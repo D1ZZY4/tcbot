@@ -29,7 +29,7 @@ from tcbot.modules.helper.pipelines.promo_decision_flow import execute_promo_dec
 from tcbot.modules.helper.pipelines.promote_flow import ROLE_ALIASES, Promote
 from tcbot.modules.helper.pipelines.transfer_flow import execute_transfer
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, esc, user_ref
+from tcbot.utils.formatter import bold, code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -606,7 +606,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             "admins.demote.done",
             await locale_for_update(update),
             user=Safe(user_ref(target_id, target_fname, target_uname)),
-            role=esc(role_label),
+            role=role_label,
         ),
         reply_markup=None,
         log_level="debug",
