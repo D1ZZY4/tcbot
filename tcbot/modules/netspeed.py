@@ -266,15 +266,25 @@ def _ping_server(base: str) -> float:
 def _pick_best(
     closest: list[dict[str, str]],
 ) -> tuple[dict[str, str], float, str]:
-    """Pick the lowest-latency server; returns (server, ping_ms, base)."""
+    """Pick the lowest-latency server; returns (server, ping_ms, base).
+
+    Pings the candidates concurrently: each probe pays a fresh TLS
+    handshake (~200ms on a far route), so sequential probing of five
+    servers costs ~3s while parallel costs one handshake.
+    """
+    bases = [(server, _server_base(server)) for server in closest]
+
+    def _probe(server: dict[str, str], base: str) -> tuple[float, dict[str, str], str]:
+        return (_ping_server(base), server, base)
+
     results: list[tuple[float, dict[str, str], str]] = []
-    for server in closest:
-        base = _server_base(server)
-        try:
-            ping_ms = _ping_server(base)
-        except Exception:
-            continue
-        results.append((ping_ms, server, base))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(bases)) as pool:
+        futures = [pool.submit(_probe, server, base) for server, base in bases]
+        for fut in concurrent.futures.as_completed(futures):
+            try:
+                results.append(fut.result())
+            except Exception:
+                continue
     if not results:
         raise RuntimeError("speedtest best server unreachable")
     results.sort(key=lambda item: item[0])
