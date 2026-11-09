@@ -57,7 +57,8 @@ def _builder_help(
                 continue
             try:
                 h: object = get_help(locale)
-            except Exception:
+            except Exception as exc:
+                log.debug("get_help failed for %s: %s", mod_name, exc)
                 h = None
             if isinstance(h, dict):
                 content[f"help_{mod_name}"] = (

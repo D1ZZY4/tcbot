@@ -264,42 +264,6 @@ class Promote:
             return ["developer", "tester"]
         return []
 
-    @staticmethod
-    async def _assign_admin(
-        bot: Bot,
-        admin_id: int,
-        admin_fname: str,
-        target_id: int,
-        target_fname: str,
-        current_role: str | None,
-        locale: str | None = None,
-    ) -> tuple[bool, str]:
-        return await assign_admin(
-            bot, admin_id, admin_fname, target_id, target_fname, current_role, locale
-        )
-
-    @staticmethod
-    async def _assign_subrole(
-        bot: Bot,
-        admin_id: int,
-        admin_fname: str,
-        target_id: int,
-        target_fname: str,
-        current_role: str | None,
-        role: str,
-        locale: str | None = None,
-    ) -> tuple[bool, str]:
-        return await assign_subrole(
-            bot,
-            admin_id,
-            admin_fname,
-            target_id,
-            target_fname,
-            current_role,
-            role,
-            locale,
-        )
-
     @classmethod
     async def request_admin(
         cls,
@@ -338,7 +302,7 @@ class Promote:
             return False, t("admins.promote.holds_role", locale, role=label)
         if role == "admin":
             if executor_role == "founder":
-                return await cls._assign_admin(
+                return await assign_admin(
                     bot,
                     admin_id,
                     admin_fname,
@@ -352,7 +316,7 @@ class Promote:
             )
         if executor_role not in ("founder", "admin"):
             return False, t("admins.promote.no_assign_perms", locale)
-        return await cls._assign_subrole(
+        return await assign_subrole(
             bot,
             admin_id,
             admin_fname,

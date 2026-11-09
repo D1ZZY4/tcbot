@@ -19,7 +19,14 @@ commands live in [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
 - Use `identity.classify`, `identity.refuse_message`, and
   `identity.staff_notice` for self, bot, Telegram, Founder, and staff branches.
 - Call `Demote.execute(..., trigger="ban"|"kick"|"mute")` before banning, kicking,
-  or muting a target who holds a federation role.
+  or muting a target who holds a federation role. This demote-before-enforce
+  step is best-effort by design: when the role lookup or demote itself fails,
+  enforcement still runs (so a transient database outage cannot block the
+  moderation action) and the failure is logged loudly. The target may
+  therefore keep a role briefly until a later pass (greeting enforcement or
+  `/tcsync`) repairs it; the enforcement itself is never blocked by the
+  demote failure. Unban and appeal-approve paths instead fail closed on the
+  same failures.
 - Developer and Tester roles live in `tc_roles`.
 - Admin promotion requests use `queues_db` and the existing promotion workflow.
 - Role lookup failures must reject the action (fail closed); never treat a

@@ -30,7 +30,7 @@ Environment filters:
 | `MODULES_LOAD` | Comma-separated allowlist. If set, only these module names load. Invalid names stop startup. |
 | `MODULES_NO_LOAD` | Comma-separated denylist. Removes matching names from the discovered list. |
 
-A module name is the filename without `.py`, for example `banning` or `stats`.
+A module name is the filename without `.py`, for example `bans` or `stats`.
 
 `get_handlers()` imports active modules and returns the combined list of each module's `__handlers__` as `list[BaseHandler[Any, Any, Any]]`. Imports run first so every failure is reported together before the fail-fast exit; collection then follows `ALL_MODULES` order. The caller (`tcbot/__main__.py`) registers the returned handlers on the PTB application.
 

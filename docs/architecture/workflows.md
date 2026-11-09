@@ -245,6 +245,23 @@ Demotion is not a conversation. `Demote.execute(...)` in `pipelines/demote_flow.
 
 `Demote.remove_role(target_id, target_role)` is the shared DB write used by all four paths. It delegates to `users_roles` and returns `True` if a role was actually removed.
 
+## Ownership transfer: `transfer_flow.py`
+
+Ownership transfer is not a conversation. `execute_transfer(bot, ...)` in
+`pipelines/transfer_flow.py` moves the Founder row to the target, promotes the
+target to admin, removes the old owner's custom role, and notifies both
+parties. The target must be a verified human (a verified bot is refused and
+an indeterminate lookup asks for a retry). `admins.py` registers the command
+and callback handlers.
+
+## Promotion decision: `promo_decision_flow.py`
+
+The Founder-side approve/reject callbacks for queued admin requests live in
+`pipelines/promo_decision_flow.py`. Approving runs `Promote.execute` and
+updates the pending card; rejecting clears the queue entry. Both paths
+re-read the owner and effective role fresh so a transfer in another process
+takes effect at once.
+
 ## Stats: `stats_flow.py`
 
 `stats_flow.py` exposes the unified `Stats` class used by `/tcstats`. Every

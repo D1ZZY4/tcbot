@@ -468,7 +468,8 @@ class CheckEventsMixin:
             return text, check_back_markup(target_id, locale)
         try:
             titles = await db.groups_db.get_group_titles([cid for cid, _ in groups])
-        except Exception:
+        except Exception as exc:
+            log.debug("Group titles fallback for check view: %s", exc)
             titles = {}
         total = sum(c for _, c in groups)
         lines = [
