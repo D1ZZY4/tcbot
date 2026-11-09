@@ -23,7 +23,7 @@ flowchart TD
 
 ## Purpose
 
-The appeal flow lets a user with an active federation ban submit one appeal through the bot in private messages. The appeal is forwarded to the configured appeal channel/topic, posted for staff review in the main group, logged in the federation logs channel, and then resolved through inline callback buttons.
+The appeal flow lets a user with an active federation ban submit one appeal through the bot in private messages or in place in the main group. The appeal is forwarded to the configured appeal channel/topic, posted for staff review in the main group topic and in the appeals channel, logged in the federation logs channel, and then resolved through inline callback buttons.
 
 ## Entry points
 
@@ -40,7 +40,9 @@ The registered `/start` entry filter only accepts private-chat messages matching
 /start appeal_<10 lowercase letters or digits>
 ```
 
-The flow itself is DM-only. If the link is opened outside a private chat, the bot asks the user to open it in private messages.
+The deep-link flow itself is DM-only. If the link is opened outside a private chat, the bot asks the user to open it in private messages.
+
+A second entry point is the main group (`MAIN_GROUP`). There, a banned user sends a `#appeal` message (with the log reference, and optionally the ban id); the bot looks up their active ban by sender and runs the same submission gates and posting as the DM path. Outside `MAIN_GROUP` the tag stays silent.
 
 ## Eligibility checks
 
@@ -102,7 +104,7 @@ duplicate review card.
 When the checks pass:
 
 1. The user's appeal message is forwarded to the configured appeals destination (`cfg.appeals`).
-2. A staff review card is posted to `cfg.main_group`, optionally inside `cfg.appeal_discussion_topic`.
+2. A staff review card is posted to `cfg.main_group`, optionally inside `cfg.appeal_discussion_topic`, and a second copy with the same Approve/Reject buttons is posted in `cfg.appeals`, so either surface stays actionable.
 3. A submitted-appeal log is posted to `cfg.logs`.
 4. The pending-review slot is claimed atomically with `bans_db.set_review_if_absent`, so a concurrent duplicate submit cannot overwrite the winner and orphan its card. The loser deletes its own orphan review card best-effort and is told the appeal is already pending.
 5. Appeal-log metadata is stored with `bans_db.set_appeal_log_msg` when the log post succeeded.
@@ -198,7 +200,7 @@ The callback handler always answers the callback query before continuing once it
 
 When a staff member approves an appeal:
 
-1. Active connected groups are fetched from `groups_db.active_groups()`, with the primary groups (`cfg.main_group`, `cfg.exec_group`) appended when absent. If the fetch fails, approval aborts before deactivation with the review card untouched (a re-tap retries the full sequence); deactivating first would leave chats unbanned-nowhere with no record to re-drive.
+1. Active connected groups are fetched from `groups_db.active_groups()`, with the primary group (`cfg.main_group`) appended when absent. If the fetch fails, approval aborts before deactivation with the review card untouched (a re-tap retries the full sequence); deactivating first would leave chats unbanned-nowhere with no record to re-drive.
 2. If the banned user currently holds a federation staff role, that role is demoted before deactivation, mirroring `/tcunban`. A role-lookup outage or a demote failure aborts with the review card untouched and a retry alert.
 3. All active bans for the user are deactivated with `bans_db.deactivate_all_active_bans(user_id)`, which clears any duplicate active records in one atomic operation. If this write fails, approval aborts before any group is touched (mirroring `execute_unban`): unbanning chats while the database still marks the user banned would split-brain and re-ban them on next join. The review card stays actionable and the tapper gets a retry alert, so a re-tap retries the full sequence.
 4. The review marker is cleared with `bans_db.clear_review(ban_id)` so a concurrent second decision sees no live review and stands down.
@@ -232,7 +234,7 @@ Appeal-related logs are built in `tcbot/modules/helper/parse_logmsg/`:
 
 | Template | Destination / use |
 |---|---|
-| `appeal_received_log` | Staff review card in the main group / appeal discussion topic. |
+| `appeal_received_log` | Staff review card in the main group / appeal discussion topic and its copy in the appeals channel. |
 | `appeal_submitted_log` | Initial log in the federation logs channel. |
 | `appeal_approved_edit` | Edited version of the submitted log after approval. |
 | `appeal_rejected_edit` | Edited version of the submitted log after rejection. |

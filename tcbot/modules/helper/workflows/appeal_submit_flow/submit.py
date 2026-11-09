@@ -211,13 +211,23 @@ class SubmitMessageMixin:
         )
         lc, lt = flow_pkg.cfg.logs
 
-        # * Send review post + log message in parallel
-        rv, sent_log = await asyncio.gather(
+        # * Send review post + log message in parallel. The review card is
+        # * posted in both the main-group topic and the APPEALS channel so
+        # * either surface stays actionable; the forwarded appeal text
+        # * above already lands in APPEALS.
+        rv, rv_appeals, sent_log = await asyncio.gather(
             ctx.bot.send_message(
                 flow_pkg.cfg.main_group,
                 review_text,
                 parse_mode="MarkdownV2",
                 message_thread_id=flow_pkg.cfg.appeal_discussion_topic or None,
+                reply_markup=appeal_review_kb(ban_id),
+            ),
+            ctx.bot.send_message(
+                appeal_chat,
+                review_text,
+                parse_mode="MarkdownV2",
+                message_thread_id=appeal_thread,
                 reply_markup=appeal_review_kb(ban_id),
             ),
             ctx.bot.send_message(
@@ -230,13 +240,19 @@ class SubmitMessageMixin:
             ),
             return_exceptions=True,
         )
-        throw_if_cancelled((rv, sent_log))
+        throw_if_cancelled((rv, rv_appeals, sent_log))
 
         review_msg_id: int | None = (
             rv.message_id if not isinstance(rv, BaseException) else None
         )
         if isinstance(rv, BaseException):
             log.error("Appeal review post failed: %s", rv)
+
+        appeals_review_id: int | None = (
+            rv_appeals.message_id if not isinstance(rv_appeals, BaseException) else None
+        )
+        if isinstance(rv_appeals, BaseException):
+            log.error("Appeal review copy to APPEALS failed: %s", rv_appeals)
 
         appeal_log_sent_id: int | None = (
             sent_log.message_id if not isinstance(sent_log, BaseException) else None
@@ -273,6 +289,17 @@ class SubmitMessageMixin:
                         ban_id,
                         exc,
                     )
+                if appeals_review_id:
+                    try:
+                        await ctx.bot.delete_message(
+                            chat_id=appeal_chat, message_id=appeals_review_id
+                        )
+                    except Exception as exc:
+                        log.debug(
+                            "Appeal orphan APPEALS-copy delete failed for ban_id=%s: %s",
+                            ban_id,
+                            exc,
+                        )
                 await safe_reply(
                     msg,
                     t(
@@ -347,6 +374,19 @@ class SubmitMessageMixin:
                 ban_id,
                 appeal_log_sent_id is not None,
             )
+            # * Drop the APPEALS copy so a retry never leaves an actionable
+            # * card without a claimed review slot.
+            if appeals_review_id:
+                try:
+                    await ctx.bot.delete_message(
+                        chat_id=appeal_chat, message_id=appeals_review_id
+                    )
+                except Exception as exc:
+                    log.debug(
+                        "submit_appeal orphan APPEALS-copy delete failed for ban_id=%s: %s",
+                        ban_id,
+                        exc,
+                    )
             if instr_mid and update.effective_chat:
                 try:
                     await ctx.bot.edit_message_text(

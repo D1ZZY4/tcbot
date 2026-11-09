@@ -30,6 +30,7 @@ from tcbot.modules.helper.workflows.appeal_submit_flow.gates import (
     _clear_appeal_state,
     _cooldown_remaining_h,
     _is_stale_review,
+    starts_with_appeal_tag,
 )
 from tcbot.modules.helper.workflows.appeal_submit_flow.submit import (
     SubmitMessageMixin,
@@ -238,6 +239,59 @@ class AppealSubmitMixin(SubmitMessageMixin):
         if not m:
             return ConversationHandler.END
         return await self._start(update, ctx, m.group(1))
+
+    async def on_group_appeal(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Handle ``#appeal`` in the main group.
+
+        The active ban is looked up by sender; an explicit 10-char ban id
+        in the text must match it. The message then runs through the same
+        submit path as the DM deep link, including forward, dual review
+        cards, and gates. Other chats return silently so the tag stays a
+        no-op outside MAIN_GROUP.
+        """
+        msg = update.effective_message
+        user = update.effective_user
+        chat = update.effective_chat
+        if msg is None or user is None or msg.text is None or chat is None:
+            return
+        if chat.id != flow_pkg.cfg.main_group or not chat.id:
+            return
+        text = msg.text.strip()
+        if not starts_with_appeal_tag(text):
+            return
+        locale = await flow_pkg.locale_for_update(update)
+        try:
+            ban = await db.bans_db.get_active_ban(user.id)
+        except Exception:
+            log.exception("Appeal group lookup failed for user=%d", user.id)
+            ban = None
+        bid = str(ban.get("ban_id", "")) if ban else ""
+        if not ban or not bid:
+            await safe_reply(
+                msg,
+                t("appeals.submit.invalid_link", locale, plain=True),
+                log_label="Appeal group no-ban",
+                parse_mode=None,
+            )
+            return
+        mentioned = re.search(r"\b([a-z0-9]{10})\b", text)
+        if mentioned and mentioned.group(1) != bid:
+            await safe_reply(
+                msg,
+                t("appeals.submit.invalid_link", locale, plain=True),
+                log_label="Appeal group id-mismatch",
+                parse_mode=None,
+            )
+            return
+        if ctx.user_data is None:
+            return
+        ctx.user_data["appeal_ban_id"] = bid
+        ctx.user_data["appeal_log_msg_id"] = ban.get("log_message_id", 0)
+        result = await self._on_message(update, ctx)
+        if result != WAITING_APPEAL:
+            _clear_appeal_state(ctx.user_data)
 
     async def _on_cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Cancel button handler; clears state and ends the conversation."""

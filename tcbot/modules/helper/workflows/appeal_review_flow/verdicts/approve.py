@@ -178,9 +178,7 @@ class ApproveMixin:
             log.exception("approve_appeal: clear_review failed for ban %s", ban_id)
 
         # * Connected groups plus primaries (single merge owner in groups_db).
-        groups = db.groups_db.with_primary_groups(
-            groups, (flow_pkg.cfg.main_group, flow_pkg.cfg.exec_group)
-        )
+        groups = db.groups_db.with_primary_groups(groups, (flow_pkg.cfg.main_group,))
 
         unban_results = await fan_out(
             [

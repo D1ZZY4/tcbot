@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from telegram.ext import CallbackQueryHandler, filters
+from telegram.ext import CallbackQueryHandler, MessageHandler, filters
 
 from tcbot.modules.helper import replies
 from tcbot.modules.helper.workflows.appeal_flow import (
@@ -15,6 +15,7 @@ from tcbot.modules.helper.workflows.appeal_flow import (
 )
 from tcbot.utils.formatter import bold, pre
 from tcbot.utils.i18n import Safe, t
+from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -65,4 +66,10 @@ _APPEAL_START_CMDS = filters.ChatType.PRIVATE & filters.Regex(
 __handlers__ = [
     appeal.build_handler(_APPEAL_START_CMDS),
     CallbackQueryHandler(appeal.on_decision, pattern=r"^appeal_(approve|reject)_\S+$"),
+    # * #appeal in the main group is a valid submission path alongside the
+    # * DM deep link; the handler itself gates the chat and the tag.
+    MessageHandler(
+        filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
+        appeal.on_group_appeal,
+    ),
 ]
