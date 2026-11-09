@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 log = get_logger("tcbot.database.users_roles")
 
 
-async def is_staff(user_id: int) -> bool:
+async def is_staff(user_id: int, *, fresh: bool = False) -> bool:
     """Return True if user_id is owner or admin.
 
     Served from the cached effective role (60 s L1 TTL) instead of two
@@ -35,9 +35,14 @@ async def is_staff(user_id: int) -> bool:
     retry hint on outage should use ``get_effective_role`` directly, as
     the appeal-review path and the auth decorators do). Cancellation
     still propagates.
+
+    With ``fresh=True`` the effective role is read directly from MongoDB
+    so a demotion in another process is never hidden for up to the 60 s
+    role TTL. Enforcement gates use it; display reads keep the cached
+    fast path.
     """
     try:
-        role = await get_effective_role(user_id)
+        role = await get_effective_role(user_id, fresh=fresh)
     except asyncio.CancelledError:
         raise
     except Exception as exc:

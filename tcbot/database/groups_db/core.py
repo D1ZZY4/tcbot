@@ -148,8 +148,8 @@ def with_primary_groups(
     federation-wide fan-out performs, so the dedup key and the
     synthesized entry shape cannot drift between the ban, mute, warn,
     unban, and appeal-approve paths. Falsy IDs (unset primaries) are
-    skipped; callers pass ``(cfg.main_group, cfg.exec_group)`` plus any
-    contextual chat such as the current one.
+    skipped; callers pass ``(cfg.main_group,)`` plus any contextual chat
+    such as the current one.
     """
     seen = {g.get("chat_id", 0) for g in groups}
     merged: list[dict[str, Any]] = [dict(g) for g in groups]

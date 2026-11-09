@@ -200,7 +200,7 @@ class ConnectionDecisionMixin:
             # * Guarded like every neighbouring DB call: an outage here must
             # * report the error instead of leaving the prompt hanging.
             try:
-                already_connected = await db.groups_db.is_connected(chat.id)
+                already_connected = await db.groups_db.is_connected(chat.id, fresh=True)
             except Exception:
                 log.exception("is_connected failed for chat %d", chat.id)
                 with contextlib.suppress(Exception):

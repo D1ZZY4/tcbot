@@ -47,8 +47,8 @@ async def _require_founder_list(
         return False
     try:
         owner_r, role_r = await asyncio.gather(
-            db.users_roles.is_owner(user_id),
-            db.users_roles.get_effective_role(user_id),
+            db.users_roles.is_owner(user_id, fresh=True),
+            db.users_roles.get_effective_role(user_id, fresh=True),
         )
     except Exception as exc:
         log.warning("stats users access check failed for %d: %s", user_id, exc)

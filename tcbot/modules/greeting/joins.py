@@ -47,14 +47,16 @@ async def _in_federation(chat_id: int, *, action: str) -> bool | None:
     """Return True when join events in ``chat_id`` must be enforced.
 
     Primary groups always qualify; other chats qualify only while their
-    connected row is active (cache-backed, negligible latency). Returns
-    ``None`` on a lookup outage so the caller stays silent instead of
-    enforcing blind or greeting an unverified joiner.
+    connected row is active, read directly so a disconnect in another
+    process stops join enforcement at once instead of lingering for the
+    connection cache TTL. Returns ``None`` on a lookup outage so the
+    caller stays silent instead of enforcing blind or greeting an
+    unverified joiner.
     """
     if cfg.is_primary_group(chat_id):
         return True
     try:
-        return await db.groups_db.is_connected(chat_id)
+        return await db.groups_db.is_connected(chat_id, fresh=True)
     except Exception as exc:
         log.warning(
             "is_connected check failed for chat=%d on %s: %s", chat_id, action, exc

@@ -132,7 +132,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         asyncio.wait_for(
             ctx.bot.get_chat_member(chat.id, user.id), timeout=TELEGRAM_LOOKUP_TIMEOUT
         ),
-        db.groups_db.is_connected(chat.id),
+        db.groups_db.is_connected(chat.id, fresh=True),
         db.groups_db.get_pending(chat.id),
         asyncio.wait_for(
             ctx.bot.get_chat_member(chat.id, ctx.bot.id),

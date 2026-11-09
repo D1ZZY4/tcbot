@@ -59,7 +59,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     # * request_id is known from q.data, so the record fetch fires
     # * speculatively alongside the ownership check and q.answer().
     is_owner, req_result, answer_r = await asyncio.gather(
-        db.users_roles.is_owner(admin.id),
+        db.users_roles.is_owner(admin.id, fresh=True),
         db.queues_db.get_request_by_id(request_id),
         q.answer(),
         return_exceptions=True,

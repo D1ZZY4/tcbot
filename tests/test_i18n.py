@@ -1203,10 +1203,10 @@ def test_effective_locale_pm_and_group(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_can_manage_group_matrix(monkeypatch: pytest.MonkeyPatch) -> None:
 
-    async def _staff_true(uid: int) -> bool:
+    async def _staff_true(uid: int, *, fresh: bool = False) -> bool:
         return True
 
-    async def _staff_false(uid: int) -> bool:
+    async def _staff_false(uid: int, *, fresh: bool = False) -> bool:
         return False
 
     async def run() -> None:
@@ -1303,7 +1303,7 @@ def test_on_lang_set_group_denied(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _owner() -> int:
         return 999
 
-    async def _staff_false(uid: int) -> bool:
+    async def _staff_false(uid: int, *, fresh: bool = False) -> bool:
         return False
 
     monkeypatch.setattr(users_roles, "get_owner_id", _owner)

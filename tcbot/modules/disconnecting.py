@@ -111,7 +111,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     try:
-        is_connected = await db.groups_db.is_connected(chat.id)
+        is_connected = await db.groups_db.is_connected(chat.id, fresh=True)
     except Exception as exc:
         log.warning("is_connected check failed for chat=%d: %s", chat.id, exc)
         await safe_reply(
@@ -135,7 +135,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    if not await can_manage_group(ctx.bot, chat.id, user.id):
+    if not await can_manage_group(ctx.bot, chat.id, user.id, fresh=True):
         if user.id == ANONYMOUS_BOT_ID:
             msg_text = t("disconnecting.state.anon_admin", locale, plain=True)
         else:

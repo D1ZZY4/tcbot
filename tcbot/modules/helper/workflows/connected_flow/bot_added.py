@@ -94,7 +94,7 @@ class ConnectionAddedMixin:
         if new_status in (ChatMemberStatus.LEFT, ChatMemberStatus.BANNED):
             # * is_connected, deactivate, and remove_pending all run in parallel
             conn_results = await asyncio.gather(
-                db.groups_db.is_connected(chat.id),
+                db.groups_db.is_connected(chat.id, fresh=True),
                 db.groups_db.deactivate_group(chat.id),
                 db.groups_db.remove_pending(chat.id),
                 return_exceptions=True,
@@ -165,7 +165,7 @@ class ConnectionAddedMixin:
             # * is only consumed if the pending+ADMINISTRATOR fast path is not taken.
             pending, is_already_connected = await asyncio.gather(
                 db.groups_db.get_pending(chat.id),
-                db.groups_db.is_connected(chat.id),
+                db.groups_db.is_connected(chat.id, fresh=True),
                 return_exceptions=True,
             )
             throw_if_cancelled((pending, is_already_connected))

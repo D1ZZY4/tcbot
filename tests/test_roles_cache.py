@@ -280,3 +280,46 @@ def test_get_owner_id_caches_second_read(
     assert first == 61008
     assert second == 61008
     assert len(hits) == 1
+
+
+def test_is_staff_fresh_forwards_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    uid = 61009
+    seen: list[bool] = []
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        seen.append(fresh)
+        return "admin" if fresh else None
+
+    monkeypatch.setattr(_res_mod, "get_effective_role", _role)
+    # * A stale cached read denies a demoted admin; the fresh read
+    # * reflects the live row, so enforcement gates must use it.
+    assert asyncio.run(users_roles.is_staff(uid)) is False
+    assert asyncio.run(users_roles.is_staff(uid, fresh=True)) is True
+    assert seen == [False, True]
+
+
+def test_is_owner_fresh_bypasses_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    users_roles.owner_id_cache.invalidate(_OWNER_KEY)
+    row = {"user_id": 61010}
+
+    class _OwnerCol:
+        async def find_one(self, *args: Any, **kwargs: Any) -> dict[str, int] | None:
+            return dict(row)
+
+    monkeypatch.setattr(_owner_mod, "col", lambda _name: _OwnerCol())
+    monkeypatch.setattr(_owner_mod, "db_call", _identity)
+    try:
+        # * Prime the cache with the first owner row.
+        assert asyncio.run(users_roles.is_owner(61010)) is True
+        # * A transfer in another process lands; the cached read still
+        # * names the old owner while the fresh read sees the new row.
+        row["user_id"] = 61011
+        assert asyncio.run(users_roles.is_owner(61010)) is True
+        assert asyncio.run(users_roles.is_owner(61010, fresh=True)) is False
+        assert asyncio.run(users_roles.is_owner(61011, fresh=True)) is True
+    finally:
+        users_roles.owner_id_cache.invalidate(_OWNER_KEY)

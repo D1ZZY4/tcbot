@@ -48,15 +48,20 @@ async def get_owner_id(*, fresh: bool = False) -> int | None:
     return cast("int | None", await owner_id_cache.get_or_fetch(_OWNER_KEY, _fetch))
 
 
-async def is_owner(user_id: int) -> bool:
+async def is_owner(user_id: int, *, fresh: bool = False) -> bool:
     """Return True if user_id belongs to the bot owner.
 
     Served from the cached owner ID (300 s L1 TTL, invalidated on
     transfer) instead of a dedicated ``find_one`` so hot auth paths pay
     zero MongoDB round trips on cache hits. Errors propagate like the
     previous direct read so decorators keep their fail-closed retry reply.
+
+    With ``fresh=True`` the owner row is read directly from MongoDB
+    (mirroring ``get_owner_id(fresh=True)``) so an ownership transfer in
+    another process is never hidden for up to the 300 s owner TTL.
+    Enforcement gates use it; display reads keep the cached fast path.
     """
-    return (await get_owner_id()) == user_id
+    return (await get_owner_id(fresh=fresh)) == user_id
 
 
 async def ensure_initial_owner(initial_id: int) -> None:

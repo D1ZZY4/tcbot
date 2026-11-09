@@ -244,7 +244,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     locale = raw_locale
     if scope == "group":
-        if not await can_manage_group(ctx.bot, chat.id, user.id):
+        if not await can_manage_group(ctx.bot, chat.id, user.id, fresh=True):
             try:
                 await q.answer(
                     t("language.denied", tapper_locale, plain=True), show_alert=True
@@ -253,7 +253,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 log.debug("language denied answer failed: %s", exc)
             return
         try:
-            connected = await db.groups_db.is_connected(chat.id)
+            connected = await db.groups_db.is_connected(chat.id, fresh=True)
         except Exception as exc:
             log.debug("language is_connected failed for %d: %s", chat.id, exc)
             connected = False
