@@ -204,7 +204,7 @@ async def require_federation_origin(
     ban/unban/sync entries). Every group-like origin must be a connected
     group or a primary group: a disconnected group must not drive
     federation-wide enforcement or, for warns, record audit rows under a
-    non-federation chat id that later aggregate into a federation auto-ban.
+    non-federation chat id that later aggregate into a federation threshold ban.
     Fail closed: a connection-state outage replies with the database retry
     notice and blocks the action. Cancellation always propagates.
     """

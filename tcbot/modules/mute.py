@@ -108,7 +108,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Entry point for the mute flow.
 
     Resolves the target, parses an optional duration token from the inline
-    arguments, runs identity and role checks in parallel, auto-demotes any
+    arguments, runs identity and role checks in parallel, demotes any
     federation role, then opens the reason/proof conversation (an inline
     reason skips the reason prompt and goes straight to proof collection).
     Returns ``ConversationHandler.END`` on validation failure.
@@ -156,7 +156,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     )
     # * Fail fast on overlong inline reasons with the shared cap and text,
     # * before any prompt is sent or state is stored. The check runs before
-    # * the auto-demote below so an aborted command never strips a role,
+    # * the demote below so an aborted command never strips a role,
     # * matching /tcban and /tckick.
     if inline_reason and is_reason_too_long(inline_reason):
         await safe_reply(
@@ -167,12 +167,11 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    # * Auto-demote must succeed before the federation-wide mute to
+    # * Demote must succeed before the federation-wide mute to
     # * preserve the role-vs-state invariant. The helper replies and
     # * signals abort when the demote fails, so the mute never proceeds
     # * on a role holder.
-    if target_role and not await Demote.auto_demote_or_abort(
-        msg,
+    if target_role and not await Demote.execute(
         ctx.bot,
         target_id,
         target_fname or str(target_id),
@@ -180,6 +179,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         admin.id,
         admin.first_name,
         trigger="mute",
+        msg=msg,
     ):
         return ConversationHandler.END
     target_mention = user_ref(target_id, target_fname or str(target_id))

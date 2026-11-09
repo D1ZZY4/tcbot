@@ -24,9 +24,9 @@ from tcbot.modules.helper.pipelines.ban_flow import (
     WAITING_PROOF,
     WAITING_UPDATE_CONFIRM,
     ban_conversation,
-    demote_ban_target,
     proof_prompt_content,
 )
+from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.reason_flow import (
     is_reason_too_long,
     parse_inline_reason,
@@ -98,7 +98,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     Resolves the target, validates the inline reason, runs identity and role
     checks in parallel, then either asks for re-ban confirmation (active ban
-    exists) or auto-demotes any federation role held by the target. Stores
+    exists) or demotes any federation role held by the target. Stores
     ban metadata in ``user_data`` and shows the proof prompt. Returns
     ``WAITING_UPDATE_CONFIRM``, ``WAITING_PROOF``, or
     ``ConversationHandler.END`` on any failure.
@@ -193,18 +193,19 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             locale=locale,
         )
 
-    # * Auto-demote is required before the ban to preserve the
+    # * Demote is required before the ban to preserve the
     # * role-vs-state invariant: a banned user must not still hold a
     # * federation role. The helper replies and signals abort when the
     # * demote fails, so the ban never proceeds on a role holder.
-    if not await demote_ban_target(
-        msg,
+    if target_role and not await Demote.execute(
         ctx.bot,
         target_id,
         target_fname or str(target_id),
         target_role,
         admin.id,
         admin.first_name,
+        trigger="ban",
+        msg=msg,
     ):
         return ConversationHandler.END
 

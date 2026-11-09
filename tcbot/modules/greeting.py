@@ -72,7 +72,7 @@ async def _in_federation(chat_id: int, *, action: str) -> bool | None:
         return None
 
 
-async def _auto_demote_for_enforcement(
+async def _demote_for_enforcement(
     bot: Bot, user_id: int, first_name: str, *, trigger: str
 ) -> None:
     """Best-effort demote of a role-holding target before join enforcement.
@@ -107,7 +107,7 @@ async def _auto_demote_for_enforcement(
         )
     except Exception:
         log.exception(
-            "Auto-demote on join %s failed for uid=%d role=%s",
+            "Demote on join %s failed for uid=%d role=%s",
             trigger,
             user_id,
             target_role,
@@ -155,12 +155,10 @@ async def _handle_member(
         _enforcement_blind = True
 
     if ban:
-        # * Best-effort auto-demote keeps the role-vs-state invariant (a
+        # * Best-effort demote keeps the role-vs-state invariant (a
         # * banned user must not hold a federation role); enforcement below
         # * runs regardless because the DB record already exists.
-        await _auto_demote_for_enforcement(
-            bot, member.id, member.first_name, trigger="ban"
-        )
+        await _demote_for_enforcement(bot, member.id, member.first_name, trigger="ban")
         coros: list = []
         try:
             await asyncio.wait_for(
@@ -169,7 +167,7 @@ async def _handle_member(
             )
         except Exception:
             log.exception(
-                "Auto-ban on join failed for uid=%d in chat=%d",
+                "Ban on join failed for uid=%d in chat=%d",
                 member.id,
                 chat.id,
             )
@@ -204,15 +202,11 @@ async def _handle_member(
         throw_if_cancelled(results)
         for result in results:
             if isinstance(result, BaseException):
-                log.debug(
-                    "Join-auto-ban notice failed for uid=%d: %s", member.id, result
-                )
+                log.debug("Join ban notice failed for uid=%d: %s", member.id, result)
         return
 
     if mute:
-        await _auto_demote_for_enforcement(
-            bot, member.id, member.first_name, trigger="mute"
-        )
+        await _demote_for_enforcement(bot, member.id, member.first_name, trigger="mute")
         until = mute.get("until_date")
         perms = ChatPermissions(can_send_messages=False)
         try:
@@ -345,9 +339,7 @@ async def on_join_request_approved(
         # * well; ban_chat_member on an already-removed user is benign.
         # * Checked before the mute-failure early-return below so a mute-DB
         # * outage cannot disable ban enforcement on this path.
-        await _auto_demote_for_enforcement(
-            ctx.bot, user.id, user.first_name, trigger="ban"
-        )
+        await _demote_for_enforcement(ctx.bot, user.id, user.first_name, trigger="ban")
         try:
             await asyncio.wait_for(
                 ctx.bot.ban_chat_member(chat.id, user.id),
@@ -355,7 +347,7 @@ async def on_join_request_approved(
             )
         except Exception:
             log.exception(
-                "Auto-ban on join_request_approved failed for uid=%d in chat=%d",
+                "Ban on join_request_approved failed for uid=%d in chat=%d",
                 user.id,
                 chat.id,
             )
@@ -371,9 +363,7 @@ async def on_join_request_approved(
     if not mute:
         return
 
-    await _auto_demote_for_enforcement(
-        ctx.bot, user.id, user.first_name, trigger="mute"
-    )
+    await _demote_for_enforcement(ctx.bot, user.id, user.first_name, trigger="mute")
     until = mute.get("until_date")
     perms = ChatPermissions(can_send_messages=False)
     try:

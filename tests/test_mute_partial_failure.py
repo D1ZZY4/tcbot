@@ -14,7 +14,6 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import mute_flow
-from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.mute_flow import execute_unmute
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -73,12 +72,12 @@ def _mute_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _no_groups() -> list[dict[str, Any]]:
         return []
 
-    async def _no_redemote(*args: Any, **kwargs: Any) -> None:
+    async def _no_role(user_id: int, *, fresh: bool = False) -> None:
         return None
 
     monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
     monkeypatch.setattr(db.groups_db, "active_groups", _no_groups)
-    monkeypatch.setattr(Demote, "redemote_before_fanout", _no_redemote)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _no_role)
 
 
 def _run(bot: _FakeBot) -> None:

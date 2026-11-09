@@ -128,18 +128,42 @@ async def execute_kick(
         # * The user-facing reply runs *after* the unban completes so we
         # * the unban failed -- otherwise the admin would see "kicked" while
         # * the user is still banned.
-        # * The entry auto-demote ran before the proof-collection window, so
+        # * The entry demote ran before the proof-collection window, so
         # * re-demote here to close the TOCTOU gap before the unban fan-out.
         # * Best-effort: ban_chat_member above already ran, so a lookup
         # * failure must not skip the unban and turn this kick into a ban.
-        await Demote.redemote_before_fanout(
-            ctx.bot,
-            target_id,
-            target_name,
-            admin_id,
-            admin_fname,
-            trigger="kick",
-        )
+        try:
+            pre_fanout_role = await db.users_roles.get_effective_role(
+                target_id, fresh=True
+            )
+        except Exception:
+            log.exception(
+                "Pre-fanout role lookup failed for target %d; proceeding with kick anyway",
+                target_id,
+            )
+            pre_fanout_role = None
+        if pre_fanout_role:
+            try:
+                await Demote.execute(
+                    ctx.bot,
+                    target_id,
+                    target_name,
+                    pre_fanout_role,
+                    admin_id,
+                    admin_fname,
+                    trigger="kick",
+                )
+                log.info(
+                    "Demoted target %d (role=%s) before kick fan-out; proof-collection TOCTOU window closed",
+                    target_id,
+                    pre_fanout_role,
+                )
+            except Exception:
+                log.exception(
+                    "Demote before kick fan-out failed for target %d (role=%s); proceeding anyway",
+                    target_id,
+                    pre_fanout_role,
+                )
         unban_result, log_send_result = await asyncio.gather(
             ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
             ctx.bot.send_message(

@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Centralised demotion logic: manual via /tcdemote and auto-demote on ban/kick."""
+"""Centralised demotion logic: manual via /tcdemote and demote before ban/kick."""
 
 from __future__ import annotations
 
@@ -34,10 +34,9 @@ class Demote:
     """All federation-demotion logic.
 
     * ``execute(trigger=None)`` runs the manual /tcdemote path.
-    * ``execute(trigger="ban")`` / ``"kick"`` / ``"mute"`` runs the auto-demote
-      path used by the ban, kick, and mute flows before the actual action.
-    * ``redemote_before_fanout(trigger=...)`` re-checks the live role right
-      before enforcement, closing the proof-collection TOCTOU window.
+    * ``execute(trigger="ban")`` / ``"kick"`` / ``"mute"`` runs the
+      demote-before-enforcement path used by the ban, kick, and mute flows
+      before the actual action.
     """
 
     @staticmethod
@@ -66,12 +65,27 @@ class Demote:
         executor_fname: str,
         *,
         trigger: str | None = None,
+        msg: Message | None = None,
     ) -> bool:
         """Remove the role, post a federation log, and DM the target.
 
-        Returns True if the role was actually removed.
+        With ``msg=None`` returns True if the role was removed.
+        With ``msg`` set (ban/kick/mute entries) returns True when the
+        caller may proceed: a surviving role replies with the abort
+        notice and returns False; an already-gone role proceeds.
         """
-        removed = await cls.remove_role(target_id, target_role)
+        try:
+            removed = await cls.remove_role(target_id, target_role)
+        except Exception:
+            if msg is None:
+                raise
+            log.exception(
+                "Demote before %s failed for target=%d role=%s",
+                trigger,
+                target_id,
+                target_role,
+            )
+            removed = False
         if not removed:
             # * No row in the expected collection: normally already-gone
             # * (safe to proceed), but loud so a stale-cache wrong-collection
@@ -80,6 +94,35 @@ class Demote:
                 "Demote found no %s row for target=%d; proceeding",
                 target_role,
                 target_id,
+            )
+            if msg is None:
+                return False
+            try:
+                live_role = await db.users_roles.get_effective_role(
+                    target_id, fresh=True
+                )
+            except Exception:
+                log.exception(
+                    "live role re-read failed after no-op demote for target=%d",
+                    target_id,
+                )
+                live_role = target_role
+            if live_role not in ("admin", "developer", "tester"):
+                return True
+            chat = msg.chat
+            mod_locale = await effective_locale(
+                getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
+            )
+            await safe_reply(
+                msg,
+                t(
+                    "demote.abort.body",
+                    mod_locale,
+                    user=Safe(user_ref(target_id, target_fname)),
+                    target_role=live_role,
+                    action=trigger,
+                ),
+                log_label="demote-fail",
             )
             return False
 
@@ -147,143 +190,4 @@ class Demote:
                 log.warning(
                     "Demote DM send failed for target=%d: %s", target_id, dm_result
                 )
-        return True
-
-    @classmethod
-    async def redemote_before_fanout(
-        cls,
-        bot: Bot,
-        target_id: int,
-        target_fname: str,
-        executor_id: int,
-        executor_fname: str,
-        *,
-        trigger: str,
-    ) -> None:
-        """Best-effort TOCTOU re-demote immediately before a moderation fan-out.
-
-        Shared by the ban/kick/mute executors, whose pre-fan-out blocks were
-        identical apart from the trigger noun. The entry-point auto-demote ran
-        before the reason/proof collection window, so a concurrent promotion
-        during that window would otherwise survive into enforcement. Re-reads
-        the live effective role and runs :meth:`execute` when the target holds
-        one; every failure path logs loudly and the caller always proceeds,
-        because the moderation record above already exists and enforcement is
-        the priority. Entry authorization already failed closed, so this
-        re-check is defense-in-depth state repair, never a gate.
-        """
-        try:
-            pre_fanout_role = await db.users_roles.get_effective_role(
-                target_id, fresh=True
-            )
-        except Exception:
-            log.exception(
-                "Pre-fanout role lookup failed for target %d; "
-                "proceeding with %s anyway",
-                target_id,
-                trigger,
-            )
-            return
-        if not pre_fanout_role:
-            return
-        try:
-            await cls.execute(
-                bot,
-                target_id,
-                target_fname,
-                pre_fanout_role,
-                executor_id,
-                executor_fname,
-                trigger=trigger,
-            )
-            log.info(
-                "Re-demoted target %d (role=%s) before %s fan-out; "
-                "proof-collection TOCTOU window closed",
-                target_id,
-                pre_fanout_role,
-                trigger,
-            )
-        except Exception:
-            log.exception(
-                "Re-demote before %s fan-out failed for target %d (role=%s); "
-                "proceeding anyway",
-                trigger,
-                target_id,
-                pre_fanout_role,
-            )
-
-    @classmethod
-    async def auto_demote_or_abort(
-        cls,
-        msg: Message,
-        bot: Bot,
-        target_id: int,
-        target_display: str,
-        target_role: str,
-        executor_id: int,
-        executor_fname: str,
-        *,
-        trigger: str,
-    ) -> bool:
-        """Auto-demote a role-holding target, or reply and signal abort.
-
-        Shared by the ban/kick/mute entry handlers, whose demote-fail blocks
-        were byte-identical apart from the action noun. Runs
-        :meth:`execute` and returns ``True`` when the caller may proceed.
-        When the demote raises, logs the failure, tells the executor to
-        demote manually, and returns ``False`` so the caller ends the
-        conversation without enforcing: a banned/muted/kicked user must
-        never keep a federation role.
-        """
-        try:
-            removed = await cls.execute(
-                bot,
-                target_id,
-                target_display,
-                target_role,
-                executor_id,
-                executor_fname,
-                trigger=trigger,
-            )
-        except Exception:
-            log.exception(
-                "Auto-demote before %s failed for target=%d role=%s",
-                trigger,
-                target_id,
-                target_role,
-            )
-            removed = False
-        if not removed:
-            # * execute() returns False when no row was cleared. Re-read the
-            # * live role (cache invalidated by remove_role) to distinguish
-            # * "already gone, safe to proceed" from a stale-cache split-brain
-            # * where the role still resolves: only the latter must abort, so
-            # * a banned/muted/kicked user never keeps a federation role.
-            try:
-                live_role = await db.users_roles.get_effective_role(
-                    target_id, fresh=True
-                )
-            except Exception:
-                log.exception(
-                    "live role re-read failed after no-op demote for target=%d",
-                    target_id,
-                )
-                live_role = target_role
-            if live_role in ("admin", "developer", "tester"):
-                chat = msg.chat
-                mod_locale = await effective_locale(
-                    getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
-                )
-                await safe_reply(
-                    msg,
-                    t(
-                        "demote.abort.body",
-                        mod_locale,
-                        user=Safe(user_ref(target_id, target_display)),
-                        target_role=live_role,
-                        action=trigger,
-                    ),
-                    log_label="auto-demote-fail",
-                )
-                return False
         return True

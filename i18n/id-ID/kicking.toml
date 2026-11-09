@@ -3,7 +3,7 @@
 # Mini-markup only: `code` and *bold*, balanced and unnested.
 
 [help]
-overview = "Mengeluarkan pengguna dari *grup ini saja*. Target staf otomatis didemosi."
+overview = "Mengeluarkan pengguna dari *grup ini saja*. Target staf didemosi."
 
 [help.commands]
 body = "`/tckick` (alias: `/tck`)"
@@ -12,7 +12,7 @@ body = "`/tckick` (alias: `/tck`)"
 body = """
 Mengeluarkan pengguna dari *grup ini saja*. Ini bukan tindakan se-federasi; pengguna bisa bergabung lagi lewat tautan undangan kecuali ia juga di-ban federasi.
 
-Jika target memegang peran federasi (Tester / Developer / Admin), peran itu otomatis didemosi dan mereka diberi tahu lewat DM. Satu entri log dikirim ke kanal log federasi."""
+Jika target memegang peran federasi (Tester / Developer / Admin), peran itu didemosi dan mereka diberi tahu lewat DM. Satu entri log dikirim ke kanal log federasi."""
 
 [help.flow]
 body = """

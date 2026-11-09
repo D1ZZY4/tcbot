@@ -18,6 +18,13 @@ log = get_logger(__name__)
 # * BCP 47 shaped default; every other locale falls back to it per key.
 DEFAULT_LOCALE: str = "en-US"
 
+# * Legacy code retained for stored per-user and per-group preferences plus
+# * in-flight language callbacks: ``id`` still resolves to the Indonesian
+# * catalog after its rename to ``id-ID``. Keys are lowercase; the alias
+# * target is matched case-insensitively against the catalog, so only an
+# * ``id-ID`` catalog keeps the alias alive.
+_LOCALE_ALIASES: dict[str, str] = {"id": "id-ID"}
+
 # * Mini-markup field names: bare identifiers only, so format specs and
 # * conversions can never smuggle unescaped content past the renderer.
 _FIELD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
@@ -126,6 +133,11 @@ def _canonical_locale(
     for existing in catalog:
         if existing.lower() == wanted:
             return existing
+    alias_target = _LOCALE_ALIASES.get(wanted)
+    if alias_target is not None:
+        for existing in catalog:
+            if existing.lower() == alias_target.lower():
+                return existing
     return None
 
 

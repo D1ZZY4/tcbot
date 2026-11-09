@@ -113,7 +113,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     failure.
     """
     # * Warn audit rows are scoped to the origin chat: only a connected
-    # * group (or primary) may create, aggregate, or trigger auto-ban.
+    # * group (or primary) may create, aggregate, or trigger threshold ban.
     resolved = await decorators.resolve_mod_target(
         update,
         ctx,

@@ -9,10 +9,8 @@ from __future__ import annotations
 import asyncio
 
 from tcbot import database as db
+from tcbot.database import users_roles
 from tcbot.database.types import GroupId
-from tcbot.database.users_roles import admin as _admin_mod
-from tcbot.database.users_roles import owner as _owner_mod
-from tcbot.database.users_roles import roles as _roles_mod
 from tcbot.modules import help as helpmod
 from tcbot.modules.help import _help_index_text, _module_text
 from tcbot.modules.helper import decorators, keyboards, replies
@@ -31,7 +29,7 @@ def test_nav_row_labels_follow_locale() -> None:
         ("« Prev", "cb:0"),
         ("Next »", "cb:2"),
     ]
-    row_id = nav_row(1, 3, "cb", "id")
+    row_id = nav_row(1, 3, "cb", "id-ID")
     assert [(b.text, b.callback_data) for b in row_id] == [
         ("« Sblm", "cb:0"),
         ("Lanjut »", "cb:2"),
@@ -55,10 +53,10 @@ def test_refusal_texts_match_legacy_english() -> None:
 
 
 def test_refusal_texts_localize() -> None:
-    assert replies.refuse_owner_only("id", plain=True) != replies.refuse_owner_only(
+    assert replies.refuse_owner_only("id-ID", plain=True) != replies.refuse_owner_only(
         "en-US", plain=True
     )
-    assert replies.refuse_mod_only("id", plain=True) != replies.refuse_mod_only(
+    assert replies.refuse_mod_only("id-ID", plain=True) != replies.refuse_mod_only(
         "en-US", plain=True
     )
 
@@ -125,7 +123,7 @@ def test_language_list_back_label_localizes() -> None:
         "user",
         [("English (US)", "en-US")],
         back_callback="back_to_start",
-        locale="id",
+        locale="id-ID",
     )
     assert kb.inline_keyboard[-1][0].text == "« Kembali"
 
@@ -167,9 +165,9 @@ def test_invalid_stored_role_grants_nothing(monkeypatch) -> None:  # type: ignor
     async def _bad_role(uid: int) -> str | None:
         return "admin"
 
-    monkeypatch.setattr(_owner_mod, "is_owner", _not_owner)
-    monkeypatch.setattr(_admin_mod, "is_admin", _not_admin)
-    monkeypatch.setattr(_roles_mod, "get_role", _bad_role)
+    monkeypatch.setattr(users_roles, "is_owner", _not_owner)
+    monkeypatch.setattr(users_roles, "is_admin", _not_admin)
+    monkeypatch.setattr(users_roles, "get_role", _bad_role)
 
     uid = 42424241
     db.users_roles.effective_role_cache.invalidate(uid)
@@ -181,7 +179,7 @@ def test_invalid_stored_role_grants_nothing(monkeypatch) -> None:  # type: ignor
 
 def test_help_topics_rebuild_per_locale() -> None:
     menu_en = helpmod._topics_for_locale("en-US", menu=True)
-    menu_id = helpmod._topics_for_locale("id", menu=True)
+    menu_id = helpmod._topics_for_locale("id-ID", menu=True)
     cmd_en = helpmod._topics_for_locale("en-US", menu=False)
     assert menu_en and menu_id and cmd_en
     assert all(cb.startswith("help_") for _, cb in menu_en)
@@ -189,14 +187,14 @@ def test_help_topics_rebuild_per_locale() -> None:
     # * Module display names stay English identifiers; the per-locale
     # * rebuild covers overviews and sections instead.
     content_en = helpmod._builder_help("en-US")
-    content_id = helpmod._builder_help("id")
+    content_id = helpmod._builder_help("id-ID")
     assert content_en.keys() == content_id.keys()
     assert content_en["help_bans"][1] != content_id["help_bans"][1]
-    assert helpmod._module_map_for_locale("id")
+    assert helpmod._module_map_for_locale("id-ID")
 
 
 def test_stats_search_buttons_resolve_in_catalog() -> None:
-    for locale in ("en-US", "id"):
+    for locale in ("en-US", "id-ID"):
         row = keyboards.stats_search_row(locale)
         assert row[0].text and not row[0].text.startswith("[")
         kb = keyboards.stats_search_results_kb(2, locale)
@@ -230,9 +228,9 @@ def test_with_primary_groups_merges_missing_only() -> None:
 
 
 def test_help_titles_localize() -> None:
-    assert "Bantuan" in _help_index_text("TCF", "id")
+    assert "Bantuan" in _help_index_text("TCF", "id-ID")
     assert "Help for" in _module_text("Ban", "Body.", "en-US")
-    assert "Bantuan untuk" in _module_text("Ban", "Body.", "id")
+    assert "Bantuan untuk" in _module_text("Ban", "Body.", "id-ID")
 
 
 def test_recheck_executor_rank() -> None:

@@ -90,7 +90,7 @@ __help_sections__ = __help__["sections"]
 async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Entry point for the kick flow.
 
-    Resolves the target, runs identity and role checks in parallel, auto-demotes
+    Resolves the target, runs identity and role checks in parallel, demotes
     any federation role, then either executes an immediate kick (with inline
     reason) or opens the reason/proof conversation. Returns
     ``ConversationHandler.END`` on validation failure.
@@ -136,11 +136,10 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    # * Auto-demote must succeed before the kick to preserve the
+    # * Demote must succeed before the kick to preserve the
     # * role-vs-state invariant. The helper replies and signals abort
     # * when the demote fails, so the kick never proceeds on a role holder.
-    if target_role and not await Demote.auto_demote_or_abort(
-        msg,
+    if target_role and not await Demote.execute(
         ctx.bot,
         target_id,
         target_name or str(target_id),
@@ -148,6 +147,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         admin.id,
         admin.first_name,
         trigger="kick",
+        msg=msg,
     ):
         return ConversationHandler.END
 

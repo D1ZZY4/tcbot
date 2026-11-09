@@ -210,7 +210,7 @@ def applied_summary(
     failed: int,
     transient: list[tuple[dict, BaseException]],
 ) -> str:
-    """Build the fan-out applied-to line shared by ban and warn auto-ban.
+    """Build the fan-out applied-to line shared by ban and warn threshold ban.
 
     Renders the ``.empty`` / ``.none`` / ``.partial`` / ``.full`` templates
     under ``key_prefix`` with a sample of the failing groups so operators

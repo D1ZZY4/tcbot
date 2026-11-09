@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
+from tcbot.database import groups_db as _locale_mod
 from tcbot.database.cache import _ALL_GROUPS_KEY
-from tcbot.database.groups_db import locale as _locale_mod
 
 
 def test_set_group_locale_invalidates_active_groups_cache(
@@ -35,9 +35,9 @@ def test_set_group_locale_invalidates_active_groups_cache(
     monkeypatch.setattr(_locale_mod, "db_call", _db_call)
     monkeypatch.setattr(_locale_mod, "_groups", lambda: _Groups())
     monkeypatch.setattr(_locale_mod, "active_groups_cache", _Cache())
-    _locale_mod._GROUP_LOCALE_L1[123] = "id"
+    _locale_mod._GROUP_LOCALE_L1[123] = "id-ID"
 
-    matched = asyncio.run(_locale_mod.set_group_locale(123, "id"))
+    matched = asyncio.run(_locale_mod.set_group_locale(123, "id-ID"))
 
     assert matched is True
     assert seen == [_ALL_GROUPS_KEY]

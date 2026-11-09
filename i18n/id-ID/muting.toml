@@ -12,7 +12,7 @@ body = """
 
 [help.what]
 body = """
-*/tcmute*: membatasi pengguna agar tidak bisa mengirim pesan, media, stiker, dan GIF di *semua grup terhubung* secara bersamaan. Setelah perintah, bot menanyakan alasan dan bukti opsional, kedua tahap bisa dilewati. Jika pengguna sudah di-mute, pembatasan yang ada diganti. Jika target memegang peran federasi (Tester / Developer / Admin), peran itu otomatis didemosi dan mereka diberi tahu lewat DM. Ringkasan menunjukkan di berapa grup mute diterapkan.
+*/tcmute*: membatasi pengguna agar tidak bisa mengirim pesan, media, stiker, dan GIF di *semua grup terhubung* secara bersamaan. Setelah perintah, bot menanyakan alasan dan bukti opsional, kedua tahap bisa dilewati. Jika pengguna sudah di-mute, pembatasan yang ada diganti. Jika target memegang peran federasi (Tester / Developer / Admin), peran itu didemosi dan mereka diberi tahu lewat DM. Ringkasan menunjukkan di berapa grup mute diterapkan.
 
 */tcunmute*: mengembalikan penuh izin kirim pengguna di semua grup terhubung. Ringkasan menunjukkan di berapa grup unmute diterapkan."""
 

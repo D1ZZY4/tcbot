@@ -12,7 +12,7 @@ body = """
 
 [help.what]
 body = """
-*/tcmute*: restricts a user from sending messages, media, stickers, and GIFs across *all connected groups* simultaneously. After the command, the bot asks for a reason and optionally proof - both steps can be skipped. If the user is already muted, the existing restriction is replaced. If the target holds a federation role (Tester / Developer / Admin), that role is auto-demoted and they are notified by DM. A summary shows how many groups the mute was applied in.
+*/tcmute*: restricts a user from sending messages, media, stickers, and GIFs across *all connected groups* simultaneously. After the command, the bot asks for a reason and optionally proof - both steps can be skipped. If the user is already muted, the existing restriction is replaced. If the target holds a federation role (Tester / Developer / Admin), that role is demoted and they are notified by DM. A summary shows how many groups the mute was applied in.
 
 */tcunmute*: restores the user's full send permissions across all connected groups. A summary shows how many groups the unmute was applied in."""
 

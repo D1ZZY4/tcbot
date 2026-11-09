@@ -42,7 +42,7 @@ Mencabut peran pengguna. Tombol konfirmasi muncul sebelum tindakan dijalankan.
 *Pemakaian:* `/tcdemote <target>`
 - Founder bisa mendemosi peran mana pun.
 - Admin hanya bisa mendemosi Developer atau Tester.
-- Saat pengguna berperan di-ban atau di-kick, perannya otomatis dicabut dan mereka diberi tahu lewat DM."""
+- Saat pengguna berperan di-ban atau di-kick, perannya dicabut dan mereka diberi tahu lewat DM."""
 
 [help.transferowner]
 body = """

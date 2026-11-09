@@ -21,7 +21,7 @@ body = """
 
 [help.what]
 body = """
-*/tcwarn*: issues a formal warning. Warnings are tracked *per-group* and do not carry across connected groups. At {limit}, the user is automatically federation-banned across all connected groups and their warnings are cleared. Staff targets are demoted first and exempted from the auto-ban.
+*/tcwarn*: issues a formal warning. Warnings are tracked *per-group* and do not carry across connected groups. At {limit}, the user is automatically federation-banned across all connected groups and their warnings are cleared. Staff targets are demoted first and exempted from the threshold ban.
 
 */tcunwarn*: removes the user's most recent warning in the current group.
 
@@ -76,8 +76,8 @@ item = "  {i}. {reason}"
 no_reason = "No reason"
 
 [exempt]
-demoted = "{user} is a {role} and was demoted, but staff are not auto-banned via warnings."
-failed = "{user} is a {role}, but the auto-demote step failed; staff are not auto-banned via warnings. See logs and retry manually if needed."
+demoted = "{user} is a {role} and was demoted, but staff are not banned via warnings."
+failed = "{user} is a {role}, but the demote step failed; staff are not banned via warnings. See logs and retry manually if needed."
 
 [autoban]
 db_fail = "{user} reached the warning threshold but the federation ban record could not be written to the database, so no groups were touched. Check the logs and ban them manually with /tcban once the database recovers."

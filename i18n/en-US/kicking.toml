@@ -3,7 +3,7 @@
 # Mini-markup only: `code` and *bold*, balanced and unnested.
 
 [help]
-overview = "Removes a user from the *current group only*. Auto-demotes staff targets."
+overview = "Removes a user from the *current group only*. Demotes staff targets."
 
 [help.commands]
 body = "`/tckick` (alias: `/tck`)"
@@ -12,7 +12,7 @@ body = "`/tckick` (alias: `/tck`)"
 body = """
 Removes a user from the *current group only*. This is not a federation-wide action; the user can rejoin via an invite link unless they are separately federation-banned.
 
-If the target holds a federation role (Tester / Developer / Admin), that role is auto-demoted and they are notified by DM. A log entry is posted to the federation logs channel."""
+If the target holds a federation role (Tester / Developer / Admin), that role is demoted and they are notified by DM. A log entry is posted to the federation logs channel."""
 
 [help.flow]
 body = """

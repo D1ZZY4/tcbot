@@ -140,14 +140,36 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             catch_all=True,
         )
         return
-    await Demote.redemote_before_fanout(
-        bot,
-        target_id,
-        target_fname,
-        admin_id,
-        admin_fname,
-        trigger="mute",
-    )
+    try:
+        pre_fanout_role = await db.users_roles.get_effective_role(target_id, fresh=True)
+    except Exception:
+        log.exception(
+            "Pre-fanout role lookup failed for target %d; proceeding with mute anyway",
+            target_id,
+        )
+        pre_fanout_role = None
+    if pre_fanout_role:
+        try:
+            await Demote.execute(
+                bot,
+                target_id,
+                target_fname,
+                pre_fanout_role,
+                admin_id,
+                admin_fname,
+                trigger="mute",
+            )
+            log.info(
+                "Demoted target %d (role=%s) before mute fan-out; proof-collection TOCTOU window closed",
+                target_id,
+                pre_fanout_role,
+            )
+        except Exception:
+            log.exception(
+                "Demote before mute fan-out failed for target %d (role=%s); proceeding anyway",
+                target_id,
+                pre_fanout_role,
+            )
     restrict_coros = [
         bot.restrict_chat_member(
             grp.get("chat_id", 0),

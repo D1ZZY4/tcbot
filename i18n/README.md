@@ -15,9 +15,13 @@ i18n/
 │   ├── help.toml       Help index header for help.py itself.
 │   └── <domain>.toml   One file per module (banning, kicking, appeals,
 │                       ...): each holds that module's [help] tables.
-├── id/                 Bahasa Indonesia (full translation).
+├── id-ID/              Bahasa Indonesia (full translation).
 └── README.md           This file.
 ```
+
+Stored preferences and in-flight callbacks using the legacy `id` code
+still resolve to the Indonesian catalog via a compatibility alias; new
+saves use `id-ID`.
 
 File name is the key prefix: `language.toml` holding `done = ...`
 is addressed as `language.done`. Section tables (`[area]`) are allowed

@@ -21,7 +21,7 @@ body = """
 
 [help.what]
 body = """
-*/tcwarn*: memberi peringatan resmi. Peringatan dicatat *per grup* dan tidak terbawa ke grup terhubung lain. Di {limit}, pengguna otomatis di-ban se-federasi di semua grup terhubung dan peringatannya dihapus. Target staf didemosi dulu dan dikecualikan dari auto-ban.
+*/tcwarn*: memberi peringatan resmi. Peringatan dicatat *per grup* dan tidak terbawa ke grup terhubung lain. Di {limit}, pengguna otomatis di-ban se-federasi di semua grup terhubung dan peringatannya dihapus. Target staf didemosi dulu dan dikecualikan dari ban ambang.
 
 */tcunwarn*: menghapus peringatan terbaru pengguna di grup ini.
 
@@ -76,8 +76,8 @@ item = "  {i}. {reason}"
 no_reason = "Tanpa alasan"
 
 [exempt]
-demoted = "{user} adalah {role} dan telah didemosi, tetapi staf tidak ikut auto-ban via peringatan."
-failed = "{user} adalah {role}, tetapi tahap auto-demote gagal; staf tidak ikut auto-ban via peringatan. Lihat log dan coba manual bila perlu."
+demoted = "{user} adalah {role} dan telah didemosi, tetapi staf tidak ikut ban via peringatan."
+failed = "{user} adalah {role}, tetapi tahap demote gagal; staf tidak ikut ban via peringatan. Lihat log dan coba manual bila perlu."
 
 [autoban]
 db_fail = "{user} mencapai ambang peringatan tetapi catatan ban federasi gagal ditulis ke database, jadi tidak ada grup yang disentuh. Cek log lalu ban manual dengan /tcban setelah database pulih."

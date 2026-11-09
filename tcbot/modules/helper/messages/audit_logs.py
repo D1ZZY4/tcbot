@@ -530,7 +530,7 @@ def demoted(
     by_id: int,
     by_fname: str,
 ) -> str:
-    """Unified demotion audit-log: manual demote and ban/kick auto-demote share one format."""
+    """Unified demotion audit-log: manual demote and ban/kick demote share one format."""
     role_label = _role_title(role)
     return (
         LogBuilder(f"{cfg.community_name} Demoted")

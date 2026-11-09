@@ -460,12 +460,12 @@ class _CfgAdapter:
 
     @property
     def fed_warn_limit(self) -> int:
-        """Federation-wide warn threshold for auto-ban; 0 = disabled."""
+        """Federation-wide warn threshold for threshold ban; 0 = disabled."""
         return self._c.fed_warn_limit
 
     @property
     def warn_limit(self) -> int:
-        """Per-group warn threshold for auto-ban (minimum 1, default 3)."""
+        """Per-group warn threshold for threshold ban (minimum 1, default 3)."""
         return self._c.warn_limit
 
     @property

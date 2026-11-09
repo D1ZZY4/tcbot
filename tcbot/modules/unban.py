@@ -222,8 +222,8 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 # * execute() returns False when no row was cleared. Re-read
                 # * the live role to distinguish "already gone, safe to
                 # * proceed" from a split-brain where the role still
-                # * resolves: only the latter must abort, mirroring
-                # * Demote.auto_demote_or_abort for ban/kick/mute.
+                # * resolves: only the latter must abort, mirroring the
+                # * ban/kick/mute entry demote.
                 try:
                     live_role = await db.users_roles.get_effective_role(
                         target_id, fresh=True

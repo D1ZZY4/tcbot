@@ -3,7 +3,7 @@
 # Mini-markup only: `code` and *bold*, balanced and unnested.
 
 [help]
-overview = "Menjatuhkan *ban se-federasi* ke pengguna, berlaku di semua grup terhubung sekaligus. Target staf otomatis didemosi dan bukti disimpan bersama catatan ban."
+overview = "Menjatuhkan *ban se-federasi* ke pengguna, berlaku di semua grup terhubung sekaligus. Target staf didemosi dan bukti disimpan bersama catatan ban."
 
 [help.commands]
 body = "`/tcban` (alias: `/tcb`)"
@@ -15,7 +15,7 @@ Menjatuhkan *ban se-federasi* ke target, berlaku otomatis di semua grup terhubun
 Setelah perintah, bot memandumu lewat tahap bukti: kirim foto, video, GIF, atau file sebagai bukti dalam satu album atau satu per satu, lalu ketuk Selesai. Bukti wajib ada dan dicatat bersama catatan ban ke kanal log federasi.
 
 Jika pengguna sudah punya ban aktif, bot meminta konfirmasi dulu (lengkap dengan tautan Lihat Log dan Lihat Bukti) alih-alih mengubah diam-diam; hanya Lanjut yang menuju pengumpulan bukti, lalu catatan yang ada diperbarui dengan alasan dan bukti baru tanpa membuat duplikat.
-Jika target memegang peran federasi (Tester / Developer / Admin), peran itu otomatis didemosi dan mereka diberi tahu lewat DM sebelum ban ditegakkan."""
+Jika target memegang peran federasi (Tester / Developer / Admin), peran itu didemosi dan mereka diberi tahu lewat DM sebelum ban ditegakkan."""
 
 [help.flow]
 body = """

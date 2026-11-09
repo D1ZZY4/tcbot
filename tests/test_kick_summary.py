@@ -13,7 +13,6 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import kick_flow
-from tcbot.modules.helper.pipelines.demote_flow import Demote
 
 
 class _FakeBot:
@@ -79,13 +78,13 @@ class _FakeCtx:
 def _kick_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub demote re-check and kick audit write so no database is touched."""
 
-    async def _no_redemote(*args: Any, **kwargs: Any) -> None:
+    async def _no_role(user_id: int, *, fresh: bool = False) -> None:
         return None
 
     async def _logged(*args: Any, **kwargs: Any) -> None:
         return None
 
-    monkeypatch.setattr(Demote, "redemote_before_fanout", _no_redemote)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _no_role)
     monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
 
 

@@ -260,9 +260,9 @@ async def can_manage_group(
 # * through the normal moderation flow. The reply is one short
 # * professional-but-friendly line.
 # * Staff roles (admin/developer/tester) are intentionally absent from the
-# * ban/kick/mute tables: those entries auto-demote the target via
+# * ban/kick/mute tables: those entries demote the target via
 # * Demote.execute before enforcing, so refusing here would make the
-# * documented auto-demote unreachable.
+# * documented demote unreachable.
 
 
 # * Which (action, kind) pairs refuse, mirroring the old per-action tables.

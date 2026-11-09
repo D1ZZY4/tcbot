@@ -461,14 +461,36 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             groups_fetch_failed = True
         else:
             groups_fetch_failed = False
-    await Demote.redemote_before_fanout(
-        bot,
-        target_id,
-        target_fname,
-        admin_id,
-        admin_fname,
-        trigger="ban",
-    )
+    try:
+        pre_fanout_role = await db.users_roles.get_effective_role(target_id, fresh=True)
+    except Exception:
+        log.exception(
+            "Pre-fanout role lookup failed for target %d; proceeding with ban anyway",
+            target_id,
+        )
+        pre_fanout_role = None
+    if pre_fanout_role:
+        try:
+            await Demote.execute(
+                bot,
+                target_id,
+                target_fname,
+                pre_fanout_role,
+                admin_id,
+                admin_fname,
+                trigger="ban",
+            )
+            log.info(
+                "Demoted target %d (role=%s) before ban fan-out; proof-collection TOCTOU window closed",
+                target_id,
+                pre_fanout_role,
+            )
+        except Exception:
+            log.exception(
+                "Demote before ban fan-out failed for target %d (role=%s); proceeding anyway",
+                target_id,
+                pre_fanout_role,
+            )
     groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
     results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
@@ -577,30 +599,6 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         log.warning("Failed to send ban PM to user %d: %s", target_id, pm_result)
 
 
-async def demote_ban_target(
-    msg: Message,
-    bot: Bot,
-    target_id: int,
-    target_fname: str,
-    target_role: str | None,
-    admin_id: int,
-    admin_fname: str,
-) -> bool:
-    """Auto-demote a role-holding ban target; reply and abort on failure."""
-    if not target_role:
-        return True
-    return await Demote.auto_demote_or_abort(
-        msg,
-        bot,
-        target_id,
-        target_fname,
-        target_role,
-        admin_id,
-        admin_fname,
-        trigger="ban",
-    )
-
-
 def proof_prompt_content(
     target_id: int, target_fname: str, reason: str, locale: str | None = None
 ) -> tuple[str, InlineKeyboardMarkup]:
@@ -642,14 +640,15 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     target_role = ctx.user_data.get("ban_target_role")
     if not target_id or not reason:
         return ConversationHandler.END
-    if not await demote_ban_target(
-        msg,
+    if isinstance(target_role, str) and not await Demote.execute(
         ctx.bot,
         target_id,
         target_fname,
-        target_role if isinstance(target_role, str) else None,
+        target_role,
         admin_id,
         admin_fname,
+        trigger="ban",
+        msg=msg,
     ):
         return ConversationHandler.END
     text, kb = proof_prompt_content(

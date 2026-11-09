@@ -42,7 +42,7 @@ Removes a user's role. A confirmation button is shown before the action executes
 *Usage:* `/tcdemote <target>`
 - Founder can demote any role.
 - Admin can demote Developer or Tester only.
-- When a user with a role is banned or kicked, their role is automatically removed and they are notified by DM."""
+- When a user with a role is banned or kicked, their role is removed and they are notified by DM."""
 
 [help.transferowner]
 body = """

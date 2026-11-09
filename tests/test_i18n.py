@@ -18,7 +18,6 @@ import pytest
 
 from tcbot import cfg
 from tcbot.database import groups_db, settings_db, users_roles
-from tcbot.database.groups_db import collections as _groups_collections
 from tcbot.modules import (
     admins,
     appeals,
@@ -324,6 +323,13 @@ def test_resolve_unknown_falls_back() -> None:
     )
 
 
+def test_legacy_id_alias_resolves_to_indonesian() -> None:
+    assert resolve_locale(chat_type="private", user_locale="id") == "id-ID"
+    assert t("common.refuse.owner_only", "id", plain=True) == t(
+        "common.refuse.owner_only", "id-ID", plain=True
+    )
+
+
 # ─────────────────── Persistence fakes and tests ─────────────────── #
 
 
@@ -387,7 +393,7 @@ def fake_user_col(monkeypatch: pytest.MonkeyPatch) -> _FakeCollection:
 def fake_group_col(monkeypatch: pytest.MonkeyPatch) -> _FakeCollection:
 
     fake = _FakeCollection()
-    monkeypatch.setattr(_groups_collections, "col", lambda _name: fake)
+    monkeypatch.setattr(groups_db, "col", lambda _name: fake)
     groups_db._GROUP_LOCALE_L1.clear()
     return fake
 
@@ -496,7 +502,7 @@ def test_start_menu_has_language_bottom_row() -> None:
 def test_language_list_marks_selected_locale() -> None:
     kb = keyboards.language_list_kb(
         "user",
-        [("English (US)", "en-US"), ("Bahasa Indonesia", "id")],
+        [("English (US)", "en-US"), ("Bahasa Indonesia", "id-ID")],
         selected="en-US",
     )
     texts = [row[0].text for row in kb.inline_keyboard]
@@ -961,7 +967,7 @@ def test_markup_escaped_braces_literal() -> None:
 def test_ban_help_overview_golden() -> None:
     assert t("banning.help.overview") == (
         "Issues a *federation\\-wide ban* on a user, applied across every "
-        "connected group at once\\. Auto\\-demotes staff targets and stores "
+        "connected group at once\\. Demotes staff targets and stores "
         "proof with the ban record\\."
     )
 
@@ -1020,7 +1026,7 @@ def test_kicking_help_golden() -> None:
 
     assert kick.__help_text__ == t("kicking.help.overview")
     assert t("kicking.help.overview") == (
-        "Removes a user from the *current group only*\\. Auto\\-demotes staff targets\\."
+        "Removes a user from the *current group only*\\. Demotes staff targets\\."
     )
     sections = _module_sections(kick)
     assert sections["Commands & Aliases"] == t("kicking.help.commands.body")

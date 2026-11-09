@@ -11,4 +11,4 @@ manual = "Peran {role} kamu di {community} telah dicabut oleh {name}."
 auto = "Peran {role} kamu di {community} telah dicabut. Status federasi: {verb}."
 
 [abort]
-body = "{user} memegang peran federasi ({target_role}) dan tahap auto-demote gagal, sehingga {action} tidak bisa lanjut dengan aman. Demosi manual dengan /tcdemote lalu ulangi {action}."
+body = "{user} memegang peran federasi ({target_role}) dan tahap demote gagal, sehingga {action} tidak bisa lanjut dengan aman. Demosi manual dengan /tcdemote lalu ulangi {action}."

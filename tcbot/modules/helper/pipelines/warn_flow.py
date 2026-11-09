@@ -2,14 +2,14 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Warning actor, auto-ban, management, and conversation factory."""
+"""Warning actor, threshold ban, management, and conversation factory."""
 
 from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING
 
-from telegram import Bot, InlineKeyboardMarkup, Message, Update
+from telegram import Message, Update
 
 from tcbot import cfg
 from tcbot import database as db
@@ -56,7 +56,7 @@ async def execute_warn(
     reason_text: str,
     proof_msgs: list[Message] | None = None,
 ) -> None:
-    """Issue a warning and auto-ban the target if a warn threshold is reached."""
+    """Issue a warning and ban the target if a warn threshold is reached."""
     msg = update.effective_message
     if msg is None:
         return
@@ -123,10 +123,10 @@ async def execute_warn(
         chat_id,
         chat_title,
     )
-    auto_ban_trigger: str | None = None
+    threshold_trigger: str | None = None
     fed_count: int = 0
     if count >= warn_limit:
-        auto_ban_trigger = "per_group"
+        threshold_trigger = "per_group"
     else:
         fed_limit = cfg.fed_warn_limit
         if fed_limit > 0:
@@ -149,286 +149,240 @@ async def execute_warn(
                 )
                 return
             if fed_count >= fed_limit:
-                auto_ban_trigger = "fed_global"
-    if auto_ban_trigger is not None:
-        await _execute_warn_auto_ban(
-            ctx.bot,
-            msg,
-            target_id,
-            target_name,
-            admin_id,
-            admin_fname,
-            reason_text,
-            count,
-            warn_limit,
-            fed_count,
-            auto_ban_trigger,
-            proof_kb,
-            chat_id,
-            lc,
-            lt,
-            log_text,
-            locale,
-            warn_proof_id,
+                threshold_trigger = "fed_global"
+    if threshold_trigger is not None:
+        fed_warn_limit = cfg.fed_warn_limit
+        try:
+            target_role = await db.users_roles.get_effective_role(target_id, fresh=True)
+        except Exception:
+            log.exception(
+                "Warn threshold ban role lookup failed for target=%d; aborting threshold ban",
+                target_id,
+            )
+            await safe_reply(
+                msg,
+                replies.err_db_retry(locale, plain=True),
+                log_label="Warn threshold lookup-fail",
+                parse_mode=None,
+            )
+            return
+        # * Staff are exempt from warn threshold ban; demoted first so rank never survives.
+        if target_role:
+            demoted = True
+            try:
+                await Demote.execute(
+                    ctx.bot,
+                    target_id,
+                    target_name,
+                    target_role,
+                    admin_id,
+                    admin_fname,
+                    trigger="ban",
+                )
+            except Exception:
+                demoted = False
+                log.exception("Demote on warn limit failed for role=%s", target_role)
+            exemption_text = (
+                t(
+                    "warnings.exempt.demoted",
+                    locale,
+                    user=Safe(user_ref(target_id, target_name)),
+                    role=target_role,
+                )
+                if demoted
+                else t(
+                    "warnings.exempt.failed",
+                    locale,
+                    user=Safe(user_ref(target_id, target_name)),
+                    role=target_role,
+                )
+            )
+            await safe_reply(
+                msg,
+                exemption_text,
+                log_label="Warn threshold staff exemption",
+                reply_markup=proof_kb,
+            )
+            return
+        groups_result, existing_ban = await asyncio.gather(
+            db.groups_db.active_groups(),
+            db.bans_db.get_active_ban(target_id),
+            return_exceptions=True,
         )
-    else:
-        results2 = await asyncio.gather(
-            ctx.bot.send_message(
+        throw_if_cancelled((groups_result, existing_ban))
+        groups_fetch_failed = isinstance(groups_result, BaseException)
+        if groups_fetch_failed:
+            log.exception(
+                "Warn threshold ban groups fetch failed for target=%d; enforcing reduced scope",
+                target_id,
+            )
+        groups: list = [] if groups_fetch_failed else groups_result
+        already_banned = (
+            not isinstance(existing_ban, BaseException) and existing_ban is not None
+        )
+        groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,), chat_id)
+        ban_id: str | None = None
+        if not already_banned:
+            try:
+                ban_doc = await db.bans_db.create_ban(
+                    target_id, reason_text, admin_id, warn_proof_id or 0, 0
+                )
+                ban_id = ban_doc.get("ban_id", "")
+            except Exception:
+                log.exception(
+                    "Failed to create federation ban record on warn limit for user %d",
+                    target_id,
+                )
+                await safe_reply(
+                    msg,
+                    t(
+                        "warnings.autoban.db_fail",
+                        locale,
+                        user=Safe(user_ref(target_id, target_name)),
+                    ),
+                    log_label="Warn threshold DB-fail",
+                    reply_markup=proof_kb,
+                )
+                return
+        try:
+            log_msg = await ctx.bot.send_message(
                 lc,
                 log_text,
                 parse_mode="MarkdownV2",
                 message_thread_id=lt,
                 reply_markup=proof_kb,
-            ),
-            msg.reply_text(
-                t(
-                    "warnings.issued.body",
-                    locale,
-                    user=Safe(user_ref(target_id, target_name)),
-                    count=count,
-                    limit=warn_limit,
-                    reason=reason_text,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Warn threshold log send failed")
+            log_msg = None
+        if ban_id and log_msg is not None:
+            try:
+                await db.bans_db.set_log_message_id(ban_id, log_msg.message_id)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("Warn threshold set_log_message_id failed")
+        ban_results = await fan_out(
+            [ctx.bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
+        )
+        total_groups = len(groups)
+        failed_groups = [
+            (grp, r)
+            for grp, r in zip(groups, ban_results, strict=False)
+            if isinstance(r, BaseException)
+        ]
+        transient_groups = [
+            (grp, r) for grp, r in failed_groups if not is_benign_telegram_error(r)
+        ]
+        failed = count_transient_errors(ban_results)
+        applied = total_groups - failed
+        any_ban_ok = applied > 0
+        for grp, exc in failed_groups:
+            log.warning(
+                "Warn threshold ban enforcement failed for user=%d in group=%s (%d): %s",
+                target_id,
+                grp.get("title", ""),
+                grp["chat_id"],
+                exc,
+            )
+        log.info(
+            "Warn threshold ban enforced (%s): target=%d applied=%d/%d",
+            threshold_trigger,
+            target_id,
+            applied,
+            total_groups,
+        )
+        applied_line = replies.applied_summary(
+            locale,
+            "warnings.autoban",
+            total=total_groups,
+            failed=failed,
+            transient=transient_groups,
+        )
+        if groups_fetch_failed:
+            applied_line += t("warnings.autoban.scope_warn", locale)
+        if threshold_trigger == "per_group":
+            ban_notice = t(
+                "warnings.autoban.notice_per_group",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+                limit=warn_limit,
+            )
+            ban_fail_notice = t(
+                "warnings.autoban.fail_per_group",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+                limit=warn_limit,
+            )
+        else:
+            ban_notice = t(
+                "warnings.autoban.notice_fed",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+                fed=fed_count,
+                fedlimit=fed_warn_limit,
+            )
+            ban_fail_notice = t(
+                "warnings.autoban.fail_fed",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+                fed=fed_count,
+                fedlimit=fed_warn_limit,
+            )
+        if any_ban_ok:
+            clear_result, reply_result = await asyncio.gather(
+                db.warns_db.clear_all_warns(target_id),
+                msg.reply_text(
+                    f"{ban_notice}{applied_line}",
+                    parse_mode="MarkdownV2",
+                    reply_markup=proof_kb,
                 ),
-                parse_mode="MarkdownV2",
-                reply_markup=proof_kb,
-            ),
-            return_exceptions=True,
-        )
-        throw_if_cancelled(results2)
-        if isinstance(results2[0], BaseException):
-            log.error("Warn log send failed: %s", results2[0])
-
-
-# ──────────────────────────── Auto-ban ──────────────────────────── #
-
-
-async def _execute_warn_auto_ban(
-    bot: Bot,
-    msg: Message,
-    target_id: int,
-    target_name: str,
-    admin_id: int,
-    admin_fname: str,
-    reason_text: str,
-    count: int,
-    warn_limit: int,
-    fed_count: int,
-    auto_ban_trigger: str,
-    proof_kb: InlineKeyboardMarkup | None,
-    chat_id: int,
-    lc: int,
-    lt: int | None,
-    log_text: str,
-    locale: str | None = None,
-    proof_msg_id: int | None = None,
-) -> None:
-    """Handle warn-threshold auto-ban: demotion, record write, fan-out, reply."""
-    fed_warn_limit = cfg.fed_warn_limit
-    try:
-        target_role = await db.users_roles.get_effective_role(target_id, fresh=True)
-    except Exception:
-        log.exception(
-            "Warn auto-ban role lookup failed for target=%d; aborting auto-ban",
-            target_id,
-        )
-        await safe_reply(
-            msg,
-            replies.err_db_retry(locale, plain=True),
-            log_label="Warn auto-ban lookup-fail",
-            parse_mode=None,
-        )
-        return
-    # * Staff are exempt from warn auto-ban; demoted first so rank never survives.
-    if target_role:
-        demoted = True
-        try:
-            await Demote.execute(
-                bot,
-                target_id,
-                target_name,
-                target_role,
-                admin_id,
-                admin_fname,
-                trigger="ban",
+                return_exceptions=True,
             )
-        except Exception:
-            demoted = False
-            log.exception("Auto-demote on warn limit failed for role=%s", target_role)
-        exemption_text = (
-            t(
-                "warnings.exempt.demoted",
-                locale,
-                user=Safe(user_ref(target_id, target_name)),
-                role=target_role,
-            )
-            if demoted
-            else t(
-                "warnings.exempt.failed",
-                locale,
-                user=Safe(user_ref(target_id, target_name)),
-                role=target_role,
-            )
-        )
-        await safe_reply(
-            msg,
-            exemption_text,
-            log_label="Warn auto-ban staff exemption",
-            reply_markup=proof_kb,
-        )
-        return
-    groups_result, existing_ban = await asyncio.gather(
-        db.groups_db.active_groups(),
-        db.bans_db.get_active_ban(target_id),
-        return_exceptions=True,
-    )
-    throw_if_cancelled((groups_result, existing_ban))
-    groups_fetch_failed = isinstance(groups_result, BaseException)
-    if groups_fetch_failed:
-        log.exception(
-            "Warn auto-ban groups fetch failed for target=%d; enforcing reduced scope",
-            target_id,
-        )
-    groups: list = [] if groups_fetch_failed else groups_result
-    already_banned = (
-        not isinstance(existing_ban, BaseException) and existing_ban is not None
-    )
-    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,), chat_id)
-    ban_id: str | None = None
-    if not already_banned:
-        try:
-            ban_doc = await db.bans_db.create_ban(
-                target_id, reason_text, admin_id, proof_msg_id or 0, 0
-            )
-            ban_id = ban_doc.get("ban_id", "")
-        except Exception:
-            log.exception(
-                "Failed to create federation ban record on warn limit for user %d",
-                target_id,
-            )
+            if isinstance(clear_result, BaseException):
+                log.error(
+                    "Warn clear after threshold ban failed for target=%d chat=%d: %s",
+                    target_id,
+                    chat_id,
+                    clear_result,
+                )
+            if isinstance(reply_result, BaseException):
+                log.debug("Threshold ban notification reply failed: %s", reply_result)
+        else:
             await safe_reply(
                 msg,
-                t(
-                    "warnings.autoban.db_fail",
-                    locale,
-                    user=Safe(user_ref(target_id, target_name)),
-                ),
-                log_label="Warn auto-ban DB-fail",
+                f"{ban_fail_notice}{applied_line}",
+                log_label="Threshold ban failure notice",
                 reply_markup=proof_kb,
             )
-            return
-    try:
-        log_msg = await bot.send_message(
+        return
+    results2 = await asyncio.gather(
+        ctx.bot.send_message(
             lc,
             log_text,
             parse_mode="MarkdownV2",
             message_thread_id=lt,
             reply_markup=proof_kb,
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        log.exception("Warn-auto-ban log send failed")
-        log_msg = None
-    if ban_id and log_msg is not None:
-        try:
-            await db.bans_db.set_log_message_id(ban_id, log_msg.message_id)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            log.exception("Warn-auto-ban set_log_message_id failed")
-    ban_results = await fan_out(
-        [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
-    )
-    total_groups = len(groups)
-    failed_groups = [
-        (grp, r)
-        for grp, r in zip(groups, ban_results, strict=False)
-        if isinstance(r, BaseException)
-    ]
-    transient_groups = [
-        (grp, r) for grp, r in failed_groups if not is_benign_telegram_error(r)
-    ]
-    failed = count_transient_errors(ban_results)
-    applied = total_groups - failed
-    any_ban_ok = applied > 0
-    for grp, exc in failed_groups:
-        log.warning(
-            "Warn auto-ban enforcement failed for user=%d in group=%s (%d): %s",
-            target_id,
-            grp.get("title", ""),
-            grp["chat_id"],
-            exc,
-        )
-    log.info(
-        "Warn auto-ban enforced (%s): target=%d applied=%d/%d",
-        auto_ban_trigger,
-        target_id,
-        applied,
-        total_groups,
-    )
-    applied_line = replies.applied_summary(
-        locale,
-        "warnings.autoban",
-        total=total_groups,
-        failed=failed,
-        transient=transient_groups,
-    )
-    if groups_fetch_failed:
-        applied_line += t("warnings.autoban.scope_warn", locale)
-    if auto_ban_trigger == "per_group":
-        ban_notice = t(
-            "warnings.autoban.notice_per_group",
-            locale,
-            user=Safe(user_ref(target_id, target_name)),
-            limit=warn_limit,
-        )
-        ban_fail_notice = t(
-            "warnings.autoban.fail_per_group",
-            locale,
-            user=Safe(user_ref(target_id, target_name)),
-            limit=warn_limit,
-        )
-    else:
-        ban_notice = t(
-            "warnings.autoban.notice_fed",
-            locale,
-            user=Safe(user_ref(target_id, target_name)),
-            fed=fed_count,
-            fedlimit=fed_warn_limit,
-        )
-        ban_fail_notice = t(
-            "warnings.autoban.fail_fed",
-            locale,
-            user=Safe(user_ref(target_id, target_name)),
-            fed=fed_count,
-            fedlimit=fed_warn_limit,
-        )
-    if any_ban_ok:
-        clear_result, reply_result = await asyncio.gather(
-            db.warns_db.clear_all_warns(target_id),
-            msg.reply_text(
-                f"{ban_notice}{applied_line}",
-                parse_mode="MarkdownV2",
-                reply_markup=proof_kb,
+        ),
+        msg.reply_text(
+            t(
+                "warnings.issued.body",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+                count=count,
+                limit=warn_limit,
+                reason=reason_text,
             ),
-            return_exceptions=True,
-        )
-        if isinstance(clear_result, BaseException):
-            log.error(
-                "Warn clear after auto-ban failed for target=%d chat=%d: %s",
-                target_id,
-                chat_id,
-                clear_result,
-            )
-        if isinstance(reply_result, BaseException):
-            log.debug("Auto-ban notification reply failed: %s", reply_result)
-    else:
-        await safe_reply(
-            msg,
-            f"{ban_fail_notice}{applied_line}",
-            log_label="Auto-ban failure notice",
+            parse_mode="MarkdownV2",
             reply_markup=proof_kb,
-        )
+        ),
+        return_exceptions=True,
+    )
+    throw_if_cancelled(results2)
+    if isinstance(results2[0], BaseException):
+        log.error("Warn log send failed: %s", results2[0])
 
 
 # ───────────────────────── Warn management ──────────────────────── #
