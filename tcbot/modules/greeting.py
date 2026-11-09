@@ -197,7 +197,12 @@ async def _handle_member(
                     notice += t(
                         "greeting.notice.appeal",
                         locale,
-                        link=Safe(link("Submit Appeal", appeal_url)),
+                        link=Safe(
+                            link(
+                                t("button.submit_appeal", locale, plain=True),
+                                appeal_url,
+                            )
+                        ),
                     )
             try:
                 await msg.reply_text(notice, parse_mode="MarkdownV2")
@@ -337,7 +342,9 @@ async def on_join_request_approved(
             chat.id,
             ban,
         )
-        ban = None
+        # * Fail closed: suppress welcome and mute enforcement until ban
+        # * state is proven clean; /tcsync heals on next sweep.
+        return
     if ban:
         # * The request-time decline in on_join_request can be beaten by a
         # * ban created after approval or a failed decline. Enforce here as
@@ -428,12 +435,23 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     )
     throw_if_cancelled((ban,))
     if isinstance(ban, BaseException):
-        log.warning(
+        log.error(
             "get_active_ban failed for uid=%d on join_request in chat=%d: %s",
             user.id,
             chat.id,
             ban,
         )
+        # * Fail closed on outage: decline rather than allow a possibly
+        # * banned user to enter until state is proven clean.
+        try:
+            await ctx.bot.decline_chat_join_request(chat.id, user.id)
+        except Exception as exc:
+            log.warning(
+                "Failed to decline join request for uid=%d in chat=%d: %s",
+                user.id,
+                chat.id,
+                exc,
+            )
         return
 
     if not ban:

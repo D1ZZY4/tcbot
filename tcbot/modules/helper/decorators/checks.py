@@ -131,11 +131,23 @@ async def classify_and_check(
         return_exceptions=True,
     )
     throw_if_cancelled((ident, role_result))
-    if isinstance(ident, BaseException):
-        log.exception("identity.classify failed in %s: %s", action, ident)
-        return None
-    if isinstance(role_result, BaseException):
-        log.exception("resolve_and_check failed in %s: %s", action, role_result)
+    if isinstance(ident, BaseException) or isinstance(role_result, BaseException):
+        # * Fail closed with a retry reply (was silent): a classify
+        # * failure must not leave the moderator staring at a dead command.
+        if isinstance(ident, BaseException):
+            log.exception("identity.classify failed in %s: %s", action, ident)
+        if isinstance(role_result, BaseException):
+            log.exception("resolve_and_check failed in %s: %s", action, role_result)
+        chat = msg.chat
+        locale = await effective_locale(
+            getattr(chat, "type", None), admin_id, getattr(chat, "id", 0)
+        )
+        await safe_reply(
+            msg,
+            replies.err_role_verify(locale, plain=True),
+            log_label=f"classify_and_check {action} failed",
+            parse_mode=None,
+        )
         return None
     # * isinstance + early return above already narrows role_result to the
     # * success tuple (asserts vanish under python -O). Guard first: when
