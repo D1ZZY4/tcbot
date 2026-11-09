@@ -219,14 +219,21 @@ class _MemberLookup(Protocol):
     async def get_chat_member(self, chat_id: int, user_id: int) -> object: ...
 
 
-async def can_manage_group(bot: _MemberLookup, chat_id: int, user_id: int) -> bool:
+async def can_manage_group(
+    bot: _MemberLookup, chat_id: int, user_id: int, *, fresh: bool = False
+) -> bool:
     """Return True when ``user_id`` may manage federation settings for a group.
 
     Granted to federation staff, or to the group's Telegram creator. Both
     lookups fail closed: a staff-role or membership failure denies, so an
     outage never grants. Cancellation always propagates.
+
+    With ``fresh=True`` the staff check reads the effective role directly
+    from MongoDB so a demotion in another process is never hidden for up
+    to the 60 s role TTL. Enforcement callers use it; display-only callers
+    keep the cached fast path.
     """
-    if await db.users_roles.is_staff(user_id):
+    if await db.users_roles.is_staff(user_id, fresh=fresh):
         return True
     try:
         member = await asyncio.wait_for(

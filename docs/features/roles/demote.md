@@ -1,6 +1,6 @@
 # Demote
 
-This document describes the current demotion behavior implemented by `tcbot/modules/admins/` (command + callback handlers) and `tcbot/modules/helper/workflows/demote_flow/` (the `Demote` class shared by manual demotion and auto-demote on ban/kick/mute).
+This document describes the current demotion behavior implemented by `tcbot/modules/admins/` (command + callback handlers) and `tcbot/modules/helper/workflows/demote_flow.py` (the `Demote` class shared by manual demotion and auto-demote on ban/kick/mute).
 
 For role hierarchy and rules, see [`roles.md`](roles.md). For the promote flow,
 see [`promote.md`](promote.md). For a flow that triggers auto-demotion
@@ -100,16 +100,17 @@ The federation log emitted by `parse_logmsg.demoted(target_id, target_fname, rol
 
 ### Confirmation callback
 
-Callback data: `demote_confirm:<target_id>` and `demote_cancel:<target_id>:<executor_id>` for new prompts (legacy `demote_cancel:<target_id>` from in-flight keyboards keeps working).
+Callback data: `demote_confirm:<target_id>:<executor_id>` and `demote_cancel:<target_id>:<executor_id>` for new prompts (legacy `:<target_id>` taps from in-flight keyboards keep working).
 
 `on_demote_confirm`:
 
-1. Re-checks the executor's effective role alongside `q.answer()` through the shared `_check_callback_staff` helper (same helper backs the promote role button); if no longer Founder/Admin, edits the perm-expired notice and removes the keyboard. Cancellation from either branch propagates.
-2. Then fetches the target role and the target's mention data (name + username) in a second parallel gather; cancellation from either branch propagates instead of rendering a fallback.
-3. Re-applies the Admin-only-Founder rule.
-4. Calls `Demote.execute(ctx.bot, target_id, target_fname, target_role, admin.id, admin.first_name, trigger=None)`.
-5. On a successful removal, edits the confirmation message to `Done. <mention> - <code id> has been removed from <Role>.` and clears the keyboard.
-6. If `Demote.execute` returns False (nothing was removed; the record was cleared by another path), edits to `Couldn't remove the role - it may have already been cleared.`
+1. New prompts carry the opener, so only that staffer can confirm; a different tapper gets an alert and the prompt stays live. Legacy taps act as the tapper.
+2. Re-checks the executor's effective role alongside `q.answer()` through the shared `_check_callback_staff` helper (same helper backs the promote role button); if no longer Founder/Admin, edits the perm-expired notice and removes the keyboard. Cancellation from either branch propagates.
+3. Then fetches the target role and the target's mention data (name + username) in a second parallel gather; cancellation from either branch propagates instead of rendering a fallback.
+4. Re-applies the Admin-only-Founder rule.
+5. Calls `Demote.execute(ctx.bot, target_id, target_fname, target_role, admin.id, admin.first_name, trigger=None)`.
+6. On a successful removal, edits the confirmation message to `Done. <mention> - <code id> has been removed from <Role>.` and clears the keyboard.
+7. If `Demote.execute` returns False (nothing was removed; the record was cleared by another path), edits to `Couldn't remove the role - it may have already been cleared.`
 
 `on_demote_cancel` answers the callback and edits the message to say no changes were made. New prompts carry the opener, so only that staffer can cancel; a different tapper gets a not-owner alert and the prompt stays live.
 

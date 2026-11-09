@@ -17,6 +17,7 @@ from tcbot.modules.admins.shared import (
     _RL_PERIOD_LONG_S,
     _RL_PERIOD_S,
     _RL_QUERY_LIMIT,
+    _action_owner_mismatch,
     _cancel_owner_mismatch,
     _check_callback_staff,
     _classify_and_load_role,
@@ -160,9 +161,13 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the role-selection inline button from /tcpromote.
 
-    Verifies the executor still holds staff rank; rejects with alert if expired.
-    Fetches the target's name and current role in parallel, then delegates to
-    ``Promote.execute`` and edits the prompt to the result.
+    New prompts carry the opener as ``promo_role:{role}:{target}:{executor}``
+    so only that staffer can act; a different tapper gets an alert and the
+    prompt stays live. Legacy three-part callbacks from in-flight keyboards
+    act as the tapper. Verifies the executor still holds staff rank; rejects
+    with alert if expired. Fetches the target's name and current role in
+    parallel, then delegates to ``Promote.execute`` and edits the prompt to
+    the result.
     """
     q = update.callback_query
     if q is None:
@@ -174,15 +179,17 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if admin is None:
         await q.answer()
         return
-    parts = q.data.split(":", 2)
-    if len(parts) != 3:
+    parts = q.data.split(":")
+    if len(parts) not in (3, 4):
         await q.answer()
         return
-    _, role, target_id_str = parts
+    _, role, target_id_str = parts[:3]
     try:
         target_id = int(target_id_str)
     except ValueError:
         await q.answer()
+        return
+    if await _action_owner_mismatch(q, update, min_parts=3):
         return
 
     executor_role = await _check_callback_staff(admin.id, q, update)

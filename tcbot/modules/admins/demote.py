@@ -17,6 +17,8 @@ from tcbot.modules.admins.shared import (
     _RL_PERIOD_LONG_S,
     _RL_PERIOD_S,
     _RL_QUERY_LIMIT,
+    _action_owner_mismatch,
+    _can_demote_admin,
     _cancel_owner_mismatch,
     _check_callback_staff,
     _classify_and_load_role,
@@ -90,7 +92,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if target_role == "admin" and executor_role != "founder":
+    if not _can_demote_admin(executor_role, target_role):
         await safe_reply(
             msg,
             t("admins.error.founder_demote_only", locale, plain=True),
@@ -120,9 +122,13 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Confirm the demote action from the inline keyboard.
 
-    Re-validates the executor's rank; rejects with alert if insufficient.
-    Answers the query, fetches the target's current role and mention data in
-    parallel, then executes ``Demote.execute`` and edits the prompt to the result.
+    New prompts carry the opener as ``demote_confirm:{target}:{executor}``
+    so only that staffer can act; a different tapper gets an alert and the
+    prompt stays live. Legacy two-part callbacks from in-flight keyboards
+    act as the tapper. Re-validates the executor's rank; rejects with alert
+    if insufficient. Answers the query, fetches the target's current role
+    and mention data in parallel, then executes ``Demote.execute`` and
+    edits the prompt to the result.
     """
     q = update.callback_query
     if q is None:
@@ -134,13 +140,16 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if admin is None:
         await q.answer()
         return
+    parts = q.data.split(":")
+    if len(parts) not in (2, 3):
+        await q.answer()
+        return
     try:
-        target_id = int(q.data.split(":", 1)[1])
+        target_id = int(parts[1])
     except ValueError:
         await q.answer()
         return
-    except IndexError:
-        await q.answer()
+    if await _action_owner_mismatch(q, update, min_parts=2):
         return
     executor_role = await _check_callback_staff(admin.id, q, update)
     if executor_role is None:
@@ -193,7 +202,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
-    if target_role == "admin" and executor_role != "founder":
+    if not _can_demote_admin(executor_role, target_role):
         await safe_edit_cb(
             q,
             t(

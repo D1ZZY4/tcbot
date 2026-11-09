@@ -23,15 +23,20 @@ def promote_role_kb(
 
     Labels render from ROLE_LABEL verbatim: ranks are canonical English
     identifiers like commands, per the translator contract. When
-    *executor_id* is given the Cancel button carries it
-    (``promo_role_cancel:{target}:{executor}``) so the cancel handler can
-    refuse a different tapper; without it the legacy two-part shape is kept
-    for callers that have no owner to record.
+    *executor_id* is given the role buttons and the Cancel button carry it
+    (``promo_role:{role}:{target}:{executor}`` and
+    ``promo_role_cancel:{target}:{executor}``) so the handlers can refuse a
+    different tapper; without it the legacy shapes are kept for callers
+    that have no owner to record.
     """
     buttons = [
         InlineKeyboardButton(
             db.users_roles.ROLE_LABEL[r],
-            callback_data=f"promo_role:{r}:{target_id}",
+            callback_data=(
+                f"promo_role:{r}:{target_id}:{executor_id}"
+                if executor_id is not None
+                else f"promo_role:{r}:{target_id}"
+            ),
             style=KeyboardButtonStyle.PRIMARY,
         )
         for r in available_roles
@@ -61,21 +66,27 @@ def demote_confirm_kb(
 ) -> InlineKeyboardMarkup:
     """Demotion confirmation: Confirm plus Cancel.
 
-    When *executor_id* is given the Cancel button carries it
-    (``demote_cancel:{target}:{executor}``) so the cancel handler can refuse
-    a different tapper; without it the legacy two-part shape is kept.
+    When *executor_id* is given both buttons carry it
+    (``demote_confirm:{target}:{executor}`` and
+    ``demote_cancel:{target}:{executor}``) so the handlers can refuse a
+    different tapper; without it the legacy two-part shapes are kept.
     """
     cancel_data = (
         f"demote_cancel:{target_id}:{executor_id}"
         if executor_id is not None
         else f"demote_cancel:{target_id}"
     )
+    confirm_data = (
+        f"demote_confirm:{target_id}:{executor_id}"
+        if executor_id is not None
+        else f"demote_confirm:{target_id}"
+    )
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(
                     t("button.confirm", locale, plain=True),
-                    callback_data=f"demote_confirm:{target_id}",
+                    callback_data=confirm_data,
                     style=KeyboardButtonStyle.DANGER,
                 ),
                 InlineKeyboardButton(

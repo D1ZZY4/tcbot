@@ -150,11 +150,11 @@ A user submits a request for themselves to become Admin. `cmd_promote_request` f
 
 | Button | Callback data | Handler |
 |---|---|---|
-| Role option | `promo_role:<role>:<target_id>` | `on_promote_role_btn` |
+| Role option | `promo_role:<role>:<target_id>:<executor_id>` (legacy without executor still works) | `on_promote_role_btn` |
 | Cancel | `promo_role_cancel:<target_id>:<executor_id>` (legacy `:<target_id>` still works) | `on_promote_role_cancel` |
 | Approve / Reject (Founder DM) | `promo_approve:<request_id>` / `promo_reject:<request_id>` | `on_promo_decision` |
 
-All callbacks re-check the tapper's current effective role (Founder/Admin) before applying any write, so a user who lost permission between selecting and confirming is rejected with an alert. The check is rank-only for action buttons: callbacks do not re-run identity refusal, and any Founder/Admin who can see the picker can complete it (attributed to the tapper in logs). Cancellation is the exception: new cancel buttons carry the opener, so only that staffer can collapse the picker; legacy cancels keep the old any-tapper behaviour.
+All callbacks re-check the tapper's current effective role (Founder/Admin) before applying any write, so a user who lost permission between selecting and confirming is rejected with an alert. New prompts carry the opener in both the role buttons and the cancel button, so only that staffer can act on or collapse the picker; a different tapper gets an alert and the prompt stays live. Legacy taps without an executor segment act as the tapper with the rank re-check, and callbacks do not re-run identity refusal.
 
 ### Approval path
 
@@ -203,3 +203,4 @@ The unified `promoted` builder places the role as a field below the user (`Role:
 - Non-Founder cannot approve/reject promotion requests.
 - Self-promotion, bot promotion, and promotion-of-Founder are rejected.
 - Inline role-button menu re-checks executor role at click time.
+- Only the prompt opener can complete or cancel the inline role picker; other staff get an alert.

@@ -184,20 +184,23 @@ async def _check_callback_staff(
     return role_r
 
 
-async def _cancel_owner_mismatch(q: Any, update: Update) -> bool:
+async def _prompt_owner_mismatch(
+    q: Any, update: Update, *, min_parts: int, key: str
+) -> bool:
     """Answer an alert and return True when the tapper is not the prompt owner.
 
-    New cancel callbacks carry ``{target}:{executor}`` after the prefix;
-    only the recorded executor (or legacy taps without an executor segment)
-    may collapse the prompt. Action buttons keep acting as the tapper with
-    a fresh rank re-check, so only cancellation enforces ownership.
+    New callbacks carry ``{...}:{executor}`` after the legacy shape; only
+    the recorded executor (or legacy taps without an executor segment) may
+    act on the prompt. ``min_parts`` is the legacy segment count for the
+    callback prefix and ``key`` selects the cancel or action alert copy.
+    The prompt stays live on mismatch so the opener can still finish it.
     """
     data = getattr(q, "data", "") or ""
     parts = str(data).split(":")
-    if len(parts) != 3:
+    if len(parts) <= min_parts:
         return False
     try:
-        owner_id = int(parts[2])
+        owner_id = int(parts[-1])
     except ValueError:
         return False
     tapper = update.effective_user
@@ -205,13 +208,40 @@ async def _cancel_owner_mismatch(q: Any, update: Update) -> bool:
         return False
     try:
         await q.answer(
-            t(
-                "admins.error.not_prompt_owner",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t(key, await locale_for_update(update), plain=True),
             show_alert=True,
         )
     except Exception as exc:
-        log.debug("Cancel owner answer failed: %s", exc)
+        log.debug("Prompt owner answer failed: %s", exc)
     return True
+
+
+async def _cancel_owner_mismatch(q: Any, update: Update) -> bool:
+    """Return True when the tapper may not cancel this prompt.
+
+    Cancel callbacks carry ``{target}:{executor}`` (3 parts); legacy
+    two-part taps have no executor segment and keep the old behaviour.
+    """
+    return await _prompt_owner_mismatch(
+        q, update, min_parts=2, key="admins.error.not_prompt_owner"
+    )
+
+
+async def _action_owner_mismatch(q: Any, update: Update, *, min_parts: int) -> bool:
+    """Return True when the tapper may not act on this prompt.
+
+    Action callbacks carry the opener as the last segment; legacy taps
+    without it act as the tapper with a fresh rank re-check downstream.
+    """
+    return await _prompt_owner_mismatch(
+        q, update, min_parts=min_parts, key="admins.error.not_prompt_actor"
+    )
+
+
+def _can_demote_admin(executor_role: str | None, target_role: str | None) -> bool:
+    """Return True when the executor may demote a target holding ``target_role``.
+
+    Only an Admin target is restricted: demoting one needs the Founder.
+    Every other target follows the normal rank rule handled by the caller.
+    """
+    return not (target_role == "admin" and executor_role != "founder")
