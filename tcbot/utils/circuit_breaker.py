@@ -38,7 +38,9 @@ class CircuitBreaker:
 
     Args:
         name: Human-readable service name used in log messages.
-        failure_threshold: Consecutive failures before the circuit opens.
+        failure_threshold: Transient failures before the circuit opens.
+            Successes in CLOSED do not reset the count, so a partial outage
+            with interleaved successes can still trip the breaker.
         recovery_timeout: Seconds to wait in OPEN before allowing a probe.
 
     """
@@ -123,7 +125,7 @@ class CircuitBreaker:
         rejects releases the half-open probe without recording a failure,
         matching the Telegram fan-out treatment of API refusals: the
         downstream already answered, so the failure counter keeps its
-        consecutive-transient meaning. When omitted, every exception counts,
+        transient-failure meaning. When omitted, every exception counts,
         which preserves the historical behaviour for other callers.
 
         """
@@ -175,7 +177,7 @@ class CircuitBreaker:
     def record_failure(self) -> None:
         """Record a failed outcome (use when not wrapping via call()).
 
-        Increments the consecutive-failure counter and may trip the circuit
+        Increments the transient-failure counter and may trip the circuit
         to OPEN.  Intended for callers that manage their own try/except.
         """
         self._record_failure()
@@ -214,8 +216,7 @@ class CircuitBreaker:
             self._opened_at = monotonic()
         elif self._failure_count >= self._failure_threshold:
             log.warning(
-                "Circuit [%s]: CLOSED -> OPEN (%d consecutive failures; "
-                "retry in %.0fs).",
+                "Circuit [%s]: CLOSED -> OPEN (%d transient failures; retry in %.0fs).",
                 self._name,
                 self._failure_count,
                 self._recovery_timeout,
@@ -231,7 +232,7 @@ class CircuitBreaker:
 # ── module-level singletons ── #
 
 #: Circuit breaker for outbound Telegram Bot API calls (fan-out, send, etc.).
-#: Trips after 5 consecutive timeout/network failures; recovers after 60s.
+#: Trips after 5 transient timeout/network failures; recovers after 60s.
 telegram: CircuitBreaker = CircuitBreaker(
     "telegram",
     failure_threshold=_DEFAULT_FAILURE_THRESHOLD,
@@ -239,7 +240,7 @@ telegram: CircuitBreaker = CircuitBreaker(
 )
 
 #: Circuit breaker for MongoDB operations.
-#: Trips after 5 consecutive failures; recovers after 60s.
+#: Trips after 5 transient failures; recovers after 60s.
 mongodb: CircuitBreaker = CircuitBreaker(
     "mongodb",
     failure_threshold=_DEFAULT_FAILURE_THRESHOLD,

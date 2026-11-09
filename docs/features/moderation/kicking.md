@@ -43,6 +43,8 @@ A kick removes a user from the current group only, not from the federation. The 
 
 Commands use the project's configured prefixes; slash commands are examples.
 
+Federation origin: `/tckick` requires a connected or primary group; private chats and disconnected groups are refused. A connection-state outage blocks the action with a retry notice instead of proceeding.
+
 ## `/tckick` flow
 
 The kick command is a `ConversationHandler` built by `reason_flow.build_modaction_conv(reason, proof, ...)` so it reuses the standard reason/proof state machine.

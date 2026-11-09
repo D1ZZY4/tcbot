@@ -55,7 +55,7 @@ async def request_admin(
         )
     request_id, owner_id = await asyncio.gather(
         db.queues_db.enqueue(target_id, target_username, target_fname, admin_id),
-        db.users_roles.get_owner_id(),
+        db.users_roles.get_owner_id(fresh=True),
         return_exceptions=True,
     )
     # * Cancellation is never a queue verdict: propagate before the

@@ -48,6 +48,8 @@ The per-group limit is read from the `WARN_LIMIT` environment variable (default 
 
 Commands use configured prefixes; slash commands are examples.
 
+Federation origin: the warn family requires a connected or primary group; private chats and disconnected groups are refused. A connection-state outage blocks the action with a retry notice instead of proceeding.
+
 ## Scope
 
 Warnings are keyed by `(user_id, chat_id)`.

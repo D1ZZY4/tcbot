@@ -191,7 +191,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             return
         if target_role:
             try:
-                await Demote.execute(
+                removed = await Demote.execute(
                     ctx.bot,
                     target_id,
                     target_fname or str(target_id),
@@ -218,6 +218,45 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     log_label="unban demote-fail",
                 )
                 return
+            if not removed:
+                # * execute() returns False when no row was cleared. Re-read
+                # * the live role to distinguish "already gone, safe to
+                # * proceed" from a split-brain where the role still
+                # * resolves: only the latter must abort, mirroring
+                # * Demote.auto_demote_or_abort for ban/kick/mute.
+                try:
+                    live_role = await db.users_roles.get_effective_role(
+                        target_id, fresh=True
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    log.exception(
+                        "Live role re-read failed after no-op demote for target=%d",
+                        target_id,
+                    )
+                    live_role = target_role
+                if live_role in staff_roles:
+                    log.warning(
+                        "Unban aborted: demote was a no-op but target=%d "
+                        "still holds role=%s",
+                        target_id,
+                        live_role,
+                    )
+                    await safe_reply(
+                        msg,
+                        t(
+                            "demote.abort.body",
+                            locale,
+                            user=Safe(
+                                user_ref(target_id, target_fname or str(target_id))
+                            ),
+                            target_role=live_role,
+                            action="unban",
+                        ),
+                        log_label="unban demote-noop",
+                    )
+                    return
 
     try:
         await execute_unban(

@@ -79,7 +79,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         return
 
     existing_role, existing = await asyncio.gather(
-        db.users_roles.get_effective_role(user.id),
+        db.users_roles.get_effective_role(user.id, fresh=True),
         db.queues_db.get_request(user.id),
         return_exceptions=True,
     )

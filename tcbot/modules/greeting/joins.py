@@ -190,6 +190,7 @@ async def _handle_member(
                 )
             )
         results = await asyncio.gather(*coros, return_exceptions=True)
+        throw_if_cancelled(results)
         for result in results:
             if isinstance(result, BaseException):
                 log.debug(
@@ -269,7 +270,8 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         async with _join_sem:
             await _pkg._handle_member(m, msg, chat, ctx.bot, greet=is_primary)
 
-    await asyncio.gather(
+    join_results = await asyncio.gather(
         *[_bounded(m) for m in msg.new_chat_members],
         return_exceptions=True,
     )
+    throw_if_cancelled(join_results)

@@ -40,6 +40,8 @@ A federation ban marks a user as banned in the persistent `bans` collection and 
 
 Commands use the project's configured prefixes; slash commands are examples.
 
+Federation origin: `/tcban`, `/tcunban`, and `/tcsync` may start from bot DM or any connected or primary group. A disconnected group is refused, and a connection-state outage blocks the action with a retry notice instead of proceeding.
+
 ## `/tcban` flow
 
 The ban command is a `ConversationHandler` with two states: `WAITING_PROOF` (proof collection) and `WAITING_UPDATE_CONFIRM`, the confirmation card shown when the target already has an active ban.

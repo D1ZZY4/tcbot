@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 
 from telegram import ChatPermissions
 from telegram.constants import ChatMemberStatus
-from telegram.error import BadRequest
 
 from tcbot.utils.dispatch import is_benign_telegram_error
 from tcbot.utils.logger import get_logger
@@ -101,7 +100,7 @@ async def _sync_ban_pair(bot: Bot, chat_id: int, user_id: int) -> str:
     if isinstance(probed, BaseException):
         # * A benign refusal (never a member) is the desired end state,
         # * not a failure; anything else is a retryable error.
-        if isinstance(probed, BadRequest) or is_benign_telegram_error(probed):
+        if is_benign_telegram_error(probed):
             return "absent"
         log.debug(
             "sync member check failed for uid=%d chat=%d: %s", user_id, chat_id, probed
@@ -118,7 +117,7 @@ async def _sync_ban_pair(bot: Bot, chat_id: int, user_id: int) -> str:
     try:
         await bot.ban_chat_member(chat_id, user_id)
     except Exception as exc:
-        if isinstance(exc, BadRequest) or is_benign_telegram_error(exc):
+        if is_benign_telegram_error(exc):
             return "absent"
         log.warning("sync re-ban failed for uid=%d chat=%d: %s", user_id, chat_id, exc)
         return "error"
@@ -134,7 +133,7 @@ async def _sync_unban_pair(bot: Bot, chat_id: int, user_id: int) -> str:
     """
     probed = await _member_status(bot, chat_id, user_id)
     if isinstance(probed, BaseException):
-        if isinstance(probed, BadRequest) or is_benign_telegram_error(probed):
+        if is_benign_telegram_error(probed):
             return "absent"
         log.debug(
             "sync member check failed for uid=%d chat=%d: %s", user_id, chat_id, probed
@@ -145,7 +144,7 @@ async def _sync_unban_pair(bot: Bot, chat_id: int, user_id: int) -> str:
     try:
         await bot.unban_chat_member(chat_id, user_id, only_if_banned=True)
     except Exception as exc:
-        if isinstance(exc, BadRequest) or is_benign_telegram_error(exc):
+        if is_benign_telegram_error(exc):
             return "absent"
         log.warning(
             "sync re-unban failed for uid=%d chat=%d: %s", user_id, chat_id, exc
@@ -170,7 +169,7 @@ async def _sync_mute_pair(
     if isinstance(probed, BaseException):
         # * Same benign rule as the ban pair: never a member is the
         # * desired end state, not a failure; anything else is retryable.
-        if isinstance(probed, BadRequest) or is_benign_telegram_error(probed):
+        if is_benign_telegram_error(probed):
             return "absent"
         log.debug(
             "sync member check failed for uid=%d chat=%d: %s", user_id, chat_id, probed
@@ -196,7 +195,7 @@ async def _sync_mute_pair(
             ),
         )
     except Exception as exc:
-        if isinstance(exc, BadRequest) or is_benign_telegram_error(exc):
+        if is_benign_telegram_error(exc):
             return "absent"
         log.warning("sync re-mute failed for uid=%d chat=%d: %s", user_id, chat_id, exc)
         return "error"

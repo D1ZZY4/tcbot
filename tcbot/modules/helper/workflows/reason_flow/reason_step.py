@@ -47,6 +47,11 @@ class _ReasonStepMixin(_FlowBase):
             return WAITING_REASON
         if ctx.user_data is None:
             return WAITING_REASON
+        # * Same rank re-check as the skip and proof taps: a moderator
+        # * demoted after the entry command must not advance from reason
+        # * to proof collection.
+        if not await self._recheck_tapper(update, ctx):
+            return ConversationHandler.END
 
         text = msg.text.strip()
         if is_reason_too_long(text):

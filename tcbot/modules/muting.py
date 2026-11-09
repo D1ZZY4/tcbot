@@ -167,22 +167,6 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await safe_reply(msg, refusal, log_label="cmd_mute refusal")
         return ConversationHandler.END
 
-    # * Auto-demote must succeed before the federation-wide mute to
-    # * preserve the role-vs-state invariant. The helper replies and
-    # * signals abort when the demote fails, so the mute never proceeds
-    # * on a role holder.
-    if target_role and not await Demote.auto_demote_or_abort(
-        msg,
-        ctx.bot,
-        target_id,
-        target_fname or str(target_id),
-        target_role,
-        admin.id,
-        admin.first_name,
-        trigger="mute",
-    ):
-        return ConversationHandler.END
-
     duration = None
     if remaining_args and _DURATION_RE.match(remaining_args[0]):
         # * Pop the token only when it parses: a regex-valid but
@@ -204,7 +188,9 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         reply_target_id=target_id if not has_explicit_target else None,
     )
     # * Fail fast on overlong inline reasons with the shared cap and text,
-    # * before any prompt is sent or state is stored.
+    # * before any prompt is sent or state is stored. The check runs before
+    # * the auto-demote below so an aborted command never strips a role,
+    # * matching /tcban and /tckick.
     if inline_reason and is_reason_too_long(inline_reason):
         await safe_reply(
             msg,
@@ -212,6 +198,22 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             log_label="cmd_mute reason-too-long",
             parse_mode=None,
         )
+        return ConversationHandler.END
+
+    # * Auto-demote must succeed before the federation-wide mute to
+    # * preserve the role-vs-state invariant. The helper replies and
+    # * signals abort when the demote fails, so the mute never proceeds
+    # * on a role holder.
+    if target_role and not await Demote.auto_demote_or_abort(
+        msg,
+        ctx.bot,
+        target_id,
+        target_fname or str(target_id),
+        target_role,
+        admin.id,
+        admin.first_name,
+        trigger="mute",
+    ):
         return ConversationHandler.END
     target_mention = user_ref(target_id, target_fname or str(target_id))
     dur_str = fmt_duration(duration, locale)

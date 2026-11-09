@@ -43,6 +43,8 @@ Aliases (matched in any prefix configured by `cfg.prefixes`):
 
 The target is resolved by `extraction.extract_target`; accepts a reply, user ID, or resolvable `@username`.
 
+Federation origin: `/tcsync` may start from bot DM or any connected or primary group. Non-benign `BadRequest` refusals now count as failures under `is_benign_telegram_error`, not as skipped absences, so a permission or validation failure surfaces in the failed count instead of disappearing into the skip total.
+
 ## How a run works
 
 1. The bot replies `Syncing enforcement state...` with its own status message (kept for the final edit, since the operator's command message cannot be edited by the bot).

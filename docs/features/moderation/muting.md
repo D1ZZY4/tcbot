@@ -53,6 +53,8 @@ A federation mute restricts a user from sending messages, media, stickers, and p
 
 Commands use the project's configured prefixes; slash commands are examples.
 
+Federation origin: `/tcmute`, `/tcunmute`, `/tckick`, and the warn family require a connected or primary group; private chats and disconnected groups are refused. A connection-state outage blocks the action with a retry notice instead of proceeding.
+
 ## `/tcmute` flow
 
 The mute command is a `ConversationHandler` built by `reason_flow.build_modaction_conv(reason, proof, ...)` and inherits all reason/proof state machine semantics from the shared factory. The mute conversation factory is wired with `escape_filter=_UNMUTE_CMDS` so that `/tcunmute` typed during a mute conversation is delivered to the unmute handler instead of being swallowed by the mute fallback.

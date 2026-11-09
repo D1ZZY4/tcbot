@@ -38,7 +38,8 @@ _RL_SYNC_LIMIT: int = 2
 async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reconcile enforcement state across connected groups, bounded per run."""
     msg = update.effective_message
-    if msg is None:
+    executor = update.effective_user
+    if msg is None or executor is None:
         return
     locale = await locale_for_update(update)
     if not await decorators.require_federation_origin(
@@ -52,6 +53,30 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     args = parse_cmd_args(msg.text)
 
+    # * Targeted runs enforce one user both directions, so they carry the
+    # * same executor-versus-target rank gate as direct unban. The bare
+    # * sweep reconciles existing records and has no single target to gate.
+    target_id: int | None = None
+    if args:
+        try:
+            target_id, _ = await extraction.extract_target(update, args, ctx.bot)
+        except Exception:
+            log.exception("extract_target failed during sync")
+            target_id = None
+        if not target_id:
+            await safe_reply(
+                msg,
+                replies.err_cannot_resolve(locale, plain=True),
+                log_label="cmd_sync no-target",
+                parse_mode=None,
+            )
+            return
+        checked = await decorators.resolve_and_check(
+            msg, executor.id, target_id, min_role="developer"
+        )
+        if checked == (None, None):
+            return
+
     try:
         status = await msg.reply_text(t("syncing.status.sending", locale, plain=True))
     except Exception as exc:
@@ -59,14 +84,7 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         status = None
 
     try:
-        if args:
-            try:
-                target_id, _ = await extraction.extract_target(update, args, ctx.bot)
-            except Exception:
-                log.exception("extract_target failed during sync")
-                target_id = None
-            if not target_id:
-                raise ValueError("unresolvable")
+        if target_id is not None:
             counts = await syncing.verify_user(ctx.bot, target_id)
             text = syncing._render_summary(
                 counts,
@@ -80,8 +98,6 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 target=t("syncing.target.sweep", locale, plain=True),
                 locale=locale,
             )
-    except ValueError:
-        text = replies.err_cannot_resolve(locale, plain=False)
     except Exception:
         log.exception("sync run failed")
         text = replies.err_groups_load_failed(locale, plain=False)
