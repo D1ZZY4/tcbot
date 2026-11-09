@@ -39,8 +39,11 @@ class CircuitBreaker:
     Args:
         name: Human-readable service name used in log messages.
         failure_threshold: Transient failures before the circuit opens.
-            Successes in CLOSED do not reset the count, so a partial outage
-            with interleaved successes can still trip the breaker.
+            Successes in CLOSED do not reset the count immediately, so a
+            partial outage with interleaved successes can still trip the
+            breaker. A long run of consecutive successes (twice the
+            threshold) decays the lifetime count so spread-out failures
+            over months cannot trip on one new blip.
         recovery_timeout: Seconds to wait in OPEN before allowing a probe.
 
     """
@@ -53,6 +56,7 @@ class CircuitBreaker:
         "_opened_at",
         "_recovery_timeout",
         "_state",
+        "_success_streak",
     )
 
     def __init__(
@@ -70,6 +74,7 @@ class CircuitBreaker:
         self._failure_count: int = 0
         self._half_open_probe_in_flight: bool = False
         self._opened_at: float = 0.0
+        self._success_streak: int = 0
 
     # ── public API ── #
 
@@ -181,26 +186,37 @@ class CircuitBreaker:
         """Force-close the circuit (useful after operator confirms service recovery)."""
         self._state = CircuitState.CLOSED
         self._failure_count = 0
+        self._success_streak = 0
         self._release_probe()
         log.info("Circuit [%s]: manually reset to CLOSED.", self._name)
 
     # ── private helpers ── #
 
     def _record_success(self) -> None:
-        # * Ordinary successes in CLOSED must not reset the counter. fan_out
-        # * runs up to 10 slots concurrently: one success interleaved between
-        # * concurrent failures would erase the failure count and the breaker
-        # * could never trip under a partial outage. Only a successful
-        # * HALF_OPEN probe closes the circuit and resets; CLOSED successes
-        # * leave the accumulated transient count for the threshold to judge.
+        # * Ordinary successes in CLOSED must not reset the counter
+        # * immediately. fan_out runs up to 10 slots concurrently: one
+        # * success interleaved between concurrent failures would erase
+        # * the failure count and the breaker could never trip under a
+        # * partial outage. Only a successful HALF_OPEN probe closes and
+        # * resets; CLOSED successes accumulate a consecutive streak and
+        # * decay the lifetime count only after a sustained healthy run
+        # * (twice the threshold), so failures spread over months do not
+        # * combine into a spurious trip.
         if self._state is CircuitState.HALF_OPEN:
             log.info("Circuit [%s]: HALF_OPEN -> CLOSED (probe succeeded).", self._name)
             self._state = CircuitState.CLOSED
             self._failure_count = 0
+            self._success_streak = 0
+        elif self._failure_count > 0:
+            self._success_streak += 1
+            if self._success_streak >= 2 * self._failure_threshold:
+                self._failure_count = 0
+                self._success_streak = 0
         self._release_probe()
 
     def _record_failure(self) -> None:
         self._failure_count += 1
+        self._success_streak = 0
         if self._state is CircuitState.HALF_OPEN:
             log.warning(
                 "Circuit [%s]: HALF_OPEN -> OPEN (probe failed; retry in %.0fs).",
