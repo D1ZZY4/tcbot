@@ -22,13 +22,13 @@ class _SpyCollection:
     def __init__(self) -> None:
         self.filters: list[dict[str, str]] = []
 
-    async def count_documents(self, filter: dict[str, str]) -> int:
+    def count_documents(self, filter: dict[str, str]) -> int:
         self.filters.append(filter)
         return 42
 
 
-async def _identity(coro: Any) -> Any:
-    return await coro
+async def _identity(op: Any) -> Any:
+    return op()
 
 
 def test_role_count_delegates_to_count_documents(

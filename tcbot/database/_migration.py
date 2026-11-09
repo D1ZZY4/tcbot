@@ -13,13 +13,13 @@ from tcbot.database.mongos import db_call
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    from motor.motor_asyncio import AsyncIOMotorCollection
+    from pymongo.collection import Collection
 
 log = get_logger(__name__)
 
 
 async def _repoint_chat(
-    collection: AsyncIOMotorCollection,
+    collection: Collection,
     old_chat_id: int,
     new_chat_id: int,
     *,
@@ -36,7 +36,7 @@ async def _repoint_chat(
     """
     try:
         res = await db_call(
-            collection.update_many(
+            lambda: collection.update_many(
                 {"chat_id": old_chat_id},
                 {"$set": {"chat_id": new_chat_id}},
             )

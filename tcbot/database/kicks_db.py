@@ -15,13 +15,13 @@ from tcbot.database.types import ChatId, UserId
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
-    from motor.motor_asyncio import AsyncIOMotorCollection
+    from pymongo.collection import Collection
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for the kicks database
 
 
-def _kicks() -> AsyncIOMotorCollection:
+def _kicks() -> Collection:
     return col("kicks")
 
 
@@ -39,7 +39,7 @@ async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> No
         "admin_id": UserId(admin_id),
         "timestamp": utc_now(),
     }
-    await db_call(_kicks().insert_one(doc))
+    await db_call(lambda: _kicks().insert_one(doc))
 
 
 # ─────────────────────── Per-user history ───────────────────────── #
@@ -59,12 +59,12 @@ async def user_kicks(
     )
     if limit is not None:
         cursor = cursor.limit(max(1, limit))
-    return await db_call(cursor.to_list(limit))
+    return await db_call(lambda: list(cursor))
 
 
 async def user_kick_count(user_id: int) -> int:
     """Count every kick ever logged against the user."""
-    return await db_call(_kicks().count_documents({"user_id": user_id}))
+    return await db_call(lambda: _kicks().count_documents({"user_id": user_id}))
 
 
 async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:

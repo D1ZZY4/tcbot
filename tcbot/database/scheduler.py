@@ -87,9 +87,13 @@ async def expire_old_warns(warn_expiry_days: int) -> None:
         async with asyncio.timeout(_EXPIRE_OP_TIMEOUT_S):
             counts_res, warns_res = await asyncio.gather(
                 _db_call(
-                    _col("warn_counts").delete_many({"updated_at": {"$lt": cutoff}})
+                    lambda: _col("warn_counts").delete_many(
+                        {"updated_at": {"$lt": cutoff}}
+                    )
                 ),
-                _db_call(_col("warns").delete_many({"timestamp": {"$lt": cutoff}})),
+                _db_call(
+                    lambda: _col("warns").delete_many({"timestamp": {"$lt": cutoff}})
+                ),
                 return_exceptions=True,
             )
     except TimeoutError:

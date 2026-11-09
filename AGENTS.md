@@ -80,7 +80,7 @@ Current stack:
 - Python 3.14 project target (`pyproject.toml` requires `>=3.14`)
 - `python-telegram-bot[rate-limiter]>=22.8,<23`, tracking the latest compatible release
 - APScheduler 3.11.3 with `AsyncIOScheduler` + `MongoDBJobStore` for persistent scheduled jobs
-- Motor async MongoDB driver with connection pool configuration
+- Synchronous PyMongo driver with connection pool configuration; sync operations run on a worker thread through `db_call`
 - Flask keep-alive / health-check server
 - Optional Redis L2 cache (`redis[hiredis]>=8.1,<9`) with in-memory L1 fallback
 - Tagged JSON values for Redis serialization (msgspec codec with project-local datetime/ObjectId tags, no `cbor2`)
@@ -108,7 +108,7 @@ Current stack:
 │   │   ├── kicks_db.py       Kicks
 │   │   ├── mutes_db.py       Mutes
 │   │   ├── queues_db.py      Promotion requests
-│   │   ├── cache/            TwoLevelCache (L1 in-memory + L2 Redis)
+│   │   ├── cache/            TwoLevelCache: codec, L1 memory, FIFO mutations, singletons, twolevel core/queue
 │   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
 │   │   ├── scheduler.py      APScheduler background task + MongoDBJobStore
 │   │   ├── mongos.py         MongoDB client/indexes

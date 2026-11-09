@@ -120,7 +120,7 @@ def _classify(exc: BaseException | None) -> str:
     if isinstance(exc, _te.TelegramError):
         return "[!] Telegram API Error"
     mod = type(exc).__module__ or ""
-    if any(x in mod for x in ("motor", "pymongo", "mongo")):
+    if "mongo" in mod:
         return "[DB] Database Error"
     if isinstance(exc, CircuitOpenError):
         return (

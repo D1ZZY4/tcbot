@@ -227,7 +227,7 @@ def setup(level: int = logging.INFO) -> None:
         root.addHandler(con_handler)
     if not any(isinstance(handler, TelegramErrorHandler) for handler in root.handlers):
         root.addHandler(TelegramErrorHandler())
-    for lib in ("httpx", "telegram", "motor", "pymongo"):
+    for lib in ("httpx", "telegram", "pymongo"):
         logging.getLogger(lib).setLevel(logging.WARNING)
 
 

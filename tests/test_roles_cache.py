@@ -15,8 +15,8 @@ from tcbot.database import users_roles
 from tcbot.database.cache import _OWNER_KEY
 
 
-async def _identity(coro: Any) -> Any:
-    return await coro
+async def _identity(op: Any) -> Any:
+    return op()
 
 
 def _invalidate(uid: int) -> None:
@@ -104,7 +104,7 @@ def test_is_admin_hits_db_on_every_call(
     hits: list[dict[str, int]] = []
 
     class _AdminCol:
-        async def find_one(self, *args: Any, **kwargs: Any) -> dict[str, int] | None:
+        def find_one(self, *args: Any, **kwargs: Any) -> dict[str, int] | None:
             filt = args[0] if args else kwargs.get("filter", {})
             hits.append(dict(filt))
             return {"_id": 1} if filt.get("user_id") == uid else None
@@ -261,7 +261,7 @@ def test_get_owner_id_caches_second_read(
     hits: list[dict[str, int]] = []
 
     class _OwnerCol:
-        async def find_one(self, *args: Any, **kwargs: Any) -> dict[str, int] | None:
+        def find_one(self, *args: Any, **kwargs: Any) -> dict[str, int] | None:
             hits.append({})
             return {"user_id": 61008}
 
@@ -303,7 +303,7 @@ def test_is_owner_fresh_bypasses_cache(
     row = {"user_id": 61010}
 
     class _OwnerCol:
-        async def find_one(self, *args: Any, **kwargs: Any) -> dict[str, int] | None:
+        def find_one(self, *args: Any, **kwargs: Any) -> dict[str, int] | None:
             return dict(row)
 
     monkeypatch.setattr(users_roles, "col", lambda _name: _OwnerCol())

@@ -61,7 +61,7 @@ tcbot/
 ├── alive.py                Flask health endpoint and webhook receiver
 ├── serverless.py           Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 ├── database/
-│   ├── mongos.py           Motor client, collection accessor, indexes
+│   ├── mongos.py           pymongo client, collection accessor, indexes
 │   ├── _migration.py       Shared chat-repoint helper for basic-group to supergroup migrations
 │   ├── bans_db.py          Federation ban records (incl. per-user history)
 │   ├── groups_db.py        Connected groups and pending joins
@@ -71,7 +71,7 @@ tcbot/
 │   ├── kicks_db.py         Kick audit records (incl. per-user history)
 │   ├── mutes_db.py         Mute audit records (incl. per-user history)
 │   ├── queues_db.py        Promotion request queue
-│   ├── cache/              L1 TTL caches with optional Redis L2
+│   ├── cache/              TwoLevelCache: codec, L1 memory, FIFO mutations, singletons, twolevel core/queue
 │   ├── redis_client.py     Optional async Redis client (owns the connect/degrade decision)
 │   ├── scheduler.py        APScheduler background jobs (MongoDBJobStore, library default collection)
 │   ├── mtproto.py          Bot-token MTProto client: resolve + member harvest

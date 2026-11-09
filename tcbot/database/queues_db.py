@@ -15,13 +15,13 @@ from tcbot.database.mongos import col, db_call, make_short_id
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
-    from motor.motor_asyncio import AsyncIOMotorCollection
+    from pymongo.collection import Collection
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access and ID generation utilities
 
 
-def _requests() -> AsyncIOMotorCollection:
+def _requests() -> Collection:
     return col("promotion_requests")
 
 
@@ -76,7 +76,7 @@ async def enqueue(
 
     async def _insert(request_id: str) -> None:
         await db_call(
-            _requests().insert_one(
+            lambda: _requests().insert_one(
                 {
                     "request_id": request_id,
                     "target_id": user_id,
@@ -116,33 +116,35 @@ async def enqueue(
 
 async def get_request_by_id(request_id: str) -> PromotionRequestDoc | None:
     """Get a promotion request by its unique request ID."""
-    return await db_call(_requests().find_one({"request_id": request_id}))
+    return await db_call(lambda: _requests().find_one({"request_id": request_id}))
 
 
 async def get_request(user_id: int) -> PromotionRequestDoc | None:
     """Get the pending request for a specific user."""
     return await db_call(
-        _requests().find_one({"target_id": user_id, "status": "pending"})
+        lambda: _requests().find_one({"target_id": user_id, "status": "pending"})
     )
 
 
 async def all_pending() -> list[PromotionRequestDoc]:
     """Get all currently pending promotion requests, oldest first."""
     return await db_call(
-        _requests()
-        .find(
-            {"status": "pending"},
-            {
-                "_id": 0,
-                "request_id": 1,
-                "target_id": 1,
-                "username": 1,
-                "first_name": 1,
-                "requested_date": 1,
-            },
-            sort=[("requested_date", 1)],
+        lambda: list(
+            _requests()
+            .find(
+                {"status": "pending"},
+                {
+                    "_id": 0,
+                    "request_id": 1,
+                    "target_id": 1,
+                    "username": 1,
+                    "first_name": 1,
+                    "requested_date": 1,
+                },
+                sort=[("requested_date", 1)],
+            )
+            .limit(200)
         )
-        .to_list(200)
     )
 
 
@@ -151,7 +153,7 @@ async def all_pending() -> list[PromotionRequestDoc]:
 # * promote-list header stays meaningful.
 async def pending_count() -> int:
     """Count all currently pending promotion requests."""
-    return await db_call(_requests().count_documents({"status": "pending"}))
+    return await db_call(lambda: _requests().count_documents({"status": "pending"}))
 
 
 async def resolve(request_id: str, status: RequestStatus, resolved_by: int) -> bool:
@@ -165,7 +167,7 @@ async def resolve(request_id: str, status: RequestStatus, resolved_by: int) -> b
     if status not in ("approved", "rejected"):
         raise ValueError(f"Refusing to resolve promotion request to {status!r}")
     result = await db_call(
-        _requests().update_one(
+        lambda: _requests().update_one(
             {"request_id": request_id, "status": "pending"},
             {
                 "$set": {

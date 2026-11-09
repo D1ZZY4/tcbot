@@ -17,17 +17,17 @@ from tcbot.utils.time_and_date import utc_now
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from motor.motor_asyncio import AsyncIOMotorCollection
+    from pymongo.collection import Collection
 
 # ─────────────────────── Collection Helpers ─────────────────────── #
 # * Internal collection access utilities for the mutes database
 
 
-def _mutes() -> AsyncIOMotorCollection:
+def _mutes() -> Collection:
     return col("mutes")
 
 
-def _active_mutes() -> AsyncIOMotorCollection:
+def _active_mutes() -> Collection:
     return col("active_mutes")
 
 
@@ -68,7 +68,7 @@ async def log_mute(
     }
     if duration_secs is not None:
         doc["duration_secs"] = duration_secs
-    await db_call(_mutes().insert_one(doc))
+    await db_call(lambda: _mutes().insert_one(doc))
 
 
 # ──────────────────────── Active mute store ─────────────────────── #
@@ -88,7 +88,7 @@ async def set_active_mute(user_id: int, *, until: datetime | None = None) -> Non
     value passed to ``restrict_chat_member``).
     """
     await db_call(
-        _active_mutes().update_one(
+        lambda: _active_mutes().update_one(
             {"user_id": UserId(user_id)},
             {
                 "$set": {
@@ -104,14 +104,14 @@ async def set_active_mute(user_id: int, *, until: datetime | None = None) -> Non
 
 async def clear_active_mute(user_id: int) -> None:
     """Remove the active mute entry when a user is unmuted."""
-    await db_call(_active_mutes().delete_one({"user_id": UserId(user_id)}))
+    await db_call(lambda: _active_mutes().delete_one({"user_id": UserId(user_id)}))
 
 
 async def get_active_mute(user_id: int) -> ActiveMuteDoc | None:
     """Return the active mute for a user, or None if none exists or has expired."""
     now = utc_now()
     return await db_call(
-        _active_mutes().find_one(
+        lambda: _active_mutes().find_one(
             {
                 "user_id": UserId(user_id),
                 **_not_expired_clause(now),
@@ -127,12 +127,12 @@ async def active_mute_docs() -> list[ActiveMuteDoc]:
     """
     now = utc_now()
     return await db_call(
-        _active_mutes()
-        .find(
-            _not_expired_clause(now),
-            {"user_id": 1, "until_date": 1, "_id": 0},
+        lambda: list(
+            _active_mutes().find(
+                _not_expired_clause(now),
+                {"user_id": 1, "until_date": 1, "_id": 0},
+            )
         )
-        .to_list(None)
     )
 
 
@@ -153,12 +153,12 @@ async def user_mutes(
     )
     if limit is not None:
         cursor = cursor.limit(max(1, limit))
-    return await db_call(cursor.to_list(limit))
+    return await db_call(lambda: list(cursor))
 
 
 async def user_mute_count(user_id: int) -> int:
     """Count every mute ever logged against the user."""
-    return await db_call(_mutes().count_documents({"user_id": user_id}))
+    return await db_call(lambda: _mutes().count_documents({"user_id": user_id}))
 
 
 async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:

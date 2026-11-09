@@ -22,7 +22,7 @@ class _FakeRequests:
         self.docs: list[dict[str, Any]] = []
         self.calls = 0
 
-    async def insert_one(self, doc: dict[str, Any]) -> None:
+    def insert_one(self, doc: dict[str, Any]) -> None:
         self.calls += 1
         outcome = self._outcomes.pop(0) if self._outcomes else None
         if outcome is not None:
@@ -30,8 +30,8 @@ class _FakeRequests:
         self.docs.append(dict(doc))
 
 
-async def _identity(coro: Any) -> Any:
-    return await coro
+async def _identity(op: Any) -> Any:
+    return op()
 
 
 def _collision_error(request_id: str) -> DuplicateKeyError:

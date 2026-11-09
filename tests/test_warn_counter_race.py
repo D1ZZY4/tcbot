@@ -29,8 +29,8 @@ def _dup_error() -> DuplicateKeyError:
     )
 
 
-async def _identity(coro: Any) -> Any:
-    return await coro
+async def _identity(op: Any) -> Any:
+    return op()
 
 
 class _FakeWarns:
@@ -38,11 +38,11 @@ class _FakeWarns:
         self.inserted: list[dict[str, Any]] = []
         self.deleted: list[dict[str, Any]] = []
 
-    async def insert_one(self, doc: dict[str, Any]) -> SimpleNamespace:
+    def insert_one(self, doc: dict[str, Any]) -> SimpleNamespace:
         self.inserted.append(dict(doc))
         return SimpleNamespace(inserted_id="warn-1")
 
-    async def delete_one(self, filt: dict[str, Any]) -> SimpleNamespace:
+    def delete_one(self, filt: dict[str, Any]) -> SimpleNamespace:
         self.deleted.append(filt)
         return SimpleNamespace(deleted_count=1)
 
@@ -53,7 +53,7 @@ class _FakeWarnCounts:
     def __init__(self) -> None:
         self.upsert_calls = 0
 
-    async def find_one_and_update(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    def find_one_and_update(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         self.upsert_calls += 1
         if self.upsert_calls == 1:
             raise _dup_error()
@@ -100,9 +100,7 @@ def test_add_warn_rolls_back_on_non_dup_counter_failure(
     warns = _FakeWarns()
 
     class _BoomCounts:
-        async def find_one_and_update(
-            self, *args: Any, **kwargs: Any
-        ) -> dict[str, Any]:
+        def find_one_and_update(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
             raise RuntimeError("db blip")
 
     _patch_warns(monkeypatch, warns)
@@ -121,16 +119,14 @@ def test_sync_warn_count_backfill_race_returns_winner_count(
     reads = iter([None, {"count": 7}])
 
     class _FakeWarns:
-        async def count_documents(self, filt: dict[str, Any]) -> int:
+        def count_documents(self, filt: dict[str, Any]) -> int:
             return 3
 
     class _FakeCounts:
-        async def find_one(self, *args: Any, **kwargs: Any) -> dict[str, Any] | None:
+        def find_one(self, *args: Any, **kwargs: Any) -> dict[str, Any] | None:
             return next(reads)
 
-        async def find_one_and_update(
-            self, *args: Any, **kwargs: Any
-        ) -> dict[str, Any]:
+        def find_one_and_update(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
             raise _dup_error()
 
     monkeypatch.setattr(counters, "_warns", lambda: _FakeWarns())
@@ -148,16 +144,14 @@ def test_sync_warn_count_backfill_race_falls_back_to_counted_value(
     reads = iter([None, None])
 
     class _FakeWarns:
-        async def count_documents(self, filt: dict[str, Any]) -> int:
+        def count_documents(self, filt: dict[str, Any]) -> int:
             return 3
 
     class _FakeCounts:
-        async def find_one(self, *args: Any, **kwargs: Any) -> dict[str, Any] | None:
+        def find_one(self, *args: Any, **kwargs: Any) -> dict[str, Any] | None:
             return next(reads)
 
-        async def find_one_and_update(
-            self, *args: Any, **kwargs: Any
-        ) -> dict[str, Any]:
+        def find_one_and_update(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
             raise _dup_error()
 
     monkeypatch.setattr(counters, "_warns", lambda: _FakeWarns())
@@ -173,9 +167,7 @@ def test_inc_warn_count_propagates_cancellation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class _CancelledCounts:
-        async def find_one_and_update(
-            self, *args: Any, **kwargs: Any
-        ) -> dict[str, Any]:
+        def find_one_and_update(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
             raise asyncio.CancelledError()
 
     monkeypatch.setattr(counters, "_warn_counts", lambda: _CancelledCounts())

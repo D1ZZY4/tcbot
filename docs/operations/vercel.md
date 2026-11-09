@@ -27,7 +27,7 @@ flowchart TD
     WH --> SL[tcbot/serverless.py]
     SL --> PTB[Shared PTB Application<br/>updater=None, process_update]
     PTB --> Handlers[Same handlers as webhook/polling]
-    Handlers --> Mongo[(MongoDB via Motor)]
+    Handlers --> Mongo[(MongoDB via pymongo)]
     Cron[Vercel Cron<br/>daily 02:00 UTC] -->|GET| CR["/api/cron (api/cron.py)"]
     CR --> EXP[expire_old_warns in MongoDB]
 ```

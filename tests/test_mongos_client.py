@@ -2,13 +2,13 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Shared MongoDB client kwargs: valid for Motor and never duplicated in connect()."""
+"""Shared MongoDB client kwargs: valid for pymongo and never duplicated in connect()."""
 
 from __future__ import annotations
 
 import inspect
 
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 
 from tcbot.database import mongos
 
@@ -20,18 +20,18 @@ def test_shared_kwargs_cover_server_timeouts() -> None:
     assert kwargs["connectTimeoutMS"] == mongos._MONGO_CONNECT_TIMEOUT_MS
 
 
-def test_shared_kwargs_construct_motor_client() -> None:
-    client = AsyncIOMotorClient(
-        "mongodb://localhost:27017", **mongos.mongo_client_kwargs()
-    )
+def test_shared_kwargs_construct_pymongo_client() -> None:
+    client = MongoClient("mongodb://localhost:27017", **mongos.mongo_client_kwargs())
     client.close()
 
 
 def test_connect_does_not_repeat_shared_kwargs() -> None:
-    """Guard the production startup crash: an explicit kwarg in connect()
-    that is also inside mongo_client_kwargs() is a duplicate keyword
-    argument and AsyncIOMotorClient raises TypeError at boot."""
+    """Guard the production startup crash: connect() must not repeat shared kwargs.
+
+    An explicit kwarg in connect() duplicated inside mongo_client_kwargs() is a
+    duplicate keyword argument and MongoClient raises TypeError at boot.
+    """
     source = inspect.getsource(mongos.connect)
-    call = source.split("AsyncIOMotorClient(")[1]
+    call = source.split("MongoClient(")[1]
     for key in mongos.mongo_client_kwargs():
         assert f"{key}=" not in call

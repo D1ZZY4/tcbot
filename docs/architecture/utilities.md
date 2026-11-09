@@ -116,7 +116,7 @@ Logging setup is installed from `tcbot.__main__.main()`.
 | `get_logger(name)` | Return the loguru-backed logger for a module. Records bridge through the same stdlib handlers, so coloring, shipping, and level discipline match plain loggers. |
 | `bind_request_context(...)` / `clear_request_context()` | Bind `update_id`/`user_id`/`chat_id` rendered on every subsequent line until cleared. `log_execution` binds on handler entry and clears in a `finally` block, so concurrent updates never leak context (contextvars are task-local). |
 
-Third-party loggers such as `httpx`, `telegram`, `motor`, and `pymongo` are capped to reduce noise. Import-time loggers (`tcbot/__init__.py`, `tcbot/modules/__init__.py`) stay on stdlib because they emit before `setup()` installs these handlers.
+Third-party loggers such as `httpx`, `telegram`, and `pymongo` are capped to reduce noise. Import-time loggers (`tcbot/__init__.py`, `tcbot/modules/__init__.py`) stay on stdlib because they emit before `setup()` installs these handlers.
 
 ## `error_reporter.py`
 

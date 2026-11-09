@@ -15,12 +15,12 @@ from tcbot.database.mongos import col, db_call
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
-    from motor.motor_asyncio import AsyncIOMotorCollection
+    from pymongo.collection import Collection
 
 # ──────────────────────────── Collection ─────────────────────────── #
 
 
-def _members() -> AsyncIOMotorCollection:
+def _members() -> Collection:
     return col("member_cache")
 
 
@@ -50,7 +50,7 @@ async def _fetch_mention_triple(user_id: int) -> list[str | None]:
     cached mention readers cannot drift apart.
     """
     doc = await db_call(
-        _members().find_one(
+        lambda: _members().find_one(
             {"user_id": user_id}, {"first_name": 1, "username": 1, "last_name": 1}
         )
     )
@@ -72,7 +72,7 @@ async def _fetch_mention_triple(user_id: int) -> list[str | None]:
 
 async def get_user(user_id: int) -> UserDoc | None:
     """Get the full cached profile for a specific user."""
-    return await db_call(_members().find_one({"user_id": user_id}))
+    return await db_call(lambda: _members().find_one({"user_id": user_id}))
 
 
 async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
@@ -119,12 +119,12 @@ async def _mention_triples(
         return result
     # * Batch-fetch only uncached users from MongoDB in a single round-trip.
     docs = await db_call(
-        _members()
-        .find(
-            {"user_id": {"$in": missing}},
-            {"user_id": 1, "first_name": 1, "username": 1, "last_name": 1},
+        lambda: list(
+            _members().find(
+                {"user_id": {"$in": missing}},
+                {"user_id": 1, "first_name": 1, "username": 1, "last_name": 1},
+            )
         )
-        .to_list(None)
     )
     for doc in docs:
         uid = doc["user_id"]
@@ -208,7 +208,7 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
 
 async def total_users() -> int:
     """Get the total number of unique users in the cache."""
-    return await db_call(_members().estimated_document_count())
+    return await db_call(lambda: _members().estimated_document_count())
 
 
 # * Allowed sort keys for all_users_page(). Unvalidated strings would force an
@@ -235,23 +235,24 @@ async def all_users_page(
     # * callers always pass positive values, this only pins the edge.
     page_size = max(1, limit)
     return await db_call(
-        _members()
-        .find(
-            {},
-            {
-                "_id": 0,
-                "user_id": 1,
-                "username": 1,
-                "first_name": 1,
-                "last_name": 1,
-                "commit_date": 1,
-                "last_updated": 1,
-            },
+        lambda: list(
+            _members()
+            .find(
+                {},
+                {
+                    "_id": 0,
+                    "user_id": 1,
+                    "username": 1,
+                    "first_name": 1,
+                    "last_name": 1,
+                    "commit_date": 1,
+                    "last_updated": 1,
+                },
+            )
+            .sort(sort_by, sort_dir)
+            .skip(max(0, skip))
+            .limit(page_size)
         )
-        .sort(sort_by, sort_dir)
-        .skip(max(0, skip))
-        .limit(page_size)
-        .to_list(length=page_size)
     )
 
 
@@ -269,13 +270,14 @@ async def search_by_name(needle: str, limit: int = 5) -> list[UserDoc]:
     # * not one that merely contains "dan" mid-string (e.g. "randy").
     pattern = {"$regex": f"^{re.escape(needle)}", "$options": "i"}
     return await db_call(
-        _members()
-        .find(
-            {"$or": [{"first_name": pattern}, {"username": pattern}]},
-            {"user_id": 1, "first_name": 1, "username": 1, "_id": 0},
+        lambda: list(
+            _members()
+            .find(
+                {"$or": [{"first_name": pattern}, {"username": pattern}]},
+                {"user_id": 1, "first_name": 1, "username": 1, "_id": 0},
+            )
+            .limit(limit)
         )
-        .limit(limit)
-        .to_list(length=limit)
     )
 
 
@@ -308,7 +310,7 @@ async def upsert_user(
     if last_name is not None:
         update["last_name"] = last_name
     await db_call(
-        _members().update_one(
+        lambda: _members().update_one(
             {"user_id": user_id},
             {
                 "$set": update,

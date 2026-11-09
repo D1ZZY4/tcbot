@@ -22,15 +22,15 @@ class _FakeCollection:
     def __init__(self, *, should_fail: bool) -> None:
         self._should_fail = should_fail
 
-    async def delete_many(self, filt: dict[str, Any]) -> _FakeResult:
+    def delete_many(self, filt: dict[str, Any]) -> _FakeResult:
         if self._should_fail:
             raise RuntimeError("delete failed")
         return _FakeResult()
 
 
 def _patch(monkeypatch: pytest.MonkeyPatch, *, fail_counts: bool) -> None:
-    async def _db_call(coro: Any) -> Any:
-        return await coro
+    async def _db_call(op: Any) -> Any:
+        return op()
 
     monkeypatch.setattr(jobs, "_db_call", _db_call)
     monkeypatch.setattr(

@@ -15,8 +15,8 @@ import pytest
 from tcbot.database import _migration
 
 
-async def _identity(coro: Any) -> Any:
-    return await coro
+async def _identity(op: Any) -> Any:
+    return op()
 
 
 class _FakeCollection:
@@ -25,7 +25,7 @@ class _FakeCollection:
         self.matched = matched
         self.calls: list[tuple[dict[str, Any], dict[str, Any]]] = []
 
-    async def update_many(self, filt: dict[str, Any], update: dict[str, Any]) -> Any:
+    def update_many(self, filt: dict[str, Any], update: dict[str, Any]) -> Any:
         self.calls.append((filt, update))
         if self.outcome is not None:
             raise self.outcome

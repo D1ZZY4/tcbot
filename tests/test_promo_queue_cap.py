@@ -22,7 +22,7 @@ class _FakeRequests:
     def __init__(self) -> None:
         self.filters: list[dict[str, str]] = []
 
-    async def count_documents(self, filt: dict[str, str]) -> int:
+    def count_documents(self, filt: dict[str, str]) -> int:
         self.filters.append(filt)
         return 234
 

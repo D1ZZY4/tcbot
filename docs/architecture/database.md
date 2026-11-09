@@ -14,8 +14,8 @@ flowchart TD
     DBHelpers --> Mongos[mongos.py<br/>connection + col]
     DBHelpers --> Cache[cache/<br/>TwoLevelCache]
     DBHelpers --> Documents[documents.py<br/>TypedDicts]
-    Mongos --> Motor[Motor AsyncIOMotorClient]
-    Motor --> MongoDB[(MongoDB)]
+    Mongos --> PyMongo[PyMongo MongoClient]
+    PyMongo --> MongoDB[(MongoDB)]
     DBHelpers --> Indexes[Index setup<br/>on startup]
     Indexes --> MongoDB
     Cache --> L1[TTLCache L1<br/>in-memory]
@@ -36,17 +36,19 @@ flowchart TD
 
 ## Connection manager
 
-`mongos.py` owns the Motor client lifecycle.
+`mongos.py` owns the synchronous pymongo client lifecycle. Async helpers
+run the sync operations on a worker thread via ``db_call``; the event loop
+never blocks on MongoDB I/O.
 
 | Export | Purpose |
 |---|---|
-| `connect()` | Creates the `AsyncIOMotorClient`, selects `cfg.db_name`, and pings MongoDB through the `mongodb` circuit breaker. A successful ping records a CLOSED success; repeated failures trip the circuit to OPEN. Must run before any other database call. |
+| `connect()` | Creates the `MongoClient`, selects `cfg.db_name`, and pings MongoDB through the `mongodb` circuit breaker. A successful ping records a CLOSED success; repeated failures trip the circuit to OPEN. Must run before any other database call. |
 | `ensure_indexes()` | Creates all required indexes in parallel. Safe to call repeatedly; MongoDB ignores existing indexes. Raises the first index failure after logging every failure (fail-fast startup). |
 | `db()` | Returns the active database or raises `RuntimeError` if `connect()` has not run. |
 | `col(name)` | Returns a collection from `db()`. Use only inside database helper modules. |
 | `is_connected()` | Returns `True` once a connection has been established via `connect()`. |
-| `mongo_client_kwargs()` | Extra `MongoClient` kwargs shared by the Motor client and the scheduler's synchronous client: pins `tlsCAFile` to the certifi Mozilla bundle unless `cfg.mongodb_uri` already carries `tlscafile`, and sets `serverSelectionTimeoutMS` (10 s) and `connectTimeoutMS` (10 s) defaults. |
-| `db_call(coro)` | Executes a Motor coroutine through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45 s socket timeout. Only transient Mongo errors count toward opening the circuit. |
+| `mongo_client_kwargs()` | Extra `MongoClient` kwargs shared by the pymongo client and the scheduler's synchronous client: pins `tlsCAFile` to the certifi Mozilla bundle unless `cfg.mongodb_uri` already carries `tlscafile`, and sets `serverSelectionTimeoutMS` (10 s) and `connectTimeoutMS` (10 s) defaults. |
+| `db_call(op)` | Runs a zero-argument thunk performing one sync pymongo operation on a worker thread through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45 s socket timeout. Only transient Mongo errors count toward opening the circuit. |
 | `make_short_id(length=10)` | Generates a lowercase alphanumeric ID (`a-z0-9`) from `secrets.choice`, used for ban IDs and promotion request IDs. |
 
 ### MongoDB client parameters
@@ -143,7 +145,7 @@ All fields are optional `total=False`; a real document always carries `user_id` 
 
 **Hot-path harvest pattern:** on every observed Telegram update `_update_member_cache` schedules `harvest_user_identity` as a fire-and-forget background task, bounded to 20 in-flight tasks (updates beyond the cap skip the harvest and refresh on the next event). When the cached identity has not changed, no MongoDB write is issued; the fast path is sub-microsecond.
 
-**Error behavior:** every helper uses `db_call()`; a MongoDB outage raises `CircuitOpenError` (circuit OPEN) or the underlying Motor exception, which `_update_member_cache` logs at DEBUG and swallows so a cache failure never breaks the update path.
+**Error behavior:** every helper uses `db_call()`; a MongoDB outage raises `CircuitOpenError` (circuit OPEN) or the underlying pymongo exception, which `_update_member_cache` logs at DEBUG and swallows so a cache failure never breaks the update path.
 
 ## Roles, owners, and admins (`users_roles.py`, collections `tc_owners`, `tc_admins`, `tc_roles`)
 
@@ -266,14 +268,10 @@ Resolution order in `get_effective_role`:
   `find_one_and_update` (return AFTER): updates reason, admin, proof/log IDs (moving the old ones to `previous_*`), timestamps and `until_date`/`duration_str`, and `$inc`s `update_count`.
 - `set_log_message_id(ban_id: str, log_msg_id: int) -> None`
   Patches only the audit log message ID (used when the ban log is edited).
-- `deactivate_ban(ban_id: str) -> bool`
-  Sets `is_active: False`; returns `modified_count > 0`.
 - `deactivate_all_active_bans(user_id: int) -> int`
   Deactivates every active ban for a user in one `update_many`; returns the count deactivated. Used by unban and appeal-approval flows to clear any duplicate active records.
 - `deactivate_extra_active_bans(user_id: int, keep_ban_id: str) -> int`
   Deactivates all active bans except the canonical `keep_ban_id` (ban-update cleanup); returns the count deactivated.
-- `set_review(ban_id: str, msg_id: int) -> None`
-  Stores `review_message_id` and `review_timestamp`.
 - `set_review_if_absent(ban_id: str, msg_id: int) -> bool`
   Atomic claim of the pending-review slot: the filter requires `review_message_id` to be `None`, so two concurrent appeal submissions cannot both win. Returns whether this submit claimed the slot; the loser discards its orphan review card.
 - `clear_review(ban_id: str) -> None`

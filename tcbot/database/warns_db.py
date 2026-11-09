@@ -15,22 +15,23 @@ from pymongo.errors import DuplicateKeyError
 from tcbot.database._migration import _repoint_chat
 from tcbot.database.documents import WarnCountDoc, WarnDoc
 from tcbot.database.mongos import col, db_call
+from tcbot.utils.dispatch import gather_bounded
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
-    from motor.motor_asyncio import AsyncIOMotorCollection
+    from pymongo.collection import Collection
 
 log = get_logger(__name__)
 
 # ──────────────────────────── Collection ─────────────────────────── #
 
 
-def _warns() -> AsyncIOMotorCollection:
+def _warns() -> Collection:
     return col("warns")
 
 
-def _warn_counts() -> AsyncIOMotorCollection:
+def _warn_counts() -> Collection:
     return col("warn_counts")
 
 
@@ -55,7 +56,7 @@ async def _inc_warn_count(user_id: int, chat_id: int) -> int | None:
     for attempt in range(2):
         try:
             counter = await db_call(
-                _warn_counts().find_one_and_update(
+                lambda: _warn_counts().find_one_and_update(
                     _warn_key(user_id, chat_id),
                     {
                         "$inc": {"count": 1},
@@ -97,7 +98,7 @@ async def _sync_warn_count(user_id: int, chat_id: int) -> int:
     then re-reads the winner's count instead.
     """
     doc: WarnCountDoc | None = await db_call(
-        _warn_counts().find_one(
+        lambda: _warn_counts().find_one(
             _warn_key(user_id, chat_id),
             {"_id": 0, "count": 1},
         )
@@ -105,11 +106,11 @@ async def _sync_warn_count(user_id: int, chat_id: int) -> int:
     if doc is not None:
         return int(doc.get("count", 0))
 
-    count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
+    count = await db_call(lambda: _warns().count_documents(_warn_key(user_id, chat_id)))
     if count > 0:
         try:
             updated = await db_call(
-                _warn_counts().find_one_and_update(
+                lambda: _warn_counts().find_one_and_update(
                     _warn_key(user_id, chat_id),
                     {
                         "$setOnInsert": {
@@ -128,7 +129,7 @@ async def _sync_warn_count(user_id: int, chat_id: int) -> int:
             # * A concurrent caller won the backfill insert; the doc exists
             # * now, so re-read the winner's count instead of failing.
             updated = await db_call(
-                _warn_counts().find_one(
+                lambda: _warn_counts().find_one(
                     _warn_key(user_id, chat_id),
                     {"_id": 0, "count": 1},
                 )
@@ -141,10 +142,10 @@ async def _sync_warn_count(user_id: int, chat_id: int) -> int:
 async def _store_warn_count(user_id: int, chat_id: int, count: int) -> None:
     """Persist the counter doc for a user/chat pair."""
     if count <= 0:
-        await db_call(_warn_counts().delete_one(_warn_key(user_id, chat_id)))
+        await db_call(lambda: _warn_counts().delete_one(_warn_key(user_id, chat_id)))
         return
     await db_call(
-        _warn_counts().update_one(
+        lambda: _warn_counts().update_one(
             _warn_key(user_id, chat_id),
             {
                 "$set": {
@@ -167,7 +168,7 @@ async def _recount_and_store(user_id: int, chat_id: int) -> None:
     Single owner for the repair path shared by every counter-write failure
     below, so a fix to the recount logic cannot drift between call sites.
     """
-    count = await db_call(_warns().count_documents(_warn_key(user_id, chat_id)))
+    count = await db_call(lambda: _warns().count_documents(_warn_key(user_id, chat_id)))
     await _store_warn_count(user_id, chat_id, count)
 
 
@@ -191,7 +192,7 @@ async def _repair_counter_delete(
     if delete_all_counts:
         for attempt in range(3):
             try:
-                await db_call(_warn_counts().delete_many(counts_filter))
+                await db_call(lambda: _warn_counts().delete_many(counts_filter))
                 return
             except asyncio.CancelledError:
                 raise
@@ -223,7 +224,7 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
     """Add a new warning to a user in a specific chat."""
     c = _warns()
     inserted = await db_call(
-        c.insert_one(
+        lambda: c.insert_one(
             {
                 "user_id": user_id,
                 "reason": reason,
@@ -238,7 +239,7 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
     except Exception:
         log.exception("add_warn counter update failed; rolling back warn insert")
         try:
-            await db_call(c.delete_one({"_id": inserted.inserted_id}))
+            await db_call(lambda: c.delete_one({"_id": inserted.inserted_id}))
         except Exception as rollback_exc:
             log.warning(
                 "add_warn rollback failed for inserted_id=%s: %s",
@@ -301,11 +302,13 @@ async def _clear_warn_docs(
     Cancellation propagates instead of reporting success.
     """
     warn_del, cnt_del = await asyncio.gather(
-        db_call(_warns().delete_many(warns_filter)),
+        db_call(lambda: _warns().delete_many(warns_filter)),
         db_call(
-            _warn_counts().delete_many(counts_filter)
-            if delete_all_counts
-            else _warn_counts().delete_one(counts_filter)
+            lambda: (
+                _warn_counts().delete_many(counts_filter)
+                if delete_all_counts
+                else _warn_counts().delete_one(counts_filter)
+            )
         ),
         return_exceptions=True,
     )
@@ -360,13 +363,13 @@ async def get_warns(
     )
     if limit is not None:
         cursor = cursor.limit(max(1, limit))
-    return await db_call(cursor.to_list(limit))
+    return await db_call(lambda: list(cursor))
 
 
 async def remove_last_warn(user_id: int, chat_id: int) -> bool:
     """Delete the most recent warn document. Returns True if one was removed."""
     doc = await db_call(
-        _warns().find_one(
+        lambda: _warns().find_one(
             _warn_key(user_id, chat_id),
             {"_id": 1},
             sort=[("timestamp", -1), ("_id", -1)],
@@ -377,9 +380,9 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
 
     # Delete warn and update counter in parallel
     del_res, counter = await asyncio.gather(
-        db_call(_warns().delete_one({"_id": doc["_id"]})),
+        db_call(lambda: _warns().delete_one({"_id": doc["_id"]})),
         db_call(
-            _warn_counts().find_one_and_update(
+            lambda: _warn_counts().find_one_and_update(
                 {
                     **_warn_key(user_id, chat_id),
                     "count": {"$gt": 0},
@@ -419,19 +422,19 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
 
 async def user_total_warns(user_id: int) -> int:
     """Total number of warning rows recorded against the user (all groups)."""
-    return await db_call(_warns().count_documents({"user_id": user_id}))
+    return await db_call(lambda: _warns().count_documents({"user_id": user_id}))
 
 
 async def user_warn_groups(user_id: int) -> list[tuple[int, int]]:
     """Return [(chat_id, count), ...] for every group where the user has warns, newest first."""
     docs = await db_call(
-        _warn_counts()
-        .find(
-            {"user_id": user_id, "count": {"$gt": 0}},
-            {"_id": 0, "chat_id": 1, "count": 1},
-            sort=[("updated_at", -1)],
+        lambda: list(
+            _warn_counts().find(
+                {"user_id": user_id, "count": {"$gt": 0}},
+                {"_id": 0, "chat_id": 1, "count": 1},
+                sort=[("updated_at", -1)],
+            )
         )
-        .to_list(length=None)
     )
     return [(int(d["chat_id"]), int(d["count"])) for d in docs]
 
@@ -462,12 +465,12 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
     )
     try:
         old_counters = await db_call(
-            _warn_counts()
-            .find(
-                {"chat_id": old_chat_id},
-                {"_id": 0, "user_id": 1, "count": 1},
+            lambda: list(
+                _warn_counts().find(
+                    {"chat_id": old_chat_id},
+                    {"_id": 0, "user_id": 1, "count": 1},
+                )
             )
-            .to_list(None)
         )
     except asyncio.CancelledError:
         raise
@@ -478,23 +481,29 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
             new_chat_id,
         )
         return matched_any
-    for doc in old_counters:
+
+    async def _merge_one_counter(doc: dict) -> bool:
+        """Atomic-take one old counter and land its count on the new pair.
+
+        Returns True when this user contributed to the migration. The old
+        doc is gone before its count lands, so a crash plus retry cannot
+        add it twice. Per-user failures log and return False; cancellation
+        propagates via gather_bounded below.
+        """
         uid = doc.get("user_id")
         cnt = int(doc.get("count", 0))
         if uid is None or cnt <= 0:
-            continue
+            return False
         try:
-            # * Atomic take: the old doc is gone before its count lands on
-            # * the new pair, so a crash plus retry cannot add it twice.
             taken = await db_call(
-                _warn_counts().find_one_and_delete(
+                lambda: _warn_counts().find_one_and_delete(
                     {"user_id": uid, "chat_id": old_chat_id}
                 )
             )
             if taken is None:
-                continue
+                return False
             res = await db_call(
-                _warn_counts().update_one(
+                lambda: _warn_counts().update_one(
                     {"user_id": uid, "chat_id": new_chat_id},
                     {
                         "$inc": {"count": cnt},
@@ -507,8 +516,7 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
                     upsert=True,
                 )
             )
-            if res.matched_count > 0 or res.upserted_id is not None:
-                matched_any = True
+            return res.matched_count > 0 or res.upserted_id is not None
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -518,8 +526,16 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
                 new_chat_id,
                 uid,
             )
+            return False
+
+    # * Per-user takes are independent, so the merge round trips run
+    # * concurrently under the shared database cap instead of one user at
+    # * a time (a large legacy group could otherwise stall for hundreds
+    # * of sequential trips).
+    results = await gather_bounded([_merge_one_counter(doc) for doc in old_counters])
+    matched_any = matched_any or any(r is True for r in results)
     try:
-        await db_call(_warn_counts().delete_many({"chat_id": old_chat_id}))
+        await db_call(lambda: _warn_counts().delete_many({"chat_id": old_chat_id}))
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -543,7 +559,7 @@ async def federation_warn_count(user_id: int) -> int:
         {"$match": {"user_id": user_id, "count": {"$gt": 0}}},
         {"$group": {"_id": None, "total": {"$sum": "$count"}}},
     ]
-    result = await db_call(_warn_counts().aggregate(pipeline).to_list(length=1))
+    result = await db_call(lambda: list(_warn_counts().aggregate(pipeline)))
     return int(result[0]["total"]) if result else 0
 
 

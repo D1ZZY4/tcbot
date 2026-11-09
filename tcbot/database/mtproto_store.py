@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable
     from typing import Any
 
-    from motor.motor_asyncio import AsyncIOMotorCollection
+    from pymongo.collection import Collection
 
 log = get_logger(__name__)
 
@@ -43,11 +43,11 @@ def _is_transient_write_error(exc: BaseException) -> bool:
     ).get("errorLabels", [])
 
 
-async def _retry_write(coro_factory: Callable[[], Awaitable[Any]]) -> Any:
-    """Execute a fresh coroutine from *coro_factory* with retries on transient WriteConcernError.
+async def _retry_write(op: Callable[[], Any]) -> Any:
+    """Execute *op* with retries on transient WriteConcernError.
 
     Pyrogram's ``handle_updates()`` background task persists update states
-    through this store.  A transient replica-set failover (code 11602 /
+    through this store.  A transient replica-set fan-out (code 11602 /
     ``InterruptedDueToReplStateChange``) raises ``WriteConcernError`` with
     the ``RetryableWriteError`` label.  Because the task is fire-and-forget,
     the exception is never retrieved and the event loop reports it as an
@@ -62,13 +62,14 @@ async def _retry_write(coro_factory: Callable[[], Awaitable[Any]]) -> Any:
     DuplicateKeyError to propagate for fencing; it calls the database
     directly instead of using this helper.
 
-    *coro_factory* must return a **new** coroutine on each call so retries
-    re-execute the operation instead of re-awaiting a spent coroutine.
+    *op* must be cheap to rebuild so retries re-execute the operation
+    instead of reusing its result: callers pass a zero-argument thunk
+    that performs the sync write when called by :func:`db_call`.
     """
     last_exc: BaseException | None = None
     for attempt in range(_MAX_WRITE_RETRIES):
         try:
-            return await coro_factory()
+            return await db_call(op)
         except asyncio.CancelledError:
             raise
         except DuplicateKeyError:
@@ -120,7 +121,7 @@ async def claim_owner(store: MongoStorage, owner: str, *, ttl_s: float) -> bool:
 
     async def _take() -> Any:
         return await db_call(
-            store._coll().find_one_and_update(
+            lambda: store._coll().find_one_and_update(
                 {
                     "_id": lease_id,
                     "$or": [{"owner": owner}, {"expires_at": {"$lt": now}}],
@@ -150,7 +151,7 @@ async def claim_owner(store: MongoStorage, owner: str, *, ttl_s: float) -> bool:
     # * the auth key.
     async def _first() -> None:
         await db_call(
-            store._coll().insert_one(
+            lambda: store._coll().insert_one(
                 {"_id": lease_id, "owner": owner, "expires_at": now + ttl_s}
             )
         )
@@ -170,7 +171,7 @@ async def claim_owner(store: MongoStorage, owner: str, *, ttl_s: float) -> bool:
 async def refresh_owner(store: MongoStorage, owner: str, *, ttl_s: float) -> bool:
     """Renew the lease; False when someone else owns it (fencing)."""
     res = await db_call(
-        store._coll().update_one(
+        lambda: store._coll().update_one(
             {"_id": store._lease_id(), "owner": owner},
             {"$set": {"expires_at": time.time() + ttl_s}},
         )
@@ -182,7 +183,7 @@ async def release_owner(store: MongoStorage, owner: str) -> None:
     """Best-effort lease release; expiry covers leftovers after a crash."""
     try:
         await db_call(
-            store._coll().delete_one({"_id": store._lease_id(), "owner": owner})
+            lambda: store._coll().delete_one({"_id": store._lease_id(), "owner": owner})
         )
     except asyncio.CancelledError:
         raise
@@ -201,27 +202,25 @@ async def update_peers(
     for peer_id, access_hash, peer_type, phone_number in peers:
         doc_id = store._peer(peer_id)
 
-        async def _op(
+        def _op(
             _did: str = doc_id,
             _ah: int = access_hash,
             _pt: str = peer_type,
             _pn: str | None = phone_number,
             _now: int = now,
         ) -> None:
-            await db_call(
-                store._coll().update_one(
-                    {"_id": _did},
-                    {
-                        "$set": {
-                            "access_hash": _ah,
-                            "type": _pt,
-                            "phone_number": _pn,
-                            "updated_on": _now,
-                        },
-                        "$setOnInsert": {"usernames": []},
+            store._coll().update_one(
+                {"_id": _did},
+                {
+                    "$set": {
+                        "access_hash": _ah,
+                        "type": _pt,
+                        "phone_number": _pn,
+                        "updated_on": _now,
                     },
-                    upsert=True,
-                )
+                    "$setOnInsert": {"usernames": []},
+                },
+                upsert=True,
             )
 
         await _retry_write(_op)
@@ -241,22 +240,20 @@ async def update_usernames(
         doc_id = store._peer(peer_id)
         filtered_names = [n for n in names if n is not None]
 
-        async def _op(
+        def _op(
             _did: str = doc_id,
             _names: list[str] = filtered_names,
             _now: int = now,
         ) -> None:
-            await db_call(
-                store._coll().update_one(
-                    {"_id": _did},
-                    {
-                        "$set": {
-                            "usernames": _names,
-                            "updated_on": _now,
-                        }
-                    },
-                    upsert=True,
-                )
+            store._coll().update_one(
+                {"_id": _did},
+                {
+                    "$set": {
+                        "usernames": _names,
+                        "updated_on": _now,
+                    }
+                },
+                upsert=True,
             )
 
         await _retry_write(_op)
@@ -264,7 +261,7 @@ async def update_usernames(
 
 async def get_peer_by_id(store: MongoStorage, peer_id: int) -> Any:
     """Return the InputPeer for *peer_id*, or raise KeyError like SQLiteStorage."""
-    doc = await db_call(store._coll().find_one({"_id": store._peer(peer_id)}))
+    doc = await db_call(lambda: store._coll().find_one({"_id": store._peer(peer_id)}))
     if doc is None:
         raise KeyError(f"ID not found: {peer_id}")
     return get_input_peer(peer_id, doc["access_hash"], doc["type"])
@@ -273,7 +270,7 @@ async def get_peer_by_id(store: MongoStorage, peer_id: int) -> Any:
 async def get_peer_by_username(store: MongoStorage, username: str) -> Any:
     """Return the freshest InputPeer for *username*, or raise KeyError."""
     doc = await db_call(
-        store._coll().find_one(
+        lambda: store._coll().find_one(
             {"_id": {"$regex": f"^{store._ns_re}:peer:"}, "usernames": username},
             sort=[("updated_on", -1)],
         )
@@ -289,7 +286,7 @@ async def get_peer_by_username(store: MongoStorage, username: str) -> Any:
 async def get_peer_by_phone_number(store: MongoStorage, phone_number: str) -> Any:
     """Return the InputPeer for *phone_number*, or raise KeyError."""
     doc = await db_call(
-        store._coll().find_one(
+        lambda: store._coll().find_one(
             {
                 "_id": {"$regex": f"^{store._ns_re}:peer:"},
                 "phone_number": phone_number,
@@ -326,7 +323,7 @@ class MongoStorage(Storage):
     # * namespace: ``<ns>:kv:<name>`` scalars, ``<ns>:peer:<peer_id>``
     # * peers, ``<ns>:ustate:<id>`` update states.
 
-    def _coll(self) -> AsyncIOMotorCollection:
+    def _coll(self) -> Collection:
         """Return the shared state collection."""
         # * Resolved via the module global so patching
         # * tcbot.database.mtproto_store.col keeps working as before.
@@ -355,35 +352,29 @@ class MongoStorage(Storage):
         await self.date(int(time.time()))
 
     async def close(self) -> None:
-        """No-op: Motor connections are owned by the shared client pool."""
+        """No-op: the sync client pool is owned by the shared mongos client."""
         return
 
     async def delete(self) -> None:
         """Drop every document in this namespace with transient-error retry."""
-        ns_re = self._ns_re
-
-        async def _op() -> None:
-            await db_call(self._coll().delete_many({"_id": {"$regex": f"^{ns_re}:"}}))
-
-        await _retry_write(_op)
+        await _retry_write(
+            lambda: self._coll().delete_many({"_id": {"$regex": f"^{self._ns_re}:"}})
+        )
 
     # ── scalar accessors (same object-sentinel contract as SQLiteStorage) ── #
 
     async def _get_scalar(self, name: str) -> Any:
         """Read scalar *name*, or None when never written."""
-        doc = await db_call(self._coll().find_one({"_id": self._kv(name)}))
+        doc = await db_call(lambda: self._coll().find_one({"_id": self._kv(name)}))
         return doc["value"] if doc else None
 
     async def _set_scalar(self, name: str, value: Any) -> None:
         """Upsert scalar *name* with transient-error retry."""
         kv = self._kv(name)
 
-        async def _op() -> None:
-            await db_call(
-                self._coll().replace_one({"_id": kv}, {"value": value}, upsert=True)
-            )
-
-        await _retry_write(_op)
+        await _retry_write(
+            lambda: self._coll().replace_one({"_id": kv}, {"value": value}, upsert=True)
+        )
 
     def _accessor(self, name: str, value: Any = object) -> Awaitable[Any]:
         """Build a dual getter/setter coroutine for scalar *name*."""
@@ -476,7 +467,7 @@ class MongoStorage(Storage):
             if not state_ids:
                 return []
             filt["_id"]["$in"] = [self._ustate(i) for i in state_ids]
-        docs = await db_call(self._coll().find(filt).sort("date", 1).to_list(None))
+        docs = await db_call(lambda: list(self._coll().find(filt).sort("date", 1)))
         return [
             UpdateState(
                 int(str(d["_id"]).rsplit(":", 1)[1]),
@@ -514,28 +505,22 @@ class MongoStorage(Storage):
                 state_id = state.id
                 state_patch = dict(patch)
 
-                async def _op(
-                    _sid: int = state_id, _patch: dict[str, Any] = state_patch
-                ) -> None:
-                    await db_call(
-                        self._coll().update_one(
-                            {"_id": self._ustate(_sid)},
-                            {"$set": _patch},
-                            upsert=True,
-                        )
+                await _retry_write(
+                    lambda sid=state_id, patch=state_patch: self._coll().update_one(
+                        {"_id": self._ustate(sid)},
+                        {"$set": patch},
+                        upsert=True,
                     )
-
-                await _retry_write(_op)
+                )
 
     async def delete_update_state(self, state_id: int | Iterable[int]) -> None:
         """Delete update states by ID with transient-error retry."""
         state_ids = (state_id,) if isinstance(state_id, int) else tuple(state_id)
         ustate_ids = [self._ustate(i) for i in state_ids]
 
-        async def _op() -> None:
-            await db_call(self._coll().delete_many({"_id": {"$in": ustate_ids}}))
-
-        await _retry_write(_op)
+        await _retry_write(
+            lambda: self._coll().delete_many({"_id": {"$in": ustate_ids}})
+        )
 
     # ── single-owner lease ── #
     # * One live MTProto connection per shared session: Telegram kills the

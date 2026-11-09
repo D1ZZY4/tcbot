@@ -26,18 +26,18 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from typing import Any
 
-    from motor.motor_asyncio import AsyncIOMotorCollection
+    from pymongo.collection import Collection
 
 log = get_logger(__name__)
 
 # ─────────────────────────── Collections ───────────────────────── #
 
 
-def _groups() -> AsyncIOMotorCollection:
+def _groups() -> Collection:
     return col("federated_groups")
 
 
-def _pending() -> AsyncIOMotorCollection:
+def _pending() -> Collection:
     return col("pending_joins")
 
 
@@ -49,9 +49,11 @@ async def get_group_titles(chat_ids: list[int]) -> dict[int, str]:
     if not chat_ids:
         return {}
     docs = await db_call(
-        _groups()
-        .find({"chat_id": {"$in": chat_ids}}, {"_id": 0, "chat_id": 1, "title": 1})
-        .to_list(length=None)
+        lambda: list(
+            _groups().find(
+                {"chat_id": {"$in": chat_ids}}, {"_id": 0, "chat_id": 1, "title": 1}
+            )
+        )
     )
     return {int(d["chat_id"]): d.get("title") or str(d["chat_id"]) for d in docs}
 
@@ -67,7 +69,7 @@ async def refresh_group_title(chat_id: int, title: str) -> bool:
     newer title with a stale read.
     """
     r = await db_call(
-        _groups().update_one(
+        lambda: _groups().update_one(
             {"chat_id": chat_id, "title": {"$ne": title}},
             {"$set": {"title": title}},
         )
@@ -90,7 +92,9 @@ async def is_connected(chat_id: int, *, fresh: bool = False) -> bool:
     async def _fetch() -> bool:
         return (
             await db_call(
-                _groups().find_one({"chat_id": chat_id, "is_active": True}, {"_id": 1})
+                lambda: _groups().find_one(
+                    {"chat_id": chat_id, "is_active": True}, {"_id": 1}
+                )
             )
             is not None
         )
@@ -105,7 +109,7 @@ async def is_connected(chat_id: int, *, fresh: bool = False) -> bool:
 async def add_group(chat_id: int, title: str, added_by: int) -> None:
     """Add or update a group in the federated_groups collection."""
     await db_call(
-        _groups().update_one(
+        lambda: _groups().update_one(
             {"chat_id": chat_id},
             {
                 "$set": {
@@ -129,7 +133,9 @@ async def add_group(chat_id: int, title: str, added_by: int) -> None:
 async def deactivate_group(chat_id: int) -> bool:
     """Mark a group as inactive (disconnect from federation)."""
     r = await db_call(
-        _groups().update_one({"chat_id": chat_id}, {"$set": {"is_active": False}})
+        lambda: _groups().update_one(
+            {"chat_id": chat_id}, {"$set": {"is_active": False}}
+        )
     )
     if r.matched_count == 0:
         return False
@@ -143,7 +149,7 @@ async def active_groups() -> list[GroupDoc]:
 
     async def _fetch() -> list[GroupDoc]:
         return await db_call(
-            _groups().find({"is_active": True}, {"_id": 0}).to_list(None)
+            lambda: list(_groups().find({"is_active": True}, {"_id": 0}))
         )
 
     return cast(
@@ -154,7 +160,7 @@ async def active_groups() -> list[GroupDoc]:
 
 async def active_group_count() -> int:
     """Count the number of currently active connected groups."""
-    return await db_call(_groups().count_documents({"is_active": True}))
+    return await db_call(lambda: _groups().count_documents({"is_active": True}))
 
 
 def with_primary_groups(
@@ -199,7 +205,7 @@ async def get_group_locale(chat_id: int) -> str | None:
     except KeyError:
         pass
     doc = await db_call(
-        _groups().find_one({"chat_id": chat_id}, {"_id": 0, "locale": 1})
+        lambda: _groups().find_one({"chat_id": chat_id}, {"_id": 0, "locale": 1})
     )
     if not doc:
         _GROUP_LOCALE_L1[chat_id] = None
@@ -218,11 +224,15 @@ async def set_group_locale(chat_id: int, locale: str | None) -> bool:
     """
     if locale is None:
         result = await db_call(
-            _groups().update_one({"chat_id": chat_id}, {"$unset": {"locale": ""}})
+            lambda: _groups().update_one(
+                {"chat_id": chat_id}, {"$unset": {"locale": ""}}
+            )
         )
     else:
         result = await db_call(
-            _groups().update_one({"chat_id": chat_id}, {"$set": {"locale": locale}})
+            lambda: _groups().update_one(
+                {"chat_id": chat_id}, {"$set": {"locale": locale}}
+            )
         )
     _GROUP_LOCALE_L1.pop(chat_id, None)
     # * active_groups() returns the row including its locale; without this
@@ -237,7 +247,7 @@ async def set_group_locale(chat_id: int, locale: str | None) -> bool:
 async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) -> None:
     """Add or update a pending join request from a group."""
     await db_call(
-        _pending().update_one(
+        lambda: _pending().update_one(
             {"chat_id": chat_id},
             {
                 "$set": {
@@ -255,12 +265,12 @@ async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) 
 
 async def get_pending(chat_id: int) -> PendingGroupDoc | None:
     """Get a pending join request by chat ID."""
-    return await db_call(_pending().find_one({"chat_id": chat_id}))
+    return await db_call(lambda: _pending().find_one({"chat_id": chat_id}))
 
 
 async def remove_pending(chat_id: int) -> None:
     """Remove a pending join request after it's approved or rejected."""
-    await db_call(_pending().delete_one({"chat_id": chat_id}))
+    await db_call(lambda: _pending().delete_one({"chat_id": chat_id}))
 
 
 # ─────────────────────────── Migration ─────────────────────────── #
@@ -278,7 +288,7 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
     """
     try:
         group_res = await db_call(
-            _groups().update_one(
+            lambda: _groups().update_one(
                 {"chat_id": old_chat_id},
                 {"$set": {"chat_id": new_chat_id}},
             )
@@ -294,7 +304,7 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
             new_chat_id,
         )
         try:
-            await db_call(_groups().delete_one({"chat_id": old_chat_id}))
+            await db_call(lambda: _groups().delete_one({"chat_id": old_chat_id}))
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -314,7 +324,7 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
         return False
     try:
         pending_res = await db_call(
-            _pending().update_one(
+            lambda: _pending().update_one(
                 {"chat_id": old_chat_id},
                 {"$set": {"chat_id": new_chat_id}},
             )
@@ -331,7 +341,7 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
             new_chat_id,
         )
         try:
-            await db_call(_pending().delete_one({"chat_id": old_chat_id}))
+            await db_call(lambda: _pending().delete_one({"chat_id": old_chat_id}))
         except asyncio.CancelledError:
             raise
         except Exception:

@@ -24,7 +24,7 @@ from tcbot.utils.circuit_breaker import CircuitOpenError
 
 
 class _FakeLeaseColl:
-    """Minimal Motor collection double supporting exactly the lease operators."""
+    """Minimal pymongo collection double supporting exactly the lease operators."""
 
     def __init__(self) -> None:
         self.docs: dict[str, dict[str, Any]] = {}
@@ -50,7 +50,7 @@ class _FakeLeaseColl:
                 return False
         return True
 
-    async def find_one_and_update(
+    def find_one_and_update(
         self,
         filt: dict[str, Any],
         update: dict[str, Any],
@@ -63,12 +63,12 @@ class _FakeLeaseColl:
                 return dict(doc)
         return None
 
-    async def insert_one(self, doc: dict[str, Any]) -> None:
+    def insert_one(self, doc: dict[str, Any]) -> None:
         if doc["_id"] in self.docs:
             raise DuplicateKeyError("duplicate lease row")
         self.docs[doc["_id"]] = dict(doc)
 
-    async def update_one(
+    def update_one(
         self, filt: dict[str, Any], update: dict[str, Any]
     ) -> SimpleNamespace:
         for doc in self.docs.values():
@@ -77,7 +77,7 @@ class _FakeLeaseColl:
                 return SimpleNamespace(matched_count=1)
         return SimpleNamespace(matched_count=0)
 
-    async def delete_one(self, filt: dict[str, Any]) -> None:
+    def delete_one(self, filt: dict[str, Any]) -> None:
         for doc_id, doc in list(self.docs.items()):
             if all(doc.get(k) == v for k, v in filt.items()):
                 del self.docs[doc_id]
@@ -311,10 +311,7 @@ def test_claim_outage_returns_false(
     """A MongoDB outage on claim refuses instead of reporting a held lease."""
     store, _ = lease_store
 
-    async def _boom(_coro: object) -> Any:
-        close = getattr(_coro, "close", None)
-        if callable(close):
-            close()
+    async def _boom(_op: object) -> Any:
         raise ConnectionFailure("no primary")
 
     monkeypatch.setattr(
@@ -330,10 +327,7 @@ def test_claim_circuit_open_returns_false(
     """An open circuit on claim also refuses instead of falling through."""
     store, _ = lease_store
 
-    async def _boom(_coro: object) -> Any:
-        close = getattr(_coro, "close", None)
-        if callable(close):
-            close()
+    async def _boom(_op: object) -> Any:
         raise CircuitOpenError("Circuit [mongodb] is OPEN; call rejected.")
 
     monkeypatch.setattr(

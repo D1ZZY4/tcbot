@@ -15,7 +15,7 @@ from tcbot.database.mongos import col, db_call
 from tcbot.database.types import UserId
 
 if TYPE_CHECKING:
-    from motor.motor_asyncio import AsyncIOMotorCollection
+    from pymongo.collection import Collection
 
 # * L1 for locale reads: resolution runs on every command and callback,
 # * so hits must cost no I/O. Writes invalidate; TTL bounds staleness
@@ -25,7 +25,7 @@ _LOCALE_L1: _cachetools.TTLCache = _cachetools.TTLCache(maxsize=4096, ttl=300)
 # ─────────────────────── Collection Helpers ─────────────────────── #
 
 
-def _settings() -> AsyncIOMotorCollection:
+def _settings() -> Collection:
     return col("user_settings")
 
 
@@ -43,7 +43,7 @@ async def get_user_locale(user_id: int) -> str | None:
     except KeyError:
         pass
     doc = await db_call(
-        _settings().find_one({"user_id": user_id}, {"_id": 0, "locale": 1})
+        lambda: _settings().find_one({"user_id": user_id}, {"_id": 0, "locale": 1})
     )
     if not doc:
         _LOCALE_L1[user_id] = None
@@ -63,12 +63,12 @@ async def set_user_locale(user_id: int, locale: str | None) -> None:
     layer) and defensively at resolution time.
     """
     if locale is None:
-        await db_call(_settings().delete_one({"user_id": user_id}))
+        await db_call(lambda: _settings().delete_one({"user_id": user_id}))
         _LOCALE_L1.pop(user_id, None)
         return
     row: UserSettingsDoc = {"user_id": UserId(user_id), "locale": locale}
     await db_call(
-        _settings().update_one(
+        lambda: _settings().update_one(
             {"user_id": user_id},
             {"$set": row},
             upsert=True,

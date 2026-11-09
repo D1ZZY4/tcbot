@@ -125,7 +125,7 @@ PROOFS="-1001234567890"
 |---|---:|---|---|
 | `BOT_TOKEN` | Yes | string | Telegram bot token. Never commit it. |
 | `OWNER_ID` | Yes | positive integer | Initial Founder user ID. Startup fails if missing or invalid. |
-| `MONGODB_URI` | Yes | MongoDB URI | Motor connection string. Never commit it. |
+| `MONGODB_URI` | Yes | MongoDB URI | PyMongo connection string. Never commit it. |
 | `DB_NAME` | No | string | MongoDB database name. Defaults to `tcbot`. |
 | `COMMUNITY_NAME` | No | string | Display name in messages and logs. Defaults to `Bot`. |
 | `PREFIXES` | No | Python-style list or CSV | Command prefixes. Default is `["/", "!", "."]`. |

@@ -339,7 +339,7 @@ class _FakeResult:
 
 
 class _FakeCollection:
-    """Minimal async stand-in for the Motor calls locale helpers use."""
+    """Minimal pymongo stand-in for the locale helpers."""
 
     def __init__(self) -> None:
         self.docs: dict[int, dict[str, Any]] = {}
@@ -348,7 +348,7 @@ class _FakeCollection:
     def _key(self, filt: dict[str, Any]) -> int:
         return int(filt.get("user_id", filt.get("chat_id", 0)))
 
-    async def find_one(
+    def find_one(
         self, filt: dict[str, Any], proj: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
         _ = proj
@@ -356,7 +356,7 @@ class _FakeCollection:
         doc = self.docs.get(self._key(filt))
         return dict(doc) if doc is not None else None
 
-    async def update_one(
+    def update_one(
         self,
         filt: dict[str, Any],
         update: dict[str, Any],
@@ -376,7 +376,7 @@ class _FakeCollection:
             doc.pop(field, None)
         return _FakeResult(1)
 
-    async def delete_one(self, filt: dict[str, Any]) -> _FakeResult:
+    def delete_one(self, filt: dict[str, Any]) -> _FakeResult:
         return _FakeResult(1 if self.docs.pop(self._key(filt), None) is not None else 0)
 
 

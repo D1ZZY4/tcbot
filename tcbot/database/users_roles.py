@@ -67,7 +67,7 @@ async def get_owner_id(*, fresh: bool = False) -> int | None:
 
     async def _fetch() -> int | None:
         doc: AdminDoc | None = await db_call(
-            col("tc_owners").find_one(
+            lambda: col("tc_owners").find_one(
                 {}, {"_id": 0, "user_id": 1}, sort=[("user_id", 1)]
             )
         )
@@ -98,10 +98,10 @@ async def is_owner(user_id: int, *, fresh: bool = False) -> bool:
 
 async def ensure_initial_owner(initial_id: int) -> None:
     """Create the first owner entry if the owners collection is empty."""
-    if await db_call(col("tc_owners").estimated_document_count()) > 0:
+    if await db_call(lambda: col("tc_owners").estimated_document_count()) > 0:
         return
     try:
-        await db_call(col("tc_owners").insert_one({"user_id": initial_id}))
+        await db_call(lambda: col("tc_owners").insert_one({"user_id": initial_id}))
         owner_id_cache.put(_OWNER_KEY, initial_id)
     except DuplicateKeyError:
         # * Another instance won the startup race; drop the cache so the next read refreshes.
@@ -118,7 +118,7 @@ async def set_owner(user_id: int) -> None:
     # * delete retries briefly so a transient failure cannot strand two
     # * owner rows without operator guidance.
     await db_call(
-        col("tc_owners").find_one_and_replace(
+        lambda: col("tc_owners").find_one_and_replace(
             {},
             {"user_id": user_id},
             upsert=True,
@@ -131,7 +131,9 @@ async def set_owner(user_id: int) -> None:
     # * exactly as before. Cancellation propagates immediately.
     for attempt in range(3):
         try:
-            await db_call(col("tc_owners").delete_many({"user_id": {"$ne": user_id}}))
+            await db_call(
+                lambda: col("tc_owners").delete_many({"user_id": {"$ne": user_id}})
+            )
             break
         except asyncio.CancelledError:
             raise
@@ -156,7 +158,7 @@ async def set_owner(user_id: int) -> None:
     # * the invariant and log loudly so a split brain is noticed instead of
     # * serving nondeterministic owners.
     try:
-        owner_rows = await db_call(col("tc_owners").estimated_document_count())
+        owner_rows = await db_call(lambda: col("tc_owners").estimated_document_count())
     except Exception:
         log.exception("set_owner verification read failed for user %d", user_id)
     else:
@@ -179,7 +181,9 @@ async def set_owner(user_id: int) -> None:
 async def is_admin(user_id: int) -> bool:
     """Return True if user_id is a registered admin."""
     return (
-        await db_call(col("tc_admins").find_one({"user_id": user_id}, {"_id": 1}))
+        await db_call(
+            lambda: col("tc_admins").find_one({"user_id": user_id}, {"_id": 1})
+        )
         is not None
     )
 
@@ -187,7 +191,7 @@ async def is_admin(user_id: int) -> bool:
 async def add_admin(user_id: int, promoted_by: int) -> None:
     """Add a new admin via upsert; no-op if already present."""
     await db_call(
-        col("tc_admins").update_one(
+        lambda: col("tc_admins").update_one(
             {"user_id": user_id},
             {
                 "$setOnInsert": {
@@ -204,7 +208,7 @@ async def add_admin(user_id: int, promoted_by: int) -> None:
 
 async def remove_admin(user_id: int) -> bool:
     """Remove an admin; return True if the entry was deleted."""
-    r = await db_call(col("tc_admins").delete_one({"user_id": user_id}))
+    r = await db_call(lambda: col("tc_admins").delete_one({"user_id": user_id}))
     effective_role_cache.invalidate(user_id)
     return r.deleted_count > 0
 
@@ -212,13 +216,13 @@ async def remove_admin(user_id: int) -> bool:
 async def all_admins() -> list[AdminDoc]:
     """Return all admin documents."""
     return await db_call(
-        col("tc_admins").find({}, {"_id": 0, "user_id": 1}).to_list(None)
+        lambda: list(col("tc_admins").find({}, {"_id": 0, "user_id": 1}))
     )
 
 
 async def admin_count() -> int:
     """Return the total count of registered admins."""
-    return await db_call(col("tc_admins").estimated_document_count())
+    return await db_call(lambda: col("tc_admins").estimated_document_count())
 
 
 # ──────────────────────── Custom roles ────────────────────────── #
@@ -238,7 +242,7 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
         "assigned_at": utc_now(),
     }
     await db_call(
-        col("tc_roles").update_one(
+        lambda: col("tc_roles").update_one(
             {"user_id": user_id},
             {"$set": row},
             upsert=True,
@@ -249,27 +253,29 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
 
 async def remove_role(user_id: int) -> bool:
     """Remove a user's custom role from the database."""
-    r = await db_call(col("tc_roles").delete_one({"user_id": user_id}))
+    r = await db_call(lambda: col("tc_roles").delete_one({"user_id": user_id}))
     effective_role_cache.invalidate(user_id)
     return r.deleted_count > 0
 
 
 async def get_role(user_id: int) -> str | None:
     """Get a user's custom role from the database only."""
-    doc = await db_call(col("tc_roles").find_one({"user_id": user_id}, {"role": 1}))
+    doc = await db_call(
+        lambda: col("tc_roles").find_one({"user_id": user_id}, {"role": 1})
+    )
     return doc["role"] if doc else None
 
 
 async def all_by_role(role: str) -> list[RoleRefDoc]:
     """Get all users with a specific custom role."""
     return await db_call(
-        col("tc_roles").find({"role": role}, {"_id": 0, "user_id": 1}).to_list(None)
+        lambda: list(col("tc_roles").find({"role": role}, {"_id": 0, "user_id": 1}))
     )
 
 
 async def role_count(role: str) -> int:
     """Count role members (count-only views; avoids fetching documents)."""
-    return await db_call(col("tc_roles").count_documents({"role": role}))
+    return await db_call(lambda: col("tc_roles").count_documents({"role": role}))
 
 
 # ─────────────────────── Role resolution ──────────────────────── #
@@ -322,7 +328,7 @@ async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None
 
             async def _owner_direct() -> bool:
                 doc = await db_call(
-                    col("tc_owners").find_one(
+                    lambda: col("tc_owners").find_one(
                         {"user_id": user_id}, {"_id": 1}, sort=[("user_id", 1)]
                     )
                 )
@@ -381,7 +387,7 @@ async def role_meta(user_id: int) -> tuple[str | None, int | None, datetime | No
         return role, None, None
     if role == "admin":
         doc = await db_call(
-            col("tc_admins").find_one(
+            lambda: col("tc_admins").find_one(
                 {"user_id": user_id},
                 {"_id": 0, "promoted_by": 1, "promoted_date": 1},
             )
@@ -390,7 +396,7 @@ async def role_meta(user_id: int) -> tuple[str | None, int | None, datetime | No
             return role, doc.get("promoted_by"), doc.get("promoted_date")
         return role, None, None
     doc = await db_call(
-        col("tc_roles").find_one(
+        lambda: col("tc_roles").find_one(
             {"user_id": user_id},
             {"_id": 0, "assigned_by": 1, "assigned_at": 1},
         )

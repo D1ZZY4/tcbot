@@ -35,12 +35,12 @@ class _FakeCursor:
         )
         return self
 
-    async def to_list(self, _n: object) -> list[dict[str, Any]]:
-        return list(self._docs)
+    def __iter__(self) -> Any:
+        return iter(list(self._docs))
 
 
 class _FakeColl:
-    """Minimal Motor collection double supporting exactly the operators used."""
+    """Minimal pymongo collection double supporting exactly the operators used."""
 
     def __init__(self) -> None:
         self.docs: dict[str, dict[str, Any]] = {}
@@ -62,7 +62,7 @@ class _FakeColl:
                 return False
         return True
 
-    async def find_one(
+    def find_one(
         self, filt: dict[str, Any], sort: list[tuple[str, int]] | None = None
     ) -> dict[str, Any] | None:
         cands = [d for d in self.docs.values() if self._match(d, filt)]
@@ -70,7 +70,7 @@ class _FakeColl:
             cands.sort(key=lambda d: d.get(sort[0][0], 0), reverse=sort[0][1] < 0)
         return dict(cands[0]) if cands else None
 
-    async def replace_one(
+    def replace_one(
         self, filt: dict[str, Any], repl: dict[str, Any], *, upsert: bool = False
     ) -> None:
         for doc_id, doc in self.docs.items():
@@ -81,7 +81,7 @@ class _FakeColl:
             doc_id = filt.get("_id", "")
             self.docs[doc_id] = {"_id": doc_id, **repl}
 
-    async def update_one(
+    def update_one(
         self, filt: dict[str, Any], update: dict[str, Any], *, upsert: bool = False
     ) -> None:
         target = next(
@@ -99,7 +99,7 @@ class _FakeColl:
         for key, value in update.get("$setOnInsert", {}).items():
             doc.setdefault(key, value)
 
-    async def delete_many(self, filt: dict[str, Any]) -> None:
+    def delete_many(self, filt: dict[str, Any]) -> None:
         for doc_id in [i for i, d in self.docs.items() if self._match(d, filt)]:
             del self.docs[doc_id]
 
@@ -118,6 +118,15 @@ def store(monkeypatch: pytest.MonkeyPatch) -> tuple[MongoStorage, _FakeColl]:
 
 def _run(coro: Any) -> Any:
     return asyncio.run(coro)
+
+
+async def _run_op(op: Any) -> Any:
+    """Fake db_call transport: run the thunk inline (no circuit, no thread).
+
+    Keeps ``_retry_write`` tests hermetic: they exercise retry/degrade
+    logic, not the process-wide MongoDB circuit.
+    """
+    return op()
 
 
 def test_scalar_roundtrip(store: tuple[MongoStorage, _FakeColl]) -> None:
@@ -189,13 +198,16 @@ def test_namespaces_do_not_leak(store: tuple[MongoStorage, _FakeColl]) -> None:
     assert len(fake.docs) == 1
 
 
-def test_retry_write_succeeds_after_transient_error() -> None:
+def test_retry_write_succeeds_after_transient_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Transient WriteConcernError with RetryableWriteError label retries and succeeds."""
+    monkeypatch.setattr(mtproto_store, "db_call", _run_op)
 
     async def _run() -> None:
         call_count = 0
 
-        async def _failing_coro() -> str:
+        def _failing_coro() -> str:
             nonlocal call_count
             call_count += 1
             if call_count < 3:
@@ -218,11 +230,12 @@ def test_retry_write_succeeds_after_transient_error() -> None:
     asyncio.run(_run())
 
 
-def test_retry_write_raises_after_max_retries() -> None:
+def test_retry_write_raises_after_max_retries(monkeypatch: pytest.MonkeyPatch) -> None:
     """WriteConcernError exhausts retries and returns None (degrades)."""
+    monkeypatch.setattr(mtproto_store, "db_call", _run_op)
 
     async def _run() -> None:
-        async def _always_failing_coro() -> None:
+        def _always_failing_coro() -> None:
             raise WriteConcernError(
                 "operation was interrupted",
                 code=11602,
@@ -242,13 +255,16 @@ def test_retry_write_raises_after_max_retries() -> None:
     asyncio.run(_run())
 
 
-def test_retry_write_does_not_retry_non_transient_error() -> None:
+def test_retry_write_does_not_retry_non_transient_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Non-transient errors are logged and degrade to None (no retry)."""
+    monkeypatch.setattr(mtproto_store, "db_call", _run_op)
 
     async def _run() -> None:
         call_count = 0
 
-        async def _non_transient_coro() -> None:
+        def _non_transient_coro() -> None:
             nonlocal call_count
             call_count += 1
             raise WriteConcernError(
@@ -267,13 +283,16 @@ def test_retry_write_does_not_retry_non_transient_error() -> None:
     asyncio.run(_run())
 
 
-def test_retry_write_connectivity_degrades_immediately() -> None:
+def test_retry_write_connectivity_degrades_immediately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """ConnectionFailure degrades once with no retry: the timeout already elapsed."""
+    monkeypatch.setattr(mtproto_store, "db_call", _run_op)
 
     async def _run() -> None:
         call_count = 0
 
-        async def _failing_coro() -> None:
+        def _failing_coro() -> None:
             nonlocal call_count
             call_count += 1
             raise ServerSelectionTimeoutError("no primary")
@@ -285,13 +304,16 @@ def test_retry_write_connectivity_degrades_immediately() -> None:
     asyncio.run(_run())
 
 
-def test_retry_write_connection_failure_degrades_immediately() -> None:
+def test_retry_write_connection_failure_degrades_immediately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Plain ConnectionFailure shares the same single-attempt degrade."""
+    monkeypatch.setattr(mtproto_store, "db_call", _run_op)
 
     async def _run() -> None:
         call_count = 0
 
-        async def _failing_coro() -> None:
+        def _failing_coro() -> None:
             nonlocal call_count
             call_count += 1
             raise ConnectionFailure("connection closed")
@@ -303,13 +325,16 @@ def test_retry_write_connection_failure_degrades_immediately() -> None:
     asyncio.run(_run())
 
 
-def test_retry_write_circuit_open_degrades_immediately() -> None:
+def test_retry_write_circuit_open_degrades_immediately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """CircuitOpenError degrades once with no retry."""
+    monkeypatch.setattr(mtproto_store, "db_call", _run_op)
 
     async def _run() -> None:
         call_count = 0
 
-        async def _failing_coro() -> None:
+        def _failing_coro() -> None:
             nonlocal call_count
             call_count += 1
             raise CircuitOpenError("Circuit [mongodb] is OPEN; call rejected.")
@@ -321,13 +346,14 @@ def test_retry_write_circuit_open_degrades_immediately() -> None:
     asyncio.run(_run())
 
 
-def test_retry_write_duplicate_key_propagates() -> None:
+def test_retry_write_duplicate_key_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
     """DuplicateKeyError is fencing control flow and must never be swallowed."""
+    monkeypatch.setattr(mtproto_store, "db_call", _run_op)
 
     async def _run() -> None:
         call_count = 0
 
-        async def _dup_coro() -> None:
+        def _dup_coro() -> None:
             nonlocal call_count
             call_count += 1
             raise DuplicateKeyError("duplicate")

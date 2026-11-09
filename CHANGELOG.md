@@ -52,7 +52,11 @@ All notable changes to this project are documented here. For workflow details, s
 ### Changed
 
 - **Local artifacts stay out of version control** (`.gitignore`): coverage data, pytest and hypothesis caches, HTML reports, and the proof-migration resume state are ignored, so local runs never leak into commits. Behavior changes: none for operators.
+- **Manifest realigned to grouped dependency sets** (`pyproject.toml`, `uv.lock`): runtime, optional, and development dependencies are organised by responsibility; the test lint ignores narrow to the specific doc rules tests actually skip, and coverage is wired into the test workflow. Behavior changes: none for operators.
+- **Database layer moves from Motor to synchronous PyMongo** (`tcbot/database/mongos.py`, `tcbot/database/*_db.py`, `tcbot/database/mtproto_store.py`, `tcbot/database/scheduler.py`, `scripts/migrate_proofs.py`): `db_call` now runs a zero-argument sync operation on a worker thread through the same MongoDB circuit; collections, indexes, schemas, and helper signatures are unchanged. A cancelled operation may still land once its thread finishes, which the atomic read patterns already tolerate. Behavior changes: none for operators.
 - **Proofs default to the community proof channel** (`tcbot/__init__.py`, `config.env.example`, `docs/getting-started/setup.md`): an empty `PROOFS` now resolves to `-1003997518221` instead of compiling to no destination. Behavior changes: proof uploads have a destination on a fresh setup.
+- **Warn counter migration runs concurrently** (`tcbot/database/warns_db.py`): per-user counter takes and merges now run through the bounded database gather helper instead of one user at a time. Behavior changes: none on the happy path; group upgrades with many legacy counters complete faster.
+- **Logging dependency carries an upper bound** (`pyproject.toml`, `uv.lock`): `loguru` now carries a `<1` bound like every other runtime dependency, so a future major cannot enter the lock silently. Behavior changes: none; the resolved version is unchanged.
 - **Modules renamed and flattened to single files** (`tcbot/modules/`): `banning.py` becomes `bans.py`, `broadcasting.py` becomes `broadcast.py`, `connecting.py` becomes `connect.py`, `kicking.py` becomes `kick.py`, `muting.py` becomes `mute.py`, and `unbanning.py` becomes `unban.py`. The `admins/`, `checking/`, `greeting/`, `help/`, `maintenance/`, `stats/`, `syncing/`, and `warnings/` packages become `admins.py`, `check.py`, `greeting.py`, `help.py`, `maintenance.py`, `stats.py`, `sync.py`, and `warns.py`. Behavior changes: `MODULES_LOAD`/`MODULES_NO_LOAD` now take the new names (`bans`, `broadcast`, `check`, `connect`, `kick`, `mute`, `sync`, `unban`, `warns`), and in-flight help keyboards using old topic keys (`help_banning` and friends) stop working after upgrade.
 - **`admins.py` is the command entry; executors live in flows** (`tcbot/modules/admins.py`, `tcbot/modules/helper/pipelines/promo_decision_flow.py`, `tcbot/modules/helper/pipelines/transfer_flow.py`): promote, demote, transfer, and queue commands plus their callbacks register from one file, while the promotion decision and ownership-transfer executors run from dedicated flow modules.
 - **Resolve helpers shared by promote and demote live in decorators** (`tcbot/modules/helper/decorators/checks.py`): `resolve_executor_target`, `classify_and_load_role`, `check_callback_staff`, `prompt_owner_mismatch`, `cancel_owner_mismatch`, `action_owner_mismatch`, and `can_demote_admin` replace the old `admins/shared.py` copies.
@@ -442,6 +446,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Removed
 
+- **Motor and speedtest-cli leave the dependency graph** (`pyproject.toml`, `uv.lock`): the database layer now runs on synchronous PyMongo and `/speedtest` on Cloudflare endpoints, so neither package is needed. Behavior changes: none for operators beyond the entries above.
+
 - **Unused UTC display helper removed** (`tcbot/utils/time_and_date.py`, `docs/architecture/utilities.md`): `utc_now_str()` had no callers and its rows in the utilities guide are gone. Display rendering stays on `fmt_dt()`. Behavior changes: none.
 
 - **Appeal log handle removed** (`tcbot/__init__.py`, `tcbot/modules/helper/pipelines/appeal_submit_flow.py`, `config.env.example`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `docs/features/appeals.md`, `.github/workflows/run-bot.yml`): the separate handle setting is gone and the instruction handle follows the public logs link instead. `APPEALS` stays the single appeal destination for channel, group, or forum thread use. Behavior changes: an existing handle value is ignored; update the public logs link instead.
@@ -464,7 +470,11 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Skills directory removed** (`.agents/skills/`, `skills-lock.json`): the feature-review and MongoDB optimizer skills, their reference guides, and the skill manifest are gone. Behavior changes: none for operators; agent guidance now lives only in `.agents/rules/`.
 
+- **Unused ban helpers removed** (`tcbot/database/bans_db.py`, `docs/architecture/database.md`): `deactivate_ban` and `set_review` had no callers; `deactivate_all_active_bans`, `deactivate_extra_active_bans`, and `set_review_if_absent` are the live helpers. Behavior changes: none.
+
 ### Documentation
+
+- **Dependency, proofs, and coverage documentation refreshed** (`docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `docs/architecture/database.md`, `docs/architecture/utilities.md`, `AGENTS.md`): PyMongo, the `PROOFS` default, the `SENTRY_DSN` option, and the coverage-backed test workflow are aligned with the implementation. Behavior changes: none for operators.
 
 - **Appeal and pool references match the tree** (`docs/features/appeals.md`, `docs/architecture/workflows.md`, `docs/operations/performance.md`): the appeal facade names the `appeal_submit_flow.py` module instead of a directory, the unban section names `unban_flow.py`, and the getUpdates pool size is credited to its lifecycle owner. Behavior changes: none, docs only.
 

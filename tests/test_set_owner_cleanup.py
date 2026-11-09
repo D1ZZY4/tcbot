@@ -16,8 +16,8 @@ from tcbot.database import users_roles
 from tcbot.database.cache import _OWNER_KEY
 
 
-async def _identity(coro: Any) -> Any:
-    return await coro
+async def _identity(op: Any) -> Any:
+    return op()
 
 
 class _FakeOwnerCol:
@@ -35,15 +35,15 @@ class _FakeOwnerCol:
         self._delete_failures = delete_failures
         self._permanent_failure = permanent_failure
 
-    async def find_one_and_replace(self, *args: Any, **kwargs: Any) -> None:
+    def find_one_and_replace(self, *args: Any, **kwargs: Any) -> None:
         self.replace_calls += 1
 
-    async def delete_many(self, *args: Any, **kwargs: Any) -> None:
+    def delete_many(self, *args: Any, **kwargs: Any) -> None:
         self.delete_calls += 1
         if self._permanent_failure or self.delete_calls <= self._delete_failures:
             raise RuntimeError("tc_owners delete failed")
 
-    async def estimated_document_count(self) -> int:
+    def estimated_document_count(self) -> int:
         self.count_calls += 1
         return 1
 
@@ -110,10 +110,10 @@ def test_set_owner_delete_cancellation_propagates_without_retry(
     delete_calls: list[int] = []
 
     class _CancelCol:
-        async def find_one_and_replace(self, *args: Any, **kwargs: Any) -> None:
+        def find_one_and_replace(self, *args: Any, **kwargs: Any) -> None:
             return None
 
-        async def delete_many(self, *args: Any, **kwargs: Any) -> None:
+        def delete_many(self, *args: Any, **kwargs: Any) -> None:
             delete_calls.append(1)
             raise asyncio.CancelledError()
 

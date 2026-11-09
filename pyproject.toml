@@ -1,50 +1,95 @@
+[build-system]
+requires = ["setuptools>=84.2.1"]
+build-backend = "setuptools.build_meta"
+
+
 [project]
 name = "tcbot"
 version = "6.9.0"
 description = "TCF | Transsion Core Federation - Telegram Bot"
 requires-python = ">=3.14"
 dependencies = [
+    # Telegram
     "python-telegram-bot[rate-limiter]>=22.8,<23",
-    "motor>=3.7.1,<4",
-    "flask>=3.1.3,<4",
-    "python-dotenv>=1.2.4,<2",
+    "kurigram[fast]>=2.2.27,<3",
+
+    # Database
+    "pymongo>=4.19,<5",
+
+    # Cache and background scheduling
     "redis[hiredis]>=8.1,<9",
     "apscheduler[mongodb]==3.11.3",
-    "cachetools>=8.0.0,<9",
-    "speedtest-cli>=2.1.3,<3",
+    "cachetools>=8.0,<9",
+
+    # HTTP and networking
+    "flask>=3.1.3,<4",
     "certifi>=2026.10.23",
-    "kurigram[fast]>=2.2.27,<3",
+
+    # Serialization and configuration
     "msgspec>=0.22,<0.23",
-    "pymongo>=4.19.0,<5",
-    "loguru>=0.7.3",
+    "python-dotenv>=1.2.4,<2",
+
+    # Logging
+    "loguru>=0.7.3,<1",
 ]
 
-[dependency-groups]
-dev = [
-    "ruff>=0.17.4,<1",
-    "pytest>=9.2,<10",
-    "pyright>=1.1.414,<2",
-    "pytest-asyncio>=1.4.1,<2",
-    "pre-commit>=4.7,<5",
-    "py-spy>=0.4.3,<1",
-    "pytest-xdist>=3.8.0,<4",
+
+[project.optional-dependencies]
+
+# Production observability and error monitoring
+observability = [
+    "prometheus-client>=0.26,<0.27",
+    "sentry-sdk[loguru]>=2.74,<3",
 ]
+
+# Optional asyncio performance optimization for Linux
+performance = [
+    "uvloop>=0.23,<0.24; sys_platform == 'linux'",
+]
+
+
+[dependency-groups]
+
+dev = [
+    # Linting and formatting
+    "ruff>=0.17.4,<1",
+
+    # Static analysis
+    "pyright>=1.1.414,<2",
+
+    # Testing
+    "pytest>=9.2,<10",
+    "pytest-asyncio>=1.4.1,<2",
+    "pytest-xdist>=3.8,<4",
+    "pytest-cov>=7.1,<8",
+    "hypothesis>=6.170.15,<7",
+
+    # Development workflow
+    "pre-commit>=4.7,<5",
+
+    # Performance profiling
+    "py-spy>=0.4.3,<1",
+]
+
 
 [tool.setuptools.packages.find]
 include = ["tcbot*"]
 
+
 [tool.ruff]
 line-length = 88
 target-version = "py314"
-exclude = [".local/", ".agents/", ".kilo/", ".claude/", "attached_assets/"]
+exclude = [
+    ".local/",
+    ".agents/",
+    ".kilo/",
+    ".claude/",
+    "attached_assets/",
+]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff.lint]
+
 select = [
     "B",
     "C4",
@@ -69,21 +114,52 @@ select = [
     "UP",
     "W",
 ]
+
 ignore = [
-    "D203",  # Conflicts with D211 (no-blank-line-before-class); D211 is preferred
-    "D213",  # Conflicts with D212 (multi-line-summary-first-line); D212 is preferred
-    "TC001", # Application imports in TYPE_CHECKING: internal TypedDicts used in runtime dict ops
-    "TC002", # Runtime import needed for cast() and local type annotations
-    "TC004", # Same: runtime import for local annotations on runtime values
+    "D203",  # Conflicts with D211
+    "D213",  # Conflicts with D212
+    "TC001", # Preserve application imports required at runtime
+    "TC002", # Preserve runtime imports used by typing operations
+    "TC004", # Preserve runtime annotation imports
 ]
 
+
 [tool.ruff.lint.per-file-ignores]
+
 "tests/**" = [
-    "D",
-] # Test functions need no docstrings; module docs stay required
+    "D101",
+    "D102",
+    "D103",
+    "D105",
+    "D106",
+    "D107",
+] # Test functions and classes need no docstrings; module docs remain required
+
 "tcbot/modules/**/__init__.py" = [
     "F401",
-] # Package inits are re-export surfaces (no __all__); used names live in submodules
+] # Package inits intentionally expose re-export surfaces
+
+
+[tool.pytest.ini_options]
+
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+
+[tool.coverage.run]
+
+branch = true
+source = ["tcbot"]
+
+
+[tool.coverage.report]
+
+show_missing = true
+skip_covered = true
+
 
 [tool.pylint.format]
+
 max-module-lines = 1000
