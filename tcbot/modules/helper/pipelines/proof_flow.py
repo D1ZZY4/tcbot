@@ -200,32 +200,48 @@ async def upload_proof(
                 if not docs:
                     return first_id
             else:
-                media: list[InputMediaPhoto | InputMediaVideo] = [
-                    InputMediaPhoto(
-                        file_id,
-                        caption=caption if idx == 0 else None,
-                        parse_mode="MarkdownV2",
-                    )
-                    if kind == "photo"
-                    else InputMediaVideo(
-                        file_id,
-                        caption=caption if idx == 0 else None,
-                        parse_mode="MarkdownV2",
-                    )
-                    for idx, (kind, file_id) in enumerate(gallery)
-                ]
-                sent = await bot.send_media_group(
-                    proof_chat, media, message_thread_id=proof_thread
-                )
-                if sent:
-                    first_id = sent[0].message_id
-                    log.info(
-                        "Proof gallery uploaded: %d items, message_id=%s",
-                        len(sent),
-                        first_id,
-                    )
-                elif not docs:
-                    return None
+                # * Telegram caps a media group at 10 items; larger albums
+                # * must be split or the whole gallery send is rejected,
+                # * which previously produced a proof-less ban.
+                for chunk_start in range(0, len(gallery), 10):
+                    chunk = gallery[chunk_start : chunk_start + 10]
+                    media: list[InputMediaPhoto | InputMediaVideo] = [
+                        InputMediaPhoto(
+                            file_id,
+                            caption=caption if chunk_start == 0 and idx == 0 else None,
+                            parse_mode="MarkdownV2",
+                        )
+                        if kind == "photo"
+                        else InputMediaVideo(
+                            file_id,
+                            caption=caption if chunk_start == 0 and idx == 0 else None,
+                            parse_mode="MarkdownV2",
+                        )
+                        for idx, (kind, file_id) in enumerate(chunk)
+                    ]
+                    try:
+                        sent = await bot.send_media_group(
+                            proof_chat, media, message_thread_id=proof_thread
+                        )
+                    except Exception:
+                        # * A failed later chunk must not lose earlier
+                        # * landed proof; log and keep first_id as set.
+                        log.exception("Proof gallery chunk upload failed")
+                        if first_id is None and not docs:
+                            return None
+                        continue
+                    if sent:
+                        if first_id is None:
+                            first_id = sent[0].message_id
+                        log.info(
+                            "Proof gallery uploaded: %d items, message_id=%s",
+                            len(sent),
+                            first_id,
+                        )
+                    elif not docs and first_id is None:
+                        return None
+                if first_id is not None and not docs:
+                    return first_id
     except Exception:
         # * A gallery failure must not discard document evidence: fall
         # * through to the docs loop below (first_id stays None, so the

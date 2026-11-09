@@ -44,6 +44,9 @@ empty = "Send a photo, video, GIF, or file first, then tap Done."
 [db_fail]
 body = "{user} could not be banned: the federation ban record could not be written to the database, so no groups were touched. Check the logs and retry with /tcban once the database recovers."
 
+[proof_fail]
+body = "{user} could not be banned: the proof media could not be uploaded, so no groups were touched. Resend the proof and retry with /tcban."
+
 [applied]
 empty = "No connected groups configured."
 none = "WARNING: ban not enforced in any group ({total}/{total} failed). Check bot admin rights in: {sample}{more}"

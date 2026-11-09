@@ -44,6 +44,9 @@ empty = "Kirim foto, video, GIF, atau file dulu, lalu ketuk Selesai."
 [db_fail]
 body = "{user} tidak bisa di-ban: catatan ban federasi gagal ditulis ke database, jadi tidak ada grup yang disentuh. Cek log lalu coba lagi dengan /tcban setelah database pulih."
 
+[proof_fail]
+body = "{user} tidak bisa di-ban: media bukti gagal diunggah, jadi tidak ada grup yang disentuh. Kirim ulang bukti dan coba lagi dengan /tcban."
+
 [applied]
 empty = "Belum ada grup terhubung yang dikonfigurasi."
 none = "PERINGATAN: ban tidak ditegakkan di grup mana pun ({total}/{total} gagal). Cek hak admin bot di: {sample}{more}"

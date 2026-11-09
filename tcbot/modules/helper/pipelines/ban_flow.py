@@ -383,6 +383,33 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             else None
         )
         logs_chat, logs_thread = cfg.logs
+        # * Proof is required for new bans: a proof-less record would let
+        # * /check and audit logs reference evidence that never landed.
+        # * Updates keep the old proof via _execute_ban_update fallback.
+        if not is_update and proof_msg_id is None:
+            log.error(
+                "Ban aborted for target=%d: proof upload returned None", target_id
+            )
+            _proof_fail_text = t(
+                "banning.proof_fail.body",
+                locale,
+                user=Safe(user_ref(target_id, target_fname)),
+            )
+            if prompt_msg_id and prompt_chat_id:
+                await safe_edit_message(
+                    bot,
+                    prompt_chat_id,
+                    prompt_msg_id,
+                    _proof_fail_text,
+                    reply_markup=None,
+                    log_level="debug",
+                    log_label="Ban proof-fail prompt",
+                    catch_all=True,
+                )
+            if not _groups_task.done():
+                _groups_task.cancel()
+            await asyncio.gather(_groups_task, return_exceptions=True)
+            return
         if is_update:
             log_msg_id, db_ok = await _execute_ban_update(
                 bot,
@@ -802,6 +829,14 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     q = update.callback_query
     if q is None:
         return ConversationHandler.END
+    # * Once flushing has started the ban is executing; cancelling mid-
+    # * _execute_ban would cancel the in-flight fan-out (partial ban, DB
+    # * written, no summary). Ignore the tap and let execution finish.
+    if ctx.user_data is not None:
+        for sess in list(_proof_sessions.values()):
+            if sess.user_data is ctx.user_data and sess.flushing:
+                await q.answer()
+                return ConversationHandler.END
     await q.answer()
     _cancel_proof_session(ctx.user_data)
     await safe_edit_cb(
