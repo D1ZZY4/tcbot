@@ -116,7 +116,7 @@ When the Founder issues `/tcpromote @user admin`:
 1. `users_roles.add_admin(target_id, founder_id)` upserts into `tc_admins`.
 2. If the target previously held Developer or Tester, `users_roles.remove_role(target_id)` clears `tc_roles`.
 3. `users_cache.upsert_user(target_id, None, target_fname)` refreshes the member cache.
-4. A `parse_logmsg.promoted(role="admin", ...)` log is sent to `cfg.logs`.
+4. A `messages.promoted(role="admin", ...)` log is sent to `cfg.logs`.
 5. The target is DM'd a welcome notification.
 6. The command replies with `Done. <mention> - <code id> is now a <community> Admin.`
 
@@ -126,7 +126,7 @@ When Founder or Admin assigns Developer/Tester:
 
 1. `users_roles.set_role(target_id, role, assigned_by)` atomically upserts into `tc_roles` (no separate remove step; the upsert replaces any existing Developer/Tester entry).
 2. `users_cache.upsert_user(...)` refreshes the cache.
-3. A `parse_logmsg.promoted(role=role, ...)` log is sent to `cfg.logs`.
+3. A `messages.promoted(role=role, ...)` log is sent to `cfg.logs`.
 4. Target is DM'd.
 
 ## Admin request to promote to Admin
@@ -161,14 +161,14 @@ All callbacks re-check the tapper's current effective role (Founder/Admin) befor
 1. `users_roles.add_admin(target_id, admin.id)` upserts `tc_admins`.
 2. `queues_db.resolve(request_id, "approved", admin.id)` marks the request resolved.
 3. Best-effort cleanup mirrors the direct Founder path: `users_roles.remove_role(target_id)` clears any stale Developer/Tester row (otherwise it resurrects on the next demote) and `users_cache.upsert_user(...)` refreshes the display name. Failures only log; the promotion already committed.
-4. `parse_logmsg.promote_approved_log(...)` is sent to `cfg.logs`.
+4. `messages.promote_approved_log(...)` is sent to `cfg.logs`.
 5. Target is DM'd a welcome notification.
 6. The review message is edited to append `- Approved by <admin name>` and the keyboard is removed.
 
 ### Rejection path
 
 1. `queues_db.resolve(request_id, "rejected", admin.id)`.
-2. `parse_logmsg.promote_rejected_log(...)` is sent to `cfg.logs`.
+2. `messages.promote_rejected_log(...)` is sent to `cfg.logs`.
 3. Target is DM'd a rejection notification.
 4. The review message is edited to append `- Rejected by <admin name>`.
 
@@ -178,10 +178,10 @@ All promotion paths share a single log builder for consistency:
 
 | Function | Trigger |
 |---|---|
-| `parse_logmsg.promoted(target_id, target_fname, role, by_id, by_fname)` | Direct role assignment (Admin/Developer/Tester). Title: `New <community> Promoted`. |
-| `parse_logmsg.promote_request_log(...)` | A new Admin promotion request is created. |
-| `parse_logmsg.promote_approved_log(...)` | The Founder approves a pending request. |
-| `parse_logmsg.promote_rejected_log(...)` | The Founder rejects a pending request. |
+| `messages.promoted(target_id, target_fname, role, by_id, by_fname)` | Direct role assignment (Admin/Developer/Tester). Title: `New <community> Promoted`. |
+| `messages.promote_request_log(...)` | A new Admin promotion request is created. |
+| `messages.promote_approved_log(...)` | The Founder approves a pending request. |
+| `messages.promote_rejected_log(...)` | The Founder rejects a pending request. |
 
 The unified `promoted` builder places the role as a field below the user (`Role: Admin`) so the title stays the same regardless of which role is assigned.
 

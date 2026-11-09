@@ -17,8 +17,6 @@ Every new conversation in this repository must start by reading the canonical ru
 
 **Read at the start of every conversation:**
 
-- [`.agents/rules/tooling-skills-use.md`](.agents/rules/tooling-skills-use.md):
-  workflow, dependency, documentation, and validation rules
 - [`.agents/rules/code-style.md`](.agents/rules/code-style.md): Python style,
   architecture, handler, and database rules
 - [`.agents/rules/comment-style.md`](.agents/rules/comment-style.md): comments,
@@ -30,21 +28,19 @@ Every new conversation in this repository must start by reading the canonical ru
 - [`.agents/rules/asyncio-gather-rules.md`](.agents/rules/asyncio-gather-rules.md):
   async handlers, `gather()` use, bounded fan-out, timeouts, and cancellation
 - [`CLAUDE.md`](CLAUDE.md), [`CHANGELOG.md`](CHANGELOG.md)
-- The relevant [`.agents/skills/`](.agents/skills/), [`docs/`](docs/), and project-root docs for the task
+- The relevant [`docs/`](docs/) and project-root docs for the task
 
 **Update in the same turn after every change:**
 
 - [`CHANGELOG.md`](CHANGELOG.md): entry under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation)
 - Every related `docs/**/*.md`, `.agents/**/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
 
-See [`tooling-skills-use.md`](.agents/rules/tooling-skills-use.md#read-before-work-and-update-after-work)
+See [`docs-sync.md`](.agents/rules/docs-sync.md#read-before-work-and-update-after-work)
 for the complete read/update rules. Skipping either step is a serious defect.
 
-## Skills and Sub-Agents Policy
+## Rule Reading Policy
 
-**Skills in `.agents/skills/` auto-invoke whenever their trigger matches**: no need for the user to ask. If you are about to write code in `tcbot/`, read [`code-style.md`](.agents/rules/code-style.md), plus [`security-rules.md`](.agents/rules/security-rules.md) for authorization work or [`asyncio-gather-rules.md`](.agents/rules/asyncio-gather-rules.md) for async work. If you are about to edit docs, read [`docs-sync`](.agents/rules/docs-sync.md). Same for `mongodb-query-optimizer`, `feature-reviewer`. When several skills match, load them all, prioritize by task relevance, and read every loaded skill's full instructions: never half. Compose multiple skills when one task spans multiple areas.
-
-The skills directory also previously included meta-tools for the agent itself (`find-skills`, `general-sub-agent`, `skill-creator`) that have been removed: they were tooling for the agent harness, not for the bot codebase, and had no project-specific value.
+Rules in `.agents/rules/` apply by scope without waiting for the user to ask. If you are about to write code in `tcbot/`, read [`code-style.md`](.agents/rules/code-style.md), plus [`security-rules.md`](.agents/rules/security-rules.md) for authorization work or [`asyncio-gather-rules.md`](.agents/rules/asyncio-gather-rules.md) for async work. If you are about to edit docs, read [`docs-sync`](.agents/rules/docs-sync.md). When several rules match, read them all and prioritize by task relevance; never read only the first finding.
 
 ## Autonomous Engineering Loop
 
@@ -131,8 +127,7 @@ Current stack:
 │   │   │   ├── identity.py   Self/bot/Telegram/Founder/staff classification
 │   │   │   ├── locale.py     Render-locale resolution (per-update locale)
 │   │   │   ├── parse_link.py  `t.me/c/...` deep-link builders
-│   │   │   ├── parse_logmsg/    Federation log message renderers
-│   │   │   ├── parse_editmsg.py  Safe `edit_text` / `edit_message_text` wrappers
+│   │   │   ├── messages.py    Safe edits and federation log message renderers
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
 │   │   │   └── replies.py     Localized reply functions and HelpEntry shape
 │   │   ├── banning.py        /tcban command
@@ -170,7 +165,7 @@ Current stack:
 │       ├── time_and_date.py    Central clock: UTC store/display + measure + durations
 │       └── transport.py        Shared PTB HTTP timeouts and pool size
 ├── docs/                     Developer documentation grouped by category
-├── .agents/                   Coding skills and style rules
+├── .agents/                   Style rules
 ├── .github/                   CI workflows (lint, type-check, tests, runner)
 ├── i18n/                      Localized message catalogs (en-US source of truth)
 ├── tests/                     Automated checks (run with the dummy-env suite)

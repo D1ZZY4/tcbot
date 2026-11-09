@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes
 from tcbot import database as db
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.modules.helper.pipelines.stats_flow import Stats
 from tcbot.modules.stats import RL_CMD_LIMIT, RL_PERIOD_S
 from tcbot.utils.i18n import t

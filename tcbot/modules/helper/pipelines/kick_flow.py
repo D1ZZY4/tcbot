@@ -11,9 +11,9 @@ from typing import TYPE_CHECKING, Any
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper import keyboards, messages, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
@@ -71,7 +71,7 @@ async def execute_kick(
     proof_task: asyncio.Task[int | None] | None = None
     pc, pt = cfg.proofs
     if proof_msgs:
-        caption = parse_logmsg.proof_caption_new(
+        caption = messages.proof_caption_new(
             target_id, admin_id, admin_fname, utc_now()
         )
         proof_task = asyncio.create_task(
@@ -109,7 +109,7 @@ async def execute_kick(
         proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
         chat_title = effective_chat.title or str(chat_id)
         lc, lt = cfg.logs
-        log_text = parse_logmsg.kick_log(
+        log_text = messages.kick_log(
             target_id,
             target_name,
             admin_id,

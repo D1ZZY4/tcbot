@@ -240,6 +240,20 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Flow modules carry section dividers and concise notes** (`tcbot/modules/helper/pipelines/`): each moderation flow now opens its executor, handler, and factory blocks with one divider line, and decision points that are not obvious from the code carry one short note. Behavior changes: none, comments only.
 
+- **Chat destination parsing gains regression coverage** (`tests/test_wave_regressions.py`): plain, threaded, empty, and invalid chat values now have a regression check; the fallback to 0 is pinned. Behavior changes: none.
+
+- **Benign refusal matching skips a dead comparison** (`tcbot/utils/dispatch.py`): the Telegram refusal check looks only at the normalized message, since the raw form can never match a stripped pattern on its own. Behavior changes: none; the same refusals are treated as benign.
+
+- **Error shipments log through the module logger** (`tcbot/utils/error_reporter.py`): failed shipments to the log channel and the owner DM now use the same logger as the rest of the reporter instead of the root logger. Behavior changes: none; the message text is unchanged with a clearer module name.
+
+- **Config and module discovery log via Loguru** (`tcbot/__init__.py`, `tcbot/modules/__init__.py`): the last two standard-library loggers now use the project logger, and the log-level parsing no longer reads the standard library. A small level table keeps the same fallback to INFO. Behavior changes: none; early warnings are now visible in the same format as later logs.
+
+- **Utils submodules load on demand** (`tcbot/utils/__init__.py`): importing any single submodule no longer pulls the whole package, so the config entry can import the logger without a circular import. Behavior changes: none; import paths and handler delivery are unchanged.
+
+- **Message helpers live in one module** (`tcbot/modules/helper/messages.py`): safe edit and reply helpers plus the audit-log builders now share a single file. Behavior changes: none; import paths moved, message content and handler registration are unchanged.
+
+- **File-size gate matches the documented budget** (`.github/workflows/lint-ruff.yml`): the size check now allows up to 1000 lines per file as the guides state. Behavior changes: none for operators; existing large flows are no longer a gate failure.
+
 ### Fixed
 
 - **Sync strips stale staff rank** (`tcbot/modules/syncing/`, `tests/test_syncing.py`, `docs/features/moderation/sync.md`): bare and targeted runs clear admin, developer, and tester rows from banned or muted holders before fan-out. Behavior changes: a re-promoted banned user no longer keeps rank through a sweep.
@@ -414,6 +428,12 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Dead identity-cache probe removed** (`tcbot/database/users_cache.py`): `has_recent_identity_attempt()` had no callers; resolvers read the mention cache directly. Behavior changes: none.
 
+- **Agent tooling rules removed** (`.agents/rules/tooling-skills-use.md`, `AGENTS.md`, `.agents/rules/`, `.agents/skills/`): the combined tooling and validation file is gone, so workflow follows `AGENTS.md` and checks follow `docs/operations/ci-cd.md`. Behavior changes: none for operators; guidance only.
+
+- **Standalone edit and log helpers removed** (`tcbot/modules/helper/parse_editmsg.py`, `tcbot/modules/helper/parse_logmsg/`): both paths are gone; all callers now import from `tcbot/modules/helper/messages.py`. Behavior changes: external callers that imported the old paths must switch modules; bot behavior is unchanged.
+
+- **Skills directory removed** (`.agents/skills/`, `skills-lock.json`): the feature-review and MongoDB optimizer skills, their reference guides, and the skill manifest are gone. Behavior changes: none for operators; agent guidance now lives only in `.agents/rules/`.
+
 ### Documentation
 
 - **Appeal and pool references match the tree** (`docs/features/appeals.md`, `docs/architecture/workflows.md`, `docs/operations/performance.md`): the appeal facade names the `appeal_submit_flow.py` module instead of a directory, the unban section names `unban_flow.py`, and the getUpdates pool size is credited to its lifecycle owner. Behavior changes: none, docs only.
@@ -469,6 +489,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **Guides follow the consolidated layout** (`.agents/rules/`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/architecture/`, `docs/features/`, `docs/README.md`): workflow paths, code rules, architecture maps, and feature guides now point at `pipelines/`, `tcbot/__init__.py`, `tcbot/__main__.py`, and `error_reporter.py`. Behavior changes: none, docs only.
 
 - **Published release notes live per version** (`CHANGELOG.md`, `docs/releases/`, `docs/README.md`, `AGENTS.md`): each published release moved unchanged into `docs/releases/vX.Y.Z.md` dated with its release date, and the changelog root now keeps only the `Unreleased` section and a linked release index. Behavior changes: none, docs only.
+
+- **Validation pointers follow the surviving sources** (`AGENTS.md`, `.agents/rules/`, `docs/architecture/repository-map.md`): rule headers now name `docs/operations/ci-cd.md` for checks and `AGENTS.md` for read and update discipline, and the repository map lists the six remaining rule files. Behavior changes: none, docs only.
 
 </details>
 

@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database import documents as docs
-from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper import messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.utils.dispatch import (
     fan_out,
     is_benign_telegram_error,
@@ -189,7 +189,7 @@ async def execute_unban(
     else:
         _log_admin_id = 0
         _log_admin_fname = "anonymous admin"
-    log_text = parse_logmsg.unban_log(
+    log_text = messages.unban_log(
         target_id,
         target_fname,
         _log_admin_id,

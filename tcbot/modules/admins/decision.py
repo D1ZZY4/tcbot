@@ -16,10 +16,10 @@ from tcbot import database as db
 from tcbot.modules.admins.shared import _RL_CMD_LIMIT, _RL_PERIOD_S
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb
-from tcbot.modules.helper.parse_logmsg import (
+from tcbot.modules.helper.messages import (
     promote_approved_log,
     promote_rejected_log,
+    safe_edit_cb,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import esc

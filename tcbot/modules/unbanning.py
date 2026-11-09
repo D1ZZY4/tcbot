@@ -15,7 +15,7 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.unban_flow import execute_unban
 from tcbot.utils.dispatch import throw_if_cancelled

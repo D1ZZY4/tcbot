@@ -114,7 +114,7 @@ When the target has no active ban:
 
 1. A new short `ban_id` is generated with `bans_db.make_ban_id()`.
 2. Proof is uploaded to `cfg.proofs` with a `proof_caption_new` caption.
-3. A new ban log is built with `parse_logmsg.ban_log`.
+3. A new ban log is built with `messages.ban_log`.
 4. The ban record is inserted with `bans_db.create_ban(...)`.
 5. Only after the insert succeeds is the ban log sent to `cfg.logs` with a keyboard containing:
    - `Proof <target_id>` URL button.
@@ -148,7 +148,7 @@ The update flow (after `Continue`):
 3. Builds an update proof caption with `proof_caption_update`.
 4. Preserves previous proof/log IDs as `previous_proof_message_id` and `previous_log_message_id`.
 5. Updates the reason, banning admin, proof ID, and `updated_timestamp` through `bans_db.update_ban(...)`; increments `update_count` atomically inside the same call. The log ID field is passed as `0` here and set separately in step 7.
-6. Posts an update log with `parse_logmsg.ban_update_log`.
+6. Posts an update log with `messages.ban_update_log`.
 7. The sent log message ID is saved with `bans_db.set_log_message_id(...)` when available (same pattern as new-ban step 6).
 8. Uses a keyboard with current proof, previous proof, and submit-appeal buttons when both proof links exist.
 9. Enforces the Telegram ban across connected groups again.
@@ -232,7 +232,7 @@ Active-ban reads are deterministic: when duplicate active records exist for the 
 
 ## Ban logs and proof logs
 
-Ban-related templates are defined in `parse_logmsg/`:
+Ban-related templates are defined in `messages.py`:
 
 | Template | Used for |
 |---|---|

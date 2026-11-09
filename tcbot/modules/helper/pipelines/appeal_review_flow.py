@@ -15,9 +15,9 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import parse_logmsg, replies
+from tcbot.modules.helper import messages, replies
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb
+from tcbot.modules.helper.messages import safe_edit_cb
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.utils.dispatch import (
     fan_out,
@@ -225,7 +225,7 @@ class ApproveMixin:
                 lc,
                 lt,
                 int(ban.get("appeal_log_msg_id") or 0) or None,
-                parse_logmsg.appeal_approved_edit(
+                messages.appeal_approved_edit(
                     target_id,
                     target_fname,
                     admin.id,
@@ -237,7 +237,7 @@ class ApproveMixin:
             ),
             bot.send_message(
                 lc,
-                parse_logmsg.appeal_unban_log(
+                messages.appeal_unban_log(
                     target_id,
                     target_fname,
                     admin.id,
@@ -358,7 +358,7 @@ class RejectMixin:
             lc,
             lt,
             int(ban.get("appeal_log_msg_id") or 0) or None,
-            parse_logmsg.appeal_rejected_edit(
+            messages.appeal_rejected_edit(
                 target_id,
                 target_fname,
                 admin.id,

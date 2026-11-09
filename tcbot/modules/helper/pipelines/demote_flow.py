@@ -13,9 +13,9 @@ from telegram.error import Forbidden
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper import messages
 from tcbot.modules.helper.locale import effective_locale, locale_for_user
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.formatter import bold, user_ref
 from tcbot.utils.i18n import Safe, t
@@ -84,7 +84,7 @@ class Demote:
             return False
 
         lc, lt = cfg.logs
-        log_text = parse_logmsg.demoted(
+        log_text = messages.demoted(
             target_id,
             target_fname,
             target_role,

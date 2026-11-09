@@ -13,7 +13,7 @@ from pymongo.errors import DuplicateKeyError
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, parse_logmsg
+from tcbot.modules.helper import keyboards, messages
 from tcbot.modules.helper.locale import locale_for_user
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
@@ -63,7 +63,7 @@ async def assign_admin(
                 "_assign_admin cleanup step failed for target=%d: %s", target_id, _r
             )
     lc, lt = cfg.logs
-    log_text = parse_logmsg.promoted(
+    log_text = messages.promoted(
         target_id, target_fname, "admin", admin_id, admin_fname
     )
     target_locale = await locale_for_user(target_id)
@@ -134,9 +134,7 @@ async def assign_subrole(
         )
     role_label = db.users_roles.ROLE_LABEL.get(role, role)
     lc, lt = cfg.logs
-    log_text = parse_logmsg.promoted(
-        target_id, target_fname, role, admin_id, admin_fname
-    )
+    log_text = messages.promoted(target_id, target_fname, role, admin_id, admin_fname)
     target_locale = await locale_for_user(target_id)
     subrole_results = await asyncio.gather(
         bot.send_message(lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt),
@@ -221,7 +219,7 @@ async def request_admin(
     if isinstance(owner_id, BaseException):
         log.warning("Failed to fetch owner id for promo notify: %s", owner_id)
         owner_id = None
-    req_text = parse_logmsg.promote_request_log(
+    req_text = messages.promote_request_log(
         target_id, target_fname, target_username, request_id
     )
     lc, lt = cfg.logs

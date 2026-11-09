@@ -21,7 +21,7 @@ from tcbot.modules.checking import (
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import safe_edit_cb, safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code, user_ref

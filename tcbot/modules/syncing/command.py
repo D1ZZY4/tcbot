@@ -13,7 +13,7 @@ from telegram.ext import ContextTypes
 from tcbot.modules import syncing
 from tcbot.modules.helper import decorators, extraction, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import parse_cmd_args

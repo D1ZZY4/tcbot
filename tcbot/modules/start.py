@@ -17,7 +17,7 @@ from tcbot.modules.about import about_msg
 from tcbot.modules.groups import render_groups
 from tcbot.modules.helper import decorators, keyboards, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import answer_and_edit, safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import answer_and_edit, safe_edit_cb, safe_reply
 from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger

@@ -230,7 +230,7 @@ Rejection does not deactivate the ban. The `review_message_id` and `review_times
 
 ## Logs
 
-Appeal-related logs are built in `tcbot/modules/helper/parse_logmsg/`:
+Appeal-related logs are built in `tcbot/modules/helper/messages.py`:
 
 | Template | Destination / use |
 |---|---|

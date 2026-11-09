@@ -13,9 +13,9 @@ from telegram import Bot, InlineKeyboardMarkup, Message, Update
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper import keyboards, messages, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
@@ -75,7 +75,7 @@ async def execute_warn(
     proof_task: asyncio.Task[int | None] | None = None
     pc, pt = cfg.proofs
     if proof_msgs:
-        proof_caption = parse_logmsg.proof_caption_new(
+        proof_caption = messages.proof_caption_new(
             target_id, admin_id, admin_fname, utc_now()
         )
         proof_task = asyncio.create_task(
@@ -112,7 +112,7 @@ async def execute_warn(
         if warn_proof_id:
             proof_link = message_link(pc, warn_proof_id, pt)
     proof_kb = keyboards.action_proof_kb(target_id, proof_link)
-    log_text = parse_logmsg.warn_log(
+    log_text = messages.warn_log(
         target_id,
         target_name,
         admin_id,
@@ -480,7 +480,7 @@ async def execute_unwarn(
     if admin is None:
         return
     lc, lt = cfg.logs
-    log_text = parse_logmsg.unwarn_log(
+    log_text = messages.unwarn_log(
         target_id,
         target_name,
         admin.id,
@@ -524,7 +524,7 @@ async def execute_unwarn(
             chat_id,
         )
         new_count = max(count - 1, 0)
-    log_text = parse_logmsg.unwarn_log(
+    log_text = messages.unwarn_log(
         target_id,
         target_name,
         admin.id,
@@ -657,7 +657,7 @@ async def execute_resetwarns(
             log_label="execute_resetwarns no-warns",
         )
         return
-    log_text = parse_logmsg.resetwarns_log(
+    log_text = messages.resetwarns_log(
         target_id,
         target_name,
         admin.id,

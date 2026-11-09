@@ -4,7 +4,7 @@ This file defines standards for inline comments, docstrings, section dividers, a
 
 The goal is to keep code explanations concise, accurate, useful, and maintainable while ensuring project documentation remains consistent.
 
-Code conventions and architecture live in [`code-style.md`](code-style.md), changelog and release documentation rules live in [`changelog-style.md`](changelog-style.md), and tooling and validation requirements live in [`tooling-skills-use.md`](tooling-skills-use.md).
+Code conventions and architecture live in [`code-style.md`](code-style.md), changelog and release documentation rules live in [`changelog-style.md`](changelog-style.md), and tooling and validation requirements live in [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
 
 This file owns comment and general Markdown conventions. Referenced documents own their respective specialized requirements.
 

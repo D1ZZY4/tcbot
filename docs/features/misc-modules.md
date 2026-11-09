@@ -122,7 +122,7 @@ Behavior:
 - Text sends use MarkdownV2; a `can't parse entities` `BadRequest` retries
   that group as plain text. Any other `BadRequest` re-raises so dead groups
   are not double-called.
-- Posts `parse_logmsg.broadcast_log` (caller, preview, ok/failed counts) to
+- Posts `messages.broadcast_log` (caller, preview, ok/failed counts) to
   `cfg.logs` and edits the status message in parallel.
 
 Rate limit: 3 per 60 s, `@staff_only`.

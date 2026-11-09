@@ -23,7 +23,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.utils.time_and_date import monotonic
 
 if TYPE_CHECKING:

@@ -325,7 +325,7 @@ A single warning below the warn limit does not auto-demote. However, when the wa
 
 ## Logs
 
-Role and promotion logs are built in `parse_logmsg/`:
+Role and promotion logs are built in `messages.py`:
 
 | Template | Trigger |
 |---|---|

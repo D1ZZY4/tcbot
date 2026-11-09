@@ -12,7 +12,7 @@ from telegram.ext import ContextTypes
 
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import ack_and_render
+from tcbot.modules.helper.messages import ack_and_render
 from tcbot.modules.helper.pipelines.stats_flow import Stats
 from tcbot.modules.stats import RL_CB_LIMIT, RL_PERIOD_S
 from tcbot.modules.stats.command import (

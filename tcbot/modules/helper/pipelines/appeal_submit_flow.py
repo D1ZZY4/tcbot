@@ -24,10 +24,10 @@ from telegram.ext import (
 
 from tcbot import cfg, tme_handle_from_url
 from tcbot import database as db
-from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper import messages
 from tcbot.modules.helper.keyboards import appeal_cancel_kb, appeal_review_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.pipelines.appeal_review_flow import AppealReviewMixin
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -333,7 +333,7 @@ async def post_appeal(
     appeal_link = (
         message_link(appeal_chat, appeal_msg_id, appeal_thread) if appeal_msg_id else ""
     )
-    review_text = parse_logmsg.appeal_received_log(
+    review_text = messages.appeal_received_log(
         uid, user.first_name, ban_id, appeal_link
     )
     lc, lt = cfg.logs
@@ -353,9 +353,7 @@ async def post_appeal(
         ),
         ctx.bot.send_message(
             lc,
-            parse_logmsg.appeal_submitted_log(
-                uid, user.first_name, ban_id, appeal_link
-            ),
+            messages.appeal_submitted_log(uid, user.first_name, ban_id, appeal_link),
             parse_mode="MarkdownV2",
             message_thread_id=lt,
         ),

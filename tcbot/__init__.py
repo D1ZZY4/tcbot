@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import ast
-import logging
 import os
 import re
 import secrets
@@ -15,7 +14,9 @@ from dataclasses import dataclass
 
 from dotenv import find_dotenv, load_dotenv
 
-log = logging.getLogger(__name__)
+from tcbot.utils.logger import get_logger
+
+log = get_logger(__name__)
 
 # ─────────────────────────────── Env parsing ─────────────────────────────── #
 
@@ -27,6 +28,19 @@ _DEFAULT_COMMUNITY_GROUP_URL: str = "https://t.me/TranssionCoreFederationGroup"
 _DEFAULT_COMMUNITY_LOGS_URL: str = "https://t.me/TranssionCoreFederationLogs"
 _DEFAULT_COMMUNITY_APPEAL_URL: str = "https://t.me/TranssionCoreFederationAppeals"
 _DEFAULT_COMMUNITY_TRAVEL_URL: str = "https://t.me/+S2C_ppFvHlAwMzNl"
+
+# * Numeric levels for ``cfg.log_level`` (stdlib-compatible ints consumed by
+# * ``utils.logger.setup``); WARN and FATAL are kept as aliases.
+_LOG_LEVELS: dict[str, int] = {
+    "NOTSET": 0,
+    "DEBUG": 10,
+    "INFO": 20,
+    "WARNING": 30,
+    "WARN": 30,
+    "ERROR": 40,
+    "CRITICAL": 50,
+    "FATAL": 50,
+}
 
 
 def tme_handle_from_url(url: str) -> str:
@@ -141,11 +155,11 @@ def _env_list(key: str) -> list[str]:
 
 def _parse_log_level(raw: str) -> int:
     """Resolve a log-level name; unknown names fall back to INFO."""
-    level = getattr(logging, raw.strip().upper(), None)
-    if isinstance(level, int):
+    level = _LOG_LEVELS.get(raw.strip().upper())
+    if level is not None:
         return level
     log.warning("Invalid LOG_LEVEL '%s', defaulting to INFO.", raw)
-    return logging.INFO
+    return _LOG_LEVELS["INFO"]
 
 
 def _auto_webhook_url() -> str:

@@ -21,9 +21,9 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, keyboards, parse_logmsg, replies
+from tcbot.modules.helper import decorators, keyboards, messages, replies
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
-from tcbot.modules.helper.parse_editmsg import (
+from tcbot.modules.helper.messages import (
     clear_markup_cb,
     safe_edit_cb,
     safe_edit_message,
@@ -216,7 +216,7 @@ async def _execute_ban_update(
         old_admin_fname = await db.users_cache.get_first_name(old_admin_id, "Admin")
     except Exception:
         old_admin_fname = "Admin"
-    log_text = parse_logmsg.ban_update_log(
+    log_text = messages.ban_update_log(
         target_id,
         target_fname,
         admin_id,
@@ -286,7 +286,7 @@ async def _execute_new_ban(
         "ban_reason", replies.no_reason(meta.get("ban_locale"), plain=True)
     )
     bot_username = bot.username or ""
-    log_text = parse_logmsg.ban_log(
+    log_text = messages.ban_log(
         target_id,
         target_fname,
         admin_id,
@@ -363,7 +363,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                 if prev_proof_msg_id
                 else None
             )
-            caption = parse_logmsg.proof_caption_update(
+            caption = messages.proof_caption_update(
                 target_id,
                 admin_id,
                 admin_fname,
@@ -372,9 +372,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             )
         else:
             prev_proof_link = None
-            caption = parse_logmsg.proof_caption_new(
-                target_id, admin_id, admin_fname, now
-            )
+            caption = messages.proof_caption_new(target_id, admin_id, admin_fname, now)
         proof_msg_id = await upload_proof(bot, msgs, caption, proof_chat, proof_thread)
         proof_link = (
             message_link(proof_chat, proof_msg_id, proof_thread)

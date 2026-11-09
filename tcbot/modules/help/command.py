@@ -20,7 +20,7 @@ from tcbot.modules.help.builder import (
 )
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger

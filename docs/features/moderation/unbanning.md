@@ -89,7 +89,7 @@ The Developer minimum is intentional: unbanning a higher-ranked target would sil
 5. Runs the active-ban deactivation via `db.bans_db.deactivate_all_active_bans(target_id)` - clears every active ban for the target in one write.
 6. Adds primary groups (`cfg.main_group`) to the list when they are not already present.
 7. Fans `ctx.bot.unban_chat_member(grp.chat_id, target_id, only_if_banned=True)` across the resulting list with `fan_out(...)`.
-8. Builds an `unban_log` via `parse_logmsg.unban_log`.
+8. Builds an `unban_log` via `messages.unban_log`.
 9. Runs two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
    - `bot.send_message(cfg.logs, log_text, parse_mode="MarkdownV2", message_thread_id=lt)`.
    - `msg.reply_text("<user> has been unbanned - removed from <ok>/<total> groups.")`, plus a `WARNING: still banned in: <titles>` suffix naming up to 5 missed groups when the fan-out had transient failures (a re-run of `/tcunban` would report "no active ban" since the record is gone; only a targeted re-drive or `/tcsync` run reaches those chats).
@@ -110,7 +110,7 @@ Unban has no scheduler interaction: neither `bans_db` nor `unban_flow` touches `
 
 ## Logs
 
-Unban log templates are defined in `parse_logmsg/`:
+Unban log templates are defined in `messages.py`:
 
 | Template | Used for |
 |---|---|
@@ -152,7 +152,7 @@ Key behaviors to keep in mind:
 9. `deactivate_all_active_bans` clears every active ban for the target in one write, not just the one returned by `get_active_ban`.
 10. The unban fan-out uses `only_if_banned=True`; missing chat memberships are silent no-ops.
 11. The reply reads `<user> has been unbanned - removed from <ok>/<total> groups.`, with a `WARNING: still banned in: <up-to-5 titles>` suffix when transient failures remain.
-12. The unban log is sent to `cfg.logs` with `parse_logmsg.unban_log`.
+12. The unban log is sent to `cfg.logs` with `messages.unban_log`.
 13. `/tcunban` does not edit any pending appeal review card.
 14. Federation log send failure does not roll back the ban deactivation.
 15. The appeal-approve path mirrors `execute_unban` inline (deactivate, primary-group backfill, fan-out, logs) instead of calling it; both abort the fan-out when the database deactivation fails.

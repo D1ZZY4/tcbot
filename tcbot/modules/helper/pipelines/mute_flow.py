@@ -13,9 +13,9 @@ from telegram import Bot, ChatPermissions, Update
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, parse_logmsg, replies
+from tcbot.modules.helper import keyboards, messages, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_edit_message, safe_reply
+from tcbot.modules.helper.messages import safe_edit_message, safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
@@ -160,7 +160,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     proof_link: str | None = None
     if proof_msgs:
         pc, pt = cfg.proofs
-        proof_caption = parse_logmsg.proof_caption_new(
+        proof_caption = messages.proof_caption_new(
             target_id, admin_id, admin_fname, utc_now()
         )
         fanout_results, upload_result = await asyncio.gather(
@@ -195,7 +195,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         total=len(groups),
     )
     lc, lt = cfg.logs
-    log_text = parse_logmsg.mute_log(
+    log_text = messages.mute_log(
         target_id,
         target_fname,
         admin_id,
@@ -314,7 +314,7 @@ async def execute_unmute(
         )
         return
     lc, lt = cfg.logs
-    log_text = parse_logmsg.unmute_log(
+    log_text = messages.unmute_log(
         target_id,
         target_name,
         admin.id,

@@ -19,7 +19,7 @@ This page maps the repository structure and the service boundaries between packa
 ├── i18n/                   Translation catalogs (en-US source, id mirror)
 ├── tests/                  Pytest test suite
 ├── .github/                GitHub Actions workflows + dependabot config
-├── .agents/                Maintainer and agent rules and skills
+├── .agents/                Maintainer and agent rules
 ├── pyproject.toml          Dependencies and Ruff config
 ├── pyrightconfig.json      Pyright type checker configuration
 ├── uv.lock                 Locked dependency graph
@@ -37,11 +37,10 @@ This page maps the repository structure and the service boundaries between packa
 └── Dockerfile              Container image
 ```
 
-Repository maintenance guidance lives under `.agents/`. Its seven canonical
-rule files are `rules/tooling-skills-use.md`, `rules/code-style.md`,
-`rules/comment-style.md`, `rules/docs-sync.md`, `rules/changelog-style.md`,
-`rules/security-rules.md`, and `rules/asyncio-gather-rules.md`; specialized
-skills live under `.agents/skills/`.
+Repository maintenance guidance lives under `.agents/`. Its six canonical
+rule files are `rules/code-style.md`, `rules/comment-style.md`,
+`rules/docs-sync.md`, `rules/changelog-style.md`, `rules/security-rules.md`,
+and `rules/asyncio-gather-rules.md`.
 
 ## Documentation structure
 
@@ -90,7 +89,8 @@ tcbot/
 │       ├── identity.py     Identity classification, group-permission checks, refusal messages
 │       ├── keyboards/      Inline keyboard factories
 │       ├── locale.py       Render-locale resolution shared by handlers, callbacks, flows
-│       ├── parse_*.py      Link, log, and safe-edit helpers
+│       ├── parse_link.py   `t.me/c/...` deep-link builders
+│       ├── messages.py     Safe edits and federation log message renderers
 │       ├── replies.py      Shared localized reply and help-text strings, HelpEntry shape
 │       └── pipelines/
 │           └── *_flow.py modules   Conversation factories, plus Promote / Demote / Check classes

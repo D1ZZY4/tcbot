@@ -16,7 +16,7 @@ from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.utils.dispatch import fan_out, gather_bounded
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t

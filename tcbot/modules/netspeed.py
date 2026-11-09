@@ -16,7 +16,7 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_edit
+from tcbot.modules.helper.messages import safe_edit
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t

@@ -15,9 +15,9 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
-from tcbot.modules.helper import decorators, parse_logmsg, replies
+from tcbot.modules.helper import decorators, messages, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
@@ -181,9 +181,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * send log and update status message in parallel
     log_coro = ctx.bot.send_message(
         lc,
-        parse_logmsg.broadcast_log(
-            admin.id, admin.first_name, preview, success, failed
-        ),
+        messages.broadcast_log(admin.id, admin.first_name, preview, success, failed),
         parse_mode="MarkdownV2",
         message_thread_id=lt,
     )

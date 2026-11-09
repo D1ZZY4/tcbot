@@ -17,8 +17,7 @@ from tcbot.modules.admins.shared import _RL_BULK_LIMIT, _RL_PERIOD_BULK_S
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.modules.helper.parse_logmsg import ownership_transferred
+from tcbot.modules.helper.messages import ownership_transferred, safe_reply
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.utils import error_reporter
 from tcbot.utils.dispatch import throw_if_cancelled

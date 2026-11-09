@@ -273,7 +273,7 @@ Flow:
 
 ## Logs
 
-Warning-related log templates are in `parse_logmsg/`:
+Warning-related log templates are in `messages.py`:
 
 | Template | Trigger |
 |---|---|

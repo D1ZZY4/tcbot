@@ -251,18 +251,16 @@ def is_benign_telegram_error(exc: BaseException) -> bool:
     "failures" in the moderation sense -- there was nothing for the bot
     to do in the first place.
 
-    Matching is done against both the raw message and a "normalized" form
-    where non-alphanumeric characters are stripped (so the API code
-    ``USER_NOT_PARTICIPANT`` matches the human-readable ``User not
-    participant`` produced by PTB).
+    Matching uses a "normalized" form where non-alphanumeric characters are
+    stripped (so the API code ``USER_NOT_PARTICIPANT`` matches the
+    human-readable ``User not participant`` produced by PTB).
     """
     if isinstance(exc, BadRequest):
-        raw = str(exc).upper()
         # * Normalize: replace any non-alphanumeric character with empty
         # * string, so "USER_NOT_PARTICIPANT" matches "USER NOT PARTICIPANT".
-        normalized = _normalize(raw)
+        normalized = _normalize(str(exc).upper())
         for target in _BENIGN_NORMALIZED:
-            if target in raw or target in normalized:
+            if target in normalized:
                 return True
     return False
 

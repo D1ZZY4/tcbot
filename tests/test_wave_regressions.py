@@ -15,7 +15,7 @@ from typing import Any, cast
 import pytest
 
 import api.cron as cron_mod
-from tcbot import _env_list, cfg
+from tcbot import _env_list, cfg, parse_chat_id
 from tcbot.database import mtproto
 from tcbot.modules import syncing as sy
 from tcbot.utils import error_reporter
@@ -153,6 +153,13 @@ def test_env_list_accepts_csv_and_literal_list_identically(
     from_literal = _env_list("TC_WAVE_LIST")
     assert from_csv == ["alpha", "beta", "gamma"]
     assert from_literal == from_csv
+
+
+def test_parse_chat_id_accepts_plain_and_thread_forms() -> None:
+    assert parse_chat_id("-100123") == (-100123, None)
+    assert parse_chat_id("-100123/42") == (-100123, 42)
+    assert parse_chat_id("") == (0, None)
+    assert parse_chat_id("not-a-chat") == (0, None)
 
 
 def test_cfg_prefixes_returns_copy() -> None:

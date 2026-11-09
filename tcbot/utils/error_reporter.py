@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 import platform
 import re
 import sys
@@ -25,6 +24,8 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import monotonic, utc_now
 
 if TYPE_CHECKING:
+    import logging
+
     from telegram import Bot
 
 log = get_logger("tcbot.utils.error_reporter")
@@ -411,9 +412,7 @@ async def _ship_throttled(text: str) -> None:
                     message_thread_id=_thread_id,
                 )
             except Exception as exc:
-                logging.getLogger().warning(
-                    "Failed to ship error summary to LOG_ERRORS: %s", exc
-                )
+                log.warning("Failed to ship error summary to LOG_ERRORS: %s", exc)
                 return
     if _sent_in_window >= _SEND_BUDGET:
         _suppressed_in_window += 1
@@ -424,7 +423,7 @@ async def _ship_throttled(text: str) -> None:
             _chat_id, text, parse_mode="MarkdownV2", message_thread_id=_thread_id
         )
     except Exception as exc:
-        logging.getLogger().warning("Failed to ship error to LOG_ERRORS: %s", exc)
+        log.warning("Failed to ship error to LOG_ERRORS: %s", exc)
 
 
 async def send_to_log_errors(text: str) -> None:
@@ -441,7 +440,7 @@ async def send_to_owner(text: str) -> None:
     try:
         await _bot.send_message(_owner_id, text, parse_mode="MarkdownV2")
     except Exception as exc:
-        logging.getLogger().warning("Failed to send owner DM: %s", exc)
+        log.warning("Failed to send owner DM: %s", exc)
 
 
 async def report_exc(exc: BaseException, context: str | None = None) -> None:
@@ -451,7 +450,7 @@ async def report_exc(exc: BaseException, context: str | None = None) -> None:
     text = build_error_message(exc=exc, context=context)
     if _owner_only(exc):
         if _owner_suppressed(_fingerprint_exc(exc)):
-            logging.getLogger().debug("Owner DM suppressed: budget spent.")
+            log.debug("Owner DM suppressed: budget spent.")
             return
         await send_to_owner(text)
     else:
@@ -467,7 +466,7 @@ async def report_record(record: logging.LogRecord) -> None:
     if _owner_only(exc):
         fp = _fingerprint_exc(exc) if exc is not None else _fingerprint_record(record)
         if _owner_suppressed(fp):
-            logging.getLogger().debug("Owner DM suppressed: budget spent.")
+            log.debug("Owner DM suppressed: budget spent.")
             return
         await send_to_owner(text)
     else:

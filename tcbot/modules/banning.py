@@ -17,7 +17,7 @@ from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.keyboards import ban_update_confirm_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.pipelines.ban_flow import (
     BAN_USER_DATA_KEYS,

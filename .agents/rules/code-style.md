@@ -4,7 +4,7 @@ This file defines Python coding standards, module boundaries, application archit
 
 The goal is to maintain a consistent, modular, maintainable, and predictable codebase without unnecessary abstractions or duplicated responsibilities.
 
-Authorization and secret handling live in [`security-rules.md`](security-rules.md), concurrency and asynchronous execution patterns live in [`asyncio-gather-rules.md`](asyncio-gather-rules.md), validation and tool requirements live in [`tooling-skills-use.md`](tooling-skills-use.md), and comments and Markdown conventions live in [`comment-style.md`](comment-style.md).
+Authorization and secret handling live in [`security-rules.md`](security-rules.md), concurrency and asynchronous execution patterns live in [`asyncio-gather-rules.md`](asyncio-gather-rules.md), validation and tool requirements live in [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md), and comments and Markdown conventions live in [`comment-style.md`](comment-style.md).
 
 This file owns code and architecture conventions. Referenced documents own their respective specialized requirements.
 

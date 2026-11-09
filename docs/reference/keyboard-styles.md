@@ -36,7 +36,7 @@ useful without becoming a checklist of every keystroke.
 | Confirmation | Positive action first, `Cancel` second on the same row: `[Confirm] [Cancel]`, `[Approve] [Reject]`, `[Connect] [Cancel]`. The re-ban update card is the one exception, with `Cancel` first: `[Cancel] [Continue]`. |
 | External links | Use `url=` only for external navigation (proof links, appeal deep links, public usernames). All other buttons use `callback_data`. |
 | Identity-aware copy | Refusal lines and staff notices belong in `tcbot/modules/helper/identity.py`, never inlined in keyboard factories. |
-| Async edits | Callback handlers `await q.answer()` first, then `safe_edit_cb()` from `parse_editmsg.py` to swallow benign `Message is not modified` errors. |
+| Async edits | Callback handlers `await q.answer()` first, then `safe_edit_cb()` from `messages.py` to swallow benign `Message is not modified` errors. |
 | Callback budget | Telegram allows up to 64 bytes of `callback_data`. Use short namespace prefixes and integer IDs; avoid embedding free text. |
 
 ---

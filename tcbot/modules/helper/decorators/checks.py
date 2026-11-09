@@ -13,7 +13,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import identity, replies
 from tcbot.modules.helper.locale import effective_locale
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
 

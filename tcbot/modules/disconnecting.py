@@ -13,10 +13,10 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, parse_logmsg, replies
+from tcbot.modules.helper import decorators, messages, replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID, can_manage_group
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
@@ -166,7 +166,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     log_r, reply_r, leave_r = await asyncio.gather(
         ctx.bot.send_message(
             lc,
-            parse_logmsg.group_disconnected_log(
+            messages.group_disconnected_log(
                 chat.id, chat.title or "Unknown", user.id, user.first_name
             ),
             parse_mode="MarkdownV2",
@@ -254,7 +254,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log_r, leave_r, reply_r = await asyncio.gather(
             ctx.bot.send_message(
                 lc,
-                parse_logmsg.group_disconnected_log(
+                messages.group_disconnected_log(
                     chat_id,
                     str(chat_id),
                     admin.id,

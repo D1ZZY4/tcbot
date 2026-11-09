@@ -120,7 +120,7 @@ If the target holds a federation role, `cmd_kick` calls `Demote.auto_demote_or_a
 Execution order:
 
 1. Write the audit row with `db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id)` first. A failed write aborts with a retry reply and no group is touched, so an enforced kick is never missing from `/check` history.
-2. When `proof_msgs` is non-empty, start the proof upload to `cfg.proofs` as a background task (caption `parse_logmsg.proof_caption_new`). If upload fails, the kick still proceeds with no proof link.
+2. When `proof_msgs` is non-empty, start the proof upload to `cfg.proofs` as a background task (caption `messages.proof_caption_new`). If upload fails, the kick still proceeds with no proof link.
 3. Call `ctx.bot.ban_chat_member(chat_id, target_id)` to remove the user immediately, without waiting for the proof-channel round trip. On ban failure the in-flight upload is cancelled and the executor replies with a permissions/retry hint.
 4. Await the upload and build the proof keyboard from the resulting link.
 5. Re-check the target's effective role via `Demote.redemote_before_fanout(..., trigger="kick")`, closing the proof-collection TOCTOU window (best-effort; the kick proceeds even if the re-demote fails).
@@ -153,7 +153,7 @@ Indexes are ensured for:
 
 ## Logs and keyboards
 
-Kick-related templates are defined in `parse_logmsg/`:
+Kick-related templates are defined in `messages.py`:
 
 | Template | Used for |
 |---|---|

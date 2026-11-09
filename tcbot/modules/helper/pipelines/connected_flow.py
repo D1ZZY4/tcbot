@@ -21,10 +21,10 @@ from telegram.constants import ChatMemberStatus
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import parse_logmsg
+from tcbot.modules.helper import messages
 from tcbot.modules.helper.keyboards import connect_join_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb
+from tcbot.modules.helper.messages import safe_edit_cb
 from tcbot.utils.dispatch import (
     count_transient_errors,
     drain_tasks,
@@ -171,7 +171,7 @@ class ConnectionAddedMixin:
                 try:
                     await ctx.bot.send_message(
                         lc,
-                        parse_logmsg.group_bot_removed_log(
+                        messages.group_bot_removed_log(
                             chat.id, chat.title or "Unknown"
                         ),
                         parse_mode="MarkdownV2",
@@ -506,7 +506,7 @@ class ConnectionDecisionMixin:
                 q.edit_message_text(self.declined_message(locale), reply_markup=None),
                 ctx.bot.send_message(
                     lc,
-                    parse_logmsg.group_connection_rejected_log(
+                    messages.group_connection_rejected_log(
                         chat.id,
                         chat.title or "Unknown",
                         user.id,
@@ -701,7 +701,7 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
         try:
             await bot.send_message(
                 lc,
-                parse_logmsg.group_connected_log(
+                messages.group_connected_log(
                     chat_id, chat_title, owner_id, owner_fname, chat_username
                 ),
                 parse_mode="MarkdownV2",

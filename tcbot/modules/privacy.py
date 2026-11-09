@@ -13,7 +13,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes
 from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import answer_and_edit
+from tcbot.modules.helper.messages import answer_and_edit
 from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import t
 

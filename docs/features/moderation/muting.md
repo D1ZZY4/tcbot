@@ -162,7 +162,7 @@ Execution order:
 3. Persist `db.mutes_db.log_mute(...)` and `db.mutes_db.set_active_mute(target_id, until=until)` first. Either write failing aborts with a retry notice and no group is touched (fail-closed, mirroring the ban flow and the warn auto-ban): enforcing chats without an `active_mutes` row would leave a restriction that `/tcunmute` refuses to lift.
 4. Build the restriction `ChatPermissions(can_send_messages=False)` and the `until_date` value (`utc_now() + duration` or `None` for permanent).
 5. Re-check the target's effective role via `Demote.redemote_before_fanout(..., trigger="mute")`, closing the proof-collection TOCTOU window (best-effort; the mute proceeds even if the re-demote fails).
-6. Fan `restrict_chat_member` across the group list with `fan_out(...)` while uploading proof to `cfg.proofs` concurrently (caption `parse_logmsg.proof_caption_new`). Failed calls are counted with `count_transient_errors(results)`; an upload failure degrades to no proof link.
+6. Fan `restrict_chat_member` across the group list with `fan_out(...)` while uploading proof to `cfg.proofs` concurrently (caption `messages.proof_caption_new`). Failed calls are counted with `count_transient_errors(results)`; an upload failure degrades to no proof link.
 7. Run two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
     - `bot.send_message(cfg.logs, mute_log, ..., reply_markup=proof_kb)`.
     - `bot.edit_message_text(summary, chat_id=prompt_chat, message_id=prompt_id, ..., reply_markup=proof_kb)` so the moderator sees the result inline.
@@ -227,7 +227,7 @@ Expired timed mutes are filtered at query time by `get_active_mute` and `active_
 
 ## Logs and keyboards
 
-Mute-related templates are defined in `parse_logmsg/`:
+Mute-related templates are defined in `messages.py`:
 
 | Template | Used for |
 |---|---|

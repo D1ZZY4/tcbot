@@ -123,7 +123,7 @@ It also updates the cache:
 
 ## Logs
 
-Both commands post the same template via `parse_logmsg.group_disconnected_log`:
+Both commands post the same template via `messages.group_disconnected_log`:
 
 | Template | Used for |
 |---|---|

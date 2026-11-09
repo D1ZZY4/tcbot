@@ -213,11 +213,11 @@ Command modules import from `replies.py` instead of inlining these strings.
 | `message_link(chat_id, message_id, thread_id=None)` | Builds a private-channel/group message link; pass `thread_id` for topic threads. |
 | `appeal_deep_link(bot_username, ban_id)` | Builds `https://t.me/<bot>?start=appeal_<ban_id>`. |
 
-## `parse_logmsg/`
+## `messages.py`
 
-This file builds MarkdownV2 audit log messages for moderation, appeals, staff roles, group connections, broadcasts, and auto-demotions.
+This module owns message sending and editing plus MarkdownV2 audit-log building for moderation, appeals, staff roles, group connections, broadcasts, and auto-demotions.
 
-Common families:
+Audit-log families:
 
 - `ban_log`, `ban_update_log`, `proof_caption_new`, `proof_caption_update`;
 - `mute_log`, `unmute_log`, `kick_log`, `warn_log`, `unwarn_log`, `unban_log`;
@@ -227,8 +227,6 @@ Common families:
 - `broadcast_log`.
 
 Use the `LogBuilder` class in this module to compose new audit-log messages; avoid hand-rolled f-strings so layout stays consistent.
-
-## `parse_editmsg.py`
 
 | Function | Purpose |
 |---|---|

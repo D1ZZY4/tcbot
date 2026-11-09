@@ -6,7 +6,7 @@ The goal is to produce professional, human-readable release documentation that e
 
 Changelogs document meaningful project changes, not development activity, implementation history, or automated progress reports.
 
-Code conventions live in [`code-style.md`](code-style.md), comment and general Markdown conventions live in [`comment-style.md`](comment-style.md), and validation requirements live in [`tooling-skills-use.md`](tooling-skills-use.md).
+Code conventions live in [`code-style.md`](code-style.md), comment and general Markdown conventions live in [`comment-style.md`](comment-style.md), and validation requirements live in [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
 
 ---
 

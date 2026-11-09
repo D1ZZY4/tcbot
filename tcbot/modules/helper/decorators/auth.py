@@ -21,7 +21,7 @@ from tcbot import database as db
 from tcbot.modules.helper import replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.modules.helper.messages import safe_reply
 
 if TYPE_CHECKING:
     from telegram import Update

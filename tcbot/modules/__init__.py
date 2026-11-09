@@ -7,18 +7,18 @@
 from __future__ import annotations
 
 import importlib
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from telegram.ext import BaseHandler
 
 from tcbot import cfg
+from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from types import ModuleType
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 # ──────────────────────── Module Discovery ──────────────────────── #

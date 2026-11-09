@@ -26,7 +26,7 @@ from tcbot.modules.admins.shared import (
 )
 from tcbot.modules.helper import decorators, identity, keyboards
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import safe_edit_cb, safe_reply
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, esc, user_ref
