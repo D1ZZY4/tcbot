@@ -56,6 +56,18 @@ from tcbot.utils.transport import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+try:  # Optional performance extra: uvloop replaces the asyncio loop on Linux.
+    import uvloop  # type: ignore[reportMissingImports]
+except ImportError:
+    uvloop = None  # type: ignore[assignment]
+
+try:  # Optional observability extra: error monitoring.
+    import sentry_sdk  # type: ignore[reportMissingImports]
+    from sentry_sdk.integrations.loguru import LoguruIntegration  # type: ignore[reportMissingImports]
+except ImportError:
+    sentry_sdk = None  # type: ignore[assignment]
+    LoguruIntegration = None  # type: ignore[assignment, misc]
+
 log = get_logger(__name__)
 
 # ─────────────────────────────── Constants ───────────────────────────────── #
@@ -448,7 +460,10 @@ def main() -> None:
     """Configure and start the PTB application in webhook or polling mode."""
     stage = "logging setup"
     try:
+        if uvloop is not None:
+            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
         setup_logging(level=cfg.log_level)
+        _init_sentry()
         log.info("Starting %s bot...", cfg.community_name)
         stage = "keepalive server"
         start_keepalive()
@@ -485,6 +500,25 @@ def main() -> None:
         raise SystemExit(1) from exc
 
 
+def _init_sentry() -> None:
+    """Initialise Sentry when a DSN is configured and the extra is installed.
+
+    Opt-in only: an empty ``SENTRY_DSN`` (or a missing observability extra)
+    is a silent no-op. Failures to initialise degrade to no monitoring
+    instead of blocking startup.
+    """
+    if not cfg.sentry_dsn or sentry_sdk is None or LoguruIntegration is None:
+        return
+    try:
+        sentry_sdk.init(
+            dsn=cfg.sentry_dsn,
+            integrations=[LoguruIntegration(level_include="ERROR")],
+            traces_sample_rate=0.0,
+        )
+    except Exception as exc:
+        log.warning("Sentry initialisation failed (non-fatal): %s", exc)
+
+
 __all__ = [
     "_ERROR_CONTEXT_TEXT_LEN",
     "_FATAL_BORDER_WIDTH",
@@ -498,6 +532,7 @@ __all__ = [
     "_WEBHOOK_PATH",
     "_asyncio_report_tasks",
     "_error_handler",
+    "_init_sentry",
     "_make_asyncio_exc_handler",
     "_member_cache_tasks",
     "_post_init",

@@ -26,9 +26,45 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import telegram
 
 log = get_logger(__name__)
+
+
+# ───────────────────────── Flask App Setup ──────────────────────── #
+_app = Flask(__name__)
+
+
+# ──────────────────── Optional Prometheus metrics ───────────────── #
+# * prometheus-client is optional (the observability extra); the endpoint
+# * registers only when the package is installed. Default process metrics
+# * (CPU/RAM/fds) expose what Prometheus scrapes; bot health stays on
+# * /health.
+try:
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest  # type: ignore[reportMissingImports]
+
+    _METRICS_RESPONSE: tuple[Callable[[], bytes], str] | None = (
+        generate_latest,
+        CONTENT_TYPE_LATEST,
+    )
+except ImportError:
+    _METRICS_RESPONSE = None
+
+if _METRICS_RESPONSE is not None:
+    _generate_latest, _metrics_content_type = _METRICS_RESPONSE
+
+    @_app.route("/metrics")
+    def metrics() -> tuple[bytes, int, dict[str, str]]:
+        """Expose Prometheus metrics (observability extra only)."""
+        return _generate_latest(), 200, {"Content-Type": _metrics_content_type}
+
+
+@_app.route("/")
+def index() -> str:
+    """Keep-alive endpoint that returns OK for basic uptime monitoring."""
+    return "OK"
 
 
 class _HealthPayload(msgspec.Struct):
@@ -42,16 +78,6 @@ class _HealthPayload(msgspec.Struct):
     circuit_mongodb: str
     update_queue: int | None
     ts: str
-
-
-# ───────────────────────── Flask App Setup ──────────────────────── #
-_app = Flask(__name__)
-
-
-@_app.route("/")
-def index() -> str:
-    """Keep-alive endpoint that returns OK for basic uptime monitoring."""
-    return "OK"
 
 
 @_app.route("/health")

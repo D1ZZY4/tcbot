@@ -62,7 +62,6 @@ class _FakeScheduler:
 @pytest.fixture
 def _health_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pin every health input to the healthy state; tests override as needed."""
-
     monkeypatch.setattr(alive_mod, "mongos", _FakeMongos(connected=True))
     monkeypatch.setattr(alive_mod, "sched_mod", _FakeScheduler(ready=True))
     monkeypatch.setattr(

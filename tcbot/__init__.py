@@ -228,6 +228,7 @@ class Configs:
     api_id: int
     api_hash: str
     mtproto_session: str
+    sentry_dsn: str
 
     @property
     def port_int(self) -> int:
@@ -341,6 +342,7 @@ class Configs:
             api_hash=os.getenv("API_HASH", "").strip(),
             mtproto_session=os.getenv("MTPROTO_SESSION", "tcbot_mtproto").strip()
             or "tcbot_mtproto",
+            sentry_dsn=os.getenv("SENTRY_DSN", "").strip(),
         )
 
 
@@ -538,6 +540,11 @@ class _CfgAdapter:
     def mtproto_session(self) -> str:
         """Namespace for the shared MTProto session in MongoDB."""
         return self._c.mtproto_session
+
+    @property
+    def sentry_dsn(self) -> str:
+        """Sentry DSN from SENTRY_DSN (empty disables error monitoring)."""
+        return self._c.sentry_dsn
 
 
 configs = Configs.load()
