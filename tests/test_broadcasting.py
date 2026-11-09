@@ -14,7 +14,7 @@ import pytest
 from telegram.error import BadRequest, TimedOut
 
 from tcbot import database as db
-from tcbot.modules import broadcasting
+from tcbot.modules import broadcast
 
 
 class _StatusMsg:
@@ -84,7 +84,7 @@ def _run(monkeypatch: pytest.MonkeyPatch, failures: dict[int, Exception]) -> _Fa
     monkeypatch.setattr(db.users_roles, "get_owner_id", _owner)
     msg = _FakeMsg("/tcbroadcast hello federation")
     ctx = SimpleNamespace(bot=_FakeBot(failures), user_data={})
-    asyncio.run(broadcasting.cmd_broadcast(_update(msg), ctx))  # type: ignore[arg-type]
+    asyncio.run(broadcast.cmd_broadcast(_update(msg), ctx))  # type: ignore[arg-type]
     return msg
 
 
@@ -137,7 +137,7 @@ def test_broadcast_refuses_disconnected_origin(monkeypatch: pytest.MonkeyPatch) 
     msg = _FakeMsg("/tcbroadcast hello federation")
     bot = _FakeBot({})
     ctx = SimpleNamespace(bot=bot, user_data={})
-    asyncio.run(broadcasting.cmd_broadcast(_update(msg), ctx))  # type: ignore[arg-type]
+    asyncio.run(broadcast.cmd_broadcast(_update(msg), ctx))  # type: ignore[arg-type]
     # * Disconnected origin refuses before fan-out.
     assert bot.sent == []
     assert msg.status.edits == []

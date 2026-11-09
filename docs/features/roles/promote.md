@@ -1,6 +1,6 @@
 # Promote
 
-This document describes the current promotion behavior implemented by `tcbot/modules/admins/` (command + callback handlers) and `tcbot/modules/helper/pipelines/promote_flow.py` (the `Promote` class and shared logic).
+This document describes the current promotion behavior implemented by `tcbot/modules/admins.py` (command + callback handlers) and `tcbot/modules/helper/pipelines/promote_flow.py` (the `Promote` class and shared logic).
 
 For role hierarchy and rules, see [`roles.md`](roles.md). For the demote flow,
 see [`demote.md`](demote.md). For shared helpers, see
@@ -191,7 +191,7 @@ The unified `promoted` builder places the role as a field below the user (`Role:
 - A user holds at most one live role: the direct Founder path and the approval path both clear any Developer/Tester row when granting Admin, and Developer/Tester assignment is a single atomic upsert.
 - DM notification failures are tolerated through `asyncio.gather(..., return_exceptions=True)` or explicit fallback logging; promotion still completes.
 - Pending requests are not deleted after approval/rejection; they are flagged with `status`, `resolved_date`, and `resolved_by`.
-- `cmd_promote` and `cmd_demote` share `_resolve_executor_target` plus `_classify_and_load_role` in `tcbot/modules/admins/` (executor role + target, then classify + role, both parallel and fail-closed); the role-button and demote-confirm callbacks share `_check_callback_staff` (rank re-check alongside `q.answer()` so the spinner clears in one round trip). Cancellation always propagates.
+- `cmd_promote` and `cmd_demote` share `resolve_executor_target` plus `classify_and_load_role` in `tcbot/modules/helper/decorators/` (executor role + target, then classify + role, both parallel and fail-closed); the role-button and demote-confirm callbacks share `check_callback_staff` (rank re-check alongside `q.answer()` so the spinner clears in one round trip). Cancellation always propagates.
 - `Promote.request_admin` propagates `CancelledError` from the enqueue/owner fetch instead of coercing it into a queue verdict.
 
 ## Behavior reference

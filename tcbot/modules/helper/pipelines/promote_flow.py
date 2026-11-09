@@ -362,6 +362,3 @@ class Promote:
             role,
             locale,
         )
-
-
-__all__ = ["ROLE_ALIASES", "Promote"]

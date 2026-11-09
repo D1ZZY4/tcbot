@@ -38,6 +38,7 @@ Atau balas sebuah pesan lalu jalankan `/c`."""
 # {reason} raw reason text, {ts} pre-formatted date.
 
 [profile]
+admin_fallback = "Admin"
 title = "*Profil*"
 activity = "*Aktivitas Federasi*"
 name = "Nama: {user}"

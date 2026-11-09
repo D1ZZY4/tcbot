@@ -79,7 +79,7 @@ flowchart TD
 | State | `WAITING_PROOF = 0` |
 | Factory | `ban_conversation(entry_fn, entry_filter)` |
 | Module instance | `proof = BuildProof("ban", skip_allowed=False)` |
-| Entry module | `tcbot/modules/banning.py` |
+| Entry module | `tcbot/modules/bans.py` |
 
 Ban differs from the shared reason flow:
 
@@ -230,7 +230,7 @@ flowchart TD
 
 ## Promotion: `promote_flow.py`
 
-Promotion is not a conversation. `Promote.execute(...)` in `pipelines/promote_flow.py` performs direct role assignment or creates a promotion request for Founder approval when required. `admins/` registers the command and callback handlers.
+Promotion is not a conversation. `Promote.execute(...)` in `pipelines/promote_flow.py` performs direct role assignment or creates a promotion request for Founder approval when required. `admins.py` registers the command and callback handlers.
 
 ## Demotion: `demote_flow.py`
 
@@ -238,7 +238,7 @@ Demotion is not a conversation. `Demote.execute(...)` in `pipelines/demote_flow.
 
 | Call | Trigger | Path |
 |---|---|---|
-| `Demote.execute(...)` | `None` | Manual `/tcdemote`: `admins/` sends a Confirm/Cancel prompt first; the confirm callback calls `Demote.execute(trigger=None)`, which removes the role, posts the federation log, and DMs the target. |
+| `Demote.execute(...)` | `None` | Manual `/tcdemote`: `admins.py` sends a Confirm/Cancel prompt first; the confirm callback calls `Demote.execute(trigger=None)`, which removes the role, posts the federation log, and DMs the target. |
 | `Demote.execute(..., trigger="ban")` | `"ban"` | Auto-demote before a federation ban: silently removes the role. The DM body names the trigger verb (banned/kicked/muted), but the federation log is identical to the manual path and never notes the trigger. |
 | `Demote.execute(..., trigger="kick")` | `"kick"` | Auto-demote before a current-group kick: same silent role-removal path as `"ban"`. |
 | `Demote.execute(..., trigger="mute")` | `"mute"` | Auto-demote before a federation-wide mute: same silent role-removal path as `"ban"` and `"kick"`. |
@@ -257,7 +257,7 @@ method list and callback namespaces.
 
 ## Check: `check_flow.py`
 
-`check_flow.py` exposes the `Check` class used by `/check`. It is not a conversation; every method is a classmethod returning `(text, InlineKeyboardMarkup)` that `checking/` sends or edits directly.
+`check_flow.py` exposes the `Check` class used by `/check`. It is not a conversation; every method is a classmethod returning `(text, InlineKeyboardMarkup)` that `check.py` sends or edits directly.
 
 | Method | Callback prefix | Purpose |
 |---|---|---|

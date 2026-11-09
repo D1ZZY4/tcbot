@@ -1,6 +1,6 @@
 # Kicking
 
-This document describes the current group kick behavior implemented by `tcbot/modules/kicking.py` (the `/tckick` entry point and decorators), `tcbot/modules/helper/pipelines/kick_flow.py` (the `execute_kick` executor and conversation factory), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation invoked by kick), and `tcbot/database/kicks_db.py` (the persistent kick log).
+This document describes the current group kick behavior implemented by `tcbot/modules/kick.py` (the `/tckick` entry point and decorators), `tcbot/modules/helper/pipelines/kick_flow.py` (the `execute_kick` executor and conversation factory), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation invoked by kick), and `tcbot/database/kicks_db.py` (the persistent kick log).
 
 For the ban flow, see [`banning.md`](banning.md). For the mute flow, see
 [`muting.md`](muting.md). For role auto-demotion on kick, see
@@ -153,7 +153,7 @@ Indexes are ensured for:
 
 ## Logs and keyboards
 
-Kick-related templates are defined in `messages.py`:
+Kick-related templates are defined in `messages/` (`audit_logs.py`):
 
 | Template | Used for |
 |---|---|

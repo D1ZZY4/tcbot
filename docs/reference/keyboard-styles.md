@@ -36,7 +36,7 @@ useful without becoming a checklist of every keystroke.
 | Confirmation | Positive action first, `Cancel` second on the same row: `[Confirm] [Cancel]`, `[Approve] [Reject]`, `[Connect] [Cancel]`. The re-ban update card is the one exception, with `Cancel` first: `[Cancel] [Continue]`. |
 | External links | Use `url=` only for external navigation (proof links, appeal deep links, public usernames). All other buttons use `callback_data`. |
 | Identity-aware copy | Refusal lines and staff notices belong in `tcbot/modules/helper/identity.py`, never inlined in keyboard factories. |
-| Async edits | Callback handlers `await q.answer()` first, then `safe_edit_cb()` from `messages.py` to swallow benign `Message is not modified` errors. |
+| Async edits | Callback handlers `await q.answer()` first, then `safe_edit_cb()` from `messages/` (`safe_edits.py`) to swallow benign `Message is not modified` errors. |
 | Callback budget | Telegram allows up to 64 bytes of `callback_data`. Use short namespace prefixes and integer IDs; avoid embedding free text. |
 
 ---
@@ -141,8 +141,8 @@ and back targets instead of rebuilding it locally.
 ```
 
 Proof and appeal links stack one per row so proof labels that embed the
-target ID never truncate on narrow clients (`ban_log_new()`,
-`ban_log_update()`, `appeal_button_kb()`, `action_proof_kb()`); the posted
+target ID never truncate on narrow clients (`ban_log_kb()`,
+`appeal_button_kb()`, `action_proof_kb()`); the posted
 ban log carries no `« Back`. The `/checkme` detail view pairs an optional
 Proof URL with its own `« Back` row instead (`checkme_detail_back_kb()`),
 and the drill-down detail views end with `paged_drill_kb`'s `« Back`.

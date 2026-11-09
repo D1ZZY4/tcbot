@@ -1,6 +1,6 @@
 # Statistics
 
-This document describes the unified federation statistics command implemented by `tcbot/modules/stats/` and `tcbot/modules/helper/pipelines/stats_flow.py`.
+This document describes the unified federation statistics command implemented by `tcbot/modules/stats.py` and `tcbot/modules/helper/pipelines/stats_flow.py`.
 
 For module structure, see [`../architecture/modules.md`](../architecture/modules.md).
 For shared helpers and decorators, see [`../architecture/helpers.md`](../architecture/helpers.md).

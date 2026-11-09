@@ -1,6 +1,6 @@
 # Check
 
-This document describes the `/check` user-profile command implemented by `tcbot/modules/checking/` (command + callback handlers) and `tcbot/modules/helper/pipelines/check_flow.py` (the `Check` class that builds every view).
+This document describes the `/check` user-profile command implemented by `tcbot/modules/check.py` (command + callback handlers) and `tcbot/modules/helper/pipelines/check_flow.py` (the `Check` class that builds every view).
 
 For ban data shown in check, see [`banning.md`](banning.md). For warnings
 shown in check, see [`warnings.md`](warnings.md). For the stats command, see

@@ -13,8 +13,7 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.admins.shared import _RL_CMD_LIMIT, _RL_PERIOD_S
-from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper import replies
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
     promote_approved_log,
@@ -32,9 +31,9 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
-@decorators.log_execution
-async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def execute_promo_decision(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Handle approve / reject decisions on promotion request cards.
 
     Owner-only callback. Answers the query and fetches the request record in

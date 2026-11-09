@@ -15,7 +15,7 @@ from telegram.constants import ChatMemberStatus
 from telegram.error import BadRequest
 
 from tcbot import database as db
-from tcbot.modules import syncing as sy
+from tcbot.modules import sync as sy
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 
 

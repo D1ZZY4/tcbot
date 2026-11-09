@@ -2,6 +2,7 @@
 # alerts (plain). Placeholders: {bot} raw bot name, {community} raw name.
 
 [msg]
+bot_fallback = "Bot ini"
 body = """*Privasi dan Data*
 
 {bot} menyimpan sedikit data untuk menjalankan federasi. Isinya:

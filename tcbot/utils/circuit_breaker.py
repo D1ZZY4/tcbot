@@ -101,11 +101,6 @@ class CircuitBreaker:
         """
         return self._state
 
-    @property
-    def is_open(self) -> bool:
-        """True when the circuit is OPEN and calls should be rejected."""
-        return self.state is CircuitState.OPEN
-
     async def call[T](
         self,
         coro: Awaitable[T],

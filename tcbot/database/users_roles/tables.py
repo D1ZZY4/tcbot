@@ -6,10 +6,12 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 # ────────────────────── Role hierarchy tables ───────────────────── #
 # * Numeric ranks compare executor vs target; labels render to humans.
 
-VALID_ROLES: frozenset[str] = frozenset({"developer", "tester"})
+VALID_ROLES: tuple[Literal["developer", "tester"], ...] = ("developer", "tester")
 
 ROLE_RANK: dict[str, int] = {
     "founder": 4,

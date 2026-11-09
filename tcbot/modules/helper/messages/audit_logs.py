@@ -2,254 +2,25 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Message helpers: safe edits and audit-log builders."""
+"""Audit-log builders for moderation, appeal, role, and group events."""
 
 from __future__ import annotations
 
-import asyncio
-from typing import TYPE_CHECKING, Any
-
-from telegram.error import BadRequest
+from typing import TYPE_CHECKING
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code, esc, link, safe_username, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_dt, utc_now
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable
     from datetime import datetime
-
-    from telegram import Bot, CallbackQuery, InlineKeyboardMarkup, Message
 
 log = get_logger(__name__)
 
-# ─────────────────────────────── Safe edits ──────────────────────────────── #
-
-_IGNORED = {"message is not modified", "message to edit not found", "chat not found"}
-
+# * Caps the broadcast log preview to one line of the operator's message.
 _MAX_BROADCAST_PREVIEW_LEN: int = 100
-
-
-def _log_edit_failure(
-    level: str, label: str | None, default_msg: str, exc: BaseException
-) -> None:
-    """Emit an edit-failure line at ``level`` using the call-site ``label``.
-
-    With a label the message becomes ``"<label> edit failed: %s"`` so
-    migrated inline sites keep byte-identical output; without one the
-    helper's own default message is used. The exception is passed
-    positionally, matching the inline ``log.debug("... edit failed: %s",
-    exc)`` sites this consolidates.
-    """
-    msg = f"{label} edit failed: %s" if label is not None else default_msg
-    getattr(log, level)(msg, exc)
-
-
-async def _edit_via(
-    do_edit: Awaitable[object],
-    *,
-    log_level: str,
-    log_label: str | None,
-    catch_all: bool,
-    default_msg: str,
-) -> None:
-    """Run one edit coroutine with the shared benign-error policy.
-
-    ``BadRequest`` values naming a harmless state (not modified, not found,
-    chat gone) return silently; other ``BadRequest`` values log at
-    ``log_level``. Generic ``Exception`` values either propagate or log at
-    ``log_level`` depending on ``catch_all``. Cancellation always propagates.
-    """
-    try:
-        await do_edit
-    except BadRequest as e:
-        if any(i in str(e).lower() for i in _IGNORED):
-            return
-        _log_edit_failure(log_level, log_label, default_msg, e)
-    except Exception as exc:
-        if not catch_all:
-            raise
-        _log_edit_failure(log_level, log_label, default_msg, exc)
-
-
-async def safe_edit(
-    msg: Message,
-    text: str,
-    *,
-    log_level: str = "warning",
-    log_label: str | None = None,
-    catch_all: bool = False,
-    parse_mode: str | None = "MarkdownV2",
-    **kwargs: Any,
-) -> None:
-    """Edit a message via ``msg.edit_text``; swallow harmless not-modified errors.
-
-    ``log_level`` selects the failure log level and ``log_label`` replaces
-    the default message prefix, so migrated inline sites keep byte-identical
-    output (``"<label> edit failed: %s"``). ``catch_all`` additionally
-    swallows generic ``Exception`` failures at ``log_level`` instead of
-    propagating them; cancellation always propagates. ``parse_mode``
-    defaults to ``"MarkdownV2"``; pass ``None`` for plain text.
-    """
-    await _edit_via(
-        msg.edit_text(text, parse_mode=parse_mode, **kwargs),
-        log_level=log_level,
-        log_label=log_label,
-        catch_all=catch_all,
-        default_msg="edit failed: %s",
-    )
-
-
-async def safe_edit_cb(
-    q: CallbackQuery,
-    text: str,
-    *,
-    log_level: str = "warning",
-    log_label: str | None = None,
-    catch_all: bool = False,
-    parse_mode: str | None = "MarkdownV2",
-    **kwargs: Any,
-) -> None:
-    """Edit a callback-query message; swallow harmless not-modified errors.
-
-    Use this whenever a user can re-tap a button that lands them on the same
-    content (e.g. a section sub-button while already viewing that section).
-    The failure parameters behave exactly as in :func:`safe_edit`.
-    """
-    await _edit_via(
-        q.edit_message_text(text, parse_mode=parse_mode, **kwargs),
-        log_level=log_level,
-        log_label=log_label,
-        catch_all=catch_all,
-        default_msg="callback edit failed: %s",
-    )
-
-
-async def safe_edit_message(
-    bot: Bot,
-    chat_id: int | None,
-    message_id: int | None,
-    text: str,
-    *,
-    log_level: str = "warning",
-    log_label: str | None = None,
-    catch_all: bool = False,
-    parse_mode: str | None = "MarkdownV2",
-    **kwargs: Any,
-) -> None:
-    """Edit a message by chat/message ID via ``bot.edit_message_text``.
-
-    Used for prompts whose chat and message IDs were stored in conversation
-    state instead of a live ``Message``/``CallbackQuery`` handle. Failure
-    parameters behave exactly as in :func:`safe_edit`.
-    """
-    await _edit_via(
-        bot.edit_message_text(
-            text,
-            chat_id=chat_id,
-            message_id=message_id,
-            parse_mode=parse_mode,
-            **kwargs,
-        ),
-        log_level=log_level,
-        log_label=log_label,
-        catch_all=catch_all,
-        default_msg="message edit failed: %s",
-    )
-
-
-async def clear_markup_cb(q: CallbackQuery) -> None:
-    """Remove the inline keyboard from a callback-query message.
-
-    Editing message text without ``reply_markup`` keeps the old buttons
-    (the parameter is omitted from the API call), so ending a flow with
-    only an edit would leave dead buttons behind. Call this after the
-    edit; "not modified" (already removed) is swallowed like
-    :func:`safe_edit_cb`.
-    """
-    try:
-        await q.edit_message_reply_markup(reply_markup=None)
-    except BadRequest as e:
-        if any(i in str(e).lower() for i in _IGNORED):
-            return
-        log.warning("clear markup failed: %s", e)
-
-
-async def answer_and_edit(q: CallbackQuery, text: str, **kwargs: Any) -> None:
-    """Answer a callback query and edit its message in parallel.
-
-    ``q.answer()`` and the inline edit are independent; gathering them starts
-    both at once. The edit goes through :func:`safe_edit_cb`, so benign
-    not-modified errors are swallowed like the raw callback sites it replaces.
-    Cancellation always propagates instead of reading as success.
-    """
-    results = await asyncio.gather(
-        q.answer(),
-        safe_edit_cb(q, text, **kwargs),
-        return_exceptions=True,
-    )
-    throw_if_cancelled(results)
-
-
-async def ack_and_render(
-    q: CallbackQuery, data_coro: Awaitable[tuple[str, InlineKeyboardMarkup | None]]
-) -> None:
-    """Acknowledge the callback query and run the data coroutine in parallel, then edit.
-
-    ``data_coro`` must be a coroutine that returns ``(text, kb)``. Gathering
-    ``q.answer()`` with the DB fetch starts both simultaneously, cutting latency
-    versus the old sequential pattern. On a data coroutine failure the query is
-    answered but the message is left untouched. Cancellation always propagates.
-    """
-    ans, result = await asyncio.gather(q.answer(), data_coro, return_exceptions=True)
-    throw_if_cancelled((ans, result))
-    if isinstance(result, BaseException):
-        log.error("ack_and_render data fetch failed: %s", result)
-        return
-    text, kb = result
-    await safe_edit_cb(q, text, reply_markup=kb)
-
-
-async def safe_reply(
-    msg: Message,
-    text: str,
-    *,
-    log_label: str = "reply",
-    parse_mode: str | None = "MarkdownV2",
-    **kwargs: Any,
-) -> None:
-    """Send a reply via ``msg.reply_text``; log failures at debug.
-
-    Replaces the recurring 3-line pattern of
-
-        try:
-            await msg.reply_text(...)
-        except Exception as exc:
-            log.debug("...reply failed: %s", exc)
-
-    which is duplicated across the command modules and workflows. The
-    ``log_label`` parameter is the human-readable name of the call site
-    (e.g. ``"mute summary fallback"``); it appears in the debug log line
-    so the operator can identify the source without grepping for the
-    function name.
-
-    ``parse_mode`` defaults to ``"MarkdownV2"`` for formatted replies; pass
-    ``None`` for plain-text replies (error strings, constants, community
-    names) so Telegram performs no entity parsing, exactly like a bare
-    ``reply_text`` call without the parameter.
-
-    Failures are logged at ``debug`` (not ``warning``) because a failed
-    ``reply_text`` is almost always benign: the user blocked the bot,
-    the chat was deleted, or the message thread was closed.
-    """
-    try:
-        await msg.reply_text(text, parse_mode=parse_mode, **kwargs)
-    except Exception as exc:
-        log.debug("%s reply failed: %s", log_label, exc)
-
 
 # ───────────────────────── Audit-log builder ────────────────────────── #
 

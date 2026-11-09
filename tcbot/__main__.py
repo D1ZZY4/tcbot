@@ -301,7 +301,7 @@ async def _post_init(app: Application) -> None:
             "API_ID/API_HASH are required for MTProto identity resolution; refusing to boot degraded."
         )
     await init_shared_subsystems(app.bot, start_mtproto=True)
-    from tcbot.modules.syncing import run_ban_sync  # noqa: PLC0415
+    from tcbot.modules.sync import run_ban_sync  # noqa: PLC0415
 
     await sched_mod.start(
         cfg.mongodb_uri,

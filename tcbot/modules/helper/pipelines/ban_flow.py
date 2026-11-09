@@ -229,17 +229,15 @@ async def _execute_ban_update(
     )
     _appeal_url = appeal_deep_link(bot_username, ban_id)
     kb = (
-        keyboards.ban_log_update(
-            target_id, proof_link, prev_proof_link, _appeal_url, meta.get("ban_locale")
+        keyboards.ban_log_kb(
+            target_id,
+            proof_link,
+            _appeal_url,
+            meta.get("ban_locale"),
+            previous_proof_link=prev_proof_link or None,
         )
-        if proof_link and prev_proof_link
-        else (
-            keyboards.ban_log_new(
-                target_id, proof_link, _appeal_url, meta.get("ban_locale")
-            )
-            if proof_link
-            else None
-        )
+        if proof_link
+        else None
     )
     send_kwargs: dict = {"parse_mode": "MarkdownV2", "message_thread_id": logs_thread}
     if kb:
@@ -296,7 +294,7 @@ async def _execute_new_ban(
         now,
     )
     kb = (
-        keyboards.ban_log_new(
+        keyboards.ban_log_kb(
             target_id,
             proof_link,
             appeal_deep_link(bot_username, ban_id),
@@ -878,34 +876,3 @@ def ban_conversation(
         per_user=True,
         per_message=False,
     )
-
-
-__all__ = [
-    "BAN_USER_DATA_KEYS",
-    "WAITING_PROOF",
-    "WAITING_UPDATE_CONFIRM",
-    "_PROOF_COLLECT_MAX_S",
-    "ConversationHandler",
-    "_ProofSession",
-    "_cancel_proof_session",
-    "_clear_ban_state",
-    "_execute_ban",
-    "_execute_ban_update",
-    "_execute_new_ban",
-    "_flush_session",
-    "_proof_sessions",
-    "asyncio",
-    "ban_conversation",
-    "db",
-    "demote_ban_target",
-    "locale_for_user",
-    "log",
-    "on_ban_update_continue",
-    "on_cancel_proof",
-    "on_done_proof",
-    "on_proof_received",
-    "on_proof_timeout",
-    "on_proof_unexpected",
-    "proof",
-    "proof_prompt_content",
-]

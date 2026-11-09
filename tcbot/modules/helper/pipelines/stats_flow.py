@@ -723,16 +723,3 @@ class SearchViews:
 
 class Stats(OverviewViews, PeopleViews, ChatViews, BanViews, SearchViews):
     """All view builders for /tcstats."""
-
-
-__all__ = (
-    "CHAT_KEY",
-    "MSG_KEY",
-    "RESULTS_KEY",
-    "SEARCH_KEY",
-    "Stats",
-    "_list_kb",
-    "back_kb",
-    "launch_group_title_refresh",
-    "main_kb",
-)

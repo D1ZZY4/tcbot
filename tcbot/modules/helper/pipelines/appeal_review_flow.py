@@ -532,15 +532,3 @@ class AppealReviewMixin(AppealVerdictsMixin):
             await self._reject_appeal(
                 ctx.bot, q, ban, ban_id, target_id, admin, lc, lt, update
             )
-
-
-__all__ = [
-    "LOCK_HOURS",
-    "_LOCK_WINDOW",
-    "AppealReviewMixin",
-    "AppealVerdictsMixin",
-    "cfg",
-    "locale_for_update",
-    "locale_for_user",
-    "reviewer_locked_out",
-]

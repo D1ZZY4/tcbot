@@ -725,15 +725,3 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
 
 
 connection = BuildConnection(cfg.community_name)
-
-__all__ = [
-    "_REPLAY_CAP",
-    "_REQUIRED_PERMS",
-    "BuildConnection",
-    "ConnectionAddedMixin",
-    "ConnectionDecisionMixin",
-    "_harvest_admin_identities",
-    "_harvest_tasks",
-    "connection",
-    "drain_harvest_tasks",
-]

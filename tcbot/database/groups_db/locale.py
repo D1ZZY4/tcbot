@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import cachetools as _cachetools
 
+from tcbot.database.cache import _ALL_GROUPS_KEY, active_groups_cache
 from tcbot.database.mongos import db_call
 
 from .collections import _groups
@@ -54,4 +55,7 @@ async def set_group_locale(chat_id: int, locale: str | None) -> bool:
             _groups().update_one({"chat_id": chat_id}, {"$set": {"locale": locale}})
         )
     _GROUP_LOCALE_L1.pop(chat_id, None)
+    # * active_groups() returns the row including its locale; without this
+    # * the new locale stays stale for the groups-list TTL after a change.
+    active_groups_cache.invalidate(_ALL_GROUPS_KEY)
     return result.matched_count > 0

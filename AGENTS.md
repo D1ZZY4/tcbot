@@ -127,29 +127,29 @@ Current stack:
 │   │   │   ├── identity.py   Self/bot/Telegram/Founder/staff classification
 │   │   │   ├── locale.py     Render-locale resolution (per-update locale)
 │   │   │   ├── parse_link.py  `t.me/c/...` deep-link builders
-│   │   │   ├── messages.py    Safe edits and federation log message renderers
+│   │   │   ├── messages/       Safe edits and federation log message renderers
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
 │   │   │   └── replies.py     Localized reply functions and HelpEntry shape
-│   │   ├── banning.py        /tcban command
-│   │   ├── kicking.py        /tckick command
-│   │   ├── muting.py         /tcmute command
-│   │   ├── warnings/         /tcwarn command
+│   │   ├── bans.py           /tcban command
+│   │   ├── kick.py           /tckick command
+│   │   ├── mute.py           /tcmute command
+│   │   ├── warns.py          /tcwarn command
 │   │   ├── appeals.py        /appeal flow
-│   │   ├── admins/           Role commands (/tcpromote, /tcdemote, /transferowner, …)
+│   │   ├── admins.py         Role commands (/tcpromote, /tcdemote, /transferowner, …)
 │   │   ├── language.py       /language command
-│   │   ├── connecting.py     /tcconnect command
+│   │   ├── connect.py        /tcconnect command
 │   │   ├── disconnecting.py  /tcdisconnect and /rmtc commands
 │   │   ├── groups.py         Group management
-│   │   ├── checking/         /check and /checkme commands
-│   │   ├── unbanning.py      /tcunban command
-│   │   ├── broadcasting.py   /tcbroadcast command
-│   │   ├── greeting/         Greeting messages
+│   │   ├── check.py          /check and /checkme commands
+│   │   ├── unban.py          /tcunban command
+│   │   ├── broadcast.py      /tcbroadcast command
+│   │   ├── greeting.py       Greeting messages
 │   │   ├── about.py          About panel (callback-only, via start menu)
 │   │   ├── additional.py     Additional menu
-│   │   ├── help/             Help command
-│   │   ├── stats/            Statistics
-│   │   ├── syncing/          Enforcement reconciliation (/tcsync)
-│   │   ├── maintenance/      Maintenance commands
+│   │   ├── help.py           Help command
+│   │   ├── stats.py          Statistics
+│   │   ├── sync.py           Enforcement reconciliation (/tcsync)
+│   │   ├── maintenance.py    Maintenance commands
 │   │   ├── netspeed.py       Network speed test
 │   │   ├── privacy.py        Privacy panel (callback-only, via start menu)
 │   │   └── start.py          /start command

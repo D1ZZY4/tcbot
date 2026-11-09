@@ -7,8 +7,9 @@
 from __future__ import annotations
 
 from tcbot.database.cache import effective_role_cache
-from tcbot.database.documents import RoleRefDoc
+from tcbot.database.documents import RoleDoc, RoleRefDoc
 from tcbot.database.mongos import col, db_call
+from tcbot.database.types import UserId
 from tcbot.utils.time_and_date import utc_now
 
 from .tables import VALID_ROLES
@@ -21,17 +22,16 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
     # ! would grant real privilege to a tc_roles row.
     if role not in VALID_ROLES:
         raise ValueError(f"Refusing to store invalid custom role: {role!r}")
+    row: RoleDoc = {
+        "user_id": UserId(user_id),
+        "role": role,
+        "assigned_by": UserId(assigned_by),
+        "assigned_at": utc_now(),
+    }
     await db_call(
         col("tc_roles").update_one(
             {"user_id": user_id},
-            {
-                "$set": {
-                    "user_id": user_id,
-                    "role": role,
-                    "assigned_by": assigned_by,
-                    "assigned_at": utc_now(),
-                }
-            },
+            {"$set": row},
             upsert=True,
         )
     )

@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Federation ownership transfer command."""
+"""Federation ownership transfer executor."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.admins.shared import _RL_BULK_LIMIT, _RL_PERIOD_BULK_S
-from tcbot.modules.helper import decorators, extraction, identity, replies
+from tcbot.modules.helper import identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper.extraction import extract_target
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import ownership_transferred, safe_reply
 from tcbot.modules.helper.pipelines.demote_flow import Demote
@@ -32,10 +32,7 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
-@decorators.ratelimiter(limit=_RL_BULK_LIMIT, period=_RL_PERIOD_BULK_S)
-@decorators.owner_only
-@decorators.log_execution
-async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Transfer federation ownership to another user.
 
     Resolves the new owner target, runs identity checks, then replaces the
@@ -53,7 +50,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     args = parse_cmd_args(msg.text)
     try:
-        target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
+        target_id, target_fname = await extract_target(update, args, ctx.bot)
     except Exception:
         log.exception("extract_target failed during transfer")
         await safe_reply(

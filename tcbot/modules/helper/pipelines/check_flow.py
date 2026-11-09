@@ -728,6 +728,3 @@ async def _per_chat_event_list(
 
 class Check(CheckProfileMixin, CheckBansMixin, CheckEventsMixin):
     """All view builders for the /check user-profile command."""
-
-
-__all__ = ("Check", "_back_to_check", "_name")

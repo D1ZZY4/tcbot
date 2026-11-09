@@ -17,7 +17,7 @@ import pytest
 import api.cron as cron_mod
 from tcbot import _env_list, cfg, parse_chat_id
 from tcbot.database import mtproto
-from tcbot.modules import syncing as sy
+from tcbot.modules import sync as sy
 from tcbot.utils import error_reporter
 
 

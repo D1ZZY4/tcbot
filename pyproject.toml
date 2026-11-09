@@ -81,6 +81,9 @@ ignore = [
 "tests/**" = [
     "D",
 ] # Test functions need no docstrings; module docs stay required
+"tcbot/modules/**/__init__.py" = [
+    "F401",
+] # Package inits are re-export surfaces (no __all__); used names live in submodules
 
 [tool.pylint.format]
 max-module-lines = 1000

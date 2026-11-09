@@ -1,6 +1,6 @@
 # Banning
 
-This document describes the current federation ban, ban lookup, and unban behavior implemented by `tcbot/modules/banning.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `tcbot/modules/checking/`, `tcbot/modules/unbanning.py`, and `tcbot/database/bans_db/`.
+This document describes the current federation ban, ban lookup, and unban behavior implemented by `tcbot/modules/bans.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `tcbot/modules/check.py`, `tcbot/modules/unban.py`, and `tcbot/database/bans_db/`.
 
 For the appeal flow following a ban, see [`../appeals.md`](../appeals.md). For
 the check command used to look up bans, see [`check.md`](check.md). For warnings
@@ -232,7 +232,7 @@ Active-ban reads are deterministic: when duplicate active records exist for the 
 
 ## Ban logs and proof logs
 
-Ban-related templates are defined in `messages.py`:
+Ban-related templates are defined in `messages/`:
 
 | Template | Used for |
 |---|---|
@@ -247,8 +247,7 @@ Ban log keyboards are defined in `keyboards/`:
 
 | Function | Buttons |
 |---|---|
-| `ban_log_new` | `Proof <target_id>`, `Submit Appeal` |
-| `ban_log_update` | `Proof <target_id>`, `Previous Proof <target_id>`, `Submit Appeal` |
+| `ban_log_kb` | `Proof <target_id>`, `Submit Appeal`; with `previous_proof_link`, adds `Previous Proof <target_id>` between them |
 | `checkme_ban_kb` | `Details`, optional `Proof`, `Appeal` |
 | `checkme_detail_back_kb` | optional `Proof`, `« Back` |
 
@@ -300,7 +299,7 @@ Unlike `/checkme`, `/check` does not provide an appeal button because it is for 
 
 ## `/tcunban` behavior
 
-Manual unban is implemented by `tcbot/modules/unbanning.py` and `tcbot/modules/helper/pipelines/unban_flow.py`.
+Manual unban is implemented by `tcbot/modules/unban.py` and `tcbot/modules/helper/pipelines/unban_flow.py`.
 
 Flow:
 

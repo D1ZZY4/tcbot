@@ -2,6 +2,7 @@
 # alerts (plain). Placeholders: {bot} raw bot name, {community} raw name.
 
 [msg]
+bot_fallback = "This bot"
 body = """*Privacy and Data*
 
 {bot} stores a small amount of data to run the federation. Here is what that includes:

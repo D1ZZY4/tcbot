@@ -191,7 +191,7 @@ def test_help_topics_rebuild_per_locale() -> None:
     content_en = helpmod._builder_help("en-US")
     content_id = helpmod._builder_help("id")
     assert content_en.keys() == content_id.keys()
-    assert content_en["help_banning"][1] != content_id["help_banning"][1]
+    assert content_en["help_bans"][1] != content_id["help_bans"][1]
     assert helpmod._module_map_for_locale("id")
 
 

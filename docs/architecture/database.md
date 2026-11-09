@@ -358,7 +358,7 @@ Resolution order in `get_effective_role`:
 - `get_group_locale(chat_id: int) -> str | None`
   Reads the stored group locale for the shared-audience resolution path (`helper/locale.py`). Unset (`None`) is cached too. Backed by a bare `cachetools` L1 `_GROUP_LOCALE_L1` (maxsize 1024, ttl 300 s), not a Redis-backed `TwoLevelCache`.
 - `set_group_locale(chat_id: int, locale: str | None) -> bool`
-  Stores the locale verbatim, or `$unset`s it when `None`. Returns `True` when a group row matched; pops the L1 entry. Validity against the translation catalog is enforced by the caller and at resolution time.
+  Stores the locale verbatim, or `$unset`s it when `None`. Returns `True` when a group row matched; pops the L1 entry and invalidates the active-groups list cache (whose rows carry the locale, so a change would otherwise linger for the groups-list TTL). Validity against the translation catalog is enforced by the caller and at resolution time.
 
 **Error behavior:** every access uses `db_call()`. `migrate_group` never aborts the whole migration because one collection failed: it logs per-collection failures, skips that side, and reports whether anything moved.
 

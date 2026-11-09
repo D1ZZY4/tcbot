@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import BanDoc
-from tcbot.modules.helper import decorators, extraction, identity, replies
+from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.keyboards import ban_update_confirm_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply
@@ -35,7 +35,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
     from telegram import Message, Update
@@ -103,31 +103,26 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ``WAITING_UPDATE_CONFIRM``, ``WAITING_PROOF``, or
     ``ConversationHandler.END`` on any failure.
     """
-    locale = await locale_for_update(update)
-    msg = update.effective_message
-    admin = update.effective_user
-    if msg is None or admin is None or ctx.user_data is None:
-        return ConversationHandler.END
-    # * Origin guard: a disconnected group must not drive federation-wide
-    # * enforcement. Private stays allowed (exec-or-group scope per help).
-    if not await decorators.require_federation_origin(
-        msg,
-        chat_id=msg.chat.id,
-        chat_type=msg.chat.type,
-        locale=locale,
+    resolved = await decorators.resolve_mod_target(
+        update,
+        ctx,
+        action="ban",
+        min_role="developer",
         allow_private=True,
-        log_label="cmd_ban_start origin",
-    ):
+        log_prefix="cmd_ban_start",
+    )
+    if resolved is None or ctx.user_data is None:
         return ConversationHandler.END
-    raw_args = parse_cmd_args(msg.text)
-
-    # * Resolution plus consumption in one call: a verified explicit
-    # * ID/@username overrides the reply target, and the consumed flag
-    # * tells the reason parser to drop args[0] as the target token.
-    (
-        (target_id, target_fname),
-        has_explicit_target,
-    ) = await extraction.extract_mod_target(update, raw_args, ctx.bot)
+    # * Private stays allowed (exec-or-group scope per help); a disconnected
+    # * group never drives federation-wide enforcement.
+    msg = resolved.msg
+    admin = resolved.admin
+    locale = resolved.locale
+    target_id = resolved.target_id
+    target_fname = resolved.target_name
+    has_explicit_target = resolved.has_explicit_target
+    raw_args = resolved.args
+    target_role = resolved.target_role
 
     ban_reason = parse_inline_reason(
         raw_args,
@@ -137,15 +132,6 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         # * explicit path can never strip a reason token that happens to match).
         reply_target_id=target_id if not has_explicit_target else None,
     )
-
-    if not target_id:
-        await safe_reply(
-            msg,
-            replies.err_cannot_resolve(locale, plain=True),
-            log_label="cmd_ban_start no-target",
-            parse_mode=None,
-        )
-        return ConversationHandler.END
 
     if not ban_reason:
         await safe_reply(
@@ -165,27 +151,6 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             log_label="cmd_ban_start reason-too-long",
             parse_mode=None,
         )
-        return ConversationHandler.END
-
-    # * Identity check + role lookup happen in parallel; both depend only on
-    # * already-resolved IDs so there is no need to wait for them sequentially.
-    # * return_exceptions=True prevents a DB failure from leaving the ConversationHandler open.
-    classified = await decorators.classify_and_check(
-        ctx.bot,
-        admin.id,
-        target_id,
-        target_fname,
-        msg,
-        action="ban",
-        min_role="developer",
-    )
-    if classified is None:
-        return ConversationHandler.END
-    ident, target_role = classified
-
-    refusal = identity.refuse_message("ban", ident, locale)
-    if refusal is not None:
-        await safe_reply(msg, refusal, log_label="cmd_ban_start refusal")
         return ConversationHandler.END
 
     ctx.user_data["ban_target_id"] = target_id

@@ -76,8 +76,8 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     if q is None:
         return
 
-    botname = ctx.bot.first_name or "This bot"
     locale = await locale_for_update(update)
+    botname = ctx.bot.first_name or t("privacy.msg.bot_fallback", locale, plain=True)
     await answer_and_edit(
         q,
         _privacy_msg(botname, locale),
@@ -95,8 +95,8 @@ async def on_privacy_policy_menu(
     if q is None:
         return
 
-    botname = ctx.bot.first_name or "This bot"
     locale = await locale_for_update(update)
+    botname = ctx.bot.first_name or t("privacy.msg.bot_fallback", locale, plain=True)
     await answer_and_edit(
         q,
         _privacy_policy_index_msg(botname, locale),

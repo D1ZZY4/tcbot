@@ -99,13 +99,6 @@ def _ensure_loaded() -> dict[str, dict[str, str]]:
     return _catalog
 
 
-def reload_catalog(root: Path | None = None) -> None:
-    """Reload the process-wide catalog, primarily for tests."""
-    global _catalog, _catalog_root
-    _catalog_root = root if root is not None else _default_root()
-    _catalog = load_catalog(_catalog_root)
-
-
 def available_locales(catalog: dict[str, dict[str, str]] | None = None) -> list[str]:
     """Return sorted locale codes present in the catalog."""
     data = catalog if catalog is not None else _ensure_loaded()

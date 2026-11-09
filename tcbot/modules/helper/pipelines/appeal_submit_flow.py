@@ -759,29 +759,3 @@ class BuildAppeal(AppealSubmitMixin, AppealReviewMixin):
 
 
 appeal = BuildAppeal(cfg.community_name, tme_handle_from_url(cfg.community_logs_url))
-
-__all__ = [
-    "WAITING_APPEAL",
-    "_APPEAL_STATE_KEYS",
-    "_ID_RE",
-    "_MAX_APPEAL_LEN",
-    "_REJECTION_COOLDOWN",
-    "_REJECTION_COOLDOWN_HOURS",
-    "_SECONDS_PER_HOUR",
-    "_STALE_REVIEW_HOURS",
-    "_STALE_REVIEW_WINDOW",
-    "AppealSubmitMixin",
-    "BuildAppeal",
-    "SubmitMessageMixin",
-    "_clear_appeal_state",
-    "_cooldown_remaining_h",
-    "_is_stale_review",
-    "appeal",
-    "build_handler",
-    "cfg",
-    "instruction_text",
-    "locale_for_update",
-    "post_appeal",
-    "starts_with_appeal_tag",
-    "text_references_log_message",
-]

@@ -13,70 +13,49 @@ from tcbot.modules.helper.parse_link import appeal_deep_link
 from tcbot.utils.i18n import t
 
 
-def ban_log_new(
+def ban_log_kb(
     target_id: int,
     proof_link: str,
     appeal_url: str,
     locale: str | None = None,
+    *,
+    previous_proof_link: str | None = None,
 ) -> InlineKeyboardMarkup:
-    """Ban-log keyboard with proof and appeal URL buttons, one per row."""
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    t("button.proof_id", locale, id=target_id, plain=True),
-                    url=proof_link,
-                    style=KeyboardButtonStyle.PRIMARY,
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    t("button.submit_appeal", locale, plain=True),
-                    url=appeal_url,
-                    style=KeyboardButtonStyle.PRIMARY,
-                )
-            ],
-        ]
-    )
+    """Ban-log keyboard with proof and appeal URL buttons, one per row.
 
-
-def ban_log_update(
-    target_id: int,
-    proof_link: str,
-    previous_proof_link: str,
-    appeal_url: str,
-    locale: str | None = None,
-) -> InlineKeyboardMarkup:
-    """Ban-log keyboard with current plus previous proof buttons.
-
-    One URL button per row: proof labels embed the target ID, so two of
-    them side by side truncate on narrow clients.
+    ``previous_proof_link`` adds the update-flow previous-proof row. One URL
+    button per row: proof labels embed the target ID, so two of them side
+    by side truncate on narrow clients.
     """
-    return InlineKeyboardMarkup(
+    rows = [
         [
-            [
-                InlineKeyboardButton(
-                    t("button.proof_id", locale, id=target_id, plain=True),
-                    url=proof_link,
-                    style=KeyboardButtonStyle.PRIMARY,
-                )
-            ],
+            InlineKeyboardButton(
+                t("button.proof_id", locale, id=target_id, plain=True),
+                url=proof_link,
+                style=KeyboardButtonStyle.PRIMARY,
+            )
+        ],
+    ]
+    if previous_proof_link:
+        rows.append(
             [
                 InlineKeyboardButton(
                     t("button.prev_proof_id", locale, id=target_id, plain=True),
                     url=previous_proof_link,
                     style=KeyboardButtonStyle.PRIMARY,
                 )
-            ],
-            [
-                InlineKeyboardButton(
-                    t("button.submit_appeal", locale, plain=True),
-                    url=appeal_url,
-                    style=KeyboardButtonStyle.PRIMARY,
-                )
-            ],
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                t("button.submit_appeal", locale, plain=True),
+                url=appeal_url,
+                style=KeyboardButtonStyle.PRIMARY,
+            )
         ]
     )
+    return InlineKeyboardMarkup(rows)
 
 
 def ban_update_confirm_kb(

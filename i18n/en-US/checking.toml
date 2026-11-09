@@ -38,6 +38,7 @@ Or reply to a message and run `/c`."""
 # {reason} raw reason text, {ts} pre-formatted date.
 
 [profile]
+admin_fallback = "Admin"
 title = "*Profile*"
 activity = "*Federation Activity*"
 name = "Name: {user}"

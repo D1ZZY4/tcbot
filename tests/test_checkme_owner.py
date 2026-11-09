@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.checking import checkme
+from tcbot.modules import check as checkme
 
 
 def _run(coro: Any) -> Any:

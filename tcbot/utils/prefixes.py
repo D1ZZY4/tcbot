@@ -26,10 +26,6 @@ _COMMAND_RE = re.compile(r"[a-z][a-z0-9]*")
 _MENTION_RE = re.compile(r"[A-Za-z0-9_]{5,32}")
 
 
-class _BotLike(Protocol):
-    username: str | None
-
-
 class _MessageLike(Protocol):
     text: str | None
 

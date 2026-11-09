@@ -22,21 +22,21 @@ from tcbot.database.groups_db import collections as _groups_collections
 from tcbot.modules import (
     admins,
     appeals,
-    banning,
-    broadcasting,
-    checking,
-    connecting,
+    bans,
+    broadcast,
+    check,
+    connect,
     disconnecting,
     groups,
-    kicking,
+    kick,
     language,
     maintenance,
-    muting,
+    mute,
     netspeed,
     stats,
-    syncing,
-    unbanning,
-    warnings,
+    sync,
+    unban,
+    warns,
 )
 from tcbot.modules import help as helpmod
 from tcbot.modules.helper import keyboards, replies
@@ -509,10 +509,10 @@ def test_language_list_marks_selected_locale() -> None:
 
 
 def test_broadcasting_help_golden() -> None:
-    assert broadcasting.__help_text__ == t(
+    assert broadcast.__help_text__ == t(
         "broadcasting.help.overview", community=cfg.community_name
     )
-    sections = _module_sections(broadcasting)
+    sections = _module_sections(broadcast)
     assert sections["Commands & Aliases"] == t("broadcasting.help.commands.body")
     assert sections["What it does"] == t(
         "broadcasting.help.what.body", community=cfg.community_name
@@ -521,10 +521,10 @@ def test_broadcasting_help_golden() -> None:
 
 
 def test_connecting_help_golden() -> None:
-    assert connecting.__help_text__ == t(
+    assert connect.__help_text__ == t(
         "connecting.help.overview", community=cfg.community_name
     )
-    sections = _module_sections(connecting)
+    sections = _module_sections(connect)
     assert sections["Commands & Aliases"] == t("connecting.help.commands.body")
     assert sections["What it does"] == t(
         "connecting.help.what.body", community=cfg.community_name
@@ -841,21 +841,21 @@ def test_get_help_matches_default_import() -> None:
     for mod_name in (
         "admins",
         "appeals",
-        "banning",
-        "broadcasting",
-        "checking",
-        "connecting",
+        "bans",
+        "broadcast",
+        "check",
+        "connect",
         "disconnecting",
         "groups",
-        "kicking",
+        "kick",
         "language",
         "maintenance",
-        "muting",
+        "mute",
         "netspeed",
         "stats",
-        "syncing",
-        "unbanning",
-        "warnings",
+        "sync",
+        "unban",
+        "warns",
     ):
         mod = importlib.import_module(f"tcbot.modules.{mod_name}")
         assert dict(mod.get_help()) == dict(mod.__help__), mod_name
@@ -983,8 +983,8 @@ def test_ban_help_fallback_unknown_locale() -> None:
 
 
 def test_ban_help_module_matches_catalog() -> None:
-    assert banning.__help_text__ == t("banning.help.overview")
-    by_label = dict(banning.__help_sections__)
+    assert bans.__help_text__ == t("banning.help.overview")
+    by_label = dict(bans.__help_sections__)
     assert by_label["Commands & Aliases"] == t("banning.help.commands.body")
     assert by_label["What it does"] == t("banning.help.what.body")
     assert by_label["Flow"] == t("banning.help.flow.body")
@@ -1018,11 +1018,11 @@ def _module_sections(mod: Any) -> dict[str, str]:
 
 def test_kicking_help_golden() -> None:
 
-    assert kicking.__help_text__ == t("kicking.help.overview")
+    assert kick.__help_text__ == t("kicking.help.overview")
     assert t("kicking.help.overview") == (
         "Removes a user from the *current group only*\\. Auto\\-demotes staff targets\\."
     )
-    sections = _module_sections(kicking)
+    sections = _module_sections(kick)
     assert sections["Commands & Aliases"] == t("kicking.help.commands.body")
     assert sections["What it does"] == t("kicking.help.what.body")
     assert sections["Flow"] == t("kicking.help.flow.body")
@@ -1031,8 +1031,8 @@ def test_kicking_help_golden() -> None:
 
 def test_muting_help_golden() -> None:
 
-    assert muting.__help_text__ == t("muting.help.overview")
-    sections = _module_sections(muting)
+    assert mute.__help_text__ == t("muting.help.overview")
+    sections = _module_sections(mute)
     assert sections["Commands & Aliases"] == t("muting.help.commands.body")
     assert sections["What it does"] == t("muting.help.what.body")
     assert sections["Flow"] == t("muting.help.flow.body")
@@ -1053,8 +1053,8 @@ def test_muting_help_golden() -> None:
 
 def test_unbanning_help_golden() -> None:
 
-    assert unbanning.__help_text__ == t("unbanning.help.overview")
-    sections = _module_sections(unbanning)
+    assert unban.__help_text__ == t("unbanning.help.overview")
+    sections = _module_sections(unban)
     assert sections["Commands & Aliases"] == t("unbanning.help.commands.body")
     assert sections["What it does"] == t("unbanning.help.what.body")
     assert sections["Examples"] == t("unbanning.help.examples.body")
@@ -1062,8 +1062,8 @@ def test_unbanning_help_golden() -> None:
 
 def test_warnings_help_golden() -> None:
     limit = Safe(bold(f"{cfg.warn_limit} warnings"))
-    assert warnings.__help_text__ == t("warnings.help.overview", limit=limit)
-    sections = _module_sections(warnings)
+    assert warns.__help_text__ == t("warnings.help.overview", limit=limit)
+    sections = _module_sections(warns)
     assert sections["Commands & Aliases"] == t("warnings.help.commands.body")
     assert sections["What it does"] == t("warnings.help.what.body", limit=limit)
     assert sections["Flow"] == t("warnings.help.flow.body")
@@ -1074,12 +1074,12 @@ def test_warnings_help_golden() -> None:
 
 
 def test_checking_help_golden() -> None:
-    assert checking.__help_text__ == t("checking.help.overview")
+    assert check.__help_text__ == t("checking.help.overview")
     assert t("checking.help.overview") == (
         "Look up your own ban status with `/checkme`, or pull a full "
         "federation activity profile for any user with `/check`\\."
     )
-    sections = _module_sections(checking)
+    sections = _module_sections(check)
     assert sections["Commands & Aliases"] == t("checking.help.commands.body")
     assert sections["/checkme"] == t("checking.help.checkme.body")
     assert sections["/check"] == t("checking.help.check.body")
@@ -1096,8 +1096,8 @@ def test_stats_help_golden() -> None:
 
 
 def test_syncing_help_golden() -> None:
-    assert syncing.__help_text__ == t("syncing.help.overview")
-    sections = _module_sections(syncing)
+    assert sync.__help_text__ == t("syncing.help.overview")
+    sections = _module_sections(sync)
     assert sections["Commands & Aliases"] == t("syncing.help.commands.body")
     assert sections["/tcsync"] == t("syncing.help.sync.body")
     assert sections["/tcsync <target>"] == t("syncing.help.sync_target.body")

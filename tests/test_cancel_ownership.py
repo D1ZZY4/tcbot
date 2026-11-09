@@ -11,8 +11,12 @@ from typing import Any
 
 import pytest
 
-from tcbot.modules.admins.demote import on_demote_cancel, on_demote_confirm
-from tcbot.modules.admins.promote import on_promote_role_btn, on_promote_role_cancel
+from tcbot.modules.admins import (
+    on_demote_cancel,
+    on_demote_confirm,
+    on_promote_role_btn,
+    on_promote_role_cancel,
+)
 from tcbot.modules.helper import keyboards as kb
 from tcbot.utils.i18n import t
 
@@ -65,7 +69,7 @@ def test_non_owner_cancel_alerts_and_keeps_prompt(
     async def _locale(update: Any) -> str:
         return "en-US"
 
-    monkeypatch.setattr("tcbot.modules.admins.promote.locale_for_update", _locale)
+    monkeypatch.setattr("tcbot.modules.admins.locale_for_update", _locale)
     query = _FakeQuery("promo_role_cancel:7:1")
     asyncio.run(on_promote_role_cancel(_update(query, 2), None))  # type: ignore[arg-type]
     assert query.answers[-1] == (
@@ -81,7 +85,7 @@ def test_owner_cancel_collapses_prompt(
     async def _locale(update: Any) -> str:
         return "en-US"
 
-    monkeypatch.setattr("tcbot.modules.admins.demote.locale_for_update", _locale)
+    monkeypatch.setattr("tcbot.modules.admins.locale_for_update", _locale)
     query = _FakeQuery("demote_cancel:7:1")
     asyncio.run(on_demote_cancel(_update(query, 1), None))  # type: ignore[arg-type]
     assert query.edits != []
@@ -91,7 +95,7 @@ def test_legacy_cancel_keeps_working(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _locale(update: Any) -> str:
         return "en-US"
 
-    monkeypatch.setattr("tcbot.modules.admins.demote.locale_for_update", _locale)
+    monkeypatch.setattr("tcbot.modules.admins.locale_for_update", _locale)
     query = _FakeQuery("demote_cancel:7")
     asyncio.run(on_demote_cancel(_update(query, 2), None))  # type: ignore[arg-type]
     assert query.edits != []
@@ -113,8 +117,8 @@ def test_non_owner_promote_action_alerts_and_keeps_prompt(
     async def _boom(*args: Any, **kwargs: Any) -> None:
         raise AssertionError("staff check must not run for a foreign tapper")
 
-    monkeypatch.setattr("tcbot.modules.admins.promote.locale_for_update", _locale)
-    monkeypatch.setattr("tcbot.modules.admins.promote._check_callback_staff", _boom)
+    monkeypatch.setattr("tcbot.modules.admins.locale_for_update", _locale)
+    monkeypatch.setattr("tcbot.modules.admins.check_callback_staff", _boom)
     query = _FakeQuery("promo_role:admin:7:1")
     asyncio.run(on_promote_role_btn(_update(query, 2), None))  # type: ignore[arg-type]
     assert query.answers[-1] == (
@@ -133,8 +137,8 @@ def test_non_owner_demote_action_alerts_and_keeps_prompt(
     async def _boom(*args: Any, **kwargs: Any) -> None:
         raise AssertionError("staff check must not run for a foreign tapper")
 
-    monkeypatch.setattr("tcbot.modules.admins.demote.locale_for_update", _locale)
-    monkeypatch.setattr("tcbot.modules.admins.demote._check_callback_staff", _boom)
+    monkeypatch.setattr("tcbot.modules.admins.locale_for_update", _locale)
+    monkeypatch.setattr("tcbot.modules.admins.check_callback_staff", _boom)
     query = _FakeQuery("demote_confirm:7:1")
     asyncio.run(on_demote_confirm(_update(query, 2), None))  # type: ignore[arg-type]
     assert query.answers[-1] == (

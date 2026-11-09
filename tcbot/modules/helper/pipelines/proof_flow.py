@@ -81,7 +81,7 @@ class BuildProof:
     ) -> str:
         """Proof-step prompt after reason was collected in-conversation."""
         # * target_mention/extra_info must already be MarkdownV2-ready
-        # * (mention/code output from the single muting.py producer).
+        # * (mention/code output from the single mute.py producer).
         suffix = Safe(f" {extra_info}") if extra_info else Safe("")
         return t(
             "proof.prompt.step",

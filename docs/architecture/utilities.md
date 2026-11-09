@@ -217,7 +217,6 @@ Each TOML file name becomes a dotted key prefix: a key `done` in `banning.toml` 
 | Function | Purpose |
 |---|---|
 | `load_catalog(root=None)` | Load every locale under `root` (default `i18n/`). File name is the key prefix. Malformed TOML raises `I18nError` immediately so a broken catalog fails fast at startup. |
-| `reload_catalog(root=None)` | Reload the process-wide catalog, primarily for tests. |
 | `available_locales(catalog=None)` | Return sorted locale codes present in the catalog. |
 | `is_known_locale(locale, catalog=None)` | Return `True` when `locale` has a catalog (case-insensitive). |
 

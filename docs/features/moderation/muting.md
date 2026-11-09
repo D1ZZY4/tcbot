@@ -1,6 +1,6 @@
 # Muting
 
-This document describes the current federation mute and unmute behavior implemented by `tcbot/modules/muting.py` (the `/tcmute` and `/tcunmute` entry points), `tcbot/modules/helper/pipelines/mute_flow.py` (the `_execute_mute` and `execute_unmute` executors), `tcbot/utils/time_and_date.py` (the duration helpers), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation), and `tcbot/database/mutes_db.py` (the persistent `mutes` and `active_mutes` collections).
+This document describes the current federation mute and unmute behavior implemented by `tcbot/modules/mute.py` (the `/tcmute` and `/tcunmute` entry points), `tcbot/modules/helper/pipelines/mute_flow.py` (the `_execute_mute` and `execute_unmute` executors), `tcbot/utils/time_and_date.py` (the duration helpers), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation), and `tcbot/database/mutes_db.py` (the persistent `mutes` and `active_mutes` collections).
 
 For the ban flow, see [`banning.md`](banning.md). For the kick flow, see
 [`kicking.md`](kicking.md). For role auto-demotion on mute, see
@@ -227,7 +227,7 @@ Expired timed mutes are filtered at query time by `get_active_mute` and `active_
 
 ## Logs and keyboards
 
-Mute-related templates are defined in `messages.py`:
+Mute-related templates are defined in `messages/` (`audit_logs.py`):
 
 | Template | Used for |
 |---|---|

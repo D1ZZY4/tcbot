@@ -13,7 +13,7 @@ import pytest
 from telegram.ext import ConversationHandler
 
 from tcbot import database as db
-from tcbot.modules import kicking
+from tcbot.modules import kick as kicking
 from tcbot.modules.helper import replies
 
 if TYPE_CHECKING:

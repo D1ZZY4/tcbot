@@ -10,8 +10,7 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes, ConversationHandler
 
-from tcbot.modules.helper import decorators, extraction, identity, replies
-from tcbot.modules.helper.locale import locale_for_update
+from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.messages import safe_reply
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.kick_flow import kick_conversation, proof, reason
@@ -25,7 +24,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -96,52 +95,35 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     reason) or opens the reason/proof conversation. Returns
     ``ConversationHandler.END`` on validation failure.
     """
-    locale = await locale_for_update(update)
-    msg = update.effective_message
-    admin = update.effective_user
-    chat = update.effective_chat
-    if msg is None or admin is None or chat is None or ctx.user_data is None:
-        return ConversationHandler.END
-
     # * Kick is a current-chat ban-then-unban: Telegram rejects it in private
-    # * chats ("Can't ban members in private chats"), so refuse up front
-    # * instead of failing in the executor after role I/O and demote work.
-    # * require_federation_origin with allow_private=False keeps that refusal
-    # * and also blocks disconnected groups from kicking in a non-federation
-    # * chat. Mirrors the connecting/disconnecting group-only guards.
-    if not await decorators.require_federation_origin(
-        msg,
-        chat_id=msg.chat.id,
-        chat_type=msg.chat.type,
-        locale=locale,
+    # * chats ("Can't ban members in private chats"), so the shared resolver
+    # * refuses private origins up front via allow_private=False; it also
+    # * blocks disconnected groups from kicking in a non-federation chat.
+    resolved = await decorators.resolve_mod_target(
+        update,
+        ctx,
+        action="kick",
+        min_role="tester",
         allow_private=False,
-        log_label="cmd_kick origin",
-    ):
-        return ConversationHandler.END
-
-    args = parse_cmd_args(msg.text)
-    # * Resolution plus consumption in one call (see banning.py): a
-    # * verified explicit ID/@username overrides the reply target, and the
-    # * consumed flag tells the reason parser to drop args[0] as target.
-    (target_id, target_name), has_explicit_target = await extraction.extract_mod_target(
-        update, args, ctx.bot
+        log_prefix="cmd_kick",
     )
+    if resolved is None or ctx.user_data is None:
+        return ConversationHandler.END
+    msg = resolved.msg
+    admin = resolved.admin
+    locale = resolved.locale
+    target_id = resolved.target_id
+    target_name = resolved.target_name
+    has_explicit_target = resolved.has_explicit_target
+    args = resolved.args
+    target_role = resolved.target_role
 
     inline_reason = parse_inline_reason(
         args,
         has_explicit_target=has_explicit_target,
-        # * Reply path only (see banning.py): strip a restated target ID.
+        # * Reply path only (see bans.py): strip a restated target ID.
         reply_target_id=target_id if not has_explicit_target else None,
     )
-
-    if not target_id:
-        await safe_reply(
-            msg,
-            replies.err_cannot_resolve(locale, plain=True),
-            log_label="cmd_kick no-target",
-            parse_mode=None,
-        )
-        return ConversationHandler.END
 
     # * Fail fast on overlong inline reasons with the shared cap and text,
     # * before any role I/O or demote work.
@@ -152,25 +134,6 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             log_label="cmd_kick reason-too-long",
             parse_mode=None,
         )
-        return ConversationHandler.END
-
-    # * return_exceptions=True prevents a DB failure from leaving the ConversationHandler open.
-    classified = await decorators.classify_and_check(
-        ctx.bot,
-        admin.id,
-        target_id,
-        target_name,
-        msg,
-        action="kick",
-        min_role="tester",
-    )
-    if classified is None:
-        return ConversationHandler.END
-    ident, target_role = classified
-
-    refusal = identity.refuse_message("kick", ident, locale)
-    if refusal is not None:
-        await safe_reply(msg, refusal, log_label="cmd_kick refusal")
         return ConversationHandler.END
 
     # * Auto-demote must succeed before the kick to preserve the

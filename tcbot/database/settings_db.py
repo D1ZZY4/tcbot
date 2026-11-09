@@ -10,7 +10,9 @@ from typing import TYPE_CHECKING
 
 import cachetools as _cachetools
 
+from tcbot.database.documents import UserSettingsDoc
 from tcbot.database.mongos import col, db_call
+from tcbot.database.types import UserId
 
 if TYPE_CHECKING:
     from motor.motor_asyncio import AsyncIOMotorCollection
@@ -64,10 +66,11 @@ async def set_user_locale(user_id: int, locale: str | None) -> None:
         await db_call(_settings().delete_one({"user_id": user_id}))
         _LOCALE_L1.pop(user_id, None)
         return
+    row: UserSettingsDoc = {"user_id": UserId(user_id), "locale": locale}
     await db_call(
         _settings().update_one(
             {"user_id": user_id},
-            {"$set": {"user_id": user_id, "locale": locale}},
+            {"$set": row},
             upsert=True,
         )
     )

@@ -22,7 +22,7 @@ from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import utc_now
+from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT, utc_now
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -93,7 +93,10 @@ async def execute_kick(
         )
         return
     try:
-        await ctx.bot.ban_chat_member(chat_id, target_id)
+        await asyncio.wait_for(
+            ctx.bot.ban_chat_member(chat_id, target_id),
+            timeout=TELEGRAM_LOOKUP_TIMEOUT,
+        )
         proof_link: str | None = None
         if proof_task is not None:
             try:

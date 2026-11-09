@@ -90,7 +90,9 @@ tcbot/
 │       ├── keyboards/      Inline keyboard factories
 │       ├── locale.py       Render-locale resolution shared by handlers, callbacks, flows
 │       ├── parse_link.py   `t.me/c/...` deep-link builders
-│       ├── messages.py     Safe edits and federation log message renderers
+│       ├── messages/       Safe edits and federation log message renderers
+│       │   ├── safe_edits.py    Safe-edit transport helpers
+│       │   └── audit_logs.py    Audit-log builders (LogBuilder + per-event logs)
 │       ├── replies.py      Shared localized reply and help-text strings, HelpEntry shape
 │       └── pipelines/
 │           └── *_flow.py modules   Conversation factories, plus Promote / Demote / Check classes
@@ -181,7 +183,7 @@ Filtering order:
 2. If `MODULES_NO_LOAD` is set, matching names are removed from the discovered list.
 3. `get_handlers()` imports active modules and extends the application handler list with each module's `__handlers__`.
 
-Module names are filenames without `.py`, for example `banning`, `appeals`, or `maintenance`.
+Module names are filenames without `.py`, for example `bans`, `appeals`, or `maintenance`.
 
 ## Request handling layers
 

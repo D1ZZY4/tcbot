@@ -236,7 +236,7 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 
 - Every module exposes `get_help(locale)` returning its `HelpEntry`.
 - Keep `__help__` as the default-locale entry for tests and fallbacks.
-- The `help/` module rebuilds content per request so topics, overviews, sections, and keyboards follow the requesting user's locale.
+- The `help.py` module rebuilds content per request so topics, overviews, sections, and keyboards follow the requesting user's locale.
 - Section labels and scope bodies are shared through `common.toml` sections such as `[section]`, `[context]`, and `[target]`.
 - Section labels render as raw text, while section bodies render as MarkdownV2.
 - Use `who_section`, `where_section`, and `target_section` with the resolved locale.

@@ -114,7 +114,7 @@ Main groups:
 
 | Factory group | Examples |
 |---|---|
-| Ban/checking | `ban_log_new`, `ban_log_update`, `ban_update_confirm_kb(log_url, proof_url, locale=None)` (re-ban confirmation: View Log / View Proof URL buttons plus Cancel / Continue), `appeal_button_kb`, `checkme_ban_kb`, `checkme_detail_back_kb` |
+| Ban/checking | `ban_log_kb(target_id, proof_link, appeal_url, locale=None, *, previous_proof_link=None)` (ban-log proof/appeal buttons, one per row; the update flow adds the previous-proof row), `ban_update_confirm_kb(log_url, proof_url, locale=None)` (re-ban confirmation: View Log / View Proof URL buttons plus Cancel / Continue), `appeal_button_kb`, `checkme_ban_kb`, `checkme_detail_back_kb` |
 | Proof | `action_proof_kb(target_id, proof_link)` - single "Proof {target_id}" URL button; returns `None` when `proof_link` is falsy. Used by mute/kick/warn executors after uploading proof. |
 | Admin roles | `promote_role_kb`, `demote_confirm_kb`, `promo_decision_kb` |
 | Menus/help | `main_menu_kb`, `group_start_kb`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb`, `module_help_kb`, `back_to_module_kb`, `additional_menu_kb` |
@@ -150,6 +150,12 @@ The `decorators/` module centralizes both auth-guard decorators and the shared e
 | Export | Purpose |
 |---|---|
 | `resolve_and_check(msg, executor_id, target_id, min_role=...)` | Resolves executor and target roles, checks minimum executor rank, checks executor outranks target, and replies on failure. Role lookup errors fail closed and do not become a no-role result. |
+| `resolve_mod_target(update, ctx, *, action, min_role, allow_private, log_prefix, bot_check=False)` | Shared entry sequence for the ban/kick/mute/warn commands: resolves locale, checks the federation origin, extracts the target, and runs identity plus rank checks, replying and returning `None` on any failure. Returns a `ModTarget` (`msg`, `admin`, `locale`, `target_id`, `target_name`, `has_explicit_target`, `args`, `ident`, `target_role`); callers keep only duty-specific parsing (reason, duration) and conversation setup. `bot_check=True` (warn) runs a verified bot check before classifying. |
+| `resolve_executor_target(msg, admin_id, update, args, bot, *, action, locale=None)` | Shared executor-role plus target fetch for the promote/demote commands: parallel reads, fail closed with a retry reply on outage. Returns `(executor_role, target_id, target_fname)` or `None`. |
+| `classify_and_load_role(bot, admin_id, target_id, target_fname, msg, *, action, locale=None)` | Shared identity classification plus live target-role fetch for the promote/demote commands: parallel reads, fail closed. Returns `(ident, current_role)` or `None`. |
+| `check_callback_staff(admin_id, q, update)` | Re-checks Founder/Admin rank in parallel with `q.answer()`; returns the role or `None` after editing the perm-expired notice. |
+| `prompt_owner_mismatch(q, update, *, min_parts, key)` | Alert-denies a prompt tap from anyone but the recorded opener (new callbacks carry `{...}:{executor}`; legacy taps without the segment keep working). `cancel_owner_mismatch` and `action_owner_mismatch` are the cancel/action wrappers. |
+| `can_demote_admin(executor_role, target_role)` | Demote rank rule: only Admin targets need the Founder. |
 | `require_federation_origin(msg, chat_id, chat_type, locale, allow_private=...)` | Enforces that moderation entries originate from a connected group or a primary group (private only when `allow_private` is set for federation-wide entries). A disconnected group, or a private chat where `allow_private` is false, replies with the shared notice and blocks the action; a connection-state outage replies with the database retry notice and blocks (fail closed). |
 
 Ban, kick, and mute entry points pair this with `Demote.execute(..., trigger="ban"/"kick"/"mute")` from `pipelines/demote_flow.py` to remove the target's role before the moderation action.
@@ -169,7 +175,7 @@ class HelpEntry(TypedDict):
     sections: list[tuple[str, str]]  # (section_header, section_body) pairs
 ```
 
-Each help-bearing module declares exactly one `__help__: replies.HelpEntry = {...}` instead of three separate attributes. `help/` reads this dict via `_builder_help()` and falls back to the legacy `__module_name__` / `__help_text__` / `__help_sections__` attributes for backward compatibility during migration.
+Each help-bearing module declares exactly one `__help__: replies.HelpEntry = {...}` instead of three separate attributes. `help.py` reads this dict via `_builder_help()` and falls back to the legacy `__module_name__` / `__help_text__` / `__help_sections__` attributes for backward compatibility during migration.
 
 ### Section constructor helpers
 
@@ -213,9 +219,9 @@ Command modules import from `replies.py` instead of inlining these strings.
 | `message_link(chat_id, message_id, thread_id=None)` | Builds a private-channel/group message link; pass `thread_id` for topic threads. |
 | `appeal_deep_link(bot_username, ban_id)` | Builds `https://t.me/<bot>?start=appeal_<ban_id>`. |
 
-## `messages.py`
+## `messages/`
 
-This module owns message sending and editing plus MarkdownV2 audit-log building for moderation, appeals, staff roles, group connections, broadcasts, and auto-demotions.
+This package owns message sending and editing plus MarkdownV2 audit-log building for moderation, appeals, staff roles, group connections, broadcasts, and auto-demotions. `messages/safe_edits.py` holds the safe-edit transport (`safe_edit`, `safe_edit_cb`, `safe_edit_message`, `clear_markup_cb`, `answer_and_edit`, `ack_and_render`, `safe_reply`); `messages/audit_logs.py` holds `LogBuilder` and every audit-log builder. The package `__init__.py` re-exports the full surface, so `from tcbot.modules.helper.messages import safe_reply` keeps working.
 
 Audit-log families:
 

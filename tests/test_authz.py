@@ -240,3 +240,99 @@ def test_recheck_executor_rank_propagates_cancellation(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _cancelled)
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(checks.recheck_executor_rank(_msg(), 11, min_role="tester"))
+
+
+def _update_ctx() -> tuple[Any, Any]:
+    msg = SimpleNamespace(
+        chat=SimpleNamespace(type="group", id=-1001),
+        text="/tcban 22 spam",
+    )
+    admin = SimpleNamespace(id=11, first_name="Admin")
+    update = SimpleNamespace(effective_message=msg, effective_user=admin)
+    ctx = SimpleNamespace(user_data={}, bot=SimpleNamespace(id=99))
+    return update, ctx
+
+
+def test_resolve_mod_target_returns_resolved_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    log = _ReplyLog()
+    _install(monkeypatch, log)
+    update, ctx = _update_ctx()
+
+    async def _locale(upd: Any) -> str:
+        return "en-US"
+
+    async def _origin(msg: Any, **kwargs: Any) -> bool:
+        return True
+
+    async def _extract(upd: Any, args: Any, bot: Any) -> tuple[Any, Any]:
+        return (22, "Target"), True
+
+    async def _classify(
+        bot: Any,
+        admin_id: int,
+        target_id: int,
+        target_name: Any,
+        msg: Any,
+        **kwargs: Any,
+    ) -> tuple[Any, Any]:
+        return SimpleNamespace(kind="user"), None
+
+    monkeypatch.setattr(checks, "locale_for_update", _locale)
+    monkeypatch.setattr(checks, "require_federation_origin", _origin)
+    monkeypatch.setattr(checks.extraction, "extract_mod_target", _extract)
+    monkeypatch.setattr(checks, "classify_and_check", _classify)
+    monkeypatch.setattr(checks.identity, "refuse_message", lambda *a: None)
+
+    resolved = asyncio.run(
+        checks.resolve_mod_target(
+            update,
+            ctx,
+            action="ban",
+            min_role="developer",
+            allow_private=True,
+            log_prefix="cmd_ban_start",
+        )
+    )
+    assert resolved is not None
+    assert resolved.target_id == 22
+    assert resolved.target_name == "Target"
+    assert resolved.has_explicit_target is True
+    assert resolved.args == ["22", "spam"]
+    assert resolved.locale == "en-US"
+    assert log.texts == []
+
+
+def test_resolve_mod_target_replies_no_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    log = _ReplyLog()
+    _install(monkeypatch, log)
+    update, ctx = _update_ctx()
+
+    async def _locale(upd: Any) -> str:
+        return "en-US"
+
+    async def _origin(msg: Any, **kwargs: Any) -> bool:
+        return True
+
+    async def _extract(upd: Any, args: Any, bot: Any) -> tuple[Any, Any]:
+        return (0, ""), False
+
+    monkeypatch.setattr(checks, "locale_for_update", _locale)
+    monkeypatch.setattr(checks, "require_federation_origin", _origin)
+    monkeypatch.setattr(checks.extraction, "extract_mod_target", _extract)
+
+    resolved = asyncio.run(
+        checks.resolve_mod_target(
+            update,
+            ctx,
+            action="kick",
+            min_role="tester",
+            allow_private=False,
+            log_prefix="cmd_kick",
+        )
+    )
+    assert resolved is None
+    assert len(log.texts) == 1

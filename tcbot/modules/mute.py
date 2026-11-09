@@ -113,57 +113,26 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     reason skips the reason prompt and goes straight to proof collection).
     Returns ``ConversationHandler.END`` on validation failure.
     """
-    locale = await locale_for_update(update)
-    msg = update.effective_message
-    admin = update.effective_user
-    if msg is None or admin is None or ctx.user_data is None:
-        return ConversationHandler.END
-    if not await decorators.require_federation_origin(
-        msg,
-        chat_id=msg.chat.id,
-        chat_type=msg.chat.type,
-        locale=locale,
-        allow_private=False,
-        log_label="cmd_mute origin",
-    ):
-        return ConversationHandler.END
-
-    raw_args = parse_cmd_args(msg.text)
-    # * Resolution plus consumption in one call (see banning.py).
-    (
-        (target_id, target_fname),
-        has_explicit_target,
-    ) = await extraction.extract_mod_target(update, raw_args, ctx.bot)
-
-    remaining_args = list(raw_args[1:] if has_explicit_target else raw_args)
-
-    if not target_id:
-        await safe_reply(
-            msg,
-            replies.err_cannot_resolve(locale, plain=True),
-            log_label="cmd_mute no-target",
-            parse_mode=None,
-        )
-        return ConversationHandler.END
-
-    # * return_exceptions=True prevents a DB failure from leaving the ConversationHandler open.
-    classified = await decorators.classify_and_check(
-        ctx.bot,
-        admin.id,
-        target_id,
-        target_fname,
-        msg,
+    resolved = await decorators.resolve_mod_target(
+        update,
+        ctx,
         action="mute",
         min_role="tester",
+        allow_private=False,
+        log_prefix="cmd_mute",
     )
-    if classified is None:
+    if resolved is None or ctx.user_data is None:
         return ConversationHandler.END
-    ident, target_role = classified
+    msg = resolved.msg
+    admin = resolved.admin
+    locale = resolved.locale
+    target_id = resolved.target_id
+    target_fname = resolved.target_name
+    has_explicit_target = resolved.has_explicit_target
+    raw_args = resolved.args
+    target_role = resolved.target_role
 
-    refusal = identity.refuse_message("mute", ident, locale)
-    if refusal is not None:
-        await safe_reply(msg, refusal, log_label="cmd_mute refusal")
-        return ConversationHandler.END
+    remaining_args = list(raw_args[1:] if has_explicit_target else raw_args)
 
     duration = None
     if remaining_args:
@@ -179,7 +148,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     inline_reason = parse_inline_reason(
         remaining_args,
         has_explicit_target=False,
-        # * Reply path only (see banning.py): strip a restated target ID.
+        # * Reply path only (see bans.py): strip a restated target ID.
         # * Uses the shape check, not the hardcoded False above, so the
         # * explicit path (target already popped into remaining_args) can
         # * never strip a reason token that happens to match.

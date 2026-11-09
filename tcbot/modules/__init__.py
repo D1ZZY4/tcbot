@@ -70,8 +70,6 @@ def _filter_modules(modules: list[str]) -> list[str]:
 ALL_MODULES = _filter_modules(_discover_modules())
 log.info("Modules to load: %s", ALL_MODULES)
 
-__all__: list[str] = [*ALL_MODULES, "ALL_MODULES"]  # type: ignore[reportUnsupportedDunderAll]  # noqa: PLE0604
-
 
 # ─────────────────────── Handler Collection ─────────────────────── #
 

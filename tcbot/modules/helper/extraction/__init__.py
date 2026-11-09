@@ -30,26 +30,3 @@ from tcbot.modules.helper.extraction.sync import (
     launch_identity_refresh,
     sync_user_identity,
 )
-
-__all__ = [
-    "_GET_CHAT_TIMEOUT",
-    "_RESOLVE_SWEEP_CONCURRENCY",
-    "_RESOLVE_SWEEP_TIMEOUT",
-    "_SYNC_MAX_AGE_S",
-    "_args_target",
-    "_best_name",
-    "_entity_target",
-    "_fetch_live_identity",
-    "_first_arg_is_explicit",
-    "_refresh_identity",
-    "_refresh_tasks",
-    "_reply_target",
-    "_reply_uid",
-    "_safe_get_chat",
-    "db",
-    "extract_mod_target",
-    "extract_target",
-    "identity_needs_refresh",
-    "launch_identity_refresh",
-    "sync_user_identity",
-]
