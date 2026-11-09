@@ -23,6 +23,7 @@ from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.extraction import (
     identity_needs_refresh,
     launch_identity_refresh,
+    sync_user_identity,
 )
 from tcbot.modules.helper.keyboards import (
     back_to_module_kb,
@@ -34,7 +35,7 @@ from tcbot.modules.helper.keyboards import (
     stats_search_results_kb,
     stats_search_row,
 )
-from tcbot.utils.dispatch import throw_if_cancelled
+from tcbot.utils.dispatch import gather_bounded, throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -244,7 +245,7 @@ class OverviewViews:
 
     @classmethod
     async def staff_roster(
-        cls, locale: str | None = None
+        cls, locale: str | None = None, *, bot: Bot | None = None
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Full staff breakdown: Founder, Admins, Developers, Testers."""
         owner_id, admins, developers, testers = await asyncio.gather(
@@ -274,6 +275,37 @@ class OverviewViews:
         all_user_ids.extend(d.get("user_id", 0) for d in developers)
         all_user_ids.extend(t.get("user_id", 0) for t in testers)
         mention_data_map = await db.users_cache.get_mention_data_batch(all_user_ids)
+        # * Staff without a member_cache row render as raw numeric IDs.
+        # * Resolve those names live (bounded, failures keep the ID) so a
+        # * legacy staff row never displays as an ID in the roster.
+        if bot is not None:
+            missing = [
+                uid
+                for uid in all_user_ids
+                if uid and mention_data_map.get(uid, ("", None))[0] == str(uid)
+            ]
+            if missing:
+                resolved = await gather_bounded(
+                    [
+                        asyncio.wait_for(
+                            sync_user_identity(bot, uid),
+                            timeout=TELEGRAM_LOOKUP_TIMEOUT,
+                        )
+                        for uid in missing
+                    ]
+                )
+                throw_if_cancelled(resolved)
+                for uid, result in zip(missing, resolved, strict=False):
+                    if isinstance(result, BaseException):
+                        log.debug(
+                            "staff roster live identity failed for %d: %s",
+                            uid,
+                            result,
+                        )
+                        continue
+                    live_fname, live_uname, _ = result
+                    if live_fname and not live_fname.lstrip("-").isdigit():
+                        mention_data_map[uid] = (live_fname, live_uname)
         lines = [
             t(
                 "stats.roster.title",

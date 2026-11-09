@@ -319,7 +319,9 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     q = update.callback_query
     if q is None:
         return
-    await ack_and_render(q, Stats.staff_roster(await locale_for_update(update)))
+    await ack_and_render(
+        q, Stats.staff_roster(await locale_for_update(update), bot=ctx.bot)
+    )
 
 
 @decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
