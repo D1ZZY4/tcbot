@@ -78,6 +78,10 @@ def parse_duration(raw: str) -> timedelta | None:
     if not m:
         return None
     value = int(m.group(1))
+    if value <= 0:
+        # * timedelta(0) is falsy; a "0s" token must be invalid, never
+        # * permanent (None would disable expiry on mute expiry paths).
+        return None
     unit = m.group(2).lower()
     try:
         result = {
