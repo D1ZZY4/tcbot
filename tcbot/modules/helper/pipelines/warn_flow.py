@@ -525,7 +525,12 @@ async def execute_warnlist(
     chat_id = chat.id
     locale = await locale_for_update(update)
     try:
-        warns = await db.warns_db.get_warns(target_id, chat_id)
+        # * Cap the numbered render: a pathological history must not
+        # * become an unbounded message. Total count stays honest via
+        # * the header; the list shows the 50 most recent.
+        warns = await db.warns_db.get_warns(
+            target_id, chat_id, newest_first=True, limit=50
+        )
     except Exception:
         log.exception("get_warns read failed for target=%d chat=%d", target_id, chat_id)
         await safe_reply(
@@ -535,7 +540,13 @@ async def execute_warnlist(
             parse_mode=None,
         )
         return
-    count = len(warns)
+    try:
+        total = await db.warns_db.warn_count(target_id, chat_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        total = len(warns)
+    count = max(total, len(warns))
     if count == 0:
         await safe_reply(
             msg,

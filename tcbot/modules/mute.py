@@ -28,7 +28,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
     parse_inline_reason,
     reason_too_long_text,
 )
-from tcbot.utils.formatter import code, user_ref
+from tcbot.utils.formatter import code, esc, user_ref
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -183,7 +183,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ):
         return ConversationHandler.END
     target_mention = user_ref(target_id, target_fname or str(target_id))
-    dur_str = fmt_duration(duration, locale)
+    dur_str = esc(fmt_duration(duration, locale))
     extra_info = f"{code(str(target_id))}: {dur_str}"
 
     ctx.user_data.update(

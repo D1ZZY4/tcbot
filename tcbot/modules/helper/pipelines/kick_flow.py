@@ -177,11 +177,29 @@ async def execute_kick(
         )
         throw_if_cancelled((unban_result, log_send_result))
         if isinstance(unban_result, BaseException):
-            log.warning(
-                "unban_chat_member failed after kick for target=%d: %s",
+            # * One bounded retry: a transient refusal otherwise strands
+            # * the user banned with only a kick log (/tcsync heals by ban
+            # * state, which a kick never records).
+            log.debug(
+                "unban_chat_member retrying once for target=%d: %s",
                 target_id,
                 unban_result,
             )
+            try:
+                await asyncio.wait_for(
+                    ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
+                    timeout=TELEGRAM_LOOKUP_TIMEOUT,
+                )
+                log.info("kick unban retry succeeded for target=%d", target_id)
+                unban_result = True
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.warning(
+                    "unban_chat_member failed after kick for target=%d: %s",
+                    target_id,
+                    unban_result,
+                )
         if isinstance(log_send_result, BaseException):
             log.error("Kick log send failed: %s", log_send_result)
         unban_warning = (

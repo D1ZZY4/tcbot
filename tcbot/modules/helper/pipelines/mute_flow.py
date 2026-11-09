@@ -335,6 +335,20 @@ async def execute_unmute(
             log_label="execute_unmute total-fail",
         )
         return
+    if failed > 0:
+        # * Partial success: keep the DB record so /tcsync can re-drive
+        # * the remaining muted chats. Clearing here would strand the
+        # * user muted with no repair path (sync never unrestricts).
+        await safe_reply(
+            msg,
+            t(
+                "muting.note.unmute_failed",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+            ),
+            log_label="execute_unmute partial-fail",
+        )
+        return
     lc, lt = cfg.logs
     log_text = messages.unmute_log(
         target_id,
