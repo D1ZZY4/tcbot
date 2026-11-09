@@ -15,7 +15,7 @@ flowchart TD
     Helper --> Keyboards[keyboards/<br/>InlineKeyboard builders]
     Helper --> Locale[locale.py<br/>render-locale resolution]
     Helper --> Replies[replies.py<br/>localized reply strings]
-    Helper --> Workflows[workflows/<br/>conversation flows]
+    Helper --> Workflows[pipelines/<br/>conversation flows]
     Decorators --> DB[tcbot/database/]
     Identity --> DB
     Locale --> DB
@@ -152,7 +152,7 @@ The `decorators/` module centralizes both auth-guard decorators and the shared e
 | `resolve_and_check(msg, executor_id, target_id, min_role=...)` | Resolves executor and target roles, checks minimum executor rank, checks executor outranks target, and replies on failure. Role lookup errors fail closed and do not become a no-role result. |
 | `require_federation_origin(msg, chat_id, chat_type, locale, allow_private=...)` | Enforces that moderation entries originate from a connected group or a primary group (private only when `allow_private` is set for federation-wide entries). A disconnected group, or a private chat where `allow_private` is false, replies with the shared notice and blocks the action; a connection-state outage replies with the database retry notice and blocks (fail closed). |
 
-Ban, kick, and mute entry points pair this with `Demote.execute(..., trigger="ban"/"kick"/"mute")` from `workflows/demote_flow.py` to remove the target's role before the moderation action.
+Ban, kick, and mute entry points pair this with `Demote.execute(..., trigger="ban"/"kick"/"mute")` from `pipelines/demote_flow.py` to remove the target's role before the moderation action.
 
 ## `replies.py`
 

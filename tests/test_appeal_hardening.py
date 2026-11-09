@@ -13,8 +13,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows import appeal_review_flow
-from tcbot.modules.helper.workflows.appeal_review_flow import verdicts
+from tcbot.modules.helper.pipelines import appeal_review_flow
 from tcbot.utils.i18n import t
 
 
@@ -137,9 +136,11 @@ def test_approve_demotes_staff_before_deactivate(
     monkeypatch.setattr(db.users_cache, "get_first_name", _fname)
     monkeypatch.setattr(db.bans_db, "deactivate_all_active_bans", _deactivate)
     monkeypatch.setattr(db.bans_db, "clear_review", _clear)
-    monkeypatch.setattr(verdicts.Demote, "execute", staticmethod(_fake_demote))
-    monkeypatch.setattr(verdicts.flow_pkg, "locale_for_update", _locale_update)
-    monkeypatch.setattr(verdicts.flow_pkg, "locale_for_user", _locale_user)
+    monkeypatch.setattr(
+        appeal_review_flow.Demote, "execute", staticmethod(_fake_demote)
+    )
+    monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale_update)
+    monkeypatch.setattr(appeal_review_flow, "locale_for_user", _locale_user)
 
     query = _FakeQuery("appeal_approve_abc")
     admin = type("Admin", (), {"id": 1, "first_name": "Admin"})()
@@ -155,7 +156,7 @@ def test_approve_demotes_staff_before_deactivate(
         "appeal_submitted_at": None,
         "appeal_log_msg_id": 0,
     }
-    mixin = verdicts.AppealVerdictsMixin()
+    mixin = appeal_review_flow.AppealVerdictsMixin()
     mixin.community_name = "Test"
     asyncio.run(
         mixin._approve_appeal(

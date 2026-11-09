@@ -10,7 +10,7 @@ For modules that consume these database helpers, see [`modules.md`](modules.md).
 flowchart TD
     Modules[tcbot/modules/*.py] --> DBHelpers[tcbot/database/*_db.py]
     Helpers[tcbot/modules/helper/] --> DBHelpers
-    Workflows[tcbot/modules/helper/workflows/] --> DBHelpers
+    Workflows[tcbot/modules/helper/pipelines/] --> DBHelpers
     DBHelpers --> Mongos[mongos/<br/>connection + col]
     DBHelpers --> Cache[cache/<br/>TwoLevelCache]
     DBHelpers --> Documents[documents.py<br/>TypedDicts]
@@ -698,7 +698,7 @@ Literal aliases: `RoleName = Literal["founder", "admin", "developer", "tester"]`
 
 ## Startup wiring and shutdown
 
-`init_shared_subsystems` in `tcbot/runtime/lifecycle.py` (called by `_post_init` for long-lived transports and by serverless with `start_mtproto=False`) runs, in order: `connect()`, then in parallel `ensure_indexes()` (index failure is fatal), `ensure_initial_owner(cfg.initial_owner_id)` (failures non-fatal), and `redis_client.connect_if_configured()` when configured (connection failure degrades to in-memory cache only with a warning), plus `mtproto.start()` on long-lived transports (an exception aborts boot; a degraded `False` warns and continues Bot-API-only). Then `scheduler.start(cfg.mongodb_uri, cfg.db_name, cfg.warn_expiry_days, bot=app.bot, sync_interval_hours=cfg.sync_interval_hours, sync_runner=run_ban_sync)`, followed by a background `_warm_hot_caches` task that pre-loads owner ID, active groups, and the owner's effective role into L1+L2. `_post_shutdown` stops the scheduler and closes Redis in parallel. Related `cfg` fields: `db_name` (default `"tcbot"`), `redis_url`, `warn_expiry_days`, `sync_interval_hours`, `initial_owner_id`.
+`init_shared_subsystems` in `tcbot/__main__.py` (called by `_post_init` for long-lived transports and by serverless with `start_mtproto=False`) runs, in order: `connect()`, then in parallel `ensure_indexes()` (index failure is fatal), `ensure_initial_owner(cfg.initial_owner_id)` (failures non-fatal), and `redis_client.connect_if_configured()` when configured (connection failure degrades to in-memory cache only with a warning), plus `mtproto.start()` on long-lived transports (an exception aborts boot; a degraded `False` warns and continues Bot-API-only). Then `scheduler.start(cfg.mongodb_uri, cfg.db_name, cfg.warn_expiry_days, bot=app.bot, sync_interval_hours=cfg.sync_interval_hours, sync_runner=run_ban_sync)`, followed by a background `_warm_hot_caches` task that pre-loads owner ID, active groups, and the owner's effective role into L1+L2. `_post_shutdown` stops the scheduler and closes Redis in parallel. Related `cfg` fields: `db_name` (default `"tcbot"`), `redis_url`, `warn_expiry_days`, `sync_interval_hours`, `initial_owner_id`.
 
 ## Safety rules
 

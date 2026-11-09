@@ -19,7 +19,7 @@ from tcbot.modules.helper.keyboards import ban_update_confirm_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import message_link
-from tcbot.modules.helper.workflows.ban_flow import (
+from tcbot.modules.helper.pipelines.ban_flow import (
     BAN_USER_DATA_KEYS,
     WAITING_PROOF,
     WAITING_UPDATE_CONFIRM,
@@ -27,7 +27,7 @@ from tcbot.modules.helper.workflows.ban_flow import (
     demote_ban_target,
     proof_prompt_content,
 )
-from tcbot.modules.helper.workflows.reason_flow import (
+from tcbot.modules.helper.pipelines.reason_flow import (
     is_reason_too_long,
     parse_inline_reason,
     reason_too_long_text,

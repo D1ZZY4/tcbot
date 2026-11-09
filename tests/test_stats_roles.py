@@ -14,7 +14,7 @@ import pytest
 from tcbot import database as db
 from tcbot.database import users_roles
 from tcbot.database.users_roles import roles as _roles_mod
-from tcbot.modules.helper.workflows.stats_flow import Stats
+from tcbot.modules.helper.pipelines.stats_flow import Stats
 
 
 class _SpyCollection:

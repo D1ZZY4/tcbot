@@ -13,12 +13,12 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from telegram.error import BadRequest, Forbidden
 
-from tcbot.modules.helper.workflows.demote_flow import Demote
+from tcbot.modules.helper.pipelines.demote_flow import Demote
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-_LOG_NAME = "tcbot.modules.helper.workflows.demote_flow"
+_LOG_NAME = "tcbot.modules.helper.pipelines.demote_flow"
 
 
 class _FakeBot:

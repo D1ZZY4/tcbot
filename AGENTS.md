@@ -99,10 +99,8 @@ Current stack:
 ```text
 <project root>/
 ├── tcbot/                    Main bot package
-│   ├── __init__.py           Environment config loader and `cfg` adapter (re-exports from config/)
-│   ├── config/               Env parsing, typed config models, cfg adapter (single config owner)
-│   ├── runtime/              App lifecycle: builder, post-init/shutdown, handler wiring, entry
-│   ├── __main__.py           Thin entry that delegates startup to tcbot.runtime
+│   ├── __init__.py           Config loader, parsing, Configs model, cfg adapter
+│   ├── __main__.py           App lifecycle, builder, errors, and main startup
 │   ├── alive.py              Flask keep-alive and webhook receiver
 │   ├── serverless.py         Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 │   ├── database/             MongoDB helpers, one package per collection/domain
@@ -126,7 +124,7 @@ Current stack:
 │   │   └── mtproto_store/    MongoDB-backed Kurigram storage
 │   ├── modules/              Telegram command modules and handlers
 │   │   ├── helper/           Shared helper code and conversation workflows
-│   │   │   ├── workflows/    ConversationHandler flows (one `*_flow/` package each)
+│   │   │   ├── pipelines/    ConversationHandler flows (one `*_flow.py` module each)
 │   │   │   ├── keyboards/    Inline keyboard builders
 │   │   │   ├── decorators/    Rate limiter, role checks, execution logging
 │   │   │   ├── extraction/   Target/user extraction helpers
@@ -163,13 +161,13 @@ Current stack:
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
 │       ├── circuit_breaker.py  Telegram/MongoDB circuit breaker
 │       ├── dispatch.py        fan_out() bounded concurrency dispatcher
-│       ├── error_reporter/    Error reporting to LOGS_ERRORS
+│       ├── error_reporter.py  Error reporting to LOGS_ERRORS
 │       ├── formatter.py       MarkdownV2 formatter (esc, code, user_ref, bold)
 │       ├── i18n.py            TOML catalog, t() and locale resolution
 │       ├── logger.py          Logging setup
 │       ├── pagination.py      Paginated message rendering
 │       ├── prefixes.py        Command prefix resolution
-│       ├── time_and_date.py    Central clock: UTC storage/display + monotonic measure
+│       ├── time_and_date.py    Central clock: UTC store/display + measure + durations
 │       └── transport.py        Shared PTB HTTP timeouts and pool size
 ├── docs/                     Developer documentation grouped by category
 ├── .agents/                   Coding skills and style rules
@@ -195,7 +193,7 @@ Core ownership rules:
 
 - Command handlers live in `tcbot/modules/`. See [`docs/architecture/modules.md`](docs/architecture/modules.md) for module boundaries.
 - Shared handler helpers live in `tcbot/modules/helper/`. See [`docs/architecture/helpers.md`](docs/architecture/helpers.md) for helper docs.
-- Conversation flows live in `tcbot/modules/helper/workflows/` as one `*_flow.py` module while it fits the file budget, or one `*_flow/` package with a re-exporting `__init__.py` once split, so dotted import paths stay stable. See [`docs/architecture/workflows.md`](docs/architecture/workflows.md) for conversation internals.
+- Conversation flows live in `tcbot/modules/helper/pipelines/` as one `*_flow.py` module each, split into a `*_flow/` package only when a flow outgrows the file budget. See [`docs/architecture/workflows.md`](docs/architecture/workflows.md) for conversation internals.
 - MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files, or `*_db/` packages once split under the file budget. See [`docs/architecture/database.md`](docs/architecture/database.md) for database layer notes.
 - Runtime utilities live in `tcbot/utils/`. See [`docs/architecture/utilities.md`](docs/architecture/utilities.md) for utility docs.
 
@@ -297,8 +295,8 @@ Use focused commits and scoped conventional prefixes (see
 [`CONTRIBUTING.md`](CONTRIBUTING.md#pull-requests)); keep one logical fix
 per commit with its own `CHANGELOG.md` slice. Cut releases as separate
 `chore(release): bump version to X.Y.Z` commits touching `pyproject.toml`,
-`uv.lock`, and a dated `CHANGELOG.md` section; never bundle a version bump
-with a fix.
+`uv.lock`, `docs/releases/vX.Y.Z.md`, and the `CHANGELOG.md` release index;
+never bundle a version bump with a fix.
 
 Pull requests should include:
 

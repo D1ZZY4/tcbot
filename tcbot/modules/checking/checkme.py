@@ -260,6 +260,10 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     ban = await _load_ban_for_callback(q, ban_id, locale, log_label="checkme_detail")
     if ban is None:
         return
+    # * Crafted taps on another user's card must not render it.
+    if ban.get("banned_user_id", 0) != q.from_user.id:
+        log.debug("checkme_detail ownership mismatch ban=%s", ban_id)
+        return
     if not ban or not ban.get("is_active"):
         await safe_edit_cb(
             q,
@@ -299,6 +303,9 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     ban = await _load_ban_for_callback(q, ban_id, locale, log_label="checkme_back")
     if ban is None:
+        return
+    if ban.get("banned_user_id", 0) != q.from_user.id:
+        log.debug("checkme_back ownership mismatch ban=%s", ban_id)
         return
     if not ban:
         await safe_edit_cb(

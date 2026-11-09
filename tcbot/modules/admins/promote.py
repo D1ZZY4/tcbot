@@ -26,7 +26,7 @@ from tcbot.modules.admins.shared import (
 from tcbot.modules.helper import decorators, extraction, identity, keyboards, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_edit_cb, safe_reply
-from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
+from tcbot.modules.helper.pipelines.promote_flow import ROLE_ALIASES, Promote
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t

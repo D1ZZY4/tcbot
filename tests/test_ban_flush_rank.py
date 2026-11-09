@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows import ban_flow
+from tcbot.modules.helper.pipelines import ban_flow
 from tcbot.utils.time_and_date import monotonic
 
 

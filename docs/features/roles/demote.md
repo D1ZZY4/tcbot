@@ -1,6 +1,6 @@
 # Demote
 
-This document describes the current demotion behavior implemented by `tcbot/modules/admins/` (command + callback handlers) and `tcbot/modules/helper/workflows/demote_flow.py` (the `Demote` class shared by manual demotion and auto-demote on ban/kick/mute).
+This document describes the current demotion behavior implemented by `tcbot/modules/admins/` (command + callback handlers) and `tcbot/modules/helper/pipelines/demote_flow.py` (the `Demote` class shared by manual demotion and auto-demote on ban/kick/mute).
 
 For role hierarchy and rules, see [`roles.md`](roles.md). For the promote flow,
 see [`promote.md`](promote.md). For a flow that triggers auto-demotion
@@ -31,7 +31,7 @@ Demotion removes a federation role from a user. Six invocation paths reach the s
 3. Kick entry handler (`/tckick`): auto-demote a role-holding target before the per-group kick.
 4. Mute entry handler (`/tcmute`): auto-demote a role-holding target before the per-group mute.
 5. Join auto-ban / mute re-apply (`greeting._handle_member` and `on_join_request_approved`): auto-demote a role-holding target before enforcing on join.
-6. Warn-limit auto-ban (`warning_flow.execute_warn`): auto-demote when a warned user about to be federation-banned happens to hold a role.
+6. Warn-limit auto-ban (`warn_flow.execute_warn`): auto-demote when a warned user about to be federation-banned happens to hold a role.
 
 The same log format is emitted in every case; there is no separate "Auto-Demote" template.
 
@@ -53,7 +53,7 @@ Founder is never demotable through this flow; ownership transfer uses `/transfer
 ## `Demote` class API
 
 ```python
-from tcbot.modules.helper.workflows.demote_flow import Demote
+from tcbot.modules.helper.pipelines.demote_flow import Demote
 
 await Demote.remove_role(target_id, target_role)              # bool
 await Demote.execute(bot,
@@ -181,7 +181,7 @@ Both helpers invalidate the affected user's entry in `effective_role_cache` so t
 - Log and DM failures are logged asymmetrically in `Demote.execute`: a failed federation log send logs at error level (a silent audit gap ships to `LOG_ERRORS`), a DM refused with `Forbidden` or another benign Telegram error (target never started the bot, blocked it, or deleted the account) logs at info level, and any other DM failure logs at warning level.
 - Self-demotion is rejected by `cmd_demote` via identity refusal (`Demoting yourself? Bold. Ask a higher-up if you really mean it.`).
 - Founder demotion is rejected by identity refusal before the role check (`... is the Founder - try /transferowner ...`); the no-role message only fires for genuinely role-less targets.
-- Auto-demote is best-effort: a failure inside `warning_flow.execute_warn` is logged via `log.exception` but never aborts the surrounding action; the executors that need to abort on demote failure use `Demote.auto_demote_or_abort` instead.
+- Auto-demote is best-effort: a failure inside `warn_flow.execute_warn` is logged via `log.exception` but never aborts the surrounding action; the executors that need to abort on demote failure use `Demote.auto_demote_or_abort` instead.
 
 ## Behavior reference
 

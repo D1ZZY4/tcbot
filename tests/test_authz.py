@@ -175,3 +175,68 @@ def test_require_origin_blocks_disconnected_and_fails_closed(
         is False
     )
     assert len(log.texts) == 2
+
+
+def test_recheck_executor_rank_allows_meeting_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    log = _ReplyLog()
+    _install(monkeypatch, log)
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        return "developer"
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    assert (
+        asyncio.run(checks.recheck_executor_rank(_msg(), 11, min_role="developer"))
+        is True
+    )
+    assert log.texts == []
+
+
+def test_recheck_executor_rank_refuses_demotion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    log = _ReplyLog()
+    _install(monkeypatch, log)
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        return None
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    assert (
+        asyncio.run(checks.recheck_executor_rank(_msg(), 11, min_role="tester"))
+        is False
+    )
+    assert len(log.texts) == 1
+
+
+def test_recheck_executor_rank_fails_closed_on_outage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    log = _ReplyLog()
+    _install(monkeypatch, log)
+
+    async def _boom(user_id: int, *, fresh: bool = False) -> str | None:
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
+    assert (
+        asyncio.run(checks.recheck_executor_rank(_msg(), 11, min_role="tester"))
+        is False
+    )
+    assert len(log.texts) == 1
+
+
+def test_recheck_executor_rank_propagates_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    log = _ReplyLog()
+    _install(monkeypatch, log)
+
+    async def _cancelled(user_id: int, *, fresh: bool = False) -> str | None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _cancelled)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(checks.recheck_executor_rank(_msg(), 11, min_role="tester"))

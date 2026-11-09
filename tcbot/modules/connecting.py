@@ -22,7 +22,7 @@ from tcbot.modules.helper import decorators, replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.modules.helper.workflows.connected_flow import connection
+from tcbot.modules.helper.pipelines.connected_flow import connection
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger

@@ -14,7 +14,7 @@ from typing import Any
 from pymongo.errors import ServerSelectionTimeoutError
 from pyrogram.session.session import AuthKeyNotFound
 
-from tcbot.runtime import errors as runtime_errors
+from tcbot import __main__ as runtime_errors
 from tcbot.utils import error_reporter
 from tcbot.utils.circuit_breaker import CircuitOpenError
 
@@ -66,7 +66,7 @@ def test_asyncio_handler_extracts_and_suppresses_mongo(
     monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
     # * Keep the park path quiet: the extracted outage is not an auth failure.
     monkeypatch.setattr(
-        "tcbot.runtime.errors.mtproto_mod.is_auth_key_duplicated",
+        "tcbot.__main__.mtproto_mod.is_auth_key_duplicated",
         lambda exc: False,
     )
 
@@ -147,7 +147,7 @@ def test_asyncio_handler_extracted_error_reports_real_type(monkeypatch: Any) -> 
 
     monkeypatch.setattr(loop, "create_task", _create)
     monkeypatch.setattr(
-        "tcbot.runtime.errors.mtproto_mod.is_auth_key_duplicated",
+        "tcbot.__main__.mtproto_mod.is_auth_key_duplicated",
         lambda exc: False,
     )
 
@@ -189,11 +189,11 @@ def test_asyncio_handler_auth_key_not_found_parks_once(monkeypatch: Any) -> None
         return None
 
     monkeypatch.setattr(
-        "tcbot.runtime.errors.mtproto_mod.handle_auth_failure",
+        "tcbot.__main__.mtproto_mod.handle_auth_failure",
         _fake_park,
     )
     monkeypatch.setattr(
-        "tcbot.runtime.errors.mtproto_mod.is_auth_dead",
+        "tcbot.__main__.mtproto_mod.is_auth_dead",
         lambda: False,
     )
 
@@ -210,7 +210,7 @@ def test_asyncio_handler_auth_key_not_found_parks_once(monkeypatch: Any) -> None
     assert loop.tasks_created == 2
 
     monkeypatch.setattr(
-        "tcbot.runtime.errors.mtproto_mod.is_auth_dead",
+        "tcbot.__main__.mtproto_mod.is_auth_dead",
         lambda: True,
     )
     loop.tasks_created = 0
@@ -235,7 +235,7 @@ def test_error_handler_suppresses_mongo_outage(monkeypatch: Any, caplog: Any) ->
     monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
 
     ctx = SimpleNamespace(error=ServerSelectionTimeoutError("no primary"))
-    with caplog.at_level(logging.DEBUG, logger="tcbot.runtime.errors"):
+    with caplog.at_level(logging.DEBUG, logger="tcbot.__main__"):
         asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]
     assert reported == []
     assert "Unhandled exception for update" not in caplog.text
@@ -257,7 +257,7 @@ def test_error_handler_reports_when_benign_check_raises(
     monkeypatch.setattr(error_reporter, "_benign", _boom)
 
     ctx = SimpleNamespace(error=ValueError("boom"))
-    with caplog.at_level(logging.DEBUG, logger="tcbot.runtime.errors"):
+    with caplog.at_level(logging.DEBUG, logger="tcbot.__main__"):
         asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]
     assert len(reported) == 1 and isinstance(reported[0], ValueError)
     assert "Unhandled exception for update" in caplog.text
@@ -276,7 +276,7 @@ def test_error_handler_suppresses_circuit_open(monkeypatch: Any, caplog: Any) ->
     ctx = SimpleNamespace(
         error=CircuitOpenError("Circuit [mongodb] is OPEN; call rejected.")
     )
-    with caplog.at_level(logging.DEBUG, logger="tcbot.runtime.errors"):
+    with caplog.at_level(logging.DEBUG, logger="tcbot.__main__"):
         asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]
     assert reported == []
     assert "Unhandled exception for update" not in caplog.text

@@ -11,7 +11,7 @@ import asyncio
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows import check_flow
+from tcbot.modules.helper.pipelines import check_flow
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 

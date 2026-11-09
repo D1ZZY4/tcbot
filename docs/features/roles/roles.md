@@ -1,6 +1,6 @@
 # Roles
 
-This document describes the current role and staff-management behavior implemented by `tcbot/modules/admins/`, `tcbot/modules/helper/workflows/promote_flow/`, `tcbot/modules/helper/workflows/demote_flow.py`, `tcbot/modules/helper/decorators/` (for `resolve_and_check`), `tcbot/modules/helper/identity.py` (for target identity refusals), `tcbot/database/users_roles/`, and `tcbot/database/queues_db.py`.
+This document describes the current role and staff-management behavior implemented by `tcbot/modules/admins/`, `tcbot/modules/helper/pipelines/promote_flow.py`, `tcbot/modules/helper/pipelines/demote_flow.py`, `tcbot/modules/helper/decorators/` (for `resolve_and_check`), `tcbot/modules/helper/identity.py` (for target identity refusals), `tcbot/database/users_roles/`, and `tcbot/database/queues_db.py`.
 
 For promote command details, see [`promote.md`](promote.md). For demote command
 details, see [`demote.md`](demote.md). For module structure, see
@@ -310,7 +310,7 @@ After transfer, the previous Founder becomes Admin and the new target becomes Fo
 
 ## Auto-demotion on moderation actions
 
-`Demote.execute(..., trigger="ban"|"kick"|"mute")` from `workflows/demote_flow.py` is used before ban/kick/mute when the target has a lower staff role than the executor.
+`Demote.execute(..., trigger="ban"|"kick"|"mute")` from `pipelines/demote_flow.py` is used before ban/kick/mute when the target has a lower staff role than the executor.
 
 Behavior:
 
@@ -321,7 +321,7 @@ Behavior:
 
 Ban, kick, and mute command modules block equal/higher-ranked targets before calling auto-demotion, so auto-demotion only applies to lower-ranked staff targets.
 
-A single warning below the warn limit does not auto-demote. However, when the warn limit is reached, `warning_flow` calls `Demote.execute(trigger="ban")` and then exempts the staff target from the auto-ban (staff are never auto-banned via warnings); the threshold warn itself is still recorded. Individual warnings below the threshold leave the role intact.
+A single warning below the warn limit does not auto-demote. However, when the warn limit is reached, `warn_flow` calls `Demote.execute(trigger="ban")` and then exempts the staff target from the auto-ban (staff are never auto-banned via warnings); the threshold warn itself is still recorded. Individual warnings below the threshold leave the role intact.
 
 ## Logs
 

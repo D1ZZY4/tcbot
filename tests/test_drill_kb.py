@@ -10,7 +10,7 @@ from telegram import InlineKeyboardButton
 from telegram.constants import KeyboardButtonStyle
 
 from tcbot.modules.helper.keyboards import paged_drill_kb
-from tcbot.modules.helper.workflows.stats_flow import _list_kb
+from tcbot.modules.helper.pipelines.stats_flow import _list_kb
 
 
 def _texts(markup) -> list[list[str]]:  # type: ignore[no-untyped-def]

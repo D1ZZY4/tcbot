@@ -57,10 +57,8 @@ skills live under `.agents/skills/`.
 
 ```text
 tcbot/
-├── __init__.py             Environment loader and cfg adapter (re-exports from config/)
-├── __main__.py             Thin entry that delegates startup to tcbot.runtime (webhook/polling)
-├── config/                 Env parsing, typed config models, cfg adapter (single config owner)
-├── runtime/                App lifecycle: build, post-init/shutdown, handler wiring, errors, entry
+├── __init__.py             Config loader, parsing, Configs model, cfg adapter
+├── __main__.py             App lifecycle, builder, errors, and main startup
 ├── alive.py                Flask health endpoint and webhook receiver
 ├── serverless.py           Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 ├── database/
@@ -94,18 +92,18 @@ tcbot/
 │       ├── locale.py       Render-locale resolution shared by handlers, callbacks, flows
 │       ├── parse_*.py      Link, log, and safe-edit helpers
 │       ├── replies.py      Shared localized reply and help-text strings, HelpEntry shape
-│       └── workflows/
-│           └── *_flow.py or *_flow/ packages   Conversation factories, plus Promote / Demote / Check classes
+│       └── pipelines/
+│           └── *_flow.py modules   Conversation factories, plus Promote / Demote / Check classes
 └── utils/
     ├── circuit_breaker.py  Async circuit breaker for Telegram + MongoDB
     ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)
-    ├── error_reporter/     Telegram error classification and reporting
+    ├── error_reporter.py     Telegram error classification and reporting
     ├── formatter.py        MarkdownV2 escaping and formatting (single source of truth)
     ├── i18n.py             TOML locale catalogs, lookup, and interpolation
     ├── logger.py           Console formatter and error log handler
     ├── pagination.py       Shared paginate(), nav_row(), date_or_unknown() helpers
     ├── prefixes.py         Prefix parsing and command filters
-    ├── time_and_date.py    Central clock: UTC storage/display + monotonic measure
+    ├── time_and_date.py    Central clock: UTC store/display + measure + durations
     └── transport.py        Shared PTB HTTP timeouts and pool size for all entry points
 ```
 
@@ -113,10 +111,10 @@ tcbot/
 
 | Area | Owns | Must not own |
 |---|---|---|
-| `tcbot/__main__.py` | Thin shim delegating to `tcbot/runtime/` (entry/lifecycle) for startup, handlers, DB init, and webhook transport (polling fallback for local dev only) | Feature business logic |
+| `tcbot/__main__.py` | App lifecycle, handler wiring, DB init, and webhook transport (polling fallback for local dev only) | Feature business logic |
 | `tcbot/modules/*.py` | Command entry points, handler registration, user-facing permissions | Raw MongoDB writes, duplicate conversation state handlers |
 | `tcbot/modules/helper/` | Shared handler helpers and keyboard factories | Top-level command registration |
-| `tcbot/modules/helper/workflows/*_flow.py` | Conversation factories, state transitions, flow executors | Module discovery or `__handlers__` exports |
+| `tcbot/modules/helper/pipelines/*_flow.py` | Conversation factories, state transitions, flow executors | Module discovery or `__handlers__` exports |
 | `tcbot/database/*_db.py` | Collection-specific DB operations | Telegram API calls |
 | `tcbot/utils/` | Runtime infrastructure utilities | Feature-specific moderation policy |
 
@@ -126,7 +124,7 @@ graph TD
     Main -->|initialises| DB[database/]
     Main -->|starts| Alive[alive.py]
     Mods -->|calls helpers from| Helper[modules/helper/]
-    Mods -->|calls flows from| Flows[helper/workflows/*_flow.py]
+    Mods -->|calls flows from| Flows[helper/pipelines/*_flow.py]
     Helper -->|reads/writes via| DB
     Flows -->|reads/writes via| DB
     Flows -->|fan-out via| Utils[utils/dispatch.py]

@@ -10,10 +10,13 @@ import asyncio
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
 from telegram.constants import ChatMemberStatus
 from telegram.error import BadRequest
 
+from tcbot import database as db
 from tcbot.modules import syncing as sy
+from tcbot.modules.helper.pipelines.demote_flow import Demote
 
 
 def _run(coro: Any) -> Any:
@@ -162,3 +165,39 @@ def test_summarize_counts_remuted() -> None:
         pairs, ["remuted", "ok"], {5: "A", 6: "B"}, truncated=False
     )
     assert (counts.checked, counts.enforced_mutes, counts.skipped) == (2, 1, 1)
+
+
+def test_demote_staff_holdings_strips_staff_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    roles = {9: "developer", 10: None, 11: "founder"}
+    removed: list[int] = []
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        return roles.get(user_id)
+
+    async def _demote_remove(target_id: int, target_role: str) -> bool:
+        removed.append(target_id)
+        return True
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(Demote, "remove_role", _demote_remove)
+    _run(sy._demote_staff_holdings([9, 10, 11]))
+    # * Only the developer holder is stripped.
+    assert removed == [9]
+
+
+def test_demote_staff_holdings_skips_outage(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _boom(user_id: int, *, fresh: bool = False) -> str | None:
+        raise RuntimeError("db down")
+
+    removed: list[int] = []
+
+    async def _demote_remove(target_id: int, target_role: str) -> bool:
+        removed.append(target_id)
+        return True
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
+    monkeypatch.setattr(Demote, "remove_role", _demote_remove)
+    _run(sy._demote_staff_holdings([9]))
+    assert removed == []

@@ -90,8 +90,7 @@ The Additional Links menu in the bot start screen shows all five buttons by defa
 
 ## Environment variable format
 
-The configuration loader reads environment variables in `tcbot/config/models.py`
-(via `tcbot/__init__.py`). Local development uses `python-dotenv` to load `config.env`.
+The configuration loader reads environment variables in `tcbot/__init__.py`. Local development uses `python-dotenv` to load `config.env`.
 
 Recommended `config.env` syntax:
 

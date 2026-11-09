@@ -11,8 +11,8 @@ from pymongo.errors import ConnectionFailure
 from pyrogram.errors import AuthKeyDuplicated
 from pyrogram.session.session import AuthKeyNotFound
 
+from tcbot.utils import error_reporter as classify
 from tcbot.utils.circuit_breaker import CircuitOpenError
-from tcbot.utils.error_reporter import classify
 
 
 def test_mongodb_circuit_label() -> None:

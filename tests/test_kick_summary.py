@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows import kicking_flow
-from tcbot.modules.helper.workflows.demote_flow import Demote
+from tcbot.modules.helper.pipelines import kick_flow
+from tcbot.modules.helper.pipelines.demote_flow import Demote
 
 
 class _FakeBot:
@@ -91,7 +91,7 @@ def _kick_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _run(bot: _FakeBot, **kwargs: Any) -> _FakeBot:
     asyncio.run(
-        kicking_flow.execute_kick(
+        kick_flow.execute_kick(
             _FakeUpdate(bot),  # type: ignore[arg-type]
             _FakeCtx(bot),  # type: ignore[arg-type]
             33,

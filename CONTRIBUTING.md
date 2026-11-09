@@ -123,7 +123,7 @@ uv run python -m tcbot
    | Concern | Location |
    |---|---|
    | Command handlers | `tcbot/modules/` |
-   | Conversation flows (`*_flow.py`) | `tcbot/modules/helper/workflows/` |
+   | Conversation flows (`*_flow.py`) | `tcbot/modules/helper/pipelines/` |
    | Shared handler helpers | `tcbot/modules/helper/` |
    | MongoDB access (always via helpers, never raw) | `tcbot/database/` |
    | Runtime utilities | `tcbot/utils/` |

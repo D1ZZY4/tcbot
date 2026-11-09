@@ -20,7 +20,7 @@ from tcbot.modules.admins.shared import (
 )
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
-from tcbot.modules.helper.workflows.promote_flow import Promote
+from tcbot.modules.helper.pipelines.promote_flow import Promote
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, user_ref
 from tcbot.utils.i18n import Safe, t

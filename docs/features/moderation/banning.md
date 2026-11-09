@@ -1,6 +1,6 @@
 # Banning
 
-This document describes the current federation ban, ban lookup, and unban behavior implemented by `tcbot/modules/banning.py`, `tcbot/modules/helper/workflows/ban_flow/`, `tcbot/modules/checking/`, `tcbot/modules/unbanning.py`, and `tcbot/database/bans_db/`.
+This document describes the current federation ban, ban lookup, and unban behavior implemented by `tcbot/modules/banning.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `tcbot/modules/checking/`, `tcbot/modules/unbanning.py`, and `tcbot/database/bans_db/`.
 
 For the appeal flow following a ban, see [`../appeals.md`](../appeals.md). For
 the check command used to look up bans, see [`check.md`](check.md). For warnings
@@ -185,7 +185,7 @@ The executor must have rank >= Developer. The target check behaves as follows:
 - If the target has a role with rank greater than or equal to the executor's rank, the action is blocked.
 - If the target has a lower role, the bot automatically removes that role before continuing with the ban.
 
-Auto-demotion is handled by `Demote.auto_demote_or_abort(..., trigger="ban")` from `workflows/demote_flow.py` (also used by the kick and mute entries with their own trigger nouns). The helper runs `Demote.execute`, and if the demote raises it replies with a localized notice telling the executor to demote manually and signals abort by returning `False`; the ban never proceeds on a role holder:
+Auto-demotion is handled by `Demote.auto_demote_or_abort(..., trigger="ban")` from `pipelines/demote_flow.py` (also used by the kick and mute entries with their own trigger nouns). The helper runs `Demote.execute`, and if the demote raises it replies with a localized notice telling the executor to demote manually and signals abort by returning `False`; the ban never proceeds on a role holder:
 
 - Admin targets are removed from `tc_admins`.
 - Developer/Tester targets are removed from `tc_roles`.
@@ -300,7 +300,7 @@ Unlike `/checkme`, `/check` does not provide an appeal button because it is for 
 
 ## `/tcunban` behavior
 
-Manual unban is implemented by `tcbot/modules/unbanning.py` and `tcbot/modules/helper/workflows/unban_flow/`.
+Manual unban is implemented by `tcbot/modules/unbanning.py` and `tcbot/modules/helper/pipelines/unban_flow.py`.
 
 Flow:
 

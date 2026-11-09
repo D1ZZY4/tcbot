@@ -2,36 +2,52 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Logging setup for the TCF bot."""
+"""Logging setup for the TCF bot (Loguru backend)."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import ClassVar
+from contextvars import ContextVar
+from typing import Any, ClassVar
 
-import structlog
-from structlog.typing import EventDict, FilteringBoundLogger
+from loguru import logger
 
 from tcbot.utils.time_and_date import from_timestamp
 
+# ────────────────────── Request context ─────────────────────────────── #
+
+_ctx: ContextVar[dict[str, object] | None] = ContextVar("tcbot_log_ctx", default=None)
+
+
+def _context_segment() -> str:
+    ctx = _ctx.get() or {}
+    parts: list[str] = []
+    if ctx.get("user_id") is not None:
+        parts.append(f"u={ctx['user_id']}")
+    if ctx.get("chat_id") is not None:
+        parts.append(f"c={ctx['chat_id']}")
+    if ctx.get("update_id") is not None:
+        parts.append(f"#{ctx['update_id']}")
+    return f" [{' '.join(parts)}]" if parts else ""
+
+
 # ────────────────────── Console Log Formatter ───────────────────── #
+
 # * Color-coded bracket format: [HH:MM] [DD/MM/YY] [LEVEL] [module:line] → message
-# * Level and message color match per severity; no background badges
-# * Module name: last segment only (e.g. ban_flow, not tcbot.modules.helper.workflows.ban_flow)
-# * All timestamps in UTC
+# * Module name: last segment only; all timestamps in UTC.
 
 
 class BotLogFormatter(logging.Formatter):
-    """Custom log formatter for console output with ANSI bracket format."""
+    """Custom stdlib formatter for console output with ANSI bracket format."""
 
     _R = "\033[0m"
-    _BR = "\033[38;5;236m"  # bracket color (dark gray)
-    _TM = "\033[38;5;242m"  # time
-    _DT = "\033[38;5;238m"  # date
-    _MD = "\033[38;5;75m"  # module:line
-    _AW = "\033[38;5;242m"  # arrow →
-    _MS = "\033[38;5;253m"  # default message
+    _BR = "\033[38;5;236m"
+    _TM = "\033[38;5;242m"
+    _DT = "\033[38;5;238m"
+    _MD = "\033[38;5;75m"
+    _AW = "\033[38;5;242m"
+    _MS = "\033[38;5;253m"
 
     _LEVELS: ClassVar[dict[int, tuple[str, str]]] = {
         logging.DEBUG: ("\033[38;5;246m", "DEBUG"),
@@ -47,49 +63,24 @@ class BotLogFormatter(logging.Formatter):
     }
 
     def _bracket(self, color: str, text: str) -> str:
-        """Wrap *text* in ANSI-coloured square brackets using the given *color* code."""
         return f"{self._BR}[{self._R}{color}{text}{self._R}{self._BR}]{self._R}"
 
-    def _context_segment(self) -> str:
-        """Colored request-context segment from structlog contextvars, or "" when absent."""
-        ctx = structlog.contextvars.get_contextvars()
-        parts: list[str] = []
-        if ctx.get("user_id") is not None:
-            parts.append(f"u={ctx['user_id']}")
-        if ctx.get("chat_id") is not None:
-            parts.append(f"c={ctx['chat_id']}")
-        if ctx.get("update_id") is not None:
-            parts.append(f"#{ctx['update_id']}")
-        if not parts:
-            return ""
-        return f" {self._BR}[{self._R}{self._MD}{' '.join(parts)}{self._R}{self._BR}]{self._R}"
-
     def format(self, record: logging.LogRecord) -> str:
-        """Format a log record with ANSI-colored time, date, level, module, and message.
-
-        Appends formatted exception and stack-info blocks when present so that
-        ``log.exception()`` and ``exc_info=True`` calls produce fully colored output.
-        """
-        # * Use the record's creation time, not now: buffered or delayed
-        # * formatting would otherwise misorder events.
+        """Format a record with ANSI time, date, level, module, and message."""
         now = from_timestamp(record.created)
         level_color, level_label = self._LEVELS.get(record.levelno, ("\033[0m", "???"))
         module = record.name.split(".")[-1]
         msg_color = level_color if record.levelno in self._COLORED_MSG else self._MS
-
         time_part = self._bracket(self._TM, now.strftime("%H:%M"))
         date_part = self._bracket(self._DT, now.strftime("%d/%m/%y"))
         level_part = self._bracket(level_color, level_label)
         module_part = self._bracket(self._MD, f"{module}:{record.lineno}")
         arrow_part = f"{self._AW} → {self._R}"
         msg_part = f"{msg_color}{record.getMessage()}{self._R}"
-
         output = (
             f"{time_part} {date_part} {level_part} {module_part}"
-            f"{self._context_segment()}{arrow_part}{msg_part}"
+            f"{_context_segment()}{arrow_part}{msg_part}"
         )
-
-        # * Append traceback for log.exception() and explicit exc_info=... calls.
         if record.exc_info:
             if not record.exc_text:
                 record.exc_text = self.formatException(record.exc_info)
@@ -101,19 +92,13 @@ class BotLogFormatter(logging.Formatter):
 
 
 # ─────────────────── Telegram Error Log Handler ─────────────────── #
-# * Sends ERROR/CRITICAL logs to the configured LOG_ERRORS channel
-# * Zero blocking; schedules coroutine on the running asyncio event loop
-# * Suppression list prevents infinite loops and network noise
 
-# * Strong references to in-flight Telegram error report tasks (prevents GC)
 _tg_tasks: set[asyncio.Task[None]] = set()
 
 
 async def drain_pending() -> None:
     """Await in-flight Telegram log-shipping tasks at shutdown (bounded)."""
-    from tcbot.utils.dispatch import (  # noqa: PLC0415 (keeps logger import-light)
-        drain_tasks,
-    )
+    from tcbot.utils.dispatch import drain_tasks  # noqa: PLC0415
 
     await drain_tasks(_tg_tasks, label="log shipping")
 
@@ -126,14 +111,14 @@ _SUPPRESS_PREFIXES: tuple[str, ...] = (
 
 
 class TelegramErrorHandler(logging.Handler):
-    """Async logging handler that ships errors to Telegram."""
+    """Stdlib handler that ships errors to Telegram (via Loguru bridge)."""
 
     def __init__(self) -> None:
-        """Register the handler at ERROR level."""
+        """Initialize the handler at ERROR level."""
         super().__init__(logging.ERROR)
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Schedule an async Telegram error report for the given log record."""
+        """Schedule an async Telegram error report for the record."""
         if any(record.name.startswith(p) for p in _SUPPRESS_PREFIXES):
             return
         try:
@@ -142,64 +127,60 @@ class TelegramErrorHandler(logging.Handler):
             self.handleError(record)
             return
         try:
-            from tcbot.utils import (  # noqa: PLC0415
-                error_reporter,
-            )
+            from tcbot.utils import error_reporter  # noqa: PLC0415
         except ImportError:
             self.handleError(record)
             return
-
         task = loop.create_task(error_reporter.report_record(record))
         _tg_tasks.add(task)
         task.add_done_callback(_tg_tasks.discard)
 
 
-# ─────────────────────── Logging Setup Entry ────────────────────── #
-# * Called once at bot startup; initializes all handlers and log levels
+# ─────────────────────── Logging Setup ──────────────────────────── #
 
 
-def _structlog_setup() -> None:
-    """Configure structlog to output through stdlib logging."""
-    structlog.configure(
-        processors=[
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            _render_event_string,
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-        ],
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        # * Never cache: tcbot.modules logs once at import time, before
-        # * setup() runs. A cached pre-setup proxy would print to stdout
-        # * forever instead of reaching the handlers installed here.
-        cache_logger_on_first_use=False,
+def _bridge_to_stdlib(message: Any) -> None:
+    """Forward a Loguru message to stdlib so caplog and shipping keep working."""
+    record = message.record
+    level = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}.get(
+        record["level"].name, 20
     )
-
-
-def _render_event_string(
-    logger: logging.Logger, method_name: str, event_dict: EventDict
-) -> str:
-    """Reduce the event mapping to its message string (final structlog processor).
-
-    Our handlers render through BotLogFormatter (a plain logging.Formatter),
-    not ProcessorFormatter, and wrap_for_formatter only packs whatever it
-    receives: without this step record.msg would be the raw mapping and every
-    line would print as a dict. Context, timestamps, and tracebacks render
-    from contextvars and the record itself in BotLogFormatter, so only the
-    event text crosses here. Tracebacks still land once via record.exc_info
-    (stdlib exception() sets it; the only explicit exc_info call site stays
-    on stdlib in __main__).
-    """
-    return str(event_dict.get("event", ""))
+    exc = record["exception"]
+    log_name: str = record["name"] or record["extra"].get("module") or "tcbot"
+    std_logger = logging.getLogger(log_name)
+    # * Stdlib level discipline applies here: a DEBUG line bridges only
+    # * when its logger is enabled for DEBUG, so production at INFO stays
+    # * quiet while caplog at DEBUG still captures diagnostics.
+    if not std_logger.isEnabledFor(level):
+        return
+    pathname = record["file"].path if record["file"] else ""
+    std_record = std_logger.makeRecord(
+        log_name,
+        level,
+        pathname,
+        record["line"],
+        record["message"],
+        (),
+        (exc.type, exc.value, exc.traceback) if exc and exc.value is not None else None,
+    )
+    if std_record.exc_info:
+        std_record.exc_text = None
+    std_logger.callHandlers(std_record)
+    std_record.exc_info = None
 
 
 def setup(level: int = logging.INFO) -> None:
-    """Initialize and configure the bot's logging system."""
-    _structlog_setup()
-
+    """Initialize and configure the bot logging system (Loguru)."""
+    logger.remove()
+    level_name = logging.getLevelName(level)
+    logger.add(
+        lambda m: print(_render_loguru(m)),
+        level=level_name,
+        colorize=True,
+    )
+    logger.add(_bridge_to_stdlib, level="DEBUG")
     root = logging.getLogger()
     root.setLevel(level)
-
     for handler in root.handlers:
         if isinstance(handler, logging.StreamHandler) and isinstance(
             handler.formatter, BotLogFormatter
@@ -209,26 +190,74 @@ def setup(level: int = logging.INFO) -> None:
         con_handler = logging.StreamHandler()
         con_handler.setFormatter(BotLogFormatter())
         root.addHandler(con_handler)
-
     if not any(isinstance(handler, TelegramErrorHandler) for handler in root.handlers):
         root.addHandler(TelegramErrorHandler())
-
     for lib in ("httpx", "telegram", "motor", "pymongo"):
         logging.getLogger(lib).setLevel(logging.WARNING)
 
 
-# ─────────────────── Public structlog API ───────────────────── #
-# * Single owner for logger creation and request correlation. Modules
-# * call get_logger(__name__) instead of logging.getLogger: records flow
-# * through the same stdlib handlers above, so every line keeps the
-# * colored bracket format, Telegram shipping, and level discipline.
-# * Import-time loggers (tcbot/__init__, tcbot/modules/__init__) stay on
-# * stdlib: they emit before setup() installs these handlers.
+def _render_loguru(message: Any) -> str:
+    record = message.record
+    now = from_timestamp(record["time"].timestamp())
+    level_map = {
+        "DEBUG": ("\033[38;5;246m", "DEBUG"),
+        "INFO": ("\033[38;5;114m", "INFO"),
+        "WARNING": ("\033[38;5;178m", "WARN"),
+        "ERROR": ("\033[38;5;203m", "ERROR"),
+        "CRITICAL": ("\033[38;5;177m", "CRIT"),
+    }
+    color, label = level_map.get(record["level"].name, ("\033[0m", "???"))
+    raw_name = record["name"] or record["extra"].get("module", "?")
+    module = raw_name.split(".")[-1]
+    return (
+        f"[<f2>{now.strftime('%H:%M')}</f2>] [<f2>{now.strftime('%d/%m/%y')}</f2>] "
+        f"[<{color}>{label}</>] [<f4>{module}:{record['line']}</>]"
+        f"{_context_segment()} <f2>→</f2> {record['message']}"
+    )
 
 
-def get_logger(name: str) -> FilteringBoundLogger:
-    """Return the structlog logger for *name* (stdlib-backed, colored output)."""
-    return structlog.get_logger(name)
+# ─────────────────── Public Loguru API ────────────────────────── #
+
+
+class _LoguruShim:
+    """Compat shim so existing %-style call sites log through Loguru."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def _emit(
+        self, level: str, msg: str, args: tuple[Any, ...], exc_info: Any = None
+    ) -> None:
+        text = msg % args if args else msg
+        bound = logger.bind(module=self._name)
+        if exc_info:
+            bound.opt(depth=2, exception=exc_info).error(text)
+        else:
+            getattr(bound.opt(depth=2), level)(text)
+
+    def debug(self, msg: str, *args: Any, exc_info: Any = None) -> None:
+        self._emit("debug", msg, args, exc_info=exc_info)
+
+    def info(self, msg: str, *args: Any, exc_info: Any = None) -> None:
+        self._emit("info", msg, args, exc_info=exc_info)
+
+    def warning(self, msg: str, *args: Any, exc_info: Any = None) -> None:
+        self._emit("warning", msg, args, exc_info=exc_info)
+
+    def error(self, msg: str, *args: Any, exc_info: Any = None) -> None:
+        self._emit("error", msg, args, exc_info=exc_info)
+
+    def critical(self, msg: str, *args: Any, exc_info: Any = None) -> None:
+        self._emit("critical", msg, args, exc_info=exc_info)
+
+    def exception(self, msg: str, *args: Any, exc_info: Any = None) -> None:
+        text = msg % args if args else msg
+        logger.bind(module=self._name).opt(depth=2, exception=True).error(text)
+
+
+def get_logger(name: str) -> _LoguruShim:
+    """Return the Loguru-backed logger for *name*."""
+    return _LoguruShim(name)
 
 
 def bind_request_context(
@@ -237,13 +266,7 @@ def bind_request_context(
     user_id: int | None = None,
     chat_id: int | None = None,
 ) -> None:
-    """Bind per-update tracing context rendered on every log line until cleared.
-
-    log_execution binds on handler entry and clears in a finally block, so
-    concurrent updates never leak context into each other (contextvars are
-    task-local). BotLogFormatter reads the bound values directly, which also
-    covers plain stdlib records from third-party libraries.
-    """
+    """Bind per-update tracing context rendered on every log line until cleared."""
     ctx: dict[str, object] = {}
     if update_id is not None:
         ctx["update_id"] = update_id
@@ -252,9 +275,9 @@ def bind_request_context(
     if chat_id is not None:
         ctx["chat_id"] = chat_id
     if ctx:
-        structlog.contextvars.bind_contextvars(**ctx)
+        _ctx.set(ctx)
 
 
 def clear_request_context() -> None:
-    """Drop all bound request context (see bind_request_context)."""
-    structlog.contextvars.clear_contextvars()
+    """Drop all bound request context."""
+    _ctx.set(None)

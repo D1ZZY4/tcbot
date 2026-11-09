@@ -14,19 +14,16 @@ from telegram import Update
 from telegram.ext import Application
 
 from tcbot import cfg
+
+# * Shared builder chain lives in tcbot.__main__ so webhook, polling, and
+# * serverless register the same handlers over the same transports.
+from tcbot.__main__ import (
+    base_builder,
+    init_shared_subsystems,
+    register_handlers,
+)
 from tcbot.database.mongos import connect, is_connected
 from tcbot.database.scheduler import expire_old_warns
-
-# * Imported from tcbot.runtime.lifecycle (single owner) so the webhook,
-# * polling, and serverless transports register exactly the same handlers
-# * and share the same ApplicationBuilder chain. Importing the runtime
-# * package also pulls the Flask import chain (entry -> alive): Flask is
-# * already a project dependency and no server is started at import time.
-from tcbot.runtime.lifecycle import (
-    _base_builder,
-    _register_handlers,
-    init_shared_subsystems,
-)
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -77,11 +74,11 @@ def build_serverless_app() -> Application:
 
     Shares the transport-tuned builder chain (token, defaults, concurrency,
     pool size, timeouts, rate limiter) with the long-lived transports via
-    ``tcbot.runtime.lifecycle._base_builder``, so Telegram HTTP behaviour is
+    ``tcbot.__main__.base_builder``, so Telegram HTTP behaviour is
     identical on Vercel. Only the Updater lane differs: disabled here because
     there is no long-poll loop in a serverless instance.
     """
-    return _base_builder().updater(None).build()
+    return base_builder().updater(None).build()
 
 
 async def _init_subsystems(app: Application) -> None:
@@ -108,7 +105,7 @@ async def get_app() -> Application:
     if _app is not None:
         return _app
     app = build_serverless_app()
-    _register_handlers(app)
+    register_handlers(app)
     await app.initialize()
     await _init_subsystems(app)
     _app = app

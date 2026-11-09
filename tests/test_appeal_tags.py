@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from tcbot.modules.helper.workflows.appeal_flow import (
+from tcbot.modules.helper.pipelines.appeal_submit_flow import (
     starts_with_appeal_tag,
     text_references_log_message,
 )

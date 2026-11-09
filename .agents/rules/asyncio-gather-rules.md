@@ -24,7 +24,7 @@ live in [`code-style.md`](code-style.md), and validation commands live in
 
 Handlers are small orchestration functions. Put persistence in
 `tcbot/database/*_db.py`, shared formatting in helpers, and reusable workflow
-logic in `tcbot/modules/helper/workflows/*_flow.py`.
+logic in `tcbot/modules/helper/pipelines/*_flow.py`.
 
 ```python
 async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

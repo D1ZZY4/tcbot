@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from tcbot.modules.helper.workflows import ban_flow
+from tcbot.modules.helper.pipelines import ban_flow
 
 
 class _DummyBot:

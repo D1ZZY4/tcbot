@@ -19,7 +19,7 @@ from tcbot.modules.checking import (
 from tcbot.modules.helper import decorators, extraction, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import ack_and_render, safe_reply
-from tcbot.modules.helper.workflows.check_flow import Check
+from tcbot.modules.helper.pipelines.check_flow import Check
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import parse_cmd_args
 

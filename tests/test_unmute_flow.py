@@ -14,7 +14,7 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules.helper import replies
-from tcbot.modules.helper.workflows import muting_flow
+from tcbot.modules.helper.pipelines import mute_flow
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 
@@ -78,9 +78,9 @@ def _install(
         if isinstance(clear, BaseException):
             raise clear
 
-    monkeypatch.setattr(muting_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
     monkeypatch.setattr(
-        muting_flow,
+        mute_flow,
         "cfg",
         SimpleNamespace(main_group=-1, exec_group=-2, logs=(-3, None)),
     )
@@ -108,7 +108,7 @@ def test_no_mute_replies_without_touching_chats(
 ) -> None:
     _install(monkeypatch, mute=None, groups=[])
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(muting_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert bot.unrestricted == []
     assert msg.replies == [
         t("muting.note.no_mute", "en-US", user=Safe(user_ref(42, "T")))
@@ -118,7 +118,7 @@ def test_no_mute_replies_without_touching_chats(
 def test_read_failure_replies_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     _install(monkeypatch, mute=RuntimeError("db down"), groups=[])
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(muting_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert bot.unrestricted == []
     assert msg.replies == [_retry()]
 
@@ -126,7 +126,7 @@ def test_read_failure_replies_retry(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_groups_failure_replies_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _install(monkeypatch, groups=RuntimeError("db down"))
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(muting_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert calls["clear"] == []
     assert msg.replies == [_retry()]
 
@@ -140,7 +140,7 @@ def test_clear_failure_aborts_without_success_reply(
         clear=RuntimeError("db down"),
     )
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(muting_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert msg.replies == [_retry()]
 
 
@@ -149,7 +149,7 @@ def test_happy_path_clears_then_announces(
 ) -> None:
     _install(monkeypatch, groups=[{"chat_id": 5, "title": "G"}])
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(muting_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert bot.unrestricted != []
     assert len(msg.replies) == 1
     assert msg.replies[0] != _retry()

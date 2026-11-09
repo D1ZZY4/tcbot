@@ -17,10 +17,10 @@ from tcbot.modules import help as helpmod
 from tcbot.modules.help import _help_index_text, _module_text
 from tcbot.modules.helper import decorators, keyboards, replies
 from tcbot.modules.helper.ban_info import build_ban_detail
-from tcbot.modules.helper.workflows import check_flow, stats_flow
-from tcbot.modules.helper.workflows.connected_flow import BuildConnection
-from tcbot.modules.helper.workflows.proof_flow import BuildProof
-from tcbot.modules.helper.workflows.reason_flow import BuildReason
+from tcbot.modules.helper.pipelines import check_flow, stats_flow
+from tcbot.modules.helper.pipelines.connected_flow import BuildConnection
+from tcbot.modules.helper.pipelines.proof_flow import BuildProof
+from tcbot.modules.helper.pipelines.reason_flow import BuildReason
 from tcbot.utils.formatter import esc
 from tcbot.utils.pagination import nav_row
 

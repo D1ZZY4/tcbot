@@ -18,7 +18,7 @@ from tcbot.modules.helper import decorators
 from tcbot.modules.helper.locale import locale_for_chat
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link
-from tcbot.modules.helper.workflows.demote_flow import Demote
+from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import link, user_ref
 from tcbot.utils.i18n import Safe, t

@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows import unban_flow
+from tcbot.modules.helper.pipelines import unban_flow
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 

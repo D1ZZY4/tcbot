@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows import check_flow
+from tcbot.modules.helper.pipelines import check_flow
 
 
 async def _fake_name(uid: int) -> str:

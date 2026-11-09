@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows import warning_flow
+from tcbot.modules.helper.pipelines import warn_flow
 
 
 class _FakeMsg:
@@ -42,7 +42,7 @@ def test_autoban_aborts_on_role_lookup_failure(
 
     msg = _FakeMsg()
     asyncio.run(
-        warning_flow._execute_warn_auto_ban(
+        warn_flow._execute_warn_auto_ban(
             None,  # type: ignore[arg-type]
             msg,  # type: ignore[arg-type]
             42,
@@ -125,7 +125,7 @@ def test_autoban_stores_warn_proof_on_ban_record(
 
     msg = _FakeMsg()
     asyncio.run(
-        warning_flow._execute_warn_auto_ban(
+        warn_flow._execute_warn_auto_ban(
             _FakeBot(),  # type: ignore[arg-type]
             msg,  # type: ignore[arg-type]
             42,

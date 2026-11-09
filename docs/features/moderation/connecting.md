@@ -1,6 +1,6 @@
 # Connecting
 
-This document describes the current federation group-connect behavior implemented by `tcbot/modules/connecting.py` (the `/tcconnect` entry point) and `tcbot/modules/helper/workflows/connected_flow/` (the `connection` builder used by the manual command path and the bot-added prompt).
+This document describes the current federation group-connect behavior implemented by `tcbot/modules/connecting.py` (the `/tcconnect` entry point) and `tcbot/modules/helper/pipelines/connected_flow.py` (the `connection` builder used by the manual command path and the bot-added prompt).
 
 For the disconnect command, see [`disconnecting.md`](disconnecting.md). For the list of currently connected groups, see [`groups.md`](groups.md). For the ban flow applied across connected groups, see [`banning.md`](banning.md). For shared helpers, see [`../../architecture/helpers.md`](../../architecture/helpers.md). For the database layer, see [`../../architecture/database.md`](../../architecture/database.md).
 

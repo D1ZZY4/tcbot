@@ -14,7 +14,7 @@ import pytest
 from telegram import Chat, Message
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows import ban_flow
+from tcbot.modules.helper.pipelines import ban_flow
 from tcbot.utils.time_and_date import monotonic
 
 
@@ -290,7 +290,7 @@ def test_zombie_timeout_silent(
 
 def test_live_unexpected_still_nags(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "tcbot.modules.helper.workflows.ban_flow.handlers.locale_for_update",
+        "tcbot.modules.helper.pipelines.ban_flow.locale_for_update",
         _fake_locale,
     )
     msg = _ZombieMessage()

@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows import appeal_review_flow
+from tcbot.modules.helper.pipelines import appeal_review_flow
 from tcbot.utils.i18n import t
 
 

@@ -39,7 +39,7 @@ Keep feedback practical. Prioritize actionable issues over style preferences.
 ### Telegram Handlers
 
 - Command handlers are in `tcbot/modules/`.
-- Shared workflows are in `tcbot/modules/helper/workflows/*_flow.py`.
+- Shared workflows are in `tcbot/modules/helper/pipelines/*_flow.py`.
 - CallbackQuery handlers call `await q.answer()` before follow-up actions.
 - Bot responses use `parse_mode="MarkdownV2"` when formatting is present.
 - User-controlled text is escaped with formatter helpers.

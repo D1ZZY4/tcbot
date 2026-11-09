@@ -11,8 +11,8 @@ from typing import Any
 
 import pytest
 
+from tcbot import __main__ as members
 from tcbot.database import scheduler as sched_mod
-from tcbot.runtime import members
 
 
 @pytest.fixture(autouse=True)

@@ -14,7 +14,7 @@ For the database layer, see [`../architecture/database.md`](../architecture/data
 |---|---|
 | HTTP plumbing (routes, status codes) | `api/webhook.py`, `api/cron.py` |
 | Serverless PTB lifecycle (app build, init, update dispatch, expiry) | `tcbot/serverless.py` |
-| Handler wiring (shared with webhook/polling transports) | `tcbot/__main__._register_handlers` |
+| Handler wiring (shared with webhook/polling transports) | `tcbot/__main__.register_handlers` |
 | Schedules, timeouts | `vercel.json` |
 | Dependency install | `pyproject.toml` + `uv.lock` (Vercel installs from these; no `requirements.txt`) |
 | Python version | `.python-version` (`3.14`, matching the project target) |
@@ -37,7 +37,7 @@ flowchart TD
   `Application.process_update()` on a per-instance shared Application
   (built once per warm instance, reused across invocations on one
   process-wide event loop).
-- Handler registration is the same `_register_handlers()` used by the
+- Handler registration is the same `register_handlers()` used by the
   long-lived transports, so command behaviour is identical.
 - APScheduler never starts on Vercel. Warn expiry (`WARN_EXPIRY_DAYS > 0`)
   runs via the daily Vercel Cron job hitting `/api/cron`, which calls the

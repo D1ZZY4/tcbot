@@ -10,7 +10,7 @@ from telegram.ext import MessageHandler
 
 from tcbot import cfg
 from tcbot.modules.helper import replies
-from tcbot.modules.helper.workflows.warning_flow import warn_conversation
+from tcbot.modules.helper.pipelines.warn_flow import warn_conversation
 from tcbot.modules.warnings.manage import cmd_resetwarns, cmd_unwarn, cmd_warnlist
 from tcbot.modules.warnings.warn import (
     _RL_CMD_PERIOD_S,

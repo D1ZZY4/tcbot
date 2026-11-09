@@ -13,7 +13,7 @@ flowchart TD
     Utils --> Dispatch[dispatch.py<br/>fan_out concurrency]
     Utils --> Prefixes[prefixes.py<br/>command prefix builders]
     Utils --> Logging[logger.py<br/>logger config]
-    Utils --> ErrorReporter[error_reporter/<br/>error sink]
+    Utils --> ErrorReporter[error_reporter.py<br/>error sink]
     Utils --> TimeDate[time_and_date.py<br/>UTC + display + measure]
     Utils --> Pagination[pagination.py<br/>paginate, nav_row, date_or_unknown]
     Utils --> Fmt[formatter.py<br/>MarkdownV2 escape, bold, code, user_ref]
@@ -110,15 +110,15 @@ Logging setup is installed from `tcbot.__main__.main()`.
 
 | Export | Purpose |
 |---|---|
-| `BotLogFormatter` | Colored console formatter with time, date, module, line, request context, level, and message. Every record renders colored, including structlog and third-party records. |
+| `BotLogFormatter` | Colored console formatter with time, date, module, line, request context, level, and message. Every record renders colored, including loguru and third-party records. |
 | `TelegramErrorHandler` | Logging handler that forwards error-level records to `error_reporter`. |
 | `setup(level=logging.INFO)` | Installs console and Telegram error handlers on the root logger and quiets noisy libraries. |
-| `get_logger(name)` | Return the structlog logger for a module. Records flow through the same stdlib handlers, so coloring, shipping, and level discipline match plain loggers. |
+| `get_logger(name)` | Return the loguru-backed logger for a module. Records bridge through the same stdlib handlers, so coloring, shipping, and level discipline match plain loggers. |
 | `bind_request_context(...)` / `clear_request_context()` | Bind `update_id`/`user_id`/`chat_id` rendered on every subsequent line until cleared. `log_execution` binds on handler entry and clears in a `finally` block, so concurrent updates never leak context (contextvars are task-local). |
 
 Third-party loggers such as `httpx`, `telegram`, `motor`, and `pymongo` are capped to reduce noise. Import-time loggers (`tcbot/__init__.py`, `tcbot/modules/__init__.py`) stay on stdlib because they emit before `setup()` installs these handlers.
 
-## `error_reporter/`
+## `error_reporter.py`
 
 Error reporting sends structured MarkdownV2 messages to `LOGS_ERRORS`.
 
@@ -150,13 +150,15 @@ handling plus monotonic measurement.
 | `from_timestamp(ts)` | Convert a POSIX timestamp (e.g. log record time) to aware UTC. |
 | `monotonic()` | Monotonic clock in seconds, for measuring durations. |
 | `elapsed_ms(start)` | Milliseconds since a `monotonic()` reading. |
+| `parse_duration(raw)` | Parse a duration token (`45s`, `30m`, `2h`, `7d`, `1w`, `3mo`, `1ye`) into a `timedelta`, or `None` when invalid. |
+| `fmt_duration(td, locale)` | Render a duration for replies, localized as permanent when `td` is `None`. |
 | `TELEGRAM_LOOKUP_TIMEOUT` | Standard 3s budget for single Telegram lookups. |
 
 Do not call `datetime.utcnow()` or `datetime.now(timezone.utc)` outside this utility. Do not read `time.monotonic()` directly; use the helpers above. The only exception is Redis rate limiting, which needs wall-clock `time.time()` scores shared across processes.
 
 ## `pagination.py`
 
-Shared pagination helpers used by `stats_flow/` and `check_flow/` drill-down pages.
+Shared pagination helpers used by `stats_flow.py` and `check_flow.py` drill-down pages.
 
 | Export | Purpose |
 |---|---|
@@ -168,7 +170,7 @@ Always import these from `tcbot.utils.pagination`; do not reimplement pagination
 
 ## `formatter.py`
 
-Single source of truth for all Telegram Markdown markup. Both the utils layer (e.g. `error_reporter/`) and the modules layer import from here.
+Single source of truth for all Telegram Markdown markup. Both the utils layer (e.g. `error_reporter.py`) and the modules layer import from here.
 
 | Function | Output/use |
 |---|---|

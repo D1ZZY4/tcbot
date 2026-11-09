@@ -14,8 +14,8 @@ import pytest
 from telegram.ext import ConversationHandler
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows import appeal_submit_flow
-from tcbot.modules.helper.workflows.appeal_submit_flow import (
+from tcbot.modules.helper.pipelines import appeal_submit_flow
+from tcbot.modules.helper.pipelines.appeal_submit_flow import (
     WAITING_APPEAL,
     AppealSubmitMixin,
 )

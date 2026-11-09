@@ -84,6 +84,15 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     if msg is None or admin is None:
         return
+    if not await decorators.require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=True,
+        log_label="cmd_broadcast origin",
+    ):
+        return
 
     args = parse_cmd_args(msg.text)
     broadcast_text: str | None = " ".join(args).strip() if args else None

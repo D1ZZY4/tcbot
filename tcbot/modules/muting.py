@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Group mute and unmute command handlers: validates permissions and delegates to muting_flow."""
+"""Group mute and unmute command handlers: validates permissions and delegates to mute_flow."""
 
 from __future__ import annotations
 
@@ -14,17 +14,14 @@ from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
-from tcbot.modules.helper.workflows.demote_flow import Demote
-from tcbot.modules.helper.workflows.muting_flow import (
-    _DURATION_RE,
+from tcbot.modules.helper.pipelines.demote_flow import Demote
+from tcbot.modules.helper.pipelines.mute_flow import (
     execute_unmute,
-    fmt_duration,
     mute_conversation,
-    parse_duration,
     proof,
     reason,
 )
-from tcbot.modules.helper.workflows.reason_flow import (
+from tcbot.modules.helper.pipelines.reason_flow import (
     WAITING_PROOF,
     WAITING_REASON,
     is_reason_too_long,
@@ -35,6 +32,7 @@ from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+from tcbot.utils.time_and_date import fmt_duration, parse_duration
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -168,11 +166,11 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     duration = None
-    if remaining_args and _DURATION_RE.match(remaining_args[0]):
-        # * Pop the token only when it parses: a regex-valid but
-        # * unparsable token (overflow past timedelta range or above the
-        # * 100-year cap) stays in the reason text instead of being
-        # * silently dropped from the moderator's message.
+    if remaining_args:
+        # * Pop the token only when it parses: an unparsable token
+        # * (overflow past timedelta range or above the 100-year cap)
+        # * stays in the reason text instead of being silently dropped
+        # * from the moderator's message.
         parsed = parse_duration(remaining_args[0])
         if parsed is not None:
             duration = parsed

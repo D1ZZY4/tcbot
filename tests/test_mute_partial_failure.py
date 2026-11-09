@@ -13,9 +13,9 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows import muting_flow
-from tcbot.modules.helper.workflows.demote_flow import Demote
-from tcbot.modules.helper.workflows.muting_flow.unmute import execute_unmute
+from tcbot.modules.helper.pipelines import mute_flow
+from tcbot.modules.helper.pipelines.demote_flow import Demote
+from tcbot.modules.helper.pipelines.mute_flow import execute_unmute
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 
@@ -76,14 +76,14 @@ def _mute_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _no_redemote(*args: Any, **kwargs: Any) -> None:
         return None
 
-    monkeypatch.setattr(muting_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
     monkeypatch.setattr(db.groups_db, "active_groups", _no_groups)
     monkeypatch.setattr(Demote, "redemote_before_fanout", _no_redemote)
 
 
 def _run(bot: _FakeBot) -> None:
     asyncio.run(
-        muting_flow._execute_mute(
+        mute_flow._execute_mute(
             bot,  # type: ignore[arg-type]
             _FakeUpdate(),  # type: ignore[arg-type]
             _meta(),  # type: ignore[arg-type]
@@ -276,7 +276,7 @@ def test_unmute_total_failure_keeps_record(monkeypatch: pytest.MonkeyPatch) -> N
     async def _clear(user_id: int) -> None:
         cleared.append(user_id)
 
-    monkeypatch.setattr(muting_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
     monkeypatch.setattr(db.mutes_db, "get_active_mute", _active_mute)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
     monkeypatch.setattr(db.mutes_db, "clear_active_mute", _clear)

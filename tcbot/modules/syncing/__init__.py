@@ -13,6 +13,7 @@ from telegram.ext import MessageHandler
 
 from tcbot import database as db
 from tcbot.modules.helper import replies
+from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.syncing.command import (
     _RL_PERIOD_BULK_S,
     _RL_SYNC_LIMIT,
@@ -30,7 +31,7 @@ from tcbot.modules.syncing.core import (
     _sync_unban_pair,
     take_pairs,
 )
-from tcbot.utils.dispatch import fan_out
+from tcbot.utils.dispatch import fan_out, gather_bounded
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -54,6 +55,7 @@ __all__ = [
     "__help_sections__",
     "__help_text__",
     "__module_name__",
+    "_demote_staff_holdings",
     "_member_status",
     "_render_summary",
     "_summarize",
@@ -110,6 +112,34 @@ __help_sections__ = __help__["sections"]
 
 # ──────────────────────── Sync entry points ──────────────────────── #
 
+# * Sync strips staff rank from banned/muted holders (founder lives on owner row).
+_STAFF_ROLES: tuple[str, ...] = ("admin", "developer", "tester")
+
+
+async def _demote_staff_holdings(user_ids: list[int]) -> None:
+    """Strip staff roles from banned/muted holders before enforcement."""
+    unique = sorted({uid for uid in user_ids if uid})
+    if not unique:
+        return
+    roles = await gather_bounded(
+        [db.users_roles.get_effective_role(uid, fresh=True) for uid in unique]
+    )
+    for uid, role in zip(unique, roles, strict=False):
+        if isinstance(role, BaseException):
+            log.warning("sync demote role lookup failed for %d: %s", uid, role)
+            continue
+        if role not in _STAFF_ROLES:
+            continue
+        try:
+            removed = await Demote.remove_role(uid, role)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning("sync demote remove_role failed for %d: %s", uid, exc)
+            continue
+        if removed:
+            log.warning("sync stripped role %s from banned/muted user %d", role, uid)
+
 
 async def run_ban_sync(bot: Bot, *, max_checks: int = _SYNC_MAX_CHECKS) -> SyncCounts:
     """Sweep active bans and mutes against connected groups, bounded by ``max_checks``.
@@ -140,8 +170,9 @@ async def run_ban_sync(bot: Bot, *, max_checks: int = _SYNC_MAX_CHECKS) -> SyncC
         if c
     }
     pairs, truncated = take_pairs(sorted(ban_uids), chat_ids, max_checks)
-    # * Bounded like every other federation-wide Telegram burst: the fan_out
-    # * semaphore plus the per-pair probe timeout cap the blast radius.
+    # * Strip stale staff rank before enforcing.
+    await _demote_staff_holdings([uid for uid, _cid in pairs])
+    # * Bounded fan-out plus per-pair probe timeout.
     outcomes: list = []
     if pairs:
         outcomes = await fan_out([_sync_ban_pair(bot, cid, uid) for uid, cid in pairs])
@@ -204,6 +235,8 @@ async def verify_user(bot: Bot, user_id: int) -> SyncCounts:
     pairs, truncated = take_pairs([user_id], chat_ids, _SYNC_MAX_CHECKS)
     if not pairs:
         return SyncCounts()
+    if ban or mute is not None:
+        await _demote_staff_holdings([user_id])
     if ban:
         outcomes = await fan_out(
             [_sync_ban_pair(bot, cid, user_id) for _, cid in pairs]

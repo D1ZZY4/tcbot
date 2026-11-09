@@ -70,11 +70,7 @@ startup. Default `0` (disabled, manual `/tcsync` only).
 
 ## Database impact
 
-Read-only except enforcement side effects: `active_groups()`,
-`active_ban_user_ids()` / `get_active_ban(user_id)`, `active_mute_docs()` /
-`get_active_mute(user_id)`, then per-miss `ban_chat_member` /
-`restrict_chat_member` / `unban_chat_member`. No ban or mute records are created,
-modified, or deactivated by a sync run.
+Reads `active_groups()`, `active_ban_user_ids()` / `get_active_ban(user_id)`, `active_mute_docs()` / `get_active_mute(user_id)`, then per-miss `ban_chat_member` / `restrict_chat_member` / `unban_chat_member`. Sync also clears stale staff roles (`admin`, `developer`, `tester`) from banned or muted holders before enforcing, mirroring direct auto-demote. No ban or mute records are created, modified, or deactivated.
 
 ## Logging behavior
 

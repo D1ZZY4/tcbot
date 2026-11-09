@@ -31,6 +31,7 @@ class _FakeMsg:
         self.reply_to_message = None
         self.replies: list[str] = []
         self.status = _StatusMsg()
+        self.chat = SimpleNamespace(id=-1001, type="supergroup")
 
     async def reply_text(self, text: str, **kwargs: Any) -> _StatusMsg:
         self.replies.append(text)
@@ -74,7 +75,11 @@ def _run(monkeypatch: pytest.MonkeyPatch, failures: dict[int, Exception]) -> _Fa
     async def _owner() -> int:
         return 999
 
+    async def _connected(chat_id: int, *, fresh: bool = False) -> bool:
+        return True
+
     monkeypatch.setattr(db.groups_db, "active_groups", _active)
+    monkeypatch.setattr(db.groups_db, "is_connected", _connected)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.users_roles, "get_owner_id", _owner)
     msg = _FakeMsg("/tcbroadcast hello federation")
@@ -105,6 +110,34 @@ def test_broadcast_counts_only_transient_failures(
     )
     assert msg.status.edits
     text = msg.status.edits[0]
-    # * Benign refusal is not a failure: 2 reached, 1 transient failed.
+    # * Benign refusal is not a failure.
     assert "`2`" in text
     assert "`1`" in text
+
+
+def test_broadcast_refuses_disconnected_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    groups = [{"chat_id": 101, "title": "A"}]
+
+    async def _active() -> Any:
+        return groups
+
+    async def _role(uid: int, *, fresh: bool = False) -> str | None:
+        return "admin"
+
+    async def _owner() -> int:
+        return 999
+
+    async def _not_connected(chat_id: int, *, fresh: bool = False) -> bool:
+        return False
+
+    monkeypatch.setattr(db.groups_db, "active_groups", _active)
+    monkeypatch.setattr(db.groups_db, "is_connected", _not_connected)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.users_roles, "get_owner_id", _owner)
+    msg = _FakeMsg("/tcbroadcast hello federation")
+    bot = _FakeBot({})
+    ctx = SimpleNamespace(bot=bot, user_data={})
+    asyncio.run(broadcasting.cmd_broadcast(_update(msg), ctx))  # type: ignore[arg-type]
+    # * Disconnected origin refuses before fan-out.
+    assert bot.sent == []
+    assert msg.status.edits == []

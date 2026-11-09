@@ -1,6 +1,6 @@
 # Muting
 
-This document describes the current federation mute and unmute behavior implemented by `tcbot/modules/muting.py` (the `/tcmute` and `/tcunmute` entry points), `tcbot/modules/helper/workflows/muting_flow/` (the `execute_mute` and `execute_unmute` executors plus duration helpers), `tcbot/modules/helper/workflows/reason_flow/` (the shared proof/reason conversation), and `tcbot/database/mutes_db.py` (the persistent `mutes` and `active_mutes` collections).
+This document describes the current federation mute and unmute behavior implemented by `tcbot/modules/muting.py` (the `/tcmute` and `/tcunmute` entry points), `tcbot/modules/helper/pipelines/mute_flow.py` (the `_execute_mute` and `execute_unmute` executors), `tcbot/utils/time_and_date.py` (the duration helpers), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation), and `tcbot/database/mutes_db.py` (the persistent `mutes` and `active_mutes` collections).
 
 For the ban flow, see [`banning.md`](banning.md). For the kick flow, see
 [`kicking.md`](kicking.md). For role auto-demotion on mute, see
@@ -73,7 +73,7 @@ The mute command is a `ConversationHandler` built by `reason_flow.build_modactio
 
 ## Duration token format
 
-The duration regex is `_DURATION_RE` in `muting_flow/`:
+The duration regex is `_DURATION_RE` in `tcbot/utils/time_and_date.py`:
 
 ```python
 _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
@@ -153,7 +153,7 @@ If the target holds a federation role, `cmd_mute` calls `Demote.auto_demote_or_a
 
 ## `execute_mute` behavior
 
-`_execute_mute(bot, update, meta)` lives in `tcbot/modules/helper/workflows/muting_flow/`. The executor reads target ID, name, reason, admin, duration, proof messages, and the prompt chat/ID from the `meta` dict.
+`_execute_mute(bot, update, meta)` lives in `tcbot/modules/helper/pipelines/mute_flow.py`. The executor reads target ID, name, reason, admin, duration, proof messages, and the prompt chat/ID from the `meta` dict.
 
 Execution order:
 

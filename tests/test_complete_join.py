@@ -12,8 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.workflows.connected_flow.connection import BuildConnection
-from tcbot.modules.helper.workflows.connected_flow.shared import _REPLAY_CAP
+from tcbot.modules.helper.pipelines.connected_flow import _REPLAY_CAP, BuildConnection
 
 
 class _FakeBot:

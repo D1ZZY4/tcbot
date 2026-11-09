@@ -1,6 +1,6 @@
 # Promote
 
-This document describes the current promotion behavior implemented by `tcbot/modules/admins/` (command + callback handlers) and `tcbot/modules/helper/workflows/promote_flow/` (the `Promote` class and shared logic).
+This document describes the current promotion behavior implemented by `tcbot/modules/admins/` (command + callback handlers) and `tcbot/modules/helper/pipelines/promote_flow.py` (the `Promote` class and shared logic).
 
 For role hierarchy and rules, see [`roles.md`](roles.md). For the demote flow,
 see [`demote.md`](demote.md). For shared helpers, see
@@ -59,10 +59,10 @@ Omitting the role triggers the inline button menu built by `keyboards.promote_ro
 
 ## `Promote` class API
 
-`workflows/promote_flow/` exposes a single `Promote` class with three entry points used by the command and callbacks. The module-level `ROLE_ALIASES` dict is exported for use by the command parser.
+`pipelines/promote_flow.py` exposes a single `Promote` class with three entry points used by the command and callbacks. The module-level `ROLE_ALIASES` dict is exported for use by the command parser.
 
 ```python
-from tcbot.modules.helper.workflows.promote_flow import ROLE_ALIASES, Promote
+from tcbot.modules.helper.pipelines.promote_flow import ROLE_ALIASES, Promote
 
 Promote.available_roles_for(executor_role)  # list[str]
 await Promote.execute(

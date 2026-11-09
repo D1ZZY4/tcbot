@@ -15,8 +15,7 @@ from typing import Any, cast
 import pytest
 
 import api.cron as cron_mod
-from tcbot import cfg
-from tcbot.config.parsing import _env_list
+from tcbot import _env_list, cfg
 from tcbot.database import mtproto
 from tcbot.modules import syncing as sy
 from tcbot.utils import error_reporter

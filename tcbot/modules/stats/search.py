@@ -19,7 +19,7 @@ from tcbot.modules.helper.parse_editmsg import (
     safe_edit_message,
     safe_reply,
 )
-from tcbot.modules.helper.workflows.stats_flow import (
+from tcbot.modules.helper.pipelines.stats_flow import (
     CHAT_KEY,
     MSG_KEY,
     RESULTS_KEY,

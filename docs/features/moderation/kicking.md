@@ -1,6 +1,6 @@
 # Kicking
 
-This document describes the current group kick behavior implemented by `tcbot/modules/kicking.py` (the `/tckick` entry point and decorators), `tcbot/modules/helper/workflows/kicking_flow/` (the `execute_kick` executor and conversation factory), `tcbot/modules/helper/workflows/reason_flow/` (the shared proof/reason conversation invoked by kick), and `tcbot/database/kicks_db.py` (the persistent kick log).
+This document describes the current group kick behavior implemented by `tcbot/modules/kicking.py` (the `/tckick` entry point and decorators), `tcbot/modules/helper/pipelines/kick_flow.py` (the `execute_kick` executor and conversation factory), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation invoked by kick), and `tcbot/database/kicks_db.py` (the persistent kick log).
 
 For the ban flow, see [`banning.md`](banning.md). For the mute flow, see
 [`muting.md`](muting.md). For role auto-demotion on kick, see
@@ -115,7 +115,7 @@ If the target holds a federation role, `cmd_kick` calls `Demote.auto_demote_or_a
 
 ## `execute_kick` behavior
 
-`execute_kick(update, ctx, target_id, target_name, reason_text, proof_msgs, prompt_chat=None, prompt_id=None)` lives in `tcbot/modules/helper/workflows/kicking_flow/`. The prompt chat/ID are stashed by the entry (`kick_prompt_chat`, `kick_prompt_id`) so the summary edits the proof prompt in place. The implementation is a single Telegram `ban_chat_member` followed by `unban_chat_member(chat_id, target_id, only_if_banned=True)`. The "kick" is therefore not a separate Telegram primitive, but the visible effect of ban-then-unban in the same chat.
+`execute_kick(update, ctx, target_id, target_name, reason_text, proof_msgs, prompt_chat=None, prompt_id=None)` lives in `tcbot/modules/helper/pipelines/kick_flow.py`. The prompt chat/ID are stashed by the entry (`kick_prompt_chat`, `kick_prompt_id`) so the summary edits the proof prompt in place. The implementation is a single Telegram `ban_chat_member` followed by `unban_chat_member(chat_id, target_id, only_if_banned=True)`. The "kick" is therefore not a separate Telegram primitive, but the visible effect of ban-then-unban in the same chat.
 
 Execution order:
 

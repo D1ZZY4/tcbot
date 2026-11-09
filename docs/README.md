@@ -75,6 +75,15 @@ deployment, see [`../replit.md`](../replit.md). For contribution workflow, see
 |---|---|
 | [Keyboard styles](reference/keyboard-styles.md) | Inline keyboard layouts and callback-data naming conventions. |
 
+### Releases
+
+Published release notes live under `releases/`; the root [`CHANGELOG.md`](../CHANGELOG.md)
+keeps the `Unreleased` section and links to each release note.
+
+| Document | Purpose |
+|---|---|
+| [Release notes](releases/v6.9.0.md) | Newest published release; older releases link from there. |
+
 ## Architecture at a glance
 
 ```mermaid
@@ -88,7 +97,7 @@ flowchart TD
     Main --> Modules[tcbot.modules dynamic loader]
     Modules --> CommandModules[tcbot.modules/*.py]
     CommandModules --> Helpers[tcbot.modules.helper]
-    CommandModules --> Workflows[tcbot.modules.helper.workflows]
+    CommandModules --> Workflows[tcbot.modules.helper.pipelines]
     Helpers --> DBHelpers[tcbot.database/*_db.py]
     Workflows --> DBHelpers
     CommandModules --> Utils[tcbot.utils]
@@ -100,7 +109,7 @@ Runtime starts with `uv run python -m tcbot`. The entry point loads configuratio
 
 - Keep command handlers in `tcbot/modules/`.
 - Keep shared handler helpers in `tcbot/modules/helper/`.
-- Keep conversation factories in `tcbot/modules/helper/workflows/*_flow.py`.
+- Keep conversation factories in `tcbot/modules/helper/pipelines/*_flow.py`.
 - Keep MongoDB reads and writes behind `tcbot/database/*_db.py` helpers.
 - Keep runtime utilities in `tcbot/utils/`.
 - Use MarkdownV2 parse mode for bot messages and escape user-provided text through formatter helpers.
