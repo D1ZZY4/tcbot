@@ -13,6 +13,10 @@ import pytest
 
 from tcbot.database import users_roles
 from tcbot.database.cache import _OWNER_KEY
+from tcbot.database.users_roles import admin as _admin_mod
+from tcbot.database.users_roles import owner as _owner_mod
+from tcbot.database.users_roles import resolution as _res_mod
+from tcbot.database.users_roles import roles as _roles_mod
 
 
 async def _identity(coro: Any) -> Any:
@@ -45,9 +49,9 @@ def test_get_effective_role_caches_second_read(
         assert user_id == uid
         return None
 
-    monkeypatch.setattr(users_roles, "is_owner", _owner)
-    monkeypatch.setattr(users_roles, "is_admin", _admin)
-    monkeypatch.setattr(users_roles, "get_role", _role)
+    monkeypatch.setattr(_owner_mod, "is_owner", _owner)
+    monkeypatch.setattr(_admin_mod, "is_admin", _admin)
+    monkeypatch.setattr(_roles_mod, "get_role", _role)
     try:
         first = asyncio.run(users_roles.get_effective_role(uid))
         second = asyncio.run(users_roles.get_effective_role(uid))
@@ -81,9 +85,9 @@ def test_is_staff_reuses_effective_role_cache(
         assert user_id == uid
         return None
 
-    monkeypatch.setattr(users_roles, "is_owner", _owner)
-    monkeypatch.setattr(users_roles, "is_admin", _admin)
-    monkeypatch.setattr(users_roles, "get_role", _role)
+    monkeypatch.setattr(_owner_mod, "is_owner", _owner)
+    monkeypatch.setattr(_admin_mod, "is_admin", _admin)
+    monkeypatch.setattr(_roles_mod, "get_role", _role)
     try:
         primed = asyncio.run(users_roles.get_effective_role(uid))
         staff_first = asyncio.run(users_roles.is_staff(uid))
@@ -109,8 +113,8 @@ def test_is_admin_hits_db_on_every_call(
             hits.append(dict(filt))
             return {"_id": 1} if filt.get("user_id") == uid else None
 
-    monkeypatch.setattr(users_roles, "col", lambda _name: _AdminCol())
-    monkeypatch.setattr(users_roles, "db_call", _identity)
+    monkeypatch.setattr(_admin_mod, "col", lambda _name: _AdminCol())
+    monkeypatch.setattr(_admin_mod, "db_call", _identity)
 
     first = asyncio.run(users_roles.is_admin(uid))
     second = asyncio.run(users_roles.is_admin(uid))
@@ -138,9 +142,9 @@ def test_get_effective_role_outage_raises_and_does_not_poison(
         assert user_id == uid
         return None
 
-    monkeypatch.setattr(users_roles, "is_owner", _owner)
-    monkeypatch.setattr(users_roles, "is_admin", _boom_admin)
-    monkeypatch.setattr(users_roles, "get_role", _role)
+    monkeypatch.setattr(_owner_mod, "is_owner", _owner)
+    monkeypatch.setattr(_admin_mod, "is_admin", _boom_admin)
+    monkeypatch.setattr(_roles_mod, "get_role", _role)
     try:
         with pytest.raises(RuntimeError, match="admin collection down"):
             asyncio.run(users_roles.get_effective_role(uid))
@@ -153,8 +157,8 @@ def test_get_effective_role_outage_raises_and_does_not_poison(
             assert user_id == uid
             return "tester"
 
-        monkeypatch.setattr(users_roles, "is_admin", _recovered_admin)
-        monkeypatch.setattr(users_roles, "get_role", _recovered_role)
+        monkeypatch.setattr(_admin_mod, "is_admin", _recovered_admin)
+        monkeypatch.setattr(_roles_mod, "get_role", _recovered_role)
         recovered = asyncio.run(users_roles.get_effective_role(uid))
     finally:
         _invalidate(uid)
@@ -171,16 +175,16 @@ def test_is_staff_fail_closed_on_outage_and_reraises_cancelled(
     async def _boom(_user_id: int) -> str | None:
         raise RuntimeError("role store down")
 
-    monkeypatch.setattr(users_roles, "get_effective_role", _boom)
+    monkeypatch.setattr(_res_mod, "get_effective_role", _boom)
     try:
         assert asyncio.run(users_roles.is_staff(uid)) is False
     finally:
         _invalidate(uid)
 
-    async def _cancelled(_user_id: int) -> str | None:
+    async def _cancelled(_user_id: int, *, fresh: bool = False) -> str | None:
         raise asyncio.CancelledError()
 
-    monkeypatch.setattr(users_roles, "get_effective_role", _cancelled)
+    monkeypatch.setattr(_res_mod, "get_effective_role", _cancelled)
     try:
         with pytest.raises(asyncio.CancelledError):
             asyncio.run(users_roles.is_staff(uid))
@@ -206,9 +210,9 @@ def test_founder_only_diverges_from_admin_membership(
         assert user_id == uid
         return None
 
-    monkeypatch.setattr(users_roles, "is_owner", _owner)
-    monkeypatch.setattr(users_roles, "is_admin", _not_admin)
-    monkeypatch.setattr(users_roles, "get_role", _no_role)
+    monkeypatch.setattr(_owner_mod, "is_owner", _owner)
+    monkeypatch.setattr(_admin_mod, "is_admin", _not_admin)
+    monkeypatch.setattr(_roles_mod, "get_role", _no_role)
     try:
         effective = asyncio.run(users_roles.get_effective_role(uid))
     finally:
@@ -239,9 +243,9 @@ def test_founder_plus_admin_shadows_admin_role(
         assert user_id == uid
         return None
 
-    monkeypatch.setattr(users_roles, "is_owner", _owner)
-    monkeypatch.setattr(users_roles, "is_admin", _admin)
-    monkeypatch.setattr(users_roles, "get_role", _no_role)
+    monkeypatch.setattr(_owner_mod, "is_owner", _owner)
+    monkeypatch.setattr(_admin_mod, "is_admin", _admin)
+    monkeypatch.setattr(_roles_mod, "get_role", _no_role)
     try:
         effective = asyncio.run(users_roles.get_effective_role(uid))
     finally:
@@ -265,8 +269,8 @@ def test_get_owner_id_caches_second_read(
             hits.append({})
             return {"user_id": 61008}
 
-    monkeypatch.setattr(users_roles, "col", lambda _name: _OwnerCol())
-    monkeypatch.setattr(users_roles, "db_call", _identity)
+    monkeypatch.setattr(_owner_mod, "col", lambda _name: _OwnerCol())
+    monkeypatch.setattr(_owner_mod, "db_call", _identity)
     try:
         first = asyncio.run(users_roles.get_owner_id())
         second = asyncio.run(users_roles.get_owner_id())

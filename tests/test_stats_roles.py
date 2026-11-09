@@ -13,6 +13,7 @@ import pytest
 
 from tcbot import database as db
 from tcbot.database import users_roles
+from tcbot.database.users_roles import roles as _roles_mod
 from tcbot.modules.helper.workflows.stats_flow import Stats
 
 
@@ -35,8 +36,8 @@ def test_role_count_delegates_to_count_documents(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake = _SpyCollection()
-    monkeypatch.setattr(users_roles, "col", lambda _name: fake)
-    monkeypatch.setattr(users_roles, "db_call", _identity)
+    monkeypatch.setattr(_roles_mod, "col", lambda _name: fake)
+    monkeypatch.setattr(_roles_mod, "db_call", _identity)
 
     result = asyncio.run(users_roles.role_count("developer"))
 

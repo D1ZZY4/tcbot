@@ -18,6 +18,7 @@ import pytest
 
 from tcbot import cfg
 from tcbot.database import groups_db, settings_db, users_roles
+from tcbot.database.groups_db import collections as _groups_collections
 from tcbot.modules import (
     admins,
     appeals,
@@ -386,7 +387,7 @@ def fake_user_col(monkeypatch: pytest.MonkeyPatch) -> _FakeCollection:
 def fake_group_col(monkeypatch: pytest.MonkeyPatch) -> _FakeCollection:
 
     fake = _FakeCollection()
-    monkeypatch.setattr(groups_db, "col", lambda _name: fake)
+    monkeypatch.setattr(_groups_collections, "col", lambda _name: fake)
     groups_db._GROUP_LOCALE_L1.clear()
     return fake
 
