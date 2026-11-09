@@ -264,8 +264,11 @@ async def search_by_name(needle: str, limit: int = 5) -> list[UserDoc]:
     over the wire, regardless of cache size. This replaces the old pattern of
     loading all users into Python and scanning linearly.
     """
-    if not needle:
+    if not needle or limit <= 0:
         return []
+    # * Clamp: negative limits act as single-batch cursors in pymongo and
+    # * huge limits are unbounded scans; both would bypass the caps above.
+    limit = max(1, min(limit, 100))
     # * Anchored so "dan" matches a name that starts with "dan" (e.g. "daniel"),
     # * not one that merely contains "dan" mid-string (e.g. "randy").
     pattern = {"$regex": f"^{re.escape(needle)}", "$options": "i"}
