@@ -43,6 +43,33 @@ def _log_edit_failure(
     getattr(log, level)(msg, exc)
 
 
+async def _edit_via(
+    do_edit: Awaitable[object],
+    *,
+    log_level: str,
+    log_label: str | None,
+    catch_all: bool,
+    default_msg: str,
+) -> None:
+    """Run one edit coroutine with the shared benign-error policy.
+
+    ``BadRequest`` values naming a harmless state (not modified, not found,
+    chat gone) return silently; other ``BadRequest`` values log at
+    ``log_level``. Generic ``Exception`` values either propagate or log at
+    ``log_level`` depending on ``catch_all``. Cancellation always propagates.
+    """
+    try:
+        await do_edit
+    except BadRequest as e:
+        if any(i in str(e).lower() for i in _IGNORED):
+            return
+        _log_edit_failure(log_level, log_label, default_msg, e)
+    except Exception as exc:
+        if not catch_all:
+            raise
+        _log_edit_failure(log_level, log_label, default_msg, exc)
+
+
 # ──────────────────────── safe_edit helper ──────────────────────── #
 
 
@@ -65,16 +92,13 @@ async def safe_edit(
     propagating them; cancellation always propagates. ``parse_mode``
     defaults to ``"MarkdownV2"``; pass ``None`` for plain text.
     """
-    try:
-        await msg.edit_text(text, parse_mode=parse_mode, **kwargs)
-    except BadRequest as e:
-        if any(i in str(e).lower() for i in _IGNORED):
-            return
-        _log_edit_failure(log_level, log_label, "edit failed: %s", e)
-    except Exception as exc:
-        if not catch_all:
-            raise
-        _log_edit_failure(log_level, log_label, "edit failed: %s", exc)
+    await _edit_via(
+        msg.edit_text(text, parse_mode=parse_mode, **kwargs),
+        log_level=log_level,
+        log_label=log_label,
+        catch_all=catch_all,
+        default_msg="edit failed: %s",
+    )
 
 
 async def safe_edit_cb(
@@ -93,16 +117,13 @@ async def safe_edit_cb(
     content (e.g. a section sub-button while already viewing that section).
     The failure parameters behave exactly as in :func:`safe_edit`.
     """
-    try:
-        await q.edit_message_text(text, parse_mode=parse_mode, **kwargs)
-    except BadRequest as e:
-        if any(i in str(e).lower() for i in _IGNORED):
-            return
-        _log_edit_failure(log_level, log_label, "callback edit failed: %s", e)
-    except Exception as exc:
-        if not catch_all:
-            raise
-        _log_edit_failure(log_level, log_label, "callback edit failed: %s", exc)
+    await _edit_via(
+        q.edit_message_text(text, parse_mode=parse_mode, **kwargs),
+        log_level=log_level,
+        log_label=log_label,
+        catch_all=catch_all,
+        default_msg="callback edit failed: %s",
+    )
 
 
 async def safe_edit_message(
@@ -123,22 +144,19 @@ async def safe_edit_message(
     state instead of a live ``Message``/``CallbackQuery`` handle. Failure
     parameters behave exactly as in :func:`safe_edit`.
     """
-    try:
-        await bot.edit_message_text(
+    await _edit_via(
+        bot.edit_message_text(
             text,
             chat_id=chat_id,
             message_id=message_id,
             parse_mode=parse_mode,
             **kwargs,
-        )
-    except BadRequest as e:
-        if any(i in str(e).lower() for i in _IGNORED):
-            return
-        _log_edit_failure(log_level, log_label, "message edit failed: %s", e)
-    except Exception as exc:
-        if not catch_all:
-            raise
-        _log_edit_failure(log_level, log_label, "message edit failed: %s", exc)
+        ),
+        log_level=log_level,
+        log_label=log_label,
+        catch_all=catch_all,
+        default_msg="message edit failed: %s",
+    )
 
 
 async def clear_markup_cb(q: CallbackQuery) -> None:

@@ -28,10 +28,9 @@ from tcbot.modules.helper.workflows.ban_flow.persist import (
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.proof_flow import upload_proof
 from tcbot.utils.dispatch import (
-    count_transient_errors,
     fan_out,
-    first_transient_error,
     is_benign_telegram_error,
+    log_fanout_error,
     throw_if_cancelled,
 )
 from tcbot.utils.formatter import user_ref
@@ -237,7 +236,6 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     transient_groups = [
         (grp, r) for grp, r in failed_groups if not is_benign_telegram_error(r)
     ]
-    failed = count_transient_errors(results)
     for grp, exc in failed_groups:
         log.warning(
             "Ban enforcement failed for user=%d in group=%s (%d): %s",
@@ -246,26 +244,17 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             grp["chat_id"],
             exc,
         )
+    # * Error-level so the failure ships to LOG_ERRORS automatically;
+    # * per-group warnings above stay console-only.
+    failed = log_fanout_error(
+        results, action="Ban", total=len(groups), target_id=target_id
+    )
     log.info(
         "Ban enforced: target=%d applied=%d/%d",
         target_id,
         len(groups) - failed,
         len(groups),
     )
-    if failed:
-        # * Attach a representative transient exception as exc_info so the
-        # * error reporter classifies the record by its real type and shows
-        # * a traceback instead of the misleading "[?] Unknown / Needs a code
-        # * fix" label. Error-level so the failure ships to LOG_ERRORS
-        # * automatically; per-group warnings above stay console-only.
-        log.error(
-            "Ban fan-out had %d/%d transient failures for target=%d; "
-            "see warnings above and retry manually where needed",
-            failed,
-            len(groups),
-            target_id,
-            exc_info=first_transient_error(results),
-        )
 
     applied_line = replies.applied_summary(
         locale,

@@ -16,9 +16,8 @@ from tcbot.modules.helper import parse_logmsg, replies
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows import muting_flow as _flow
 from tcbot.utils.dispatch import (
-    count_transient_errors,
     fan_out,
-    first_transient_error,
+    log_fanout_error,
     throw_if_cancelled,
 )
 from tcbot.utils.formatter import user_ref
@@ -112,15 +111,9 @@ async def execute_unmute(
             for grp in groups
         ]
     )
-    failed = count_transient_errors(results)
-    if failed:
-        log.error(
-            "Unmute fan-out had %d/%d transient failures for target=%d",
-            failed,
-            len(groups),
-            target_id,
-            exc_info=first_transient_error(results),
-        )
+    failed = log_fanout_error(
+        results, action="Unmute", total=len(groups), target_id=target_id
+    )
     if groups and failed >= len(groups):
         # * Total enforcement failure: keep the record so a retry re-drives
         # * the full fan-out (mirrors the warn auto-ban path, which keeps

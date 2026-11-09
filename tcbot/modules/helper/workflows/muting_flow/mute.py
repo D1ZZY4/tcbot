@@ -20,9 +20,8 @@ from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.modules.helper.workflows.muting_flow.duration import fmt_duration
 from tcbot.modules.helper.workflows.proof_flow import upload_proof
 from tcbot.utils.dispatch import (
-    count_transient_errors,
     fan_out,
-    first_transient_error,
+    log_fanout_error,
     throw_if_cancelled,
 )
 from tcbot.utils.formatter import bold, user_ref
@@ -205,15 +204,9 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             proof_link = message_link(pc, proof_msg_id, pt)
     else:
         results = await fan_out(restrict_coros)
-    failed = count_transient_errors(results)
-    if failed:
-        log.error(
-            "Mute fan-out had %d/%d transient failures for target=%d",
-            failed,
-            len(groups),
-            target_id,
-            exc_info=first_transient_error(results),
-        )
+    failed = log_fanout_error(
+        results, action="Mute", total=len(groups), target_id=target_id
+    )
 
     proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
     summary = t(

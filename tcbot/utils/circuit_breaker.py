@@ -190,10 +190,16 @@ class CircuitBreaker:
     # ── private helpers ── #
 
     def _record_success(self) -> None:
+        # * Ordinary successes in CLOSED must not reset the counter. fan_out
+        # * runs up to 10 slots concurrently: one success interleaved between
+        # * concurrent failures would erase the failure count and the breaker
+        # * could never trip under a partial outage. Only a successful
+        # * HALF_OPEN probe closes the circuit and resets; CLOSED successes
+        # * leave the accumulated transient count for the threshold to judge.
         if self._state is CircuitState.HALF_OPEN:
             log.info("Circuit [%s]: HALF_OPEN -> CLOSED (probe succeeded).", self._name)
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
+            self._state = CircuitState.CLOSED
+            self._failure_count = 0
         self._release_probe()
 
     def _record_failure(self) -> None:

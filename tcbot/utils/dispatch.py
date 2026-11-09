@@ -296,3 +296,32 @@ def first_transient_error(results: Sequence[object]) -> BaseException | None:
         if isinstance(r, BaseException) and not is_benign_telegram_error(r):
             return r
     return None
+
+
+def log_fanout_error(
+    results: Sequence[object],
+    *,
+    action: str,
+    total: int,
+    target_id: int,
+) -> int:
+    """Log the transient-failure summary and return the transient count.
+
+    Single owner for the error-level fan-out line every federation
+    executor emits, so the reporter classifies partial failures by their
+    real Telegram type. The per-group warning lines and the applied
+    summary stay at each call site because their wording differs per
+    action; only this error line is shared. Returns the count from
+    :func:`count_transient_errors` for the caller's applied arithmetic.
+    """
+    failed = count_transient_errors(results)
+    if failed:
+        log.error(
+            "%s fan-out had %d/%d transient failures for target=%d",
+            action,
+            failed,
+            total,
+            target_id,
+            exc_info=first_transient_error(results),
+        )
+    return failed

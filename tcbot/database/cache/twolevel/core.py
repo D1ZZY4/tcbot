@@ -241,7 +241,11 @@ class TwoLevelCache[T](_QueueMixin):
                 return cast("T", val)
         finally:
             # * Waiters hold their own reference; the value is already in L1.
-            self._locks.pop(key, None)
+            # * Remove only our own lock: invalidate() or a later fetch may
+            # * have replaced it, and popping that replacement would break
+            # * mutual exclusion for the waiters still holding the new lock.
+            if self._locks.get(key) is lock:
+                self._locks.pop(key, None)
 
     # ── Internal helpers ── #
 

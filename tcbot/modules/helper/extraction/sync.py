@@ -117,9 +117,24 @@ async def _fetch_live_identity(
 
         try:
             async with asyncio.timeout(_RESOLVE_SWEEP_TIMEOUT):
-                probed = await asyncio.gather(
-                    *(_probe(grp) for grp in groups), return_exceptions=True
-                )
+                # * Chunked gather: at most _RESOLVE_SWEEP_CONCURRENCY probe
+                # * coroutines are pending at once. The old gather created
+                # * one coroutine per group eagerly (hundreds pending on a
+                # * large federation) before the semaphore bounded them.
+                # * First hit in group order wins; every probe returns the
+                # * same user triple, so an early exit preserves the result
+                # * while skipping the remaining chunks.
+                for start in range(0, len(groups), _RESOLVE_SWEEP_CONCURRENCY):
+                    chunk = groups[start : start + _RESOLVE_SWEEP_CONCURRENCY]
+                    results = await asyncio.gather(
+                        *(_probe(grp) for grp in chunk),
+                        return_exceptions=True,
+                    )
+                    for result in results:
+                        if isinstance(result, asyncio.CancelledError):
+                            raise result
+                        if not isinstance(result, BaseException) and result is not None:
+                            return result
         except TimeoutError:
             log.debug(
                 "get_chat_member sweep timed out for target=%d after %ds",
@@ -127,13 +142,6 @@ async def _fetch_live_identity(
                 _RESOLVE_SWEEP_TIMEOUT,
             )
             return None
-        for result in probed:
-            if isinstance(result, asyncio.CancelledError):
-                raise result
-            if isinstance(result, BaseException):
-                continue
-            if result is not None:
-                return result
 
     if not fname:
         return None

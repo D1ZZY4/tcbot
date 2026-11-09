@@ -16,10 +16,9 @@ from tcbot.modules.helper import parse_logmsg
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.utils.dispatch import (
-    count_transient_errors,
     fan_out,
-    first_transient_error,
     is_benign_telegram_error,
+    log_fanout_error,
     throw_if_cancelled,
 )
 from tcbot.utils.formatter import user_ref
@@ -167,16 +166,9 @@ async def execute_unban(
             for grp in groups
         ]
     )
-    failed = count_transient_errors(results)
-    if failed:
-        log.error(
-            "Unban fan-out had %d/%d transient failures for target=%d; "
-            "user may still be banned in those chats",
-            failed,
-            len(groups),
-            target_id,
-            exc_info=first_transient_error(results),
-        )
+    failed = log_fanout_error(
+        results, action="Unban", total=len(groups), target_id=target_id
+    )
     # * Name the still-banned groups for the operator reply below (mirrors
     # * the ban executor's applied-line): counts alone never tell the
     # * operator where to look, and a re-run of /tcunban would report "no

@@ -67,38 +67,6 @@ class LogBuilder:
         self._lines.append("")
         return self
 
-    def user_block(
-        self,
-        target_id: int,
-        target_fname: str,
-        target_username: str | None = None,
-        *,
-        user_label: str = "User",
-        id_label: str = "User ID",
-    ) -> LogBuilder:
-        """Append the canonical `Label: mention` + `User ID: <id>` pair."""
-        self._lines.append(
-            f"{user_label}: {user_ref(target_id, target_fname, target_username)}"
-        )
-        self._lines.append(f"{id_label}: {code(str(target_id))}")
-        return self
-
-    def actor_block(
-        self,
-        actor_id: int,
-        actor_fname: str,
-        actor_username: str | None = None,
-        *,
-        label: str = "Admin",
-        id_label: str = "ID",
-    ) -> LogBuilder:
-        """Append the canonical `Label: mention` + `ID: <id>` pair for an actor."""
-        self._lines.append(
-            f"{label}: {user_ref(actor_id, actor_fname, actor_username)}"
-        )
-        self._lines.append(f"{id_label}: {code(str(actor_id))}")
-        return self
-
     def date(self, ts: datetime | None = None, *, label: str = "Date") -> LogBuilder:
         """Append a `Label: dd-mm-yyyy | HH:MM` line. Defaults to utc_now()."""
         self._lines.append(f"{label}: {fmt_dt(ts if ts is not None else utc_now())}")

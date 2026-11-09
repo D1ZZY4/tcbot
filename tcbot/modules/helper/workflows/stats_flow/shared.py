@@ -13,7 +13,6 @@ from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from tcbot import database as db
 from tcbot.modules.helper.keyboards import (
     stats_back_kb,
-    stats_back_row,
     stats_list_kb,
     stats_main_kb,
 )
@@ -67,11 +66,6 @@ def launch_group_title_refresh(bot: Bot, chat_id: int) -> None:
         return
     _refresh_tasks.add(task)
     task.add_done_callback(_refresh_tasks.discard)
-
-
-def _back_main(locale: str | None = None) -> list[InlineKeyboardButton]:
-    """Back row to the stats main menu (single source: keyboards)."""
-    return stats_back_row(locale)
 
 
 def main_kb(
