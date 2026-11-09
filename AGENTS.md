@@ -100,24 +100,24 @@ Current stack:
 │   ├── alive.py              Flask keep-alive and webhook receiver
 │   ├── serverless.py         Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 │   ├── database/             MongoDB helpers, one package per collection/domain
-│   │   ├── users_cache/      Member profile cache operations
-│   │   ├── users_roles/      Role system: owners/admins/roles
-│   │   ├── bans_db/          Federation bans
-│   │   ├── groups_db/        Connected and pending groups
-│   │   ├── warns_db/         Warnings
+│   │   ├── users_cache.py    Member profile cache operations
+│   │   ├── users_roles.py    Role system: owners/admins/roles
+│   │   ├── bans_db.py        Federation bans
+│   │   ├── groups_db.py      Connected and pending groups
+│   │   ├── warns_db.py       Warnings
 │   │   ├── kicks_db.py       Kicks
 │   │   ├── mutes_db.py       Mutes
 │   │   ├── queues_db.py      Promotion requests
 │   │   ├── cache/            TwoLevelCache (L1 in-memory + L2 Redis)
 │   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
-│   │   ├── scheduler/        APScheduler background task + MongoDBJobStore
-│   │   ├── mongos/           MongoDB client/indexes
+│   │   ├── scheduler.py      APScheduler background task + MongoDBJobStore
+│   │   ├── mongos.py         MongoDB client/indexes
 │   │   ├── _migration.py     Shared chat-repoint helper for group migrations
 │   │   ├── documents.py      Typed document shapes
 │   │   ├── types.py          Domain primitive types
 │   │   ├── settings_db.py    Per-user locale preferences
-│   │   ├── mtproto/          Bot-token MTProto client
-│   │   └── mtproto_store/    MongoDB-backed Kurigram storage
+│   │   ├── mtproto.py        Bot-token MTProto client
+│   │   └── mtproto_store.py  MongoDB-backed Kurigram storage
 │   ├── modules/              Telegram command modules and handlers
 │   │   ├── helper/           Shared helper code and conversation workflows
 │   │   │   ├── pipelines/    ConversationHandler flows (one `*_flow.py` module each)

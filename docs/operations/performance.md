@@ -79,7 +79,7 @@ be reviewed together.
 
 ### Keep indexes aligned with query shapes
 
-Startup index creation lives in `tcbot/database/mongos/`. Current examples
+Startup index creation lives in `tcbot/database/mongos.py`. Current examples
 include:
 
 ```text

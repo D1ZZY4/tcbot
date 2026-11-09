@@ -1,6 +1,6 @@
 # Groups
 
-This document describes the current connected-group list behavior implemented by `tcbot/modules/groups.py` (the `/tcgroups` command and the inline toggle callbacks) and `tcbot/database/groups_db/` (the shared connected-groups collection and cache).
+This document describes the current connected-group list behavior implemented by `tcbot/modules/groups.py` (the `/tcgroups` command and the inline toggle callbacks) and `tcbot/database/groups_db.py` (the shared connected-groups collection and cache).
 
 For the connect flow, see [`connecting.md`](connecting.md). For the disconnect
 flow, see [`disconnecting.md`](disconnecting.md). For shared helpers, see

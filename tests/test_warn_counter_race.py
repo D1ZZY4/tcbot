@@ -13,7 +13,8 @@ from typing import Any
 import pytest
 from pymongo.errors import DuplicateKeyError
 
-from tcbot.database.warns_db import counters, records
+from tcbot.database import warns_db as counters
+from tcbot.database import warns_db as records
 
 
 def _dup_error() -> DuplicateKeyError:

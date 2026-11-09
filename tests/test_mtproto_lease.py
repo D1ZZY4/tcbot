@@ -19,7 +19,6 @@ from pyrogram.errors import AuthKeyDuplicated
 from pyrogram.session.session import AuthKeyNotFound
 
 from tcbot.database import mtproto, mtproto_store
-from tcbot.database.mtproto import lifecycle
 from tcbot.database.mtproto_store import MongoStorage
 from tcbot.utils.circuit_breaker import CircuitOpenError
 
@@ -319,7 +318,7 @@ def test_claim_outage_returns_false(
         raise ConnectionFailure("no primary")
 
     monkeypatch.setattr(
-        "tcbot.database.mtproto_store.lease.db_call",
+        "tcbot.database.mtproto_store.db_call",
         _boom,
     )
     assert _run(store.claim_owner("a", ttl_s=90.0)) is False
@@ -338,7 +337,7 @@ def test_claim_circuit_open_returns_false(
         raise CircuitOpenError("Circuit [mongodb] is OPEN; call rejected.")
 
     monkeypatch.setattr(
-        "tcbot.database.mtproto_store.lease.db_call",
+        "tcbot.database.mtproto_store.db_call",
         _boom,
     )
     assert _run(store.claim_owner("a", ttl_s=90.0)) is False
@@ -358,7 +357,7 @@ def test_heartbeat_defers_on_connection_failure(
                 raise ConnectionFailure("no primary")
             return True
 
-    monkeypatch.setattr(lifecycle._mtproto_pkg, "_HEARTBEAT_S", 0.0)
+    monkeypatch.setattr(mtproto, "_HEARTBEAT_S", 0.0)
 
     class _Client:
         pass
@@ -367,7 +366,7 @@ def test_heartbeat_defers_on_connection_failure(
 
         async def _do() -> None:
             task = asyncio.create_task(
-                lifecycle._heartbeat_lease(_Client(), _Store(), "owner")  # type: ignore[arg-type]
+                mtproto._heartbeat_lease(_Client(), _Store(), "owner")  # type: ignore[arg-type]
             )
             await asyncio.sleep(0.05)
             task.cancel()
@@ -394,7 +393,7 @@ def test_heartbeat_defers_on_circuit_open(
                 raise CircuitOpenError("Circuit [mongodb] is OPEN; call rejected.")
             return True
 
-    monkeypatch.setattr(lifecycle._mtproto_pkg, "_HEARTBEAT_S", 0.0)
+    monkeypatch.setattr(mtproto, "_HEARTBEAT_S", 0.0)
 
     class _Client:
         pass
@@ -403,7 +402,7 @@ def test_heartbeat_defers_on_circuit_open(
 
         async def _do() -> None:
             task = asyncio.create_task(
-                lifecycle._heartbeat_lease(_Client(), _Store(), "owner")  # type: ignore[arg-type]
+                mtproto._heartbeat_lease(_Client(), _Store(), "owner")  # type: ignore[arg-type]
             )
             await asyncio.sleep(0.05)
             task.cancel()

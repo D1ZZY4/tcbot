@@ -13,8 +13,9 @@ from typing import Any
 
 import pytest
 
+from tcbot import database as db
 from tcbot.database import mtproto
-from tcbot.modules.helper import extraction
+from tcbot.modules.helper.extraction.sync import _fetch_live_identity
 
 
 def _with_creds(monkeypatch: pytest.MonkeyPatch, api_id: int, api_hash: str) -> None:
@@ -218,11 +219,11 @@ def test_fetch_live_identity_prefers_mtproto_over_sweep(
     async def _must_not_run() -> object:
         raise AssertionError("group sweep must be skipped on MTProto hit")
 
-    monkeypatch.setattr(extraction.db.mtproto, "resolve_user", _hit)
-    monkeypatch.setattr(extraction.db.groups_db, "active_groups", _must_not_run)
+    monkeypatch.setattr(db.mtproto, "resolve_user", _hit)
+    monkeypatch.setattr(db.groups_db, "active_groups", _must_not_run)
 
     assert asyncio.run(
-        extraction._fetch_live_identity(_BlindBot(), 42)  # type: ignore[arg-type]
+        _fetch_live_identity(_BlindBot(), 42)  # type: ignore[arg-type]
     ) == (
         "Ghost",
         "ghost",

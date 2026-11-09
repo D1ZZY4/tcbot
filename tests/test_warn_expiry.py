@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from tcbot.database.scheduler import jobs
+from tcbot.database import scheduler as jobs
 
 
 class _FakeResult:

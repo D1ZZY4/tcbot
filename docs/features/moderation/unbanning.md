@@ -1,6 +1,6 @@
 # Unbanning
 
-This document describes the current federation unban behavior implemented by `tcbot/modules/unban.py` (the `/tcunban` entry point) and `tcbot/modules/helper/pipelines/unban_flow.py` (the `execute_unban` executor). Persistent ban state lives in `tcbot/database/bans_db/`; only the unban-relevant helpers are documented here.
+This document describes the current federation unban behavior implemented by `tcbot/modules/unban.py` (the `/tcunban` entry point) and `tcbot/modules/helper/pipelines/unban_flow.py` (the `execute_unban` executor). Persistent ban state lives in `tcbot/database/bans_db.py`; only the unban-relevant helpers are documented here.
 
 For the ban flow that creates the records this command clears, see
 [`banning.md`](banning.md). For the appeal flow that can also trigger an unban,

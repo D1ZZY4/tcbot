@@ -17,7 +17,7 @@ from pymongo.errors import (
     WriteConcernError,
 )
 
-from tcbot.database.mongos.client import is_transient_mongo_error
+from tcbot.database.mongos import is_transient_mongo_error
 from tcbot.utils.circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
 
 

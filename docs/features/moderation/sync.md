@@ -2,7 +2,7 @@
 
 This document describes the enforcement-reconciliation behavior implemented by
 `tcbot/modules/sync.py` (the `/tcsync` command plus the shared sweep core)
-and the optional scheduled sweep in `tcbot/database/scheduler/`.
+and the optional scheduled sweep in `tcbot/database/scheduler.py`.
 
 For the ban flow that this reconciles, see [`banning.md`](banning.md). For the
 unban flow, see [`unbanning.md`](unbanning.md). For shared helpers, see

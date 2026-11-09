@@ -61,21 +61,21 @@ tcbot/
 ├── alive.py                Flask health endpoint and webhook receiver
 ├── serverless.py           Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 ├── database/
-│   ├── mongos/             Motor client, collection accessor, indexes
+│   ├── mongos.py           Motor client, collection accessor, indexes
 │   ├── _migration.py       Shared chat-repoint helper for basic-group to supergroup migrations
-│   ├── bans_db/            Federation ban records (incl. per-user history)
-│   ├── groups_db/          Connected groups and pending joins
-│   ├── users_cache/        Member profile cache operations
-│   ├── users_roles/        Owners/admins + dev/tester roles, effective-role resolution
-│   ├── warns_db/           Warnings and warning counters (incl. per-user aggregates)
+│   ├── bans_db.py          Federation ban records (incl. per-user history)
+│   ├── groups_db.py        Connected groups and pending joins
+│   ├── users_cache.py      Member profile cache operations
+│   ├── users_roles.py      Owners/admins + dev/tester roles, effective-role resolution
+│   ├── warns_db.py         Warnings and warning counters (incl. per-user aggregates)
 │   ├── kicks_db.py         Kick audit records (incl. per-user history)
 │   ├── mutes_db.py         Mute audit records (incl. per-user history)
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache/              L1 TTL caches with optional Redis L2
 │   ├── redis_client.py     Optional async Redis client (owns the connect/degrade decision)
-│   ├── scheduler/          APScheduler background jobs (MongoDBJobStore, library default collection)
-│   ├── mtproto/            Bot-token MTProto client: resolve + member harvest
-│   ├── mtproto_store/      MongoDB-backed Kurigram storage engine
+│   ├── scheduler.py        APScheduler background jobs (MongoDBJobStore, library default collection)
+│   ├── mtproto.py          Bot-token MTProto client: resolve + member harvest
+│   ├── mtproto_store.py    MongoDB-backed Kurigram storage engine
 │   ├── settings_db.py      Per-user settings (locale preferences)
 │   ├── documents.py        TypedDict document shapes
 │   └── types.py            NewType ID primitives

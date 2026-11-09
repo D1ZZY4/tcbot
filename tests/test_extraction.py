@@ -302,7 +302,7 @@ def test_username_falls_back_to_mtproto(monkeypatch) -> None:  # type: ignore[no
         assert username == "ghost"
         return (42, "Ghost", "ghost")
 
-    monkeypatch.setattr(ex.db.mtproto, "resolve_username", _hit)
+    monkeypatch.setattr(db.mtproto, "resolve_username", _hit)
     assert _run(ex.extract_target(_update(_msg()), ["@ghost"], cast("Any", bot))) == (
         42,
         "Ghost",
@@ -317,7 +317,7 @@ def test_username_bot_hit_skips_mtproto(monkeypatch) -> None:  # type: ignore[no
     async def _boom(username: str):
         raise AssertionError("must not run")
 
-    monkeypatch.setattr(ex.db.mtproto, "resolve_username", _boom)
+    monkeypatch.setattr(db.mtproto, "resolve_username", _boom)
     assert _run(ex.extract_target(_update(_msg()), ["@someone"], cast("Any", bot))) == (
         77,
         "Some",

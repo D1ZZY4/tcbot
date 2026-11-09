@@ -14,7 +14,6 @@ import pytest
 
 from tcbot.database import users_roles
 from tcbot.database.cache import _OWNER_KEY
-from tcbot.database.users_roles import owner as _owner_mod
 
 
 async def _identity(coro: Any) -> Any:
@@ -55,7 +54,7 @@ def _install_sleep_spy(monkeypatch: pytest.MonkeyPatch, sleeps: list[float]) -> 
     async def _spy(delay: float, *args: Any, **kwargs: Any) -> None:
         sleeps.append(delay)
 
-    monkeypatch.setattr(_owner_mod.asyncio, "sleep", _spy)
+    monkeypatch.setattr(users_roles.asyncio, "sleep", _spy)
 
 
 def test_set_owner_retries_transient_delete_then_succeeds(
@@ -64,8 +63,8 @@ def test_set_owner_retries_transient_delete_then_succeeds(
     uid = 61009
     col_obj = _FakeOwnerCol(delete_failures=2)
     sleeps: list[float] = []
-    monkeypatch.setattr(_owner_mod, "col", lambda _name: col_obj)
-    monkeypatch.setattr(_owner_mod, "db_call", _identity)
+    monkeypatch.setattr(users_roles, "col", lambda _name: col_obj)
+    monkeypatch.setattr(users_roles, "db_call", _identity)
     _install_sleep_spy(monkeypatch, sleeps)
     try:
         asyncio.run(users_roles.set_owner(uid))
@@ -87,8 +86,8 @@ def test_set_owner_persistent_delete_failure_reraises_with_guidance(
     uid = 61010
     col_obj = _FakeOwnerCol(permanent_failure=True)
     sleeps: list[float] = []
-    monkeypatch.setattr(_owner_mod, "col", lambda _name: col_obj)
-    monkeypatch.setattr(_owner_mod, "db_call", _identity)
+    monkeypatch.setattr(users_roles, "col", lambda _name: col_obj)
+    monkeypatch.setattr(users_roles, "db_call", _identity)
     _install_sleep_spy(monkeypatch, sleeps)
     with (
         caplog.at_level(logging.ERROR, logger="tcbot.database.users_roles"),
@@ -119,8 +118,8 @@ def test_set_owner_delete_cancellation_propagates_without_retry(
             raise asyncio.CancelledError()
 
     sleeps: list[float] = []
-    monkeypatch.setattr(_owner_mod, "col", lambda _name: _CancelCol())
-    monkeypatch.setattr(_owner_mod, "db_call", _identity)
+    monkeypatch.setattr(users_roles, "col", lambda _name: _CancelCol())
+    monkeypatch.setattr(users_roles, "db_call", _identity)
     _install_sleep_spy(monkeypatch, sleeps)
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(users_roles.set_owner(uid))

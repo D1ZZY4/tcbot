@@ -196,7 +196,7 @@ i18n/
 │   ├── banning.toml
 │   ├── common.toml
 │   └── ...
-└── id/             Optional locale (Indonesian example)
+└── id-ID/            Optional locale (Indonesian example)
     ├── banning.toml
     ├── common.toml
     └── ...
