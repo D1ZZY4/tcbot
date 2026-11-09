@@ -105,6 +105,7 @@ not_prompt_owner = "Hanya staf yang membuka prompt ini yang bisa membatalkannya.
 not_prompt_actor = "Hanya staf yang membuka prompt ini yang bisa bertindak atasnya."
 no_pending = "Tidak ada permintaan promosi tertunda."
 bot_target = "Bot tidak dapat memegang peran atau kepemilikan federasi."
+banned_target = "Pengguna ter-ban tidak dapat memegang peran atau kepemilikan federasi. Cabut ban dulu."
 
 # Promote/demote/transfer/list/decision UI. [role_picker]/[confirm]/
 # [transfer]/[list]/[card] render as MarkdownV2; [decision.dm] sends plain.

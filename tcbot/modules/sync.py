@@ -309,8 +309,17 @@ def _summarize(
 _STAFF_ROLES: tuple[str, ...] = ("admin", "developer", "tester")
 
 
-async def _demote_staff_holdings(user_ids: list[int]) -> None:
-    """Strip staff roles from banned/muted holders before enforcement."""
+async def _demote_staff_holdings(
+    user_ids: list[int], executor_role: str | None = None
+) -> None:
+    """Strip staff roles from banned/muted holders before enforcement.
+
+    ``executor_role`` of None means the system sweep (scheduled job),
+    which may strip any staff role as reconcile of existing records.
+    A human executor who is not the Founder must not strip ``admin``
+    (``can_demote_admin`` gate); otherwise any Developer could demote
+    Admin holders through ``/tcsync``.
+    """
     unique = sorted({uid for uid in user_ids if uid})
     if not unique:
         return
@@ -323,6 +332,13 @@ async def _demote_staff_holdings(user_ids: list[int]) -> None:
             log.warning("sync demote role lookup failed for %d: %s", uid, role)
             continue
         if role not in _STAFF_ROLES:
+            continue
+        if role == "admin" and executor_role is not None and executor_role != "founder":
+            log.warning(
+                "sync kept admin role for %d: executor %s may not demote admin",
+                uid,
+                executor_role,
+            )
             continue
         holders.append((uid, role))
     if not holders:
@@ -406,7 +422,9 @@ async def run_ban_sync(bot: Bot, *, max_checks: int = _SYNC_MAX_CHECKS) -> SyncC
     return counts
 
 
-async def verify_user(bot: Bot, user_id: int) -> SyncCounts:
+async def verify_user(
+    bot: Bot, user_id: int, executor_role: str | None = None
+) -> SyncCounts:
     """Verify one user both directions across every connected group."""
     groups, ban = await asyncio.gather(
         db.groups_db.active_groups(),
@@ -433,7 +451,7 @@ async def verify_user(bot: Bot, user_id: int) -> SyncCounts:
     if not pairs:
         return SyncCounts()
     if ban or mute is not None:
-        await _demote_staff_holdings([user_id])
+        await _demote_staff_holdings([user_id], executor_role)
     if ban:
         outcomes = await fan_out(
             [_sync_ban_pair(bot, cid, user_id) for _, cid in pairs]
@@ -517,6 +535,7 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * same executor-versus-target rank gate as direct unban. The bare
     # * sweep reconciles existing records and has no single target to gate.
     target_id: int | None = None
+    executor_role: str | None = None
     if args:
         try:
             target_id, _ = await extraction.extract_target(update, args, ctx.bot)
@@ -536,6 +555,7 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         if checked == (None, None):
             return
+        executor_role = checked[0]
 
     try:
         status = await msg.reply_text(t("syncing.status.sending", locale, plain=True))
@@ -545,7 +565,7 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         if target_id is not None:
-            counts = await verify_user(ctx.bot, target_id)
+            counts = await verify_user(ctx.bot, target_id, executor_role)
             text = _render_summary(
                 counts,
                 target=t("syncing.target.user", locale, id=target_id, plain=True),

@@ -108,6 +108,30 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
+    # * Banned users must not gain founder powers: fail closed on active
+    # * ban (and on the lookup itself) so appeal/unban comes first.
+    try:
+        target_ban = await db.bans_db.get_active_ban(target_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("cmd_transfer ban lookup failed for %d", target_id)
+        await safe_reply(
+            msg,
+            replies.err_role_verify(locale, plain=True),
+            log_label="cmd_transfer ban-lookup-failed",
+            parse_mode=None,
+        )
+        return
+    if target_ban is not None:
+        await safe_reply(
+            msg,
+            t("admins.error.banned_target", locale, plain=True),
+            log_label="cmd_transfer banned-target",
+            parse_mode=None,
+        )
+        return
+
     target_uname = ident.username
 
     # * Rank-check the target so the new owner keeps no residual

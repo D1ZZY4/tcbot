@@ -105,6 +105,7 @@ not_prompt_owner = "Only the staff member who opened this prompt can cancel it."
 not_prompt_actor = "Only the staff member who opened this prompt can act on it."
 no_pending = "No pending promotion requests."
 bot_target = "Bots cannot hold federation roles or ownership."
+banned_target = "Banned users cannot hold federation roles or ownership. Lift the ban first."
 
 # Promote/demote/transfer/list/decision UI. [role_picker]/[confirm]/
 # [transfer]/[list]/[card] render as MarkdownV2; [decision.dm] sends plain.

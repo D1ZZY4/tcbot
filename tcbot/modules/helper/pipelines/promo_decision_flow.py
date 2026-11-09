@@ -145,33 +145,12 @@ async def execute_promo_decision(
     lc, lt = cfg.logs
 
     if action == "promo_approve":
-        # * Sequential, not parallel: add_admin first so a failure leaves
-        # * the request pending and retryable. The old parallel form could
-        # * resolve "approved" while add_admin failed, orphaning the user.
-        # * add_admin is an idempotent upsert, so a retry after a resolve
-        # * failure still converges; the atomic resolve decides a race.
-        try:
-            await db.users_roles.add_admin(target_id, admin.id)
-        except Exception:
-            log.exception(
-                "add_admin failed for %d (request %s)",
-                target_id,
-                request_id,
-            )
-            await safe_edit_cb(
-                q,
-                t(
-                    "admins.decision.approve_fail",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
-                parse_mode=None,
-                reply_markup=None,
-                log_level="debug",
-                log_label="promo_approve db-fail",
-                catch_all=True,
-            )
-            return
+        # * Resolve-first claim, then grant: the atomic resolve decides a
+        # * concurrent approve/reject race. Granting before the claim (old
+        # * order) could add admin after a winning reject, granting rank
+        # * against the resolved intent. If add_admin fails after a won
+        # * claim, the request stays approved and the operator grants
+        # * manually; that availability gap is safer than a privilege race.
         try:
             db_resolve_r = await db.queues_db.resolve(request_id, "approved", admin.id)
         except Exception:
@@ -191,6 +170,28 @@ async def execute_promo_decision(
             )
             return
         if db_resolve_r is False:
+            await safe_edit_cb(
+                q,
+                t(
+                    "admins.error.request_not_found",
+                    await locale_for_update(update),
+                    plain=True,
+                ),
+                parse_mode=None,
+                reply_markup=None,
+                log_level="debug",
+                log_label="promo_approve already-resolved",
+                catch_all=True,
+            )
+            return
+        try:
+            await db.users_roles.add_admin(target_id, admin.id)
+        except Exception:
+            log.exception(
+                "add_admin failed for %d (request %s, already resolved)",
+                target_id,
+                request_id,
+            )
             await safe_edit_cb(
                 q,
                 t(
