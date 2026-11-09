@@ -14,16 +14,16 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Operator proof migration script** (`scripts/migrate_proofs.py`, `tests/test_proof_migration.py`, `docs/operations/proof-migration.md`): one-shot tool that copies every stored ban proof to a new channel, updates the proof ids in the bans collection, rewrites the proof buttons on the stored ban log messages, and fixes old proof links inside copied captions. Dry-run by default, resumable through a state file, album-safe. Operators point `PROOFS` at the new channel after running it.
 
-- **Group locale change and ban-log keyboard cover** (`tests/test_group_locale_cache.py`, `tests/test_ban_log_kb.py`, `tcbot/database/groups_db/locale.py`, `tcbot/modules/helper/keyboards/ban.py`): `set_group_locale` invalidating the groups-list cache and the merged ban-log keyboard rows are pinned. Behavior changes: none for operators.
+- **Group locale change and ban-log keyboard cover** (`tests/test_group_locale_cache.py`, `tests/test_ban_log_kb.py`, `tcbot/database/groups_db.py`, `tcbot/modules/helper/keyboards/ban.py`): `set_group_locale` invalidating the groups-list cache and the merged ban-log keyboard rows are pinned. Behavior changes: none for operators.
 - **Shared moderation entry sequence** (`tcbot/modules/helper/decorators/checks.py`, `tests/test_authz.py`): `resolve_mod_target` runs the locale, origin, extraction, identity, and rank steps once for the ban, kick, mute, and warn commands, replacing five copies of the same sequence. Behavior changes: none; replies and log labels are byte-identical.
 
-- **Self-check cards stay with their owner** (`tcbot/modules/checking/checkme.py`, `tests/test_checkme_owner.py`): detail and back callbacks ignore a crafted tap for another user's ban. Behavior changes: other users cannot render your ban card.
+- **Self-check cards stay with their owner** (`tcbot/modules/check.py`, `tests/test_checkme_owner.py`): detail and back callbacks ignore a crafted tap for another user's ban. Behavior changes: other users cannot render your ban card.
 
 - **Module budget widened and comments tightened** (`pyproject.toml`, `.agents/rules/code-style.md`, `.agents/rules/comment-style.md`): per-file budget is 1000 lines, comments stay short and dense. Behavior changes: none for operators.
 
 - **Runtime builder is public** (`tcbot/__main__.py`, `tcbot/serverless.py`): the shared builder, app build, and handler wiring use public names. Behavior changes: none.
 
-- **Fresh role and connection reads for enforcement gates** (`tcbot/database/users_roles/`, `tcbot/database/groups_db/`, `tcbot/modules/helper/decorators/`): owner, effective-role, and connection lookups accept a fresh bypass that reads MongoDB directly and refreshes the cache. Enforcement gates use it so a demotion, transfer, or disconnect in another process is never hidden for the cache TTL; display reads keep the cached fast path. Behavior changes: demotions, transfers, and disconnects take effect immediately for moderation commands.
+- **Fresh role and connection reads for enforcement gates** (`tcbot/database/users_roles.py`, `tcbot/database/groups_db.py`, `tcbot/modules/helper/decorators/`): owner, effective-role, and connection lookups accept a fresh bypass that reads MongoDB directly and refreshes the cache. Enforcement gates use it so a demotion, transfer, or disconnect in another process is never hidden for the cache TTL; display reads keep the cached fast path. Behavior changes: demotions, transfers, and disconnects take effect immediately for moderation commands.
 
 - **Broadcast coverage for partial failures** (`tests/test_broadcasting.py`): broadcast counting is pinned for total success and for mixed benign and transient failures. Behavior changes: none for operators.
 
@@ -33,27 +33,35 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Local test run without CI values** (`tests/conftest.py`, `tests/test_authz.py`): the suite supplies placeholder startup values when none are present, so it collects and runs locally, and the new checks cover the fail-closed and propagation contracts. Behavior changes: none for operators.
 
-- **Localized Prev/Next and authorization refusals** (`i18n/en-US/button.toml`, `i18n/id/button.toml`, `i18n/en-US/common.toml`, `i18n/id/common.toml`): the paged-list navigation row reads `button.prev` / `button.next`, and every auth refusal (tier refusals, rank, role-lookup retry, anonymous admin, outrank notice) reads `common.refuse.*` in the viewer's locale. Default-locale wording is unchanged.
+- **Localized Prev/Next and authorization refusals** (`i18n/en-US/button.toml`, `i18n/id-ID/button.toml`, `i18n/en-US/common.toml`, `i18n/id-ID/common.toml`): the paged-list navigation row reads `button.prev` / `button.next`, and every auth refusal (tier refusals, rank, role-lookup retry, anonymous admin, outrank notice) reads `common.refuse.*` in the viewer's locale. Default-locale wording is unchanged.
 
-- **Warn, stats, and help catalog coverage** (`i18n/en-US/stats.toml`, `i18n/id/stats.toml`, `i18n/en-US/help.toml`, `i18n/id/help.toml`, `i18n/en-US/common.toml`, `i18n/id/common.toml`): outage cards, degraded-overview notes, localized help titles, and a shared unknown-date word in both languages. Default-locale output is unchanged.
+- **Warn, stats, and help catalog coverage** (`i18n/en-US/stats.toml`, `i18n/id-ID/stats.toml`, `i18n/en-US/help.toml`, `i18n/id-ID/help.toml`, `i18n/en-US/common.toml`, `i18n/id-ID/common.toml`): outage cards, degraded-overview notes, localized help titles, and a shared unknown-date word in both languages. Default-locale output is unchanged.
 
 - **Modern dependency stack for structured logging, testing, and code quality** (`pyproject.toml`, `.pre-commit-config.yaml`, `tcbot/utils/logger.py`): logging runs on `loguru` with `contextvars`-based per-request context, bridged to stdlib so capture and error shipping keep working, plus `pytest-asyncio` for proper async test execution, `pre-commit` with Ruff and pyright hooks for automated quality enforcement, and `py-spy` for production profiling. Two dependencies (`taskiq`, `pydantic-settings`) were evaluated but excluded due to Python 3.14 compatibility issues with pydantic's type evaluation internals; they will be re-added when pydantic releases a compatible version.
 
 - **Parallel test execution** (`pyproject.toml`, `uv.lock`, `.github/workflows/test-pytest.yml`, `docs/operations/ci-cd.md`): the dev group gains `pytest-xdist` (Python 3.14 support verified upstream and by a local parallel run) and CI runs the suite with `-n auto`. All checks pass identically in serial and parallel runs. Behavior changes: none, faster feedback only.
 
-- **Sync reconciles active mutes** (`tcbot/modules/syncing/`, `tcbot/database/scheduler.py`, `i18n/en-US/syncing.toml`, `i18n/id/syncing.toml`, `docs/features/moderation/sync.md`): bare and targeted runs re-apply live mutes within the shared pair budget after the ban sweep, and the summary gains a re-muted count. Restricted non-muted users are never unrestriced. Behavior changes: sweeps now restrict seemingly-unrestricted muted members.
+- **Sync reconciles active mutes** (`tcbot/modules/sync.py`, `tcbot/database/scheduler.py`, `i18n/en-US/syncing.toml`, `i18n/id-ID/syncing.toml`, `docs/features/moderation/sync.md`): bare and targeted runs re-apply live mutes within the shared pair budget after the ban sweep, and the summary gains a re-muted count. Restricted non-muted users are never unrestriced. Behavior changes: sweeps now restrict seemingly-unrestricted muted members.
 
 - **Warn auto-ban stores the warn proof on the ban record** (`tcbot/modules/helper/pipelines/warn_flow.py`, `tests/test_warn_autoban_guard.py`, `docs/features/moderation/warnings.md`): the proof upload collected with the threshold warn becomes the ban `proof_message_id`, so `/check` shows View Proof instead of an empty slot. Behavior changes: auto-ban records now carry the warn proof.
 
-- **Founder gates read fresh role state** (`tcbot/database/users_roles/`, `tcbot/modules/admins/decision.py`, `tcbot/modules/stats/command.py`): promotion approve and reject buttons plus the founder-only users list now read the owner and effective role directly instead of the cached values, so a transfer in another process takes effect at once. Behavior changes: a transferred founder loses approve, reject, and list access immediately rather than after the cache window.
+- **Founder gates read fresh role state** (`tcbot/database/users_roles.py`, `tcbot/modules/admins.py`, `tcbot/modules/stats.py`): promotion approve and reject buttons plus the founder-only users list now read the owner and effective role directly instead of the cached values, so a transfer in another process takes effect at once. Behavior changes: a transferred founder loses approve, reject, and list access immediately rather than after the cache window.
 
-- **Role prompts name their opener for the action buttons** (`tcbot/modules/helper/keyboards/admin.py`, `tcbot/modules/admins/`, `i18n/en-US/admins.toml`, `i18n/id/admins.toml`): the promote role buttons and the demote confirm button carry the staff member who opened the prompt, so a different staffer tapping gets an alert and the prompt stays live. Keyboard shapes for in-flight prompts keep working. Behavior changes: cross-staff taps on a pending role prompt alert instead of acting.
+- **Role prompts name their opener for the action buttons** (`tcbot/modules/helper/keyboards/admin.py`, `tcbot/modules/admins/`, `i18n/en-US/admins.toml`, `i18n/id-ID/admins.toml`): the promote role buttons and the demote confirm button carry the staff member who opened the prompt, so a different staffer tapping gets an alert and the prompt stays live. Keyboard shapes for in-flight prompts keep working. Behavior changes: cross-staff taps on a pending role prompt alert instead of acting.
 
-- **Warn family refuses verified bot targets** (`tcbot/modules/warnings/`, `tcbot/modules/muting.py`): warn, unwarn, resetwarns, and unmute verify the target is a bot before classifying, so the bot-target refusal actually fires. Ban, kick, and mute keep allowing bots, matching their refusal tables. Behavior changes: warning a proven bot now asks for a human target instead of warning the bot.
+- **Warn family refuses verified bot targets** (`tcbot/modules/warns.py`, `tcbot/modules/mute.py`): warn, unwarn, resetwarns, and unmute verify the target is a bot before classifying, so the bot-target refusal actually fires. Ban, kick, and mute keep allowing bots, matching their refusal tables. Behavior changes: warning a proven bot now asks for a human target instead of warning the bot.
 
 - **Main-group appeals in place** (`tcbot/modules/appeals.py`, `appeal_submit_flow.py`): a `#appeal` message in the main group submits through the same gates and posting as the DM deep link, including dual review cards. Behavior changes: `#appeal` in the main group opens an appeal for the sender's active ban.
 
 - **Review cards post in both surfaces** (`appeal_submit_flow.py`): the staff review card with Approve/Reject buttons now lands in the main group and as a copy in the appeals destination, next to the forwarded appeal text. Behavior changes: staff can decide from either surface; the main-group card stays canonical for the stored review slot.
+
+- **Proof upload splits large galleries at the Telegram limit** (`tcbot/modules/helper/pipelines/proof_flow.py`): albums longer than 10 items now send as successive media groups instead of being rejected as one oversized send. Behavior changes: large proof albums now land instead of producing a proof-less ban.
+
+- **Error reports keep their traceback** (`tcbot/utils/logger.py`): the Telegram error handler ships a snapshot of the log record so clearing the live record after delivery no longer erases the traceback before the report runs. Behavior changes: error channel reports show the real exception and trace instead of an unknown-error label.
+
+- **Staff roster resolves names live on cache miss** (`tcbot/modules/helper/pipelines/stats_flow.py`, `tcbot/modules/stats.py`): staff without a member-cache row now resolve through live identity (bounded, failures keep the numeric ID) instead of rendering the ID placeholder. Behavior changes: legacy staff rows show Telegram names in the roster.
+
+- **Speedtest probes servers concurrently** (`tcbot/modules/netspeed.py`): best-server latency probes now run in parallel instead of one server after another. Behavior changes: server selection is faster on far routes; results keep the same fields.
 
 ### Changed
 
@@ -90,9 +98,9 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Sync staff stripping runs concurrently** (`tcbot/modules/syncing/__init__.py`): role removals for banned/muted holders now run through the bounded gather helper instead of one await per holder. Behavior changes: none; same removals, less sequential latency.
 
-- **Localized fallbacks for bot name and admin name** (`tcbot/modules/privacy.py`, `tcbot/modules/checking/checkme.py`, `i18n/`): the privacy bot-name fallback and the checkme admin-name fallback read `privacy.msg.bot_fallback` and `checking.profile.admin_fallback` in the viewer's locale. Behavior changes: Indonesian viewers read translated fallback names; default-locale wording is unchanged.
+- **Localized fallbacks for bot name and admin name** (`tcbot/modules/privacy.py`, `tcbot/modules/check.py`, `i18n/`): the privacy bot-name fallback and the checkme admin-name fallback read `privacy.msg.bot_fallback` and `checking.profile.admin_fallback` in the viewer's locale. Behavior changes: Indonesian viewers read translated fallback names; default-locale wording is unchanged.
 
-- **Shared document types now type their writers** (`tcbot/database/users_roles/roles.py`, `tcbot/database/settings_db.py`, `tcbot/database/users_roles/tables.py`): `set_role` and `set_user_locale` write through `RoleDoc` and `UserSettingsDoc`, and `VALID_ROLES` is a literal tuple so the validation narrows the role. Behavior changes: none.
+- **Shared document types now type their writers** (`tcbot/database/users_roles.py`, `tcbot/database/settings_db.py`, `tcbot/database/users_roles.py`): `set_role` and `set_user_locale` write through `RoleDoc` and `UserSettingsDoc`, and `VALID_ROLES` is a literal tuple so the validation narrows the role. Behavior changes: none.
 
 - **Unused helpers removed** (`tcbot/utils/circuit_breaker.py`, `tcbot/utils/i18n.py`, `tcbot/utils/prefixes.py`): `is_open`, `reload_catalog`, and `_BotLike` had no callers. Behavior changes: none.
 
@@ -110,19 +118,19 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **24/7 runner re-enabled** (`.github/workflows/run-bot.yml`, `README.md`, `docs/operations/ci-cd.md`, `.agents/rules/docs-sync.md`, `AGENTS.md`, `docs/architecture/helpers.md`): the self-chaining runner moves from `.github/workflows.disabled/` back to `.github/workflows/` and schedules again with push-triggered handover and cron fallback. Behavior changes: the bot auto-runs via GitHub Actions again; repository secrets still need to be set once.
 
-- **Role and group helpers live in focused packages** (`tcbot/database/users_roles/`, `tcbot/database/groups_db/`, `tcbot/modules/helper/pipelines/promote_flow.py`): owner, admin, custom-role, and resolution logic; core, pending, migration, and locale group logic; and assign, request, and alias promotion logic each have one home with a thin re-exporting package. Dotted import paths, callback data, and handler registration are unchanged. Behavior changes: none.
+- **Role and group helpers live in focused packages** (`tcbot/database/users_roles.py`, `tcbot/database/groups_db.py`, `tcbot/modules/helper/pipelines/promote_flow.py`): owner, admin, custom-role, and resolution logic; core, pending, migration, and locale group logic; and assign, request, and alias promotion logic each have one home with a thin re-exporting package. Dotted import paths, callback data, and handler registration are unchanged. Behavior changes: none.
 
 - **Scheduler sync runs through an injected runner** (`tcbot/database/scheduler/`, `tcbot/__main__.py`): the database package never imports a command module; startup injects the enforcement runner after the scheduler starts. Behavior changes: none; scheduled sweeps run as before without the import cycle.
 
 - **Fan-out failure summaries share one helper** (`tcbot/utils/dispatch.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `tcbot/modules/helper/pipelines/mute_flow.py`, `tcbot/modules/helper/pipelines/unban_flow.py`, `tcbot/modules/helper/pipelines/appeal_review_flow.py`): the error-level transient summary is emitted from one place while per-group warnings and applied lines stay per-flow. Operator-facing counts are unchanged. Behavior changes: none, consistent partial-failure reporting.
 
-- **Self-check callbacks share one ban loader** (`tcbot/modules/checking/checkme.py`): callback parsing and the parallel answer-plus-fetch live once so the detail and back paths cannot drift. Behavior changes: none.
+- **Self-check callbacks share one ban loader** (`tcbot/modules/check.py`): callback parsing and the parallel answer-plus-fetch live once so the detail and back paths cannot drift. Behavior changes: none.
 
 - **Python floor and codec bound match the deployed runtime** (`pyproject.toml`, `uv.lock`, `AGENTS.md`, `replit.md`, `docs/getting-started/setup.md`): the floor is now 3.14 (the tested runtime) and the structured-codec version carries an upper bound. Behavior changes: none; installs on older runtimes now fail fast.
 
 - **Docker port follows the environment** (`Dockerfile`, `docker-compose.yml`): the published port and health probe use the configured port instead of a fixed 5000. Behavior changes: custom ports work in Docker.
 
-- **Moderation requires a federation origin** (`tcbot/modules/banning.py`, `tcbot/modules/muting.py`, `tcbot/modules/kicking.py`, `tcbot/modules/warnings/`, `tcbot/modules/unbanning.py`, `tcbot/modules/syncing/command.py`): ban, unban, and sync accept bot DM or any connected or primary group, while mute, warn, kick, and their manage commands require a connected or primary group. A connection-state outage blocks the action with a retry notice instead of proceeding. Behavior changes: commands from disconnected groups, and private mute, warn, and kick, are refused.
+- **Moderation requires a federation origin** (`tcbot/modules/banning.py`, `tcbot/modules/mute.py`, `tcbot/modules/kicking.py`, `tcbot/modules/warns.py`, `tcbot/modules/unbanning.py`, `tcbot/modules/syncing/command.py`): ban, unban, and sync accept bot DM or any connected or primary group, while mute, warn, kick, and their manage commands require a connected or primary group. A connection-state outage blocks the action with a retry notice instead of proceeding. Behavior changes: commands from disconnected groups, and private mute, warn, and kick, are refused.
 
 - **Ownership transfer needs a verified human** (`tcbot/modules/admins/transfer.py`, `tcbot/modules/helper/identity.py`): transfer proceeds only when the target is verified human. A verified bot is refused, and an indeterminate lookup asks for a retry instead of granting ownership on the benefit of the doubt. Promotion keeps allowing unknown off-group targets. Behavior changes: transfer during a lookup outage asks for a retry.
 
@@ -224,7 +232,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **One owner for conversation state keys and list rendering** (`tcbot/modules/helper/pipelines/ban_flow.py`, `banning.py`, `kicking.py`, `muting.py`, `warnings.py`, `groups.py`, `start.py`, `tests/test_ban_flush_cleanup.py`): the ban key tuple lives once in `ban_flow` as `BAN_USER_DATA_KEYS` (the parallel entry-point list is gone, including a `ban_duration` entry nothing ever set), kick/mute/warn key tuples move to module level with the mute prompt ID completed, and the shared group-list renderer is public as `render_groups` instead of a cross-module private import. Behavior changes: none.
 
-- **Promotion and ownership transfer refuse verified bot targets** (`tcbot/modules/admins.py`, `tcbot/modules/helper/identity.py`, `i18n/en-US/admins.toml`, `i18n/id/admins.toml`): a shared verified-only check (quoted sender, one bounded membership probe, one MTProto peer lookup) refuses bot targets, while unknown targets stay allowed so off-group promotions keep working. Behavior changes: promoting a proven bot, or transferring ownership to one, now replies with a refusal instead of granting privilege.
+- **Promotion and ownership transfer refuse verified bot targets** (`tcbot/modules/admins.py`, `tcbot/modules/helper/identity.py`, `i18n/en-US/admins.toml`, `i18n/id-ID/admins.toml`): a shared verified-only check (quoted sender, one bounded membership probe, one MTProto peer lookup) refuses bot targets, while unknown targets stay allowed so off-group promotions keep working. Behavior changes: promoting a proven bot, or transferring ownership to one, now replies with a refusal instead of granting privilege.
 
 - **Demote clears both role collections** (`tcbot/modules/helper/pipelines/demote_flow.py`): the removal step clears the admin row and the custom-role row together and reports success when either was present. Behavior changes: a stale row in the other collection can no longer resurrect privilege on a later demote.
 
@@ -236,7 +244,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Every callback tap answers the spinner first** (`tcbot/modules/checking.py`, `tcbot/modules/admins.py`, `tcbot/modules/helper/pipelines/connected_flow.py`): handlers with missing callback data acknowledge the query before returning instead of leaving the client spinner hanging. Behavior changes: malformed taps dismiss the spinner instead of timing out.
 
-- **Remaining hardcoded English strings move to the catalog** (`tcbot/modules/connecting.py`, `stats.py`, `admins.py`, `checking.py`, `i18n/en-US/connecting.toml`, `stats.toml`, `admins.toml`, `checking.toml`, `i18n/id/*`): help section titles and the unknown-date word render in the viewer's locale. Behavior changes: Indonesian viewers read translated titles where English leaked through; default-locale wording is unchanged.
+- **Remaining hardcoded English strings move to the catalog** (`tcbot/modules/connecting.py`, `stats.py`, `admins.py`, `checking.py`, `i18n/en-US/connecting.toml`, `stats.toml`, `admins.toml`, `checking.toml`, `i18n/id-ID/*`): help section titles and the unknown-date word render in the viewer's locale. Behavior changes: Indonesian viewers read translated titles where English leaked through; default-locale wording is unchanged.
 
 - **Mention batch reads share one implementation** (`tcbot/database/users_cache.py`): both batch readers funnel through a single triple-fetching helper, so miss handling and sentinel caching cannot drift between them. Behavior changes: none, same values with one code path.
 
@@ -288,7 +296,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Moderation flows live in one module each** (`tcbot/modules/helper/pipelines/`): the fragmented workflow subpackages are now single modules (`ban_flow.py`, `reason_flow.py`, `kick_flow.py`, `mute_flow.py`, `warn_flow.py`, and the appeal, check, stats, promote, demote, connected, proof, and unban flows), so the code a moderator action touches is easy to find and review. Behavior changes: none; import paths moved, callback data and handler registration are unchanged.
 
-- **Mute duration parsing lives in one helper** (`tcbot/utils/time_and_date.py`, `tcbot/modules/muting.py`, `tcbot/modules/helper/pipelines/mute_flow.py`): duration parse and format live with the other time helpers, and the mute entry parses the token once instead of checking a pattern and then parsing again. Behavior changes: none; identical tokens, identical replies.
+- **Mute duration parsing lives in one helper** (`tcbot/utils/time_and_date.py`, `tcbot/modules/mute.py`, `tcbot/modules/helper/pipelines/mute_flow.py`): duration parse and format live with the other time helpers, and the mute entry parses the token once instead of checking a pattern and then parsing again. Behavior changes: none; identical tokens, identical replies.
 
 - **Flow modules carry section dividers and concise notes** (`tcbot/modules/helper/pipelines/`): each moderation flow now opens its executor, handler, and factory blocks with one divider line, and decision points that are not obvious from the code carry one short note. Behavior changes: none, comments only.
 
@@ -324,10 +332,41 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
-- **Group locale change reaches the groups list immediately** (`tcbot/database/groups_db.py`): `set_group_locale` now also invalidates the active-groups list cache, whose rows carry the locale. Behavior changes: connected-groups views show the new locale now instead of one list-cache window later.
-- **Sync strips stale staff rank** (`tcbot/modules/syncing/`, `tests/test_syncing.py`, `docs/features/moderation/sync.md`): bare and targeted runs clear admin, developer, and tester rows from banned or muted holders before fan-out. Behavior changes: a re-promoted banned user no longer keeps rank through a sweep.
+- **Zero duration no longer becomes a permanent mute** (`tcbot/utils/time_and_date.py`): `parse_duration` rejects a zero value instead of returning a falsy delta the mute executor coerced to permanent. Behavior changes: `/tcmute <target> 0s` now errors instead of muting forever.
 
-- **Mute no longer demotes on an aborted reason** (`tcbot/modules/muting.py`): duration and reason checks now run before the auto-demote, so an overlong reason never strips a role. Behavior changes: role removal is skipped when the command aborts.
+- **New bans without proof no longer proceed** (`tcbot/modules/helper/pipelines/ban_flow.py`): a new ban whose proof upload returns nothing now aborts before any group is touched and explains the failure on the prompt. Behavior changes: proof-less new bans are refused instead of stored with proof zero.
+
+- **Sync keeps admin rank for non-founder executors** (`tcbot/modules/sync.py`): targeted `/tcsync` now carries the executor role into the staff-strip step, so a developer cannot strip an admin through sync. Behavior changes: admin rows survive targeted sync unless the executor is the founder; scheduled sweeps still reconcile all roles.
+
+- **Partial unmute no longer discards the mute record** (`tcbot/modules/helper/pipelines/mute_flow.py`): a partial fan-out now keeps the active mute so a later sync can re-drive the remaining chats. Behavior changes: partial unmute keeps the record and reports failure instead of clearing it.
+
+- **Ownership cannot transfer to a banned user** (`tcbot/modules/helper/pipelines/transfer_flow.py`): transfer now fails closed when the target holds an active ban. Behavior changes: banned targets are refused with an unban-first message.
+
+- **Classify failure replies instead of staying silent** (`tcbot/modules/helper/decorators/checks.py`): a failed target classification now sends a retry notice. Behavior changes: the command no longer ends without feedback.
+
+- **Name search clamps its result limit** (`tcbot/database/users_cache.py`): non-positive and oversized limits are clamped instead of reaching the database driver. Behavior changes: none on healthy callers; invalid limits no longer scan unbounded.
+
+- **Join requests fail closed on ban lookup outage** (`tcbot/modules/greeting.py`): a join request is declined when the ban read fails instead of proceeding, and an approved join returns early without welcome enforcement. Behavior changes: during a database outage join requests are declined rather than admitted.
+
+- **Appeal decisions claim atomically** (`tcbot/database/bans_db.py`, `tcbot/modules/helper/pipelines/appeal_review_flow.py`): a second concurrent Approve/Reject tap loses an atomic claim and aborts instead of double executing. Behavior changes: double taps no longer produce duplicate unbans or contradictory verdicts.
+
+- **Promotion approve claims before granting** (`tcbot/modules/helper/pipelines/promo_decision_flow.py`): the atomic resolve now runs before `add_admin`, so a winning reject is never followed by an admin grant. Behavior changes: a grant failure after a won claim leaves the request approved for manual follow-up instead of pending.
+
+- **Cancel after Done does not abort execution** (`tcbot/modules/helper/pipelines/ban_flow.py`): cancel taps are ignored once flushing has started. Behavior changes: a late cancel no longer cancels a half executed ban.
+
+- **Kick retry unban once** (`tcbot/modules/helper/pipelines/kick_flow.py`): a transient unban failure after kick retries once before warning. Behavior changes: transient failures no longer strand a banned user with only a kick log.
+
+- **Permanent mute label is escaped before prompts** (`tcbot/modules/mute.py`): the duration text is escaped before reuse in MarkdownV2 prompts. Behavior changes: translated permanent text cannot break the prompt send.
+
+- **Warn list caps at the 50 most recent** (`tcbot/modules/helper/pipelines/warn_flow.py`): the numbered render no longer loads unbounded history. Behavior changes: pathological histories render the most recent 50 with an honest total.
+
+- **Profile role shows unknown during outage** (`tcbot/modules/helper/pipelines/check_flow.py`): a failed role lookup now renders the unknown label instead of the regular-user label. Behavior changes: `/check` no longer mislabels staff during a role-read outage.
+
+- **Circuit breaker decays a sustained healthy run** (`tcbot/utils/circuit_breaker.py`): a long consecutive success streak clears the lifetime failure count. Behavior changes: failures spread over months no longer combine into a spurious open.
+
+- **Sync strips stale staff rank** (`tcbot/modules/sync.py`, `tests/test_syncing.py`, `docs/features/moderation/sync.md`): bare and targeted runs clear admin, developer, and tester rows from banned or muted holders before fan-out. Behavior changes: a re-promoted banned user no longer keeps rank through a sweep.
+
+- **Mute no longer demotes on an aborted reason** (`tcbot/modules/mute.py`): duration and reason checks now run before the auto-demote, so an overlong reason never strips a role. Behavior changes: role removal is skipped when the command aborts.
 
 - **Unban aborts when the role survives the cleanup demote** (`tcbot/modules/unbanning.py`): when the demote clears no row, the fresh role is re-read and the unban stops if the target still holds staff rank. Behavior changes: a still-staff target keeps both role and ban instead of being unbanned with rank intact.
 
@@ -339,7 +378,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Warn expiry timeout fails the job** (`tcbot/database/scheduler/jobs.py`): a hung expiry now raises instead of returning normally, so the daily job and the cron endpoint report the incomplete run instead of success. Behavior changes: a timeout answers failure instead of success.
 
-- **Cancelled reads no longer render as empty** (`tcbot/modules/helper/pipelines/stats_flow.py`, `tcbot/modules/checking/checkme.py`): shutdown cancellation propagates from the overview, roster, and self-check reads instead of rendering as zeroes or a clean record. Behavior changes: none during normal operation.
+- **Cancelled reads no longer render as empty** (`tcbot/modules/helper/pipelines/stats_flow.py`, `tcbot/modules/check.py`): shutdown cancellation propagates from the overview, roster, and self-check reads instead of rendering as zeroes or a clean record. Behavior changes: none during normal operation.
 
 - **Skip-reason checks rank like Done and Skip** (`tcbot/modules/helper/pipelines/reason_flow.py`): advancing without a reason now verifies the tapper still holds rank, matching the proof Done and Skip taps. Behavior changes: a demoted moderator's skip tap ends the flow with a refusal instead of advancing.
 
@@ -359,7 +398,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Appeal review blocks self-review and demotes staff before approval** (`tcbot/modules/helper/pipelines/appeal_review_flow.py`, `docs/features/appeals.md`): a banned user who is later promoted cannot approve or reject their own appeal, and an approved appeal now demotes a still-staff target before unbanning, mirroring manual unban. A role lookup outage or demote failure keeps the review card untouched. Behavior changes: self-review taps alert instead of deciding; approved staff targets lose their role before unban.
 
-- **Cancel buttons honour the prompt opener** (`tcbot/modules/helper/keyboards/admin.py`, `tcbot/modules/admins/promote.py`, `tcbot/modules/admins/demote.py`, `tcbot/modules/admins/shared.py`, `i18n/en-US/admins.toml`, `i18n/id/admins.toml`, `docs/features/roles/promote.md`, `docs/features/roles/demote.md`, `docs/features/roles/roles.md`): new role-picker and demote confirmation cancels carry the staff member who opened the prompt, so a different tapper gets a not-owner alert and the prompt stays live. Legacy cancel taps keep working. Reason-flow cancels are already scoped by the conversation handler. Behavior changes: cross-staff cancel taps alert instead of collapsing the prompt.
+- **Cancel buttons honour the prompt opener** (`tcbot/modules/helper/keyboards/admin.py`, `tcbot/modules/admins/promote.py`, `tcbot/modules/admins/demote.py`, `tcbot/modules/admins/shared.py`, `i18n/en-US/admins.toml`, `i18n/id-ID/admins.toml`, `docs/features/roles/promote.md`, `docs/features/roles/demote.md`, `docs/features/roles/roles.md`): new role-picker and demote confirmation cancels carry the staff member who opened the prompt, so a different tapper gets a not-owner alert and the prompt stays live. Legacy cancel taps keep working. Reason-flow cancels are already scoped by the conversation handler. Behavior changes: cross-staff cancel taps alert instead of collapsing the prompt.
 
 - **Revocation cache writes survive queue saturation** (`tcbot/database/cache/twolevel.py`, `docs/architecture/database.md`): single-key deletes and writes for role, connection, group-list, and owner caches are never dropped when the mutation queue is full, so a revoked privilege cannot stay visible to other processes until the key TTL. Display-name hints remain droppable. Behavior changes: none on healthy reads; revocations land even under burst.
 
@@ -467,7 +506,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Proof conversation ends after a silence flush executes the ban** (`tcbot/modules/helper/pipelines/ban_flow.py`, `tests/test_ban_flush_cleanup.py`, `docs/features/moderation/banning.md`): late messages, media, Done taps, and commands arriving after the background flush end the leftover conversation silently instead of nagging for proof, opening orphan sessions, or claiming no ban was issued. Behavior changes: post-ban messages no longer receive proof prompts; timed-out commands after an executed ban end quietly.
 
-- **Unmute keeps the record on total enforcement failure** (`tcbot/modules/helper/pipelines/mute_flow.py`, `tests/test_mute_partial_failure.py`, `i18n/en-US/muting.toml`, `i18n/id/muting.toml`, `docs/features/moderation/muting.md`): when no group could be unrestriced the reply asks for a retry and the active-mute row stays, so a re-run re-drives the full fan-out instead of announcing a restore while every chat is still muted. Behavior changes: total-failure unmutes no longer clear the record.
+- **Unmute keeps the record on total enforcement failure** (`tcbot/modules/helper/pipelines/mute_flow.py`, `tests/test_mute_partial_failure.py`, `i18n/en-US/muting.toml`, `i18n/id-ID/muting.toml`, `docs/features/moderation/muting.md`): when no group could be unrestriced the reply asks for a retry and the active-mute row stays, so a re-run re-drives the full fan-out instead of announcing a restore while every chat is still muted. Behavior changes: total-failure unmutes no longer clear the record.
 
 - **Group management re-checks staff state fresh** (`tcbot/modules/helper/identity.py`, `tcbot/modules/disconnecting.py`, `tcbot/modules/language.py`): the disconnect and group-language write gates now read the staff role directly instead of the cached value, so a demotion takes effect at once. Behavior changes: a demoted admin can no longer disconnect a group or save its language during the old cache window.
 
@@ -512,6 +551,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **Unused ban helpers removed** (`tcbot/database/bans_db.py`, `docs/architecture/database.md`): `deactivate_ban` and `set_review` had no callers; `deactivate_all_active_bans`, `deactivate_extra_active_bans`, and `set_review_if_absent` are the live helpers. Behavior changes: none.
 
 ### Documentation
+
+- **Env table and module examples match the loader** (`CLAUDE.md`, `config.env.example`, `docs/getting-started/setup.md`, `docs/architecture/repository-map.md`): the required founder identity, the `SENTRY_DSN` option, the live module names, and the `id-ID` catalog location now match the code. Behavior changes: none, docs only.
 
 - **Dependency, proofs, and coverage documentation refreshed** (`docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `docs/architecture/database.md`, `docs/architecture/utilities.md`, `AGENTS.md`): PyMongo, the `PROOFS` default, the `SENTRY_DSN` option, and the coverage-backed test workflow are aligned with the implementation. Behavior changes: none for operators.
 

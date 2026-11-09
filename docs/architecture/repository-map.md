@@ -16,7 +16,7 @@ This page maps the repository structure and the service boundaries between packa
 ├── tcbot/                  Main Python package
 ├── api/                    Vercel serverless endpoints (webhook, cron)
 ├── docs/                   Documentation grouped by purpose
-├── i18n/                   Translation catalogs (en-US source, id mirror)
+├── i18n/                   Translation catalogs (en-US source, id-ID mirror)
 ├── tests/                  Pytest test suite
 ├── .github/                GitHub Actions workflows + dependabot config
 ├── .agents/                Maintainer and agent rules

@@ -232,6 +232,7 @@ Never commit real credentials. Required secret values include:
 
 - `BOT_TOKEN`: Telegram bot token from BotFather.
 - `MONGODB_URI`: MongoDB connection string.
+- `OWNER_ID`: initial federation founder Telegram user ID (positive integer; boot refuses without it).
 - `API_ID`: Telegram API ID for MTProto identity lookups; boot refuses without it.
 - `API_HASH`: Telegram API hash matching `API_ID`; boot refuses without it.
 
@@ -247,6 +248,7 @@ Important non-secret/runtime variables include:
 - `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`: log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id` (channel, group, or forum thread).
 - `ALBUM_DEBOUNCE_SECONDS`: proof silence window before the ban executor runs.
 - `LOG_LEVEL`: bot log level.
+- `SENTRY_DSN`: optional Sentry DSN for production error monitoring (observability extra); empty disables monitoring.
 - `MODULES_LOAD`, `MODULES_NO_LOAD`: optional module allowlist/denylist.
 - `WEBHOOK_URL`: explicit webhook URL for production; overrides `REPLIT_DEV_DOMAIN`.
 - `WEBHOOK_SECRET`: optional webhook secret for Telegram to sign update payloads.

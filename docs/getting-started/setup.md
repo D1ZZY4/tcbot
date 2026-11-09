@@ -141,8 +141,8 @@ PROOFS="-1001234567890"
 | `API_HASH` | Yes | string | Telegram API hash matching `API_ID`. Never commit the real value. |
 | `MTPROTO_SESSION` | No | string | Namespace for the shared MTProto session in MongoDB. Default `tcbot_mtproto`. |
 | `LOG_LEVEL` | No | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Runtime logging level. Default `INFO`. |
-| `MODULES_LOAD` | No | comma-separated module names | Optional allowlist, e.g. `banning,appeals`. |
-| `MODULES_NO_LOAD` | No | comma-separated module names | Optional denylist, e.g. `maintenance,broadcasting`. |
+| `MODULES_LOAD` | No | comma-separated module names | Optional allowlist, e.g. `bans,appeals`. |
+| `MODULES_NO_LOAD` | No | comma-separated module names | Optional denylist, e.g. `maintenance,broadcast`. |
 | `REDIS_URL` | No | Redis URI | L2 cache connection string, e.g. `redis://localhost:6379/0`. When absent the bot uses in-process L1 cache only. |
 | `SENTRY_DSN` | No | DSN string | Error monitoring via Sentry (observability extra: install `tcbot[observability]`). When empty, monitoring is disabled. |
 | `WEBHOOK_URL` | No | URL | Base URL for webhook transport, e.g. `https://yourdomain.example.com`. An explicit value takes precedence over the automatically detected `REPLIT_DEV_DOMAIN`; when neither is available, the bot falls back to polling for local development. |
