@@ -23,7 +23,7 @@ def appeal_received_log(
     ban_id: str,
     appeal_link: str,
 ) -> str:
-    """Review card posted to APPEAL_DISCUSSION_TOPIC."""
+    """Review card posted to MAIN_GROUP and the appeals destination."""
     b = LogBuilder(f"New {cfg.community_name} Appeal Request").raw(
         f"User: {user_ref(target_id, target_fname)} \\(ID: {code(str(target_id))}\\)"
     )

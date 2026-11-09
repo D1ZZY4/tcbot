@@ -13,7 +13,9 @@ from dataclasses import dataclass
 from dotenv import find_dotenv, load_dotenv
 
 from .parsing import (
+    _DEFAULT_COMMUNITY_APPEAL_URL,
     _DEFAULT_COMMUNITY_CHANNEL_URL,
+    _DEFAULT_COMMUNITY_GROUP_URL,
     _DEFAULT_COMMUNITY_LOGS_URL,
     _DEFAULT_COMMUNITY_TRAVEL_URL,
     _DEFAULT_PORT,
@@ -51,8 +53,6 @@ class Configs:
     logs: str
     logs_errors: str
     appeals: str
-    appeal_log_handle: str
-    appeal_discussion_topic: int
     album_debounce_seconds: int
     log_level: int
     modules_load: list[str]
@@ -153,13 +153,6 @@ class Configs:
             logs=os.getenv("LOGS", "").strip(),
             logs_errors=os.getenv("LOGS_ERRORS", "").strip(),
             appeals=os.getenv("APPEALS", "").strip(),
-            appeal_log_handle=os.getenv(
-                "APPEAL_LOG_HANDLE", "@TranssionCoreFederationLogs"
-            ).strip()
-            or "@TranssionCoreFederationLogs",
-            appeal_discussion_topic=_int_from_env(
-                "APPEAL_DISCUSSION_TOPIC", 0, minimum=0
-            ),
             album_debounce_seconds=_int_from_env(
                 "ALBUM_DEBOUNCE_SECONDS", 4, minimum=1
             ),
@@ -179,8 +172,14 @@ class Configs:
                 "COMMUNITY_CHANNEL_URL", _DEFAULT_COMMUNITY_CHANNEL_URL
             ).strip()
             or _DEFAULT_COMMUNITY_CHANNEL_URL,
-            community_group_url=os.getenv("COMMUNITY_GROUP_URL", "").strip(),
-            community_appeal_url=os.getenv("COMMUNITY_APPEAL_URL", "").strip(),
+            community_group_url=os.getenv(
+                "COMMUNITY_GROUP_URL", _DEFAULT_COMMUNITY_GROUP_URL
+            ).strip()
+            or _DEFAULT_COMMUNITY_GROUP_URL,
+            community_appeal_url=os.getenv(
+                "COMMUNITY_APPEAL_URL", _DEFAULT_COMMUNITY_APPEAL_URL
+            ).strip()
+            or _DEFAULT_COMMUNITY_APPEAL_URL,
             community_logs_url=os.getenv(
                 "COMMUNITY_LOGS_URL", _DEFAULT_COMMUNITY_LOGS_URL
             ).strip()

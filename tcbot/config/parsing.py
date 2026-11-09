@@ -25,10 +25,26 @@ _REPLIT_DEV_DOMAIN_VAR: str = "REPLIT_DEV_DOMAIN"
 
 # * Built-in Additional Links menu URLs. Used when the matching env var is
 # * unset or blank; a non-empty env value always wins. Kept here (not in the
-# * template) so fresh deployments show the community buttons with zero setup.
+# * template) so fresh deployments show all five community buttons with zero setup.
 _DEFAULT_COMMUNITY_CHANNEL_URL: str = "https://t.me/TranssionCoreFederation"
+_DEFAULT_COMMUNITY_GROUP_URL: str = "https://t.me/TranssionCoreFederationGroup"
 _DEFAULT_COMMUNITY_LOGS_URL: str = "https://t.me/TranssionCoreFederationLogs"
+_DEFAULT_COMMUNITY_APPEAL_URL: str = "https://t.me/TranssionCoreFederationAppeals"
 _DEFAULT_COMMUNITY_TRAVEL_URL: str = "https://t.me/+S2C_ppFvHlAwMzNl"
+
+
+def tme_handle_from_url(url: str) -> str:
+    """Return the display handle (``@name``) for a ``https://t.me/`` URL.
+
+    Used to derive the logs-channel handle for appeal instructions from the
+    public logs link, so no separate handle variable is needed. Falls back
+    to the raw value when the URL is not a plain public link (for example an
+    invite link), leaving the menu to show it as-is.
+    """
+    name = url.strip().removeprefix("https://t.me/").strip("/")
+    if name and "/" not in name and "+" not in name:
+        return "@" + name
+    return url.strip()
 
 
 def parse_list(raw: str) -> list[str]:

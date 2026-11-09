@@ -94,7 +94,6 @@ def test_review_post_failure_stays_retryable(
             appeals=(-1001, None),
             main_group=-1002,
             logs=(-1003, None),
-            appeal_discussion_topic=None,
         ),
     )
 

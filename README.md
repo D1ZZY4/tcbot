@@ -84,8 +84,6 @@ Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (e
 |---|---|---|
 | `MAIN_GROUP` | Usually | Main community group or forum (negative chat ID). |
 | `MAIN_CHANNEL` | No | Announcement channel reference for some log messages. |
-| `MAIN_GROUP_URL` | No | Public URL of the main group (Discussion button). |
-| `MAIN_DISCUSSION_GROUP` | No | Discussion group outside the federation (appeals in place). |
 
 ### Logs, proofs, and appeals
 
@@ -95,10 +93,8 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 |---|---|---|
 | `PROOFS` | For bans | Ban proof media destination. |
 | `LOGS` | Yes | Audit-log destination for bans, unbans, appeals, and admin actions. |
-| `LOGS_ERRORS` | Recommended | Error-report destination; empty disables error shipping (errors are not forwarded to `LOGS`). |
-| `APPEALS` | For appeals | Submitted-appeal record destination. |
-| `APPEAL_LOG_HANDLE` | No | Display handle shown with appeal logs (default `@TranssionCoreFederationLogs`). |
-| `APPEAL_DISCUSSION_TOPIC` | For reviews | Thread ID inside `MAIN_GROUP` where review cards are posted. |
+| `LOGS_ERRORS` | Recommended | Error-report destination; when empty, reports fall back to the owner DM instead of being dropped. |
+| `APPEALS` | For appeals | Submitted-appeal record destination (channel, group, or forum thread as `chat_id` or `chat_id/thread_id`; also receives a copy of every review card). |
 
 ### Moderation thresholds
 
@@ -130,7 +126,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 
 ### Community links
 
-`COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_TRAVEL_URL`: each shows one button in the Additional Links menu; a non-empty value overrides the built-in default, empty falls back to it.
+`COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_APPEAL_URL`, `COMMUNITY_TRAVEL_URL`: each shows one button in the Additional Links menu; a non-empty value overrides the built-in default, empty falls back to it.
 
 </details>
 
@@ -206,9 +202,9 @@ Limits: multi-step conversations are best-effort (cold starts drop instance-memo
 
 1. `cp config.env.example .env` and set at least `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI=mongodb://mongo:27017`, `API_ID`, `API_HASH`, `REDIS_URL=redis://redis:6379/0`.
 2. `docker compose up --build` (bot plus `mongo:7` plus `redis:7-alpine`, each with health checks; the bot waits for both databases).
-3. Verify: `curl localhost:5000/health` returns subsystem JSON with HTTP 200.
+3. Verify: `curl localhost:${PORT:-5000}/health` returns subsystem JSON with HTTP 200.
 
-Single image without compose: `docker build -t tcf-bot .` then `docker run --env-file .env -p 5000:5000 tcf-bot` (image command is `uv run --frozen python -m tcbot`). Point MongoDB/Redis at reachable hosts.
+Single image without compose: `docker build -t tcf-bot .` then `docker run --env-file .env -p ${PORT:-5000}:${PORT:-5000} tcf-bot` (image command is `uv run --frozen python -m tcbot`). Point MongoDB/Redis at reachable hosts.
 </details>
 
 <details>

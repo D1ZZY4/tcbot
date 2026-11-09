@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from tcbot import cfg
 from tcbot.modules.helper.locale import locale_for_update
+from tcbot.modules.helper.workflows.appeal_submit_flow.factory import (
+    build_handler,
+)
 from tcbot.modules.helper.workflows.appeal_submit_flow.gates import (
     _APPEAL_STATE_KEYS,
     _ID_RE,
@@ -25,6 +28,10 @@ from tcbot.modules.helper.workflows.appeal_submit_flow.gates import (
     text_references_log_message,
 )
 from tcbot.modules.helper.workflows.appeal_submit_flow.mixin import AppealSubmitMixin
+from tcbot.modules.helper.workflows.appeal_submit_flow.posting import post_appeal
+from tcbot.modules.helper.workflows.appeal_submit_flow.prompts import (
+    instruction_text,
+)
 from tcbot.modules.helper.workflows.appeal_submit_flow.submit import SubmitMessageMixin
 
 __all__ = [
@@ -42,8 +49,11 @@ __all__ = [
     "_clear_appeal_state",
     "_cooldown_remaining_h",
     "_is_stale_review",
+    "build_handler",
     "cfg",
+    "instruction_text",
     "locale_for_update",
+    "post_appeal",
     "starts_with_appeal_tag",
     "text_references_log_message",
 ]

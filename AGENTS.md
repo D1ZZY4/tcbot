@@ -250,9 +250,7 @@ Important non-secret/runtime variables include:
 - `PREFIXES`: command prefix list, default `['/', '!', '.']`.
 - `PORT`: Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
 - `MAIN_GROUP`, `MAIN_CHANNEL`, `COMMUNITY_GROUP_URL`: community chat IDs / links.
-- `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`: log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id`.
-- `APPEAL_LOG_HANDLE`: channel handle shown in appeal instructions.
-- `APPEAL_DISCUSSION_TOPIC`: thread ID in `MAIN_GROUP` for appeal review cards.
+- `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`: log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id` (channel, group, or forum thread).
 - `ALBUM_DEBOUNCE_SECONDS`: proof silence window before the ban executor runs.
 - `LOG_LEVEL`: bot log level.
 - `MODULES_LOAD`, `MODULES_NO_LOAD`: optional module allowlist/denylist.

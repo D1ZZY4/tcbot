@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from tcbot import cfg
+from tcbot.config.parsing import tme_handle_from_url
 from tcbot.modules.helper.workflows.appeal_review_flow import (
     LOCK_HOURS,
     AppealReviewMixin,
@@ -50,4 +51,7 @@ class BuildAppeal(AppealSubmitMixin, AppealReviewMixin):
 
 # ────────────────────── Module-level instance ───────────────────── #
 
-appeal = BuildAppeal(cfg.community_name, cfg.appeal_log_handle)
+# * The instruction handle is derived from the public logs link so no
+# * separate handle variable is needed; APPEALS stays the numeric
+# * destination that supports channel, group, and forum threads.
+appeal = BuildAppeal(cfg.community_name, tme_handle_from_url(cfg.community_logs_url))

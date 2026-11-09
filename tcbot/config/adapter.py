@@ -93,16 +93,6 @@ class _CfgAdapter:
         return self._c.appeals_id
 
     @property
-    def appeal_log_handle(self) -> str:
-        """Public log handle shown to users in appeal instructions."""
-        return self._c.appeal_log_handle
-
-    @property
-    def appeal_discussion_topic(self) -> int:
-        """Thread ID inside MAIN_GROUP where appeal review cards are posted."""
-        return self._c.appeal_discussion_topic
-
-    @property
     def album_debounce(self) -> int:
         """Album grouping window in seconds for multi-photo ban proofs."""
         return self._c.album_debounce_seconds
@@ -216,12 +206,12 @@ class _CfgAdapter:
 
     @property
     def community_group_url(self) -> str:
-        """Public URL of the main community discussion group (empty when unset)."""
+        """Public URL of the main community discussion group (built-in default when env is empty)."""
         return self._c.community_group_url
 
     @property
     def community_appeal_url(self) -> str:
-        """Public URL of the appeals channel (empty when unset)."""
+        """Public URL of the appeals channel (built-in default when env is empty)."""
         return self._c.community_appeal_url
 
     @property

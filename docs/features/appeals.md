@@ -15,7 +15,7 @@ flowchart TD
     Validate -->|yes| DM[Open private DM]
     DM --> Reason[WAITING_APPEAL]
     Reason --> Submit[Submit to APPEALS chat]
-    Submit --> ReviewCard[Post review card<br/>in cfg.main_group topic]
+    Submit --> ReviewCard[Post review card<br/>in cfg.main_group]
     ReviewCard --> Decision{Staff decision}
     Decision -->|approve| Unban[Run /tcunban + notify]
     Decision -->|reject| Notify[Notify user rejected]
@@ -23,7 +23,7 @@ flowchart TD
 
 ## Purpose
 
-The appeal flow lets a user with an active federation ban submit one appeal through the bot in private messages or in place in the main group. The appeal is forwarded to the configured appeal channel/topic, posted for staff review in the main group topic and in the appeals channel, logged in the federation logs channel, and then resolved through inline callback buttons.
+The appeal flow lets a user with an active federation ban submit one appeal through the bot in private messages or in place in the main group. The appeal is forwarded to the configured appeals destination, posted for staff review in the main group and in the appeals destination, logged in the federation logs channel, and then resolved through inline callback buttons.
 
 ## Entry points
 
@@ -104,7 +104,7 @@ duplicate review card.
 When the checks pass:
 
 1. The user's appeal message is forwarded to the configured appeals destination (`cfg.appeals`).
-2. A staff review card is posted to `cfg.main_group`, optionally inside `cfg.appeal_discussion_topic`, and a second copy with the same Approve/Reject buttons is posted in `cfg.appeals`, so either surface stays actionable.
+2. A staff review card is posted to `cfg.main_group`, and a second copy with the same Approve/Reject buttons is posted in `cfg.appeals`, so either surface stays actionable.
 3. A submitted-appeal log is posted to `cfg.logs`.
 4. The pending-review slot is claimed atomically with `bans_db.set_review_if_absent`, so a concurrent duplicate submit cannot overwrite the winner and orphan its card. The loser deletes its own orphan review card best-effort and is told the appeal is already pending.
 5. Appeal-log metadata is stored with `bans_db.set_appeal_log_msg` when the log post succeeded.
@@ -234,7 +234,7 @@ Appeal-related logs are built in `tcbot/modules/helper/parse_logmsg/`:
 
 | Template | Destination / use |
 |---|---|
-| `appeal_received_log` | Staff review card in the main group / appeal discussion topic and its copy in the appeals channel. |
+| `appeal_received_log` | Staff review card in the main group and its copy in the appeals destination. |
 | `appeal_submitted_log` | Initial log in the federation logs channel. |
 | `appeal_approved_edit` | Edited version of the submitted log after approval. |
 | `appeal_rejected_edit` | Edited version of the submitted log after rejection. |
@@ -305,7 +305,7 @@ Important appeal behaviors to keep in mind:
 8. Any staff reviewer is allowed after 12 hours.
 9. Missing `review_timestamp` or missing/zero `admin_user_id` disables the reviewer lock.
 10. Uppercase `#APPEAL` reaches the expired-session branch when conversation state is missing.
-11. The module-level appeal builder uses the configured appeal log handle.
+11. The module-level appeal builder derives its log handle from the public logs link.
 12. After rejection, a 24-hour cooldown applies before the user can start a new appeal.
 13. Staff in anonymous admin mode can use appeal decision buttons but not bot commands.
 14. Non-deciding taps (outsiders, locked-out reviewers, repeat taps, outage retries) never edit the review card.

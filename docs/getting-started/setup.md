@@ -40,7 +40,7 @@ uv run pyright .
 ## Docker setup
 
 The repository includes a Docker Compose stack with the bot, `mongo:7`, and Redis.
-Compose reads `.env`, not `config.env`, and maps the bot's port as `5000:5000`.
+Compose reads `.env`, not `config.env`, and maps the bot's port as `${PORT:-5000}:${PORT:-5000}`.
 Create a Docker-specific environment file before starting the stack:
 
 ```bash
@@ -65,9 +65,8 @@ For Replit or another hosting platform:
 
 1. Store `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` in the platform secret
    manager or its environment configuration.
-2. Store the required destination values (`LOGS`, plus `PROOFS`, `APPEALS`,
-   and `APPEAL_DISCUSSION_TOPIC` when those features are enabled) as
-   environment variables or secrets.
+2. Store the required destination values (`LOGS`, plus `PROOFS` and `APPEALS`
+   when those features are enabled) as environment variables or secrets.
 3. Start the bot with `uv run python -m tcbot`.
 4. Make sure the Flask health endpoint port matches `PORT`.
 
@@ -79,7 +78,7 @@ Docker, Heroku, VPS with systemd, Windows over RDP) live in the collapsible
 
 ### Community links (optional)
 
-The Additional Links menu in the bot start screen shows buttons for the community channel, the discussion group, logs, and the TRAVEL community. Channel, logs, and travel keep the built-in defaults noted below; the discussion button reads `COMMUNITY_GROUP_URL` and has no built-in default. and A non-http(s) env value is rejected: it logs a warning and that button is omitted.
+The Additional Links menu in the bot start screen shows all five buttons by default: Main Channel, Discussion Group, Logs Channel, Appeals Channel, and TRAVEL. Each reads `COMMUNITY_*_URL`; a non-empty env value overrides the built-in default, and empty falls back to it, so a fresh deployment shows every button with zero setup. A non-http(s) env value is rejected: it logs a warning and that button is omitted.
 
 | Variable | Button label |
 |---|---|
@@ -134,13 +133,10 @@ PROOFS="-1001234567890"
 | `PORT` | No | integer or `auto` | Flask keep-alive port. `auto`, invalid, or out-of-range values resolve to `5000`. |
 | `MAIN_GROUP` | Usually | integer chat ID | Main community group or forum. |
 | `MAIN_CHANNEL` | No | integer chat ID | Optional announcement channel reference. |
-| `COMMUNITY_GROUP_URL` | No | http(s) URL | Discussion Group button in the Additional Links menu. No built-in default; empty hides the button. |
 | `PROOFS` | Yes for bans | `chat_id` or `chat_id/thread_id` | Destination for ban proof media. |
 | `LOGS` | Yes | `chat_id` or `chat_id/thread_id` | Audit-log destination. |
 | `LOGS_ERRORS` | Recommended | `chat_id` or `chat_id/thread_id` | Error-report destination. When empty, reports fall back to the owner DM instead of being dropped. |
-| `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination. Also receives a copy of every review card. |
-| `APPEAL_LOG_HANDLE` | No | channel handle | Displayed in appeal instructions. Defaults to `@TranssionCoreFederationLogs`. |
-| `APPEAL_DISCUSSION_TOPIC` | Yes for reviews | integer thread ID | Topic inside `MAIN_GROUP` where review cards are posted. |
+| `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination (channel, group, or forum thread). Also receives a copy of every review card, so one value covers all appeal surfaces. The appeal instruction handle is derived from the public logs link (`COMMUNITY_LOGS_URL`), so no separate handle variable is needed. |
 | `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. |
 | `API_ID` | Yes | integer | Telegram API ID for MTProto identity lookups. The bot refuses to boot without it. |
 | `API_HASH` | Yes | string | Telegram API hash matching `API_ID`. Never commit the real value. |
@@ -156,12 +152,13 @@ PROOFS="-1001234567890"
 | `FED_WARN_LIMIT` | No | integer >= 0 | Federation-wide warning threshold: sum of warn counts across all groups triggers an automatic federation ban when >= this value. Default `0` (disabled). Set to a positive integer to enable cross-group warn aggregation. |
 | `WARN_EXPIRY_DAYS` | No | positive integer | Days after which `warn_counts` records are deleted by the daily scheduler job. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
 | `SYNC_INTERVAL_HOURS` | No | integer >= 0 | Hours between scheduled enforcement-sync sweeps (`/tcsync` core on a timer, log-only). Default `0` (disabled, manual `/tcsync` only). |
-| `COMMUNITY_CHANNEL_URL` | No | http(s) URL | Main Channel button in the Additional Links menu. |
-| `COMMUNITY_LOGS_URL` | No | http(s) URL | Logs Channel button. |
-| `COMMUNITY_APPEAL_URL` | No | http(s) URL | Appeals Channel button. No built-in default; empty hides the button. |
-| `COMMUNITY_TRAVEL_URL` | No | http(s) URL | TRAVEL community button. |
+| `COMMUNITY_CHANNEL_URL` | No | http(s) URL | Main Channel button in the Additional Links menu. Built-in default `https://t.me/TranssionCoreFederation`. |
+| `COMMUNITY_GROUP_URL` | No | http(s) URL | Discussion Group button. Built-in default `https://t.me/TranssionCoreFederationGroup`. |
+| `COMMUNITY_LOGS_URL` | No | http(s) URL | Logs Channel button. Built-in default `https://t.me/TranssionCoreFederationLogs`. |
+| `COMMUNITY_APPEAL_URL` | No | http(s) URL | Appeals Channel button. Built-in default `https://t.me/TranssionCoreFederationAppeals`. |
+| `COMMUNITY_TRAVEL_URL` | No | http(s) URL | TRAVEL community button. Built-in default `https://t.me/+S2C_ppFvHlAwMzNl`. |
 
-Each community link falls back to its built-in default when empty, except the discussion and exec buttons, which have no built-in default. A non-http(s) value is ignored with a warning and hides that button.
+Each community link falls back to its built-in default when empty, so all five buttons show with zero setup. A non-http(s) value is ignored with a warning and hides that button.
 
 MTProto runs on the bot token alone: no phone number, no login code, no
 session file. Fill `API_ID` / `API_HASH` and boot connects a bot-token

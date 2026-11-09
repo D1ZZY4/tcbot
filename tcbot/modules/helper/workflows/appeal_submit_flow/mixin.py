@@ -7,21 +7,17 @@
 from __future__ import annotations
 
 import contextlib
-import re
 from typing import TYPE_CHECKING
 
-from telegram.ext import (
-    CallbackQueryHandler,
-    ContextTypes,
-    ConversationHandler,
-    MessageHandler,
-    filters,
-)
+from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot import database as db
 from tcbot.modules.helper.keyboards import appeal_cancel_kb
 from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.workflows import appeal_submit_flow as flow_pkg
+from tcbot.modules.helper.workflows.appeal_submit_flow.factory import (
+    build_handler as _build_handler,
+)
 from tcbot.modules.helper.workflows.appeal_submit_flow.gates import (
     _ID_RE,
     _REJECTION_COOLDOWN_HOURS,
@@ -30,15 +26,18 @@ from tcbot.modules.helper.workflows.appeal_submit_flow.gates import (
     _clear_appeal_state,
     _cooldown_remaining_h,
     _is_stale_review,
-    starts_with_appeal_tag,
+)
+from tcbot.modules.helper.workflows.appeal_submit_flow.group import (
+    handle_group_appeal as _handle_group_appeal,
+)
+from tcbot.modules.helper.workflows.appeal_submit_flow.prompts import (
+    instruction_text as _instruction_text,
 )
 from tcbot.modules.helper.workflows.appeal_submit_flow.submit import (
     SubmitMessageMixin,
 )
-from tcbot.utils.formatter import pre
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -69,24 +68,10 @@ class AppealSubmitMixin(SubmitMessageMixin):
 
     def instruction_text(self, locale: str | None = None) -> str:
         """Multi-line MarkdownV2 instruction prompt sent when the user opens an appeal."""
-        log_handle = self.log_channel.lstrip("@")
-        example = pre(
-            t(
-                "appeals.instruction.example_body",
-                locale,
-                logs=log_handle,
-                plain=True,
-            )
-        )
-        return (
-            f"{t('appeals.instruction.title', locale, community=self.community_name)}\n\n"
-            f"{t('appeals.instruction.intro', locale)}\n"
-            f"{t('appeals.instruction.log_item', locale)}\n"
-            f"{t('appeals.instruction.clarify_item', locale)}\n"
-            f"{t('appeals.instruction.agree_item', locale)}\n\n"
-            f"{t('appeals.instruction.example_label', locale)}\n"
-            f"{example}\n\n"
-            f"{t('appeals.instruction.channel', locale, handle=self.log_channel)}"
+        return _instruction_text(
+            community_name=self.community_name,
+            log_channel=self.log_channel,
+            locale=locale,
         )
 
     # ── ConversationHandler step methods ──────────────────────────────────
@@ -243,55 +228,8 @@ class AppealSubmitMixin(SubmitMessageMixin):
     async def on_group_appeal(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        """Handle ``#appeal`` in the main group.
-
-        The active ban is looked up by sender; an explicit 10-char ban id
-        in the text must match it. The message then runs through the same
-        submit path as the DM deep link, including forward, dual review
-        cards, and gates. Other chats return silently so the tag stays a
-        no-op outside MAIN_GROUP.
-        """
-        msg = update.effective_message
-        user = update.effective_user
-        chat = update.effective_chat
-        if msg is None or user is None or msg.text is None or chat is None:
-            return
-        if chat.id != flow_pkg.cfg.main_group or not chat.id:
-            return
-        text = msg.text.strip()
-        if not starts_with_appeal_tag(text):
-            return
-        locale = await flow_pkg.locale_for_update(update)
-        try:
-            ban = await db.bans_db.get_active_ban(user.id)
-        except Exception:
-            log.exception("Appeal group lookup failed for user=%d", user.id)
-            ban = None
-        bid = str(ban.get("ban_id", "")) if ban else ""
-        if not ban or not bid:
-            await safe_reply(
-                msg,
-                t("appeals.submit.invalid_link", locale, plain=True),
-                log_label="Appeal group no-ban",
-                parse_mode=None,
-            )
-            return
-        mentioned = re.search(r"\b([a-z0-9]{10})\b", text)
-        if mentioned and mentioned.group(1) != bid:
-            await safe_reply(
-                msg,
-                t("appeals.submit.invalid_link", locale, plain=True),
-                log_label="Appeal group id-mismatch",
-                parse_mode=None,
-            )
-            return
-        if ctx.user_data is None:
-            return
-        ctx.user_data["appeal_ban_id"] = bid
-        ctx.user_data["appeal_log_msg_id"] = ban.get("log_message_id", 0)
-        result = await self._on_message(update, ctx)
-        if result != WAITING_APPEAL:
-            _clear_appeal_state(ctx.user_data)
+        """Handle ``#appeal`` in the main group via the DM submit path."""
+        await _handle_group_appeal(update, ctx, self._on_message)
 
     async def _on_cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Cancel button handler; clears state and ends the conversation."""
@@ -364,44 +302,13 @@ class AppealSubmitMixin(SubmitMessageMixin):
     # ── ConversationHandler factory ────────────────────────────────────────
 
     def build_handler(self, entry_filter: BaseFilter) -> ConversationHandler:
-        """Assemble and return the appeal ConversationHandler.
-
-        Note: ``conversation_timeout`` is intentionally absent.  PTB's timeout
-        support requires the ``job-queue`` extra (APScheduler 3.x backend) which
-        is already used by this project's persistent MongoDBJobStore setup.
-        Stale sessions are detected via the 72-hour ``_STALE_REVIEW_WINDOW`` guard
-        in ``_start`` and ended via the ``_end`` fallback (triggered on any command)
-        or Cancel.
-        """
-        return ConversationHandler(
-            entry_points=[MessageHandler(entry_filter, self._on_entry)],
-            states={
-                WAITING_APPEAL: [
-                    CallbackQueryHandler(
-                        self._on_cancel,
-                        pattern=rf"^{re.escape(self.cancel_callback)}$",
-                    ),
-                    MessageHandler(
-                        filters.ChatType.PRIVATE
-                        & filters.TEXT
-                        & ~ALL_PREFIXES_CMD_FILTER,
-                        self._on_message,
-                    ),
-                    MessageHandler(
-                        filters.ChatType.PRIVATE
-                        & ~filters.TEXT
-                        & ~ALL_PREFIXES_CMD_FILTER,
-                        self._on_unexpected,
-                    ),
-                ],
-            },
-            fallbacks=[
-                # * A fresh deep link restarts the flow instead of falling
-                # * into the generic session-ended handler below.
-                MessageHandler(entry_filter, self._on_entry),
-                MessageHandler(ALL_PREFIXES_CMD_FILTER, self._end),
-            ],
-            per_chat=True,
-            per_user=True,
-            per_message=False,
+        """Assemble and return the appeal ConversationHandler."""
+        return _build_handler(
+            entry_filter=entry_filter,
+            on_entry=self._on_entry,
+            on_cancel=self._on_cancel,
+            on_message=self._on_message,
+            on_unexpected=self._on_unexpected,
+            on_end=self._end,
+            cancel_callback=self.cancel_callback,
         )

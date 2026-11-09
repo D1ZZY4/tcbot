@@ -196,7 +196,7 @@ Appeal flow requirements:
 - The user must have an active ban matching the deep-link ban ID.
 - The appeal text must start with `#appeal` (case-insensitive); when the ban carries a `log_message_id`, the text must also reference that ID as a standalone number. Section labels (`Log link:`, `Clarification:`, `Agreement:`) are requested by the instructions but not parsed semantically.
 - Submit revalidates pending-review and rejection-cooldown state, then claims the review slot atomically (`set_review_if_absent`).
-- A review card is posted to `APPEAL_DISCUSSION_TOPIC` in `MAIN_GROUP`.
+- A review card is posted to `MAIN_GROUP` (general) with a copy in the appeals destination.
 - Approve runs an inline deactivate-plus-fan-out sequence mirroring `execute_unban` and notifies the user; a cancelled deactivation propagates with the card untouched instead of rendering a DB-fail edit. A failed ban read answers the `appeals.review.db_retry` popup with the card untouched for a re-tap. Reject records the rejector (display-name read in parallel), then runs the DM, card edit, and review clear in parallel.
 - Non-deciding taps (including ban-read outages) answer with a popup and never edit the shared card.
 
@@ -205,7 +205,7 @@ flowchart TD
     Start["/start appeal_<ban_id> in private chat"] --> Check{Active ban\nfor user?}
     Check -->|no| Deny[Deny - no active ban]
     Check -->|yes| Wait[WAITING_APPEAL]
-    Wait -->|appeal text with required fields| Post[Post review card to APPEAL_DISCUSSION_TOPIC]
+    Wait -->|appeal text with required fields| Post[Post review card to MAIN_GROUP and appeals destination]
     Wait -->|cancel or timeout| End[ConversationHandler.END]
     Post --> End
     Post --> Review[Staff reviewer sees card]

@@ -9,7 +9,9 @@ from __future__ import annotations
 from .adapter import _CfgAdapter
 from .models import Configs
 from .parsing import (
+    _DEFAULT_COMMUNITY_APPEAL_URL,
     _DEFAULT_COMMUNITY_CHANNEL_URL,
+    _DEFAULT_COMMUNITY_GROUP_URL,
     _DEFAULT_COMMUNITY_LOGS_URL,
     _DEFAULT_COMMUNITY_TRAVEL_URL,
     _DEFAULT_PORT,
@@ -27,10 +29,13 @@ from .parsing import (
     parse_chat_id,
     parse_list,
     parse_port,
+    tme_handle_from_url,
 )
 
 __all__ = [
+    "_DEFAULT_COMMUNITY_APPEAL_URL",
     "_DEFAULT_COMMUNITY_CHANNEL_URL",
+    "_DEFAULT_COMMUNITY_GROUP_URL",
     "_DEFAULT_COMMUNITY_LOGS_URL",
     "_DEFAULT_COMMUNITY_TRAVEL_URL",
     "_DEFAULT_PORT",
@@ -50,4 +55,5 @@ __all__ = [
     "parse_chat_id",
     "parse_list",
     "parse_port",
+    "tme_handle_from_url",
 ]
