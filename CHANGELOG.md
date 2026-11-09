@@ -193,6 +193,7 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Cron endpoint rejects POST explicitly** (`api/cron.py`): non-GET callers get `405` with a warning line instead of the default `501` silence. Behavior changes: POST now answers `405`.
 
 ### Fixed
+- **Ignore intermediate log files in repository tracking** (`.gitignore`): ignore `*.log` and `*.log.*` patterns across the project, preventing CI auto-fix workflows from staging local logs (`pyright.log`, `pytest.log`, `ai-fix-summary.log`) as repository changes and generating phantom pull requests. Behavior changes: automated quality checks never commit log outputs.
 
 - **Cache fetch keeps mutual exclusion** (`tcbot/database/cache/twolevel/core.py`): a finishing fetch removes only its own lock, so concurrent misses for the same key cannot run two database fetches after a lock handoff. Behavior changes: none on single-threaded use; shared misses fetch once.
 

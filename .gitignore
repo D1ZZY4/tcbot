@@ -42,8 +42,8 @@ attached_assets/
 
 # Local
 logs*/
-check.log
-format.log
+*.log
+*.log.*
 nothing.md
 nothing-*.md
 account*
