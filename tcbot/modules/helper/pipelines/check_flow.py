@@ -178,7 +178,11 @@ class CheckProfileMixin:
                 role or "", t("checking.profile.regular", locale)
             )
             if role
-            else t("checking.profile.regular", locale)
+            else (
+                t("checking.profile.unknown", locale)
+                if isinstance(r_role_meta, BaseException)
+                else t("checking.profile.regular", locale)
+            )
         )
         uname_part = (
             t("checking.profile.username", locale, name=uname or "")
