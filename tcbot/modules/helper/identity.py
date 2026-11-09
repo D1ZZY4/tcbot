@@ -183,8 +183,13 @@ async def verify_not_bot(
             )
         except asyncio.CancelledError:
             raise
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug(
+                "bot verification member probe failed for %d in %d: %s",
+                target_id,
+                chat.id,
+                exc,
+            )
         else:
             user = getattr(member, "user", None)
             if user is not None:

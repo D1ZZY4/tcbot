@@ -62,8 +62,8 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     try:
         if error_reporter._benign(exc):
             return
-    except Exception:
-        pass
+    except Exception as check_exc:
+        log.debug("benign check failed, treating as reportable: %s", check_exc)
 
     # * Build context string from the update for extra detail
     context_parts: list[str] = []

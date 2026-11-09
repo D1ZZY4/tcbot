@@ -241,6 +241,29 @@ def test_error_handler_suppresses_mongo_outage(monkeypatch: Any, caplog: Any) ->
     assert "Unhandled exception for update" not in caplog.text
 
 
+def test_error_handler_reports_when_benign_check_raises(
+    monkeypatch: Any, caplog: Any
+) -> None:
+    """If the benign predicate itself faults, the update still ships loudly."""
+    reported: list[Any] = []
+
+    async def _fake_report(exc: BaseException, context: Any = None) -> None:
+        reported.append(exc)
+
+    def _boom(exc: BaseException) -> bool:
+        raise RuntimeError("benign predicate offline")
+
+    monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
+    monkeypatch.setattr(error_reporter, "_benign", _boom)
+
+    ctx = SimpleNamespace(error=ValueError("boom"))
+    with caplog.at_level(logging.DEBUG, logger="tcbot.runtime.errors"):
+        asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]
+    assert len(reported) == 1 and isinstance(reported[0], ValueError)
+    assert "Unhandled exception for update" in caplog.text
+    assert "benign check failed" in caplog.text
+
+
 def test_error_handler_suppresses_circuit_open(monkeypatch: Any, caplog: Any) -> None:
     """The PTB handler path drops CircuitOpenError before log.error."""
     reported: list[Any] = []

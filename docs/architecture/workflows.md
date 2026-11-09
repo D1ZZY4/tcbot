@@ -171,11 +171,11 @@ flowchart TD
 
 Warns are tracked per `(user_id, chat_id)`. At `cfg.warn_limit` (per-group) or `cfg.fed_warn_limit` (federation-wide), the flow issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups, creates a ban document in the `bans` collection, and then clears warnings across all groups with `clear_all_warns` (only after at least one group ban succeeds). If `proof_msgs` is provided, the proof upload starts before the warn write and runs concurrently with `warns_db.add_warn`, so the warn never waits for the proof-channel round trip; the resulting link is attached as an inline keyboard button to all outgoing messages (auto-ban log, replies, non-auto-ban log). A warn-write failure cancels the in-flight upload and replies with a retry notice.
 
-## Unban: `unban_flow/`
+## Unban: `unban_flow.py`
 
 `execute_unban(update, ctx, target_id, target_fname, *, pre_ban=None)` is a direct executor, not a `ConversationHandler`. It finds the active ban (or uses a caller-supplied `pre_ban` record to skip the DB round-trip), deactivates it, unbans the user from all active groups with `fan_out()`, and posts an audit log.
 
-## Appeal: `appeal_flow/` + `appeal_submit_flow/` + `appeal_review_flow/`
+## Appeal: `appeal_flow.py` + `appeal_submit_flow/` + `appeal_review_flow/`
 
 | Item | Value |
 |---|---|
@@ -184,7 +184,7 @@ Warns are tracked per `(user_id, chat_id)`. At `cfg.warn_limit` (per-group) or `
 | Decision handler | `BuildAppeal.on_decision(update, ctx)` (review mixin) |
 | Lock helper | `reviewer_locked_out(review_timestamp, ban_admin_id, reviewer_id)` (in `appeal_review_flow/`) |
 
-`appeal_flow/` is a thin facade: `BuildAppeal` combines `AppealSubmitMixin`
+`appeal_flow.py` is a thin facade: `BuildAppeal` combines `AppealSubmitMixin`
 (user DM entry, gates, posting, cancel) with `AppealReviewMixin` (staff
 decisions) and re-exports the shared names, so `appeals.py` and existing
 importers keep working unchanged. Both keyboards live in `keyboards/`

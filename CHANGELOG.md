@@ -42,6 +42,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **Failed bot checks and error filters leave a trace** (`tcbot/modules/helper/identity.py`, `tcbot/runtime/errors.py`, `tests/test_identity_copy.py`, `tests/test_runtime_errors.py`): the Telegram membership probe behind bot verification and the benign-error filter behind the global error handler now log their own failures at debug level instead of dropping them silently. Verification still defers to MTProto and errors still ship as reports. Behavior changes: none; degraded lookups are visible in logs.
+
 - **Additional Links shows all five buttons by default** (`tcbot/config/parsing.py`, `tcbot/config/models.py`, `tcbot/config/__init__.py`, `config.env.example`, `docs/getting-started/setup.md`): Discussion Group and Appeals Channel gain built-in links, so a fresh setup shows Main Channel, Discussion Group, Logs Channel, Appeals Channel, and TRAVEL without manual values. Behavior changes: the two buttons now appear even when their env vars are empty.
 
 - **Appeal submission split into focused helpers** (`tcbot/modules/helper/workflows/appeal_submit_flow/`): review posting, the handler factory, and instruction text each have one module, so every file fits the size limit again. Import paths and retry behavior are unchanged.
@@ -376,6 +378,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Removed
 
+- **Unused UTC display helper removed** (`tcbot/utils/time_and_date.py`, `docs/architecture/utilities.md`): `utc_now_str()` had no callers and its rows in the utilities guide are gone. Display rendering stays on `fmt_dt()`. Behavior changes: none.
+
 - **Appeal log handle removed** (`tcbot/config/`, `tcbot/modules/helper/workflows/appeal_flow.py`, `config.env.example`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `docs/features/appeals.md`, `.github/workflows/run-bot.yml`): the separate handle setting is gone and the instruction handle follows the public logs link instead. `APPEALS` stays the single appeal destination for channel, group, or forum thread use. Behavior changes: an existing handle value is ignored; update the public logs link instead.
 
 - **Appeal discussion topic removed** (`tcbot/config/`, `tcbot/modules/helper/workflows/appeal_submit_flow/posting.py`, `tcbot/modules/helper/parse_logmsg/appeals.py`, `config.env.example`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `docs/features/appeals.md`, `docs/architecture/workflows.md`, `.github/workflows/run-bot.yml`): the separate thread setting is gone and the main-group review card posts to general. `APPEALS` stays the single appeal destination for channel, group, or forum thread use. Behavior changes: an existing topic value is ignored; review cards no longer land in a dedicated main-group topic.
@@ -391,6 +395,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Dead identity-cache probe removed** (`tcbot/database/users_cache.py`): `has_recent_identity_attempt()` had no callers; resolvers read the mention cache directly. Behavior changes: none.
 
 ### Documentation
+
+- **Appeal and pool references match the tree** (`docs/features/appeals.md`, `docs/architecture/workflows.md`, `docs/operations/performance.md`): the appeal facade names the `appeal_flow.py` module instead of a directory, the unban section names `unban_flow.py`, and the getUpdates pool size is credited to its lifecycle owner. Behavior changes: none, docs only.
 
 - **Setup and run guides match the config surface** (`README.md`, `config.env.example`, `docs/getting-started/setup.md`, `.github/workflows/run-bot.yml`): error reports fall back to the owner DM when empty, the appeals community link is listed and forwarded, removed federation chat vars and the exec button are gone, and Docker port text follows the configured port. Behavior changes: none, docs only.
 

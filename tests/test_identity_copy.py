@@ -6,11 +6,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+from types import SimpleNamespace
+from typing import Any
+
+from tcbot import database as db
 from tcbot.modules.helper.identity import (
     Identity,
     profile_note,
     refuse_message,
     staff_notice,
+    verify_not_bot,
 )
 
 
@@ -58,3 +65,49 @@ def test_role_label_maps_staff_only() -> None:
     assert _ident("founder").role_label == "Founder"
     assert _ident("user").role_label is None
     assert _ident("self").role_label is None
+
+
+class _ProbeFailBot:
+    """Fake Bot whose membership probe always faults."""
+
+    async def get_chat_member(self, chat_id: int, user_id: int) -> object:
+        raise RuntimeError("probe offline")
+
+
+def _group_update() -> Any:
+    """Update stand-in for a group chat without a reply context."""
+    return SimpleNamespace(
+        effective_message=None,
+        effective_chat=SimpleNamespace(id=-100123, type="supergroup"),
+    )
+
+
+def test_verify_not_bot_falls_through_after_probe_failure(
+    monkeypatch: Any, caplog: Any
+) -> None:
+    """A faulting membership probe defers to MTProto and logs the miss."""
+    seen: list[int] = []
+
+    async def _fake_is_bot_user(user_id: int) -> bool:
+        seen.append(user_id)
+        return False
+
+    monkeypatch.setattr(db.mtproto, "is_bot_user", _fake_is_bot_user)
+    with caplog.at_level(logging.DEBUG, logger="tcbot.modules.helper.identity"):
+        result = asyncio.run(verify_not_bot(_group_update(), 42, _ProbeFailBot()))  # type: ignore[arg-type]
+    assert result is True
+    assert seen == [42]
+    assert "bot verification member probe failed for 42 in -100123" in caplog.text
+
+
+def test_verify_not_bot_is_indeterminate_when_both_lookups_miss(
+    monkeypatch: Any,
+) -> None:
+    """Probe failure plus an unknown MTProto verdict stays indeterminate."""
+
+    async def _fake_is_bot_user(user_id: int) -> None:
+        return None
+
+    monkeypatch.setattr(db.mtproto, "is_bot_user", _fake_is_bot_user)
+    result = asyncio.run(verify_not_bot(_group_update(), 42, _ProbeFailBot()))  # type: ignore[arg-type]
+    assert result is None

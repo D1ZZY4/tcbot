@@ -38,11 +38,6 @@ def fmt_dt(dt: datetime) -> str:
     return esc(dt.strftime("%d-%m-%Y | %H:%M"))
 
 
-def utc_now_str() -> str:
-    """Return the current UTC time formatted for user-visible display."""
-    return fmt_dt(utc_now())
-
-
 def from_timestamp(ts: float) -> datetime:
     """Convert a POSIX timestamp (e.g. ``LogRecord.created``) to aware UTC."""
     return datetime.fromtimestamp(ts, tz=UTC)
