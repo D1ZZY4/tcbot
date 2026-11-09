@@ -200,20 +200,19 @@ keeps the group (fail closed).
 | Command | Aliases | Purpose | Access |
 |---|---|---|---|
 | `/ping` | `/p` | Telegram API round-trip latency in ms. | Founder only |
-| `/speedtest` | `/st` | Full Ookla speed test (download, upload, ping, client/server details). | Founder only |
+| `/speedtest` | `/st` | Full speed test (download, upload, ping, client/server details) against speedtest.net. | Founder only |
 
 Behavior:
 
 - `/ping` replies "Pinging…", measures the elapsed time, and edits the
   message to the latency (single round-trip read).
-- `/speedtest` replies "Running…", runs the Ookla test in an executor thread
-  bounded by `_SPEEDTEST_TIMEOUT = 180` s, and edits the result. Timeouts and
+- `/speedtest` replies "Running…", fetches config and the server list,
+  picks the lowest-latency server among the five closest, then measures
+  download and upload concurrently in an executor thread bounded by
+  `_SPEEDTEST_TIMEOUT = 180` s, and edits the result. Timeouts and
   unparseable results (missing keys or `None` where a mapping was expected)
-  edit a dedicated notice instead of raising. A non-http(s) share URL is
-  logged and sent without the photo. The test uses `speedtest-cli` 2.1.3
-  (upstream archived, final release) pinned by `pyproject.toml`; the
-  certifi context patch degrades to a warning if a future layout change
-  removes the patched attribute.
+  edit a dedicated notice instead of raising. The result renders the same
+  detail fields without a share image; unavailable geodata renders "N/A".
 
 Rate limit: 3 per 60 s for both commands, `@owner_only`. No database impact.
 

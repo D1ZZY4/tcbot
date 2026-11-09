@@ -62,7 +62,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Database layer moves from Motor to synchronous PyMongo** (`tcbot/database/mongos.py`, `tcbot/database/*_db.py`, `tcbot/database/mtproto_store.py`, `tcbot/database/scheduler.py`, `scripts/migrate_proofs.py`): `db_call` now runs a zero-argument sync operation on a worker thread through the same MongoDB circuit; collections, indexes, schemas, and helper signatures are unchanged. A cancelled operation may still land once its thread finishes, which the atomic read patterns already tolerate. Behavior changes: none for operators.
 
-- **Speedtest drops its heavy provider dependency** (`tcbot/modules/netspeed.py`, `tests/test_netspeed.py`, `pyproject.toml`): `/speedtest` now measures latency, download, and upload against Cloudflare endpoints over the certifi TLS bundle, rendering the same result fields; unavailable geodata shows "N/A". The Ookla share image is gone. Behavior changes: results no longer carry a share image.
+- **Speedtest drops its heavy provider dependency** (`tcbot/modules/netspeed.py`, `tests/test_netspeed.py`, `pyproject.toml`): `/speedtest` now measures latency, download, and upload against speedtest.net over the certifi TLS bundle, rendering the same result fields; unavailable geodata shows "N/A". The share image is gone. Behavior changes: results no longer carry a share image.
 
 - **Proofs default to the community proof channel** (`tcbot/__init__.py`, `config.env.example`, `docs/getting-started/setup.md`): an empty `PROOFS` now resolves to `-1003997518221` instead of compiling to no destination. Behavior changes: proof uploads have a destination on a fresh setup.
 
@@ -475,9 +475,11 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Bot starts regardless of module load order** (`tcbot/utils/time_and_date.py`, `tcbot/utils/logger.py`, `tcbot/utils/i18n.py`): the time helper loads the message catalog lazily instead of importing it at module level, so logging, time, and catalog load in any order without a circular-import failure. Behavior changes: none on the happy path; startup no longer depends on which module imports first.
 
+- **Speedtest follows speedtest.net** (`tcbot/modules/netspeed.py`, `tests/test_netspeed.py`): config, server list, latency, download, and upload now run against speedtest.net with the Ookla agent, closest-server selection, and concurrent transfers, returning real client ISP and country. Behavior changes: `/speedtest` reports the speedtest.net best server; results keep the same fields.
+
 ### Removed
 
-- **Motor and speedtest-cli leave the dependency graph** (`pyproject.toml`, `uv.lock`): the database layer now runs on synchronous PyMongo and `/speedtest` on Cloudflare endpoints, so neither package is needed. Behavior changes: none for operators beyond the entries above.
+- **Motor and speedtest-cli leave the dependency graph** (`pyproject.toml`, `uv.lock`): the database layer now runs on synchronous PyMongo and `/speedtest` on speedtest.net, so neither package is needed. Behavior changes: none for operators beyond the entries above.
 
 - **Unused UTC display helper removed** (`tcbot/utils/time_and_date.py`, `docs/architecture/utilities.md`): `utc_now_str()` had no callers and its rows in the utilities guide are gone. Display rendering stays on `fmt_dt()`. Behavior changes: none.
 

@@ -73,7 +73,7 @@ help-discovery convention, not a handler-registration switch.
 | `sync.py` | `Sync` | `/tcsync`, `/tcsynchronize` | Bounded enforcement reconciliation sweep plus single-user verification; shares its core with the optional scheduled sync job. |
 | `unban.py` | `Unban` | `/tcunban`, `/tcunb` | Developer+ federation unban. |
 | `warns.py` | `Warnings` | `/tcwarn`, `/tcw`, `/tcunwarn`, `/tcunw`, `/warns`, `/warnlist`, `/resetwarns`, `/clearwarns` | Warning conversation and direct warning management commands. |
-| `netspeed.py` | `Netspeed` | `/ping`, `/p`, `/speedtest`, `/st` | Founder-only network diagnostics: API round-trip latency ping and full bandwidth speed test via `speedtest-cli` in a thread executor. |
+| `netspeed.py` | `Netspeed` | `/ping`, `/p`, `/speedtest`, `/st` | Founder-only network diagnostics: API round-trip latency ping and full bandwidth speed test against speedtest.net in a thread executor. |
 
 ## Internal/menu modules
 
