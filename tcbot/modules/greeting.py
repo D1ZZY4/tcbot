@@ -167,7 +167,6 @@ async def _handle_member(
         # * banned user must not hold a federation role); enforcement below
         # * runs regardless because the DB record already exists.
         await _demote_for_enforcement(bot, member.id, member.first_name, trigger="ban")
-        coros: list = []
         try:
             await asyncio.wait_for(
                 bot.ban_chat_member(chat.id, member.id),
@@ -200,17 +199,12 @@ async def _handle_member(
                         locale,
                         link=Safe(link("Submit Appeal", appeal_url)),
                     )
-            coros.append(
-                msg.reply_text(
-                    notice,
-                    parse_mode="MarkdownV2",
-                )
-            )
-        results = await asyncio.gather(*coros, return_exceptions=True)
-        throw_if_cancelled(results)
-        for result in results:
-            if isinstance(result, BaseException):
-                log.debug("Join ban notice failed for uid=%d: %s", member.id, result)
+            try:
+                await msg.reply_text(notice, parse_mode="MarkdownV2")
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.debug("Join ban notice failed for uid=%d: %s", member.id, exc)
         return
 
     if mute:

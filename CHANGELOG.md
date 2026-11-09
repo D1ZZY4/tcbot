@@ -318,6 +318,10 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Dependency versions bumped to latest releases** (`pyproject.toml`, `uv.lock`): `cachetools` moves to 8.0.0 and `kurigram` to 2.2.27, with `kuricrypt` replacing `tgcrypto` and `virtualenv` to 21.15.6 via the lockfile. Behavior changes: none. The `apscheduler` pin stays at 3.11.3.
 
+- **Sync runner imports at startup** (`tcbot/__main__.py`): the enforcement sync runner now imports at module level instead of inside startup, so the scheduler wiring follows the same top-level import rule as every other handler dependency. Behavior changes: none; scheduled sweeps run as before.
+
+- **Join notices await directly** (`tcbot/modules/greeting.py`): the single banned-joiner notice now awaits its reply directly instead of gathering a zero-or-one item list, keeping the same debug log and cancellation propagation with one less indirection. Behavior changes: none; replies and logs are unchanged.
+
 ### Fixed
 
 - **Group locale change reaches the groups list immediately** (`tcbot/database/groups_db.py`): `set_group_locale` now also invalidates the active-groups list cache, whose rows carry the locale. Behavior changes: connected-groups views show the new locale now instead of one list-cache window later.

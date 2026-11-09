@@ -38,6 +38,7 @@ from tcbot.database.mongos import connect, ensure_indexes
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.modules.helper.pipelines.connected_flow import drain_harvest_tasks
+from tcbot.modules.sync import run_ban_sync
 from tcbot.utils import error_reporter
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitOpenError
@@ -313,8 +314,6 @@ async def _post_init(app: Application) -> None:
             "API_ID/API_HASH are required for MTProto identity resolution; refusing to boot degraded."
         )
     await init_shared_subsystems(app.bot, start_mtproto=True)
-    from tcbot.modules.sync import run_ban_sync  # noqa: PLC0415
-
     await sched_mod.start(
         cfg.mongodb_uri,
         cfg.db_name,
