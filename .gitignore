@@ -1,46 +1,58 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-# Environment variables (real credentials)
+# Secrets and credentials (never commit)
+# Runtime tokens, URIs, and session material stay out of version control.
 *.env
+.env
 config.env
 config.env.backup
+!config.env.example
 
-# MTProto session files (auth secrets, never commit)
+# MTProto sessions (auth secrets)
 *.session
 *.session-journal
 
-# Exported GPG keys (private key material must never be committed)
+# Exported GPG keys (private key material)
 gpg-key-backup/
 
-# Virtual environment
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# Virtual environments
 venv/
 .venv/
 .pythonlibs/
 
-# uv – lock file is the canonical source of truth; requirements.txt is legacy
+# Dependency lockfile is canonical; the legacy requirements file is unused.
 requirements.txt
 
-# IDE
-.idea/
+# Coverage and test artifacts (local runs and CI reports)
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.pytest_cache/
+.hypothesis/
 
-# OS
+# Tool caches
+.cache/
+.ruff_cache/
+
+# Local operator state (one-shot migration resume file)
+proof_migration_state.json
+proof_migration_state.json.tmp
+
+# Build outputs
+dist/
+build/
+
+# Editors and OS files
+.idea/
 .DS_Store
 Thumbs.db
 
-# Cache and local agent state
-dist/
-build/
-*.egg-info/
-.cache/
-.ruff_cache/
-/.config/
-
-# Replit attached assets
-attached_assets/
-
-# Local
+# Logs and scratch notes
 logs*/
 check.log
 format.log
@@ -49,7 +61,11 @@ nothing-*.md
 account*
 replit.nix
 
-# Skills
+# Platform assets and local config
+attached_assets/
+/.config/
+
+# Local agent skills (never versioned)
 context7-expert/
 copywriting-expert/
 create-readme-expert/
