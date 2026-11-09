@@ -21,13 +21,13 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff",
-    "pytest",
-    "pyright",
+    "ruff>=0.17.4,<1",
+    "pytest>=9.2,<10",
+    "pyright>=1.1.414,<2",
     "pytest-asyncio>=1.4.1,<2",
     "pre-commit>=4.7,<5",
     "py-spy>=0.4.3,<1",
-    "pytest-xdist>=3.8.0",
+    "pytest-xdist>=3.8.0,<4",
 ]
 
 [tool.setuptools.packages.find]

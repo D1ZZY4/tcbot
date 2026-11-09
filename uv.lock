@@ -826,11 +826,11 @@ requires-dist = [
 dev = [
     { name = "pre-commit", specifier = ">=4.7,<5" },
     { name = "py-spy", specifier = ">=0.4.3,<1" },
-    { name = "pyright" },
-    { name = "pytest" },
+    { name = "pyright", specifier = ">=1.1.414,<2" },
+    { name = "pytest", specifier = ">=9.2,<10" },
     { name = "pytest-asyncio", specifier = ">=1.4.1,<2" },
-    { name = "pytest-xdist", specifier = ">=3.8.0" },
-    { name = "ruff" },
+    { name = "pytest-xdist", specifier = ">=3.8.0,<4" },
+    { name = "ruff", specifier = ">=0.17.4,<1" },
 ]
 
 [[package]]
