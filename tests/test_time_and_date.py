@@ -11,8 +11,10 @@ from datetime import UTC, datetime, timedelta, timezone
 from tcbot.utils.time_and_date import (
     elapsed_ms,
     fmt_dt,
+    fmt_duration,
     from_timestamp,
     monotonic,
+    parse_duration,
     to_utc,
 )
 
@@ -37,3 +39,20 @@ def test_from_timestamp_epoch() -> None:
 
 def test_monotonic_elapsed_non_negative() -> None:
     assert elapsed_ms(monotonic()) >= 0
+
+
+def test_fmt_duration_permanent_and_tiers() -> None:
+    assert fmt_duration(None) == "permanently"
+    assert fmt_duration(timedelta(seconds=30)) == "30s"
+    assert fmt_duration(timedelta(minutes=5)) == "5m"
+    assert fmt_duration(timedelta(hours=3)) == "3h"
+    assert fmt_duration(timedelta(days=2)) == "2d"
+    assert fmt_duration(timedelta(days=14)) == "2w"
+    assert fmt_duration(timedelta(days=60)) == "2mo"
+    assert fmt_duration(timedelta(days=800)) == "2ye"
+
+
+def test_parse_duration_round_trip() -> None:
+    assert parse_duration("90s") == timedelta(seconds=90)
+    assert parse_duration("3d") == timedelta(days=3)
+    assert parse_duration("nope") is None

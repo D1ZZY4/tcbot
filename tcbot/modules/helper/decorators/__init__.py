@@ -6,12 +6,7 @@
 
 from __future__ import annotations
 
-from tcbot import database as db
 from tcbot.modules.helper.decorators.auth import (
-    _ANON_BOT_ID,
-    _REFUSAL_BY_LABEL,
-    _auth_only,
-    _is_anon_admin,
     basic_mod_only,
     mod_only,
     owner_only,
@@ -33,15 +28,6 @@ from tcbot.modules.helper.decorators.checks import (
     resolve_mod_target,
 )
 from tcbot.modules.helper.decorators.ratelimit import (
-    _RL_LUA,
-    _RL_REDIS_TIMEOUT_S,
-    _AsyncRateLimiter,
-    _cbq_limiter,
-    _cmd_limiter,
-    _cmd_staff_limiter,
-    _is_exempt,
-    _RateLimiter,
-    _throttle_tier,
     global_rate_limit_handler,
     ratelimiter,
 )

@@ -145,7 +145,7 @@ async def extract_target(
     return None, None
 
 
-def _reply_uid(msg: Message) -> int | None:
+def reply_uid(msg: Message) -> int | None:
     """Return the user/channel ID quoted by ``msg``, or ``None``.
 
     Synchronous core of the reply-target decision, shared by
@@ -177,11 +177,11 @@ async def _reply_target(msg: Message) -> tuple[int, str] | None:
     # * that appears as `from_user` when an anonymous admin sends a message.
     # * Targeting it would attempt to act on the placeholder, not a real user.
     # * Similarly skip the Telegram service account (777000) and channel posts.
-    uid = _reply_uid(msg)
+    uid = reply_uid(msg)
     if uid is None:
         return None
     target_msg = msg.reply_to_message
-    if target_msg is None:  # * Unreachable: _reply_uid just saw one.
+    if target_msg is None:  # * Unreachable: reply_uid just saw one.
         return None
     from_user = target_msg.from_user
     if from_user is not None and from_user.id == uid:
@@ -297,14 +297,14 @@ async def extract_mod_target(
       strips a restated ID via ``reply_target_id``.
     """
     msg = update.effective_message
-    reply_uid = _reply_uid(msg) if msg is not None else None
+    quoted_uid = reply_uid(msg) if msg is not None else None
     hit = await extract_target(update, args, bot)
     target_id, _ = hit
     consumed = (
         target_id is not None
         and bool(args)
         and _first_arg_is_explicit(args)
-        and (reply_uid is None or target_id != reply_uid)
+        and (quoted_uid is None or target_id != quoted_uid)
     )
     return hit, consumed
 

@@ -9,11 +9,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextvars import ContextVar
+from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from loguru import logger
-
-from tcbot.utils.time_and_date import from_timestamp
 
 # ────────────────────── Request context ─────────────────────────────── #
 
@@ -30,6 +29,38 @@ def _context_segment() -> str:
     if ctx.get("update_id") is not None:
         parts.append(f"#{ctx['update_id']}")
     return f" [{' '.join(parts)}]" if parts else ""
+
+
+def _safe_time_parts(created: float) -> tuple[str, str]:
+    """Return ``(HH:MM, DD/MM/YY)`` in UTC, or placeholders when conversion fails.
+
+    Formatter runs on the logging path, including during interpreter
+    shutdown when modules are torn down: a conversion failure must never
+    turn a log line into a "Logging error" traceback.
+    """
+    try:
+        now = datetime.fromtimestamp(created, tz=UTC)
+    except ImportError, OSError, OverflowError, ValueError:
+        return "--:--", "--/--/--"
+    return now.strftime("%H:%M"), now.strftime("%d/%m/%y")
+
+
+def _format_percent(msg: str, args: tuple[Any, ...]) -> str:
+    """Interpolate ``msg % args`` without ever raising into the caller.
+
+    The shim eagerly formats %-style call sites; a mismatched format
+    string (literal ``%`` without args, wrong count) must degrade to the
+    raw message plus args instead of crashing the handler that logged it.
+    """
+    if not args:
+        return msg
+    try:
+        return msg % args
+    except TypeError, ValueError:
+        try:
+            return f"{msg} (args={args!r})"
+        except Exception:
+            return msg
 
 
 # ────────────────────── Console Log Formatter ───────────────────── #
@@ -67,16 +98,20 @@ class BotLogFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Format a record with ANSI time, date, level, module, and message."""
-        now = from_timestamp(record.created)
+        hhmm, ddmmyy = _safe_time_parts(record.created)
         level_color, level_label = self._LEVELS.get(record.levelno, ("\033[0m", "???"))
         module = record.name.split(".")[-1]
         msg_color = level_color if record.levelno in self._COLORED_MSG else self._MS
-        time_part = self._bracket(self._TM, now.strftime("%H:%M"))
-        date_part = self._bracket(self._DT, now.strftime("%d/%m/%y"))
+        time_part = self._bracket(self._TM, hhmm)
+        date_part = self._bracket(self._DT, ddmmyy)
         level_part = self._bracket(level_color, level_label)
         module_part = self._bracket(self._MD, f"{module}:{record.lineno}")
         arrow_part = f"{self._AW} → {self._R}"
-        msg_part = f"{msg_color}{record.getMessage()}{self._R}"
+        try:
+            message_text = record.getMessage()
+        except TypeError, ValueError:
+            message_text = str(record.msg) if record.msg is not None else ""
+        msg_part = f"{msg_color}{message_text}{self._R}"
         output = (
             f"{time_part} {date_part} {level_part} {module_part}"
             f"{_context_segment()}{arrow_part}{msg_part}"
@@ -198,7 +233,7 @@ def setup(level: int = logging.INFO) -> None:
 
 def _render_loguru(message: Any) -> str:
     record = message.record
-    now = from_timestamp(record["time"].timestamp())
+    hhmm, ddmmyy = _safe_time_parts(record["time"].timestamp())
     level_map = {
         "DEBUG": ("\033[38;5;246m", "DEBUG"),
         "INFO": ("\033[38;5;114m", "INFO"),
@@ -210,7 +245,7 @@ def _render_loguru(message: Any) -> str:
     raw_name = record["name"] or record["extra"].get("module", "?")
     module = raw_name.split(".")[-1]
     return (
-        f"[<f2>{now.strftime('%H:%M')}</f2>] [<f2>{now.strftime('%d/%m/%y')}</f2>] "
+        f"[<f2>{hhmm}</f2>] [<f2>{ddmmyy}</f2>] "
         f"[<{color}>{label}</>] [<f4>{module}:{record['line']}</>]"
         f"{_context_segment()} <f2>→</f2> {record['message']}"
     )
@@ -228,7 +263,7 @@ class _LoguruShim:
     def _emit(
         self, level: str, msg: str, args: tuple[Any, ...], exc_info: Any = None
     ) -> None:
-        text = msg % args if args else msg
+        text = _format_percent(msg, args)
         bound = logger.bind(module=self._name)
         if exc_info:
             bound.opt(depth=2, exception=exc_info).error(text)
@@ -251,7 +286,7 @@ class _LoguruShim:
         self._emit("critical", msg, args, exc_info=exc_info)
 
     def exception(self, msg: str, *args: Any, exc_info: Any = None) -> None:
-        text = msg % args if args else msg
+        text = _format_percent(msg, args)
         logger.bind(module=self._name).opt(depth=2, exception=True).error(text)
 
 

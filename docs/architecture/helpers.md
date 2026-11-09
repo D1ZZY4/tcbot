@@ -82,6 +82,7 @@ Target resolution for moderation commands.
 |---|---|
 | `extract_target(update, args, bot=None, *, prefer_explicit=False)` | Resolves targets; returns `tuple[int, str]` (user_id, fname) on success or `tuple[None, None]` on failure. Priority: reply to sender_chat-aware (channel senders are refused: they are not actionable user IDs, so resolution falls through to args/entities) → args (ID/username) → args (partial name search in DB) → text mentions → @mentions. One exception: a typed numeric ID or `@username` that verifies as a real user different from the quoted sender overrides the reply (deliberate intent beats quote context); anything unverified or fuzzy keeps the reply. With `prefer_explicit=True` (read-only `/check`), any resolving arg wins and only a miss falls back to the reply. Numeric IDs take a cache fast path (IDs are immutable, so a real cached name skips the live `get_chat` round trip); bare-numeric and legacy `User <id>` fallbacks fall through to the live lookup. |
 | `extract_mod_target(update, args, bot=None)` | Single owner of moderation target resolution plus the consumed-or-reason decision, used by the ban, kick, mute, and warn entries. Returns `(hit, consumed)`: `consumed` is true when `args[0]` named the target (classic no-reply path, or the verified-override path), so entries drop it from the reason; otherwise the reply stands and `parse_inline_reason` still strips a restated ID via `reply_target_id`. |
+| `reply_uid(msg)` | Returns the quoted user/channel ID for a reply, skipping the anonymous-admin placeholder, the Telegram service account, and channel posts. Public so command modules share the exact reply-target decision without reaching into a private helper. |
 | `sync_user_identity(bot, target_id)` | Full sync protocol for detail views: cached read, live verify, update on mismatch. The older gap-fill-only `resolve_user_identity` was removed once every consumer used `sync`; its logic lives on inside `sync_user_identity` and `_fetch_live_identity`. |
 
 **Resolution priority for `extract_target()`:**
@@ -99,7 +100,7 @@ Render-locale resolution shared by handlers, callbacks, and flows. Every entry p
 
 | Export | Purpose |
 |---|---|
-| `effective_locale(chat_type, user_id, chat_id)` | Resolves the render locale for a message: private chats read the sender's `user_settings` row, group-like chats read the group's `federated_groups.locale`. The two reads run in parallel; a failed read degrades to `None` (falls through to the default) and never raises. |
+| `effective_locale(chat_type, user_id, chat_id)` | Resolves the render locale for a message: private chats read the sender's `user_settings` row, group-like chats read the group's `federated_groups.locale`. Only the locale the chat type consumes is read, so each resolution costs one lookup instead of two; a failed read degrades to `None` (falls through to the default) and never raises. |
 | `locale_for_update(update)` | Convenience wrapper using `update.effective_chat` / `update.effective_user`; missing chat or user falls back to `DEFAULT_LOCALE`. |
 | `locale_for_user(user_id)` | Personal locale for a DM to one user (ban notices, appeal updates), independent of any chat. |
 | `locale_for_chat(chat)` | Group locale when no `Update` is available (join/leave events carry the chat directly). Reads only the group row. |

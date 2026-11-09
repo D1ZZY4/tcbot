@@ -10,7 +10,6 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from tcbot import database as db
-from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import DEFAULT_LOCALE, resolve_locale
 from tcbot.utils.logger import get_logger
 
@@ -21,22 +20,36 @@ log = get_logger(__name__)
 
 
 async def effective_locale(chat_type: str | None, user_id: int, chat_id: int) -> str:
-    """Resolve the locale used to render a message in this chat."""
-    user_locale, group_locale = await asyncio.gather(
-        db.settings_db.get_user_locale(user_id),
-        db.groups_db.get_group_locale(chat_id),
-        return_exceptions=True,
-    )
-    throw_if_cancelled((user_locale, group_locale))
-    if isinstance(user_locale, BaseException):
-        log.debug("locale user read failed for %d: %s", user_id, user_locale)
-        user_locale = None
-    if isinstance(group_locale, BaseException):
-        log.debug("locale group read failed for %d: %s", chat_id, group_locale)
+    """Resolve the locale used to render a message in this chat.
+
+    Only the locale the chat type consumes is read: private chats need the
+    user preference, group-like chats need the group row. The other read
+    would always be discarded by :func:`resolve_locale`, so skipping it
+    halves locale DB reads. Resolution never raises; a failed read falls
+    back to the default locale. Cancellation propagates.
+    """
+    effective_type = chat_type or "private"
+    if effective_type == "private":
+        try:
+            user_locale = await db.settings_db.get_user_locale(user_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug("locale user read failed for %d: %s", user_id, exc)
+            user_locale = None
+        return resolve_locale(
+            chat_type="private",
+            user_locale=user_locale if isinstance(user_locale, str) else None,
+        )
+    try:
+        group_locale = await db.groups_db.get_group_locale(chat_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("locale group read failed for %d: %s", chat_id, exc)
         group_locale = None
     return resolve_locale(
-        chat_type=chat_type or "private",
-        user_locale=user_locale if isinstance(user_locale, str) else None,
+        chat_type=effective_type,
         group_locale=group_locale if isinstance(group_locale, str) else None,
     )
 

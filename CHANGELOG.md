@@ -266,9 +266,21 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **File-size gate matches the documented budget** (`.github/workflows/lint-ruff.yml`): the size check now allows up to 1000 lines per file as the guides state. Behavior changes: none for operators; existing large flows are no longer a gate failure.
 
+- **Utils package is a plain namespace** (`tcbot/utils/__init__.py`): the package initializer no longer carries a lazy `__getattr__` loader, since direct submodule imports already avoid pulling the whole package. Behavior changes: none; import paths and handler delivery are unchanged.
+
+- **Locale resolution reads one row per message** (`tcbot/modules/helper/locale.py`, `docs/architecture/helpers.md`): private chats read only the user preference and group-like chats read only the group row, instead of reading both and discarding one. Behavior changes: none; replies render in the same locale with one fewer lookup per resolution.
+
+- **Helper packages expose only the public API** (`tcbot/modules/helper/decorators/__init__.py`, `tcbot/modules/helper/extraction/__init__.py`, `tcbot/modules/helper/extraction/resolve.py`, `tcbot/modules/admins.py`): private helpers and the database re-export leave the package namespaces, and the shared reply-target decision is public as `reply_uid`. Behavior changes: none; handlers, callbacks, and database behavior are unchanged.
+
+- **Logging never raises on format or timestamp failures** (`tcbot/utils/logger.py`, `tcbot/utils/time_and_date.py`): percent formatting and console timestamp conversion fall back to a degraded line instead of raising into the caller, and the duration helper imports the catalog at module level. Behavior changes: none on the happy path; malformed format strings and shutdown stamp failures render placeholders instead of crashing the handler.
+
+- **Database helpers live in single files** (`tcbot/database/bans_db.py`, `tcbot/database/groups_db.py`, `tcbot/database/mongos.py`, `tcbot/database/mtproto.py`, `tcbot/database/mtproto_store.py`, `tcbot/database/scheduler.py`, `tcbot/database/users_cache.py`, `tcbot/database/users_roles.py`, `tcbot/database/warns_db.py`): every former `*_db/` and support package merges its submodules into one file, so each domain has one home. Behavior changes: none; `db.*` keeps the same functions and patchable globals, and scheduler job paths stay on `tcbot.database.scheduler`.
+
+- **Dependency versions bumped to latest releases** (`pyproject.toml`, `uv.lock`): `cachetools` moves to 8.0.0 and `kurigram` to 2.2.27, with `kuricrypt` replacing `tgcrypto` and `virtualenv` to 21.15.6 via the lockfile. Behavior changes: none. The `apscheduler` pin stays at 3.11.3.
+
 ### Fixed
 
-- **Group locale change reaches the groups list immediately** (`tcbot/database/groups_db/locale.py`): `set_group_locale` now also invalidates the active-groups list cache, whose rows carry the locale. Behavior changes: connected-groups views show the new locale now instead of one list-cache window later.
+- **Group locale change reaches the groups list immediately** (`tcbot/database/groups_db.py`): `set_group_locale` now also invalidates the active-groups list cache, whose rows carry the locale. Behavior changes: connected-groups views show the new locale now instead of one list-cache window later.
 - **Sync strips stale staff rank** (`tcbot/modules/syncing/`, `tests/test_syncing.py`, `docs/features/moderation/sync.md`): bare and targeted runs clear admin, developer, and tester rows from banned or muted holders before fan-out. Behavior changes: a re-promoted banned user no longer keeps rank through a sweep.
 
 - **Mute no longer demotes on an aborted reason** (`tcbot/modules/muting.py`): duration and reason checks now run before the auto-demote, so an overlong reason never strips a role. Behavior changes: role removal is skipped when the command aborts.

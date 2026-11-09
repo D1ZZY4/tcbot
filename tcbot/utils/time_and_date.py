@@ -11,6 +11,7 @@ import time
 from datetime import UTC, datetime, timedelta
 
 from tcbot.utils.formatter import esc
+from tcbot.utils.i18n import t
 
 # ──────────────────────── Datetime Helpers ──────────────────────── #
 
@@ -98,8 +99,6 @@ def parse_duration(raw: str) -> timedelta | None:
 def fmt_duration(td: timedelta | None, locale: str | None = None) -> str:
     """Human-readable duration string for replies."""
     if td is None:
-        from tcbot.utils.i18n import t  # noqa: PLC0415
-
         return t("muting.duration.permanent", locale, plain=True)
     total = int(td.total_seconds())
     if total < 60:

@@ -130,7 +130,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if (
         not has_explicit_target
         and args
-        and extraction._reply_uid(msg) is None
+        and extraction.reply_uid(msg) is None
         and args[0].lstrip("@").lower() in ROLE_ALIASES
     ):
         await safe_reply(
