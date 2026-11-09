@@ -2,7 +2,7 @@
 name = "tcbot"
 version = "6.9.0"
 description = "TCF | Transsion Core Federation - Telegram Bot"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "python-telegram-bot[rate-limiter]>=22.8,<23",
     "motor>=3.7.1,<4",
@@ -15,7 +15,7 @@ dependencies = [
     "certifi>=2026.10.23",
     "kurigram[fast]>=2.2.26,<3",
     "structlog>=26.1,<27",
-    "msgspec>=0.22",
+    "msgspec>=0.22,<0.23",
     "pymongo>=4.19.0,<5",
 ]
 

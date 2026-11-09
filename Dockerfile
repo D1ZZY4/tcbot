@@ -19,6 +19,6 @@ RUN uv sync --frozen --no-dev
 # Verify hiredis C extension is present
 RUN uv run --frozen -- python -c "import hiredis; print('hiredis C extension verified')"
 
-EXPOSE 5000
+EXPOSE ${PORT:-5000}
 
 CMD ["uv", "run", "--frozen", "python", "-m", "tcbot"]
