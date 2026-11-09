@@ -296,6 +296,23 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         if not isinstance(target_fname_r, BaseException)
         else str(target_id)
     )
+    # * The picker callback only has the target ID (no reply context), so a
+    # * cache miss renders the raw ID. Resolve live before the Done text
+    # * when the cached name is the numeric fallback.
+    if target_fname == str(target_id) or target_fname.lstrip("-").isdigit():
+        try:
+            live_fname, _, _ = await extraction.sync_user_identity(ctx.bot, target_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug(
+                "promote callback live identity failed for %d: %s",
+                target_id,
+                exc,
+            )
+        else:
+            if live_fname and not live_fname.lstrip("-").isdigit():
+                target_fname = live_fname
     if isinstance(current_role, BaseException):
         log.error(
             "target role lookup failed during promote callback for target=%d: %s",

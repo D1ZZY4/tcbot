@@ -477,6 +477,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Speedtest follows speedtest.net** (`tcbot/modules/netspeed.py`, `tests/test_netspeed.py`): config, server list, latency, download, and upload now run against speedtest.net with the Ookla agent, closest-server selection, and concurrent transfers, returning real client ISP and country. Behavior changes: `/speedtest` reports the speedtest.net best server; results keep the same fields.
 
+- **Role picker shows the live name on a cache miss** (`tcbot/modules/admins.py`, `tests/test_promote_live_name.py`): the promote role callback resolves the target live before rendering the Done text when the cached name is the numeric fallback, so newly seen users render by name instead of ID. Behavior changes: picker confirmations for uncached users show the Telegram name.
+
 ### Removed
 
 - **Motor and speedtest-cli leave the dependency graph** (`pyproject.toml`, `uv.lock`): the database layer now runs on synchronous PyMongo and `/speedtest` on speedtest.net, so neither package is needed. Behavior changes: none for operators beyond the entries above.
