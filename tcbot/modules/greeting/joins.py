@@ -75,7 +75,7 @@ async def _auto_demote_for_enforcement(
     logs loudly and proceeds as non-staff.
     """
     try:
-        target_role = await db.users_roles.get_effective_role(user_id)
+        target_role = await db.users_roles.get_effective_role(user_id, fresh=True)
     except Exception:
         log.exception(
             "Role lookup failed on join %s for uid=%d; proceeding anyway",

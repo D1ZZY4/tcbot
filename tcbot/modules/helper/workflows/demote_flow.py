@@ -173,7 +173,9 @@ class Demote:
         re-check is defense-in-depth state repair, never a gate.
         """
         try:
-            pre_fanout_role = await db.users_roles.get_effective_role(target_id)
+            pre_fanout_role = await db.users_roles.get_effective_role(
+                target_id, fresh=True
+            )
         except Exception:
             log.exception(
                 "Pre-fanout role lookup failed for target %d; "
@@ -258,7 +260,9 @@ class Demote:
             # * where the role still resolves: only the latter must abort, so
             # * a banned/muted/kicked user never keeps a federation role.
             try:
-                live_role = await db.users_roles.get_effective_role(target_id)
+                live_role = await db.users_roles.get_effective_role(
+                    target_id, fresh=True
+                )
             except Exception:
                 log.exception(
                     "live role re-read failed after no-op demote for target=%d",

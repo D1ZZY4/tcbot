@@ -65,10 +65,10 @@ class _FakeCtx:
 def _staff_caller(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Stub role reads so the Tester-ranked caller passes the decorators."""
 
-    async def _owner_id() -> int:
+    async def _owner_id(*, fresh: bool = False) -> int:
         return 999
 
-    async def _role(uid: int) -> str | None:
+    async def _role(uid: int, *, fresh: bool = False) -> str | None:
         return "tester"
 
     monkeypatch.setattr(db.users_roles, "get_owner_id", _owner_id)
@@ -96,6 +96,11 @@ def test_kick_in_group_passes_guard(
     _staff_caller: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A group chat must sail past the guard into target resolution."""
+
+    async def _connected(chat_id: int, *, fresh: bool = False) -> bool:
+        return True
+
+    monkeypatch.setattr(db.groups_db, "is_connected", _connected)
     chat = _FakeChat(-100123, "supergroup")
     msg = _FakeMsg("/tckick", chat)
     ctx = _FakeCtx()

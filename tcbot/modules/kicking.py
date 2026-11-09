@@ -106,14 +106,17 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * Kick is a current-chat ban-then-unban: Telegram rejects it in private
     # * chats ("Can't ban members in private chats"), so refuse up front
     # * instead of failing in the executor after role I/O and demote work.
-    # * Mirrors the connecting/disconnecting group-only guards.
-    if chat.type == "private":
-        await safe_reply(
-            msg,
-            replies.err_group_only(locale, plain=True),
-            log_label="cmd_kick group-only",
-            parse_mode=None,
-        )
+    # * require_federation_origin with allow_private=False keeps that refusal
+    # * and also blocks disconnected groups from kicking in a non-federation
+    # * chat. Mirrors the connecting/disconnecting group-only guards.
+    if not await decorators.require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=False,
+        log_label="cmd_kick origin",
+    ):
         return ConversationHandler.END
 
     args = parse_cmd_args(msg.text)

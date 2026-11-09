@@ -45,7 +45,7 @@ def _fake_update(query: _FakeQuery, user_id: int) -> Any:
 
 
 def test_self_review_is_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _role(user_id: int) -> str:
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
         return "admin"
 
     ban: dict[str, Any] = {
@@ -90,7 +90,7 @@ def test_approve_demotes_staff_before_deactivate(
     async def _groups() -> list[Any]:
         return []
 
-    async def _role(user_id: int) -> str:
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
         return "admin" if user_id == 9 else "founder"
 
     async def _fname(user_id: int, fallback: str = "") -> str:

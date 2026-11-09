@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import identity, replies
 from tcbot.modules.helper.locale import effective_locale
@@ -37,8 +38,8 @@ async def resolve_and_check(
     On success, returns ``(executor_role, target_role)``.
     """
     executor_role, target_role = await asyncio.gather(
-        db.users_roles.get_effective_role(executor_id),
-        db.users_roles.get_effective_role(target_id),
+        db.users_roles.get_effective_role(executor_id, fresh=True),
+        db.users_roles.get_effective_role(target_id, fresh=True),
         return_exceptions=True,
     )
     throw_if_cancelled((executor_role, target_role))
@@ -156,7 +157,7 @@ async def recheck_executor_rank(
         getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
     )
     try:
-        role = await db.users_roles.get_effective_role(executor_id)
+        role = await db.users_roles.get_effective_role(executor_id, fresh=True)
     except asyncio.CancelledError:
         raise
     except Exception as exc:
@@ -173,6 +174,61 @@ async def recheck_executor_rank(
             msg,
             replies.refuse_rank_insufficient(locale, plain=True),
             log_label="recheck rank-insufficient",
+            parse_mode=None,
+        )
+        return False
+    return True
+
+
+async def require_federation_origin(
+    msg: Message,
+    *,
+    chat_id: int,
+    chat_type: str,
+    locale: str | None,
+    allow_private: bool = True,
+    log_label: str = "federation origin",
+) -> bool:
+    """Return True when the origin chat may host federation moderation.
+
+    Private is allowed only when ``allow_private`` is set (federation-wide
+    ban/unban/sync entries). Every group-like origin must be a connected
+    group or a primary group: a disconnected group must not drive
+    federation-wide enforcement or, for warns, record audit rows under a
+    non-federation chat id that later aggregate into a federation auto-ban.
+    Fail closed: a connection-state outage replies with the database retry
+    notice and blocks the action. Cancellation always propagates.
+    """
+    if chat_type == "private":
+        if allow_private:
+            return True
+        await safe_reply(
+            msg,
+            replies.err_group_only(locale, plain=True),
+            log_label=log_label,
+            parse_mode=None,
+        )
+        return False
+    if cfg.is_primary_group(chat_id):
+        return True
+    try:
+        connected = await db.groups_db.is_connected(chat_id, fresh=True)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning("is_connected check failed for chat=%d: %s", chat_id, exc)
+        await safe_reply(
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label=log_label,
+            parse_mode=None,
+        )
+        return False
+    if not connected:
+        await safe_reply(
+            msg,
+            replies.err_group_not_found(locale, plain=True),
+            log_label=log_label,
             parse_mode=None,
         )
         return False

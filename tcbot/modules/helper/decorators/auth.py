@@ -81,15 +81,16 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
                 # * Cancellation still propagates.
                 try:
                     if min_role is None:
-                        # * Served from the cached owner ID (300 s TTL) so
-                        # * repeated Founder checks cost zero MongoDB round
-                        # * trips on cache hits.
-                        authorized = (await db.users_roles.get_owner_id()) == uid
+                        # * Fresh read: a transfer in another process must
+                        # * not stay hidden for the 300 s owner TTL.
+                        authorized = (
+                            await db.users_roles.get_owner_id(fresh=True)
+                        ) == uid
                     else:
-                        # * Served from the cached effective role (60 s TTL)
-                        # * instead of two uncached reads.
+                        # * Fresh read: a demotion in another process must
+                        # * not stay hidden for the 60 s role TTL.
                         authorized = db.users_roles.role_rank(
-                            await db.users_roles.get_effective_role(uid)
+                            await db.users_roles.get_effective_role(uid, fresh=True)
                         ) >= db.users_roles.role_rank(min_role)
                 except asyncio.CancelledError:
                     raise

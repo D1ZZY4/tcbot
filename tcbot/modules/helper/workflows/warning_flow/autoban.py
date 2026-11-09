@@ -54,7 +54,7 @@ async def _execute_warn_auto_ban(
     # * failure could auto-ban an exempt staffer. Skipping is safe because the
     # * warn count persists and the >= trigger re-fires on the next warn.
     try:
-        target_role = await db.users_roles.get_effective_role(target_id)
+        target_role = await db.users_roles.get_effective_role(target_id, fresh=True)
     except Exception:
         log.exception(
             "Warn auto-ban role lookup failed for target=%d; aborting auto-ban",

@@ -108,6 +108,17 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     admin = update.effective_user
     if msg is None or admin is None or ctx.user_data is None:
         return ConversationHandler.END
+    # * Origin guard: a disconnected group must not drive federation-wide
+    # * enforcement. Private stays allowed (exec-or-group scope per help).
+    if not await decorators.require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=True,
+        log_label="cmd_ban_start origin",
+    ):
+        return ConversationHandler.END
     raw_args = parse_cmd_args(msg.text)
 
     # * Resolution plus consumption in one call: a verified explicit

@@ -6,6 +6,15 @@
 
 from __future__ import annotations
 
+import os
+
+# * Dummy import-time env: tcbot/__init__ loads Configs at import, so the
+# * suite must not depend on CI-only env to collect. setdefault keeps real
+# * CI/local values when already present.
+os.environ.setdefault("BOT_TOKEN", "000000:dummy-token-for-lint000000000000000")
+os.environ.setdefault("MONGODB_URI", "mongodb://localhost:27017")
+os.environ.setdefault("OWNER_ID", "1")
+
 import pytest
 
 from tcbot.utils.logger import setup as setup_logging

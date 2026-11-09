@@ -91,13 +91,23 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await safe_reply(msg, refusal, log_label="cmd_transfer refusal")
         return
 
-    # * A bot owner would brick federation leadership, so the same
-    # * verified-only check as promotion applies; unknown stays allowed.
-    if await identity.is_proven_bot(update, target_id, ctx.bot):
+    # * A bot owner would brick federation leadership, so transfer fails
+    # * closed on an indeterminate check: only a verified human proceeds.
+    # * Promotion keeps the best-effort gate where unknown stays allowed.
+    verified_human = await identity.verify_not_bot(update, target_id, ctx.bot)
+    if verified_human is False:
         await safe_reply(
             msg,
             t("admins.error.bot_target", locale, plain=True),
             log_label="cmd_transfer bot-target",
+            parse_mode=None,
+        )
+        return
+    if verified_human is None:
+        await safe_reply(
+            msg,
+            replies.err_role_verify(locale, plain=True),
+            log_label="cmd_transfer unverified-target",
             parse_mode=None,
         )
         return

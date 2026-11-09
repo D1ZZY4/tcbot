@@ -19,9 +19,8 @@ from tcbot.modules.helper.workflows.appeal_review_flow.verdicts.logmsg import (
     _update_or_send_log,
 )
 from tcbot.utils.dispatch import (
-    count_transient_errors,
     fan_out,
-    first_transient_error,
+    log_fanout_error,
     throw_if_cancelled,
 )
 from tcbot.utils.formatter import code, user_ref
@@ -83,7 +82,7 @@ class ApproveMixin:
         # * failure aborts the same way so enforcement never leaves a stale
         # * federation role behind.
         try:
-            target_role = await db.users_roles.get_effective_role(target_id)
+            target_role = await db.users_roles.get_effective_role(target_id, fresh=True)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -191,16 +190,12 @@ class ApproveMixin:
                 for grp in groups
             ]
         )
-        unban_failed = count_transient_errors(unban_results)
-        if unban_failed:
-            log.error(
-                "Appeal-approve fan-out had %d/%d transient failures for "
-                "target=%d; user may still be banned in those chats",
-                unban_failed,
-                len(groups),
-                target_id,
-                exc_info=first_transient_error(unban_results),
-            )
+        log_fanout_error(
+            unban_results,
+            action="Appeal-approve",
+            total=len(groups),
+            target_id=target_id,
+        )
 
         appeal_link = ban.get("appeal_link") or ""
         appeal_submitted_at = ban.get("appeal_submitted_at")

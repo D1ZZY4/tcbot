@@ -168,7 +168,7 @@ def test_done_proof_finally_guard_regression(
         registry[key] = first
         monkeypatch.setattr(ban_flow, "_execute_ban", _replace_while_executing)
 
-        async def _founder(uid: int) -> str | None:
+        async def _founder(uid: int, *, fresh: bool = False) -> str | None:
             return "founder"
 
         monkeypatch.setattr(db.users_roles, "get_effective_role", _founder)

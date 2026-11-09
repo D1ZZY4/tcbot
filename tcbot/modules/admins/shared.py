@@ -60,7 +60,7 @@ async def _resolve_executor_target(
     if locale is None:
         locale = await locale_for_update(update)
     _exec_r, _target_r = await asyncio.gather(
-        db.users_roles.get_effective_role(admin_id),
+        db.users_roles.get_effective_role(admin_id, fresh=True),
         extraction.extract_target(update, args, bot),
         return_exceptions=True,
     )
@@ -118,7 +118,7 @@ async def _classify_and_load_role(
     """
     ident_r, role_r = await asyncio.gather(
         identity.classify(bot, admin_id, target_id, target_fname),
-        db.users_roles.get_effective_role(target_id),
+        db.users_roles.get_effective_role(target_id, fresh=True),
         return_exceptions=True,
     )
     throw_if_cancelled((ident_r, role_r))
@@ -163,7 +163,7 @@ async def _check_callback_staff(
     Cancellation from either branch propagates instead of rendering.
     """
     role_r, answer_r = await asyncio.gather(
-        db.users_roles.get_effective_role(admin_id),
+        db.users_roles.get_effective_role(admin_id, fresh=True),
         q.answer(),
         return_exceptions=True,
     )

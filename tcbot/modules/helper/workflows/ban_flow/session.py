@@ -123,7 +123,9 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
         # * purpose: this task has no Update, so it only logs.
         admin_id = int(session.meta.get("ban_admin_id") or 0)
         try:
-            executor_role = await db.users_roles.get_effective_role(admin_id)
+            executor_role = await db.users_roles.get_effective_role(
+                admin_id, fresh=True
+            )
         except asyncio.CancelledError:
             raise
         except Exception as exc:

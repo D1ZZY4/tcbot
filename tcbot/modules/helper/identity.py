@@ -153,22 +153,23 @@ def _line(ident: Identity) -> str:
     return user_ref(ident.target_id, ident.fname, ident.username)
 
 
-async def is_proven_bot(update: Update, target_id: int, bot: Bot | None) -> bool:
-    """Return True only when the target is verified to be a bot account.
+async def verify_not_bot(
+    update: Update, target_id: int, bot: Bot | None
+) -> bool | None:
+    """Return True when the target is verified human, False when verified bot.
 
-    Best-effort by design and only ever positive: a quoted sender names
-    itself for free, otherwise one bounded membership probe runs in the
-    current chat, then one MTProto peer lookup. Unknown (lookup failure,
-    target absent, MTProto down) returns False so legitimate promotions
-    of off-group users keep working. Callers guard promotion and
-    ownership transfer, where a bot target would otherwise receive
-    privilege or brick the federation.
+    ``None`` means indeterminate (membership probe failed or absent and
+    MTProto down or unknown). Ownership transfer fails closed on ``None``:
+    a bot owner bricks the federation, so an unverified target must refuse
+    rather than proceed on the benefit of the doubt. Promotion keeps the
+    best-effort ``is_proven_bot`` gate instead, where off-group promotions
+    of unknown targets stay allowed by design. Cancellation propagates.
     """
     msg = getattr(update, "effective_message", None)
     reply = getattr(msg, "reply_to_message", None) if msg is not None else None
     sender = getattr(reply, "from_user", None) if reply is not None else None
     if sender is not None and sender.id == target_id:
-        return bool(sender.is_bot)
+        return not bool(sender.is_bot)
     chat = getattr(update, "effective_chat", None)
     if (
         bot is not None
@@ -187,9 +188,25 @@ async def is_proven_bot(update: Update, target_id: int, bot: Bot | None) -> bool
         else:
             user = getattr(member, "user", None)
             if user is not None:
-                return bool(user.is_bot)
+                return not bool(user.is_bot)
     hit = await db.mtproto.is_bot_user(target_id)
-    return hit is True
+    if hit is None:
+        return None
+    return not bool(hit)
+
+
+async def is_proven_bot(update: Update, target_id: int, bot: Bot | None) -> bool:
+    """Return True only when the target is verified to be a bot account.
+
+    Best-effort by design and only ever positive: a quoted sender names
+    itself for free, otherwise one bounded membership probe runs in the
+    current chat, then one MTProto peer lookup. Unknown (lookup failure,
+    target absent, MTProto down) returns False so legitimate promotions
+    of off-group users keep working. Callers guard promotion and
+    ownership transfer, where a bot target would otherwise receive
+    privilege or brick the federation.
+    """
+    return (await verify_not_bot(update, target_id, bot)) is False
 
 
 class _MemberLookup(Protocol):

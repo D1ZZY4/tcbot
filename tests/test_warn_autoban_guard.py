@@ -33,7 +33,7 @@ def _boom(*args: Any, **kwargs: Any) -> Any:
 def test_autoban_aborts_on_role_lookup_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _role_lookup(user_id: int) -> object:
+    async def _role_lookup(user_id: int, *, fresh: bool = False) -> object:
         raise RuntimeError("db blip")
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role_lookup)
@@ -90,7 +90,7 @@ def test_autoban_stores_warn_proof_on_ban_record(
     created: list[dict[str, Any]] = []
     cleared: list[int] = []
 
-    async def _role_lookup(user_id: int) -> None:
+    async def _role_lookup(user_id: int, *, fresh: bool = False) -> None:
         return None
 
     async def _groups() -> list[dict[str, Any]]:

@@ -54,6 +54,15 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if admin is None:
         return
     locale = await locale_for_update(update)
+    if not await decorators.require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=False,
+        log_label="cmd_unwarn origin",
+    ):
+        return
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
@@ -105,6 +114,15 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if admin is None:
         return
     locale = await locale_for_update(update)
+    if not await decorators.require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=False,
+        log_label="cmd_warnlist origin",
+    ):
+        return
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
@@ -144,6 +162,15 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     if admin is None:
         return
     locale = await locale_for_update(update)
+    if not await decorators.require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=False,
+        log_label="cmd_resetwarns origin",
+    ):
+        return
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:

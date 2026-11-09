@@ -74,7 +74,7 @@ def _run_flush(
 def test_flush_executes_when_executor_still_developer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _developer(uid: int) -> str | None:
+    async def _developer(uid: int, *, fresh: bool = False) -> str | None:
         return "developer"
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _developer)
@@ -86,7 +86,7 @@ def test_flush_executes_when_executor_still_developer(
 def test_flush_aborts_when_executor_demoted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _tester(uid: int) -> str | None:
+    async def _tester(uid: int, *, fresh: bool = False) -> str | None:
         return "tester"
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _tester)
@@ -98,7 +98,7 @@ def test_flush_aborts_when_executor_demoted(
 def test_flush_fail_closed_on_role_lookup_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _boom(uid: int) -> str | None:
+    async def _boom(uid: int, *, fresh: bool = False) -> str | None:
         raise RuntimeError("db down")
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
@@ -108,7 +108,7 @@ def test_flush_fail_closed_on_role_lookup_failure(
 
 
 def test_flush_propagates_cancellation(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _cancelled(uid: int) -> str | None:
+    async def _cancelled(uid: int, *, fresh: bool = False) -> str | None:
         raise asyncio.CancelledError
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _cancelled)

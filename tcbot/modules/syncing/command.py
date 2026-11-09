@@ -41,6 +41,15 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None:
         return
     locale = await locale_for_update(update)
+    if not await decorators.require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=True,
+        log_label="cmd_sync origin",
+    ):
+        return
     args = parse_cmd_args(msg.text)
 
     try:

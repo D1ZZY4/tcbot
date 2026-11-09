@@ -85,7 +85,7 @@ class AppealReviewMixin(AppealVerdictsMixin):
         # * surfaces as an exception and gets a retry hint instead of being
         # * coerced to False and misreported as "not authorized".
         role_result, ban_result, answer_r = await asyncio.gather(
-            db.users_roles.get_effective_role(admin.id),
+            db.users_roles.get_effective_role(admin.id, fresh=True),
             db.bans_db.get_ban(ban_id),
             q.answer(),
             return_exceptions=True,

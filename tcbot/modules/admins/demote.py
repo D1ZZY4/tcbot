@@ -147,7 +147,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     target_role, mention_data = await asyncio.gather(
-        db.users_roles.get_effective_role(target_id),
+        db.users_roles.get_effective_role(target_id, fresh=True),
         db.users_cache.get_user_mention_data(target_id),
         return_exceptions=True,
     )

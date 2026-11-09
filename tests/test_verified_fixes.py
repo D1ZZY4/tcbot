@@ -10,6 +10,9 @@ import asyncio
 
 from tcbot import database as db
 from tcbot.database.types import GroupId
+from tcbot.database.users_roles import admin as _admin_mod
+from tcbot.database.users_roles import owner as _owner_mod
+from tcbot.database.users_roles import roles as _roles_mod
 from tcbot.modules import help as helpmod
 from tcbot.modules.help import _help_index_text, _module_text
 from tcbot.modules.helper import decorators, keyboards, replies
@@ -164,9 +167,9 @@ def test_invalid_stored_role_grants_nothing(monkeypatch) -> None:  # type: ignor
     async def _bad_role(uid: int) -> str | None:
         return "admin"
 
-    monkeypatch.setattr(db.users_roles, "is_owner", _not_owner)
-    monkeypatch.setattr(db.users_roles, "is_admin", _not_admin)
-    monkeypatch.setattr(db.users_roles, "get_role", _bad_role)
+    monkeypatch.setattr(_owner_mod, "is_owner", _not_owner)
+    monkeypatch.setattr(_admin_mod, "is_admin", _not_admin)
+    monkeypatch.setattr(_roles_mod, "get_role", _bad_role)
 
     uid = 42424241
     db.users_roles.effective_role_cache.invalidate(uid)
@@ -247,10 +250,10 @@ def test_recheck_executor_rank() -> None:
             self.replies.append(text)
             return object()
 
-    async def _tester(uid: int) -> str | None:
+    async def _tester(uid: int, *, fresh: bool = False) -> str | None:
         return "tester"
 
-    async def _founder(uid: int) -> str | None:
+    async def _founder(uid: int, *, fresh: bool = False) -> str | None:
         return "founder"
 
     async def run() -> tuple[bool, bool, int]:

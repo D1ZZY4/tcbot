@@ -67,6 +67,17 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if ctx.user_data is None:
         return ConversationHandler.END
     locale = await locale_for_update(update)
+    # * Warn audit rows are scoped to the origin chat: only a connected
+    # * group (or primary) may create, aggregate, or trigger auto-ban.
+    if not await decorators.require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=False,
+        log_label="cmd_warn_entry origin",
+    ):
+        return ConversationHandler.END
 
     args = parse_cmd_args(msg.text)
     # * Resolution plus consumption in one call (see banning.py).

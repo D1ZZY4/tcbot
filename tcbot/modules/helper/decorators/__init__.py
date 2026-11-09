@@ -20,6 +20,7 @@ from tcbot.modules.helper.decorators.auth import (
 from tcbot.modules.helper.decorators.checks import (
     classify_and_check,
     recheck_executor_rank,
+    require_federation_origin,
     resolve_and_check,
 )
 from tcbot.modules.helper.decorators.ratelimit import (
@@ -60,6 +61,7 @@ __all__ = [
     "owner_only",
     "ratelimiter",
     "recheck_executor_rank",
+    "require_federation_origin",
     "resolve_and_check",
     "staff_only",
 ]

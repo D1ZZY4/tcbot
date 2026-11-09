@@ -218,7 +218,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         return
     target_fname_r, current_role = await asyncio.gather(
         db.users_cache.get_first_name(target_id, str(target_id)),
-        db.users_roles.get_effective_role(target_id),
+        db.users_roles.get_effective_role(target_id, fresh=True),
         return_exceptions=True,
     )
     throw_if_cancelled((target_fname_r, current_role))

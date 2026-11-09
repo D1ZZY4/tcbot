@@ -120,6 +120,15 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     admin = update.effective_user
     if msg is None or admin is None or ctx.user_data is None:
         return ConversationHandler.END
+    if not await decorators.require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=False,
+        log_label="cmd_mute origin",
+    ):
+        return ConversationHandler.END
 
     raw_args = parse_cmd_args(msg.text)
     # * Resolution plus consumption in one call (see banning.py).
@@ -276,6 +285,15 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None or admin is None:
         return
     locale = await locale_for_update(update)
+    if not await decorators.require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=False,
+        log_label="cmd_unmute origin",
+    ):
+        return
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:

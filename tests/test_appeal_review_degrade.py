@@ -46,7 +46,7 @@ def _expected_retry() -> str:
 def test_ban_read_failure_alerts_and_keeps_card(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _role(user_id: int) -> str:
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
         return "admin"
 
     async def _boom(ban_id: str) -> object:
