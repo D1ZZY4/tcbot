@@ -21,6 +21,7 @@ from tcbot.modules.helper.parse_editmsg import safe_reply
 from tcbot.modules.helper.parse_logmsg import ownership_transferred
 from tcbot.modules.helper.workflows.demote_flow import Demote
 from tcbot.utils import error_reporter
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -182,6 +183,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ),
         return_exceptions=True,
     )
+    throw_if_cancelled((transfer_log_r, transfer_reply_r))
     if isinstance(transfer_log_r, BaseException):
         log.error("Ownership transfer log send failed: %s", transfer_log_r)
     if isinstance(transfer_reply_r, BaseException):

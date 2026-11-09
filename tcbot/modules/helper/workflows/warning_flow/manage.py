@@ -16,6 +16,7 @@ from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.parse_editmsg import safe_reply
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -159,6 +160,7 @@ async def execute_unwarn(
         ),
         return_exceptions=True,
     )
+    throw_if_cancelled(results)
     if isinstance(results[0], BaseException):
         log.error("Unwarn log send failed: %s", results[0])
 
@@ -305,6 +307,7 @@ async def execute_resetwarns(
         ),
         return_exceptions=True,
     )
+    throw_if_cancelled(results)
     if isinstance(results[0], BaseException):
         log.exception(
             "Reset-warns log send failed for target=%d: %s", target_id, results[0]
