@@ -170,6 +170,7 @@ Current stack:
 ├── i18n/                      Localized message catalogs (en-US source of truth)
 ├── tests/                     Automated checks (run with the dummy-env suite)
 ├── api/                       Vercel serverless endpoints (webhook, cron)
+├── scripts/                   One-shot operator tools (proof migration runbook)
 ├── config.env.example        Environment variable template
 ├── docker-compose.yml        Local bot + MongoDB + Redis compose setup
 ├── Dockerfile                Container image definition

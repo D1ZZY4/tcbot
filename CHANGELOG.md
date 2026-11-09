@@ -8,6 +8,8 @@ All notable changes to this project are documented here. For workflow details, s
 <summary>Unreleased changes (click to collapse)</summary>
 
 ### Added
+- **Operator proof migration script** (`scripts/migrate_proofs.py`, `tests/test_proof_migration.py`, `docs/operations/proof-migration.md`): one-shot tool that copies every stored ban proof to a new channel, updates the proof ids in the bans collection, rewrites the proof buttons on the stored ban log messages, and fixes old proof links inside copied captions. Dry-run by default, resumable through a state file, album-safe. Operators point `PROOFS` at the new channel after running it.
+
 - **Group locale change and ban-log keyboard cover** (`tests/test_group_locale_cache.py`, `tests/test_ban_log_kb.py`, `tcbot/database/groups_db/locale.py`, `tcbot/modules/helper/keyboards/ban.py`): `set_group_locale` invalidating the groups-list cache and the merged ban-log keyboard rows are pinned. Behavior changes: none for operators.
 - **Shared moderation entry sequence** (`tcbot/modules/helper/decorators/checks.py`, `tests/test_authz.py`): `resolve_mod_target` runs the locale, origin, extraction, identity, and rank steps once for the ban, kick, mute, and warn commands, replacing five copies of the same sequence. Behavior changes: none; replies and log labels are byte-identical.
 
