@@ -14,9 +14,7 @@ from telegram import Update
 from telegram.ext import Application
 
 from tcbot import cfg
-from tcbot import database as db
-from tcbot.database import redis_client
-from tcbot.database.mongos import connect, ensure_indexes, is_connected
+from tcbot.database.mongos import connect, is_connected
 from tcbot.database.scheduler import expire_old_warns
 
 # * Imported from tcbot.runtime.lifecycle (single owner) so the webhook,
@@ -24,10 +22,11 @@ from tcbot.database.scheduler import expire_old_warns
 # * and share the same ApplicationBuilder chain. Importing the runtime
 # * package also pulls the Flask import chain (entry -> alive): Flask is
 # * already a project dependency and no server is started at import time.
-from tcbot.runtime.lifecycle import _base_builder, _register_handlers
-from tcbot.utils import error_reporter
-from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.i18n import _ensure_loaded
+from tcbot.runtime.lifecycle import (
+    _base_builder,
+    _register_handlers,
+    init_shared_subsystems,
+)
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -99,26 +98,7 @@ async def _init_subsystems(app: Application) -> None:
     boot without API_ID/API_HASH; serverless stays available without
     them by design.
     """
-    # * Same preload as the long-lived transport: never pay the full TOML
-    # * parse on the first handler's event loop.
-    _ensure_loaded()
-    log.info("serverless: connecting to MongoDB...")
-    await connect()
-
-    indexes_r, owner_r, _ = await asyncio.gather(
-        ensure_indexes(),
-        db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
-        redis_client.connect_if_configured(),
-        return_exceptions=True,
-    )
-    throw_if_cancelled((indexes_r, owner_r))
-    if isinstance(indexes_r, BaseException):
-        raise indexes_r
-    if isinstance(owner_r, BaseException):
-        log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
-
-    lec, let = cfg.logs_errors
-    error_reporter.attach(app.bot, lec, let, owner_id=cfg.initial_owner_id)
+    await init_shared_subsystems(app.bot, start_mtproto=False)
     log.info("serverless: subsystems ready.")
 
 

@@ -7,12 +7,14 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from tcbot.database import scheduler as _sched_pkg
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from telegram import Bot
 
 # * Logger keeps the pre-split name so log output is unchanged.
@@ -26,6 +28,7 @@ async def start(
     *,
     bot: Bot | None = None,
     sync_interval_hours: int = 0,
+    sync_runner: Callable[..., Any] | None = None,
 ) -> None:
     """Initialise and start the APScheduler background scheduler.
 
@@ -42,6 +45,10 @@ async def start(
         bot: Live bot for the optional enforcement-sync sweep (same as
             ``SYNC_INTERVAL_HOURS``); ``None`` disables the sweep.
         sync_interval_hours: Hours between enforcement sweeps (0 = disabled).
+        sync_runner: Enforcement sweep supplied by the runtime lifecycle,
+            which already imports the command modules. Passing it here
+            keeps the database package free of a modules import while
+            making the dependency explicit; ``None`` disables the sweep.
 
     """
     # * A live task means start() already ran: a second start would orphan
@@ -52,6 +59,7 @@ async def start(
     _sched_pkg._sched_stop = asyncio.Event()
     _sched_pkg._sched_error = None
     _sched_pkg._sync_bot = bot
+    _sched_pkg._sync_runner = sync_runner
     _sched_pkg._sched_task = asyncio.create_task(
         _sched_pkg._scheduler_background(
             mongodb_uri, db_name, warn_expiry_days, sync_interval_hours

@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import warnings
 
-from telegram import LinkPreviewOptions, Update
+from telegram import Bot, LinkPreviewOptions, Update
 from telegram.ext import (
     AIORateLimiter,
     Application,
@@ -108,6 +108,66 @@ async def _warm_hot_caches() -> None:
         log.debug("Cache warm-up failed (non-fatal): %s", exc)
 
 
+async def init_shared_subsystems(bot: Bot, *, start_mtproto: bool) -> None:
+    """Connect MongoDB/Redis and attach the error reporter (shared by both transports).
+
+    Index creation, owner seeding, and Redis connect run in parallel once
+    the MongoDB client is live; with ``start_mtproto`` the shared MTProto
+    session starts alongside. Long-lived transports pass True and fail
+    closed when MTProto errors; serverless passes False because a frozen
+    instance cannot hold the long-lived session, so identity resolution
+    degrades to Bot-API-only there by design.
+    """
+    # * Load the TOML catalog here, once, instead of on the first handler:
+    # * the first t() call would otherwise read and parse every locale
+    # * synchronously on the event loop and stall the first command.
+    _ensure_loaded()
+    log.info("Connecting to MongoDB...")
+    await connect()
+
+    log.info("Running parallel setup (indexes, owner seed, Redis)...")
+    if start_mtproto:
+        indexes_r, owner_r, _, _mtproto_r = await asyncio.gather(
+            ensure_indexes(),
+            db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
+            redis_client.connect_if_configured(),
+            mtproto_mod.start(),
+            return_exceptions=True,
+        )
+    else:
+        indexes_r, owner_r, _ = await asyncio.gather(
+            ensure_indexes(),
+            db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
+            redis_client.connect_if_configured(),
+            return_exceptions=True,
+        )
+        _mtproto_r = True
+    throw_if_cancelled((indexes_r, owner_r, _mtproto_r))
+    if isinstance(indexes_r, BaseException):
+        raise indexes_r
+    if isinstance(owner_r, BaseException):
+        log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
+    # * MTProto is mandatory on long-lived transports: missing credentials
+    # * or a login-less session must abort boot loudly instead of serving
+    # * numeric-ID displays. A degraded False (lease held elsewhere) is not
+    # * fatal: the bot serves fully on the Bot API without MTProto lookups.
+    if start_mtproto:
+        if isinstance(_mtproto_r, BaseException):
+            raise _mtproto_r
+        if _mtproto_r is False:
+            log.warning(
+                "MTProto degraded: another live instance owns the shared session "
+                "(or the lease claim failed). Identity lookups run Bot-API-only; "
+                "moderation is unaffected."
+            )
+
+    # * Attach live bot to the error reporter (enables Layers 1 + 3)
+    # * Owner ID is passed so infra-level errors (Conflict, InvalidToken)
+    # * go to the owner's DM instead of the shared logs_errors channel.
+    lec, let = cfg.logs_errors
+    error_reporter.attach(bot, lec, let, owner_id=cfg.initial_owner_id)
+
+
 async def _post_init(app: Application) -> None:
     """Connect to MongoDB, ensure indexes, seed owner, start scheduler, and attach error reporter."""
     # * Fail fast on missing MTProto credentials before any side effect
@@ -118,58 +178,24 @@ async def _post_init(app: Application) -> None:
         raise RuntimeError(
             "API_ID/API_HASH are required for MTProto identity resolution; refusing to boot degraded."
         )
-    # * Load the TOML catalog here, once, instead of on the first handler:
-    # * the first t() call would otherwise read and parse every locale
-    # * synchronously on the event loop and stall the first command.
-    _ensure_loaded()
-    log.info("post_init: connecting to MongoDB...")
-    await connect()
-
-    # * Run index creation, owner seeding, and Redis connect in parallel.
-    # * All three are safe to run concurrently once the MongoDB client is live.
-    log.info("post_init: parallel setup (indexes, owner seed, Redis)...")
-
-    indexes_r, owner_r, _, _mtproto_r = await asyncio.gather(
-        ensure_indexes(),
-        db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
-        redis_client.connect_if_configured(),
-        mtproto_mod.start(),
-        return_exceptions=True,
-    )
-    throw_if_cancelled((indexes_r, owner_r, _mtproto_r))
-    if isinstance(indexes_r, BaseException):
-        raise indexes_r
-    if isinstance(owner_r, BaseException):
-        log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
-    # * MTProto is mandatory: missing credentials or a login-less session
-    # * must abort boot loudly instead of serving numeric-ID displays.
-    # * A degraded False (lease held elsewhere) is not fatal: the bot
-    # * serves fully on the Bot API without MTProto lookups.
-    if isinstance(_mtproto_r, BaseException):
-        raise _mtproto_r
-    if _mtproto_r is False:
-        log.warning(
-            "MTProto degraded: another live instance owns the shared session "
-            "(or the lease claim failed). Identity lookups run Bot-API-only; "
-            "moderation is unaffected."
-        )
+    await init_shared_subsystems(app.bot, start_mtproto=True)
 
     # * APScheduler 3.11.3 with MongoDBJobStore - persistent scheduled jobs.
     # * app.bot is live here (post_init runs inside the initialised app), so
     # * the optional enforcement-sync sweep gets a real Bot reference; a
     # * SYNC_INTERVAL_HOURS of 0 keeps the sweep disabled.
+    # * The runner is passed explicitly so the database package never imports
+    # * a command module (that import is the database -> modules cycle).
+    from tcbot.modules.syncing import run_ban_sync  # noqa: PLC0415
+
     await sched_mod.start(
         cfg.mongodb_uri,
         cfg.db_name,
         cfg.warn_expiry_days,
         bot=app.bot,
         sync_interval_hours=cfg.sync_interval_hours,
+        sync_runner=run_ban_sync,
     )
-    # * Inject the enforcement runner so the database package never imports
-    # * a command module (that import is the database -> modules cycle).
-    from tcbot.modules.syncing import run_ban_sync  # noqa: PLC0415
-
-    sched_mod._sync_runner = run_ban_sync
 
     # * Pre-warm hot caches (owner ID + active groups) as a background task so
     # * the first real user command hits L1 instead of going all the way to MongoDB.
@@ -179,15 +205,10 @@ async def _post_init(app: Application) -> None:
     _startup_tasks.add(_t)
     _t.add_done_callback(_startup_tasks.discard)
 
-    # * Attach live bot to the error reporter (enables Layers 1 + 3)
-    # * Owner ID is passed so infra-level errors (Conflict, InvalidToken)
-    # * go to the owner's DM instead of the shared logs_errors channel.
-    lec, let = cfg.logs_errors
-    error_reporter.attach(app.bot, lec, let, owner_id=cfg.initial_owner_id)
-
     # * Register asyncio-level exception handler (Layer 3)
     loop.set_exception_handler(_make_asyncio_exc_handler(loop))
 
+    lec, _ = cfg.logs_errors
     log.info("Bot initialised.")
     # * Internal IDs go to DEBUG so they do not appear in default INFO logs.
     log.debug("Owner: %d | LOG_ERRORS: %d", cfg.initial_owner_id, lec)
