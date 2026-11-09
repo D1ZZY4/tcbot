@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from tcbot.database import mtproto as _mtproto_pkg
+from tcbot.utils.dispatch import gather_bounded
 from tcbot.utils.logger import get_logger
 
 # * Logger keeps the pre-split name so log output is unchanged.
@@ -22,8 +25,8 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
     (returns the count so far); peer hashes persist in shared storage as a
     side effect for future direct resolves.
     """
-    # * Sequential scan, no parallelism; shard per-group or page with
-    # * smaller limits if a mega-group harvest ever gets too slow.
+    # * The member scan itself stays sequential (Telegram order); the DB
+    # * writes batch instead of awaiting one at a time.
     from tcbot.database import users_cache  # noqa: PLC0415 (avoid import cycle)
 
     c = _mtproto_pkg._client
@@ -31,13 +34,32 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
         raise RuntimeError("MTProto session invalidated; refusing to harvest.")
     if c is None or not c.is_connected:
         raise RuntimeError("MTProto client is not connected.")
-    count = 0
     # * A 1000-member scan is up to 1000 sequential DB writes on the event
     # * loop; cap wall time so one backfill cannot stall moderation traffic.
     deadline = _mtproto_pkg.monotonic() + _mtproto_pkg._HARVEST_BUDGET_S
+    # * Valid identities batch into bounded flushes (mirrors the connected
+    # * admin harvest) so writes overlap instead of awaiting each one. The
+    # * batch stays small: at most _HARVEST_BATCH pending writes at a time.
+    _HARVEST_BATCH: int = 50
+    pending: list = []
+    count = 0
+
+    async def _flush() -> None:
+        nonlocal count
+        if not pending:
+            return
+        results = await gather_bounded(list(pending))
+        for result in results:
+            if isinstance(result, BaseException):
+                log.debug("Member harvest write failed: %s", result)
+            else:
+                count += 1
+        pending.clear()
+
     try:
         async for member in c.get_chat_members(chat_id, limit=limit):
             if _mtproto_pkg.monotonic() >= deadline:
+                await _flush()
                 log.warning(
                     "Member harvest stopped on timeslice in %d (%ds budget).",
                     chat_id,
@@ -48,20 +70,28 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
             fname = getattr(user, "first_name", None) if user is not None else None
             if user is None or getattr(user, "is_bot", False) or not fname:
                 continue
-            try:
-                await users_cache.harvest_user_identity(
+            pending.append(
+                users_cache.harvest_user_identity(
                     user.id,
                     getattr(user, "username", None),
                     fname,
                     getattr(user, "last_name", None),
                 )
-            except Exception as exc:
-                log.debug("Member harvest write failed for %d: %s", user.id, exc)
-                continue
-            count += 1
+            )
+            if len(pending) >= _HARVEST_BATCH:
+                await _flush()
+        await _flush()
+        return count
     except Exception as exc:
         if getattr(exc, "value", None) is not None:  # FloodWait-likes carry .value
             log.warning("Member harvest stopped early in %d: %s", chat_id, exc)
+            # * Flush what was collected before the flood so partial progress
+            # * survives; the count so far is returned either way.
+            try:
+                await _flush()
+            except asyncio.CancelledError:
+                raise
+            except Exception as flush_exc:
+                log.debug("Member harvest partial flush failed: %s", flush_exc)
             return count
         raise
-    return count

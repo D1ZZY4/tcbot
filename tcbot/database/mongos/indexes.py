@@ -6,8 +6,7 @@
 
 from __future__ import annotations
 
-import asyncio
-
+from tcbot.utils.dispatch import gather_bounded
 from tcbot.utils.logger import get_logger
 
 from .client import _MEMBER_CACHE_EXPIRE_S, col, db_call
@@ -66,7 +65,11 @@ async def ensure_indexes() -> None:
     # * until_date_1 index must be gone before the TTL recreate runs, or
     # * the recreate conflicts and this same fail-fast fires.
     await _drop_legacy_active_mutes_index()
-    results = await asyncio.gather(
+    # * Each create_index runs through the MongoDB circuit (outages feed the
+    # * breaker instead of bypassing it) and the batch is bounded to the
+    # * fan-out cap of 10, inside the 20-connection Motor pool: the old raw
+    # * gather fired all 35 at once and queued on pool exhaustion.
+    index_coros = [
         # * Serves get_active_ban(): filter on banned_user_id + is_active, sort on
         # * timestamp + ban_id. Compound index replaces the separate prefix index below.
         col("bans").create_index(
@@ -167,8 +170,8 @@ async def ensure_indexes() -> None:
         col("member_cache").create_index(
             [("last_updated", 1)], expireAfterSeconds=_MEMBER_CACHE_EXPIRE_S
         ),
-        return_exceptions=True,
-    )
+    ]
+    results = await gather_bounded([db_call(coro) for coro in index_coros])
     failed = [r for r in results if isinstance(r, BaseException)]
     if failed:
         for exc in failed:
