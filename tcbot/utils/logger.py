@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -166,7 +167,10 @@ class TelegramErrorHandler(logging.Handler):
         except ImportError:
             self.handleError(record)
             return
-        task = loop.create_task(error_reporter.report_record(record))
+        # * Snapshot now: _bridge_to_stdlib clears exc_info on the live
+        # * record after callHandlers, which would otherwise erase the
+        # * traceback before this async task reads it.
+        task = loop.create_task(error_reporter.report_record(copy.copy(record)))
         _tg_tasks.add(task)
         task.add_done_callback(_tg_tasks.discard)
 
