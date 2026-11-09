@@ -38,9 +38,13 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Main-group appeals in place** (`tcbot/modules/appeals.py`, `appeal_submit_flow/`): a `#appeal` message in the main group submits through the same gates and posting as the DM deep link, including dual review cards. Behavior changes: `#appeal` in the main group opens an appeal for the sender's active ban.
 
-- **Review cards post in both surfaces** (`appeal_submit_flow/submit.py`): the staff review card with Approve/Reject buttons now lands in the main-group topic and as a copy in the appeals channel, next to the forwarded appeal text. Behavior changes: staff can decide from either surface; the main-group card stays canonical for the stored review slot.
+- **Review cards post in both surfaces** (`appeal_submit_flow/submit.py`): the staff review card with Approve/Reject buttons now lands in the main group and as a copy in the appeals destination, next to the forwarded appeal text. Behavior changes: staff can decide from either surface; the main-group card stays canonical for the stored review slot.
 
 ### Changed
+
+- **Additional Links shows all five buttons by default** (`tcbot/config/parsing.py`, `tcbot/config/models.py`, `tcbot/config/__init__.py`, `config.env.example`, `docs/getting-started/setup.md`): Discussion Group and Appeals Channel gain built-in links, so a fresh setup shows Main Channel, Discussion Group, Logs Channel, Appeals Channel, and TRAVEL without manual values. Behavior changes: the two buttons now appear even when their env vars are empty.
+
+- **Appeal submission split into focused helpers** (`tcbot/modules/helper/workflows/appeal_submit_flow/`): review posting, the handler factory, and instruction text each have one module, so every file fits the size limit again. Import paths and retry behavior are unchanged.
 
 - **24/7 runner re-enabled** (`.github/workflows/run-bot.yml`, `README.md`, `docs/operations/ci-cd.md`, `.agents/rules/docs-sync.md`, `AGENTS.md`, `docs/architecture/helpers.md`): the self-chaining runner moves from `.github/workflows.disabled/` back to `.github/workflows/` and schedules again with push-triggered handover and cron fallback. Behavior changes: the bot auto-runs via GitHub Actions again; repository secrets still need to be set once.
 
@@ -222,6 +226,14 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
+- **Mute no longer demotes on an aborted reason** (`tcbot/modules/muting.py`): duration and reason checks now run before the auto-demote, so an overlong reason never strips a role. Behavior changes: role removal is skipped when the command aborts.
+
+- **Unban aborts when the role survives the cleanup demote** (`tcbot/modules/unbanning.py`): when the demote clears no row, the fresh role is re-read and the unban stops if the target still holds staff rank. Behavior changes: a still-staff target keeps both role and ban instead of being unbanned with rank intact.
+
+- **Join handling propagates shutdown** (`tcbot/modules/greeting/joins.py`): new-member handling now propagates task cancellation instead of logging it as per-item failure. Behavior changes: none during normal operation.
+
+- **Sync treats unexpected refusals as failures** (`tcbot/modules/syncing/core.py`, `docs/features/moderation/sync.md`): membership and enforcement errors now count through the shared benign check only, so non-benign refusals surface in the failed total. Behavior changes: some skips now read as failures.
+
 - **Cache fetch keeps mutual exclusion** (`tcbot/database/cache/twolevel/core.py`): a finishing fetch removes only its own lock, so concurrent misses for the same key cannot run two database fetches after a lock handoff. Behavior changes: none on single-threaded use; shared misses fetch once.
 
 - **Warn expiry timeout fails the job** (`tcbot/database/scheduler/jobs.py`): a hung expiry now raises instead of returning normally, so the daily job and the cron endpoint report the incomplete run instead of success. Behavior changes: a timeout answers failure instead of success.
@@ -364,6 +376,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Removed
 
+- **Appeal log handle removed** (`tcbot/config/`, `tcbot/modules/helper/workflows/appeal_flow.py`, `config.env.example`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `docs/features/appeals.md`, `.github/workflows/run-bot.yml`): the separate handle setting is gone and the instruction handle follows the public logs link instead. `APPEALS` stays the single appeal destination for channel, group, or forum thread use. Behavior changes: an existing handle value is ignored; update the public logs link instead.
+
+- **Appeal discussion topic removed** (`tcbot/config/`, `tcbot/modules/helper/workflows/appeal_submit_flow/posting.py`, `tcbot/modules/helper/parse_logmsg/appeals.py`, `config.env.example`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `docs/features/appeals.md`, `docs/architecture/workflows.md`, `.github/workflows/run-bot.yml`): the separate thread setting is gone and the main-group review card posts to general. `APPEALS` stays the single appeal destination for channel, group, or forum thread use. Behavior changes: an existing topic value is ignored; review cards no longer land in a dedicated main-group topic.
+
 - **Unused log and navigation helpers removed** (`tcbot/modules/helper/parse_logmsg/core.py`, `tcbot/modules/helper/workflows/stats_flow/shared.py`): two `LogBuilder` block helpers and one stats back-row alias had no callers. The live builders and the central keyboard factories stay. Behavior changes: none.
 
 - **TCF Bot 24/7 runner disabled** (`.github/workflows/run-bot.yml` → `.github/workflows.disabled/`): the self-chaining GitHub Actions runner is moved out of the active workflows directory so it no longer schedules or runs. Behavior changes: the bot no longer auto-runs via GitHub Actions; host it elsewhere.
@@ -375,6 +391,12 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Dead identity-cache probe removed** (`tcbot/database/users_cache.py`): `has_recent_identity_attempt()` had no callers; resolvers read the mention cache directly. Behavior changes: none.
 
 ### Documentation
+
+- **Setup and run guides match the config surface** (`README.md`, `config.env.example`, `docs/getting-started/setup.md`, `.github/workflows/run-bot.yml`): error reports fall back to the owner DM when empty, the appeals community link is listed and forwarded, removed federation chat vars and the exec button are gone, and Docker port text follows the configured port. Behavior changes: none, docs only.
+
+- **Moderation guides name the federation origin gate** (`docs/features/moderation/banning.md`, `muting.md`, `kicking.md`, `warnings.md`, `sync.md`): each guide states which commands allow DM and which require a connected or primary group, and that outages block with a retry notice. Behavior changes: none, docs only.
+
+- **Circuit wording matches the breaker** (`tcbot/utils/circuit_breaker.py`): the threshold is now described as transient failures that successes do not reset, so a partial outage with interleaved successes can still trip it. Behavior changes: none, wording only.
 
 - **Guides match the disabled runner** (`README.md`, `AGENTS.md`, `.agents/rules/docs-sync.md`, `docs/operations/ci-cd.md`, `docs/architecture/helpers.md`, `docs/architecture/repository-map.md`, `docs/getting-started/setup.md`, `CONTRIBUTING.md`, `config.env.example`, `docs/architecture/helpers.md`, `docs/architecture/database.md`, `docs/features/roles/roles.md`, `.agents/rules/security-rules.md`, `docs/features/moderation/check.md`, `docs/features/statistics.md`, `.pre-commit-config.yaml`): the runner is documented as parked, missing contributor links and stale role-check references are gone, startup ownership and discovery match the runtime package, the session namespace ships active, and the public check and stats panes are marked public by design. Behavior changes: none, docs only.
 
