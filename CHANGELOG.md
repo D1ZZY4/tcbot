@@ -18,8 +18,11 @@ All notable changes to this project are documented here. For workflow details, s
 - **Shared moderation entry sequence** (`tcbot/modules/helper/decorators/checks.py`, `tests/test_authz.py`): `resolve_mod_target` runs the locale, origin, extraction, identity, and rank steps once for the ban, kick, mute, and warn commands, replacing five copies of the same sequence. Behavior changes: none; replies and log labels are byte-identical.
 
 - **Self-check cards stay with their owner** (`tcbot/modules/checking/checkme.py`, `tests/test_checkme_owner.py`): detail and back callbacks ignore a crafted tap for another user's ban. Behavior changes: other users cannot render your ban card.
+
 - **Module budget widened and comments tightened** (`pyproject.toml`, `.agents/rules/code-style.md`, `.agents/rules/comment-style.md`): per-file budget is 1000 lines, comments stay short and dense. Behavior changes: none for operators.
+
 - **Runtime builder is public** (`tcbot/__main__.py`, `tcbot/serverless.py`): the shared builder, app build, and handler wiring use public names. Behavior changes: none.
+
 - **Fresh role and connection reads for enforcement gates** (`tcbot/database/users_roles/`, `tcbot/database/groups_db/`, `tcbot/modules/helper/decorators/`): owner, effective-role, and connection lookups accept a fresh bypass that reads MongoDB directly and refreshes the cache. Enforcement gates use it so a demotion, transfer, or disconnect in another process is never hidden for the cache TTL; display reads keep the cached fast path. Behavior changes: demotions, transfers, and disconnects take effect immediately for moderation commands.
 
 - **Broadcast coverage for partial failures** (`tests/test_broadcasting.py`): broadcast counting is pinned for total success and for mixed benign and transient failures. Behavior changes: none for operators.
@@ -56,7 +59,9 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Local artifacts stay out of version control** (`.gitignore`): coverage data, pytest and hypothesis caches, HTML reports, and the proof-migration resume state are ignored, so local runs never leak into commits. Behavior changes: none for operators.
 - **Manifest realigned to grouped dependency sets** (`pyproject.toml`, `uv.lock`): runtime, optional, and development dependencies are organised by responsibility; the test lint ignores narrow to the specific doc rules tests actually skip, and coverage is wired into the test workflow. Behavior changes: none for operators.
+
 - **Database layer moves from Motor to synchronous PyMongo** (`tcbot/database/mongos.py`, `tcbot/database/*_db.py`, `tcbot/database/mtproto_store.py`, `tcbot/database/scheduler.py`, `scripts/migrate_proofs.py`): `db_call` now runs a zero-argument sync operation on a worker thread through the same MongoDB circuit; collections, indexes, schemas, and helper signatures are unchanged. A cancelled operation may still land once its thread finishes, which the atomic read patterns already tolerate. Behavior changes: none for operators.
+
 - **Speedtest drops its heavy provider dependency** (`tcbot/modules/netspeed.py`, `tests/test_netspeed.py`, `pyproject.toml`): `/speedtest` now measures latency, download, and upload against Cloudflare endpoints over the certifi TLS bundle, rendering the same result fields; unavailable geodata shows "N/A". The Ookla share image is gone. Behavior changes: results no longer carry a share image.
 
 - **Proofs default to the community proof channel** (`tcbot/__init__.py`, `config.env.example`, `docs/getting-started/setup.md`): an empty `PROOFS` now resolves to `-1003997518221` instead of compiling to no destination. Behavior changes: proof uploads have a destination on a fresh setup.
@@ -70,18 +75,31 @@ All notable changes to this project are documented here. For workflow details, s
 - **Display fallbacks now leave a debug trace** (`tcbot/modules/help.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `tcbot/modules/helper/pipelines/check_flow.py`): the help-entry, old-admin-name, and group-title fallbacks log at debug level instead of dropping failures silently. Behavior changes: none; user-facing text is unchanged.
 
 - **Logging dependency carries an upper bound** (`pyproject.toml`, `uv.lock`): `loguru` now carries a `<1` bound like every other runtime dependency, so a future major cannot enter the lock silently. Behavior changes: none; the resolved version is unchanged.
+
 - **Modules renamed and flattened to single files** (`tcbot/modules/`): `banning.py` becomes `bans.py`, `broadcasting.py` becomes `broadcast.py`, `connecting.py` becomes `connect.py`, `kicking.py` becomes `kick.py`, `muting.py` becomes `mute.py`, and `unbanning.py` becomes `unban.py`. The `admins/`, `checking/`, `greeting/`, `help/`, `maintenance/`, `stats/`, `syncing/`, and `warnings/` packages become `admins.py`, `check.py`, `greeting.py`, `help.py`, `maintenance.py`, `stats.py`, `sync.py`, and `warns.py`. Behavior changes: `MODULES_LOAD`/`MODULES_NO_LOAD` now take the new names (`bans`, `broadcast`, `check`, `connect`, `kick`, `mute`, `sync`, `unban`, `warns`), and in-flight help keyboards using old topic keys (`help_banning` and friends) stop working after upgrade.
+
 - **`admins.py` is the command entry; executors live in flows** (`tcbot/modules/admins.py`, `tcbot/modules/helper/pipelines/promo_decision_flow.py`, `tcbot/modules/helper/pipelines/transfer_flow.py`): promote, demote, transfer, and queue commands plus their callbacks register from one file, while the promotion decision and ownership-transfer executors run from dedicated flow modules.
+
 - **Resolve helpers shared by promote and demote live in decorators** (`tcbot/modules/helper/decorators/checks.py`): `resolve_executor_target`, `classify_and_load_role`, `check_callback_staff`, `prompt_owner_mismatch`, `cancel_owner_mismatch`, `action_owner_mismatch`, and `can_demote_admin` replace the old `admins/shared.py` copies.
+
 - **`__all__` removed from every module under `tcbot/modules/`** (`tcbot/modules/`, `pyproject.toml`): package initializers stay re-export surfaces without export lists; new-file imports no longer need an export manifest. Behavior changes: none.
+
 - **Message helpers split into safe edits and audit logs** (`tcbot/modules/helper/messages/`): the audit-log builders move to `audit_logs.py` and the safe-edit transport to `safe_edits.py` behind the same package import surface. Behavior changes: none.
+
 - **Single-group enforcement calls are time-bounded** (`tcbot/modules/greeting/joins.py`, `tcbot/modules/greeting/requests.py`, `tcbot/modules/helper/pipelines/kick_flow.py`, `tcbot/modules/syncing/core.py`): join, join-request, kick, and sync enforcement writes now share the 3-second Telegram lookup budget instead of holding a join or fan-out slot until the HTTP timeout. Behavior changes: stalled calls now fail fast and retry on the next event instead of blocking.
+
 - **Sync staff stripping runs concurrently** (`tcbot/modules/syncing/__init__.py`): role removals for banned/muted holders now run through the bounded gather helper instead of one await per holder. Behavior changes: none; same removals, less sequential latency.
+
 - **Localized fallbacks for bot name and admin name** (`tcbot/modules/privacy.py`, `tcbot/modules/checking/checkme.py`, `i18n/`): the privacy bot-name fallback and the checkme admin-name fallback read `privacy.msg.bot_fallback` and `checking.profile.admin_fallback` in the viewer's locale. Behavior changes: Indonesian viewers read translated fallback names; default-locale wording is unchanged.
+
 - **Shared document types now type their writers** (`tcbot/database/users_roles/roles.py`, `tcbot/database/settings_db.py`, `tcbot/database/users_roles/tables.py`): `set_role` and `set_user_locale` write through `RoleDoc` and `UserSettingsDoc`, and `VALID_ROLES` is a literal tuple so the validation narrows the role. Behavior changes: none.
+
 - **Unused helpers removed** (`tcbot/utils/circuit_breaker.py`, `tcbot/utils/i18n.py`, `tcbot/utils/prefixes.py`): `is_open`, `reload_catalog`, and `_BotLike` had no callers. Behavior changes: none.
+
 - **App lifecycle lives in one file** (`tcbot/__main__.py`, `tcbot/serverless.py`, `tests/test_runtime_errors.py`, `tests/test_reliability_regressions.py`, `AGENTS.md`, `docs/architecture/repository-map.md`, `docs/architecture/database.md`, `docs/operations/performance.md`, `docs/operations/vercel.md`): builder, lifecycle, errors, member cache, and entry merge into the process entry point. Behavior changes: none.
+
 - **Error reporting lives in one file** (`tcbot/utils/error_reporter.py`, `tests/test_error_reporter_classify.py`, `AGENTS.md`, `docs/architecture/repository-map.md`, `docs/architecture/utilities.md`, `docs/operations/ci-cd.md`): classify, format, state, and ship merge into one module. Behavior changes: none.
+
 - **Config lives in one file** (`tcbot/__init__.py`, `tcbot/modules/helper/pipelines/appeal_submit_flow.py`, `tests/test_wave_regressions.py`, `AGENTS.md`, `docs/architecture/repository-map.md`, `docs/getting-started/setup.md`): env parsing, the Configs model, and the cfg adapter merge into the top package. Behavior changes: none.
 
 - **Failed bot checks and error filters leave a trace** (`tcbot/modules/helper/identity.py`, `tcbot/__main__.py`, `tests/test_identity_copy.py`, `tests/test_runtime_errors.py`): the Telegram membership probe behind bot verification and the benign-error filter behind the global error handler now log their own failures at debug level instead of dropping them silently. Verification still defers to MTProto and errors still ship as reports. Behavior changes: none; degraded lookups are visible in logs.
