@@ -178,6 +178,10 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Revocation cache writes survive queue saturation** (`tcbot/database/cache/twolevel.py`, `docs/architecture/database.md`): single-key deletes and writes for role, connection, group-list, and owner caches are never dropped when the mutation queue is full, so a revoked privilege cannot stay visible to other processes until the key TTL. Display-name hints remain droppable. Behavior changes: none on healthy reads; revocations land even under burst.
 
+- **Cancelled Redis predecessor no longer drops its successors** (`tcbot/database/cache/twolevel.py`, `docs/architecture/database.md`): each FIFO mutation shields its predecessor and only aborts on its own cancellation, so one cancelled task cannot cascade-cancel the tail. Behavior changes: none on the happy path; later mutations still run after an earlier cancellation.
+
+- **Cache split into queue and core modules** (`tcbot/database/cache/twolevel/`): the FIFO mutation queue now lives in its own submodule with a thin re-exporting package, keeping every file within the size budget again. Public imports, cache keys, and queue ordering are unchanged.
+
 - **Connect fails closed on database outage** (`tcbot/modules/connecting.py`, `tcbot/modules/helper/workflows/connected_flow/bot_added.py`, `docs/features/moderation/connecting.md`): the manual and bot-added connect paths now reply with a retry notice, or drop the event, when the connection-state reads fail instead of treating the outage as not connected. Behavior changes: outage connects show a failure notice instead of proceeding to join.
 
 - **Join decision refuses primary groups** (`tcbot/modules/helper/workflows/connected_flow/join_decision.py`, `docs/features/moderation/connecting.md`): tapping Connect on a primary-group prompt now answers and returns without connecting, matching the command and bot-added guards. Behavior changes: none on normal prompts; primary-group taps no longer create a federation row.

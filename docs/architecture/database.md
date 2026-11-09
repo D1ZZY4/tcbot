@@ -603,6 +603,7 @@ Pool parameters: `decode_responses=True`, `max_connections=20`, `socket_connect_
 - Redis writes/deletes are fire-and-forget, bounded to 2.0 s each, and logged at DEBUG on failure; background-task errors are surfaced via a done-callback log, never raised into callers.
 - Redis failures after the first are not re-logged per op (transition logging only), and the pool/health state is tracked via `mark_op`.
 - Single-key deletes and writes for revocation prefixes (`role`, `conn`, `groups`, `owner`) are never dropped by the 200-deep mutation-queue bound: a dropped role revocation would leave other processes serving the revoked privilege until the key TTL (90-360 s). Display-name hints (`umention`) remain droppable; the next update refreshes them.
+- A cancelled predecessor does not drop its successors: each FIFO mutation shields its predecessor and only aborts on its own cancellation, so one cancelled task cannot cascade-cancel the tail.
 
 ## Scheduler (`scheduler/`)
 
