@@ -82,7 +82,7 @@ Ensure the `.replit` file contains (TOML array form):
 run = ["uv", "run", "python", "-m", "tcbot"]
 ```
 
-For Python 3.14, the Replit Nix `modules` already pins `python-3.14` (`modules = ["nix", "python-3.14", "nodejs-24"]`). If using a custom `pyproject.toml`, ensure the Replit Python version meets `requires-python = ">=3.13"`.
+For Python 3.14, the Replit Nix `modules` already pins `python-3.14` (`modules = ["nix", "python-3.14", "nodejs-24"]`). If using a custom `pyproject.toml`, ensure the Replit Python version meets `requires-python = ">=3.14"`.
 
 ---
 

@@ -11,12 +11,13 @@ validation, and pull requests.
 >
 > - If you work with AI coding assistants on this repository, **you** are
 >   responsible for pointing them at the agent contract first:
->   [`AGENTS.md`](AGENTS.md) (or [`CLAUDE.md`](CLAUDE.md)), [`PROMPT.md`](PROMPT.md),
+>   [`AGENTS.md`](AGENTS.md) (or [`CLAUDE.md`](CLAUDE.md))
 >   and the rules under [`.agents/rules/`](.agents/rules/). Do not let an
 >   assistant touch code until it has completed that reading checkpoint.
 > - If you **are** an AI agent reading this file, treat it as orientation
 >   only. Your working contract is [`AGENTS.md`](AGENTS.md) (or
->   [`CLAUDE.md`](CLAUDE.md)) plus [`PROMPT.md`](PROMPT.md): complete that
+>   [`CLAUDE.md`](CLAUDE.md)) plus the canonical rules under
+>   [`.agents/rules/`](.agents/rules/): complete that
 >   reading checkpoint, learn what this project is, and only then change
 >   any code.
 

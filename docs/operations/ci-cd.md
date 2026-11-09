@@ -8,7 +8,9 @@ For the changelog of CI/CD additions, see
 
 ## Overview
 
-The project uses 7 automated workflows for continuous integration, code quality, and maintenance:
+The project uses 6 active automated workflows for continuous integration,
+code quality, and maintenance. The 24/7 bot runner lives under
+`.github/workflows.disabled/` and does not schedule until re-enabled:
 
 | # | Workflow | Purpose |
 |---:|---|---|
@@ -18,7 +20,7 @@ The project uses 7 automated workflows for continuous integration, code quality,
 | 4 | Auto-Fix Code Quality | Automatically fix linting issues |
 | 5 | Dependency Updates | Weekly dependency updates with auto-PR |
 | 6 | CodeQL | Security analysis |
-| 7 | Run Bot | Long-running bot runner with push-triggered handover, self-chaining, and cron fallback |
+| - | Run Bot (disabled) | Long-running bot runner, parked in `.github/workflows.disabled/` |
 
 ---
 
@@ -142,9 +144,9 @@ Review the dependency changes and CI results before merging.
 
 ---
 
-## 5. Run Bot
+## 5. Run Bot (disabled)
 
-**File:** `.github/workflows/run-bot.yml`
+**File:** `.github/workflows.disabled/run-bot.yml` (not scheduled until moved back to `.github/workflows/`)
 
 **Triggers:**
 - Self-dispatch (`workflow_dispatch`) from the previous run, for seamless chaining
@@ -180,7 +182,7 @@ Auto-create PR
     ↓
 Telegram Notification
 
-Run Bot (schedule / handover dispatch: queues behind the live run)
+Run Bot (disabled: lives in `.github/workflows.disabled/`; re-enable to restore the chain below)
     ↓
 Self-dispatch next run (~10 min before window ends)
     ↓
@@ -209,7 +211,7 @@ Configure these in GitHub repository settings → Secrets:
 
 Without `BOT_PAT`, the Run Bot workflow cannot dispatch its own next run; it falls back to the every-15-minute cron resurrection schedule.
 
-The Run Bot workflow forwards the full federation env surface as repository
+The Run Bot workflow (when re-enabled) forwards the full federation env surface as repository
 secrets, so every runtime variable must be set there for the runner: `DB_NAME`,
 `COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`, `MAIN_CHANNEL`, `EXTEND_GROUP`,
 `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `REDIS_URL`,
@@ -253,7 +255,7 @@ View workflow
 
 1. **Monitor GitHub issues** - Auto-created issues need triage
 2. **Review auto-fix pull requests** - Verify changes are correct
-3. **Keep `BOT_PAT` valid** - An expired token breaks Run Bot self-chaining; the cron fallback still resurrects the bot, but with brief gaps
+3. **Keep `BOT_PAT` valid** - An expired token breaks Run Bot self-chaining (when re-enabled); the cron fallback still resurrects the bot, but with brief gaps
 4. **Check workflow runs** - Weekly scheduled runs keep dependencies fresh
 
 ---
@@ -273,13 +275,16 @@ View workflow
 - Verify `pull-requests: write` permission
 - Same repository toggle as above: without `Allow GitHub Actions to create and approve pull requests`, `gh pr create` fails even with the right permissions (the `deps/auto-update-*` branch is already pushed, so re-running or opening the PR manually recovers)
 
-### Bot not staying online (Run Bot)
-- Verify `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` secrets are set
+### Bot not staying online (Run Bot, disabled)
+
+- The runner is parked in `.github/workflows.disabled/` and never schedules; move it back to `.github/workflows/` to re-enable
+- When re-enabled, verify `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` secrets are set
 - For seamless 24/7, set `BOT_PAT` (a PAT with the `workflow` scope) so the run can dispatch its successor; otherwise only the 15-minute cron fallback restarts it
 - A `409 Conflict` from Telegram means two instances are polling at once; the `tcf-bot-runner` concurrency group should prevent this, so check for a stray manual run
 
-### Bot restarted right after a push (Run Bot)
-- Expected when the push touched runtime files: the live run detects the new commit and hands over on purpose so the new commit serves within minutes. Docs-only pushes never restart the bot
+### Bot restarted right after a push (Run Bot, disabled)
+
+- Expected when re-enabled and the push touched runtime files: the live run detects the new commit and hands over on purpose so the new commit serves within minutes. Docs-only pushes never restart the bot
 - If restarts flap on rapid successive pushes, the latest commit always wins; avoid pushing runtime fixes one line at a time during an incident
 
 ---
@@ -293,7 +298,7 @@ View workflow
 ### Manual Tasks
 - Review and merge dependency update PRs
 - Triage auto-created issues
-- Keep `BOT_PAT` valid so Run Bot self-chaining stays seamless
+- Keep `BOT_PAT` valid so Run Bot self-chaining stays seamless (when re-enabled)
 
 ---
 

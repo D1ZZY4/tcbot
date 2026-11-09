@@ -1,6 +1,6 @@
 # Roles
 
-This document describes the current role and staff-management behavior implemented by `tcbot/modules/admins/`, `tcbot/modules/helper/workflows/promote_flow/`, `tcbot/modules/helper/workflows/demote_flow/`, `tcbot/modules/helper/decorators/` (for `resolve_and_check`), `tcbot/modules/helper/identity.py` (for target identity refusals), `tcbot/database/users_roles.py`, and `tcbot/database/queues_db.py`.
+This document describes the current role and staff-management behavior implemented by `tcbot/modules/admins/`, `tcbot/modules/helper/workflows/promote_flow/`, `tcbot/modules/helper/workflows/demote_flow/`, `tcbot/modules/helper/decorators/` (for `resolve_and_check`), `tcbot/modules/helper/identity.py` (for target identity refusals), `tcbot/database/users_roles/`, and `tcbot/database/queues_db.py`.
 
 For promote command details, see [`promote.md`](promote.md). For demote command
 details, see [`demote.md`](demote.md). For module structure, see
@@ -64,7 +64,7 @@ Only `developer` and `tester` are valid custom roles in `tc_roles`. Founder and 
 
 ## Permission model
 
-The helper `role_rank(role)` converts an effective role into its numeric rank. `can_act_on(executor_id, target_id)` returns true only when the executor rank is strictly greater than the target rank. If either role lookup fails, the check returns false rather than treating the failed lookup as a user with no role.
+The helper `role_rank(role)` converts an effective role into its numeric rank. Executor-versus-target checks go through `decorators.resolve_and_check()`, which allows the action only when the executor rank is strictly greater than the target rank. If either role lookup fails, the check fails closed with a retry reply rather than treating the failed lookup as a user with no role; cancellation always propagates.
 
 Common moderation thresholds:
 
@@ -354,7 +354,7 @@ Key role-system behaviors to keep in mind:
 
 1. `get_effective_role` returns Founder over Admin/custom role, Admin over custom role, then custom role.
 2. `role_rank(None)` returns `0`.
-3. `can_act_on` is true only when executor rank is strictly higher than target rank.
+3. `resolve_and_check` allows the action only when executor rank is strictly higher than target rank.
 4. Founder can directly promote Admin/Developer/Tester.
 5. Admin can directly promote Developer/Tester.
 6. Admin attempting to promote Admin creates a pending request.

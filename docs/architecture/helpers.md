@@ -40,7 +40,7 @@ Decorators provide authorization, handler-level rate limiting, and debug tracing
 
 `_AsyncRateLimiter` backs the global `_cmd_limiter` (8 calls / 30 s), `_cbq_limiter` (20 presses / 10 s), and each `ratelimiter()` per-handler instance:
 
-- **Redis available**: atomic Lua script on a sorted-set key `rl:{prefix}:{uid}`. Expired entries are purged each check via `ZREMRANGEBYSCORE`. State survives bot restarts, so the quota is consistent across the scheduled 4-hour `run-bot.yml` cycle.
+- **Redis available**: atomic Lua script on a sorted-set key `rl:{prefix}:{uid}`. Expired entries are purged each check via `ZREMRANGEBYSCORE`. State survives bot restarts, so the quota is consistent across restarts (including the disabled 24/7 runner cycle in `.github/workflows.disabled/run-bot.yml`).
 - **Redis absent or error**: transparent fallback to `_RateLimiter` (in-process `deque`-based sliding window). Rate limiting is never silently disabled; the fallback is logged at DEBUG level.
 - **Founder exemption**: `_is_exempt(uid)` compares against the cached owner ID before any bucket check, in both the global handler and every per-handler wrapper. A failed lookup means not exempt (fail-closed, throttling stays on); cancellation propagates. Per-handler quotas are graduated by cost: reads 8-10 calls / 30 s, moderation writes 3-5 calls / 60 s, bulk actions 1-3 calls / 300 s, callbacks 15-20 presses / 30 s.
 - **Staff global tier**: `_throttle_tier(uid)` resolves the flood ceiling for commands in one cached role read: Founder skips it, Tester and above share `_cmd_staff_limiter` (16 calls / 30 s), everyone else uses `_cmd_limiter` (8 calls / 30 s). A failed lookup lands on the strict bucket; cancellation propagates. Per-handler quotas still pace each destructive command, and the callback bucket (20 presses / 10 s) is unchanged for all tiers.
@@ -130,7 +130,7 @@ See [keyboard styles](../reference/keyboard-styles.md) for layout, color, and ca
 
 ## `identity.py`
 
-`identity.classify(bot, executor_id, target_id, target_fname, *, target_is_bot=None)` returns an `Identity` dataclass that classifies a moderation target as one of: `self`, `this_bot`, `other_bot`, `telegram`, `anon_admin`, `founder`, `admin`, `developer`, `tester`, `user`. Pass `target_is_bot=True` to skip the Telegram bot lookup when the caller already knows the target is a bot. The name and role cache reads run in parallel; a role-lookup failure degrades to `user` (fail open, callers pair it with a fail-closed role read) while cancellation always propagates.
+`identity.classify(bot, executor_id, target_id, target_fname, *, target_is_bot=None)` returns an `Identity` dataclass that classifies a moderation target as one of: `self`, `this_bot`, `other_bot`, `telegram`, `anon_admin`, `founder`, `admin`, `developer`, `tester`, `user`. Pass `target_is_bot=True` to skip the Telegram bot lookup when the caller already knows the target is a bot. The name and role cache reads run in parallel; a role-lookup failure degrades to `user` (fail open, callers pair it with a fail-closed role read) while cancellation always propagates. `identity.verify_not_bot(update, target_id, bot)` returns `True` for a verified human, `False` for a verified bot, and `None` when indeterminate; ownership transfer fails closed on `None` while promotion keeps the best-effort `is_proven_bot` wrapper that treats unknown as allowed.
 
 The `Identity` dataclass now includes:
 - `kind`: The identity type
@@ -150,6 +150,7 @@ The `decorators/` module centralizes both auth-guard decorators and the shared e
 | Export | Purpose |
 |---|---|
 | `resolve_and_check(msg, executor_id, target_id, min_role=...)` | Resolves executor and target roles, checks minimum executor rank, checks executor outranks target, and replies on failure. Role lookup errors fail closed and do not become a no-role result. |
+| `require_federation_origin(msg, chat_id, chat_type, locale, allow_private=...)` | Enforces that moderation entries originate from a connected group or a primary group (private only when `allow_private` is set for federation-wide entries). A disconnected group, or a private chat where `allow_private` is false, replies with the shared notice and blocks the action; a connection-state outage replies with the database retry notice and blocks (fail closed). |
 
 Ban, kick, and mute entry points pair this with `Demote.execute(..., trigger="ban"/"kick"/"mute")` from `workflows/demote_flow/` to remove the target's role before the moderation action.
 

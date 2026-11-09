@@ -30,7 +30,6 @@ This page maps the repository structure and the service boundaries between packa
 ├── CONTRIBUTING.md         Contribution workflow and review checklist
 ├── AGENTS.md               Maintainer and agent project guide
 ├── CLAUDE.md               Symlink to AGENTS.md
-├── PROMPT.md               Bootstrap prompt
 ├── SECURITY.md             Security policy
 ├── replit.md               Replit deployment notes
 ├── CHANGELOG.md            Version history
@@ -68,16 +67,16 @@ tcbot/
 │   ├── mongos/             Motor client, collection accessor, indexes
 │   ├── _migration.py       Shared chat-repoint helper for basic-group to supergroup migrations
 │   ├── bans_db/            Federation ban records (incl. per-user history)
-│   ├── groups_db.py        Connected groups and pending joins
+│   ├── groups_db/          Connected groups and pending joins
 │   ├── users_cache/        Member profile cache operations
-│   ├── users_roles.py      Owners/admins + dev/tester roles, effective-role resolution
+│   ├── users_roles/        Owners/admins + dev/tester roles, effective-role resolution
 │   ├── warns_db/           Warnings and warning counters (incl. per-user aggregates)
 │   ├── kicks_db.py         Kick audit records (incl. per-user history)
 │   ├── mutes_db.py         Mute audit records (incl. per-user history)
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache/              L1 TTL caches with optional Redis L2
 │   ├── redis_client.py     Optional async Redis client (owns the connect/degrade decision)
-│   ├── scheduler/          APScheduler background jobs in the MongoDB `jobs` collection
+│   ├── scheduler/          APScheduler background jobs (MongoDBJobStore, library default collection)
 │   ├── mtproto/            Bot-token MTProto client: resolve + member harvest
 │   ├── mtproto_store/      MongoDB-backed Kurigram storage engine
 │   ├── settings_db.py      Per-user settings (locale preferences)
@@ -114,7 +113,7 @@ tcbot/
 
 | Area | Owns | Must not own |
 |---|---|---|
-| `tcbot/__main__.py` | Application startup, global handlers, DB init, webhook transport (polling fallback for local dev only) | Feature business logic |
+| `tcbot/__main__.py` | Thin shim delegating to `tcbot/runtime/` (entry/lifecycle) for startup, handlers, DB init, and webhook transport (polling fallback for local dev only) | Feature business logic |
 | `tcbot/modules/*.py` | Command entry points, handler registration, user-facing permissions | Raw MongoDB writes, duplicate conversation state handlers |
 | `tcbot/modules/helper/` | Shared handler helpers and keyboard factories | Top-level command registration |
 | `tcbot/modules/helper/workflows/*_flow.py` | Conversation factories, state transitions, flow executors | Module discovery or `__handlers__` exports |
@@ -176,7 +175,7 @@ sequenceDiagram
 
 ## Dynamic module discovery
 
-`tcbot/modules/__init__.py` discovers every top-level `tcbot/modules/*.py` file except `__init__.py`. Discovery is sorted for deterministic registration order.
+`tcbot/modules/__init__.py` discovers every top-level `tcbot/modules/*.py` file and every package directory with an `__init__.py`, except `__init__.py` and the `helper/` package. Discovery is sorted for deterministic registration order.
 
 Filtering order:
 

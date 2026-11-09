@@ -163,23 +163,26 @@ Run exactly one live instance per token on exactly one target below. Every targe
 <details>
 <summary>GitHub Actions automation (lint, auto-fix, dependencies, CodeQL)</summary>
 
-Seven CI workflows run automatically; no secrets needed (validation steps use dummy values, so fork PRs work too). All use Python 3.14 with `uv sync --frozen` and cached `uv` setup.
+Six CI workflows run automatically; no secrets needed (validation steps use dummy values, so fork PRs work too). All use Python 3.14 with `uv sync --frozen` and cached `uv` setup.
 
 - **Lint (Ruff)** (`lint-ruff.yml`), **Lint (Pyright)** (`lint-pyright.yml`), **Test (Pytest)** (`test-pytest.yml`): on push to `main`/`feat/**`/`fix/**` and PRs to `main`. Run `ruff format --check` + `ruff check` + the `import tcbot` check, `pyright`, and `pytest tests/ -q -n auto` respectively. Fail the PR subject to branch protection.
 - **Auto-Fix** (`auto-fix.yml`): same push/PR triggers plus weekly Monday 04:00 UTC and manual dispatch. Runs `ruff format` + `ruff check --fix`; outside a PR it force-pushes the fixed `auto-fix/ruff` branch and opens a PR, on a PR it comments the local fix commands instead. Needs `contents: write` + `pull-requests: write`.
 - **Dependency Updates** (`dependency-update.yml`): weekly Monday 04:00 UTC and manual dispatch. Runs `uv lock --upgrade`, validates with Ruff plus the import check, then opens a `deps/auto-update-YYYYMMDD` PR labeled `dependencies` against `main` (no-op when the lockfile is unchanged). Sends the owner a Telegram status DM when `BOT_TOKEN`/`OWNER_ID` secrets exist, silently skips otherwise.
 - **CodeQL** (`codeql.yml`): on push/PR to `main` plus weekly Tuesday 15:38 UTC. Scans the `actions` and `python` languages with `build-mode: none`; findings land under the repository Security tab.
-- **Run Bot** (`run-bot.yml`): self-chaining 24/7 runner with webhook-first transport, plus daily restart checks.
+- **Run Bot** (`.github/workflows.disabled/run-bot.yml`): self-chaining 24/7 runner, currently disabled. Move it back to `.github/workflows/` to re-enable.
 
 Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run ruff check .`, `uv run python -c "import tcbot"`. Full reference: [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md).
 </details>
 
 <details>
-<summary>GitHub Actions 24/7 runner (self-chaining)</summary>
+<summary>GitHub Actions 24/7 runner (disabled)</summary>
 
-`.github/workflows/run-bot.yml` runs the bot in 5-hour windows (GitHub hard-caps a job at 6 h) with a crash watchdog, a handover dispatch about 10 minutes before the window ends, and a `*/15` cron resurrection fallback. A push to `main` touching bot code, translations, dependencies, or the runner itself queues a successor run and the live bot hands over gracefully within minutes; docs-only pushes never restart the bot.
+The self-chaining runner is parked at `.github/workflows.disabled/run-bot.yml`
+and does not schedule. To re-enable it, move the file back to
+`.github/workflows/` and set the secrets below. When active, it runs the bot
+in 5-hour windows (GitHub hard-caps a job at 6 h) with a crash watchdog, a handover dispatch about 10 minutes before the window ends, and a `*/15` cron resurrection fallback. A push to `main` touching bot code, translations, dependencies, or the runner itself queues a successor run and the live bot hands over gracefully within minutes; docs-only pushes never restart the bot.
 
-1. Repository → Settings → Secrets and variables → Actions: set `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID` (plus `WEBHOOK_URL`/`WEBHOOK_SECRET` for webhook mode, `REDIS_URL` optional).
+1. Repository → Settings → Secrets and variables → Actions: set `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID` (plus `WEBHOOK_URL`/`WEBHOOK_SECRET` for webhook mode, `REDIS_URL` optional, `API_ID`/`API_HASH` for MTProto).
 2. For gap-free chaining add `BOT_PAT`: a Personal Access Token with the `workflow` scope. Without it only the 15-minute cron restarts the bot.
 3. Actions → "TCF Bot - 24/7 Runner" → Run workflow (or wait for the schedule).
 4. Verify in the run logs (`Bot started`, `subsystems ready`); crash tails ship as credential-scrubbed artifacts kept 7 days.
@@ -290,7 +293,7 @@ uv run python -c "import tcbot"
 git diff --check
 ```
 
-`pyproject.toml` targets Python 3.14 with line length 88. Dependencies install from `uv.lock` via `uv sync --frozen`. CI runs lint, auto-fix PRs, weekly dependency updates, CodeQL, and a long-running bot runner; see [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md). Contribution workflow and review checklist are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+`pyproject.toml` targets Python 3.14 with line length 88. Dependencies install from `uv.lock` via `uv sync --frozen`. CI runs lint, auto-fix PRs, weekly dependency updates, and CodeQL (the 24/7 bot runner is disabled under `.github/workflows.disabled/`); see [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md). Contribution workflow and review checklist are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Documentation
 

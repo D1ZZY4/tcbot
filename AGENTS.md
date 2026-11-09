@@ -81,12 +81,12 @@ Treat it as large-scale infrastructure: the bot may serve 50+ groups with thousa
 
 Current stack:
 
-- Python 3.14 project target (`pyproject.toml` requires `>=3.13`)
+- Python 3.14 project target (`pyproject.toml` requires `>=3.14`)
 - `python-telegram-bot[rate-limiter]>=22.8,<23`, tracking the latest compatible release
 - APScheduler 3.11.3 with `AsyncIOScheduler` + `MongoDBJobStore` for persistent scheduled jobs
 - Motor async MongoDB driver with connection pool configuration
 - Flask keep-alive / health-check server
-- Optional Redis L2 cache (`redis[hiredis]>=8.0,<9`) with in-memory L1 fallback
+- Optional Redis L2 cache (`redis[hiredis]>=8.1,<9`) with in-memory L1 fallback
 - Tagged JSON values for Redis serialization (msgspec codec with project-local datetime/ObjectId tags, no `cbor2`)
 - `cachetools` for L1 TTLCache
 - `kurigram[fast]` for bot-token MTProto lookups beyond Bot API enumeration
@@ -107,9 +107,9 @@ Current stack:
 │   ├── serverless.py         Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 │   ├── database/             MongoDB helpers, one package per collection/domain
 │   │   ├── users_cache/      Member profile cache operations
-│   │   ├── users_roles.py    Role system: owners/admins/roles
+│   │   ├── users_roles/      Role system: owners/admins/roles
 │   │   ├── bans_db/          Federation bans
-│   │   ├── groups_db.py      Connected and pending groups
+│   │   ├── groups_db/        Connected and pending groups
 │   │   ├── warns_db/         Warnings
 │   │   ├── kicks_db.py       Kicks
 │   │   ├── mutes_db.py       Mutes
@@ -173,7 +173,7 @@ Current stack:
 │       └── transport.py        Shared PTB HTTP timeouts and pool size
 ├── docs/                     Developer documentation grouped by category
 ├── .agents/                   Coding skills and style rules
-├── .github/                   CI workflows (lint, type-check, tests, runner)
+├── .github/                   CI workflows (lint, type-check, tests; 24/7 runner disabled under workflows.disabled/)
 ├── i18n/                      Localized message catalogs (en-US source of truth)
 ├── tests/                     Automated checks (run with the dummy-env suite)
 ├── api/                       Vercel serverless endpoints (webhook, cron)

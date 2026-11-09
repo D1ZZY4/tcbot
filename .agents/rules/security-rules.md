@@ -12,8 +12,7 @@ commands live in [`tooling-skills-use.md`](tooling-skills-use.md).
 ## Role Resolution and Authorization
 
 - Resolve roles with `users_roles.get_effective_role(user_id)`.
-- Use `users_roles.can_act_on()` or
-  `decorators.resolve_and_check()` for executor-versus-target checks.
+- Use `decorators.resolve_and_check()` for executor-versus-target checks.
 - Do not chain owner, admin, and role checks manually in handlers.
 - Do not compare role ranks inline in command modules.
 - Use `ROLE_LABEL` for user-facing role labels.

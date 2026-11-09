@@ -36,6 +36,12 @@ flowchart TD
 | `/checkme` | `/cme` | Anyone (for themselves) | Bot PM, exec group, any connected group |
 | `/check` | `/c` | Anyone | Bot PM, exec group, any connected group |
 
+`/check` is public by design: anyone may look up any user's federation
+history. The staff-only warn list (`/warns`) stays staff-gated because it is
+an operational tool, while `/check` is the community-facing directory. The
+profile shows `Assigned by` / `Assigned at` metadata to every viewer; treat
+that as public federation transparency, not a privacy boundary.
+
 The target is resolved by `extraction.extract_target` with `prefer_explicit=True`: a typed user ID, `@username`, or partial-name match wins over the quoted sender, so `/check` shows who was asked about, never who was quoted. When the argument resolves to nobody, the reply target still stands. The old `/checkban` and `/cban` aliases have been removed; `/check` now covers and extends that surface.
 
 ## Top-level profile view

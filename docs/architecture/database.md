@@ -78,9 +78,9 @@ A DNS patch (`_patch_dns_if_needed`) installs an in-process fallback resolver po
 | Helper | Collection(s) | Main responsibilities |
 |---|---|---|
 | `users_cache/` | `member_cache` | Member profile cache: upsert, change-detection upsert, harvest, get, batch queries, mention formatting, counts, paged listing, name search. |
-| `users_roles.py` | `tc_owners`, `tc_admins`, `tc_roles` | Owner CRUD, admin CRUD, developer/tester role CRUD, effective-role resolution, `can_act_on` checks. |
+| `users_roles/` | `tc_owners`, `tc_admins`, `tc_roles` | Owner CRUD, admin CRUD, developer/tester role CRUD, effective-role resolution. |
 | `bans_db/` | `bans` | Active ban lookup, ban creation/update, unban deactivation, appeal/review metadata, active ban lists, per-user history. |
-| `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group locale, cache invalidation, chat-migration repoint. |
+| `groups_db/` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group locale, cache invalidation, chat-migration repoint. |
 | `warns_db/` | `warns`, `warn_counts` | Warning event history, per-group counters, limit checks, backfill/sync, clear, migration. |
 | `kicks_db.py` | `kicks` | Append-only kick audit records. |
 | `mutes_db.py` | `mutes`, `active_mutes` | Mute audit trail plus the live active-mute store used to re-apply restrictions. |
@@ -145,7 +145,7 @@ All fields are optional `total=False`; a real document always carries `user_id` 
 
 **Error behavior:** every helper uses `db_call()`; a MongoDB outage raises `CircuitOpenError` (circuit OPEN) or the underlying Motor exception, which `_update_member_cache` logs at DEBUG and swallows so a cache failure never breaks the update path.
 
-## Roles, owners, and admins (`users_roles.py`, collections `tc_owners`, `tc_admins`, `tc_roles`)
+## Roles, owners, and admins (`users_roles/`, collections `tc_owners`, `tc_admins`, `tc_roles`)
 
 ### Document shapes
 
@@ -187,10 +187,8 @@ Resolution order in `get_effective_role`:
 3. `tc_roles` custom role returns `"developer"` or `"tester"`.
 4. No role returns `None`.
 
-- `get_effective_role(user_id: int) -> str | None`
-  Resolves the full effective role via `effective_role_cache.get_or_fetch` (L1 60 s, L2 90 s). The `_fetch` reads owner/admin/custom role in parallel with `return_exceptions=True`, calls `throw_if_cancelled`, and re-raises any non-cancellation exception so a degraded "founder"/"admin" result is never cached for a real database error.
-- `can_act_on(executor_id: int, target_id: int) -> bool`
-  Gathers both effective roles, propagates cancellation, returns `False` if either lookup failed, otherwise `role_rank(executor) > role_rank(target)`.
+- `get_effective_role(user_id: int, *, fresh: bool = False) -> str | None`
+  Resolves the full effective role via `effective_role_cache.get_or_fetch` (L1 60 s, L2 90 s). The `_fetch` reads owner/admin/custom role in parallel with `return_exceptions=True`, calls `throw_if_cancelled`, and re-raises any non-cancellation exception so a degraded "founder"/"admin" result is never cached for a real database error. With `fresh=True` the caches are bypassed and the rows are read directly (the cache is refreshed with the result): enforcement gates use `fresh=True` so a demotion or transfer in another process is never hidden for the cache TTL. Executor-versus-target checks go through `decorators.resolve_and_check()`, which fails closed when either lookup fails.
 - `role_meta(user_id: int) -> tuple[str | None, int | None, datetime | None]`
   `(role, assigned_by, assigned_at)` for profile views. An owner has no metadata (`None`s); an admin reads `promoted_by`/`promoted_date` from `tc_admins`; a custom role reads `assigned_by`/`assigned_at` from `tc_roles`. A missing row still returns the role with `None` metadata.
 
@@ -222,7 +220,7 @@ Resolution order in `get_effective_role`:
 - `all_by_role(role: str) -> list[RoleRefDoc]`: all users holding a specific custom role (serves the `(role)` index).
 - `role_count(role: str) -> int`: `count_documents` on the role filter.
 
-**Security notes:** role lookup failures reject the action where authorization is enforced (`get_effective_role` propagates, `can_act_on` returns `False`). `is_staff` is the only deliberately coerce-to-`False` path and is kept for its historical callers. Uses NewType `UserId` where the schema says so; DB values remain ints.
+**Security notes:** role lookup failures reject the action where authorization is enforced (`get_effective_role` propagates, `resolve_and_check` fails closed). `is_staff` is the only deliberately coerce-to-`False` path and is kept for its historical callers. Uses NewType `UserId` where the schema says so; DB values remain ints.
 
 ## Bans (`bans_db/`, collection `bans`)
 
@@ -303,7 +301,7 @@ Resolution order in `get_effective_role`:
 
 **Error behavior:** all operations route through `db_call()`. `create_ban` absorbs one random-ID collision for auto-generated IDs only; everything else propagates so moderation callers report the real failure.
 
-## Groups (`groups_db.py`, collections `federated_groups`, `pending_joins`)
+## Groups (`groups_db/`, collections `federated_groups`, `pending_joins`)
 
 ### Document shapes
 
@@ -334,8 +332,8 @@ Resolution order in `get_effective_role`:
   `{chat_id: title}` for the given chats in one `$in` query; missing groups are absent from the result. Falls back to `str(chat_id)` when a title is empty.
 - `refresh_group_title(chat_id: int, title: str) -> bool`
   Atomic update: the `$ne` filter skips when the stored title already matches (one round trip on the common no-change path, no read-then-write race). Returns `True` when a change was written and the groups cache invalidated; `False` when already current or the group is unknown.
-- `is_connected(chat_id: int) -> bool`
-  `connected_cache.get_or_fetch` (L1 120 s, L2 180 s): existence check on `{chat_id, is_active: True}`.
+- `is_connected(chat_id: int, *, fresh: bool = False) -> bool`
+  `connected_cache.get_or_fetch` (L1 120 s, L2 180 s): existence check on `{chat_id, is_active: True}`. With `fresh=True` the row is read directly and the cache refreshed: the origin guard uses `fresh=True` so a disconnect in another process is never hidden for the TTL.
 - `add_group(chat_id: int, title: str, added_by: int) -> None`
   Upsert with `$setOnInsert` preserving `added_date`; sets `is_active: True`. Puts `True` in `connected_cache` and invalidates the active-groups list cache.
 - `deactivate_group(chat_id: int) -> bool`
@@ -620,7 +618,7 @@ Recurring jobs (idempotent via `replace_existing=True`):
 | Job ID | Trigger | Purpose |
 |---|---|---|
 | `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: deletes `warn_counts` rows older than the cutoff from `updated_at` and `warns` rows from `timestamp` in parallel (both must be pruned together or the counter backfill restores stale counts). Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
-| `tcbot.enforcement_sync` | `IntervalTrigger(hours=sync_interval_hours)` | Calls `_run_scheduled_sync` (the `/tcsync` core on a timer, bounded to 200 checks, log-only results, lazy-imported `syncing.run_ban_sync`). Uses `misfire_grace_time=86400`, `coalesce=True`. Registered only when the interval is positive and a `bot` reference was passed; otherwise removed. See [`../features/moderation/sync.md`](../features/moderation/sync.md). |
+| `tcbot.enforcement_sync` | `IntervalTrigger(hours=sync_interval_hours)` | Calls `_run_scheduled_sync` (the `/tcsync` core on a timer, bounded to 200 checks, log-only results, via the lifecycle-injected `_sync_runner`, so the database package never imports a command module). Uses `misfire_grace_time=86400`, `coalesce=True`. Registered only when the interval is positive and a `bot` reference was passed; otherwise removed. See [`../features/moderation/sync.md`](../features/moderation/sync.md). |
 | `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal call runs on startup and `_cleanup_old_records()` remains as a no-op migration shim so any persisted schedule can deserialize without `AttributeError`. |
 
 Member-cache cleanup is handled by the MongoDB TTL index on `last_updated` (`expireAfterSeconds=7776000`, 90 days), not by a scheduler job.

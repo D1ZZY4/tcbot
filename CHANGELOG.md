@@ -8,7 +8,15 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 <summary>Unreleased changes (click to collapse)</summary>
 
 ### Added
+- **Fresh role and connection reads for enforcement gates** (`tcbot/database/users_roles/`, `tcbot/database/groups_db/`, `tcbot/modules/helper/decorators/`): owner, effective-role, and connection lookups accept a fresh bypass that reads MongoDB directly and refreshes the cache. Enforcement gates use it so a demotion, transfer, or disconnect in another process is never hidden for the cache TTL; display reads keep the cached fast path. Behavior changes: demotions, transfers, and disconnects take effect immediately for moderation commands.
+
+- **Broadcast coverage for partial failures** (`tests/test_broadcasting.py`): broadcast counting is pinned for total success and for mixed benign and transient failures. Behavior changes: none for operators.
+
 - **Direct pymongo dependency** (`pyproject.toml`, `uv.lock`): the code imports `pymongo.errors` and `bson` in many modules, so the dependency is now declared explicitly within the major version the project already runs. Behavior changes: none; the resolved version is unchanged.
+
+- **Authorization checks for federation origin and bot verification** (`tcbot/modules/helper/decorators/checks.py`, `tcbot/modules/helper/identity.py`, `tests/test_authz.py`): a shared origin guard requires moderation commands to start from a connected or primary group, and a tri-state bot check distinguishes a verified human from a verified bot and from an unknown lookup. The new checks fail closed on lookup failure and propagate cancellation. Behavior changes: disconnected groups are refused, and unknown ownership-transfer targets ask for a retry.
+
+- **Local test run without CI values** (`tests/conftest.py`, `tests/test_authz.py`): the suite supplies placeholder startup values when none are present, so it collects and runs locally, and the new checks cover the fail-closed and propagation contracts. Behavior changes: none for operators.
 
 - **Localized Prev/Next and authorization refusals** (`i18n/en-US/button.toml`, `i18n/id/button.toml`, `i18n/en-US/common.toml`, `i18n/id/common.toml`): the paged-list navigation row reads `button.prev` / `button.next`, and every auth refusal (tier refusals, rank, role-lookup retry, anonymous admin, outrank notice) reads `common.refuse.*` in the viewer's locale. Default-locale wording is unchanged.
 
@@ -23,6 +31,32 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Warn auto-ban stores the warn proof on the ban record** (`tcbot/modules/helper/workflows/warning_flow/`, `tests/test_warn_autoban_guard.py`, `docs/features/moderation/warnings.md`): the proof upload collected with the threshold warn becomes the ban `proof_message_id`, so `/check` shows View Proof instead of an empty slot. Behavior changes: auto-ban records now carry the warn proof.
 
 ### Changed
+
+- **Role and group helpers live in focused packages** (`tcbot/database/users_roles/`, `tcbot/database/groups_db/`, `tcbot/modules/helper/workflows/promote_flow/`): owner, admin, custom-role, and resolution logic; core, pending, migration, and locale group logic; and assign, request, and alias promotion logic each have one home with a thin re-exporting package. Dotted import paths, callback data, and handler registration are unchanged. Behavior changes: none.
+
+- **Scheduler sync runs through an injected runner** (`tcbot/database/scheduler/`, `tcbot/runtime/lifecycle.py`): the database package never imports a command module; startup injects the enforcement runner after the scheduler starts. Behavior changes: none; scheduled sweeps run as before without the import cycle.
+
+- **Fan-out failure summaries share one helper** (`tcbot/utils/dispatch.py`, `tcbot/modules/helper/workflows/ban_flow/executor.py`, `tcbot/modules/helper/workflows/muting_flow/mute.py`, `tcbot/modules/helper/workflows/unban_flow.py`, `tcbot/modules/helper/workflows/muting_flow/unmute.py`, `tcbot/modules/helper/workflows/appeal_review_flow/verdicts/approve.py`): the error-level transient summary is emitted from one place while per-group warnings and applied lines stay per-flow. Operator-facing counts are unchanged. Behavior changes: none, consistent partial-failure reporting.
+
+- **Self-check callbacks share one ban loader** (`tcbot/modules/checking/checkme.py`): callback parsing and the parallel answer-plus-fetch live once so the detail and back paths cannot drift. Behavior changes: none.
+
+- **Python floor and codec bound match the deployed runtime** (`pyproject.toml`, `uv.lock`, `AGENTS.md`, `replit.md`, `docs/getting-started/setup.md`): the floor is now 3.14 (the tested runtime) and the structured-codec version carries an upper bound. Behavior changes: none; installs on older runtimes now fail fast.
+
+- **Docker port follows the environment** (`Dockerfile`, `docker-compose.yml`): the published port and health probe use the configured port instead of a fixed 5000. Behavior changes: custom ports work in Docker.
+
+- **Moderation requires a federation origin** (`tcbot/modules/banning.py`, `tcbot/modules/muting.py`, `tcbot/modules/kicking.py`, `tcbot/modules/warnings/`, `tcbot/modules/unbanning.py`, `tcbot/modules/syncing/command.py`): ban, unban, and sync accept bot DM or any connected or primary group, while mute, warn, kick, and their manage commands require a connected or primary group. A connection-state outage blocks the action with a retry notice instead of proceeding. Behavior changes: commands from disconnected groups, and private mute, warn, and kick, are refused.
+
+- **Ownership transfer needs a verified human** (`tcbot/modules/admins/transfer.py`, `tcbot/modules/helper/identity.py`): transfer proceeds only when the target is verified human. A verified bot is refused, and an indeterminate lookup asks for a retry instead of granting ownership on the benefit of the doubt. Promotion keeps allowing unknown off-group targets. Behavior changes: transfer during a lookup outage asks for a retry.
+
+- **Telegram circuit trips on accumulated transients** (`tcbot/utils/circuit_breaker.py`, `tcbot/utils/dispatch.py`): ordinary successes no longer erase earlier transient failures, so a partial outage with interleaved successes can still open the circuit and skip doomed slots. Only a successful recovery probe closes it. Behavior changes: partial outages pause quickly instead of firing timeouts.
+
+- **Catalog loads at startup on both transports** (`tcbot/runtime/lifecycle.py`, `tcbot/serverless.py`): the message catalog loads once during startup rather than on the first command, so the first reply no longer pays the full file scan on the event loop. Behavior changes: none visible, faster first reply.
+
+- **Index startup stays inside the connection pool** (`tcbot/database/mongos/indexes.py`): every index creation runs through the database circuit and the startup batch runs with bounded concurrency instead of firing all at once. Behavior changes: none on healthy startup.
+
+- **Member harvest batches its writes** (`tcbot/database/mtproto/harvest.py`): group backfill collects identities and flushes them in bounded batches instead of awaiting one write at a time, while the time budget, flood handling, and partial counts stay the same. Behavior changes: none, faster backfill.
+
+- **Safe edits share one failure policy** (`tcbot/modules/helper/parse_editmsg.py`): the three message-edit helpers delegate to one internal runner with the same benign-error, logging-level, and catch-all behavior. Log output and swallowed errors are unchanged. Behavior changes: none.
 
 - **One owner for every safe edit** (`tcbot/modules/helper/parse_editmsg.py`, fourteen modules under `tcbot/modules/`): `safe_edit`, `safe_edit_cb`, and the new `safe_edit_message` accept a log level, call-site label, and catch-all option, and the duplicated inline edit-error handlers across the admin, check, stats, start, language, netspeed, ban, mute, and appeal paths delegate to them with identical log output. Behavior changes: none to user-visible output; benign not-modified edits are now dropped silently instead of logging a debug line, matching every other safe-edit site.
 
@@ -158,6 +192,14 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Fixed
 
+- **Cache fetch keeps mutual exclusion** (`tcbot/database/cache/twolevel/core.py`): a finishing fetch removes only its own lock, so concurrent misses for the same key cannot run two database fetches after a lock handoff. Behavior changes: none on single-threaded use; shared misses fetch once.
+
+- **Warn expiry timeout fails the job** (`tcbot/database/scheduler/jobs.py`): a hung expiry now raises instead of returning normally, so the daily job and the cron endpoint report the incomplete run instead of success. Behavior changes: a timeout answers failure instead of success.
+
+- **Cancelled reads no longer render as empty** (`tcbot/modules/helper/workflows/stats_flow/overview.py`, `tcbot/modules/checking/checkme.py`): shutdown cancellation propagates from the overview, roster, and self-check reads instead of rendering as zeroes or a clean record. Behavior changes: none during normal operation.
+
+- **Skip-reason checks rank like Done and Skip** (`tcbot/modules/helper/workflows/reason_flow/reason_step.py`): advancing without a reason now verifies the tapper still holds rank, matching the proof Done and Skip taps. Behavior changes: a demoted moderator's skip tap ends the flow with a refusal instead of advancing.
+
 - **Shutdown cancellation propagates instead of reading as failure** (`tcbot/runtime/entry.py`, `tcbot/runtime/lifecycle.py`, `tcbot/serverless.py`, `tcbot/modules/connecting.py`, `tcbot/modules/disconnecting.py`, `tcbot/modules/helper/workflows/demote_flow.py`, `tcbot/modules/helper/workflows/promote_flow.py`, `tcbot/modules/helper/workflows/appeal_submit_flow/submit.py`, `tcbot/modules/helper/workflows/muting_flow/mute.py`, `tcbot/modules/helper/workflows/connected_flow/join_decision.py`): parallel reads and deliveries now propagate task cancellation, so shutdowns no longer log as per-item failures or complete as success. Cache warm-up, startup, shutdown, and webhook paths follow the same contract. Behavior changes: none during normal operation.
 
 - **Prefix-wide Redis clear is bounded per operation** (`tcbot/database/cache/twolevel.py`, `docs/architecture/database.md`): each scan and unlink now has its own 2.0 second bound, so a stalled sweep aborts instead of holding the ordered mutation tail. Behavior changes: none on healthy reads.
@@ -228,22 +270,6 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Cancellation propagates in moderation flows** (`connected_flow/connection.py`, `warning_flow/issue.py`, `muting_flow/unmute.py`): `throw_if_cancelled` now runs after the parallel log, reply, and connection gathers, so shutdown is not misreported as per-item failure. Behavior changes: none on the happy path.
 
-- **Group migration cleans up a stale pending row** (`tcbot/database/groups_db.py`): a `DuplicateKeyError` on the pending-joins repoint now deletes the stale old row instead of leaving a dangling pending document. Behavior changes: none on the happy path.
-
-- **MTProto writes degrade instead of crashing update handling** (`tcbot/database/mtproto_store/retry.py`): non-transient store failures are logged and returned instead of propagating into Pyrogram's background task. Behavior changes: update handling continues instead of dying on a store error.
-
-- **Connection requests reject anonymous admins** (`tcbot/modules/connecting.py`): groups posting as the anonymous admin can no longer submit an unattributable connection request. Behavior changes: anonymous-admin requests are refused.
-
-- **Admin harvest is bounded** (`tcbot/modules/helper/workflows/connected_flow/harvest.py`): identity writes now run through the bounded gather helper instead of an unbounded one. Behavior changes: none.
-
-- **Sync re-applies mutes with aware datetimes** (`tcbot/modules/syncing/core.py`): mute expiry values are normalized to UTC before being sent to Telegram. Behavior changes: none on the happy path.
-
-- **Cancellation propagates in moderation flows** (`connected_flow/connection.py`, `warning_flow/issue.py`, `muting_flow/unmute.py`): `throw_if_cancelled` now runs after the parallel log, reply, and connection gathers, so shutdown is not misreported as per-item failure. Behavior changes: none on the happy path.
-
-- **Unban no longer skips staff-target demote on degraded identity** (`tcbot/modules/unbanning.py`): federation staff-ness now comes from the fail-closed role read, so a transient `identity.classify` failure no longer drops the demote-before-unban cleanup. Behavior changes: none on the happy path.
-
-- **Auto-demote aborts when the role survives a no-op removal** (`tcbot/modules/helper/workflows/demote_flow.py`): a no-row removal now re-reads the live role and aborts only when the role still resolves, so a banned, kicked, or muted user cannot keep a federation role through split-brain. Behavior changes: none on the happy path.
-
 - **Container image ships the message catalog** (`Dockerfile`): the build copies `i18n/` next to the package so the first render finds its templates. Behavior changes: Docker deploys boot instead of failing every handler.
 
 - **Stats search buttons read real labels** (`tcbot/modules/helper/keyboards.py`): the Search and New Search buttons use the shared button catalog instead of missing keys. Behavior changes: the buttons show words instead of key markers.
@@ -302,6 +328,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Removed
 
+- **Unused log and navigation helpers removed** (`tcbot/modules/helper/parse_logmsg/core.py`, `tcbot/modules/helper/workflows/stats_flow/shared.py`): two `LogBuilder` block helpers and one stats back-row alias had no callers. The live builders and the central keyboard factories stay. Behavior changes: none.
+
 - **TCF Bot 24/7 runner disabled** (`.github/workflows/run-bot.yml` → `.github/workflows.disabled/`): the self-chaining GitHub Actions runner is moved out of the active workflows directory so it no longer schedules or runs. Behavior changes: the bot no longer auto-runs via GitHub Actions; host it elsewhere.
 
 - **Dead locale scope helper removed** (`tcbot/modules/helper/locale.py`, `docs/architecture/helpers.md`): `chat_scope()` had no callers anywhere in code, tests, or docs examples; `language._chat_scope` remains the single mapping and keeps its test. Behavior changes: none.
@@ -311,6 +339,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 - **Dead identity-cache probe removed** (`tcbot/database/users_cache.py`): `has_recent_identity_attempt()` had no callers; resolvers read the mention cache directly. Behavior changes: none.
 
 ### Documentation
+
+- **Guides match the disabled runner** (`README.md`, `AGENTS.md`, `.agents/rules/docs-sync.md`, `docs/operations/ci-cd.md`, `docs/architecture/helpers.md`, `docs/architecture/repository-map.md`, `docs/getting-started/setup.md`, `CONTRIBUTING.md`, `config.env.example`, `docs/architecture/helpers.md`, `docs/architecture/database.md`, `docs/features/roles/roles.md`, `.agents/rules/security-rules.md`, `docs/features/moderation/check.md`, `docs/features/statistics.md`, `.pre-commit-config.yaml`): the runner is documented as parked, missing contributor links and stale role-check references are gone, startup ownership and discovery match the runtime package, the session namespace ships active, and the public check and stats panes are marked public by design. Behavior changes: none, docs only.
 
 - **CI secrets list corrected** (`docs/operations/ci-cd.md`): the runner forwards `SYNC_INTERVAL_HOURS` and the community links; only `CRON_SECRET` is not forwarded. Behavior changes: none, docs only.
 

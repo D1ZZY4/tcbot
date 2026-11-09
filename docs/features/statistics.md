@@ -38,6 +38,10 @@ Aliases:
 |---|---|---|---|
 | `/tcstats` | `/tcs` | Anyone | Bot PM, exec group, or supported federation group context |
 
+Only the `Users` pane is Owner/Founder only; the overview, staff roster,
+connected chats, and active-ban panes are public by design (a community
+directory, not an operator dashboard).
+
 ## Top-level overview
 
 `Stats.main(*, viewer_id=None, locale=None)` returns the overview card:

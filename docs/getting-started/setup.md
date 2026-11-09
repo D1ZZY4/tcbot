@@ -7,7 +7,8 @@ Replit-specific deployment, see [`../../replit.md`](../../replit.md).
 
 ## Prerequisites
 
-- Python 3.14 or newer. The project metadata targets `>=3.13`.
+- Python 3.14 (the pinned runtime for local, Docker, and Vercel; the
+  package floor is `>=3.14` and it is also the tested runtime).
 - [`uv`](https://docs.astral.sh/uv/) for dependency and lockfile management.
 - A Telegram bot token from BotFather.
 - A MongoDB deployment, local or hosted.
@@ -90,7 +91,8 @@ The Additional Links menu in the bot start screen shows buttons for community ch
 
 ## Environment variable format
 
-The configuration loader reads environment variables in `tcbot/__init__.py`. Local development uses `python-dotenv` to load `config.env`.
+The configuration loader reads environment variables in `tcbot/config/models.py`
+(via `tcbot/__init__.py`). Local development uses `python-dotenv` to load `config.env`.
 
 Recommended `config.env` syntax:
 
