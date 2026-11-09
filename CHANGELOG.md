@@ -571,6 +571,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Validation pointers follow the surviving sources** (`AGENTS.md`, `.agents/rules/`, `docs/architecture/repository-map.md`): rule headers now name `docs/operations/ci-cd.md` for checks and `AGENTS.md` for read and update discipline, and the repository map lists the six remaining rule files. Behavior changes: none, docs only.
 
+- **Driver and path references match the tree** (`.agents/rules/docs-sync.md`, `.agents/rules/asyncio-gather-rules.md`, `tcbot/__init__.py`, `tcbot/serverless.py`, `tcbot/database/mongos.py`, `tcbot/database/scheduler.py`, `docs/features/moderation/warnings.md`, `docs/features/moderation/check.md`): the synchronous PyMongo `db_call` model and the single-file database paths replace the retired driver and package-form paths. Behavior changes: none, docs and comments only.
+
 </details>
 
 

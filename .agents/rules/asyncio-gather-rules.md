@@ -47,7 +47,7 @@ Rules:
 - Guard `effective_message`, `effective_user`, and `effective_chat` when they
   can be absent.
 - Keep handler call paths async end-to-end.
-- Always `await` Telegram API calls and Motor calls.
+- Always `await` Telegram API calls and database (`db_call`) calls.
 - Do not call `asyncio.run()` inside handlers; the application already owns
   the event loop.
 
@@ -145,20 +145,25 @@ Rules:
 - Log unexpected exceptions with enough IDs to diagnose without exposing
   secrets.
 
-## Motor Access from Async Code
+## Database Access from Async Code
 
 Database helpers are async, typed, and domain-focused. Handlers call database
-helper modules; helpers call Motor collections.
+helper modules. Helpers run synchronous PyMongo operations on a worker thread
+through `mongos.db_call()`, so the event loop never blocks on MongoDB I/O.
+A cancelled operation may still land once its thread finishes; the atomic
+read patterns already tolerate that.
 
 Rules:
 
 - Module boundaries and collection ownership follow `code-style.md`; the rules
   below cover async behavior only.
-- Avoid returning Motor cursors to handlers; convert to plain lists inside
+- Avoid returning PyMongo cursors to handlers; convert to plain lists inside
   helpers when practical.
 - Use projection when large documents do not need every field.
 - Add indexes in `mongos.ensure_indexes()` when adding indexed queries.
 - Pre-resolve per-item lookups for paginated views before formatting.
+- Use `gather_bounded()` for pure database bursts; reserve `fan_out()` for
+  Telegram operations that must respect the Telegram circuit breaker.
 
 ## Blocking Work to Avoid
 
@@ -169,7 +174,8 @@ Avoid these in async handlers and database helpers:
   depends on one, or justify a new dependency.
 - Long CPU loops, image processing, compression, or parsing large files on
   the event loop.
-- Synchronous database drivers.
+- Synchronous PyMongo calls outside `db_call()`; database helpers must run
+  sync operations on a worker thread through `db_call()`.
 - Raw subprocess calls from handlers.
 - Blocking work on Flask keep-alive routes.
 
@@ -202,7 +208,7 @@ This avoids Telegram client spinners and keeps UX responsive.
 Before finishing async work, verify:
 
 - Every coroutine is awaited or deliberately scheduled and tracked.
-- No blocking call was added to a handler, callback, job, or Motor helper.
+- No blocking call was added to a handler, callback, job, or database helper.
 - Parallel work is bounded.
 - Callback queries call `await query.answer()` first.
 - Multi-group Telegram operations use `fan_out()`.

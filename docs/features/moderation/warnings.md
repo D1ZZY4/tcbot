@@ -1,6 +1,6 @@
 # Warnings
 
-This document describes the current warning behavior implemented by `tcbot/modules/warns.py`, `tcbot/modules/helper/pipelines/warn_flow.py`, `tcbot/modules/helper/pipelines/reason_flow.py`, and `tcbot/database/warns_db/`.
+This document describes the current warning behavior implemented by `tcbot/modules/warns.py`, `tcbot/modules/helper/pipelines/warn_flow.py`, `tcbot/modules/helper/pipelines/reason_flow.py`, and `tcbot/database/warns_db.py`.
 
 For the ban flow triggered by a warning limit, see [`banning.md`](banning.md).
 For the check command showing warning history, see [`check.md`](check.md). For

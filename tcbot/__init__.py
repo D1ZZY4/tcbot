@@ -131,7 +131,7 @@ def _warn_mongodb_uri_fmt(uri: str) -> None:
     if not uri.startswith(("mongodb://", "mongodb+srv://")):
         log.warning(
             "MONGODB_URI does not start with 'mongodb://' or 'mongodb+srv://'. "
-            "Motor will fail at connect time if the value is wrong."
+            "The MongoDB client will fail at connect time if the value is wrong."
         )
 
 

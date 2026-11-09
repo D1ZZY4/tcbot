@@ -139,7 +139,7 @@ Bans, appeals, per-chat warns, kicks, and mutes lists append the shared `checkin
 
 ## Callback routing
 
-All callbacks are registered in `checking/` and run safely on repeated taps thanks to `safe_edit_cb` swallowing benign `BadRequest` errors (e.g. `Message is not modified`).
+All callbacks are registered in `tcbot/modules/check.py` and run safely on repeated taps thanks to `safe_edit_cb` swallowing benign `BadRequest` errors (e.g. `Message is not modified`).
 
 | Callback data | Handler |
 |---|---|

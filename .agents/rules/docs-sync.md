@@ -64,12 +64,12 @@ Good documentation should:
 
 ## Project Facts To Keep Current
 
-As of 2026-06-02, TCF Bot uses:
+As of 2026-11-10, TCF Bot uses:
 
 - Python 3.14 project target
 - `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]`
   extra), tracking the latest compatible release
-- Motor/MongoDB
+- Synchronous PyMongo with MongoDB (sync operations run on a worker thread through `db_call`)
 - Flask keep-alive server
 - `uv` and `uv.lock`
 - Ruff
@@ -81,7 +81,7 @@ Recent project additions to keep accurate when editing docs:
   links. Usernames are never used in the rendered link (the numeric ID is
   the single source of truth); the `username` parameter is accepted for
   backward compatibility and ignored.
-- Batch query helpers in `tcbot/database/users_cache/`
+- Batch query helpers in `tcbot/database/users_cache.py`
   (`get_user_mention_data`, `get_mention_data_batch`,
   `get_first_names_batch`).
 - Target resolution in `tcbot.modules.helper.extraction.extract_target`:

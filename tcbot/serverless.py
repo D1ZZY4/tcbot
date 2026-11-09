@@ -35,7 +35,7 @@ log = get_logger(__name__)
 # ─────────────── Instance event loop (warm-invocation reuse) ────────────── #
 # * Vercel freezes the process between invocations, so a module-level asyncio
 # * loop survives across warm invocations while a per-request asyncio.run()
-# * loop would orphan every cached client (Motor, httpx) on a closed loop.
+# * loop would orphan every cached client (PyMongo, httpx) on a closed loop.
 # * One shared loop keeps the PTB Application, MongoDB client, and Redis
 # * client usable across invocations.  Access is serialised: overlapping
 # * invocations on one instance take turns instead of racing the loop.

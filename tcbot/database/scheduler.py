@@ -233,10 +233,11 @@ async def _scheduler_background(
     """
     global _scheduler
     # * MongoDBJobStore builds its own synchronous MongoClient, so it needs
-    # * the same certifi TLS pinning as the Motor client: without it, Atlas
-    # * handshakes fail with CERTIFICATE_VERIFY_FAILED on sandboxes whose
-    # * system CA store is stale, while Motor connects fine. Extra kwargs
-    # * flow straight into pymongo.MongoClient (supported by APScheduler 3.x).
+    # * the same certifi TLS pinning as the main PyMongo client: without it,
+    # * Atlas handshakes fail with CERTIFICATE_VERIFY_FAILED on sandboxes
+    # * whose system CA store is stale, while PyMongo connects fine. Extra
+    # * kwargs flow straight into pymongo.MongoClient (supported by
+    # * APScheduler 3.x).
     jobstores = {
         "mongodb": MongoDBJobStore(
             database=db_name,

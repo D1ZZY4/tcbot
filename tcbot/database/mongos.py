@@ -92,7 +92,7 @@ def is_transient_mongo_error(exc: BaseException) -> bool:
         return "RetryableWriteError" in (getattr(exc, "details", None) or {}).get(
             "errorLabels", []
         )
-    # * Callers wrap Motor calls in asyncio.timeout for slow-path bounds; a
+    # * Callers wrap database calls in asyncio.timeout for slow-path bounds; a
     # * timeout there is a hang, not an application error.
     return isinstance(exc, TimeoutError)
 
