@@ -134,9 +134,7 @@ async def _execute_warn_auto_ban(
 
     # * Connected groups plus the current chat plus primaries (single
     # * merge owner in groups_db).
-    groups = db.groups_db.with_primary_groups(
-        groups, (cfg.main_group, cfg.exec_group), chat_id
-    )
+    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,), chat_id)
 
     ban_id: str | None = None
     if not already_banned:

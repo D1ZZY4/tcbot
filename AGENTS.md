@@ -249,7 +249,7 @@ Important non-secret/runtime variables include:
 - `COMMUNITY_NAME`: display name used in bot messages and logs.
 - `PREFIXES`: command prefix list, default `['/', '!', '.']`.
 - `PORT`: Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
-- `MAIN_GROUP`, `MAIN_CHANNEL`, `EXTEND_GROUP`: community chat IDs.
+- `MAIN_GROUP`, `MAIN_CHANNEL`, `COMMUNITY_GROUP_URL`: community chat IDs / links.
 - `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`: log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id`.
 - `APPEAL_LOG_HANDLE`: channel handle shown in appeal instructions.
 - `APPEAL_DISCUSSION_TOPIC`: thread ID in `MAIN_GROUP` for appeal review cards.
@@ -264,7 +264,7 @@ Important non-secret/runtime variables include:
 - `WARN_EXPIRY_DAYS`: days after which warn records expire; default `0` (disabled).
 - `SYNC_INTERVAL_HOURS`: hours between scheduled enforcement-sync sweeps; default `0` (disabled, manual `/tcsync` only).
 - `FED_WARN_LIMIT`: federation-wide warn threshold that triggers auto-ban; default `0` (disabled).
-- `COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_EXEC_URL`, `COMMUNITY_TRAVEL_URL`: optional community links shown in the additional menu (built-in defaults apply when empty).
+- `COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_APPEAL_URL`, `COMMUNITY_TRAVEL_URL`: optional community links shown in the additional menu (built-in defaults apply when empty).
 
 Use `config.env.example` as the complete template.
 

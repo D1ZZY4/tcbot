@@ -10,8 +10,6 @@ from .adapter import _CfgAdapter
 from .models import Configs
 from .parsing import (
     _DEFAULT_COMMUNITY_CHANNEL_URL,
-    _DEFAULT_COMMUNITY_EXEC_URL,
-    _DEFAULT_COMMUNITY_GROUP_URL,
     _DEFAULT_COMMUNITY_LOGS_URL,
     _DEFAULT_COMMUNITY_TRAVEL_URL,
     _DEFAULT_PORT,
@@ -33,8 +31,6 @@ from .parsing import (
 
 __all__ = [
     "_DEFAULT_COMMUNITY_CHANNEL_URL",
-    "_DEFAULT_COMMUNITY_EXEC_URL",
-    "_DEFAULT_COMMUNITY_GROUP_URL",
     "_DEFAULT_COMMUNITY_LOGS_URL",
     "_DEFAULT_COMMUNITY_TRAVEL_URL",
     "_DEFAULT_PORT",

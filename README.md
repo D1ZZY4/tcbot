@@ -84,7 +84,8 @@ Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (e
 |---|---|---|
 | `MAIN_GROUP` | Usually | Main community group or forum (negative chat ID). |
 | `MAIN_CHANNEL` | No | Announcement channel reference for some log messages. |
-| `EXTEND_GROUP` | No | Secondary group watched alongside `MAIN_GROUP`. |
+| `MAIN_GROUP_URL` | No | Public URL of the main group (Discussion button). |
+| `MAIN_DISCUSSION_GROUP` | No | Discussion group outside the federation (appeals in place). |
 
 ### Logs, proofs, and appeals
 
@@ -129,7 +130,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 
 ### Community links
 
-`COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_EXEC_URL`, `COMMUNITY_TRAVEL_URL`: each shows one button in the Additional Links menu; a non-empty value overrides the built-in default, empty falls back to it.
+`COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_TRAVEL_URL`: each shows one button in the Additional Links menu; a non-empty value overrides the built-in default, empty falls back to it.
 
 </details>
 

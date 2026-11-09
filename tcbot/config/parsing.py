@@ -27,9 +27,7 @@ _REPLIT_DEV_DOMAIN_VAR: str = "REPLIT_DEV_DOMAIN"
 # * unset or blank; a non-empty env value always wins. Kept here (not in the
 # * template) so fresh deployments show the community buttons with zero setup.
 _DEFAULT_COMMUNITY_CHANNEL_URL: str = "https://t.me/TranssionCoreFederation"
-_DEFAULT_COMMUNITY_GROUP_URL: str = "https://t.me/TranssionCoreFederationGroup"
 _DEFAULT_COMMUNITY_LOGS_URL: str = "https://t.me/TranssionCoreFederationLogs"
-_DEFAULT_COMMUNITY_EXEC_URL: str = "https://t.me/+A105pfnCvkhiZWM1"
 _DEFAULT_COMMUNITY_TRAVEL_URL: str = "https://t.me/+S2C_ppFvHlAwMzNl"
 
 

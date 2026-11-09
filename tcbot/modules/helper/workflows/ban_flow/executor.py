@@ -222,7 +222,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         admin_fname,
         trigger="ban",
     )
-    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group, cfg.exec_group))
+    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
     results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
     )

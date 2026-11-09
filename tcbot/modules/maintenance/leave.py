@@ -36,7 +36,7 @@ _RL_LEAVEALL_LIMIT: int = 1
 # ──────────────────────── Helper Functions ──────────────────────── #
 
 
-# * Primary groups (main_group, exec_group) are managed separately from the
+# * Primary groups (main_group) are managed separately from the
 # * federated_groups collection. They are always-required destinations for
 # * primary-group enforcement (ban / unban / mute / warn fan-out) and for the
 # * federation log channel. They must not be torn down by leaveall / cleanup

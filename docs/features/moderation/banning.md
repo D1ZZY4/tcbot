@@ -123,7 +123,7 @@ When the target has no active ban:
    them could leave a phantom ban card in the log channel (dead appeal link,
    `/check` miss) when the write failed.
 6. The sent log message ID is saved with `bans_db.set_log_message_id(...)` in parallel with the pre-fetched `active_groups()` result.
-7. The target is banned in every active connected group returned by `groups_db.active_groups()`, plus the primary groups (`cfg.main_group`, `cfg.exec_group`) when they are not already in the connected-groups list.
+7. The target is banned in every active connected group returned by `groups_db.active_groups()`, plus the primary groups (`cfg.main_group`) when they are not already in the connected-groups list.
 8. The target user is cached with `users_cache.upsert_user(...)`.
 9. The original proof prompt is edited with an applied-groups summary.
 
@@ -153,7 +153,7 @@ The update flow (after `Continue`):
 
 ## Connected-group enforcement
 
-Federation enforcement uses `groups_db.active_groups()` (connected groups from the `federated_groups` collection) and then appends the primary groups (`cfg.main_group`, `cfg.exec_group`) when they are not already in the list. It calls `ban_chat_member` for each group through `fan_out(...)`. `fan_out` caps concurrency and returns exceptions instead of raising them.
+Federation enforcement uses `groups_db.active_groups()` (connected groups from the `federated_groups` collection) and then appends the primary groups (`cfg.main_group`) when they are not already in the list. It calls `ban_chat_member` for each group through `fan_out(...)`. `fan_out` caps concurrency and returns exceptions instead of raising them.
 
 The user-facing summary reports how many groups succeeded:
 
@@ -183,7 +183,7 @@ The executor must have rank >= Developer. The target check behaves as follows:
 - If the target has a role with rank greater than or equal to the executor's rank, the action is blocked.
 - If the target has a lower role, the bot automatically removes that role before continuing with the ban.
 
-Auto-demotion is handled by `Demote.auto_demote_or_abort(..., trigger="ban")` from `workflows/demote_flow/` (also used by the kick and mute entries with their own trigger nouns). The helper runs `Demote.execute`, and if the demote raises it replies with a localized notice telling the executor to demote manually and signals abort by returning `False`; the ban never proceeds on a role holder:
+Auto-demotion is handled by `Demote.auto_demote_or_abort(..., trigger="ban")` from `workflows/demote_flow.py` (also used by the kick and mute entries with their own trigger nouns). The helper runs `Demote.execute`, and if the demote raises it replies with a localized notice telling the executor to demote manually and signals abort by returning `False`; the ban never proceeds on a role holder:
 
 - Admin targets are removed from `tc_admins`.
 - Developer/Tester targets are removed from `tc_roles`.

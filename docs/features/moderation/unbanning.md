@@ -27,7 +27,7 @@ flowchart TD
 
 ## Purpose
 
-`/tcunban` clears an active federation ban by deactivating the underlying `bans` records and unbanning the target across every active connected group plus the primary groups (`cfg.main_group`, `cfg.exec_group`). The appeal-approve path runs its own inline sequence that mirrors `execute_unban` (deactivate, primary-group backfill, fan-out, logs); it does not call `execute_unban` directly.
+`/tcunban` clears an active federation ban by deactivating the underlying `bans` records and unbanning the target across every active connected group plus the primary groups (`cfg.main_group`). The appeal-approve path runs its own inline sequence that mirrors `execute_unban` (deactivate, primary-group backfill, fan-out, logs); it does not call `execute_unban` directly.
 
 The Developer minimum rank (instead of Tester) is enforced because unban is irreversible at the database level and a low-rank moderator could otherwise quietly undo a Founder ban.
 
@@ -87,7 +87,7 @@ The Developer minimum is intentional: unbanning a higher-ranked target would sil
 3. Reads `ban_id` from the record for the federation log.
 4. Fetches active groups with `db.groups_db.active_groups()` **sequentially** before any mutation: a fetch outage aborts with the ban record intact, so a retry re-drives the full fan-out cleanly instead of unbanning "blind" against a stale list.
 5. Runs the active-ban deactivation via `db.bans_db.deactivate_all_active_bans(target_id)` - clears every active ban for the target in one write.
-6. Adds primary groups (`cfg.main_group`, `cfg.exec_group`) to the list when they are not already present.
+6. Adds primary groups (`cfg.main_group`) to the list when they are not already present.
 7. Fans `ctx.bot.unban_chat_member(grp.chat_id, target_id, only_if_banned=True)` across the resulting list with `fan_out(...)`.
 8. Builds an `unban_log` via `parse_logmsg.unban_log`.
 9. Runs two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:

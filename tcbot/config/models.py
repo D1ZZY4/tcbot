@@ -14,8 +14,6 @@ from dotenv import find_dotenv, load_dotenv
 
 from .parsing import (
     _DEFAULT_COMMUNITY_CHANNEL_URL,
-    _DEFAULT_COMMUNITY_EXEC_URL,
-    _DEFAULT_COMMUNITY_GROUP_URL,
     _DEFAULT_COMMUNITY_LOGS_URL,
     _DEFAULT_COMMUNITY_TRAVEL_URL,
     _DEFAULT_PORT,
@@ -55,7 +53,6 @@ class Configs:
     appeals: str
     appeal_log_handle: str
     appeal_discussion_topic: int
-    extend_group: str
     album_debounce_seconds: int
     log_level: int
     modules_load: list[str]
@@ -72,7 +69,7 @@ class Configs:
     community_channel_url: str
     community_group_url: str
     community_logs_url: str
-    community_exec_url: str
+    community_appeal_url: str
     community_travel_url: str
     api_id: int
     api_hash: str
@@ -101,17 +98,6 @@ class Configs:
         except ValueError:
             log.warning(
                 "Invalid MAIN_CHANNEL '%s', defaulting to 0.", self.main_channel
-            )
-            return 0
-
-    @property
-    def extend_group_id(self) -> int:
-        """Return EXTEND_GROUP as int, or 0 when unset or invalid."""
-        try:
-            return int(self.extend_group) if self.extend_group else 0
-        except ValueError:
-            log.warning(
-                "Invalid EXTEND_GROUP '%s', defaulting to 0.", self.extend_group
             )
             return 0
 
@@ -174,7 +160,6 @@ class Configs:
             appeal_discussion_topic=_int_from_env(
                 "APPEAL_DISCUSSION_TOPIC", 0, minimum=0
             ),
-            extend_group=os.getenv("EXTEND_GROUP", "").strip(),
             album_debounce_seconds=_int_from_env(
                 "ALBUM_DEBOUNCE_SECONDS", 4, minimum=1
             ),
@@ -194,18 +179,12 @@ class Configs:
                 "COMMUNITY_CHANNEL_URL", _DEFAULT_COMMUNITY_CHANNEL_URL
             ).strip()
             or _DEFAULT_COMMUNITY_CHANNEL_URL,
-            community_group_url=os.getenv(
-                "COMMUNITY_GROUP_URL", _DEFAULT_COMMUNITY_GROUP_URL
-            ).strip()
-            or _DEFAULT_COMMUNITY_GROUP_URL,
+            community_group_url=os.getenv("COMMUNITY_GROUP_URL", "").strip(),
+            community_appeal_url=os.getenv("COMMUNITY_APPEAL_URL", "").strip(),
             community_logs_url=os.getenv(
                 "COMMUNITY_LOGS_URL", _DEFAULT_COMMUNITY_LOGS_URL
             ).strip()
             or _DEFAULT_COMMUNITY_LOGS_URL,
-            community_exec_url=os.getenv(
-                "COMMUNITY_EXEC_URL", _DEFAULT_COMMUNITY_EXEC_URL
-            ).strip()
-            or _DEFAULT_COMMUNITY_EXEC_URL,
             community_travel_url=os.getenv(
                 "COMMUNITY_TRAVEL_URL", _DEFAULT_COMMUNITY_TRAVEL_URL
             ).strip()

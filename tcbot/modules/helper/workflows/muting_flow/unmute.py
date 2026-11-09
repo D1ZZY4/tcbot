@@ -98,9 +98,7 @@ async def execute_unmute(
         )
         return
     # * Connected groups plus primaries (single merge owner in groups_db).
-    groups = db.groups_db.with_primary_groups(
-        groups, (_flow.cfg.main_group, _flow.cfg.exec_group)
-    )
+    groups = db.groups_db.with_primary_groups(groups, (_flow.cfg.main_group,))
     results = await fan_out(
         [
             ctx.bot.restrict_chat_member(

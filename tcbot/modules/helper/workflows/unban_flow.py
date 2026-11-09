@@ -155,7 +155,7 @@ async def execute_unban(
 
     # * Include primary groups not already in the connected list
     # * (single merge owner in groups_db).
-    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group, cfg.exec_group))
+    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
 
     # * unban from all groups - semaphore-bounded for rate safety
     results = await fan_out(

@@ -211,7 +211,7 @@ Without `BOT_PAT`, the Run Bot workflow cannot dispatch its own next run; it fal
 
 The Run Bot workflow forwards the full federation env surface as repository
 secrets, so every runtime variable must be set there for the runner: `DB_NAME`,
-`COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`, `MAIN_CHANNEL`, `EXTEND_GROUP`,
+`COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`, `MAIN_CHANNEL`,
 `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `REDIS_URL`,
 `APPEAL_LOG_HANDLE`, `APPEAL_DISCUSSION_TOPIC`, `WARN_EXPIRY_DAYS`,
 `WARN_LIMIT`, `FED_WARN_LIMIT`, `API_ID`, `API_HASH`,

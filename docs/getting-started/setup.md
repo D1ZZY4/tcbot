@@ -79,14 +79,14 @@ Docker, Heroku, VPS with systemd, Windows over RDP) live in the collapsible
 
 ### Community links (optional)
 
-The Additional Links menu in the bot start screen shows buttons for community channels, groups, and the TRAVEL community. Each button uses its env var when set to a non-empty `http(s)` URL and falls back to the built-in default otherwise, so all five buttons show with zero setup. A non-http(s) env value is rejected: it logs a warning and that button is omitted.
+The Additional Links menu in the bot start screen shows buttons for the community channel, the discussion group, logs, and the TRAVEL community. Channel, logs, and travel keep the built-in defaults noted below; the discussion button reads `COMMUNITY_GROUP_URL` and has no built-in default. and A non-http(s) env value is rejected: it logs a warning and that button is omitted.
 
 | Variable | Button label |
 |---|---|
 | `COMMUNITY_CHANNEL_URL` | Main Channel |
 | `COMMUNITY_GROUP_URL` | Discussion Group |
 | `COMMUNITY_LOGS_URL` | Logs Channel |
-| `COMMUNITY_EXEC_URL` | Exec Group |
+| `COMMUNITY_APPEAL_URL` | Appeals Channel |
 | `COMMUNITY_TRAVEL_URL` | TRAVEL - Transsion Development (Community) |
 
 ## Environment variable format
@@ -134,11 +134,11 @@ PROOFS="-1001234567890"
 | `PORT` | No | integer or `auto` | Flask keep-alive port. `auto`, invalid, or out-of-range values resolve to `5000`. |
 | `MAIN_GROUP` | Usually | integer chat ID | Main community group or forum. |
 | `MAIN_CHANNEL` | No | integer chat ID | Optional announcement channel reference. |
-| `EXTEND_GROUP` | No | integer chat ID | Secondary group watched by selected handlers. |
+| `COMMUNITY_GROUP_URL` | No | http(s) URL | Discussion Group button in the Additional Links menu. No built-in default; empty hides the button. |
 | `PROOFS` | Yes for bans | `chat_id` or `chat_id/thread_id` | Destination for ban proof media. |
 | `LOGS` | Yes | `chat_id` or `chat_id/thread_id` | Audit-log destination. |
-| `LOGS_ERRORS` | Recommended | `chat_id` or `chat_id/thread_id` | Error-report destination. |
-| `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination. |
+| `LOGS_ERRORS` | Recommended | `chat_id` or `chat_id/thread_id` | Error-report destination. When empty, reports fall back to the owner DM instead of being dropped. |
+| `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination. Also receives a copy of every review card. |
 | `APPEAL_LOG_HANDLE` | No | channel handle | Displayed in appeal instructions. Defaults to `@TranssionCoreFederationLogs`. |
 | `APPEAL_DISCUSSION_TOPIC` | Yes for reviews | integer thread ID | Topic inside `MAIN_GROUP` where review cards are posted. |
 | `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. |
@@ -157,12 +157,11 @@ PROOFS="-1001234567890"
 | `WARN_EXPIRY_DAYS` | No | positive integer | Days after which `warn_counts` records are deleted by the daily scheduler job. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
 | `SYNC_INTERVAL_HOURS` | No | integer >= 0 | Hours between scheduled enforcement-sync sweeps (`/tcsync` core on a timer, log-only). Default `0` (disabled, manual `/tcsync` only). |
 | `COMMUNITY_CHANNEL_URL` | No | http(s) URL | Main Channel button in the Additional Links menu. |
-| `COMMUNITY_GROUP_URL` | No | http(s) URL | Discussion Group button. |
 | `COMMUNITY_LOGS_URL` | No | http(s) URL | Logs Channel button. |
-| `COMMUNITY_EXEC_URL` | No | http(s) URL | Exec Group button. |
+| `COMMUNITY_APPEAL_URL` | No | http(s) URL | Appeals Channel button. No built-in default; empty hides the button. |
 | `COMMUNITY_TRAVEL_URL` | No | http(s) URL | TRAVEL community button. |
 
-Each community link falls back to its built-in default when empty, so all five buttons show with zero setup. A non-http(s) value is ignored with a warning and hides that button.
+Each community link falls back to its built-in default when empty, except the discussion and exec buttons, which have no built-in default. A non-http(s) value is ignored with a warning and hides that button.
 
 MTProto runs on the bot token alone: no phone number, no login code, no
 session file. Fill `API_ID` / `API_HASH` and boot connects a bot-token

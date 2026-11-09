@@ -87,9 +87,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         )
         return
     # * Connected groups plus primaries (single merge owner in groups_db).
-    groups = db.groups_db.with_primary_groups(
-        groups, (_flow.cfg.main_group, _flow.cfg.exec_group)
-    )
+    groups = db.groups_db.with_primary_groups(groups, (_flow.cfg.main_group,))
 
     # * Persist the mute record before touching any group. Enforcing chats
     # * without an active_mutes row leaves an un-unmutable split brain:

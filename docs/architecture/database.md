@@ -194,10 +194,10 @@ Resolution order in `get_effective_role`:
 
 ### Owner CRUD
 
-- `get_owner_id() -> int | None`
-  Current owner's ID through `owner_id_cache` (L1 300 s, L2 360 s, fixed key `__owner__`).
-- `is_owner(user_id: int) -> bool`
-  `get_owner_id() == user_id`; cached, no MongoDB round trip on hits. Errors propagate so decorators keep their fail-closed retry reply.
+- `get_owner_id(*, fresh: bool = False) -> int | None`
+  Current owner's ID through `owner_id_cache` (L1 300 s, L2 360 s, fixed key `__owner__`). With `fresh=True` the owner row is read directly from MongoDB (cache refreshed with the result): enforcement gates use it so a transfer in another process is never hidden for the TTL.
+- `is_owner(user_id: int, *, fresh: bool = False) -> bool`
+  `get_owner_id(fresh=fresh) == user_id`; cached, no MongoDB round trip on hits. Errors propagate so decorators keep their fail-closed retry reply. Enforcement gates (promotion decisions, the founder-only users list) use `fresh=True`.
 - `ensure_initial_owner(initial_id: int) -> None`
   Inserts the founder when `tc_owners` is empty. On a `DuplicateKeyError` (another instance won the startup race) it invalidates the owner cache instead of failing.
 - `set_owner(user_id: int) -> None`
@@ -206,7 +206,7 @@ Resolution order in `get_effective_role`:
 ### Admin CRUD
 
 - `is_admin(user_id: int) -> bool`: existence check on `tc_admins` (projection `{_id: 1}`).
-- `is_staff(user_id: int) -> bool`: `get_effective_role(user_id) in ("founder", "admin")`. Keeps the historical fail-open-to-`False` contract: lookup failures log at WARNING and return `False`; cancellation still propagates. Callers that need a retry hint on outage use `get_effective_role` directly (like the appeal-review path and decorators).
+- `is_staff(user_id: int, *, fresh: bool = False) -> bool`: `get_effective_role(user_id, fresh=fresh) in ("founder", "admin")`. Keeps the historical fail-open-to-`False` contract: lookup failures log at WARNING and return `False`; cancellation still propagates. Callers that need a retry hint on outage use `get_effective_role` directly (like the appeal-review path and decorators). Enforcement callers (disconnect, group-language write) use `fresh=True` so a demotion is never hidden for the 60 s TTL; display-only callers keep the cached path.
 - `add_admin(user_id: int, promoted_by: int) -> None`: upsert with `$setOnInsert` (`user_id`, `promoted_by`, `promoted_date`); no-op if already present. Invalidates the target's effective role cache.
 - `remove_admin(user_id: int) -> bool`: delete; returns whether a row was deleted; invalidates the role cache.
 - `all_admins() -> list[AdminDoc]`: all admin rows, projection `{user_id}`.
@@ -605,7 +605,7 @@ Pool parameters: `decode_responses=True`, `max_connections=20`, `socket_connect_
 
 ## Scheduler (`scheduler/`)
 
-`start(mongodb_uri: str, db_name: str, warn_expiry_days: int, *, bot: Bot | None = None, sync_interval_hours: int = 0) -> None` spawns the `tcbot.scheduler` background asyncio task and waits (bounded by the same 10 s grace window as `stop()`) for the scheduler to become ready, so a constructor error or a hung jobstore handshake reports a startup failure instead of hanging boot. `bot` plus a positive interval registers the `tcbot.enforcement_sync` sweep; a zero interval or `None` bot removes a stale schedule. On readiness failure it raises `RuntimeError` (wrapped from the captured error).
+`start(mongodb_uri: str, db_name: str, warn_expiry_days: int, *, bot: Bot | None = None, sync_interval_hours: int = 0, sync_runner: Callable[..., Any] | None = None) -> None` spawns the `tcbot.scheduler` background asyncio task and waits (bounded by the same 10 s grace window as `stop()`) for the scheduler to become ready, so a constructor error or a hung jobstore handshake reports a startup failure instead of hanging boot. `bot` plus a positive interval registers the `tcbot.enforcement_sync` sweep; a zero interval or `None` bot removes a stale schedule. `sync_runner` is the enforcement sweep supplied by the runtime lifecycle (which already imports the command modules), passed explicitly so the database package never imports a command module; `None` disables the sweep. On readiness failure it raises `RuntimeError` (wrapped from the captured error).
 
 `stop() -> None` sets the stop event and waits up to 10 s for graceful shutdown, then cancels a stuck task so shutdown never orphans a live scheduler into the next `start()`. A background-task exception is logged and still clears the module globals, and cancellation of `stop()` itself clears them before propagating. Safe to call when `start()` never ran.
 
@@ -618,7 +618,7 @@ Recurring jobs (idempotent via `replace_existing=True`):
 | Job ID | Trigger | Purpose |
 |---|---|---|
 | `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: deletes `warn_counts` rows older than the cutoff from `updated_at` and `warns` rows from `timestamp` in parallel (both must be pruned together or the counter backfill restores stale counts). Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
-| `tcbot.enforcement_sync` | `IntervalTrigger(hours=sync_interval_hours)` | Calls `_run_scheduled_sync` (the `/tcsync` core on a timer, bounded to 200 checks, log-only results, via the lifecycle-injected `_sync_runner`, so the database package never imports a command module). Uses `misfire_grace_time=86400`, `coalesce=True`. Registered only when the interval is positive and a `bot` reference was passed; otherwise removed. See [`../features/moderation/sync.md`](../features/moderation/sync.md). |
+| `tcbot.enforcement_sync` | `IntervalTrigger(hours=sync_interval_hours)` | Calls `_run_scheduled_sync` (the `/tcsync` core on a timer, bounded to 200 checks, log-only results, via the explicit `sync_runner` start argument, so the database package never imports a command module). Uses `misfire_grace_time=86400`, `coalesce=True`. Registered only when the interval is positive and a `bot` reference was passed; otherwise removed. See [`../features/moderation/sync.md`](../features/moderation/sync.md). |
 | `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal call runs on startup and `_cleanup_old_records()` remains as a no-op migration shim so any persisted schedule can deserialize without `AttributeError`. |
 
 Member-cache cleanup is handled by the MongoDB TTL index on `last_updated` (`expireAfterSeconds=7776000`, 90 days), not by a scheduler job.
@@ -649,7 +649,7 @@ The legacy plain `until_date_1` index on `active_mutes` is dropped first, as a s
 | `federated_groups` | `(is_active)` | Active-group listing / count. |
 | `pending_joins` | unique `(chat_id)` | One pending request per chat. |
 | `member_cache` | unique `(user_id)` | One profile per user. |
-| `member_cache` | `(user_id, first_name, username)` | Covered-query index for batch `get_mention_data_batch` / `get_first_names_batch` `$in` projections. |
+| `member_cache` | `(user_id, first_name, username, last_name)` | Covered-query index for batch `get_mention_data_batch` / `get_first_names_batch` `$in` projections. |
 | `member_cache` | `(username)` | Username lookups / search. |
 | `member_cache` | `(first_name)` | Name search. |
 | `member_cache` | `(last_updated)` TTL `expireAfterSeconds=7776000` | Auto-expiry of profiles older than 90 days. |
@@ -698,7 +698,7 @@ Literal aliases: `RoleName = Literal["founder", "admin", "developer", "tester"]`
 
 ## Startup wiring and shutdown
 
-`_post_init` in `tcbot/__main__.py` runs, in order: `connect()`, then in parallel `ensure_indexes()` (index failure is fatal), `ensure_initial_owner(cfg.initial_owner_id)` (failures non-fatal), and `redis_client.connect(cfg.redis_url)` when configured (connection failure degrades to in-memory cache only with a warning). Then `scheduler.start(cfg.mongodb_uri, cfg.db_name, cfg.warn_expiry_days, bot=app.bot, sync_interval_hours=cfg.sync_interval_hours)`, followed by a background `_warm_hot_caches` task that pre-loads owner ID, active groups, and the owner's effective role into L1+L2. `_post_shutdown` stops the scheduler and closes Redis in parallel. Related `cfg` fields: `db_name` (default `"tcbot"`), `redis_url`, `warn_expiry_days`, `sync_interval_hours`, `initial_owner_id`.
+`init_shared_subsystems` in `tcbot/runtime/lifecycle.py` (called by `_post_init` for long-lived transports and by serverless with `start_mtproto=False`) runs, in order: `connect()`, then in parallel `ensure_indexes()` (index failure is fatal), `ensure_initial_owner(cfg.initial_owner_id)` (failures non-fatal), and `redis_client.connect_if_configured()` when configured (connection failure degrades to in-memory cache only with a warning), plus `mtproto.start()` on long-lived transports (an exception aborts boot; a degraded `False` warns and continues Bot-API-only). Then `scheduler.start(cfg.mongodb_uri, cfg.db_name, cfg.warn_expiry_days, bot=app.bot, sync_interval_hours=cfg.sync_interval_hours, sync_runner=run_ban_sync)`, followed by a background `_warm_hot_caches` task that pre-loads owner ID, active groups, and the owner's effective role into L1+L2. `_post_shutdown` stops the scheduler and closes Redis in parallel. Related `cfg` fields: `db_name` (default `"tcbot"`), `redis_url`, `warn_expiry_days`, `sync_interval_hours`, `initial_owner_id`.
 
 ## Safety rules
 

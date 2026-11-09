@@ -40,7 +40,7 @@ flowchart TD
 
 ## Purpose
 
-A federation mute restricts a user from sending messages, media, stickers, and polls across all active connected groups at once, plus the primary groups (`cfg.main_group`, `cfg.exec_group`). Mutes may be timed (with a duration token) or permanent (`until_date=None`). The mute flow accepts an optional inline reason and optional proof, posts a federation mute log, writes an audit row to the `mutes` collection, and persists an active-mute record in `active_mutes` so unmute and group-connect replay can find it. Targets that hold a federation role are auto-demoted before the mute.
+A federation mute restricts a user from sending messages, media, stickers, and polls across all active connected groups at once, plus the primary groups (`cfg.main_group`). Mutes may be timed (with a duration token) or permanent (`until_date=None`). The mute flow accepts an optional inline reason and optional proof, posts a federation mute log, writes an audit row to the `mutes` collection, and persists an active-mute record in `active_mutes` so unmute and group-connect replay can find it. Targets that hold a federation role are auto-demoted before the mute.
 
 `/tcunmute` clears the active-mute record and restores full send permissions across the same set of groups.
 
@@ -156,7 +156,7 @@ If the target holds a federation role, `cmd_mute` calls `Demote.auto_demote_or_a
 Execution order:
 
 1. Resolve the origin chat from the update; abort before any side effect when it is absent.
-2. Build the active-groups list: `groups_db.active_groups()` plus any primary groups (`cfg.main_group`, `cfg.exec_group`) that are not already present. A fetch outage aborts with a retry notice and no group is touched.
+2. Build the active-groups list: `groups_db.active_groups()` plus any primary groups (`cfg.main_group`) that are not already present. A fetch outage aborts with a retry notice and no group is touched.
 3. Persist `db.mutes_db.log_mute(...)` and `db.mutes_db.set_active_mute(target_id, until=until)` first. Either write failing aborts with a retry notice and no group is touched (fail-closed, mirroring the ban flow and the warn auto-ban): enforcing chats without an `active_mutes` row would leave a restriction that `/tcunmute` refuses to lift.
 4. Build the restriction `ChatPermissions(can_send_messages=False)` and the `until_date` value (`utc_now() + duration` or `None` for permanent).
 5. Re-check the target's effective role via `Demote.redemote_before_fanout(..., trigger="mute")`, closing the proof-collection TOCTOU window (best-effort; the mute proceeds even if the re-demote fails).
@@ -260,7 +260,7 @@ Key behaviors to keep in mind:
 7. Reason is skippable; skipped reason records as the localized `replies.no_reason(locale)` text.
 8. Proof is skippable; skipped proof records nothing.
 9. The `_UNMUTE_CMDS` filter is excluded from the mute conversation fallback so unmute can interrupt a pending mute conversation.
-10. `execute_mute` restricts across `active_groups()` plus `cfg.main_group`/`cfg.exec_group`, deduplicated.
+10. `execute_mute` restricts across `active_groups()` plus `cfg.main_group`, deduplicated.
 11. `execute_mute` writes both `log_mute` (audit) and `set_active_mute` (live record) so group connect can replay.
 12. `execute_unmute` refuses to fan unrestrict calls when no active mute record exists.
 13. The `until_date` value matches the value passed to `restrict_chat_member`; `None` means permanent.

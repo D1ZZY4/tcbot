@@ -232,9 +232,9 @@ flowchart TD
 
 Promotion is not a conversation. `Promote.execute(...)` in `workflows/promote_flow/` performs direct role assignment or creates a promotion request for Founder approval when required. `admins/` registers the command and callback handlers.
 
-## Demotion: `demote_flow/`
+## Demotion: `demote_flow.py`
 
-Demotion is not a conversation. `Demote.execute(...)` in `workflows/demote_flow/` handles two distinct paths controlled by the optional `trigger` argument:
+Demotion is not a conversation. `Demote.execute(...)` in `workflows/demote_flow.py` handles two distinct paths controlled by the optional `trigger` argument:
 
 | Call | Trigger | Path |
 |---|---|---|

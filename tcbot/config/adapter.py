@@ -61,13 +61,8 @@ class _CfgAdapter:
         """Announcement channel chat ID, or 0 when unset."""
         return self._c.main_channel_id
 
-    @property
-    def exec_group(self) -> int:
-        """Staff/exec group chat ID, or 0 when unset."""
-        return self._c.extend_group_id
-
     def is_primary_group(self, chat_id: int | None) -> bool:
-        """Return True for the main/exec groups (never disconnect).
+        """Return True for the main group (never disconnect).
 
         Single source of truth for primary-group membership; every guard
         across connect, disconnect, maintenance, greeting, and workflow
@@ -75,7 +70,7 @@ class _CfgAdapter:
         """
         if chat_id is None or chat_id <= 0:
             return False
-        return chat_id in (self.main_group, self.exec_group)
+        return chat_id == self.main_group
 
     @property
     def logs(self) -> tuple[int, int | None]:
@@ -221,18 +216,18 @@ class _CfgAdapter:
 
     @property
     def community_group_url(self) -> str:
-        """Public URL of the main community discussion group (built-in default when env is empty)."""
+        """Public URL of the main community discussion group (empty when unset)."""
         return self._c.community_group_url
+
+    @property
+    def community_appeal_url(self) -> str:
+        """Public URL of the appeals channel (empty when unset)."""
+        return self._c.community_appeal_url
 
     @property
     def community_logs_url(self) -> str:
         """Public URL of the logs channel (built-in default when env is empty)."""
         return self._c.community_logs_url
-
-    @property
-    def community_exec_url(self) -> str:
-        """Public URL or invite link of the exec/staff group (built-in default when env is empty)."""
-        return self._c.community_exec_url
 
     @property
     def community_travel_url(self) -> str:

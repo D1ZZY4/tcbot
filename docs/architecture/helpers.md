@@ -121,7 +121,7 @@ Main groups:
 | Privacy | `privacy_kb`, `privacy_policy_sections_kb`, `back_to_privacy_policy_kb` |
 | Groups | `groups_menu_kb`, `tcgroups_kb` |
 | Stats | `stats_main_kb`, `stats_back_kb`, `stats_back_row`, `stats_list_kb`, `stats_search_panel_kb`, `stats_search_results_kb`, `stats_search_row` |
-| Check | `check_back_row`, `check_warns_back_row`, `check_warn_groups_kb`, `check_profile_kb` |
+| Check | `check_back_row`, `check_warns_back_row`, `check_back_markup`, `check_paged_markup`, `check_warn_groups_kb`, `check_profile_kb` |
 | Flow steps | `reason_step_kb`, `proof_step_kb`, `connect_join_kb` - owned here; `BuildReason.keyboard()`, `BuildProof.keyboard()`, and `BuildConnection.join_keyboard()` stay as thin delegating steps so existing call sites keep working. `stats_flow.main_kb` / `back_kb` / `_list_kb` and `check_flow._back_to_check` are compat aliases over the same builders. |
 | Paginated drill-downs | `paged_drill_kb(items, *, page, total_pages, nav_prefix, back_callback, extra_rows=None, per_row=3, locale=None)` - numbered drill-in grid plus nav row, back button, and optional extra rows. Single owner for the numbered-grid look (the one place numbered buttons gain their PRIMARY style), replacing local copies in the stats and check drill-downs. The `« Prev` / `Next »` labels come from `button.prev` / `button.next` in the view locale; the row primitive itself lives in `tcbot/utils/pagination.py` (`nav_row`, also locale-aware). |
 | Language menu | `language_list_kb(scope, items, *, back_label=None, back_callback=None, selected=None, locale=None)` - one row per locale button from `(display_name, locale_code)` pairs, each sending `lang:set:<scope>:<locale>`. The currently selected locale is prefixed with `✓` (a plain check character, not an emoji); the optional Back row sends `back_callback` verbatim. The Back label renders from `button.back` in `locale` unless `back_label` overrides it. |
@@ -152,7 +152,7 @@ The `decorators/` module centralizes both auth-guard decorators and the shared e
 | `resolve_and_check(msg, executor_id, target_id, min_role=...)` | Resolves executor and target roles, checks minimum executor rank, checks executor outranks target, and replies on failure. Role lookup errors fail closed and do not become a no-role result. |
 | `require_federation_origin(msg, chat_id, chat_type, locale, allow_private=...)` | Enforces that moderation entries originate from a connected group or a primary group (private only when `allow_private` is set for federation-wide entries). A disconnected group, or a private chat where `allow_private` is false, replies with the shared notice and blocks the action; a connection-state outage replies with the database retry notice and blocks (fail closed). |
 
-Ban, kick, and mute entry points pair this with `Demote.execute(..., trigger="ban"/"kick"/"mute")` from `workflows/demote_flow/` to remove the target's role before the moderation action.
+Ban, kick, and mute entry points pair this with `Demote.execute(..., trigger="ban"/"kick"/"mute")` from `workflows/demote_flow.py` to remove the target's role before the moderation action.
 
 ## `replies.py`
 
