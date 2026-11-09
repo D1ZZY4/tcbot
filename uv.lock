@@ -298,21 +298,35 @@ wheels = [
 ]
 
 [[package]]
+name = "kuricrypt"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/a4/6e84d54aef3f4a04bdf1b41b244f7d0a45fc4a2614ae3800dc8ff87f03a9/kuricrypt-0.1.0.tar.gz", hash = "sha256:e9455108260caa40dadbbb088e056f6f73a9f47ecd6864c83613ddd7e3aeadb8", size = 8689, upload-time = "2026-11-08T13:04:42.453Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/50/3d/b51f3d5eeec3ca1ab4c1e5197789506b5b58d4ec3c81f8ef7e7b696c23a2/kuricrypt-0.1.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:f21bfb5673c9dc5bdd9f0df841d0e922d842d268e7634547857b3fb5441eaf6d", size = 195668, upload-time = "2026-11-08T13:04:36.497Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/38/6d90d0d4a38448c6ccf919fa86f0c0031472330cb6f47e002ba6891d6bba/kuricrypt-0.1.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:8ca8c1dcf1abc9442a551fa56183d110e2143a848eadf0420517c14663f5aa29", size = 228936, upload-time = "2026-11-08T13:04:37.373Z" },
+    { url = "https://files.pythonhosted.org/packages/14/ef/c97b19401c66295d7cfe5ab177de983f564eff3318d613497207c8dfc0c7/kuricrypt-0.1.0-cp314-cp314-win_amd64.whl", hash = "sha256:b2c9c1fb58174344a31f3331679b62038b3e61cb8ce1022cda263fa7cf6c0ec7", size = 122925, upload-time = "2026-11-08T13:04:38.335Z" },
+    { url = "https://files.pythonhosted.org/packages/46/45/0ac6734b651d03865d034d9bc1a79d0034b435321b35f7fd41968965f193/kuricrypt-0.1.0-cp315-cp315-macosx_11_0_arm64.whl", hash = "sha256:27b6d9d0c8cdb4dd64890320276ac6a07c4afcf79e48084f552c782d55ede646", size = 195853, upload-time = "2026-11-08T13:04:39.274Z" },
+    { url = "https://files.pythonhosted.org/packages/76/f2/d9bbf22a51a00dda71a2254f32a93fc9ce82f9a5fcacecd73dd115e215c7/kuricrypt-0.1.0-cp315-cp315-manylinux_2_28_x86_64.whl", hash = "sha256:73acc0ac27a45dfbbab7de509842035532c5382fc316be0651d675317046dd8c", size = 229163, upload-time = "2026-11-08T13:04:40.192Z" },
+    { url = "https://files.pythonhosted.org/packages/20/b0/76684369a1e5de20fc58a50473498f659f9859702095b350658f4f7837a7/kuricrypt-0.1.0-cp315-cp315-win_amd64.whl", hash = "sha256:a76d49133de05a6c02992bd52804a9c8a1347a8741d1cea024eefa1b6596c3e2", size = 123012, upload-time = "2026-11-08T13:04:41.272Z" },
+]
+
+[[package]]
 name = "kurigram"
-version = "2.2.26"
+version = "2.2.27"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pyaes" },
     { name = "python-socks" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c1/48/65efaaaaf24dc62d6f6ef046843952ff17b5358f9c7119303ceee6d53657/kurigram-2.2.26.tar.gz", hash = "sha256:83b64fd7ab37122d920b1e7c0e221b599d7c52dd5d0d24c79956f01273020c49", size = 748176, upload-time = "2026-09-12T17:45:08.406Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7d/b9/59d958f6383fc7bf79e9af051a861446bfcc887bcee62722fd059028cd32/kurigram-2.2.27.tar.gz", hash = "sha256:f7338a8cce4885b2108a9b20daaf7bf75bea17d6da2fd13f1018fd4adb85b19c", size = 851387, upload-time = "2026-11-09T12:22:50.484Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2b/e0/a00020c21725550c9309e6e03787acf7236de2f284c8d9bc57644ae2160a/kurigram-2.2.26-py3-none-any.whl", hash = "sha256:f53cee6119a579b74620f45b5f83d543cd3bd510a8a6a1b4b3852e21603241e9", size = 6044442, upload-time = "2026-09-12T17:45:06.456Z" },
+    { url = "https://files.pythonhosted.org/packages/5c/2e/02e8196b334c61fb7098240a6ca0a8451eebdecf4337de582a77a0bd9045/kurigram-2.2.27-py3-none-any.whl", hash = "sha256:75aee16496f104c553e3d742c825ea860943ddad180343da95b0273a60a0a90c", size = 6501151, upload-time = "2026-11-09T12:22:48.74Z" },
 ]
 
 [package.optional-dependencies]
 fast = [
-    { name = "tgcrypto" },
+    { name = "kuricrypt" },
     { name = "uvloop", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
 ]
 
@@ -838,12 +852,6 @@ dev = [
 ]
 
 [[package]]
-name = "tgcrypto"
-version = "1.2.5"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/33/59/7cf5ced989e3139a791d5452d58cb8994de589576b80f9267ba76d794f6c/TgCrypto-1.2.5.tar.gz", hash = "sha256:9bc2cac6fb9a12ef5b08f3dd500174fe374d89b660cce981f57e3138559cb682", size = 37280, upload-time = "2022-11-11T19:55:11.436Z" }
-
-[[package]]
 name = "typing-extensions"
 version = "4.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -907,7 +915,7 @@ wheels = [
 
 [[package]]
 name = "virtualenv"
-version = "21.15.5"
+version = "21.15.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "distlib" },
@@ -916,9 +924,9 @@ dependencies = [
     { name = "platformdirs" },
     { name = "python-discovery" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/69/74/745e612b69ad14a534b7bc233c4574b968eb2c21a276ea172e8f0fc13f51/virtualenv-21.15.5.tar.gz", hash = "sha256:fb869ea32930530ccc87549877b53268c2a4d4a7d7f2c384042eca05170350e6", size = 5639868, upload-time = "2026-11-04T05:13:20.929Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/bd/e40ad2df6a9efc1f859ea23d63fd7371cff68252833f182ca9af819bb4d3/virtualenv-21.15.6.tar.gz", hash = "sha256:c8b65c7d206ca6ef18de9352c160b3f04f66fff9f6b0ec8fd31f14688eba52c4", size = 5641659, upload-time = "2026-11-06T18:17:32.46Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9d/d6/f9ac78f115e32e0d76adda9db72b74425b86495ae274cd7b58c660f5d1c1/virtualenv-21.15.5-py3-none-any.whl", hash = "sha256:bcf98c32139cf3df7f0cc2c8c48ca150645c20e66f8c4fe6c1e5e40bcae73947", size = 5680750, upload-time = "2026-11-04T05:13:19.057Z" },
+    { url = "https://files.pythonhosted.org/packages/0a/63/fd514dee3159f74a96ac01beb8f460b65e4ef0b972f63f4fe9f0cd2aa0e3/virtualenv-21.15.6-py3-none-any.whl", hash = "sha256:4b99ab9b95ff11043939bb4cad2fa0449175fa5a478372864f62160cb6c1a7ed", size = 5680963, upload-time = "2026-11-06T18:17:30.128Z" },
 ]
 
 [[package]]
