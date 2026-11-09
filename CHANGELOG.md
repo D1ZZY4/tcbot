@@ -32,6 +32,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 ### Changed
 
+- **24/7 runner re-enabled** (`.github/workflows/run-bot.yml`, `README.md`, `docs/operations/ci-cd.md`, `.agents/rules/docs-sync.md`, `AGENTS.md`, `docs/architecture/helpers.md`): the self-chaining runner moves from `.github/workflows.disabled/` back to `.github/workflows/` and schedules again with push-triggered handover and cron fallback. Behavior changes: the bot auto-runs via GitHub Actions again; repository secrets still need to be set once.
+
 - **Role and group helpers live in focused packages** (`tcbot/database/users_roles/`, `tcbot/database/groups_db/`, `tcbot/modules/helper/workflows/promote_flow/`): owner, admin, custom-role, and resolution logic; core, pending, migration, and locale group logic; and assign, request, and alias promotion logic each have one home with a thin re-exporting package. Dotted import paths, callback data, and handler registration are unchanged. Behavior changes: none.
 
 - **Scheduler sync runs through an injected runner** (`tcbot/database/scheduler/`, `tcbot/runtime/lifecycle.py`): the database package never imports a command module; startup injects the enforcement runner after the scheduler starts. Behavior changes: none; scheduled sweeps run as before without the import cycle.

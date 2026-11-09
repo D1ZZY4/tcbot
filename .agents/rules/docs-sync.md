@@ -97,9 +97,9 @@ Recent project additions to keep accurate when editing docs:
 - CI/CD workflows: `.github/workflows/auto-fix.yml` (auto-PR for Ruff fixes
   on the fixed `auto-fix/ruff` branch),
   `.github/workflows/dependency-update.yml` (weekly auto-PR like dependabot),
-  `.github/workflows/codeql.yml` (security
-  scanning). The 24/7 runner lives disabled at
-  `.github/workflows.disabled/run-bot.yml`. All workflows are documented in
+  `.github/workflows/run-bot.yml` (self-chaining 24/7 runner with
+  webhook-first transport), `.github/workflows/codeql.yml` (security
+  scanning). All workflows are documented in
   [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
 - i18n system: user-facing strings in `i18n/<locale>/*.toml` (`en-US`
   source of truth, `button.toml` owns every button label once),

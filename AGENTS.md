@@ -173,7 +173,7 @@ Current stack:
 │       └── transport.py        Shared PTB HTTP timeouts and pool size
 ├── docs/                     Developer documentation grouped by category
 ├── .agents/                   Coding skills and style rules
-├── .github/                   CI workflows (lint, type-check, tests; 24/7 runner disabled under workflows.disabled/)
+├── .github/                   CI workflows (lint, type-check, tests, runner)
 ├── i18n/                      Localized message catalogs (en-US source of truth)
 ├── tests/                     Automated checks (run with the dummy-env suite)
 ├── api/                       Vercel serverless endpoints (webhook, cron)
