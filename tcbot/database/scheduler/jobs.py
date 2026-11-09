@@ -64,7 +64,13 @@ async def expire_old_warns(warn_expiry_days: int) -> None:
             "Warn expiry timed out after %ds; no expiry completed.",
             _EXPIRE_OP_TIMEOUT_S,
         )
-        return
+        # * A hung expiry must fail the run, not report success: returning
+        # * normally would make the serverless cron endpoint answer 200
+        # * while warns were never pruned. Mirrors the partial-failure path
+        # * below so scheduler and cron both surface the incomplete run.
+        raise RuntimeError(
+            "Warn expiry timed out: no records expired; see errors above."
+        ) from None
     # ! CRITICAL: a cancelled expiry must propagate, not report success.
     throw_if_cancelled((counts_res, warns_res))
     if isinstance(counts_res, BaseException):
@@ -133,17 +139,14 @@ async def _run_scheduled_sync() -> None:
     A missing bot (or any failure) logs and returns; the next interval
     re-drives, so one bad run never wedges the schedule.
     """
-    # * Lazy import: tcbot.modules.* must never be imported at this module's
-    # * top level (database/__init__ → scheduler → modules → database cycle).
-    from tcbot.modules import syncing as _syncing  # noqa: PLC0415
-
     bot = _sched_pkg._sync_bot
-    if bot is None:
+    runner = _sched_pkg._sync_runner
+    if bot is None or runner is None:
         log.debug("Scheduled sync skipped: no bot reference.")
         return
     try:
         async with asyncio.timeout(_SYNC_RUN_TIMEOUT_S):
-            counts = await _syncing.run_ban_sync(bot)
+            counts = await runner(bot)
     except TimeoutError:
         log.exception(
             "Scheduled enforcement sync timed out after %ds; next interval re-drives.",

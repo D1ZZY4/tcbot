@@ -134,6 +134,7 @@ async def stop() -> None:
             _sched_pkg._sched_stop = None
             _sched_pkg._sched_error = None
             _sched_pkg._sync_bot = None
+            _sched_pkg._sync_runner = None
             raise
         except TimeoutError:
             log.warning(
@@ -162,6 +163,7 @@ async def stop() -> None:
     _sched_pkg._sched_stop = None
     _sched_pkg._sched_error = None
     _sched_pkg._sync_bot = None
+    _sched_pkg._sync_runner = None
     log.info("APScheduler stopped.")
 
 

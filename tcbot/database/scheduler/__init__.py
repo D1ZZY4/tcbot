@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .jobs import (
     _EXPIRE_OP_TIMEOUT_S,
@@ -26,6 +26,7 @@ from .schedules import (
 
 if TYPE_CHECKING:
     import asyncio
+    from collections.abc import Callable
 
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
     from telegram import Bot
@@ -45,6 +46,11 @@ _sched_ready: asyncio.Event | None = None
 _sched_stop: asyncio.Event | None = None
 _sched_error: BaseException | None = None
 _sync_bot: Bot | None = None
+# * Enforcement runner supplied by the runtime lifecycle (which already imports
+# * the command modules). Keeping the callable here avoids the
+# * database -> modules import cycle: this package never imports a command
+# * module; the lifecycle injects the runner at startup.
+_sync_runner: Callable[..., Any] | None = None
 
 # * Maximum seconds to wait for the scheduler background task to exit cleanly
 # * before declaring it stuck.  10 s matches the PTB shutdown grace window.
@@ -67,6 +73,7 @@ __all__ = [
     "_scheduler",
     "_scheduler_background",
     "_sync_bot",
+    "_sync_runner",
     "expire_old_warns",
     "is_ready",
     "start",

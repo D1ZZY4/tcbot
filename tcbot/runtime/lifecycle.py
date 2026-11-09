@@ -42,6 +42,7 @@ from tcbot.runtime.members import (
 from tcbot.utils import error_reporter
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.dispatch import drain_tasks, throw_if_cancelled
+from tcbot.utils.i18n import _ensure_loaded
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import (
     API_POOL_SIZE,
@@ -117,6 +118,10 @@ async def _post_init(app: Application) -> None:
         raise RuntimeError(
             "API_ID/API_HASH are required for MTProto identity resolution; refusing to boot degraded."
         )
+    # * Load the TOML catalog here, once, instead of on the first handler:
+    # * the first t() call would otherwise read and parse every locale
+    # * synchronously on the event loop and stall the first command.
+    _ensure_loaded()
     log.info("post_init: connecting to MongoDB...")
     await connect()
 
@@ -160,6 +165,11 @@ async def _post_init(app: Application) -> None:
         bot=app.bot,
         sync_interval_hours=cfg.sync_interval_hours,
     )
+    # * Inject the enforcement runner so the database package never imports
+    # * a command module (that import is the database -> modules cycle).
+    from tcbot.modules.syncing import run_ban_sync  # noqa: PLC0415
+
+    sched_mod._sync_runner = run_ban_sync
 
     # * Pre-warm hot caches (owner ID + active groups) as a background task so
     # * the first real user command hits L1 instead of going all the way to MongoDB.

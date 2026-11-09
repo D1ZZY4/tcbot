@@ -27,6 +27,7 @@ from tcbot.database.scheduler import expire_old_warns
 from tcbot.runtime.lifecycle import _base_builder, _register_handlers
 from tcbot.utils import error_reporter
 from tcbot.utils.dispatch import throw_if_cancelled
+from tcbot.utils.i18n import _ensure_loaded
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -98,6 +99,9 @@ async def _init_subsystems(app: Application) -> None:
     boot without API_ID/API_HASH; serverless stays available without
     them by design.
     """
+    # * Same preload as the long-lived transport: never pay the full TOML
+    # * parse on the first handler's event loop.
+    _ensure_loaded()
     log.info("serverless: connecting to MongoDB...")
     await connect()
 
