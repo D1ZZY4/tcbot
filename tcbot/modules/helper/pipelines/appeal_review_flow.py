@@ -523,6 +523,34 @@ class AppealReviewMixin(AppealVerdictsMixin):
             except Exception as exc:
                 log.debug("Appeal self-review answer failed: %s", exc)
             return
+        # * Atomic decision claim: two concurrent taps both pass the read
+        # * checks above, but only one wins this update. The loser aborts
+        # * instead of double-unbanning or approve+reject racing.
+        try:
+            claimed = await db.bans_db.claim_appeal_decision(
+                ban_id, int(ban.get("review_message_id") or 0)
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("claim_appeal_decision failed for ban %s", ban_id)
+            try:
+                await q.answer(
+                    t("appeals.review.db_retry", locale, plain=True),
+                    show_alert=True,
+                )
+            except Exception as exc:
+                log.debug("Appeal claim-fail answer failed: %s", exc)
+            return
+        if not claimed:
+            try:
+                await q.answer(
+                    t("appeals.review.already_resolved", locale, plain=True),
+                    show_alert=True,
+                )
+            except Exception as exc:
+                log.debug("Appeal claim-loser answer failed: %s", exc)
+            return
         lc, lt = cfg.logs
         if action == "approve":
             await self._approve_appeal(

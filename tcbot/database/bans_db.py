@@ -194,6 +194,28 @@ async def clear_review(ban_id: str) -> None:
     )
 
 
+async def claim_appeal_decision(ban_id: str, review_msg_id: int) -> bool:
+    """Atomically claim one appeal decision; return True when claimed.
+
+    The filter matches only the exact review card the tapper saw while the
+    ban is still active. Two concurrent Approve/Reject taps both pass the
+    read checks, but only the first update matches: the loser sees
+    ``modified_count == 0`` and must abort instead of double-executing
+    (duplicate unbans, contradictory approve+reject, duplicate logs).
+    """
+    r = await db_call(
+        lambda: _bans().update_one(
+            {
+                "ban_id": ban_id,
+                "is_active": True,
+                "review_message_id": review_msg_id,
+            },
+            {"$set": {"review_message_id": None, "review_timestamp": None}},
+        )
+    )
+    return r.modified_count > 0
+
+
 async def set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None:
     """Persist the rejector identity and rejection timestamp on a ban document.
 
@@ -382,6 +404,7 @@ __all__ = [
     "active_ban_user_ids",
     "active_bans_for_users",
     "active_bans_page",
+    "claim_appeal_decision",
     "clear_review",
     "create_ban",
     "deactivate_all_active_bans",
