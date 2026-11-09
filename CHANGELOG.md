@@ -182,6 +182,8 @@ For workflow details mentioned below, see [`docs/operations/ci-cd.md`](docs/oper
 
 - **Cache split into queue and core modules** (`tcbot/database/cache/twolevel/`): the FIFO mutation queue now lives in its own submodule with a thin re-exporting package, keeping every file within the size budget again. Public imports, cache keys, and queue ordering are unchanged.
 
+- **Appeal verdicts split into approve and reject modules** (`tcbot/modules/helper/workflows/appeal_review_flow/verdicts/`): approve and reject executors now live in focused submodules with the log helper, keeping every file within the size budget. Import paths, callback data, and verdict behaviour are unchanged.
+
 - **Connect fails closed on database outage** (`tcbot/modules/connecting.py`, `tcbot/modules/helper/workflows/connected_flow/bot_added.py`, `docs/features/moderation/connecting.md`): the manual and bot-added connect paths now reply with a retry notice, or drop the event, when the connection-state reads fail instead of treating the outage as not connected. Behavior changes: outage connects show a failure notice instead of proceeding to join.
 
 - **Join decision refuses primary groups** (`tcbot/modules/helper/workflows/connected_flow/join_decision.py`, `docs/features/moderation/connecting.md`): tapping Connect on a primary-group prompt now answers and returns without connecting, matching the command and bot-added guards. Behavior changes: none on normal prompts; primary-group taps no longer create a federation row.

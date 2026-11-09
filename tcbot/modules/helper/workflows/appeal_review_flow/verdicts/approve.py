@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Approve / reject executors for staff appeal review."""
+"""Approve executor for staff appeal review."""
 
 from __future__ import annotations
 
@@ -13,9 +13,11 @@ from telegram import Bot, CallbackQuery, User
 
 from tcbot import database as db
 from tcbot.modules.helper import parse_logmsg, replies
-from tcbot.modules.helper.parse_editmsg import safe_edit_cb
 from tcbot.modules.helper.workflows import appeal_review_flow as flow_pkg
-from tcbot.modules.helper.workflows.demote_flow import Demote
+from tcbot.modules.helper.workflows.appeal_review_flow import verdicts as _verdicts
+from tcbot.modules.helper.workflows.appeal_review_flow.verdicts.logmsg import (
+    _update_or_send_log,
+)
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
@@ -34,35 +36,8 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
-async def _update_or_send_log(
-    bot: Bot,
-    lc: int,
-    lt: int | None,
-    msg_id: int | None,
-    text: str,
-) -> None:
-    """Edit the existing appeal log message, or post a new one as fallback."""
-    if msg_id:
-        try:
-            await bot.edit_message_text(
-                text, chat_id=lc, message_id=msg_id, parse_mode="MarkdownV2"
-            )
-            return
-        except Exception as exc:
-            log.warning("Could not edit appeal submitted log: %s", exc)
-    try:
-        await bot.send_message(lc, text, parse_mode="MarkdownV2", message_thread_id=lt)
-    except Exception as exc:
-        log.debug("Could not send appeal submitted log: %s", exc)
-
-
-class AppealVerdictsMixin:
-    """Staff-side appeal verdict executors: approve fans out unbans, reject cools down.
-
-    Combined into ``AppealReviewMixin``; ``cfg`` and locale lookups resolve
-    through the package namespace (``flow_pkg``) so package-level
-    monkeypatching keeps working as it did for the flat module.
-    """
+class ApproveMixin:
+    """Approve path: deactivate, unban fan-out, and notifications."""
 
     community_name: str
 
@@ -126,7 +101,7 @@ class AppealVerdictsMixin:
             return
         if target_role in ("admin", "developer", "tester"):
             try:
-                await Demote.execute(
+                await _verdicts.Demote.execute(
                     bot,
                     target_id,
                     str(target_id),
@@ -312,118 +287,3 @@ class AppealVerdictsMixin:
                 ban_id,
                 unban_log_r,
             )
-
-    async def _reject_appeal(
-        self,
-        bot: Bot,
-        q: CallbackQuery,
-        ban: BanDoc,
-        ban_id: str,
-        target_id: int,
-        admin: User,
-        lc: int,
-        lt: int | None,
-        update: Update,
-    ) -> None:
-        # * The cooldown write and the display-name read are independent, so
-        # * they run in parallel to save one DB round trip. A cancelled
-        # * cooldown write propagates (the decision stays actionable); a
-        # * cancelled name read falls back to the numeric ID so the
-        # * committed cooldown still notifies.
-        set_r, name_r = await asyncio.gather(
-            db.bans_db.set_rejected_by(ban_id, admin.id, admin.first_name),
-            db.users_cache.get_first_name(target_id, str(target_id)),
-            return_exceptions=True,
-        )
-        if isinstance(set_r, asyncio.CancelledError):
-            raise set_r
-        if isinstance(set_r, BaseException):
-            # * Without rejected_at the verdict card would show "rejected"
-            # * while the user may re-appeal immediately. Abort with the
-            # * card untouched (a re-tap retries the full sequence),
-            # * mirroring the approve DB-fail path.
-            log.exception("reject_appeal set_rejected_by failed for ban %s", ban_id)
-            try:
-                staff_locale = await flow_pkg.locale_for_update(update)
-                await q.answer(
-                    t("appeals.review.db_retry", staff_locale, plain=True),
-                    show_alert=True,
-                )
-            except Exception as exc:
-                log.debug("reject_appeal DB-fail answer failed: %s", exc)
-            return
-        target_fname: str = (
-            name_r if isinstance(name_r, str) and name_r else str(target_id)
-        )
-        if isinstance(name_r, BaseException) and not isinstance(
-            name_r, asyncio.CancelledError
-        ):
-            log.debug("reject_appeal name fetch failed: %s", name_r)
-        # * The target DM locale and the staff card locale are independent
-        # * reads; one gather instead of two serial round trips.
-        target_locale, staff_locale = await asyncio.gather(
-            flow_pkg.locale_for_user(target_id),
-            flow_pkg.locale_for_update(update),
-        )
-        # * Edit the verdict card before clearing the review marker so a
-        # * successful edit removes live buttons before the DB slot frees.
-        # * A transient edit failure still proceeds to DM + clear below
-        # * (matching the approve path): the decision is already committed
-        # * in rejected_at, so keeping the marker would block the user past
-        # * the 24 h cooldown until the 72 h stale window. The card keeps
-        # * live buttons that answer already-resolved on re-tap, and the
-        # * failure is logged for operators.
-        await safe_edit_cb(
-            q,
-            t(
-                "appeals.decision.reject_card",
-                staff_locale,
-                admin=Safe(user_ref(admin.id, admin.first_name)),
-            ),
-            reply_markup=None,
-            log_level="warning",
-            log_label="reject_appeal review-card",
-            catch_all=True,
-        )
-        results = await asyncio.gather(
-            bot.send_message(
-                target_id,
-                t(
-                    "appeals.decision.reject_dm",
-                    target_locale,
-                    ban_id=Safe(code(ban_id)),
-                ),
-                parse_mode="MarkdownV2",
-            ),
-            db.bans_db.clear_review(ban_id),
-            return_exceptions=True,
-        )
-        throw_if_cancelled(results)
-        if isinstance(results[0], BaseException):
-            log.warning("reject_appeal DM to %d failed: %s", target_id, results[0])
-        if isinstance(results[1], BaseException):
-            # * ``clear_review`` failure is more serious: the user could
-            # * re-submit an appeal within the 72-hour stale-review window
-            # * because the DB still has the pending review. Log loudly.
-            log.error(
-                "reject_appeal clear_review failed for ban %s: user %d may "
-                "re-appeal within the 72-hour window",
-                ban_id,
-                target_id,
-            )
-
-        await _update_or_send_log(
-            bot,
-            lc,
-            lt,
-            int(ban.get("appeal_log_msg_id") or 0) or None,
-            parse_logmsg.appeal_rejected_edit(
-                target_id,
-                target_fname,
-                admin.id,
-                admin.first_name,
-                ban_id,
-                str(ban.get("appeal_link") or ""),
-                ban.get("appeal_submitted_at"),
-            ),
-        )
