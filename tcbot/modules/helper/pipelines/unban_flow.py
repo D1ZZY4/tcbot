@@ -17,9 +17,9 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply, send_log
 from tcbot.utils.dispatch import (
     fan_out,
-    is_benign_telegram_error,
     log_fanout_error,
     throw_if_cancelled,
+    transient_groups,
 )
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -173,11 +173,7 @@ async def execute_unban(
     # * the ban executor's applied-line): counts alone never tell the
     # * operator where to look, and a re-run of /tcunban would report "no
     # * active ban" since the record is already gone.
-    transient_groups = [
-        grp
-        for grp, r in zip(groups, results, strict=False)
-        if isinstance(r, BaseException) and not is_benign_telegram_error(r)
-    ]
+    transient = transient_groups(groups, results)
 
     # * effective_user can be None for anonymous admins; attribute the action
     # * to an anonymous admin rather than to the target, which would read as
@@ -202,7 +198,7 @@ async def execute_unban(
     if failed:
         sample = ", ".join(
             grp.get("title") or str(grp.get("chat_id", 0))
-            for grp in transient_groups[:5]
+            for grp, _exc in transient[:5]
         )
         unban_note = t(
             "unbanning.note.partial",
@@ -210,7 +206,7 @@ async def execute_unban(
             done=len(groups) - failed,
             total=len(groups),
             sample=sample,
-            more=" ..." if len(transient_groups) > 5 else "",
+            more=" ..." if len(transient) > 5 else "",
         )
     else:
         unban_note = t("unbanning.note.full", locale, total=len(groups))

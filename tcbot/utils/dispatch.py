@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from telegram.error import BadRequest, NetworkError, TimedOut
 
@@ -281,6 +281,40 @@ def count_transient_errors(results: Sequence[object]) -> int:
         for r in results
         if isinstance(r, BaseException) and not is_benign_telegram_error(r)
     )
+
+
+def failed_groups(
+    groups: Sequence[dict[str, Any]],
+    results: Sequence[object],
+) -> list[tuple[dict[str, Any], BaseException]]:
+    """Return every group whose action raised, with the exception.
+
+    Single owner for the "which groups did not get the action" shape, so
+    every federation executor reports its failures the same way.
+    """
+    return [
+        (grp, r)
+        for grp, r in zip(groups, results, strict=False)
+        if isinstance(r, BaseException)
+    ]
+
+
+def transient_groups(
+    groups: Sequence[dict[str, Any]],
+    results: Sequence[object],
+) -> list[tuple[dict[str, Any], BaseException]]:
+    """Return the groups whose action failed for a non-benign reason.
+
+    Benign refusals (the user was never in the chat, the chat is gone)
+    are dropped: they are not enforcement failures the operator must act
+    on. The shape matches :func:`failed_groups` so both can feed the
+    shared applied-summary renderer.
+    """
+    return [
+        (grp, exc)
+        for grp, exc in failed_groups(groups, results)
+        if not is_benign_telegram_error(exc)
+    ]
 
 
 def first_transient_error(results: Sequence[object]) -> BaseException | None:

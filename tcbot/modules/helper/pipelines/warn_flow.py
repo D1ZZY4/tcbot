@@ -25,9 +25,10 @@ from tcbot.modules.helper.pipelines.reason_flow import (
 )
 from tcbot.utils.dispatch import (
     count_transient_errors,
+    failed_groups,
     fan_out,
-    is_benign_telegram_error,
     throw_if_cancelled,
+    transient_groups,
 )
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -285,18 +286,12 @@ async def execute_warn(
             [ctx.bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
         )
         total_groups = len(groups)
-        failed_groups = [
-            (grp, r)
-            for grp, r in zip(groups, ban_results, strict=False)
-            if isinstance(r, BaseException)
-        ]
-        transient_groups = [
-            (grp, r) for grp, r in failed_groups if not is_benign_telegram_error(r)
-        ]
+        failures = failed_groups(groups, ban_results)
+        transient = transient_groups(groups, ban_results)
         failed = count_transient_errors(ban_results)
         applied = total_groups - failed
         any_ban_ok = applied > 0
-        for grp, exc in failed_groups:
+        for grp, exc in failures:
             log.warning(
                 "Warn threshold ban enforcement failed for user=%d in group=%s (%d): %s",
                 target_id,
@@ -316,7 +311,7 @@ async def execute_warn(
             "warnings.autoban",
             total=total_groups,
             failed=failed,
-            transient=transient_groups,
+            transient=transient,
         )
         if groups_fetch_failed:
             applied_line += t("warnings.autoban.scope_warn", locale)

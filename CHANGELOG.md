@@ -85,6 +85,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The ban executors share one path** (`tcbot/modules/helper/pipelines/ban_flow.py`): the fresh-ban and the re-ban executors were the same sixty lines twice; they are now one function that takes the existing record. Behavior changes: none.
 
+- **The moderation views agree on the failing groups** (`tcbot/utils/dispatch.py`): `failed_groups` and `transient_groups` own the "which groups did not get the action" shape, so the ban, warn-threshold, and unban executors report the same failures the same way. Behavior changes: none.
+
 - **The event logs order ties the same way** (`tcbot/database/kicks_db.py`, `tcbot/database/mutes_db.py`): the kick and mute histories now tie-break on the record id like the ban and warn histories, so the lists `/check` renders side by side order identically. Behavior changes: none beyond a stable order for equal timestamps.
 
 - **The locale helpers share one read path** (`tcbot/modules/helper/locale.py`): the private-chat and group-chat branches of the locale resolution were written twice each; they now call one helper per source. Behavior changes: none.
