@@ -9,6 +9,9 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
@@ -175,24 +178,26 @@ async def _recount_and_store(user_id: int, chat_id: int) -> None:
 async def _repair_counter_delete(
     counts_filter: dict[str, Any],
     *,
-    delete_all_counts: bool,
+    counts_many: bool,
     scope: str,
 ) -> None:
     """Best-effort repair after a counter-delete failure in _clear_warn_docs.
 
     A surviving counter keeps stale counts that later warns increment
-    from, so the clear must not end with only a log line. Single-chat
+    from, so the clear must not end with only a log line. Single-pair
     clears recount the pair (history is already gone, so the recount
-    lands at zero and drops the stale doc); federation-wide clears retry
-    the delete. The delete retry runs a bounded number of attempts with a
+    lands at zero and drops the stale doc); multi-pair clears retry the
+    delete. The delete retry runs a bounded number of attempts with a
     short backoff; a persistent outage stays error-logged but non-fatal
     like the original delete failure so a clear never reports failure
     for a repair problem. Cancellation propagates.
     """
-    if delete_all_counts:
+    if counts_many:
         for attempt in range(3):
             try:
-                await db_call(lambda: _warn_counts().delete_many(counts_filter))
+                await db_call(
+                    lambda: _warn_counts().delete_many(counts_filter), timeout=None
+                )
                 return
             except asyncio.CancelledError:
                 raise
@@ -265,7 +270,7 @@ async def clear_warns(user_id: int, chat_id: int) -> int:
     return await _clear_warn_docs(
         key,
         key,
-        delete_all_counts=False,
+        counts_many=False,
         scope=f"clear_warns user={user_id} chat={chat_id}",
     )
 
@@ -283,7 +288,31 @@ async def clear_all_warns(user_id: int) -> int:
     """
     filt: dict[str, Any] = {"user_id": user_id}
     return await _clear_warn_docs(
-        filt, filt, delete_all_counts=True, scope=f"clear_all_warns user={user_id}"
+        filt, filt, counts_many=True, scope=f"clear_all_warns user={user_id}"
+    )
+
+
+async def clear_warns_for_chats(user_id: int, chat_ids: Sequence[int]) -> int:
+    """Remove the warnings of *user_id* in the given groups only.
+
+    Used by a partially applied federation threshold ban: the groups where
+    the ban landed lose their stale warn counts, while the groups where the
+    enforcement failed keep theirs so the threshold can fire again there.
+    Clearing everything would leave the failed groups with no warning and no
+    ban.
+
+    Raises the warns-delete failure like :func:`clear_warns`.
+    """
+    chats = [c for c in dict.fromkeys(chat_ids) if c]
+    if not chats:
+        return 0
+    warns_filter: dict[str, Any] = {"user_id": user_id, "chat_id": {"$in": chats}}
+    counts_filter: dict[str, Any] = {"user_id": user_id, "chat_id": {"$in": chats}}
+    return await _clear_warn_docs(
+        warns_filter,
+        counts_filter,
+        counts_many=True,
+        scope=f"clear_warns_for_chats user={user_id} chats={len(chats)}",
     )
 
 
@@ -291,10 +320,10 @@ async def _clear_warn_docs(
     warns_filter: dict[str, Any],
     counts_filter: dict[str, Any],
     *,
-    delete_all_counts: bool,
+    counts_many: bool,
     scope: str,
 ) -> int:
-    """Delete warn history plus counter docs; shared by both clear paths.
+    """Delete warn history plus counter docs; shared by every clear path.
 
     Returns the history deleted count. Raises the history-delete failure
     (a 0 return means "nothing to clear"); counter-delete failures are
@@ -302,13 +331,14 @@ async def _clear_warn_docs(
     Cancellation propagates instead of reporting success.
     """
     warn_del, cnt_del = await asyncio.gather(
-        db_call(lambda: _warns().delete_many(warns_filter)),
+        db_call(lambda: _warns().delete_many(warns_filter), timeout=None),
         db_call(
             lambda: (
                 _warn_counts().delete_many(counts_filter)
-                if delete_all_counts
+                if counts_many
                 else _warn_counts().delete_one(counts_filter)
-            )
+            ),
+            timeout=None,
         ),
         return_exceptions=True,
     )
@@ -319,7 +349,7 @@ async def _clear_warn_docs(
         # * warns increment from, so repair it instead of only logging.
         log.error("%s counter delete failed: %s", scope, cnt_del)
         await _repair_counter_delete(
-            counts_filter, delete_all_counts=delete_all_counts, scope=scope
+            counts_filter, counts_many=counts_many, scope=scope
         )
     if isinstance(warn_del, BaseException):
         log.error("%s warns delete failed: %s", scope, warn_del)
@@ -559,6 +589,8 @@ async def federation_warn_count(user_id: int) -> int:
         {"$match": {"user_id": user_id, "count": {"$gt": 0}}},
         {"$group": {"_id": None, "total": {"$sum": "$count"}}},
     ]
+    # * The aggregate scans every warn counter of the user; it is bounded by
+    # * the user's own rows and stays inside the default call budget.
     result = await db_call(lambda: list(_warn_counts().aggregate(pipeline)))
     return int(result[0]["total"]) if result else 0
 
@@ -576,6 +608,7 @@ __all__ = [
     "add_warn",
     "clear_all_warns",
     "clear_warns",
+    "clear_warns_for_chats",
     "federation_warn_count",
     "get_warns",
     "migrate_records",

@@ -360,6 +360,10 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The promote callback applies the command path's identity refusal** (`tcbot/modules/admins.py`): the role-picker button granted roles without the refusal the command applies. Behavior changes: neither entry point grants a role to the anonymous-admin placeholder or a Telegram service account.
 
+- **A partial threshold ban keeps the warnings of the groups it missed** (`tcbot/modules/helper/pipelines/warn_flow.py`, `tcbot/database/warns_db.py`): one successful group was enough to clear every warning of the user across the federation, leaving the failed groups with no warning and no ban. Behavior changes: warnings are cleared only where the ban landed, so the threshold can fire again in the groups where enforcement failed.
+
+- **A concurrent threshold ban converges on one record** (`tcbot/modules/helper/pipelines/warn_flow.py`): two moderators hitting the limit at the same moment could store two active bans for one user, so the profile and the appeal link disagreed. Behavior changes: the duplicate record is deactivated, leaving one canonical active ban.
+
 - **An invalidation is no longer undone by an in-flight read** (`tcbot/database/cache/twolevel/core.py`): a fetch that started before a revocation wrote the revoked value back into the in-memory and shared caches. Behavior changes: a revoked role or connection state is not resurrected for the cache lifetime.
 
 - **Zero duration no longer becomes a permanent mute** (`tcbot/utils/time_and_date.py`): `parse_duration` rejects a zero value instead of returning a falsy delta the mute executor coerced to permanent. Behavior changes: `/tcmute <target> 0s` now errors instead of muting forever.

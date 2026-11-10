@@ -36,6 +36,7 @@ from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import Any
 
     from telegram.ext import ContextTypes
     from telegram.ext.filters import BaseFilter
@@ -244,6 +245,25 @@ async def execute_warn(
                     reply_markup=proof_kb,
                 )
                 return
+            # * Two moderators hitting the threshold at the same moment can
+            # * insert two active records; converge on the canonical one so
+            # * /check and the appeal deep link agree on the same ban.
+            try:
+                extras = await db.bans_db.deactivate_extra_active_bans(
+                    target_id, ban_id
+                )
+            except Exception:
+                log.exception(
+                    "Duplicate active ban cleanup failed for user %d", target_id
+                )
+            else:
+                if extras > 0:
+                    log.warning(
+                        "Suppressed %d duplicate active ban(s) for user %d after "
+                        "warn-threshold ban",
+                        extras,
+                        target_id,
+                    )
         try:
             log_msg = await ctx.bot.send_message(
                 lc,
@@ -332,14 +352,25 @@ async def execute_warn(
                 fedlimit=fed_warn_limit,
             )
         if any_ban_ok:
-            clear_result, reply_result = await asyncio.gather(
-                db.warns_db.clear_all_warns(target_id),
-                msg.reply_text(
+            # * The reply is best-effort: a failed notification must not
+            # * skip the warn cleanup below.
+            try:
+                await msg.reply_text(
                     f"{ban_notice}{applied_line}",
                     parse_mode="MarkdownV2",
                     reply_markup=proof_kb,
-                ),
-                return_exceptions=True,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.debug("Threshold ban notification reply failed: %s", exc)
+            # * The warn slate is cleared only where the ban actually landed.
+            # * Clearing everything after a partial enforcement left the
+            # * failed groups with no warning and no ban, so their threshold
+            # * could never fire again. A complete enforcement clears the
+            # * whole slate so a later unban does not re-ban on stale counts.
+            clear_result = await _clear_warns_after_threshold_ban(
+                target_id, groups, ban_results
             )
             if isinstance(clear_result, BaseException):
                 log.error(
@@ -348,8 +379,6 @@ async def execute_warn(
                     chat_id,
                     clear_result,
                 )
-            if isinstance(reply_result, BaseException):
-                log.debug("Threshold ban notification reply failed: %s", reply_result)
         else:
             await safe_reply(
                 msg,
@@ -386,6 +415,36 @@ async def execute_warn(
 
 
 # ───────────────────────── Warn management ──────────────────────── #
+
+
+async def _clear_warns_after_threshold_ban(
+    target_id: int,
+    groups: list[dict[str, Any]],
+    ban_results: list[Any],
+) -> Any:
+    """Clear the warn slate of the groups the threshold ban reached.
+
+    A complete enforcement clears every group so a later unban does not
+    re-ban on stale counts. A partial enforcement clears only the groups
+    where the ban landed: the failed groups keep their warnings so their
+    threshold can fire again once the enforcement succeeds.
+    """
+    failed = count_transient_errors(ban_results)
+    if failed == 0:
+        return await db.warns_db.clear_all_warns(target_id)
+    landed = [
+        int(grp["chat_id"])
+        for grp, result in zip(groups, ban_results, strict=False)
+        if not isinstance(result, BaseException)
+    ]
+    log.warning(
+        "Warn threshold ban applied to %d/%d groups for target=%d; "
+        "warnings kept in the groups where enforcement failed.",
+        len(landed),
+        len(groups),
+        target_id,
+    )
+    return await db.warns_db.clear_warns_for_chats(target_id, landed)
 
 
 async def execute_unwarn(

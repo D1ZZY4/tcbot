@@ -33,7 +33,7 @@ Warnings are per-group moderation records. Each warn is keyed by `(user_id, chat
 1. **Per-group threshold** (`cfg.warn_limit`, env var `WARN_LIMIT`, default 3, minimum 1): fires when a user's warn count in the current group reaches or exceeds `cfg.warn_limit`. Uses `>=` so a retry after a total enforcement failure still fires: warns are cleared only after successful enforcement, so a 0/N fan-out leaves the count at the limit and the next warn must re-drive the ban instead of wedging above the threshold. The `already_banned` guard skips re-creation when the ban record already exists.
 2. **Federation-wide threshold** (`FED_WARN_LIMIT`, env var, default 0 = disabled): fires when the user's total warns across all groups reaches or exceeds the configured value, even if no single group has reached its per-group limit. Uses `>=` because the cross-group aggregate is a separate DB read with no atomicity guarantee. Set to a positive integer to close the evasion path of spreading warns thinly across many groups.
 
-In both cases a non-staff user is issued a **federation-wide ban** across all active connected groups, a ban document is created in the `bans` collection (appealable), and warnings are cleared across all groups (`clear_all_warns`). A target holding a federation role is auto-demoted and exempted from the auto-ban instead (staff are never auto-banned via warnings); the threshold warn itself is still recorded.
+In both cases a non-staff user is issued a **federation-wide ban** across all active connected groups, a ban document is created in the `bans` collection (appealable), and the warnings of the groups where the ban landed are cleared (`clear_all_warns` on complete enforcement, `clear_warns_for_chats` on partial enforcement). A target holding a federation role is auto-demoted and exempted from the auto-ban instead (staff are never auto-banned via warnings); the threshold warn itself is still recorded.
 
 The per-group limit is read from the `WARN_LIMIT` environment variable (default 3, minimum 1) and exposed as `cfg.warn_limit`.
 
@@ -218,14 +218,16 @@ The trigger uses `>=` for per-group (retry-safe after total enforcement failure)
 3. `fan_out()` propagates `ban_chat_member` to all active connected groups plus MAIN_GROUP.
 4. Per-group failures are logged at WARNING level with group title, chat_id, and exception.
 5. An applied-to summary is computed: "Applied to X/Y groups", "Applied to X/Y groups (Z failed: ...)", or "WARNING: ban not enforced in any group" when all fail. When the group-list fetch itself fails, the reply gains a reduced-scope WARNING suffix (and an error is logged) instead of reporting full success over the reachable subset.
-6. If at least one group ban succeeds, `warns_db.clear_all_warns(target_id)` clears warning history and counters across all groups.
+6. The warning slate is cleared only where the ban landed. A complete enforcement (no transient failure) calls `warns_db.clear_all_warns(target_id)` so a later unban does not re-ban on stale counts. A partial enforcement calls `warns_db.clear_warns_for_chats(target_id, landed_chats)` instead: the groups where the ban failed keep their warnings, so their threshold can fire again. Clearing everything after a partial enforcement would leave those groups with no warning and no ban.
 7. The originating group receives a reply that the user hit the warn limit and has been federation-banned, including the applied-to summary.
 8. If the user already holds an active federation ban, a new ban document is not created; `fan_out()` still runs to ensure enforcement in any newly connected groups.
+9. A newly created ban record converges on one canonical active ban: `deactivate_extra_active_bans` suppresses a duplicate created by a concurrent threshold ban, so `/check` and the appeal deep link always agree on the same record.
 
 Both auto-ban branches behave as follows:
 
-- On successful auto-ban (at least one group), warnings are cleared across all groups.
-- On complete fan-out failure, warnings are kept and the next warn re-fires the auto-ban via the `>=` per-group check.
+- On complete enforcement, warnings are cleared across all groups.
+- On partial enforcement, warnings are cleared only in the groups where the ban landed; the failed groups keep them and the next warn re-fires the auto-ban via the `>=` per-group check.
+- On complete fan-out failure, no warning is cleared and the next warn re-fires the auto-ban via the `>=` per-group check.
 
 ## `/tcunwarn` behavior
 
