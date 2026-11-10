@@ -62,11 +62,11 @@ async def _best_name(uid: int, *primary: str | None) -> str:
     pattern can detect a numeric fallback and avoid displaying the ID twice.
     """
     for cand in primary:
-        if cand and not cand.lstrip("-").isdigit():
+        if cand is not None and not db.users_cache.is_placeholder_name(cand):
             return cand
     # * Try the member cache before resorting to a bare numeric ID.
     cached = await db.users_cache.get_first_name(uid, "")
-    if cached and not cached.lstrip("-").isdigit():
+    if not db.users_cache.is_placeholder_name(cached):
         return cached
     return str(uid)
 
@@ -229,12 +229,7 @@ async def _args_target(
         except Exception as exc:
             log.debug("numeric fast-path cache read failed for %d: %s", uid, exc)
             cached_name = ""
-        if (
-            not verified
-            and cached_name
-            and not cached_name.lstrip("-").isdigit()
-            and not cached_name.startswith("User ")
-        ):
+        if not verified and not db.users_cache.is_placeholder_name(cached_name):
             return uid, cached_name
         chat_first: str | None = None
         chat_username: str | None = None

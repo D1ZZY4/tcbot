@@ -419,11 +419,7 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * returned nothing) -- in that case we let Check.profile do the
     # * heavy lifting via _resolve_user_info (which tries get_chat_member
     # * on each connected group) and we trust its lookup result.
-    if (
-        target_fname
-        and not target_fname.startswith("User ")
-        and not target_fname.lstrip("-").isdigit()
-    ):
+    if target_fname and not db.users_cache.is_placeholder_name(target_fname):
         try:
             await db.users_cache.upsert_user(target_id, None, target_fname)
         except Exception as exc:

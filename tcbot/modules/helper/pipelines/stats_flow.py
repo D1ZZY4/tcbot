@@ -264,7 +264,7 @@ class OverviewViews:
                         )
                         continue
                     live_fname, live_uname, _ = result
-                    if live_fname and not live_fname.lstrip("-").isdigit():
+                    if not db.users_cache.is_placeholder_name(live_fname):
                         mention_data_map[uid] = (live_fname, live_uname)
         lines = [
             t(

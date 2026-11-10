@@ -67,6 +67,20 @@ async def _fetch_mention_triple(user_id: int) -> list[str | None]:
     return list(_NOT_FOUND_SENTINEL)
 
 
+def is_placeholder_name(name: str | None) -> bool:
+    """Return True when the name is a fallback rather than a real name.
+
+    Two fallback shapes exist in the member cache: a bare numeric ID and the
+    legacy ``User <id>`` form older releases wrote. A view that renders
+    either as a name shows the placeholder to the operator, so every
+    surface must agree on what counts as a real name.
+    """
+    if not name:
+        return True
+    stripped = name.strip()
+    return stripped.startswith("User ") or stripped.lstrip("-").isdigit()
+
+
 # ────────────────────────────── Reads ────────────────────────────── #
 
 
@@ -412,6 +426,7 @@ __all__ = [
     "get_user",
     "get_user_mention_data",
     "harvest_user_identity",
+    "is_placeholder_name",
     "remember_identity",
     "search_by_name",
     "total_users",

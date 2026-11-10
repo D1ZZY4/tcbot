@@ -108,11 +108,7 @@ async def classify(
     role = role_result if not isinstance(role_result, BaseException) else None
     # * Override fname when it looks like a fallback: missing, the legacy
     # * "User <id>" format, or a bare numeric string returned by _best_name().
-    if (
-        not target_fname
-        or target_fname.startswith("User ")
-        or target_fname.lstrip("-").isdigit()
-    ):
+    if db.users_cache.is_placeholder_name(target_fname):
         target_fname = cached_fname
     # * Guard: cached_fname is None when the DB call itself raised an exception.
     if not target_fname:
