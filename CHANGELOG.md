@@ -13,6 +13,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Demote gates have one owner** (`tcbot/modules/helper/pipelines/demote_flow.py`): `demote_before_enforcement` and `demote_before_unban` replace the four copies of the pre-fan-out re-demote and the two copies of the pre-unban demote. The enforcement gate stays best effort, the unban gate fails closed. Behavior changes: none for the enforcement paths; the appeal-approve path now blocks the unban when the role survives the demote.
 
+- **The layer boundaries are executable contracts** (`tests/test_layering.py`): the shared foundation may not import the database or helper layers, and the helper and database layers may not import a command module. The rule is now checked by the suite instead of resting on discipline.
+
 - **Federation log delivery has one owner** (`tcbot/modules/helper/messages/safe_edits.py`): `send_log` posts the audit log to the configured destination as MarkdownV2 in the configured thread, replacing twenty-seven hand-written copies of the same call.
 
 - **Callback payloads have one owner** (`tcbot/modules/helper/messages/safe_edits.py`): `callback_args` and `callback_numbers` own the shape check, so a stale button is answered instead of reaching a handler that did not guard it.
