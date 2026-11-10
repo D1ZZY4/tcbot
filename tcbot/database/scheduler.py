@@ -11,6 +11,7 @@ import contextlib
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from apscheduler.job import Job
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.jobstores.mongodb import MongoDBJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -89,10 +90,14 @@ async def expire_old_warns(warn_expiry_days: int) -> None:
                 _db_call(
                     lambda: _col("warn_counts").delete_many(
                         {"updated_at": {"$lt": cutoff}}
-                    )
+                    ),
+                    # * Bulk deletes over the whole history may run long;
+                    # * the run-level timeout bounds them instead.
+                    timeout=None,
                 ),
                 _db_call(
-                    lambda: _col("warns").delete_many({"timestamp": {"$lt": cutoff}})
+                    lambda: _col("warns").delete_many({"timestamp": {"$lt": cutoff}}),
+                    timeout=None,
                 ),
                 return_exceptions=True,
             )
@@ -156,7 +161,7 @@ async def _cleanup_old_records() -> None:
     member_cache cleanup is now handled automatically by the MongoDB TTL index on
     ``last_updated`` (``expireAfterSeconds=_MEMBER_CACHE_EXPIRE_S``, 90 days), added
     in ``mongos.ensure_indexes()``.  The APScheduler schedule is removed on startup
-    in ``_register_periodic_schedules``; this function exists solely so that any
+    in ``_reconcile_schedules``; this function exists solely so that any
     schedule record persisted from a previous bot version can be deserialised and
     called without raising an ``AttributeError``.  It is safe to remove once all
     running instances have been restarted and the MongoDB datastore no longer contains
@@ -214,9 +219,15 @@ _WARN_EXPIRY_SCHEDULE_ID: str = "tcbot.warn_expiry_daily"
 # * Stable ID for the optional enforcement-sync sweep (/tcsync core on a
 # * timer). Same replace_existing idempotency as the warn-expiry schedule.
 _SYNC_SCHEDULE_ID: str = "tcbot.enforcement_sync"
-# * Legacy ID kept so _register_periodic_schedules can remove the old schedule
+# * Legacy ID kept so _reconcile_schedules can remove the old schedule
 # * from any MongoDB datastore that was created before the TTL-index migration.
 _CLEANUP_SCHEDULE_ID: str = "tcbot.db_cleanup_weekly"
+
+# * Alias of the persistent job store. Every job must name it explicitly:
+# * APScheduler defaults to the ``default`` alias, which is auto-created as an
+# * in-memory store, so a job registered without it never reaches MongoDB and
+# * dies with the process.
+_JOBSTORE_ALIAS: str = "mongodb"
 
 
 async def _scheduler_background(
@@ -227,33 +238,43 @@ async def _scheduler_background(
 ) -> None:
     """Long-running background task that owns the AsyncIOScheduler lifecycle.
 
-    Calls ``scheduler.start()`` (synchronous, must be in the running event loop),
-    registers periodic schedules, then waits for the stop event before calling
-    ``scheduler.shutdown()``.
+    Starts the scheduler, reconciles the persisted schedules, then waits for
+    the stop event before shutting the scheduler down.
     """
-    global _scheduler
+    global _scheduler, _sched_error
     # * MongoDBJobStore builds its own synchronous MongoClient, so it needs
     # * the same certifi TLS pinning as the main PyMongo client: without it,
     # * Atlas handshakes fail with CERTIFICATE_VERIFY_FAILED on sandboxes
     # * whose system CA store is stale, while PyMongo connects fine. Extra
     # * kwargs flow straight into pymongo.MongoClient (supported by
     # * APScheduler 3.x).
-    jobstores = {
-        "mongodb": MongoDBJobStore(
-            database=db_name,
-            host=mongodb_uri,
-            **_mongo_client_kwargs(),
-            **_mongo_jobstore_kwargs(),
-        )
-    }
-    scheduler = AsyncIOScheduler(jobstores=jobstores)
+    store = MongoDBJobStore(
+        database=db_name,
+        host=mongodb_uri,
+        **_mongo_client_kwargs(),
+        **_mongo_jobstore_kwargs(),
+    )
+    # * The loop is bound explicitly so the scheduler can be started from a
+    # * worker thread: APScheduler would otherwise call get_running_loop()
+    # * there and fail.
+    scheduler = AsyncIOScheduler(
+        event_loop=asyncio.get_running_loop(),
+        jobstores={_JOBSTORE_ALIAS: store},
+    )
     _scheduler = scheduler
     started = False
     try:
-        _register_periodic_schedules(
-            scheduler, warn_expiry_days, sync_interval_hours=sync_interval_hours
+        # * The job store performs blocking pymongo calls (index creation,
+        # * job insert/update/lookup) and every one of them would otherwise
+        # * stall the event loop for the whole server-selection timeout while
+        # * MongoDB is unreachable, freezing the webhook receiver with it.
+        await asyncio.to_thread(
+            _bootstrap_scheduler,
+            scheduler,
+            store,
+            warn_expiry_days,
+            sync_interval_hours=sync_interval_hours,
         )
-        scheduler.start()
         started = True
         if _sched_ready is None:
             raise RuntimeError(
@@ -271,6 +292,9 @@ async def _scheduler_background(
         started = False
     except Exception as exc:
         log.exception("APScheduler background task crashed.")
+        # * Module-level global: a local assignment here would leave the
+        # * startup check reading a stale None and the bot would boot with a
+        # * dead scheduler and a "ready" log line.
         _sched_error = exc
         if _sched_ready is not None and not _sched_ready.is_set():
             _sched_ready.set()  # unblock start() so it doesn't hang forever
@@ -285,77 +309,150 @@ async def _scheduler_background(
         log.info("APScheduler background task exited.")
 
 
-def _register_periodic_schedules(
-    scheduler: AsyncIOScheduler, warn_expiry_days: int, *, sync_interval_hours: int = 0
+def _bootstrap_scheduler(
+    scheduler: AsyncIOScheduler,
+    store: MongoDBJobStore,
+    warn_expiry_days: int,
+    *,
+    sync_interval_hours: int = 0,
 ) -> None:
-    """Register recurring maintenance schedules (idempotent via replace_existing)."""
+    """Start the scheduler and reconcile its persisted schedules.
+
+    Runs on a worker thread: the MongoDB job store performs blocking pymongo
+    calls, and the event loop must stay responsive to Telegram traffic while
+    the store is unreachable.
+    """
+    scheduler.start()
+    _reconcile_schedules(
+        scheduler,
+        store,
+        warn_expiry_days,
+        sync_interval_hours=sync_interval_hours,
+    )
+
+
+def _schedule_matches(
+    job: Job, trigger: IntervalTrigger, args: tuple[Any, ...]
+) -> bool:
+    """Return True when the stored job already runs the desired schedule.
+
+    Only the interval and the arguments are compared: an ``IntervalTrigger``
+    derives its ``start_date`` from the current clock, so two triggers built
+    a second apart are never equal even when they describe the same cadence.
+    """
+    stored_trigger = job.trigger
+    if not isinstance(stored_trigger, IntervalTrigger):
+        return False
+    return stored_trigger.interval == trigger.interval and tuple(job.args) == args
+
+
+def _ensure_job(
+    scheduler: AsyncIOScheduler,
+    store: MongoDBJobStore,
+    *,
+    job_id: str,
+    func: Callable[..., Any],
+    trigger: IntervalTrigger,
+    args: tuple[Any, ...],
+    misfire_grace_time: int,
+) -> None:
+    """Register a recurring job without resetting an unchanged schedule.
+
+    ``add_job(replace_existing=True)`` always rewrites ``next_run_time`` from
+    the current clock. Re-adding the job at every boot would therefore reset
+    the daily cadence on each restart, and a bot that restarts more often
+    than the interval would never let the job fire. The stored job is left
+    untouched when its interval and arguments still match, so the persisted
+    fire time, the misfire grace window, and the coalescing behaviour survive
+    a restart.
+    """
+    try:
+        existing = store.lookup_job(job_id)
+    except Exception as exc:
+        log.warning("Job lookup failed for %s: %s", job_id, exc)
+        existing = None
+    if existing is not None and _schedule_matches(existing, trigger, args):
+        log.info("Schedule %s kept (next run %s).", job_id, existing.next_run_time)
+        return
+    scheduler.add_job(
+        func,
+        trigger=trigger,
+        id=job_id,
+        args=list(args),
+        jobstore=_JOBSTORE_ALIAS,
+        replace_existing=True,
+        # * A restart straddling the daily fire must still run expiry:
+        # * the default 1s misfire window would silently drop that day's
+        # * run (same defect class as the scheduled-unban fix, which uses
+        # * 3600s). One coalesced late run per missed day is the correct
+        # * daily semantics; 24h covers extended outages.
+        misfire_grace_time=misfire_grace_time,
+        coalesce=True,
+    )
+
+
+def _remove_job(scheduler: AsyncIOScheduler, job_id: str, label: str) -> None:
+    """Remove a persisted job from the MongoDB store.
+
+    The store is addressed directly: ``scheduler.remove_job`` only reaches
+    the stores while the scheduler is running, so a removal issued before
+    ``start()`` would silently do nothing and leave a stale schedule firing.
+    """
+    try:
+        scheduler.remove_job(job_id, jobstore=_JOBSTORE_ALIAS)
+        log.info("Removed %s schedule.", label)
+    except JobLookupError:
+        log.debug("%s schedule not present, nothing to remove.", label)
+    except Exception as exc:
+        log.warning(
+            "%s schedule removal failed: a stale schedule may keep firing: %s",
+            label,
+            exc,
+        )
+
+
+def _reconcile_schedules(
+    scheduler: AsyncIOScheduler,
+    store: MongoDBJobStore,
+    warn_expiry_days: int,
+    *,
+    sync_interval_hours: int = 0,
+) -> None:
+    """Align the persisted schedules with the current configuration."""
     if warn_expiry_days > 0:
-        scheduler.add_job(
-            expire_old_warns,
+        _ensure_job(
+            scheduler,
+            store,
+            job_id=_WARN_EXPIRY_SCHEDULE_ID,
+            func=expire_old_warns,
             trigger=IntervalTrigger(hours=24),
-            id=_WARN_EXPIRY_SCHEDULE_ID,
-            args=[warn_expiry_days],
-            replace_existing=True,
-            # * A restart straddling the daily fire must still run expiry:
-            # * the default 1s misfire window would silently drop that day's
-            # * run (same defect class as the scheduled-unban fix, which uses
-            # * 3600s). One coalesced late run per missed day is the correct
-            # * daily semantics; 24h covers extended outages.
+            args=(warn_expiry_days,),
             misfire_grace_time=86400,
-            coalesce=True,
         )
         log.info("Scheduled warn expiry: every 24h, expiry_days=%d.", warn_expiry_days)
     else:
         # * Warn expiry disabled: remove stale schedule if previously active.
-        try:
-            scheduler.remove_job(_WARN_EXPIRY_SCHEDULE_ID)
-            log.info("Warn expiry schedule removed (WARN_EXPIRY_DAYS=0).")
-        except JobLookupError:
-            log.debug("Warn expiry schedule not present, skipping removal.")
-        except Exception as exc:
-            log.warning(
-                "Warn expiry schedule removal failed: a stale schedule may keep firing: %s",
-                exc,
-            )
+        _remove_job(scheduler, _WARN_EXPIRY_SCHEDULE_ID, "Warn expiry")
 
     # * member_cache cleanup is now handled by a MongoDB TTL index on last_updated.
     # * Remove the legacy weekly schedule if it was persisted from a prior bot version.
-    try:
-        scheduler.remove_job(_CLEANUP_SCHEDULE_ID)
-        log.info("Removed legacy weekly cleanup schedule (now handled by TTL index).")
-    except JobLookupError:
-        log.debug("Legacy cleanup schedule not present, nothing to remove.")
-    except Exception as exc:
-        log.warning(
-            "Legacy cleanup schedule removal failed: a stale schedule may keep firing: %s",
-            exc,
-        )
+    _remove_job(scheduler, _CLEANUP_SCHEDULE_ID, "Legacy weekly cleanup")
 
     if sync_interval_hours > 0 and _sync_bot is not None:
-        scheduler.add_job(
-            _run_scheduled_sync,
+        _ensure_job(
+            scheduler,
+            store,
+            job_id=_SYNC_SCHEDULE_ID,
+            func=_run_scheduled_sync,
             trigger=IntervalTrigger(hours=sync_interval_hours),
-            id=_SYNC_SCHEDULE_ID,
-            replace_existing=True,
-            # * Same misfire reasoning as warn expiry: a restart straddling
-            # * the fire must still run the sweep once instead of dropping it.
+            args=(),
             misfire_grace_time=86400,
-            coalesce=True,
         )
         log.info("Scheduled enforcement sync: every %dh.", sync_interval_hours)
     else:
         # * Sync sweep disabled (or no bot reference): remove a stale schedule
         # * left by a previous enabled run so nothing fires without a bot.
-        try:
-            scheduler.remove_job(_SYNC_SCHEDULE_ID)
-            log.info("Enforcement sync schedule removed (disabled).")
-        except JobLookupError:
-            log.debug("Sync schedule not present, skipping removal.")
-        except Exception as exc:
-            log.warning(
-                "Enforcement sync schedule removal failed: a stale schedule may keep firing: %s",
-                exc,
-            )
+        _remove_job(scheduler, _SYNC_SCHEDULE_ID, "Enforcement sync")
 
 
 # ──────────────────────────── Lifecycle ──────────────────────────── #
@@ -526,17 +623,22 @@ def is_ready() -> bool:
 __all__ = [
     "_CLEANUP_SCHEDULE_ID",
     "_EXPIRE_OP_TIMEOUT_S",
+    "_JOBSTORE_ALIAS",
     "_STOP_TIMEOUT_S",
     "_SYNC_RUN_TIMEOUT_S",
     "_SYNC_SCHEDULE_ID",
     "_WARN_EXPIRY_SCHEDULE_ID",
+    "_bootstrap_scheduler",
     "_cleanup_old_records",
-    "_register_periodic_schedules",
+    "_ensure_job",
+    "_reconcile_schedules",
+    "_remove_job",
     "_run_scheduled_sync",
     "_sched_error",
     "_sched_ready",
     "_sched_stop",
     "_sched_task",
+    "_schedule_matches",
     "_scheduler",
     "_scheduler_background",
     "_sync_bot",

@@ -346,6 +346,14 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The primary group is recognised again** (`tcbot/__init__.py`): the primary-group check rejected every chat ID below zero, but Telegram group and channel IDs are negative, so the main group never matched. Behavior changes: the main group is recognised as a primary destination, federation moderation is accepted from it, join enforcement runs there, and it can no longer be disconnected, removed, or connected like an ordinary group.
 
+- **Scheduled jobs live in the persistent job store** (`tcbot/database/scheduler.py`): the recurring schedules were registered without a job-store alias, so APScheduler put them in its auto-created in-memory store and they died with the process. Behavior changes: the warn-expiry and enforcement-sweep schedules persist across restarts, their misfire window and coalescing now apply, and the retired weekly cleanup schedule is actually removed from the database.
+
+- **An unchanged schedule keeps its fire time** (`tcbot/database/scheduler.py`): re-registering a schedule rewrote its next run from the current clock, so a bot that restarted more often than the interval never let the daily job fire. Behavior changes: a restart keeps the persisted fire time unless the configured interval or arguments changed.
+
+- **A scheduler that cannot start fails the boot** (`tcbot/database/scheduler.py`): the captured startup error was written to a local variable instead of the module state the boot check reads, so the bot started with a dead scheduler and logged it as ready. Behavior changes: a broken job store aborts startup instead of serving traffic without scheduled maintenance.
+
+- **Scheduler startup no longer stalls the event loop** (`tcbot/database/scheduler.py`): the job store performs blocking database calls, which ran on the event loop and froze the webhook receiver while MongoDB was unreachable. Behavior changes: a degraded database delays startup instead of hanging the running bot.
+
 - **An invalidation is no longer undone by an in-flight read** (`tcbot/database/cache/twolevel/core.py`): a fetch that started before a revocation wrote the revoked value back into the in-memory and shared caches. Behavior changes: a revoked role or connection state is not resurrected for the cache lifetime.
 
 - **Zero duration no longer becomes a permanent mute** (`tcbot/utils/time_and_date.py`): `parse_duration` rejects a zero value instead of returning a falsy delta the mute executor coerced to permanent. Behavior changes: `/tcmute <target> 0s` now errors instead of muting forever.
