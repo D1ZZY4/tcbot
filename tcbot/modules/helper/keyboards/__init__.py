@@ -6,19 +6,20 @@
 
 from __future__ import annotations
 
-from telegram import InlineKeyboardMarkup
-
-from .admin import demote_confirm_kb, promo_decision_kb, promote_role_kb
-from .appeal import appeal_cancel_kb, appeal_review_kb
-from .ban import (
+from tcbot.modules.helper.keyboards.admin import (
+    demote_confirm_kb,
+    promo_decision_kb,
+    promote_role_kb,
+)
+from tcbot.modules.helper.keyboards.appeal import appeal_cancel_kb, appeal_review_kb
+from tcbot.modules.helper.keyboards.ban import (
     action_proof_kb,
     appeal_button_kb,
     ban_log_kb,
     ban_update_confirm_kb,
     detail_kb,
 )
-from .check import _WARN_GROUP_TITLE_MAX as _WARN_GROUP_TITLE_MAX
-from .check import (
+from tcbot.modules.helper.keyboards.check import (
     check_back_markup,
     check_back_row,
     check_paged_markup,
@@ -28,18 +29,20 @@ from .check import (
     checkme_ban_kb,
     checkme_detail_back_kb,
 )
-from .common import _build_topic_rows as _build_topic_rows
-from .common import _https_url as _https_url
-from .drills import (
+from tcbot.modules.helper.keyboards.drills import (
     paged_drill_kb,
     stats_list_kb,
     stats_search_panel_kb,
     stats_search_results_kb,
     stats_search_row,
 )
-from .flows import connect_join_kb, proof_step_kb, reason_step_kb
-from .language import language_list_kb
-from .menus import (
+from tcbot.modules.helper.keyboards.flows import (
+    connect_join_kb,
+    proof_step_kb,
+    reason_step_kb,
+)
+from tcbot.modules.helper.keyboards.language import language_list_kb
+from tcbot.modules.helper.keyboards.menus import (
     additional_menu_kb,
     back_to_start_kb,
     group_start_kb,
@@ -47,8 +50,12 @@ from .menus import (
     main_menu_kb,
     tcgroups_kb,
 )
-from .stats import stats_back_kb, stats_back_row, stats_main_kb
-from .topics import (
+from tcbot.modules.helper.keyboards.stats import (
+    stats_back_kb,
+    stats_back_row,
+    stats_main_kb,
+)
+from tcbot.modules.helper.keyboards.topics import (
     back_to_help_cmd_kb,
     back_to_help_kb,
     back_to_module_kb,

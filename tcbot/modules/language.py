@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from telegram import InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import database as db
@@ -85,7 +86,7 @@ def _chat_scope(chat_type: str | None) -> str:
     return "user" if chat_type == "private" else "group"
 
 
-def _options_kb(scope: str, locale: str) -> keyboards.InlineKeyboardMarkup:
+def _options_kb(scope: str, locale: str) -> InlineKeyboardMarkup:
     """Build the locale-option keyboard for ``scope`` in display ``locale``."""
     items = [(display_name(code_), code_) for code_ in available_locales()]
     back = t("button.back", locale, plain=True)
@@ -131,7 +132,7 @@ async def cmd_language(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         permitted = True
     if permitted:
-        kb: keyboards.InlineKeyboardMarkup | None = _options_kb(scope, locale)
+        kb: InlineKeyboardMarkup | None = _options_kb(scope, locale)
     else:
         kb = None
     await safe_reply(

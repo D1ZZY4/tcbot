@@ -614,6 +614,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Removed
 
+- **Dead re-export surfaces removed** (`tcbot/database/cache/__init__.py`, `tcbot/database/cache/twolevel.py`, `tcbot/modules/helper/keyboards/__init__.py`): the cache package re-exported roughly thirty private names that no caller imported, and the keyboards package re-exported private helpers plus a Telegram markup class. The keyboards package no longer leaks the markup type into command modules, which import it from `telegram` directly. Behavior changes: none; the package import paths and the public factory names are unchanged.
+
 - **Unused helpers and forwarding wrappers** (`tcbot/utils/time_and_date.py`, `tcbot/database/mtproto.py`, `tcbot/modules/helper/replies.py`, `tcbot/modules/helper/pipelines/stats_flow.py`, `tcbot/modules/helper/pipelines/check_flow.py`, `tcbot/modules/helper/decorators/auth.py`, `tcbot/modules/helper/keyboards/__init__.py`): a speculative timestamp helper, a configuration alias, a permission notice with no renderer, four keyboard wrappers that only forwarded, a placeholder alias, and an unused import. Behavior changes: none; the unused permission notice is removed from both locale catalogs.
 
 - **Motor and speedtest-cli leave the dependency graph** (`pyproject.toml`, `uv.lock`): the database layer now runs on synchronous PyMongo and `/speedtest` on speedtest.net, so neither package is needed. Behavior changes: none for operators beyond the entries above.
