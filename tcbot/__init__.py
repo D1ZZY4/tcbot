@@ -224,7 +224,6 @@ class Configs:
     prefixes: tuple[str, ...]
     port: int
     main_group: int
-    main_channel: int
     logs: tuple[int, int | None]
     logs_errors: tuple[int, int | None]
     proofs: tuple[int, int | None]
@@ -293,7 +292,6 @@ class Configs:
             prefixes=prefixes,
             port=parse_port(os.getenv("PORT", str(_DEFAULT_PORT)).strip()),
             main_group=_chat_id_from_env("MAIN_GROUP"),
-            main_channel=_chat_id_from_env("MAIN_CHANNEL"),
             logs=parse_chat_id(os.getenv("LOGS", "").strip()),
             logs_errors=parse_chat_id(os.getenv("LOGS_ERRORS", "").strip()),
             proofs=parse_chat_id(os.getenv("PROOFS", "").strip() or _DEFAULT_PROOFS),

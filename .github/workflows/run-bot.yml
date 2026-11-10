@@ -59,7 +59,6 @@ jobs:
       COMMUNITY_NAME:          ${{ secrets.COMMUNITY_NAME }}
       PREFIXES:                ${{ secrets.PREFIXES }}
       MAIN_GROUP:              ${{ secrets.MAIN_GROUP }}
-      MAIN_CHANNEL:            ${{ secrets.MAIN_CHANNEL }}
       PROOFS:                  ${{ secrets.PROOFS }}
       LOGS:                    ${{ secrets.LOGS }}
       LOGS_ERRORS:             ${{ secrets.LOGS_ERRORS }}
