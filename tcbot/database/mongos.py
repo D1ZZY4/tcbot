@@ -410,6 +410,53 @@ async def _migrate_duplicate_active_bans() -> None:
     )
 
 
+async def _migrate_member_cache_lower_names() -> None:
+    """Populate the lowercase name mirrors the case-insensitive search uses.
+
+    A case-insensitive regex cannot use an index, so the name search ran as
+    a collection scan over every member the bot had ever seen. The mirror
+    fields let the same query use an index range scan.
+
+    The migration is idempotent: it only touches rows that do not carry the
+    mirror yet, and it never removes or rewrites a stored name.
+    """
+    try:
+        result = await db_call(
+            lambda: col("member_cache").update_many(
+                {
+                    "$or": [
+                        {"first_name_lower": {"$exists": False}},
+                        {"username_lower": {"$exists": False}},
+                    ]
+                },
+                [
+                    {
+                        "$set": {
+                            "first_name_lower": {
+                                "$toLower": {"$ifNull": ["$first_name", ""]}
+                            },
+                            "username_lower": {
+                                "$toLower": {"$ifNull": ["$username", ""]}
+                            },
+                        }
+                    }
+                ],
+            ),
+            timeout=None,
+        )
+    except Exception as exc:
+        # * A failed backfill only costs search accuracy: the rows that miss
+        # * the mirror are simply not found by name until their next write.
+        # * It must not abort the boot.
+        log.warning("member_cache lowercase-name backfill failed: %s", exc)
+        return
+    if result.modified_count:
+        log.info(
+            "Populated the lowercase name mirrors for %d member row(s).",
+            result.modified_count,
+        )
+
+
 async def ensure_indexes() -> None:
     """Create all critical collection indexes in parallel. No-op if they already exist.
 
@@ -498,12 +545,14 @@ async def ensure_indexes() -> None:
             col("member_cache").create_index,
             [("user_id", 1), ("first_name", 1), ("username", 1), ("last_name", 1)],
         ),
-        # * Serves batch username lookups and search operations
-        partial(col("member_cache").create_index, [("username", 1)]),
+        # * Serves the name search: the lowercase mirrors carry a
+        # * case-sensitive prefix query, which uses an index range scan.
+        # * A case-insensitive regex on the raw fields could not use any
+        # * index and scanned the whole collection.
+        partial(col("member_cache").create_index, [("username_lower", 1)]),
+        partial(col("member_cache").create_index, [("first_name_lower", 1)]),
         # * Serves user_settings lookups by user: one preference row per user.
         partial(col("user_settings").create_index, [("user_id", 1)], unique=True),
-        # * Serves name search operations (case-insensitive search by first_name)
-        partial(col("member_cache").create_index, [("first_name", 1)]),
         partial(
             col("warns").create_index,
             [("user_id", 1), ("chat_id", 1), ("timestamp", -1)],
@@ -601,6 +650,11 @@ async def ensure_indexes() -> None:
         len(results) - len(failed),
         len(results),
     )
+    # * Third sequential step: the lowercase name mirrors backfill the rows
+    # * that older releases wrote without them. It runs after the indexes
+    # * so the "missing mirror" query is served by the new index instead of
+    # * a collection scan.
+    await _migrate_member_cache_lower_names()
 
 
 __all__ = [

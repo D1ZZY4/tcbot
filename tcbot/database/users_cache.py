@@ -273,24 +273,28 @@ async def all_users_page(
 async def search_by_name(needle: str, limit: int = 5) -> list[UserDoc]:
     """Return up to ``limit`` cached users whose name or username contains ``needle``.
 
-    Runs a server-side case-insensitive regex query with a result cap so only
-    matching documents (and only the fields needed for target resolution) travel
-    over the wire, regardless of cache size. This replaces the old pattern of
-    loading all users into Python and scanning linearly.
+    Runs a server-side prefix query against the lowercase mirror fields with
+    a result cap so only matching documents (and only the fields needed for
+    target resolution) travel over the wire, regardless of cache size. This
+    replaces the old pattern of loading all users into Python and scanning
+    linearly.
     """
     if not needle or limit <= 0:
         return []
     # * Clamp: negative limits act as single-batch cursors in pymongo and
     # * huge limits are unbounded scans; both would bypass the caps above.
     limit = max(1, min(limit, 100))
-    # * Anchored so "dan" matches a name that starts with "dan" (e.g. "daniel"),
-    # * not one that merely contains "dan" mid-string (e.g. "randy").
-    pattern = {"$regex": f"^{re.escape(needle)}", "$options": "i"}
+    # * The query runs against the lowercase mirrors with a case-sensitive
+    # * anchored prefix. MongoDB cannot use an index for a case-insensitive
+    # * regex, so the old query scanned the whole collection on every
+    # * search; a case-sensitive prefix on an indexed mirror is a range
+    # * scan instead.
+    pattern = {"$regex": f"^{re.escape(needle.lower())}"}
     return await db_call(
         lambda: list(
             _members()
             .find(
-                {"$or": [{"first_name": pattern}, {"username": pattern}]},
+                {"$or": [{"first_name_lower": pattern}, {"username_lower": pattern}]},
                 {"user_id": 1, "first_name": 1, "username": 1, "_id": 0},
             )
             .limit(limit)
@@ -320,10 +324,15 @@ async def upsert_user(
     update: dict[str, object] = {
         "user_id": user_id,
         "first_name": first_name,
+        # * Lowercase mirrors of the searchable fields. The name search runs
+        # * a case-sensitive prefix query on them because MongoDB cannot use
+        # * an index for a case-insensitive regex.
+        "first_name_lower": first_name.lower(),
         "last_updated": now,
     }
     if username is not None:
         update["username"] = username
+        update["username_lower"] = username.lower()
     if last_name is not None:
         update["last_name"] = last_name
     await db_call(

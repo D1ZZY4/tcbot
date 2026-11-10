@@ -352,6 +352,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **A name search no longer scans the whole member cache** (`tcbot/database/users_cache.py`, `tcbot/database/mongos.py`): the search matched a case-insensitive regex, and MongoDB cannot use an index for one, so every search scanned every member the bot had ever seen. The search now runs an indexed case-sensitive prefix query over lowercase mirror fields, and a startup backfill fills the mirrors for the rows older releases wrote. Behavior changes: none; the same names match.
+
 - **An unchanged member profile is no longer rewritten on every message** (`tcbot/database/users_cache.py`): the profile write invalidated the mention cache instead of populating it, so the change-detection guard could never fire for a member who was never rendered anywhere. Every message from an ordinary member cost a database update and a queued cache delete for data that had not changed. Behavior changes: the write populates the cache, so an unchanged profile costs no database round trip after the first message.
 
 - **Database calls get their own worker pool and a per-call budget** (`tcbot/database/mongos.py`): database work shared the event loop's default executor with other blocking calls, and a caller waited for the full socket timeout on a hung operation. Behavior changes: database calls run on a dedicated bounded pool, a hung operation releases the caller after 20 seconds, and the timeout counts as an outage signal for the circuit breaker.
