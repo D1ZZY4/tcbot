@@ -83,6 +83,7 @@ role_lookup = "I couldn't verify federation roles right now. Please try again in
 ban_not_found = "Ban record not found."
 already_resolved = "Appeal already resolved (ban is no longer active)."
 db_retry = "The database write failed. The review card is unchanged, tap again to retry."
+demote_blocked = "This user still holds a federation role, so the approval was blocked and the ban stays. Demote them with /tcdemote and retry."
 review_locked = "Only the admin who issued this ban can review it within the first {hours}h."
 
 [decision]

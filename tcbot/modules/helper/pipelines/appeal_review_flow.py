@@ -15,10 +15,10 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import messages, replies
+from tcbot.modules.helper import messages
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import safe_edit_cb, send_log
-from tcbot.modules.helper.pipelines.demote_flow import Demote
+from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
 from tcbot.utils.dispatch import (
     fan_out,
     log_fanout_error,
@@ -73,6 +73,18 @@ async def _update_or_send_log(
         log.debug("Could not send appeal submitted log: %s", exc)
 
 
+async def _answer_review(q: CallbackQuery, locale: str | None, key: str) -> None:
+    """Answer the review card with a localized plain-text alert; never raises.
+
+    Callback alerts are plain text (Telegram does not parse MarkdownV2 in
+    an answer), so the message is rendered with ``plain=True``.
+    """
+    try:
+        await q.answer(t(key, locale, plain=True), show_alert=True)
+    except Exception as exc:
+        log.debug("Appeal review answer failed for %s: %s", key, exc)
+
+
 # ───────────────────────────── Approve ──────────────────────────── #
 
 
@@ -93,69 +105,50 @@ class ApproveMixin:
         lt: int | None,
         update: Update,
     ) -> None:
+        locale = await locale_for_update(update)
         try:
             groups = await db.groups_db.active_groups()
         except Exception:
             log.exception("approve_appeal: groups fetch failed for user=%d", target_id)
-            try:
-                locale = await locale_for_update(update)
-                await q.answer(
-                    replies.err_groups_load_failed(locale, plain=True),
-                    show_alert=True,
-                )
-            except Exception as exc:
-                log.debug("approve_appeal groups-fail answer failed: %s", exc)
+            await _answer_review(q, locale, "common.err.groups_load_failed")
             return
-        try:
-            target_role = await db.users_roles.get_effective_role(target_id, fresh=True)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            log.warning(
-                "approve_appeal role lookup failed for user=%d: %s", target_id, exc
-            )
-            try:
-                locale = await locale_for_update(update)
-                await q.answer(
-                    t("appeals.review.db_retry", locale, plain=True),
-                    show_alert=True,
-                )
-            except Exception as exc:
-                log.debug("approve_appeal role-fail answer failed: %s", exc)
-            return
-        if target_role in ("admin", "developer", "tester"):
-            try:
-                await Demote.execute(
-                    bot,
-                    target_id,
-                    str(target_id),
-                    target_role,
-                    admin.id,
-                    admin.first_name,
-                    trigger=None,
-                )
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                log.exception(
-                    "approve_appeal demote before unban failed for user=%d role=%s",
-                    target_id,
-                    target_role,
-                )
-                try:
-                    locale = await locale_for_update(update)
-                    await q.answer(
-                        t("appeals.review.db_retry", locale, plain=True),
-                        show_alert=True,
-                    )
-                except Exception as exc:
-                    log.debug("approve_appeal demote-fail answer failed: %s", exc)
-                return
-        deactivate_result, target_fname = await asyncio.gather(
-            db.bans_db.deactivate_all_active_bans(target_id),
+        # * The target name is resolved alongside the role so the demote audit
+        # * log records the real name instead of the raw ID.
+        role_result, name_result = await asyncio.gather(
+            db.users_roles.get_effective_role(target_id, fresh=True),
             db.users_cache.get_first_name(target_id, str(target_id)),
             return_exceptions=True,
         )
+        throw_if_cancelled((role_result, name_result))
+        target_fname = (
+            str(target_id) if isinstance(name_result, BaseException) else name_result
+        )
+        if isinstance(role_result, BaseException):
+            log.warning(
+                "approve_appeal role lookup failed for user=%d: %s",
+                target_id,
+                role_result,
+            )
+            await _answer_review(q, locale, "appeals.review.db_retry")
+            return
+        target_role = role_result
+        if target_role in db.users_roles.STAFF_ROLES:
+            # * Fail closed: the shared gate blocks the approval when the
+            # * demote raised, or when it cleared no row while the role still
+            # * resolves. A staff holder must never keep rank after the ban
+            # * lifts, and the ban record stays active when the gate blocks.
+            gate = await demote_before_unban(
+                bot,
+                target_id,
+                target_fname,
+                target_role,
+                admin.id,
+                admin.first_name,
+            )
+            if not gate.may_proceed:
+                await _answer_review(q, locale, "appeals.review.demote_blocked")
+                return
+        deactivate_result = await db.bans_db.deactivate_all_active_bans(target_id)
         if isinstance(deactivate_result, asyncio.CancelledError):
             raise deactivate_result
         if isinstance(deactivate_result, BaseException):
@@ -164,17 +157,8 @@ class ApproveMixin:
                 target_id,
                 deactivate_result,
             )
-            try:
-                locale = await locale_for_update(update)
-                await q.answer(
-                    t("appeals.review.db_retry", locale, plain=True),
-                    show_alert=True,
-                )
-            except Exception as exc:
-                log.debug("approve_appeal DB-fail answer failed: %s", exc)
+            await _answer_review(q, locale, "appeals.review.db_retry")
             return
-        if isinstance(target_fname, BaseException):
-            target_fname = str(target_id)
         try:
             await db.bans_db.clear_review(ban_id)
         except Exception:
@@ -292,18 +276,11 @@ class RejectMixin:
             db.users_cache.get_first_name(target_id, str(target_id)),
             return_exceptions=True,
         )
-        if isinstance(set_r, asyncio.CancelledError):
-            raise set_r
+        throw_if_cancelled((set_r, name_r))
+        staff_locale = await locale_for_update(update)
         if isinstance(set_r, BaseException):
             log.exception("reject_appeal set_rejected_by failed for ban %s", ban_id)
-            try:
-                staff_locale = await locale_for_update(update)
-                await q.answer(
-                    t("appeals.review.db_retry", staff_locale, plain=True),
-                    show_alert=True,
-                )
-            except Exception as exc:
-                log.debug("reject_appeal DB-fail answer failed: %s", exc)
+            await _answer_review(q, staff_locale, "appeals.review.db_retry")
             return
         target_fname: str = (
             name_r if isinstance(name_r, str) and name_r else str(target_id)
@@ -312,10 +289,7 @@ class RejectMixin:
             name_r, asyncio.CancelledError
         ):
             log.debug("reject_appeal name fetch failed: %s", name_r)
-        target_locale, staff_locale = await asyncio.gather(
-            locale_for_user(target_id),
-            locale_for_update(update),
-        )
+        target_locale = await locale_for_user(target_id)
         await safe_edit_cb(
             q,
             t(

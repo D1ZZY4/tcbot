@@ -83,6 +83,7 @@ role_lookup = "Tidak bisa memverifikasi peran federasi sekarang. Coba lagi seben
 ban_not_found = "Catatan ban tidak ditemukan."
 already_resolved = "Banding sudah diputuskan (ban sudah tidak aktif)."
 db_retry = "Penulisan database gagal. Kartu tinjauan tidak berubah, ketuk lagi untuk mencoba ulang."
+demote_blocked = "Pengguna ini masih memegang peran federasi, jadi persetujuan dibatalkan dan ban tetap aktif. Turunkan perannya dengan /tcdemote lalu coba lagi."
 review_locked = "Hanya admin yang menjatuhkan ban ini yang bisa meninjau dalam {hours} jam pertama."
 
 [decision]

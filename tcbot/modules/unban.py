@@ -16,7 +16,7 @@ from tcbot.modules.helper import decorators, extraction, identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply
-from tcbot.modules.helper.pipelines.demote_flow import Demote
+from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
 from tcbot.modules.helper.pipelines.unban_flow import execute_unban
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
@@ -190,22 +190,19 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             await safe_reply(msg, refusal or "", log_label="unban refusal")
             return
         if target_role:
-            try:
-                removed = await Demote.execute(
-                    ctx.bot,
-                    target_id,
-                    target_fname or str(target_id),
-                    target_role,
-                    admin.id,
-                    admin.first_name,
-                    trigger=None,
-                )
-            except Exception:
-                log.exception(
-                    "Demote before unban-cleanup failed for target=%d role=%s",
-                    target_id,
-                    target_role,
-                )
+            # * Fail closed: the shared gate blocks the unban when the demote
+            # * raised, or when it cleared no row while the role still
+            # * resolves (a split-brain). A staff holder must never keep
+            # * rank after the ban lifts.
+            gate = await demote_before_unban(
+                ctx.bot,
+                target_id,
+                target_fname or str(target_id),
+                target_role,
+                admin.id,
+                admin.first_name,
+            )
+            if not gate.may_proceed:
                 await safe_reply(
                     msg,
                     t(
@@ -215,48 +212,9 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                         target_role=target_role,
                         action="unban",
                     ),
-                    log_label="unban demote-fail",
+                    log_label=f"unban demote-{gate.value}",
                 )
                 return
-            if not removed:
-                # * execute() returns False when no row was cleared. Re-read
-                # * the live role to distinguish "already gone, safe to
-                # * proceed" from a split-brain where the role still
-                # * resolves: only the latter must abort, mirroring the
-                # * ban/kick/mute entry demote.
-                try:
-                    live_role = await db.users_roles.get_effective_role(
-                        target_id, fresh=True
-                    )
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    log.exception(
-                        "Live role re-read failed after no-op demote for target=%d",
-                        target_id,
-                    )
-                    live_role = target_role
-                if live_role in staff_roles:
-                    log.warning(
-                        "Unban aborted: demote was a no-op but target=%d "
-                        "still holds role=%s",
-                        target_id,
-                        live_role,
-                    )
-                    await safe_reply(
-                        msg,
-                        t(
-                            "demote.abort.body",
-                            locale,
-                            user=Safe(
-                                user_ref(target_id, target_fname or str(target_id))
-                            ),
-                            target_role=live_role,
-                            action="unban",
-                        ),
-                        log_label="unban demote-noop",
-                    )
-                    return
 
     try:
         await execute_unban(

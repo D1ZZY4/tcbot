@@ -354,6 +354,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **Approving an appeal no longer unbans a user who kept their role** (`tcbot/modules/helper/pipelines/appeal_review_flow.py`, `tcbot/modules/unban.py`, `tcbot/modules/helper/pipelines/demote_flow.py`): the appeal-approve path demoted a role-holding target but ignored the result, while the `/tcunban` path checked it and aborted when the role survived. A target whose role outlived the demote was therefore unbanned with federation rank intact. Behavior changes: approving an appeal now blocks when the demote fails or when the role still resolves, replies with a localized notice, and leaves the ban active so the reviewer can retry.
+
 - **A name search no longer scans the whole member cache** (`tcbot/database/users_cache.py`, `tcbot/database/mongos.py`): the search matched a case-insensitive regex, and MongoDB cannot use an index for one, so every search scanned every member the bot had ever seen. The search now runs an indexed case-sensitive prefix query over lowercase mirror fields, and a startup backfill fills the mirrors for the rows older releases wrote. Behavior changes: none; the same names match.
 
 - **An unchanged member profile is no longer rewritten on every message** (`tcbot/database/users_cache.py`): the profile write invalidated the mention cache instead of populating it, so the change-detection guard could never fire for a member who was never rendered anywhere. Every message from an ordinary member cost a database update and a queued cache delete for data that had not changed. Behavior changes: the write populates the cache, so an unchanged profile costs no database round trip after the first message.

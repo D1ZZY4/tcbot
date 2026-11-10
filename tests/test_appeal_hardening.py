@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import appeal_review_flow
+from tcbot.modules.helper.pipelines import appeal_review_flow, demote_flow
 from tcbot.utils.i18n import t
 
 
@@ -30,6 +30,17 @@ class _FakeQuery:
 
     async def edit_message_text(self, text: str, **kwargs: Any) -> None:
         self.edits.append(text)
+
+
+class _FakeBot:
+    async def send_message(self, *a: Any, **k: Any) -> Any:
+        return type("M", (), {"message_id": 1})()
+
+    async def unban_chat_member(self, *a: Any, **k: Any) -> None:
+        return None
+
+    async def edit_message_text(self, *a: Any, **k: Any) -> None:
+        return None
 
 
 def _fake_update(query: _FakeQuery, user_id: int) -> Any:
@@ -80,23 +91,18 @@ def test_self_review_is_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
     assert query.edits == []
 
 
-def test_approve_demotes_staff_before_deactivate(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    demoted: list[tuple[int, str]] = []
-    deactivated: list[int] = []
+def _wire_approve(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Wire the approve path with recording doubles; returns the recorders."""
+    record: dict[str, Any] = {"demoted": [], "deactivated": []}
 
     async def _groups() -> list[Any]:
         return []
-
-    async def _role(user_id: int, *, fresh: bool = False) -> str:
-        return "admin" if user_id == 9 else "founder"
 
     async def _fname(user_id: int, fallback: str = "") -> str:
         return fallback
 
     async def _deactivate(target_id: int) -> int:
-        deactivated.append(target_id)
+        record["deactivated"].append(target_id)
         return 1
 
     async def _clear(ban_id: str) -> None:
@@ -108,41 +114,17 @@ def test_approve_demotes_staff_before_deactivate(
     async def _locale_user(user_id: int) -> str:
         return "en-US"
 
-    async def _fake_demote(
-        bot: Any,
-        target_id: int,
-        target_fname: str,
-        target_role: str,
-        executor_id: int,
-        executor_fname: str,
-        *,
-        trigger: str | None = None,
-    ) -> bool:
-        demoted.append((target_id, target_role))
-        return True
-
-    class _FakeBot:
-        async def send_message(self, *a: Any, **k: Any) -> Any:
-            return type("M", (), {"message_id": 1})()
-
-        async def unban_chat_member(self, *a: Any, **k: Any) -> None:
-            return None
-
-        async def edit_message_text(self, *a: Any, **k: Any) -> None:
-            return None
-
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.users_cache, "get_first_name", _fname)
     monkeypatch.setattr(db.bans_db, "deactivate_all_active_bans", _deactivate)
     monkeypatch.setattr(db.bans_db, "clear_review", _clear)
-    monkeypatch.setattr(
-        appeal_review_flow.Demote, "execute", staticmethod(_fake_demote)
-    )
     monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale_update)
     monkeypatch.setattr(appeal_review_flow, "locale_for_user", _locale_user)
+    return record
 
-    query = _FakeQuery("appeal_approve_abc")
+
+def _run_approve(query: _FakeQuery) -> None:
+    """Run the approve executor against a staff-banned target."""
     admin = type("Admin", (), {"id": 1, "first_name": "Admin"})()
     ban: dict[str, Any] = {
         "ban_id": "abc",
@@ -171,5 +153,116 @@ def test_approve_demotes_staff_before_deactivate(
             _fake_update(query, 1),  # type: ignore[arg-type]
         )
     )
-    assert demoted == [(9, "admin")]
-    assert deactivated == [9]
+
+
+def test_approve_demotes_staff_before_deactivate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    record = _wire_approve(monkeypatch)
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "admin" if user_id == 9 else "founder"
+
+    async def _fake_demote(
+        bot: Any,
+        target_id: int,
+        target_fname: str,
+        target_role: str,
+        executor_id: int,
+        executor_fname: str,
+        *,
+        trigger: str | None = None,
+    ) -> bool:
+        record["demoted"].append((target_id, target_role))
+        return True
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+
+    query = _FakeQuery("appeal_approve_abc")
+    _run_approve(query)
+
+    assert record["demoted"] == [(9, "admin")]
+    assert record["deactivated"] == [9]
+
+
+def test_approve_blocks_when_demote_is_a_noop_and_the_role_survives(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A no-op demote that leaves the role live must block the unban.
+
+    The /tcunban path already aborted here. The appeal path used to ignore
+    the demote result and unban a user who still held federation rank.
+    """
+    record = _wire_approve(monkeypatch)
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "admin" if user_id == 9 else "founder"
+
+    async def _fake_demote(*a: Any, **k: Any) -> bool:
+        record["demoted"].append((9, "admin"))
+        return False
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+
+    query = _FakeQuery("appeal_approve_abc")
+    _run_approve(query)
+
+    assert record["demoted"] == [(9, "admin")]
+    assert record["deactivated"] == []
+    assert query.answers[-1] == (
+        t("appeals.review.demote_blocked", "en-US", plain=True),
+        True,
+    )
+
+
+def test_approve_blocks_when_the_demote_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failing demote must block the approval and keep the ban active."""
+    record = _wire_approve(monkeypatch)
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "admin" if user_id == 9 else "founder"
+
+    async def _fake_demote(*a: Any, **k: Any) -> bool:
+        raise RuntimeError("database down")
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+
+    query = _FakeQuery("appeal_approve_abc")
+    _run_approve(query)
+
+    assert record["deactivated"] == []
+    assert query.answers[-1] == (
+        t("appeals.review.demote_blocked", "en-US", plain=True),
+        True,
+    )
+
+
+def test_approve_proceeds_when_the_role_is_already_gone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A no-op demote with no live role left may proceed with the unban."""
+    record = _wire_approve(monkeypatch)
+    reads: list[int] = []
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        reads.append(user_id)
+        # * The approve path reads the role first and demotes it; the gate's
+        # * live re-read after the no-op demote sees it already gone.
+        return "admin" if len(reads) == 1 else None
+
+    async def _fake_demote(*a: Any, **k: Any) -> bool:
+        record["demoted"].append((9, "admin"))
+        return False
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+
+    query = _FakeQuery("appeal_approve_abc")
+    _run_approve(query)
+
+    assert record["deactivated"] == [9]
