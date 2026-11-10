@@ -16,7 +16,13 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, keyboards, replies
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import ack_and_render, safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import (
+    ack_and_render,
+    callback_args,
+    callback_numbers,
+    safe_edit_cb,
+    safe_reply,
+)
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.pipelines.check_flow import Check
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -82,14 +88,11 @@ __help_sections__ = __help__["sections"]
 
 async def _ban_id_from_query(q: CallbackQuery) -> str | None:
     """Parse the ban id from checkme callback data, answering on malformed taps."""
-    if q.data is None:
+    args = callback_args(q, 2)
+    if args is None:
         await q.answer()
         return None
-    try:
-        return q.data.split(":")[1]
-    except IndexError:
-        await q.answer()
-        return None
+    return args[0]
 
 
 async def _load_ban_for_callback(
@@ -443,17 +446,11 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     if q is None:
         return
-    if q.data is None:
+    numbers = callback_numbers(q, 2)
+    if numbers is None:
         await q.answer()
         return
-    try:
-        target_id = int(q.data.split(":", 1)[1])
-    except ValueError:
-        await q.answer()
-        return
-    except IndexError:
-        await q.answer()
-        return
+    target_id = numbers[0]
     tapper = update.effective_user
     locale = await locale_for_update(update)
     await ack_and_render(
@@ -474,19 +471,11 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     if q is None:
         return
-    if q.data is None:
+    numbers = callback_numbers(q, 3)
+    if numbers is None:
         await q.answer()
         return
-    try:
-        _, target_id_str, page_str = q.data.split(":")
-        target_id = int(target_id_str)
-        page = int(page_str)
-    except ValueError:
-        await q.answer()
-        return
-    except IndexError:
-        await q.answer()
-        return
+    target_id, page = numbers
     locale = await locale_for_update(update)
     await ack_and_render(q, Check.bans_list(target_id, page, locale))
 
@@ -498,18 +487,16 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     q = update.callback_query
     if q is None:
         return
-    if q.data is None:
+    args = callback_args(q, 3)
+    if args is None:
         await q.answer()
         return
     try:
-        _, target_id_str, ban_id = q.data.split(":", 2)
-        target_id = int(target_id_str)
+        target_id = int(args[0])
     except ValueError:
         await q.answer()
         return
-    except IndexError:
-        await q.answer()
-        return
+    ban_id = args[1]
     locale = await locale_for_update(update)
     await ack_and_render(q, Check.ban_detail(target_id, ban_id, locale))
 
@@ -521,17 +508,11 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     q = update.callback_query
     if q is None:
         return
-    if q.data is None:
+    numbers = callback_numbers(q, 2)
+    if numbers is None:
         await q.answer()
         return
-    try:
-        target_id = int(q.data.split(":", 1)[1])
-    except ValueError:
-        await q.answer()
-        return
-    except IndexError:
-        await q.answer()
-        return
+    target_id = numbers[0]
     locale = await locale_for_update(update)
     await ack_and_render(q, Check.warns_by_group(target_id, locale))
 
@@ -543,20 +524,11 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     q = update.callback_query
     if q is None:
         return
-    if q.data is None:
+    numbers = callback_numbers(q, 4)
+    if numbers is None:
         await q.answer()
         return
-    try:
-        _, target_id_str, chat_id_str, page_str = q.data.split(":")
-        target_id = int(target_id_str)
-        chat_id = int(chat_id_str)
-        page = int(page_str)
-    except ValueError:
-        await q.answer()
-        return
-    except IndexError:
-        await q.answer()
-        return
+    target_id, chat_id, page = numbers
     locale = await locale_for_update(update)
     await ack_and_render(
         q,
@@ -571,19 +543,11 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     q = update.callback_query
     if q is None:
         return
-    if q.data is None:
+    numbers = callback_numbers(q, 3)
+    if numbers is None:
         await q.answer()
         return
-    try:
-        _, target_id_str, page_str = q.data.split(":")
-        target_id = int(target_id_str)
-        page = int(page_str)
-    except ValueError:
-        await q.answer()
-        return
-    except IndexError:
-        await q.answer()
-        return
+    target_id, page = numbers
     locale = await locale_for_update(update)
     await ack_and_render(q, Check.kicks_list(target_id, page, locale))
 
@@ -595,19 +559,11 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     q = update.callback_query
     if q is None:
         return
-    if q.data is None:
+    numbers = callback_numbers(q, 3)
+    if numbers is None:
         await q.answer()
         return
-    try:
-        _, target_id_str, page_str = q.data.split(":")
-        target_id = int(target_id_str)
-        page = int(page_str)
-    except ValueError:
-        await q.answer()
-        return
-    except IndexError:
-        await q.answer()
-        return
+    target_id, page = numbers
     locale = await locale_for_update(update)
     await ack_and_render(q, Check.mutes_list(target_id, page, locale))
 
@@ -619,19 +575,11 @@ async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     q = update.callback_query
     if q is None:
         return
-    if q.data is None:
+    numbers = callback_numbers(q, 3)
+    if numbers is None:
         await q.answer()
         return
-    try:
-        _, target_id_str, page_str = q.data.split(":")
-        target_id = int(target_id_str)
-        page = int(page_str)
-    except ValueError:
-        await q.answer()
-        return
-    except IndexError:
-        await q.answer()
-        return
+    target_id, page = numbers
     locale = await locale_for_update(update)
     await ack_and_render(q, Check.appeals_list(target_id, page, locale))
 

@@ -207,6 +207,13 @@ async def ack_and_render(
     await safe_edit_cb(q, text, reply_markup=kb)
 
 
+# ───────────────────────── Callback payload parsing ─────────────────────── #
+# * Single owner for the "split the callback payload and read its numbers"
+# * pattern. Every handler answered a malformed payload the same way, but
+# * each one spelled the parse differently, so a stale button could reach a
+# * handler that did not guard the shape.
+
+
 async def send_log(bot: Bot, text: str, **kwargs: Any) -> Message:
     """Post a federation log message to the configured logs destination.
 
@@ -223,6 +230,39 @@ async def send_log(bot: Bot, text: str, **kwargs: Any) -> Message:
         message_thread_id=thread_id,
         **kwargs,
     )
+
+
+def callback_args(q: CallbackQuery, count: int) -> list[str] | None:
+    """Return the callback payload arguments, or ``None`` when malformed.
+
+    The payload must have exactly *count* colon-separated segments; the
+    leading prefix is dropped and the remaining segments are returned in
+    order. ``None`` when the payload is missing or has a different shape,
+    so the caller can answer the button and stop instead of raising.
+    """
+    data = q.data
+    if not data:
+        return None
+    segments = data.split(":")
+    if len(segments) != count:
+        return None
+    return segments[1:]
+
+
+def callback_numbers(q: CallbackQuery, count: int) -> list[int] | None:
+    """Return the callback payload arguments parsed as integers.
+
+    Same shape contract as :func:`callback_args`, and every argument must
+    be an integer. ``None`` when the payload is missing, has a different
+    shape, or holds a value that is not an integer.
+    """
+    args = callback_args(q, count)
+    if args is None:
+        return None
+    try:
+        return [int(arg) for arg in args]
+    except ValueError:
+        return None
 
 
 async def safe_reply(

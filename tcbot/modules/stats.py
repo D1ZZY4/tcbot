@@ -22,6 +22,7 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ack_and_render,
     answer_and_edit,
+    callback_numbers,
     safe_edit_message,
     safe_reply,
 )
@@ -331,14 +332,11 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     q = update.callback_query
     if q is None:
         return
-    try:
-        page = int((q.data or "").split(":")[1])
-    except ValueError:
+    numbers = callback_numbers(q, 2)
+    if numbers is None:
         await q.answer()
         return
-    except IndexError:
-        await q.answer()
-        return
+    page = numbers[0]
     tapper = update.effective_user
     if not await _require_founder_list(
         q, tapper.id if tapper is not None else None, update
@@ -377,14 +375,11 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     q = update.callback_query
     if q is None:
         return
-    try:
-        page = int((q.data or "").split(":")[1])
-    except ValueError:
+    numbers = callback_numbers(q, 2)
+    if numbers is None:
         await q.answer()
         return
-    except IndexError:
-        await q.answer()
-        return
+    page = numbers[0]
     await ack_and_render(q, Stats.chats_list(page, await locale_for_update(update)))
 
 
@@ -413,14 +408,11 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     if q is None:
         return
-    try:
-        page = int((q.data or "").split(":")[1])
-    except ValueError:
+    numbers = callback_numbers(q, 2)
+    if numbers is None:
         await q.answer()
         return
-    except IndexError:
-        await q.answer()
-        return
+    page = numbers[0]
     Stats.clear_search(ctx)
     await ack_and_render(q, Stats.bans_list(page, await locale_for_update(update)))
 

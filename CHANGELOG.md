@@ -15,6 +15,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Federation log delivery has one owner** (`tcbot/modules/helper/messages/safe_edits.py`): `send_log` posts the audit log to the configured destination as MarkdownV2 in the configured thread, replacing twenty-seven hand-written copies of the same call.
 
+- **Callback payloads have one owner** (`tcbot/modules/helper/messages/safe_edits.py`): `callback_args` and `callback_numbers` own the shape check, so a stale button is answered instead of reaching a handler that did not guard it.
+
 - **Role sets and role labels have one owner** (`tcbot/database/users_roles.py`): `STAFF_ROLES`, `FOUNDER_ADMIN_ROLES`, and `role_label` replace eleven inline role-set literals and two different label fallbacks.
 
 - **Name placeholders have one owner** (`tcbot/database/users_cache.py`): `is_placeholder_name` decides what counts as a real name, so the legacy `User <id>` form is no longer rendered as a name on some surfaces and not on others.
