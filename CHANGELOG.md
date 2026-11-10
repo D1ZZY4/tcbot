@@ -25,6 +25,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Name placeholders have one owner** (`tcbot/database/users_cache.py`): `is_placeholder_name` decides what counts as a real name, so the legacy `User <id>` form is no longer rendered as a name on some surfaces and not on others.
 
+- **Circuit-breaker and member-cache contracts are pinned** (`tests/test_circuit_breaker.py`, `tests/test_member_cache_writes.py`, `tests/test_complete_join.py`): the recovery probe transition, the change-detection write, and the connect replay budget are covered as executable contracts. Behavior changes: none.
+
 - **MongoDB query shapes are verified without a live server** (`pyproject.toml`, `uv.lock`, `tests/test_ban_uniqueness_mongo.py`): the duplicate-ban migration and the one-active-ban guarantee depend on MongoDB semantics a hand-written double cannot prove, so the in-memory MongoDB engine runs the same aggregation pipeline and the same partial unique index. Behavior changes: none; the dependency is development-only.
 - **Production observability via optional extras** (`tcbot/alive.py`, `tcbot/__main__.py`, `tcbot/__init__.py`, `config.env.example`): a `/metrics` endpoint on the keep-alive server when prometheus-client is installed, the uvloop event loop policy on Linux when the package is present, and Sentry initialisation when `SENTRY_DSN` is set. Behavior changes: the operations surfaces appear only with their extras configured.
 

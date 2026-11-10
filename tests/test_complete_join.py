@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
+from tcbot.modules.helper.pipelines import connected_flow
 from tcbot.modules.helper.pipelines.connected_flow import _REPLAY_CAP, BuildConnection
 
 
@@ -99,3 +100,20 @@ def test_complete_join_truncates_replay_and_is_blind(
     blind = asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
     assert blind is True
     assert len(bot.banned) == _REPLAY_CAP
+
+
+def test_complete_join_stops_at_the_replay_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The replay must not run past its time budget.
+
+    Telegram paces same-chat requests at 20 a minute, so an unbounded
+    replay kept the connect handler running for a quarter of an hour and
+    never finished inside a serverless request window.
+    """
+    monkeypatch.setattr(connected_flow, "_REPLAY_BUDGET_S", 0.0)
+    _install_world(monkeypatch, ban_uids=[11, 22, 33])
+    bot = _FakeBot()
+    blind = asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
+    assert blind is True
+    assert bot.banned == []
