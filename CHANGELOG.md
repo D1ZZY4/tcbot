@@ -83,6 +83,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The error reporter is an application service** (`tcbot/error_reporter.py`, `tcbot/utils/logger.py`): the reporter moved from the utils layer to the package root, and it registers its shipping sink with the logger instead of the logger importing it. The utils layer no longer depends on the layer above it. Behavior changes: none; error reports still reach the same channel.
 
+- **The event logs order ties the same way** (`tcbot/database/kicks_db.py`, `tcbot/database/mutes_db.py`): the kick and mute histories now tie-break on the record id like the ban and warn histories, so the lists `/check` renders side by side order identically. Behavior changes: none beyond a stable order for equal timestamps.
+
 - **The locale helpers share one read path** (`tcbot/modules/helper/locale.py`): the private-chat and group-chat branches of the locale resolution were written twice each; they now call one helper per source. Behavior changes: none.
 
 - **The main-group check has one owner** (`tcbot/modules/helper/pipelines/appeal_submit_flow.py`): the group-appeal entry compared the chat id with the configured main group inline instead of using the shared primary-group guard. The guard now decides it everywhere. Behavior changes: none; the same chats are accepted.

@@ -54,7 +54,13 @@ async def user_kicks(
     """
     cursor = (
         _kicks()
-        .find({"user_id": user_id}, {"_id": 0}, sort=[("timestamp", -1)])
+        .find(
+            {"user_id": user_id},
+            {"_id": 0},
+            # * Tie-break on _id so the order is stable when two
+            # * events share a timestamp, matching the warn history.
+            sort=[("timestamp", -1), ("_id", -1)],
+        )
         .skip(max(0, skip))
     )
     if limit is not None:
