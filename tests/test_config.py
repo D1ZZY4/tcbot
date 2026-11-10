@@ -23,7 +23,6 @@ def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
     base.update(env)
     for key in (
         "MAIN_GROUP",
-        "MAIN_CHANNEL",
         "LOGS",
         "LOGS_ERRORS",
         "APPEALS",
