@@ -121,9 +121,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
 
-    has_explicit_target = bool(args) and (
-        args[0].lstrip("-").isdigit() or args[0].startswith("@")
-    )
+    has_explicit_target = extraction.first_arg_is_explicit(args)
     # * A bare role token with no reply target is ambiguous: name search
     # * could resolve "developer" to an unrelated cached user and promote
     # * a stranger. Ask for an explicit target instead.

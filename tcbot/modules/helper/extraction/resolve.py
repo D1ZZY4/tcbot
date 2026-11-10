@@ -38,13 +38,14 @@ async def _safe_get_chat(bot: Bot, ident: str | int) -> Chat | ChatFullInfo | No
 # ──────────────────────── Target resolution ─────────────────────── #
 
 
-def _first_arg_is_explicit(args: list[str]) -> bool:
+def first_arg_is_explicit(args: list[str]) -> bool:
     """Return True when ``args[0]`` is shaped like an explicit target.
 
     Shape only (leading numeric ID or ``@username``), no I/O: whether the
     token actually names someone is decided by the resolver. Shared by
-    :func:`extract_target` (override detection) and
-    :func:`extract_mod_target` (reason splitting) so both agree.
+    :func:`extract_target` (override detection),
+    :func:`extract_mod_target` (reason splitting), and the promotion entry
+    (argument consumption) so all three agree on what counts as a target.
     """
     if not args:
         return False
@@ -117,7 +118,7 @@ async def extract_target(
         args
         and reply_hit is not None
         and not prefer_explicit
-        and not _first_arg_is_explicit(args)
+        and not first_arg_is_explicit(args)
     ):
         return reply_hit
     if args and reply_hit is not None and prefer_explicit:
@@ -298,7 +299,7 @@ async def extract_mod_target(
     consumed = (
         target_id is not None
         and bool(args)
-        and _first_arg_is_explicit(args)
+        and first_arg_is_explicit(args)
         and (quoted_uid is None or target_id != quoted_uid)
     )
     return hit, consumed

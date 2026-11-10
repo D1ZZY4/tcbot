@@ -9,6 +9,7 @@ from __future__ import annotations
 from tcbot.modules.helper.extraction.resolve import (
     extract_mod_target,
     extract_target,
+    first_arg_is_explicit,
     reply_uid,
 )
 from tcbot.modules.helper.extraction.sync import (
