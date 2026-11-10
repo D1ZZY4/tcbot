@@ -55,6 +55,22 @@ def _benign(exc: BaseException | None) -> bool:
     return any(p in msg for p in _BENIGN_PATTERNS)
 
 
+def _is_benign(exc: BaseException | None) -> bool:
+    """Return True when the exception is a recoverable no-op.
+
+    The reporter exists precisely for unexpected failures, so a predicate
+    that itself fails must never discard the report: the unknown state is
+    reported instead of swallowed.
+    """
+    if exc is None:
+        return False
+    try:
+        return _benign(exc)
+    except Exception as check_exc:
+        log.warning("Benign check failed, treating as reportable: %s", check_exc)
+        return False
+
+
 def _log_noise(record: logging.LogRecord | None) -> bool:
     """Check record duplication an already-reported error."""
     return bool(record) and any(p in record.getMessage() for p in _LOG_NOISE_PATTERNS)
@@ -445,7 +461,7 @@ async def send_to_owner(text: str) -> None:
 
 async def report_exc(exc: BaseException, context: str | None = None) -> None:
     """Report an exception; owner-only errors go to owner DM."""
-    if _benign(exc) or _dedup(exc, None):
+    if _is_benign(exc) or _dedup(exc, None):
         return
     text = build_error_message(exc=exc, context=context)
     if _owner_only(exc):
@@ -460,7 +476,7 @@ async def report_exc(exc: BaseException, context: str | None = None) -> None:
 async def report_record(record: logging.LogRecord) -> None:
     """Report a LogRecord; deduped and noise-filtered."""
     exc = record.exc_info[1] if record.exc_info else None
-    if _benign(exc) or _log_noise(record) or _dedup(exc, record):
+    if _is_benign(exc) or _log_noise(record) or _dedup(exc, record):
         return
     text = build_error_message(record=record)
     if _owner_only(exc):
@@ -503,6 +519,7 @@ __all__ = [
     "_dedup",
     "_fingerprint_exc",
     "_fingerprint_record",
+    "_is_benign",
     "_location",
     "_log_noise",
     "_normalize_fp_text",

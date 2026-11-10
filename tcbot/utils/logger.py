@@ -146,6 +146,22 @@ _SUPPRESS_PREFIXES: tuple[str, ...] = (
 )
 
 
+def _log_task_failure(task: asyncio.Task[None]) -> None:
+    """Retrieve a failed report task's exception so asyncio stays quiet.
+
+    An unretrieved task exception is reported by asyncio as "Task exception
+    was never retrieved" through the root logger, which would start the
+    reporting loop again. Retrieving it here keeps the failure visible
+    without the noise.
+    """
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is None:
+        return
+    logger.bind(module=__name__).warning("Telegram error report task failed: %s", exc)
+
+
 class TelegramErrorHandler(logging.Handler):
     """Stdlib handler that ships errors to Telegram (via Loguru bridge)."""
 
@@ -160,7 +176,10 @@ class TelegramErrorHandler(logging.Handler):
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            self.handleError(record)
+            # * No running loop (the process is shutting down or the record
+            # * was emitted outside async code): the report cannot be
+            # * shipped. handleError() would print a misleading
+            # * "Logging error" traceback for a normal condition.
             return
         try:
             from tcbot.utils import error_reporter  # noqa: PLC0415
@@ -173,6 +192,7 @@ class TelegramErrorHandler(logging.Handler):
         task = loop.create_task(error_reporter.report_record(copy.copy(record)))
         _tg_tasks.add(task)
         task.add_done_callback(_tg_tasks.discard)
+        task.add_done_callback(_log_task_failure)
 
 
 # ─────────────────────── Logging Setup ──────────────────────────── #
