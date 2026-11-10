@@ -12,13 +12,13 @@ from typing import TYPE_CHECKING
 from telegram.ext import ContextTypes
 
 from tcbot import database as db
+from tcbot import error_reporter
 from tcbot.modules.helper import identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.extraction import extract_target
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import ownership_transferred, safe_reply, send_log
 from tcbot.modules.helper.pipelines.demote_flow import Demote
-from tcbot.utils import error_reporter
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t

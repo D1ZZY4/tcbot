@@ -21,7 +21,6 @@ from tcbot.modules import netspeed, sync
 from tcbot.modules.helper.decorators import checks
 from tcbot.modules.helper.pipelines import mute_flow, proof_flow, stats_flow
 from tcbot.modules.helper.pipelines.demote_flow import Demote
-from tcbot.utils import error_reporter
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitBreaker, CircuitState
 from tcbot.utils.time_and_date import parse_duration
@@ -51,7 +50,10 @@ def test_logger_handler_copies_record(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake_report(rec: logging.LogRecord) -> None:
         captured.append(rec)
 
-    monkeypatch.setattr(error_reporter, "report_record", _fake_report)
+    # * The logger lives in the utils layer and must not import the error
+    # * reporter, so the reporter registers a sink instead.
+    logger_mod.set_record_sink(_fake_report)
+    monkeypatch.setattr(logger_mod, "set_record_sink", logger_mod.set_record_sink)
 
     async def _run() -> None:
         handler = logger_mod.TelegramErrorHandler()
@@ -73,6 +75,7 @@ def test_logger_handler_copies_record(monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(_run())
     assert len(captured) == 1
     assert captured[0].exc_info is not None
+    logger_mod.set_record_sink(None)
 
 
 def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:

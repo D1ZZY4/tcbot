@@ -18,6 +18,7 @@ import telegram.error as _te
 from pymongo.errors import ConnectionFailure
 
 from tcbot import cfg
+from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.formatter import bold, code, esc, pre
 from tcbot.utils.logger import get_logger
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 
     from telegram import Bot
 
-log = get_logger("tcbot.utils.error_reporter")
+log = get_logger("tcbot.error_reporter")
 
 # * Log-noise patterns come from log_execution wrapping every handler.
 _BENIGN_PATTERNS: tuple[str, ...] = (
@@ -183,6 +184,20 @@ def attach(bot: Bot, chat_id: int, thread_id: int | None, *, owner_id: int = 0) 
             "error_reporter.attach with owner_id=%d; owner DM disabled",
             owner_id,
         )
+    # * Register the shipping sink with the logger. The logger lives in the
+    # * utils layer and must not import this module, so the dependency is
+    # * inverted: this side registers, the logger calls.
+    logger_mod.set_record_sink(_ship_record)
+
+
+async def _ship_record(record: logging.LogRecord) -> None:
+    """Ship a log record to the error channel.
+
+    A wrapper, so the registered sink resolves ``report_record`` at call
+    time: an override of the reporter then takes effect without a
+    re-attach.
+    """
+    await report_record(record)
 
 
 def set_owner(owner_id: int) -> None:
@@ -487,58 +502,3 @@ async def report_record(record: logging.LogRecord) -> None:
         await send_to_owner(text)
     else:
         await send_to_log_errors(text)
-
-
-__all__ = [
-    "_ACTION_HINTS",
-    "_BENIGN_PATTERNS",
-    "_DEDUPE_WINDOW",
-    "_HEX_ADDR_RE",
-    "_LOG_NOISE_PATTERNS",
-    "_MAX_CONTEXT_LEN",
-    "_MAX_CTX",
-    "_MAX_LINE_CONTENT",
-    "_MAX_MSG",
-    "_MAX_TB",
-    "_MONGO_AUTH_RE",
-    "_OWNER_BUDGET",
-    "_OWNER_MAX",
-    "_OWNER_ONLY_TYPES",
-    "_OWNER_WINDOW",
-    "_RECENT_MAX",
-    "_REPORT_SEP_LEN",
-    "_SEND_BUDGET",
-    "_SEND_WINDOW",
-    "_TASK_ID_RE",
-    "_TB_FRAMES",
-    "_TOKEN_RE",
-    "_action_hint",
-    "_benign",
-    "_classify",
-    "_condensed_tb",
-    "_dedup",
-    "_fingerprint_exc",
-    "_fingerprint_record",
-    "_is_benign",
-    "_location",
-    "_log_noise",
-    "_normalize_fp_text",
-    "_owner_only",
-    "_owner_sent",
-    "_owner_suppressed",
-    "_recent",
-    "_scrub_secrets",
-    "_seen_recently",
-    "_ship_throttled",
-    "_shorten_path",
-    "attach",
-    "build_error_message",
-    "cfg",
-    "log",
-    "report_exc",
-    "report_record",
-    "scrub_text",
-    "send_to_log_errors",
-    "send_to_owner",
-    "set_owner",
-]

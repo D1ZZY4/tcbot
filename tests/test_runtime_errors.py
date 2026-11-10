@@ -15,7 +15,7 @@ from pymongo.errors import ServerSelectionTimeoutError
 from pyrogram.session.session import AuthKeyNotFound
 
 from tcbot import __main__ as runtime_errors
-from tcbot.utils import error_reporter
+from tcbot import error_reporter
 from tcbot.utils.circuit_breaker import CircuitOpenError
 
 

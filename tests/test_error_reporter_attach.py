@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tcbot.utils import error_reporter
+from tcbot import error_reporter
 
 
 def _attach(chat_id: int, caplog: Any) -> None:
@@ -19,14 +19,14 @@ def _attach(chat_id: int, caplog: Any) -> None:
 
 
 def test_negative_chat_id_is_valid(caplog: Any) -> None:
-    with caplog.at_level(logging.WARNING, logger="tcbot.utils.error_reporter"):
+    with caplog.at_level(logging.WARNING, logger="tcbot.error_reporter"):
         _attach(-1001234567890, caplog)
 
     assert "without a chat_id" not in caplog.text
 
 
 def test_zero_chat_id_falls_back_to_owner(caplog: Any) -> None:
-    with caplog.at_level(logging.WARNING, logger="tcbot.utils.error_reporter"):
+    with caplog.at_level(logging.WARNING, logger="tcbot.error_reporter"):
         _attach(0, caplog)
 
     assert "falling back" in caplog.text

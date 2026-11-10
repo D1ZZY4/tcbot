@@ -9,9 +9,9 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Added
 
-- **Federation log delivery has one owner** (`tcbot/modules/helper/messages/safe_edits.py`): `send_log` posts the audit log to the configured destination as MarkdownV2 in the configured thread, replacing twenty-seven hand-written copies of the same call.
-
 - **Authorization and expiry contracts are pinned** (`tests/test_moderation_contracts.py`, `tests/test_role_assignment_rules.py`): the role-rank table, the rate-limit exemption and throttle tiers, the mute expiry clauses, the atomic appeal and ban claims, the primary-group merge, the promotion rules, and the ownership transfer are covered as executable contracts. Behavior changes: none.
+
+- **Federation log delivery has one owner** (`tcbot/modules/helper/messages/safe_edits.py`): `send_log` posts the audit log to the configured destination as MarkdownV2 in the configured thread, replacing twenty-seven hand-written copies of the same call.
 
 - **MongoDB query shapes are verified without a live server** (`pyproject.toml`, `uv.lock`, `tests/test_ban_uniqueness_mongo.py`): the duplicate-ban migration and the one-active-ban guarantee depend on MongoDB semantics a hand-written double cannot prove, so the in-memory MongoDB engine runs the same aggregation pipeline and the same partial unique index. Behavior changes: none; the dependency is development-only.
 - **Production observability via optional extras** (`tcbot/alive.py`, `tcbot/__main__.py`, `tcbot/__init__.py`, `config.env.example`): a `/metrics` endpoint on the keep-alive server when prometheus-client is installed, the uvloop event loop policy on Linux when the package is present, and Sentry initialisation when `SENTRY_DSN` is set. Behavior changes: the operations surfaces appear only with their extras configured.
@@ -70,6 +70,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **Speedtest probes servers concurrently** (`tcbot/modules/netspeed.py`): best-server latency probes now run in parallel instead of one server after another. Behavior changes: server selection is faster on far routes; results keep the same fields.
 
 ### Changed
+
+- **The error reporter is an application service** (`tcbot/error_reporter.py`, `tcbot/utils/logger.py`): the reporter moved from the utils layer to the package root, and it registers its shipping sink with the logger instead of the logger importing it. The utils layer no longer depends on the layer above it. Behavior changes: none; error reports still reach the same channel.
 
 - **The hot path has a measured baseline** (`scripts/benchmark_hotpath.py`, `docs/operations/performance.md`): the database call transport, the two-level cache, and the bounded fan-out can now be measured in-process, without MongoDB, Redis, or a Telegram connection. Behavior changes: none; the benchmark is a development tool.
 

@@ -26,7 +26,7 @@ from telegram.ext import (
     TypeHandler,
 )
 
-from tcbot import cfg
+from tcbot import cfg, error_reporter
 from tcbot import database as db
 from tcbot.alive import register_webhook, start_keepalive
 from tcbot.database import mtproto as mtproto_mod
@@ -39,7 +39,6 @@ from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.modules.helper.pipelines.connected_flow import drain_harvest_tasks
 from tcbot.modules.sync import run_ban_sync
-from tcbot.utils import error_reporter
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.dispatch import drain_tasks, throw_if_cancelled

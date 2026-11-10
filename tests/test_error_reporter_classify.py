@@ -11,7 +11,7 @@ from pymongo.errors import ConnectionFailure
 from pyrogram.errors import AuthKeyDuplicated
 from pyrogram.session.session import AuthKeyNotFound
 
-from tcbot.utils import error_reporter as classify
+from tcbot import error_reporter as classify
 from tcbot.utils.circuit_breaker import CircuitOpenError
 
 

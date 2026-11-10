@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from tcbot.utils import error_reporter
+from tcbot import error_reporter
 
 
 def _record(message: str) -> logging.LogRecord:

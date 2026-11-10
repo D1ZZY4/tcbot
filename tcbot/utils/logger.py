@@ -11,9 +11,12 @@ import copy
 import logging
 from contextvars import ContextVar
 from datetime import UTC, datetime
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
 
 # ────────────────────── Request context ─────────────────────────────── #
 
@@ -140,10 +143,29 @@ async def drain_pending() -> None:
 
 
 _SUPPRESS_PREFIXES: tuple[str, ...] = (
-    "tcbot.utils.error_reporter",
+    "tcbot.error_reporter",
     "httpcore",
     "httpx._client",
 )
+
+# * Registered by the error reporter at startup. The reporter lives above
+# * the utils layer, so the logger must not import it: a direct import
+# * would close a cycle between the two. Registering the sink keeps the
+# * dependency one-way.
+_record_sink: Callable[[logging.LogRecord], Coroutine[Any, Any, None]] | None = None
+
+
+def set_record_sink(
+    sink: Callable[[logging.LogRecord], Coroutine[Any, Any, None]] | None,
+) -> None:
+    """Register the coroutine that ships a log record to the error channel.
+
+    Pass ``None`` to stop shipping. Without a registered sink the logger
+    still writes the record to the console; only the Telegram delivery is
+    skipped.
+    """
+    global _record_sink
+    _record_sink = sink
 
 
 def _log_task_failure(task: asyncio.Task[None]) -> None:
@@ -173,6 +195,9 @@ class TelegramErrorHandler(logging.Handler):
         """Schedule an async Telegram error report for the record."""
         if any(record.name.startswith(p) for p in _SUPPRESS_PREFIXES):
             return
+        sink = _record_sink
+        if sink is None:
+            return
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -181,15 +206,10 @@ class TelegramErrorHandler(logging.Handler):
             # * shipped. handleError() would print a misleading
             # * "Logging error" traceback for a normal condition.
             return
-        try:
-            from tcbot.utils import error_reporter  # noqa: PLC0415
-        except ImportError:
-            self.handleError(record)
-            return
         # * Snapshot now: _bridge_to_stdlib clears exc_info on the live
         # * record after callHandlers, which would otherwise erase the
         # * traceback before this async task reads it.
-        task = loop.create_task(error_reporter.report_record(copy.copy(record)))
+        task = loop.create_task(sink(copy.copy(record)))
         _tg_tasks.add(task)
         task.add_done_callback(_tg_tasks.discard)
         task.add_done_callback(_log_task_failure)

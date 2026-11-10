@@ -15,10 +15,9 @@ from typing import Any, cast
 import pytest
 
 import api.cron as cron_mod
-from tcbot import _env_list, cfg, parse_chat_id
+from tcbot import _env_list, cfg, error_reporter, parse_chat_id
 from tcbot.database import mtproto
 from tcbot.modules import sync as sy
-from tcbot.utils import error_reporter
 
 
 def _run(coro: Any) -> Any:
