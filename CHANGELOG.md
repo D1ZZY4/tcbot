@@ -85,6 +85,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The locale helpers share one read path** (`tcbot/modules/helper/locale.py`): the private-chat and group-chat branches of the locale resolution were written twice each; they now call one helper per source. Behavior changes: none.
 
+- **The main-group check has one owner** (`tcbot/modules/helper/pipelines/appeal_submit_flow.py`): the group-appeal entry compared the chat id with the configured main group inline instead of using the shared primary-group guard. The guard now decides it everywhere. Behavior changes: none; the same chats are accepted.
+
 - **The hot path has a measured baseline** (`scripts/benchmark_hotpath.py`, `docs/operations/performance.md`): the database call transport, the two-level cache, and the bounded fan-out can now be measured in-process, without MongoDB, Redis, or a Telegram connection. Behavior changes: none; the benchmark is a development tool.
 
 - **One configuration model instead of an adapter layer** (`tcbot/__init__.py`): the runtime configuration was parsed into one model and then forwarded property by property through a second class. Behavior changes: none; the same values are available under the same names, the list settings are immutable, and the model rejects mutation after loading.

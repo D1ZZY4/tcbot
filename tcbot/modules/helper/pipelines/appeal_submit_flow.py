@@ -138,7 +138,7 @@ async def handle_group_appeal(
     chat = update.effective_chat
     if msg is None or user is None or msg.text is None or chat is None:
         return
-    if chat.id != cfg.main_group or not chat.id:
+    if not cfg.is_primary_group(chat.id):
         return
     text = msg.text.strip()
     if not starts_with_appeal_tag(text):
