@@ -352,6 +352,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **An unchanged member profile is no longer rewritten on every message** (`tcbot/database/users_cache.py`): the profile write invalidated the mention cache instead of populating it, so the change-detection guard could never fire for a member who was never rendered anywhere. Every message from an ordinary member cost a database update and a queued cache delete for data that had not changed. Behavior changes: the write populates the cache, so an unchanged profile costs no database round trip after the first message.
+
 - **Database calls get their own worker pool and a per-call budget** (`tcbot/database/mongos.py`): database work shared the event loop's default executor with other blocking calls, and a caller waited for the full socket timeout on a hung operation. Behavior changes: database calls run on a dedicated bounded pool, a hung operation releases the caller after 20 seconds, and the timeout counts as an outage signal for the circuit breaker.
 
 - **A Redis outage no longer disables the shared cache for the process lifetime** (`tcbot/database/redis_client.py`, `tcbot/database/cache/`): a Redis that was down at boot was never re-established, so cross-process role and connection state diverged until the key TTL expired. Behavior changes: the client is re-established lazily, at most one attempt per 30 seconds, and the shared cache recovers on its own.

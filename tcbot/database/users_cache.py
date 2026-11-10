@@ -338,8 +338,15 @@ async def upsert_user(
             upsert=True,
         )
     )
-    # * Invalidate mention cache so the next read reflects the updated profile.
-    user_mention_cache.invalidate(user_id)
+    # * Populate the mention cache when the write carried every field, so
+    # * the next change check hits L1 and an unchanged profile is not
+    # * rewritten on every message. A partial write (username or last name
+    # * left as "unknown, preserve existing") cannot reconstruct the stored
+    # * triple, so it invalidates instead.
+    if username is not None and last_name is not None:
+        user_mention_cache.put(user_id, [first_name, username, last_name])
+    else:
+        user_mention_cache.invalidate(user_id)
 
 
 async def upsert_user_if_changed(
@@ -356,6 +363,10 @@ async def upsert_user_if_changed(
     the MongoDB round-trip for the vast majority of updates (where identity
     data has not changed) and makes the hot-path member-cache handler
     nearly free.  Legacy two-element cache entries count as changed.
+
+    The guard only works because :func:`upsert_user` populates the mention
+    cache on a complete write; invalidating instead would leave every
+    ordinary member with an empty cache entry and one write per message.
 
     Returns True when a DB write was performed, False when skipped.
     """
@@ -402,9 +413,10 @@ def remember_identity(
 ) -> None:
     """Mirror a resolved identity into L1 without touching the database.
 
-    Used after a Telegram-side resolve: ``upsert_user`` invalidates rather
-    than populates, so without this the next read would miss L1. A fully
-    empty identity stores the not-found sentinel.
+    Used after a Telegram-side resolve so the next read hits L1. A partial
+    write through :func:`upsert_user` invalidates rather than populates, so
+    without this the next read would miss L1. A fully empty identity stores
+    the not-found sentinel.
     """
     if first_name is None:
         user_mention_cache.put(user_id, list(_NOT_FOUND_SENTINEL))
