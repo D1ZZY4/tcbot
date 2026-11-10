@@ -19,6 +19,33 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
+async def _user_locale(user_id: int) -> str | None:
+    """Read the stored user locale, or None when it is unavailable."""
+    try:
+        locale = await db.settings_db.get_user_locale(user_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("locale user read failed for %d: %s", user_id, exc)
+        return None
+    return locale if isinstance(locale, str) else None
+
+
+async def _group_locale(chat_id: int, chat_type: str) -> str:
+    """Resolve the locale a group-like chat renders in."""
+    try:
+        locale = await db.groups_db.get_group_locale(chat_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("locale group read failed for %d: %s", chat_id, exc)
+        locale = None
+    return resolve_locale(
+        chat_type=chat_type,
+        group_locale=locale if isinstance(locale, str) else None,
+    )
+
+
 async def effective_locale(chat_type: str | None, user_id: int, chat_id: int) -> str:
     """Resolve the locale used to render a message in this chat.
 
@@ -30,28 +57,11 @@ async def effective_locale(chat_type: str | None, user_id: int, chat_id: int) ->
     """
     effective_type = chat_type or "private"
     if effective_type == "private":
-        try:
-            user_locale = await db.settings_db.get_user_locale(user_id)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            log.debug("locale user read failed for %d: %s", user_id, exc)
-            user_locale = None
         return resolve_locale(
             chat_type="private",
-            user_locale=user_locale if isinstance(user_locale, str) else None,
+            user_locale=await _user_locale(user_id),
         )
-    try:
-        group_locale = await db.groups_db.get_group_locale(chat_id)
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.debug("locale group read failed for %d: %s", chat_id, exc)
-        group_locale = None
-    return resolve_locale(
-        chat_type=effective_type,
-        group_locale=group_locale if isinstance(group_locale, str) else None,
-    )
+    return await _group_locale(chat_id, effective_type)
 
 
 async def locale_for_update(update: Update) -> str:
@@ -80,16 +90,9 @@ async def locale_for_user(user_id: int) -> str:
     (ban notices, appeal updates). Falls back to the default locale;
     resolution never raises.
     """
-    try:
-        user_locale = await db.settings_db.get_user_locale(user_id)
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.debug("locale user read failed for %d: %s", user_id, exc)
-        user_locale = None
     return resolve_locale(
         chat_type="private",
-        user_locale=user_locale if isinstance(user_locale, str) else None,
+        user_locale=await _user_locale(user_id),
     )
 
 
@@ -102,14 +105,7 @@ async def locale_for_chat(chat: object) -> str:
     """
     chat_id = getattr(chat, "id", 0)
     chat_type = getattr(chat, "type", None)
-    try:
-        group_locale = await db.groups_db.get_group_locale(chat_id)
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.debug("locale group read failed for %d: %s", chat_id, exc)
-        group_locale = None
-    return resolve_locale(
-        chat_type=chat_type if isinstance(chat_type, str) else "group",
-        group_locale=group_locale if isinstance(group_locale, str) else None,
+    return await _group_locale(
+        chat_id,
+        chat_type if isinstance(chat_type, str) else "group",
     )
