@@ -15,7 +15,7 @@ from tcbot.modules.helper import keyboards, messages, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply, send_log
 from tcbot.modules.helper.parse_link import message_link
-from tcbot.modules.helper.pipelines.demote_flow import Demote
+from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.pipelines.reason_flow import BuildReason, build_modaction_conv
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -131,38 +131,14 @@ async def execute_kick(
         # * re-demote here to close the TOCTOU gap before the unban fan-out.
         # * Best-effort: ban_chat_member above already ran, so a lookup
         # * failure must not skip the unban and turn this kick into a ban.
-        try:
-            pre_fanout_role = await db.users_roles.get_effective_role(
-                target_id, fresh=True
-            )
-        except Exception:
-            log.exception(
-                "Pre-fanout role lookup failed for target %d; proceeding with kick anyway",
-                target_id,
-            )
-            pre_fanout_role = None
-        if pre_fanout_role:
-            try:
-                await Demote.execute(
-                    ctx.bot,
-                    target_id,
-                    target_name,
-                    pre_fanout_role,
-                    admin_id,
-                    admin_fname,
-                    trigger="kick",
-                )
-                log.info(
-                    "Demoted target %d (role=%s) before kick fan-out; proof-collection TOCTOU window closed",
-                    target_id,
-                    pre_fanout_role,
-                )
-            except Exception:
-                log.exception(
-                    "Demote before kick fan-out failed for target %d (role=%s); proceeding anyway",
-                    target_id,
-                    pre_fanout_role,
-                )
+        await demote_before_enforcement(
+            ctx.bot,
+            target_id,
+            target_name,
+            trigger="kick",
+            executor_id=admin_id,
+            executor_fname=admin_fname,
+        )
         unban_result, log_send_result = await asyncio.gather(
             ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
             send_log(

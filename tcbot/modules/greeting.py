@@ -25,7 +25,7 @@ from tcbot.modules.helper import decorators
 from tcbot.modules.helper.locale import locale_for_chat, locale_for_update
 from tcbot.modules.helper.messages import safe_reply
 from tcbot.modules.helper.parse_link import appeal_deep_link
-from tcbot.modules.helper.pipelines.demote_flow import Demote
+from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import link, user_ref
 from tcbot.utils.i18n import Safe, t
@@ -70,48 +70,6 @@ async def _in_federation(chat_id: int, *, action: str) -> bool | None:
             "is_connected check failed for chat=%d on %s: %s", chat_id, action, exc
         )
         return None
-
-
-async def _demote_for_enforcement(
-    bot: Bot, user_id: int, first_name: str, *, trigger: str
-) -> None:
-    """Best-effort demote of a role-holding target before join enforcement.
-
-    Shared by the ban and mute branches of both join paths
-    (``_handle_member`` and ``on_join_request_approved``), which carried
-    four identical copies: guarded role lookup, ``Demote.execute``, loud
-    logs. A lookup or demote failure never skips enforcement below (the
-    DB record already exists; enforcement is the side effect), it only
-    logs loudly and proceeds as non-staff.
-    """
-    try:
-        target_role = await db.users_roles.get_effective_role(user_id, fresh=True)
-    except Exception:
-        log.exception(
-            "Role lookup failed on join %s for uid=%d; proceeding anyway",
-            trigger,
-            user_id,
-        )
-        return
-    if not target_role:
-        return
-    try:
-        await Demote.execute(
-            bot,
-            user_id,
-            first_name or str(user_id),
-            target_role,
-            0,
-            "",
-            trigger=trigger,
-        )
-    except Exception:
-        log.exception(
-            "Demote on join %s failed for uid=%d role=%s",
-            trigger,
-            user_id,
-            target_role,
-        )
 
 
 async def _handle_member(
@@ -166,7 +124,9 @@ async def _handle_member(
         # * Best-effort demote keeps the role-vs-state invariant (a
         # * banned user must not hold a federation role); enforcement below
         # * runs regardless because the DB record already exists.
-        await _demote_for_enforcement(bot, member.id, member.first_name, trigger="ban")
+        await demote_before_enforcement(
+            bot, member.id, member.first_name, trigger="ban"
+        )
         try:
             await asyncio.wait_for(
                 bot.ban_chat_member(chat.id, member.id),
@@ -213,7 +173,9 @@ async def _handle_member(
         return
 
     if mute:
-        await _demote_for_enforcement(bot, member.id, member.first_name, trigger="mute")
+        await demote_before_enforcement(
+            bot, member.id, member.first_name, trigger="mute"
+        )
         until = mute.get("until_date")
         perms = ChatPermissions(can_send_messages=False)
         try:
@@ -351,7 +313,9 @@ async def on_join_request_approved(
         # * well; ban_chat_member on an already-removed user is benign.
         # * Checked before the mute-failure early-return below so a mute-DB
         # * outage cannot disable ban enforcement on this path.
-        await _demote_for_enforcement(ctx.bot, user.id, user.first_name, trigger="ban")
+        await demote_before_enforcement(
+            ctx.bot, user.id, user.first_name, trigger="ban"
+        )
         try:
             await asyncio.wait_for(
                 ctx.bot.ban_chat_member(chat.id, user.id),
@@ -375,7 +339,7 @@ async def on_join_request_approved(
     if not mute:
         return
 
-    await _demote_for_enforcement(ctx.bot, user.id, user.first_name, trigger="mute")
+    await demote_before_enforcement(ctx.bot, user.id, user.first_name, trigger="mute")
     until = mute.get("until_date")
     perms = ChatPermissions(can_send_messages=False)
     try:

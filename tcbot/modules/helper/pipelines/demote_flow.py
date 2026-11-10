@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from telegram.error import Forbidden
@@ -25,6 +26,23 @@ if TYPE_CHECKING:
     from telegram import Bot, Message
 
 log = get_logger(__name__)
+
+
+class UnbanGate(Enum):
+    """Outcome of the demote-before-unban gate.
+
+    ``PROCEED`` lets the unban run. The blocking states keep a staff holder
+    from keeping rank after the ban lifts.
+    """
+
+    PROCEED = "proceed"
+    DEMOTE_FAILED = "demote_failed"
+    ROLE_SURVIVED = "role_survived"
+
+    @property
+    def may_proceed(self) -> bool:
+        """True when the caller may continue with the unban."""
+        return self is UnbanGate.PROCEED
 
 
 # ────────────────────────── Demote class ────────────────────────── #
@@ -189,3 +207,128 @@ class Demote:
                     "Demote DM send failed for target=%d: %s", target_id, dm_result
                 )
         return True
+
+
+# ───────────────────────── Shared demote gates ──────────────────────── #
+
+
+async def demote_before_enforcement(
+    bot: Bot,
+    target_id: int,
+    target_fname: str,
+    *,
+    trigger: str,
+    executor_id: int = 0,
+    executor_fname: str = "",
+) -> str | None:
+    """Best-effort demote of a role-holding target before enforcement.
+
+    Returns the demoted role, or None when the target held no role or the
+    demote failed. Never raises: the moderation record already exists and
+    enforcement is the side effect, so a lookup or demote failure is logged
+    loudly and the target is treated as non-staff.
+
+    Single owner for the ban, kick, mute, and join-enforcement pre-fanout
+    demote, so the rule cannot drift between the four copies that used to
+    carry it. ``executor_id`` stays 0 for join enforcement, where no
+    moderator triggered the action.
+    """
+    try:
+        target_role = await db.users_roles.get_effective_role(target_id, fresh=True)
+    except Exception:
+        log.exception(
+            "Pre-%s role lookup failed for target %d; proceeding anyway",
+            trigger,
+            target_id,
+        )
+        return None
+    if not target_role:
+        return None
+    try:
+        await Demote.execute(
+            bot,
+            target_id,
+            target_fname or str(target_id),
+            target_role,
+            executor_id,
+            executor_fname,
+            trigger=trigger,
+        )
+    except Exception:
+        log.exception(
+            "Demote before %s fan-out failed for target %d (role=%s); proceeding anyway",
+            trigger,
+            target_id,
+            target_role,
+        )
+        return None
+    log.info(
+        "Demoted target %d (role=%s) before %s fan-out; "
+        "proof-collection TOCTOU window closed",
+        target_id,
+        target_role,
+        trigger,
+    )
+    return target_role
+
+
+async def demote_before_unban(
+    bot: Bot,
+    target_id: int,
+    target_fname: str,
+    target_role: str,
+    executor_id: int,
+    executor_fname: str,
+) -> UnbanGate:
+    """Remove a federation role before an unban; fail closed on failure.
+
+    Returns :attr:`UnbanGate.PROCEED` when the caller may unban. Unlike
+    :func:`demote_before_enforcement` this gate fails closed: a demote that
+    raises, or a demote that cleared no row while the role still resolves,
+    blocks the unban so a staff holder never keeps rank after the ban
+    lifts. Single owner for the /tcunban and appeal-approve paths.
+    """
+    try:
+        removed = await Demote.execute(
+            bot,
+            target_id,
+            target_fname,
+            target_role,
+            executor_id,
+            executor_fname,
+            trigger=None,
+        )
+    except Exception:
+        log.exception(
+            "Demote before unban failed for target=%d role=%s",
+            target_id,
+            target_role,
+        )
+        return UnbanGate.DEMOTE_FAILED
+    if removed:
+        return UnbanGate.PROCEED
+    # * No row was cleared: normally the role is already gone, so the unban
+    # * may proceed. A split-brain where the role still resolves must not.
+    try:
+        live_role = await db.users_roles.get_effective_role(target_id, fresh=True)
+    except Exception:
+        log.exception(
+            "Live role re-read failed after no-op demote for target=%d", target_id
+        )
+        live_role = target_role
+    if live_role in db.users_roles.STAFF_ROLES:
+        log.warning(
+            "Unban blocked: demote was a no-op but target=%d still holds role=%s",
+            target_id,
+            live_role,
+        )
+        return UnbanGate.ROLE_SURVIVED
+    return UnbanGate.PROCEED
+
+
+__all__ = [
+    "Demote",
+    "UnbanGate",
+    "demote_before_enforcement",
+    "demote_before_unban",
+]

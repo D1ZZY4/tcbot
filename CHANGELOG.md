@@ -11,6 +11,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Authorization and expiry contracts are pinned** (`tests/test_moderation_contracts.py`, `tests/test_role_assignment_rules.py`): the role-rank table, the rate-limit exemption and throttle tiers, the mute expiry clauses, the atomic appeal and ban claims, the primary-group merge, the promotion rules, and the ownership transfer are covered as executable contracts. Behavior changes: none.
 
+- **Demote gates have one owner** (`tcbot/modules/helper/pipelines/demote_flow.py`): `demote_before_enforcement` and `demote_before_unban` replace the four copies of the pre-fan-out re-demote and the two copies of the pre-unban demote. The enforcement gate stays best effort, the unban gate fails closed. Behavior changes: none for the enforcement paths; the appeal-approve path now blocks the unban when the role survives the demote.
+
 - **Federation log delivery has one owner** (`tcbot/modules/helper/messages/safe_edits.py`): `send_log` posts the audit log to the configured destination as MarkdownV2 in the configured thread, replacing twenty-seven hand-written copies of the same call.
 
 - **Role sets and role labels have one owner** (`tcbot/database/users_roles.py`): `STAFF_ROLES`, `FOUNDER_ADMIN_ROLES`, and `role_label` replace eleven inline role-set literals and two different label fallbacks.

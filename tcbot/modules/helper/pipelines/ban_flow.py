@@ -30,7 +30,10 @@ from tcbot.modules.helper.messages import (
     safe_reply,
 )
 from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
-from tcbot.modules.helper.pipelines.demote_flow import Demote
+from tcbot.modules.helper.pipelines.demote_flow import (
+    Demote,
+    demote_before_enforcement,
+)
 from tcbot.modules.helper.pipelines.proof_flow import (
     PROOF_MEDIA_FILTER,
     BuildProof,
@@ -493,36 +496,14 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             groups_fetch_failed = True
         else:
             groups_fetch_failed = False
-    try:
-        pre_fanout_role = await db.users_roles.get_effective_role(target_id, fresh=True)
-    except Exception:
-        log.exception(
-            "Pre-fanout role lookup failed for target %d; proceeding with ban anyway",
-            target_id,
-        )
-        pre_fanout_role = None
-    if pre_fanout_role:
-        try:
-            await Demote.execute(
-                bot,
-                target_id,
-                target_fname,
-                pre_fanout_role,
-                admin_id,
-                admin_fname,
-                trigger="ban",
-            )
-            log.info(
-                "Demoted target %d (role=%s) before ban fan-out; proof-collection TOCTOU window closed",
-                target_id,
-                pre_fanout_role,
-            )
-        except Exception:
-            log.exception(
-                "Demote before ban fan-out failed for target %d (role=%s); proceeding anyway",
-                target_id,
-                pre_fanout_role,
-            )
+    await demote_before_enforcement(
+        bot,
+        target_id,
+        target_fname,
+        trigger="ban",
+        executor_id=admin_id,
+        executor_fname=admin_fname,
+    )
     groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
     results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]

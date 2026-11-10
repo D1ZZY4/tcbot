@@ -17,7 +17,7 @@ from tcbot.modules.helper import keyboards, messages, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_edit_message, safe_reply, send_log
 from tcbot.modules.helper.parse_link import message_link
-from tcbot.modules.helper.pipelines.demote_flow import Demote
+from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.pipelines.reason_flow import (
     BuildReason,
@@ -140,36 +140,14 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             catch_all=True,
         )
         return
-    try:
-        pre_fanout_role = await db.users_roles.get_effective_role(target_id, fresh=True)
-    except Exception:
-        log.exception(
-            "Pre-fanout role lookup failed for target %d; proceeding with mute anyway",
-            target_id,
-        )
-        pre_fanout_role = None
-    if pre_fanout_role:
-        try:
-            await Demote.execute(
-                bot,
-                target_id,
-                target_fname,
-                pre_fanout_role,
-                admin_id,
-                admin_fname,
-                trigger="mute",
-            )
-            log.info(
-                "Demoted target %d (role=%s) before mute fan-out; proof-collection TOCTOU window closed",
-                target_id,
-                pre_fanout_role,
-            )
-        except Exception:
-            log.exception(
-                "Demote before mute fan-out failed for target %d (role=%s); proceeding anyway",
-                target_id,
-                pre_fanout_role,
-            )
+    await demote_before_enforcement(
+        bot,
+        target_id,
+        target_fname,
+        trigger="mute",
+        executor_id=admin_id,
+        executor_fname=admin_fname,
+    )
     restrict_coros = [
         bot.restrict_chat_member(
             grp.get("chat_id", 0),
