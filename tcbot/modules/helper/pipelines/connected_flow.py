@@ -35,7 +35,7 @@ from tcbot.utils.dispatch import (
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
+from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT, monotonic
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -54,6 +54,15 @@ _REQUIRED_PERMS: tuple[str, ...] = (
     "can_invite_users",
 )
 _REPLAY_CAP: int = 500
+# * Telegram admits 20 requests a minute per group, so a long ban or mute
+# * list cannot be enforced in one pass. The replay runs until this budget
+# * is spent and reports the remainder as not applied; the enforcement
+# * sweep repairs the rest. Without the budget a large list kept the
+# * connect handler running for a quarter of an hour.
+_REPLAY_BUDGET_S: float = 20.0
+# * Enforcement actions issued per round. The deadline is checked between
+# * rounds, so the round size bounds how long the budget can be overrun.
+_REPLAY_ROUND: int = 8
 _harvest_tasks: set[asyncio.Task[None]] = set()
 
 
@@ -582,29 +591,54 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
         return all(getattr(member, p, False) for p in self.required_perms)
 
     @staticmethod
-    async def _replay_bans(bot: Bot, chat_id: int, ban_uids: list[int]) -> int:
-        """Fan out every active federation ban into the new group."""
-        results = await fan_out([bot.ban_chat_member(chat_id, uid) for uid in ban_uids])
-        return len(results) - count_transient_errors(results)
+    async def _replay_bans(
+        bot: Bot, chat_id: int, ban_uids: list[int], deadline: float
+    ) -> tuple[int, int]:
+        """Fan out every active federation ban into the new group.
+
+        Returns ``(applied, skipped)``. The per-chat Telegram limit admits
+        20 requests a minute, so a long list cannot be enforced in one
+        pass: the replay stops at *deadline* and reports the remainder.
+        """
+        pending = list(ban_uids)
+        applied = 0
+        while pending and monotonic() < deadline:
+            chunk = pending[:_REPLAY_ROUND]
+            results = await fan_out(
+                [bot.ban_chat_member(chat_id, uid) for uid in chunk]
+            )
+            applied += len(results) - count_transient_errors(results)
+            pending = pending[len(chunk) :]
+        return applied, len(pending)
 
     @staticmethod
     async def _replay_mutes(
-        bot: Bot, chat_id: int, mute_docs: list[ActiveMuteDoc]
-    ) -> int:
-        """Fan out every active federation mute into the new group."""
+        bot: Bot, chat_id: int, mute_docs: list[ActiveMuteDoc], deadline: float
+    ) -> tuple[int, int]:
+        """Fan out every active federation mute into the new group.
+
+        Returns ``(applied, skipped)``; see :meth:`_replay_bans` for the
+        deadline contract.
+        """
         _mute_perms = ChatPermissions(can_send_messages=False)
-        mute_results = await fan_out(
-            [
-                bot.restrict_chat_member(
-                    chat_id,
-                    int(doc.get("user_id", 0)),
-                    permissions=_mute_perms,
-                    until_date=doc.get("until_date"),
-                )
-                for doc in mute_docs
-            ]
-        )
-        return len(mute_results) - count_transient_errors(mute_results)
+        pending = list(mute_docs)
+        applied = 0
+        while pending and monotonic() < deadline:
+            chunk = pending[:_REPLAY_ROUND]
+            results = await fan_out(
+                [
+                    bot.restrict_chat_member(
+                        chat_id,
+                        int(doc.get("user_id", 0)),
+                        permissions=_mute_perms,
+                        until_date=doc.get("until_date"),
+                    )
+                    for doc in chunk
+                ]
+            )
+            applied += len(results) - count_transient_errors(results)
+            pending = pending[len(chunk) :]
+        return applied, len(pending)
 
     async def complete_join(
         self,
@@ -656,6 +690,10 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
             replay_blind = True
         else:
             replay_blind = False
+        # * The replay is bounded: Telegram paces same-chat requests, so a
+        # * long enforcement list would otherwise keep the connect handler
+        # * running far past any reasonable request window.
+        deadline = monotonic() + _REPLAY_BUDGET_S
         if isinstance(mute_docs, BaseException):
             log.error("active_mute_docs failed for new chat %d: %s", chat_id, mute_docs)
             mute_docs = []
@@ -687,8 +725,24 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
                 task.add_done_callback(_harvest_tasks.discard)
             except RuntimeError:
                 log.debug("Harvest task skipped: no running event loop.")
-        applied_bans = await self._replay_bans(bot, chat_id, ban_uids)
-        applied_mutes = await self._replay_mutes(bot, chat_id, mute_docs)
+        applied_bans, skipped_bans = await self._replay_bans(
+            bot, chat_id, ban_uids, deadline
+        )
+        applied_mutes, skipped_mutes = await self._replay_mutes(
+            bot, chat_id, mute_docs, deadline
+        )
+        if skipped_bans or skipped_mutes:
+            # * The replay stopped at the budget, so the new group is not
+            # * fully enforced yet. The operator is told to re-sync, and
+            # * the enforcement sweep repairs the remainder.
+            log.warning(
+                "Connect replay for chat %d stopped at the time budget: "
+                "%d ban(s) and %d mute(s) not applied.",
+                chat_id,
+                skipped_bans,
+                skipped_mutes,
+            )
+            replay_blind = True
         try:
             await send_log(
                 bot,
