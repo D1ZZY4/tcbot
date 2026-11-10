@@ -191,95 +191,25 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
 # ────────────────────────── Ban executors ───────────────────────── #
 
 
-async def _execute_ban_update(
+async def _execute_ban_record(
     bot: Bot,
-    existing: BanDoc,
     meta: dict[str, Any],
+    *,
+    existing: BanDoc | None,
+    ban_id: str,
     proof_msg_id: int | None,
     proof_link: str | None,
     prev_proof_link: str | None,
-    logs_chat: int,
-    logs_thread: int | None,
-) -> tuple[int, bool]:
-    """Build log text, keyboard, and DB update for a re-ban."""
-    target_id: int = meta.get("ban_target_id") or 0
-    target_fname: str = meta.get("ban_target_fname", str(target_id))
-    admin_id: int = meta.get("ban_admin_id") or 0
-    admin_fname: str = meta.get("ban_admin_fname", "Admin")
-    reason: str = meta.get(
-        "ban_reason", replies.no_reason(meta.get("ban_locale"), plain=True)
-    )
-    ban_id = str(existing.get("ban_id", ""))
-    old_admin_id = int(existing.get("admin_user_id", admin_id))
-    bot_username = bot.username or ""
-    old_proof_msg_id = int(existing.get("proof_message_id", 0))
-    old_log_msg_id = int(existing.get("log_message_id", 0))
-    new_proof_msg_id = proof_msg_id if proof_msg_id else old_proof_msg_id
-    try:
-        old_admin_fname = await db.users_cache.get_first_name(old_admin_id, "Admin")
-    except Exception as exc:
-        log.debug("Old-admin name fallback for %d: %s", old_admin_id, exc)
-        old_admin_fname = "Admin"
-    log_text = messages.ban_update_log(
-        target_id,
-        target_fname,
-        admin_id,
-        admin_fname,
-        old_admin_id,
-        old_admin_fname,
-        reason,
-        ban_id,
-        to_utc(existing.get("timestamp", utc_now())),
-    )
-    _appeal_url = appeal_deep_link(bot_username, ban_id)
-    kb = (
-        keyboards.ban_log_kb(
-            target_id,
-            proof_link,
-            _appeal_url,
-            meta.get("ban_locale"),
-            previous_proof_link=prev_proof_link or None,
-        )
-        if proof_link
-        else None
-    )
-    send_kwargs: dict = {"parse_mode": "MarkdownV2", "message_thread_id": logs_thread}
-    if kb:
-        send_kwargs["reply_markup"] = kb
-    try:
-        await db.bans_db.update_ban(
-            ban_id,
-            reason,
-            admin_id,
-            new_proof_msg_id,
-            0,
-            old_proof_msg_id,
-            old_log_msg_id,
-        )
-    except Exception:
-        log.exception("update_ban failed for ban_id=%s", ban_id)
-        return 0, False
-    try:
-        log_msg = await bot.send_message(logs_chat, log_text, **send_kwargs)
-    except Exception:
-        log.exception("Ban log send failed for ban_id=%s", ban_id)
-        return 0, True
-    log_msg_id = log_msg.message_id
-    log.info("Ban log posted: ban_id=%s msg_id=%s", ban_id, log_msg_id)
-    return log_msg_id, True
-
-
-async def _execute_new_ban(
-    bot: Bot,
-    meta: dict[str, Any],
-    proof_msg_id: int | None,
-    proof_link: str | None,
     now: datetime,
     logs_chat: int,
     logs_thread: int | None,
-    ban_id: str,
 ) -> tuple[int, bool]:
-    """Build log text, keyboard, and DB insert for a fresh ban."""
+    """Write the ban record and post the federation log.
+
+    One executor for the fresh-ban and the re-ban path: the two differ
+    only in the log template, the keyboard's previous-proof link, and the
+    database write. Returns ``(log_message_id, db_ok)``.
+    """
     target_id: int = meta.get("ban_target_id") or 0
     target_fname: str = meta.get("ban_target_fname", str(target_id))
     admin_id: int = meta.get("ban_admin_id") or 0
@@ -288,34 +218,72 @@ async def _execute_new_ban(
         "ban_reason", replies.no_reason(meta.get("ban_locale"), plain=True)
     )
     bot_username = bot.username or ""
-    log_text = messages.ban_log(
-        target_id,
-        target_fname,
-        admin_id,
-        admin_fname,
-        reason,
-        ban_id,
-        now,
-    )
+    is_update = existing is not None
+    if is_update:
+        old_admin_id = int(existing.get("admin_user_id", admin_id))
+        try:
+            old_admin_fname = await db.users_cache.get_first_name(old_admin_id, "Admin")
+        except Exception as exc:
+            log.debug("Old-admin name fallback for %d: %s", old_admin_id, exc)
+            old_admin_fname = "Admin"
+        log_text = messages.ban_update_log(
+            target_id,
+            target_fname,
+            admin_id,
+            admin_fname,
+            old_admin_id,
+            old_admin_fname,
+            reason,
+            ban_id,
+            to_utc(existing.get("timestamp", utc_now())),
+        )
+    else:
+        log_text = messages.ban_log(
+            target_id,
+            target_fname,
+            admin_id,
+            admin_fname,
+            reason,
+            ban_id,
+            now,
+        )
     kb = (
         keyboards.ban_log_kb(
             target_id,
             proof_link,
             appeal_deep_link(bot_username, ban_id),
             meta.get("ban_locale"),
+            previous_proof_link=prev_proof_link or None,
         )
         if proof_link
         else None
     )
-    send_kwargs = {"parse_mode": "MarkdownV2", "message_thread_id": logs_thread}
-    if kb:
+    send_kwargs: dict[str, Any] = {
+        "parse_mode": "MarkdownV2",
+        "message_thread_id": logs_thread,
+    }
+    if kb is not None:
         send_kwargs["reply_markup"] = kb
     try:
-        await db.bans_db.create_ban(
-            target_id, reason, admin_id, proof_msg_id or 0, 0, ban_id
-        )
+        if is_update:
+            old_proof_msg_id = int(existing.get("proof_message_id", 0))
+            old_log_msg_id = int(existing.get("log_message_id", 0))
+            new_proof_msg_id = proof_msg_id if proof_msg_id else old_proof_msg_id
+            await db.bans_db.update_ban(
+                ban_id,
+                reason,
+                admin_id,
+                new_proof_msg_id,
+                0,
+                old_proof_msg_id,
+                old_log_msg_id,
+            )
+        else:
+            await db.bans_db.create_ban(
+                target_id, reason, admin_id, proof_msg_id or 0, 0, ban_id
+            )
     except Exception:
-        log.exception("create_ban failed for ban_id=%s", ban_id)
+        log.exception("Ban record write failed for ban_id=%s", ban_id)
         return 0, False
     try:
         log_msg = await bot.send_message(logs_chat, log_text, **send_kwargs)
@@ -388,7 +356,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         logs_chat, logs_thread = cfg.logs
         # * Proof is required for new bans: a proof-less record would let
         # * /check and audit logs reference evidence that never landed.
-        # * Updates keep the old proof via _execute_ban_update fallback.
+        # * Updates keep the old proof via the re-ban branch.
         if not is_update and proof_msg_id is None:
             log.error(
                 "Ban aborted for target=%d: proof upload returned None", target_id
@@ -413,21 +381,18 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                 _groups_task.cancel()
             await asyncio.gather(_groups_task, return_exceptions=True)
             return
-        if is_update:
-            log_msg_id, db_ok = await _execute_ban_update(
-                bot,
-                existing,
-                meta,
-                proof_msg_id,
-                proof_link,
-                prev_proof_link,
-                logs_chat,
-                logs_thread,
-            )
-        else:
-            log_msg_id, db_ok = await _execute_new_ban(
-                bot, meta, proof_msg_id, proof_link, now, logs_chat, logs_thread, ban_id
-            )
+        log_msg_id, db_ok = await _execute_ban_record(
+            bot,
+            meta,
+            existing=existing if is_update else None,
+            ban_id=ban_id,
+            proof_msg_id=proof_msg_id,
+            proof_link=proof_link,
+            prev_proof_link=prev_proof_link if is_update else None,
+            now=now,
+            logs_chat=logs_chat,
+            logs_thread=logs_thread,
+        )
     except asyncio.CancelledError:
         if not _groups_task.done():
             _groups_task.cancel()
