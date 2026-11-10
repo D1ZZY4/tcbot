@@ -122,7 +122,6 @@ class CheckProfileMixin:
             db.bans_db.user_appeal_count(target_id),
             db.warns_db.user_total_warns(target_id),
             db.warns_db.user_warn_groups(target_id),
-            db.warns_db.federation_warn_count(target_id),
             db.kicks_db.user_kick_count(target_id),
             db.mutes_db.user_mute_count(target_id),
         ]
@@ -134,7 +133,7 @@ class CheckProfileMixin:
         r_role_meta = _results[1]
         ban_failed = isinstance(_results[2], BaseException)
         mute_failed = isinstance(_results[3], BaseException)
-        counts_failed = any(isinstance(r, BaseException) for r in _results[4:11])
+        counts_failed = any(isinstance(r, BaseException) for r in _results[4:10])
         active_ban = _results[2] if not ban_failed else None
         active_mute = _results[3] if not mute_failed else None
         ban_total = _results[4] if not isinstance(_results[4], BaseException) else 0
@@ -144,11 +143,12 @@ class CheckProfileMixin:
         warn_groups: list[tuple[int, int]] = (
             cast("list[tuple[int, int]]", _wg) if _wg is not None else []
         )
-        fed_warn_total = (
-            _results[8] if not isinstance(_results[8], BaseException) else 0
-        )
-        kick_total = _results[9] if not isinstance(_results[9], BaseException) else 0
-        mute_total = _results[10] if not isinstance(_results[10], BaseException) else 0
+        # * The federation total is the sum of the per-group counts that the
+        # * warn-group read already returned, so a second query would read
+        # * the same rows again.
+        fed_warn_total = sum(count for _, count in warn_groups)
+        kick_total = _results[8] if not isinstance(_results[8], BaseException) else 0
+        mute_total = _results[9] if not isinstance(_results[9], BaseException) else 0
         if isinstance(r_user_info, BaseException):
             log.error("_resolve_user_info failed for %d: %s", target_id, r_user_info)
             fname, uname = str(target_id), None
@@ -162,8 +162,8 @@ class CheckProfileMixin:
                 "tuple[str | None, int | None, datetime | None]", r_role_meta
             )
         identity_note: str | None = None
-        if len(_results) > 11:
-            r_ident = _results[11]
+        if len(_results) > 10:
+            r_ident = _results[10]
             if not isinstance(r_ident, BaseException):
                 identity_note = profile_note(cast("Identity", r_ident), locale)
         role_label = (
