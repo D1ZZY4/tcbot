@@ -9,8 +9,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.keyboards import paged_drill_kb
-from tcbot.modules.helper.pipelines.stats_flow import _list_kb
+from tcbot.modules.helper.keyboards import paged_drill_kb, stats_list_kb
 
 
 def _texts(markup) -> list[list[str]]:  # type: ignore[no-untyped-def]
@@ -57,7 +56,9 @@ def test_extra_rows_land_before_back() -> None:
 
 
 def test_stats_list_kb_keeps_shape_and_callbacks() -> None:
-    kb = _list_kb(0, 2, 4, cb_prefix="stats_users", item_cb_prefix="stats_user_item")
+    kb = stats_list_kb(
+        0, 2, 4, cb_prefix="stats_users", item_cb_prefix="stats_user_item"
+    )
     rows = kb.inline_keyboard
     assert [b.callback_data for b in rows[0]] == [
         "stats_user_item:0:0",

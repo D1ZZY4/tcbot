@@ -22,7 +22,6 @@ db_retry = "I couldn't reach the database right now. Please try again in a momen
 [perm]
 founder_only = "Founder only."
 staff_only = "TC Staff (Admin and above)."
-admin_above = "Admin and above (Founder / Admin)."
 dev_above = "Developer and above (Founder / Admin / Developer)."
 tester_above = "Tester and above (Founder / Admin / Developer / Tester)."
 

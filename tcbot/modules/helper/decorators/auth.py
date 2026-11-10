@@ -29,12 +29,6 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
-# * `ANONYMOUS_BOT_ID` is defined in `tcbot.modules.helper.identity` as the
-# * single source of truth for the GroupAnonymousBot placeholder. Re-exported
-# * under the historical name `_ANON_BOT_ID` so existing in-module references
-# * stay valid; new code should import from `identity` directly.
-_ANON_BOT_ID = ANONYMOUS_BOT_ID
-
 # * User-facing refusal prose lives in common.toml [refuse] (replies.py
 # * owners); each auth tier below names its replies function so refusals
 # * render in the viewer's locale instead of hardcoded English.
@@ -49,7 +43,7 @@ _REFUSAL_BY_LABEL: dict[str, Any] = {
 def _is_anon_admin(update: Update) -> bool:
     """Return True when the effective user is the anonymous admin placeholder bot."""
     u = update.effective_user
-    return u is not None and u.id == _ANON_BOT_ID
+    return u is not None and u.id == ANONYMOUS_BOT_ID
 
 
 def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:

@@ -135,11 +135,6 @@ def perm_staff_only(locale: str | None = None, *, plain: bool) -> str:
     return t("common.perm.staff_only", locale, plain=plain)
 
 
-def perm_admin_above(locale: str | None = None, *, plain: bool) -> str:
-    """Admin-and-above notice in the render locale."""
-    return t("common.perm.admin_above", locale, plain=plain)
-
-
 def perm_dev_above(locale: str | None = None, *, plain: bool) -> str:
     """Developer-and-above notice in the render locale."""
     return t("common.perm.dev_above", locale, plain=plain)

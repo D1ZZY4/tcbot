@@ -560,6 +560,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Removed
 
+- **Unused helpers and forwarding wrappers** (`tcbot/utils/time_and_date.py`, `tcbot/database/mtproto.py`, `tcbot/modules/helper/replies.py`, `tcbot/modules/helper/pipelines/stats_flow.py`, `tcbot/modules/helper/pipelines/check_flow.py`, `tcbot/modules/helper/decorators/auth.py`, `tcbot/modules/helper/keyboards/__init__.py`): a speculative timestamp helper, a configuration alias, a permission notice with no renderer, four keyboard wrappers that only forwarded, a placeholder alias, and an unused import. Behavior changes: none; the unused permission notice is removed from both locale catalogs.
+
 - **Motor and speedtest-cli leave the dependency graph** (`pyproject.toml`, `uv.lock`): the database layer now runs on synchronous PyMongo and `/speedtest` on speedtest.net, so neither package is needed. Behavior changes: none for operators beyond the entries above.
 
 - **Unused UTC display helper removed** (`tcbot/utils/time_and_date.py`, `docs/architecture/utilities.md`): `utc_now_str()` had no callers and its rows in the utilities guide are gone. Display rendering stays on `fmt_dt()`. Behavior changes: none.

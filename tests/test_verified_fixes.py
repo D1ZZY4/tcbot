@@ -15,7 +15,6 @@ from tcbot.modules import help as helpmod
 from tcbot.modules.help import _help_index_text, _module_text
 from tcbot.modules.helper import decorators, keyboards, replies
 from tcbot.modules.helper.ban_info import build_ban_detail
-from tcbot.modules.helper.pipelines import check_flow, stats_flow
 from tcbot.modules.helper.pipelines.connected_flow import BuildConnection
 from tcbot.modules.helper.pipelines.proof_flow import BuildProof
 from tcbot.modules.helper.pipelines.reason_flow import BuildReason
@@ -76,15 +75,6 @@ def test_flow_keyboards_delegate_to_single_source() -> None:
         == keyboards.connect_join_kb(
             conn.join_callback, conn.cancel_callback, locale="en-US"
         ).to_dict()
-    )
-    assert check_flow._back_to_check(7, "en-US") == keyboards.check_back_row(7, "en-US")
-    assert (
-        stats_flow.main_kb(show_users=True, locale="en-US").to_dict()
-        == keyboards.stats_main_kb(show_users=True, locale="en-US").to_dict()
-    )
-    assert (
-        stats_flow.back_kb("en-US").to_dict()
-        == keyboards.stats_back_kb("en-US").to_dict()
     )
 
 

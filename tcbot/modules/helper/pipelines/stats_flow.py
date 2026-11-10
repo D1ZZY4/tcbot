@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any, cast
 from telegram import (
     Bot,
     CallbackQuery,
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
 )
@@ -89,45 +88,6 @@ def launch_group_title_refresh(bot: Bot, chat_id: int) -> None:
         return
     _refresh_tasks.add(task)
     task.add_done_callback(_refresh_tasks.discard)
-
-
-# ──────────────────────── Keyboard helpers ──────────────────────── #
-
-
-def main_kb(
-    *, show_users: bool = False, locale: str | None = None
-) -> InlineKeyboardMarkup:
-    """Top-level menu: Staff / Bans / Chats; Users only for Founder."""
-    return stats_main_kb(show_users=show_users, locale=locale)
-
-
-def back_kb(locale: str | None = None) -> InlineKeyboardMarkup:
-    """Single Back button to the stats main menu."""
-    return stats_back_kb(locale)
-
-
-def _list_kb(
-    page: int,
-    total_pages: int,
-    n_items: int,
-    cb_prefix: str,
-    item_cb_prefix: str,
-    *,
-    extra_row: list[InlineKeyboardButton] | None = None,
-    item_ids: list[str] | None = None,
-    locale: str | None = None,
-) -> InlineKeyboardMarkup:
-    """Compose nav plus numbered detail buttons plus optional extra row."""
-    return stats_list_kb(
-        page,
-        total_pages,
-        n_items,
-        cb_prefix,
-        item_cb_prefix,
-        extra_row=extra_row,
-        item_ids=item_ids,
-        locale=locale,
-    )
 
 
 # ─────────────────────── Overview and roster ────────────────────── #
@@ -241,7 +201,7 @@ class OverviewViews:
         )
         if degraded:
             text += f"\n\n{t('stats.main.degraded', locale)}"
-        return text, main_kb(show_users=show_users, locale=locale)
+        return text, stats_main_kb(show_users=show_users, locale=locale)
 
     @classmethod
     async def staff_roster(
@@ -352,7 +312,7 @@ class OverviewViews:
         _section("Admins", admins)
         _section("Developers", developers)
         _section("Testers", testers)
-        return "\n".join(lines).rstrip(), back_kb(locale)
+        return "\n".join(lines).rstrip(), stats_back_kb(locale)
 
 
 # ────────────────────────── Member lists ────────────────────────── #
@@ -377,9 +337,9 @@ class PeopleViews:
             raise
         except Exception as exc:
             log.warning("stats users_list read failed: %s", exc)
-            return t("stats.error.db_fail", locale), back_kb(locale)
+            return t("stats.error.db_fail", locale), stats_back_kb(locale)
         if total == 0:
-            return t("stats.users.empty", locale), back_kb(locale)
+            return t("stats.users.empty", locale), stats_back_kb(locale)
         lines = [
             t(
                 "stats.users.header",
@@ -403,7 +363,7 @@ class PeopleViews:
                     user=Safe(user_ref(uid, fname, uname)),
                 )
             )
-        return "\n".join(lines), _list_kb(
+        return "\n".join(lines), stats_list_kb(
             page,
             total_pages,
             len(chunk),
@@ -479,10 +439,10 @@ class ChatViews:
             raise
         except Exception as exc:
             log.warning("stats chats_list read failed: %s", exc)
-            return t("stats.error.db_fail", locale), back_kb(locale)
+            return t("stats.error.db_fail", locale), stats_back_kb(locale)
         chunk, total_pages, page = paginate(groups, page, _PAGE_SIZE)
         if not groups:
-            return t("stats.chats.empty", locale), back_kb(locale)
+            return t("stats.chats.empty", locale), stats_back_kb(locale)
         lines = [
             t(
                 "stats.chats.header",
@@ -504,7 +464,7 @@ class ChatViews:
                     id=Safe(code(str(grp.get("chat_id", 0)))),
                 )
             )
-        return "\n".join(lines), _list_kb(
+        return "\n".join(lines), stats_list_kb(
             page,
             total_pages,
             len(chunk),
@@ -572,9 +532,9 @@ class BanViews:
             raise
         except Exception as exc:
             log.warning("stats bans_list read failed: %s", exc)
-            return t("stats.error.db_fail", locale), back_kb(locale)
+            return t("stats.error.db_fail", locale), stats_back_kb(locale)
         if total == 0:
-            return t("stats.bans_view.empty", locale), back_kb(locale)
+            return t("stats.bans_view.empty", locale), stats_back_kb(locale)
         uids = [b.get("banned_user_id", 0) for b in chunk]
         fname_map = await db.users_cache.get_first_names_batch(uids) if uids else {}
         lines = [
@@ -601,7 +561,7 @@ class BanViews:
                 )
             )
         search_row = stats_search_row(locale)
-        return "\n".join(lines), _list_kb(
+        return "\n".join(lines), stats_list_kb(
             page,
             total_pages,
             len(chunk),

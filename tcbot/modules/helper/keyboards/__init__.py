@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardMarkup
 
 from .admin import demote_confirm_kb, promo_decision_kb, promote_role_kb
 from .appeal import appeal_cancel_kb, appeal_review_kb

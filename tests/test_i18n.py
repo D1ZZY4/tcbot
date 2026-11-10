@@ -817,10 +817,6 @@ def test_replies_tiers_golden() -> None:
         == "TC Staff \\(Admin and above\\)\\."
     )
     assert (
-        replies.perm_admin_above(DEFAULT_LOCALE, plain=False)
-        == "Admin and above \\(Founder / Admin\\)\\."
-    )
-    assert (
         replies.perm_dev_above(DEFAULT_LOCALE, plain=False)
         == "Developer and above \\(Founder / Admin / Developer\\)\\."
     )

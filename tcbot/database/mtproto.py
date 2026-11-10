@@ -60,11 +60,6 @@ def _instance_id() -> str:
     return f"{socket.gethostname()}:{os.getpid()}:{secrets.token_hex(4)}"
 
 
-def is_configured() -> bool:
-    """Return True when API_ID + API_HASH are set."""
-    return cfg.mtproto_enabled
-
-
 def client() -> Client:
     """Return the shared unstarted bot-token client.
 
@@ -528,7 +523,6 @@ __all__ = [
     "is_auth_key_duplicated",
     "is_auth_key_not_found",
     "is_bot_user",
-    "is_configured",
     "monotonic",
     "resolve_user",
     "resolve_username",

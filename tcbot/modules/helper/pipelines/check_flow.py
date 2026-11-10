@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Bot, InlineKeyboardMarkup
 
 from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
@@ -68,13 +68,6 @@ async def _resolve_user_info(bot: Bot, target_id: int) -> tuple[str, str | None]
     if identity_needs_refresh(doc):
         launch_identity_refresh(bot, target_id)
     return fname, uname
-
-
-def _back_to_check(
-    target_id: int, locale: str | None = None
-) -> list[InlineKeyboardButton]:
-    """Back row to the /check profile."""
-    return check_back_row(target_id, locale)
 
 
 def _maybe_caveat(text: str, locale: str | None, *, failed: bool) -> str:
@@ -725,7 +718,7 @@ async def _per_chat_event_list(
     nav = nav_row(page, total_pages, cb_prefix, locale)
     return _maybe_caveat(
         "\n".join(lines), locale, failed=count_failed
-    ), check_paged_markup(nav, _back_to_check(target_id, locale))
+    ), check_paged_markup(nav, check_back_row(target_id, locale))
 
 
 # ─────────────────────────── Check views ────────────────────────── #
