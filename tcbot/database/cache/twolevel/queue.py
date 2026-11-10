@@ -10,6 +10,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from tcbot.database.cache.mutations import (
+    _REDIS_HARD_MAX_PENDING,
     _REDIS_MAX_PENDING,
     _clear_redis_tail,
     _log_redis_task_error,
@@ -64,6 +65,18 @@ class _QueueMixin:
 
         tail_key = (self._redis_prefix, loop)
         depth = _redis_pending.get(tail_key, 0)
+        if depth >= _REDIS_HARD_MAX_PENDING:
+            # * Hard ceiling: a dead Redis would otherwise grow the queue
+            # * without bound. Dropping a revocation leaves the revoked
+            # * state visible until the key TTL, which is recoverable;
+            # * exhausting the process memory is not.
+            log.error(
+                "Redis mutation queue critically full for prefix %s (%d pending); "
+                "dropping op to keep memory bounded.",
+                self._redis_prefix,
+                depth,
+            )
+            return None
         if droppable and depth >= _REDIS_MAX_PENDING:
             if tail_key not in _redis_drop_warned:
                 _redis_drop_warned.add(tail_key)

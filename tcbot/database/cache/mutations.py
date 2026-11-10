@@ -22,6 +22,13 @@ _redis_tails: dict[tuple[str, asyncio.AbstractEventLoop], asyncio.Task[None]] = 
 # * warning. L2 is a TTL hint layer, so a drop only extends staleness to
 # * the key TTL while an unbounded queue would stall revocation paths.
 _REDIS_MAX_PENDING: int = 200
+# * Hard ceiling for the queue depth, droppable ops included. A dead Redis
+# * would otherwise grow the queue without bound, and an unbounded queue is
+# * a memory leak that outlives the outage. Past this ceiling even a
+# * revocation op is dropped, with an error-level warning: the revoked
+# * state then survives until the key TTL instead of exhausting the
+# * process memory.
+_REDIS_HARD_MAX_PENDING: int = 1000
 _redis_pending: dict[tuple[str, asyncio.AbstractEventLoop], int] = {}
 _redis_drop_warned: set[tuple[str, asyncio.AbstractEventLoop]] = set()
 # * Grace window for draining background mutations before the pool closes.

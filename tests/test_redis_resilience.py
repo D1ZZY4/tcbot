@@ -15,7 +15,7 @@ import pytest
 import tcbot.database.cache as cache_mod
 import tcbot.database.redis_client as redis_client_mod
 from tcbot import cfg
-from tcbot.database.cache.mutations import _REDIS_MAX_PENDING
+from tcbot.database.cache.mutations import _REDIS_HARD_MAX_PENDING, _REDIS_MAX_PENDING
 
 
 class _FakeRedis:
@@ -127,3 +127,44 @@ def test_cache_resolves_the_client_through_the_reconnect_path(
     )
     asyncio.run(cache._redis_set("k", "v"))
     assert redis_client_mod.client() is fake
+
+
+def test_queue_drops_a_droppable_op_past_the_soft_ceiling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A droppable op is dropped with a warning past the soft ceiling."""
+    cache = cache_mod.TwoLevelCache(
+        memory_ttl=60.0, redis_ttl=90.0, redis_prefix="test-queue-soft"
+    )
+    loop = asyncio.new_event_loop()
+    try:
+        tail_key = ("test-queue-soft", loop)
+        cache_mod._redis_pending[tail_key] = _REDIS_MAX_PENDING
+        task = cache._enqueue_redis_mutation(_noop, droppable=True)
+        assert task is None
+    finally:
+        cache_mod._redis_pending.pop(("test-queue-soft", loop), None)
+        loop.close()
+
+
+def test_queue_drops_a_revocation_op_past_the_hard_ceiling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Even a revocation op is dropped past the hard ceiling."""
+    cache = cache_mod.TwoLevelCache(
+        memory_ttl=60.0, redis_ttl=90.0, redis_prefix="test-queue-hard"
+    )
+    loop = asyncio.new_event_loop()
+    try:
+        tail_key = ("test-queue-hard", loop)
+        cache_mod._redis_pending[tail_key] = _REDIS_HARD_MAX_PENDING
+        task = cache._enqueue_redis_mutation(_noop, droppable=False)
+        assert task is None
+    finally:
+        cache_mod._redis_pending.pop(("test-queue-hard", loop), None)
+        loop.close()
+
+
+async def _noop() -> None:
+    """Stand-in for a queued Redis operation."""
+    return
