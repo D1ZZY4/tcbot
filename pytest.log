@@ -1,0 +1,126 @@
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [ 11%]
+........................................................................ [ 22%]
+........................................................................ [ 34%]
+........................................................................ [ 45%]
+........................................................................ [ 57%]
+............................................................F...F....... [ 68%]
+........................................................................ [ 80%]
+........................................................................ [ 91%]
+......................................................                   [100%]
+=================================== FAILURES ===================================
+____________ test_role_delete_survives_sat_queue_but_mention_drops _____________
+[gw2] linux -- Python 3.14.10 /home/runner/work/tcbot/tcbot/.venv/bin/python
+
+    def test_role_delete_survives_sat_queue_but_mention_drops() -> None:
+        async def _scenario() -> None:
+            loop = asyncio.get_running_loop()
+            role_cache = _cache("role")
+            mention_cache = _cache("umention")
+            # Saturate both prefixes to the bound.
+            mutations._redis_pending[("role", loop)] = mutations._REDIS_MAX_PENDING
+            mutations._redis_pending[("umention", loop)] = mutations._REDIS_MAX_PENDING
+            before_role = mutations._redis_pending[("role", loop)]
+            before_mention = mutations._redis_pending[("umention", loop)]
+            tasks_before = set(mutations._redis_bg_tasks)
+    
+            role_cache.invalidate(123)
+            mention_cache.invalidate(123)
+    
+            # Role delete enqueued despite the bound; mention delete dropped.
+            assert mutations._redis_pending[("role", loop)] == before_role + 1
+            assert mutations._redis_pending[("umention", loop)] == before_mention
+            new_tasks = set(mutations._redis_bg_tasks) - tasks_before
+            assert len(new_tasks) == 1
+            for task in new_tasks:
+                task.cancel()
+            await asyncio.gather(*new_tasks, return_exceptions=True)
+    
+>       asyncio.run(_scenario())
+
+tests/test_cache_revocation_queue.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/asyncio/runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/asyncio/runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/asyncio/base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _scenario() -> None:
+        loop = asyncio.get_running_loop()
+        role_cache = _cache("role")
+        mention_cache = _cache("umention")
+        # Saturate both prefixes to the bound.
+        mutations._redis_pending[("role", loop)] = mutations._REDIS_MAX_PENDING
+        mutations._redis_pending[("umention", loop)] = mutations._REDIS_MAX_PENDING
+        before_role = mutations._redis_pending[("role", loop)]
+        before_mention = mutations._redis_pending[("umention", loop)]
+        tasks_before = set(mutations._redis_bg_tasks)
+    
+        role_cache.invalidate(123)
+        mention_cache.invalidate(123)
+    
+        # Role delete enqueued despite the bound; mention delete dropped.
+>       assert mutations._redis_pending[("role", loop)] == before_role + 1
+E       assert 200 == (200 + 1)
+
+tests/test_cache_revocation_queue.py:55: AssertionError
+_______________________ test_role_put_survives_sat_queue _______________________
+[gw2] linux -- Python 3.14.10 /home/runner/work/tcbot/tcbot/.venv/bin/python
+
+    def test_role_put_survives_sat_queue() -> None:
+        async def _scenario() -> None:
+            loop = asyncio.get_running_loop()
+            role_cache = _cache("role")
+            mutations._redis_pending[("role", loop)] = mutations._REDIS_MAX_PENDING
+            before = mutations._redis_pending[("role", loop)]
+            tasks_before = set(mutations._redis_bg_tasks)
+    
+            role_cache.put(123, "admin")
+    
+            assert mutations._redis_pending[("role", loop)] == before + 1
+            new_tasks = set(mutations._redis_bg_tasks) - tasks_before
+            assert len(new_tasks) == 1
+            for task in new_tasks:
+                task.cancel()
+            await asyncio.gather(*new_tasks, return_exceptions=True)
+    
+>       asyncio.run(_scenario())
+
+tests/test_cache_revocation_queue.py:83: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/asyncio/runners.py:205: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/asyncio/runners.py:128: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/hostedtoolcache/Python/3.14.10/x64/lib/python3.14/asyncio/base_events.py:720: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _scenario() -> None:
+        loop = asyncio.get_running_loop()
+        role_cache = _cache("role")
+        mutations._redis_pending[("role", loop)] = mutations._REDIS_MAX_PENDING
+        before = mutations._redis_pending[("role", loop)]
+        tasks_before = set(mutations._redis_bg_tasks)
+    
+        role_cache.put(123, "admin")
+    
+>       assert mutations._redis_pending[("role", loop)] == before + 1
+E       assert 200 == (200 + 1)
+
+tests/test_cache_revocation_queue.py:76: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_cache_revocation_queue.py::test_role_delete_survives_sat_queue_but_mention_drops - assert 200 == (200 + 1)
+FAILED tests/test_cache_revocation_queue.py::test_role_put_survives_sat_queue - assert 200 == (200 + 1)
+2 failed, 628 passed in 20.43s
