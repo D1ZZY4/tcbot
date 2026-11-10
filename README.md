@@ -42,6 +42,12 @@ Fill in at least `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI`, `API_ID`, and `API_HASH
 | `/tcpromote`, `/tcdemote`, `/transferowner` | Manage Founder, Admin, Developer, and Tester roles. |
 | `/tcsync` | Reconcile enforcement state across groups (bounded sweep, plus single-user check). |
 | `/tcstats` | Federation statistics with drill-down views. |
+| `/tcpromoterequests`, `/tcpromotelist` | Submit an Admin promotion request and list the pending ones. |
+| `/help`, `/start` | Topic help and the start menu. |
+| `/language` | Per-user or per-group interface language. |
+| `/leaveall`, `/cleanup` | Founder-only mass leave and staff-only cleanup of dead group records. |
+| `/tcbroadcast` | Staff-only broadcast to every connected group. |
+| `/ping`, `/speedtest` | Latency check and throughput measurement. |
 
 Appeals are submitted by the banned user in bot DM through a deep link. Command prefixes are configurable (default `/`, `!`, `.`).
 
@@ -123,6 +129,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | `API_ID` | Required: Telegram API ID for MTProto identity lookups; boot refuses without it. |
 | `API_HASH` | Required: Telegram API hash matching `API_ID`; never commit the real value. |
 | `MTPROTO_SESSION` | Namespace for the shared MTProto session in MongoDB (default `tcbot_mtproto`). |
+| `SENTRY_DSN` | Optional Sentry DSN for error monitoring; empty disables monitoring. |
 
 ### Community links
 
@@ -168,7 +175,7 @@ Seven CI workflows run automatically; no secrets needed (validation steps use du
 - **CodeQL** (`codeql.yml`): on push/PR to `main` plus weekly Tuesday 15:38 UTC. Scans the `actions` and `python` languages with `build-mode: none`; findings land under the repository Security tab.
 - **Run Bot** (`run-bot.yml`): self-chaining 24/7 runner with webhook-first transport, plus daily restart checks.
 
-Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run ruff check .`, `uv run python -c "import tcbot"`. Full reference: [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md).
+Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run ruff check .`, the 1000-line file-size budget over `tcbot/` and `api/`, and `uv run python -c "import tcbot"`. Full reference: [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md).
 </details>
 
 <details>

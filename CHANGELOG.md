@@ -69,6 +69,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **The hot path has a measured baseline** (`scripts/benchmark_hotpath.py`, `docs/operations/performance.md`): the database call transport, the two-level cache, and the bounded fan-out can now be measured in-process, without MongoDB, Redis, or a Telegram connection. Behavior changes: none; the benchmark is a development tool.
+
 - **One configuration model instead of an adapter layer** (`tcbot/__init__.py`): the runtime configuration was parsed into one model and then forwarded property by property through a second class. Behavior changes: none; the same values are available under the same names, the list settings are immutable, and the model rejects mutation after loading.
 
 - **The warn entry handler is named `cmd_warn`** (`tcbot/modules/warns.py`, `docs/architecture/modules.md`): the handler name matched its role in the flow rather than the command it serves. Behavior changes: none; the command, aliases, and replies are unchanged.
@@ -593,6 +595,10 @@ All notable changes to this project are documented here. For workflow details, s
 - **Unused ban helpers removed** (`tcbot/database/bans_db.py`, `docs/architecture/database.md`): `deactivate_ban` and `set_review` had no callers; `deactivate_all_active_bans`, `deactivate_extra_active_bans`, and `set_review_if_absent` are the live helpers. Behavior changes: none.
 
 ### Documentation
+
+- **Database and performance documentation match the implementation** (`docs/architecture/database.md`, `docs/operations/performance.md`): the database worker pool, the per-call budget, the lazy Redis reconnect, the bounded mutation queue, the one-active-ban constraint, and the hot-path benchmark are now described as implemented.
+
+- **Developer docs match the implementation** (`AGENTS.md`, `.agents/rules/asyncio-gather-rules.md`, `docs/architecture/*.md`, `docs/features/**/*.md`, `docs/operations/*.md`, `docs/reference/*.md`, `README.md`): the configuration model, the scheduler's persistent job store and off-loop startup, the sync rank gate, the promotion ban guard, the warn-threshold clearing rule, the current callback shapes, the shipped locale, and the CI file-size gate are now described as implemented.
 
 - **Env table and module examples match the loader** (`CLAUDE.md`, `config.env.example`, `docs/getting-started/setup.md`, `docs/architecture/repository-map.md`): the required founder identity, the `SENTRY_DSN` option, the live module names, and the `id-ID` catalog location now match the code. Behavior changes: none, docs only.
 

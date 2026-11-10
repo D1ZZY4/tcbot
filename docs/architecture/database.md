@@ -48,7 +48,7 @@ never blocks on MongoDB I/O.
 | `col(name)` | Returns a collection from `db()`. Use only inside database helper modules. |
 | `is_connected()` | Returns `True` once a connection has been established via `connect()`. |
 | `mongo_client_kwargs()` | Extra `MongoClient` kwargs shared by the pymongo client and the scheduler's synchronous client: pins `tlsCAFile` to the certifi Mozilla bundle unless `cfg.mongodb_uri` already carries `tlscafile`, and sets `serverSelectionTimeoutMS` (10 s) and `connectTimeoutMS` (10 s) defaults. |
-| `db_call(op)` | Runs a zero-argument thunk performing one sync pymongo operation on a worker thread through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45 s socket timeout. Only transient Mongo errors count toward opening the circuit. |
+| `db_call(op, *, timeout=20.0)` | Runs a zero-argument thunk performing one sync pymongo operation on the dedicated database worker pool through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45 s socket timeout. Only transient Mongo errors count toward opening the circuit. The keyword-only `timeout` bounds how long the caller waits; the default 20 s raises `TimeoutError` (a transient failure, so it opens the circuit) and the worker thread finishes on its own. Pass `timeout=None` for operations that are legitimately long: index builds and bulk deletes. The request context is copied into the worker thread so the log context survives. |
 | `make_short_id(length=10)` | Generates a lowercase alphanumeric ID (`a-z0-9`) from `secrets.choice`, used for ban IDs and promotion request IDs. |
 
 ### MongoDB client parameters
@@ -298,6 +298,8 @@ Resolution order in `get_effective_role`:
 - `user_appeal_count(user_id: int) -> int`: count of bans with an appeal submitted.
 
 **Error behavior:** all operations route through `db_call()`. `create_ban` absorbs one random-ID collision for auto-generated IDs only; everything else propagates so moderation callers report the real failure.
+
+**Uniqueness:** a partial unique index on `(banned_user_id)` where `is_active` is true keeps one active ban per user, so two moderators reaching the warn threshold at the same moment cannot store two records that disagree about which ban is real. The index is created by `ensure_indexes()` after `_migrate_duplicate_active_bans()` converges the duplicates older releases left behind: the duplicate is deactivated (never deleted) and the canonical record is the one `get_active_ban` returns, the newest by timestamp then ban id. `create_ban` treats a unique-index collision as a lost race and reuses the winning record instead of failing the moderation action.
 
 ## Groups (`groups_db.py`, collections `federated_groups`, `pending_joins`)
 
@@ -609,15 +611,21 @@ Pool parameters: `decode_responses=True`, `max_connections=20`, `socket_connect_
 
 `is_ready() -> bool` returns `True` only after the full startup sequence completed successfully (scheduler object set, ready event set, no captured error).
 
-Job store: `MongoDBJobStore(database=db_name, host=mongodb_uri, **_mongo_client_kwargs())` inside a single `AsyncIOScheduler`. The library owns the synchronous `MongoClient`, so the same certifi TLS pinning and `serverSelectionTimeoutMS`/`connectTimeoutMS` defaults are applied, or Atlas handshakes fail on sandboxes with a stale system CA store. The job collection name is APScheduler's library default: the code does not set a `collection` parameter. UNVERIFIED: the exact default collection name is not hard-coded in this repo; it relies on the installed APScheduler 3.x default.
+Job store: `MongoDBJobStore(database=db_name, host=mongodb_uri, **_mongo_client_kwargs())` registered under the explicit alias `mongodb` inside a single `AsyncIOScheduler`. The library owns the synchronous `MongoClient`, so the same certifi TLS pinning and `serverSelectionTimeoutMS`/`connectTimeoutMS` defaults are applied, or Atlas handshakes fail on sandboxes with a stale system CA store. The job collection name is APScheduler's library default: the code does not set a `collection` parameter. UNVERIFIED: the exact default collection name is not hard-coded in this repo; it relies on the installed APScheduler 3.x default.
 
-Recurring jobs (idempotent via `replace_existing=True`):
+Every job names the `mongodb` alias explicitly. APScheduler defaults to the `default` alias, which it auto-creates as an in-memory store, so a job registered without an alias would never reach MongoDB and would die with the process.
+
+Startup runs off the event loop. `scheduler.start()` and the schedule reconciliation execute in a worker thread because the MongoDB job store performs blocking pymongo calls (index creation, job insert/update/lookup). With the loop bound explicitly through `AsyncIOScheduler(event_loop=...)`, the scheduler can be started from that thread without losing its loop. A reachable but degraded MongoDB therefore delays the boot instead of freezing the webhook receiver.
+
+An unchanged schedule keeps its persisted fire time. Re-adding a job through `add_job(replace_existing=True)` rewrites `next_run_time` from the current clock, which would reset the daily cadence on every restart and stop the job from ever firing on a bot that restarts more often than the interval. The stored job is therefore left untouched when its interval and arguments still match the desired configuration; only a changed configuration replaces it. This is what makes `misfire_grace_time` and `coalesce` effective after a restart.
+
+Recurring jobs:
 
 | Job ID | Trigger | Purpose |
 |---|---|---|
 | `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: deletes `warn_counts` rows older than the cutoff from `updated_at` and `warns` rows from `timestamp` in parallel (both must be pruned together or the counter backfill restores stale counts). Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
 | `tcbot.enforcement_sync` | `IntervalTrigger(hours=sync_interval_hours)` | Calls `_run_scheduled_sync` (the `/tcsync` core on a timer, bounded to 200 checks, log-only results, via the explicit `sync_runner` start argument, so the database package never imports a command module). Uses `misfire_grace_time=86400`, `coalesce=True`. Registered only when the interval is positive and a `bot` reference was passed; otherwise removed. See [`../features/moderation/sync.md`](../features/moderation/sync.md). |
-| `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal call runs on startup and `_cleanup_old_records()` remains as a no-op migration shim so any persisted schedule can deserialize without `AttributeError`. |
+| `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal runs against the `mongodb` store after the scheduler started (a removal issued before `start()` only searches the pending-job list and would leave the persisted row firing) and `_cleanup_old_records()` remains as a no-op migration shim so any persisted schedule can deserialize without `AttributeError`. |
 
 Member-cache cleanup is handled by the MongoDB TTL index on `last_updated` (`expireAfterSeconds=7776000`, 90 days), not by a scheduler job.
 

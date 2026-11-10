@@ -67,10 +67,10 @@ or `_` as listed in each row below.
 | `ban_continue` | re-ban confirmation | flat | Proceed from the update-confirm card to proof collection (reuses the shared `ban_cancel` abort path). |
 | `appeal_approve_<ban_id>` / `appeal_reject_<ban_id>` | appeal review | ban ID tail | Staff verdict on a submitted appeal. Both buttons use the underscore-delimited `<action>_<ban_id>` shape that the handler registers and parses (`appeals.py` pattern `^appeal_(approve|reject)_\S+$`; `appeal_review_flow/` parses the tail after `appeal_reject_`); appeal IDs cannot contain the separator. |
 | `cancel_appeal` | appeal submit | flat | Cancels an appeal submission from the instruction prompt. Produced by `appeal_cancel_kb()`. |
-| `promo_role:<role>:<target_id>` | promote menu | role, target | Inline role-selection menu shown when `/tcpromote` is run without a role argument. |
-| `promo_role_cancel:<target_id>` | promote menu | target | Cancel the role-selection menu. |
+| `promo_role:<role>:<target_id>[:<executor_id>]` | promote menu | role, target, optional executor | Inline role-selection menu shown when `/tcpromote` is run without a role argument. The trailing executor segment restricts the menu to the staffer who opened it; legacy three-part menus stay valid. |
+| `promo_role_cancel:<target_id>[:<executor_id>]` | promote menu | target, optional executor | Cancel the role-selection menu. |
 | `promo_approve:<request_id>` / `promo_reject:<request_id>` | Founder DM | request | Founder resolves a pending Admin promotion request. |
-| `demote_confirm:<target_id>` / `demote_cancel:<target_id>` | demote prompt | target | Confirm or cancel a demotion. |
+| `demote_confirm:<target_id>[:<executor_id>]` / `demote_cancel:<target_id>[:<executor_id>]` | demote prompt | target, optional executor | Confirm or cancel a demotion. The trailing executor segment restricts the prompt to the staffer who opened it; legacy two-part prompts stay valid. |
 | `checkme_detail:<ban_id>` / `checkme_back:<ban_id>` | `/checkme` | ban | Toggle the `/checkme` summary and detail views. |
 | `stats_main` / `stats_admins` / `stats_users:<page>` / `stats_user_item:<page>:<idx>[:stable]` / `stats_chats:<page>` / `stats_chat_item:<page>:<idx>[:stable]` / `stats_bans:<page>` / `stats_ban_item:<page>:<idx>[:stable]` | `/tcstats` | varies | Federation stats drill-downs (`Stats` class). |
 | `stats_bans_search` / `stats_search_cancel` / `stats_search_back` / `stats_search_item:<idx>` | stats search | varies | Search panel for the active-ban list. |

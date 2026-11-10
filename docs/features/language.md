@@ -13,7 +13,7 @@ For the database layer, see [`../architecture/database.md`](../architecture/data
 
 Users set a personal locale (used in private chats); groups hold their own
 locale (used for group-visible messages), changeable only by the group
-owner or federation staff. `en-US` and `id` (Bahasa Indonesia) ship
+owner or federation staff. `en-US` and `id-ID` (Bahasa Indonesia) ship
 today; new locales land as data files with no Python changes.
 
 ## Commands and callbacks

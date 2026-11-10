@@ -165,6 +165,40 @@ Polling mode adds a dedicated getUpdates connection pool of 4
 `fan_out()` caps in-flight Telegram calls at 10 via its semaphore, so the
 connection count stays bounded regardless of how many groups are connected.
 
+## Database worker pool and per-call budget
+
+Database calls do not run on the event loop's default executor. They use a
+dedicated pool (`tcbot/database/mongos.py`) sized from the CPU count, with a
+floor of 8 and a ceiling of 24 workers. The isolation matters because the
+default executor is shared with other blocking work: the speedtest holds one
+of its threads for minutes, so a few hung database calls could otherwise
+starve it and stall unrelated work.
+
+Every call is also bounded. `db_call(op, timeout=...)` defaults to 20 s and
+raises `TimeoutError` when the operation does not answer in time; the worker
+thread finishes on its own, so the bound releases the caller, not the thread.
+A timeout counts as a transient failure and therefore opens the MongoDB
+circuit like any other connection error.
+
+Operations that are legitimately long pass `timeout=None`: index builds in
+`ensure_indexes()`, the warn-expiry bulk deletes, and the warn-history and
+counter deletes.
+
+## Redis reconnect
+
+A Redis outage during boot used to disable the shared cache for the rest of
+the process lifetime, so cross-process role and connection state diverged
+until the key TTL expired. The client is now re-established lazily: the first
+cache operation after a failure asks for a reconnect, rate-limited to one
+attempt per 30 s. The shared cache is optional, so a dead Redis still degrades
+to the in-memory layer without delaying a request.
+
+The mutation queue is bounded at two levels. Droppable operations (the
+display-name hints) are dropped past 200 queued mutations, and even a
+revocation operation is dropped past 1000, with an error-level warning: a
+dropped revocation leaves the revoked state visible until the key TTL, while
+an unbounded queue exhausts the process memory.
+
 ## Measuring a suspected bottleneck
 
 Measure a real workload before and after a change. A lightweight development
@@ -176,6 +210,19 @@ py-spy profiles the running process without modifying code:
 ```bash
 uv run py-spy record --pid <PID> --duration 60 --rate 20 --format speedscope --output profile.svg
 ```
+
+The in-process micro-benchmark measures the primitives every request pays for
+(the database call transport, the two-level cache, and the bounded fan-out).
+It needs no MongoDB, Redis, or Telegram connection, so it runs anywhere:
+
+```bash
+uv run python scripts/benchmark_hotpath.py
+```
+
+It reports the median and p95 per scenario and prints the observed fan-out
+concurrency, which must stay at the cap of 10. Treat the numbers as a
+relative baseline for one machine: the absolute values depend on the host and
+its load.
 
 Investigate:
 

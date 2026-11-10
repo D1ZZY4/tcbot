@@ -24,9 +24,9 @@ from tcbot.utils.logger import setup as setup_logging
 def _production_logging() -> None:
     """Install the production logging setup once, like main() does at startup.
 
-    Modules log through structlog (stdlib-backed), which only reaches
-    caplog and the Telegram error handler after configure() runs.
-    Without this, records would fall back to structlog's default
+    Modules log through the loguru-backed shim (bridged to stdlib), which
+    only reaches caplog and the Telegram error handler after configure()
+    runs. Without this, records would fall back to loguru's default
     print-to-stdout facility and tests asserting on log output fail.
     """
     setup_logging()

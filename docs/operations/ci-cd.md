@@ -28,7 +28,8 @@ Three workflows with identical triggers (push to `main`, `feat/**`,
 `fix/**`; pull requests to `main`), one job each:
 
 - **Lint (Ruff)** (`.github/workflows/lint-ruff.yml`): `uv run ruff format
-  --check .`, `uv run ruff check .`, and `uv run python -c "import tcbot"`.
+  --check .`, `uv run ruff check .`, the 1000-line file-size budget over
+  `tcbot/` and `api/`, and `uv run python -c "import tcbot"`.
 - **Lint (Pyright)** (`.github/workflows/lint-pyright.yml`): `uv run pyright`.
 - **Test (Pytest)** (`.github/workflows/test-pytest.yml`): `uv run pytest tests/ -q -n auto --cov=tcbot --cov-branch --cov-report=term-missing --cov-report=html` (parallel via `pytest-xdist`, coverage via `pytest-cov`, report uploaded as the `coverage-report` artifact).
 

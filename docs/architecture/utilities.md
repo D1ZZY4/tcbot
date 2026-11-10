@@ -116,7 +116,7 @@ Logging setup is installed from `tcbot.__main__.main()`.
 | `get_logger(name)` | Return the loguru-backed logger for a module. Records bridge through the same stdlib handlers, so coloring, shipping, and level discipline match plain loggers. |
 | `bind_request_context(...)` / `clear_request_context()` | Bind `update_id`/`user_id`/`chat_id` rendered on every subsequent line until cleared. `log_execution` binds on handler entry and clears in a `finally` block, so concurrent updates never leak context (contextvars are task-local). |
 
-Third-party loggers such as `httpx`, `telegram`, and `pymongo` are capped to reduce noise. Import-time loggers (`tcbot/__init__.py`, `tcbot/modules/__init__.py`) stay on stdlib because they emit before `setup()` installs these handlers.
+Third-party loggers such as `httpx`, `telegram`, and `pymongo` are capped to reduce noise. Every module logger, including the import-time ones in `tcbot/__init__.py` and `tcbot/modules/__init__.py`, goes through the same loguru-backed shim and bridges to stdlib.
 
 ## `error_reporter.py`
 
@@ -147,7 +147,6 @@ handling plus monotonic measurement.
 | `utc_now()` | Store timestamps and compare elapsed time. |
 | `to_utc(dt)` | Normalize naive or aware datetimes before arithmetic. |
 | `fmt_dt(dt)` | Display datetimes as `DD-MM-YYYY | HH:MM`. |
-| `from_timestamp(ts)` | Convert a POSIX timestamp to aware UTC. No production caller yet; it is pinned by a unit test as a helper for future log-time display. |
 | `monotonic()` | Monotonic clock in seconds, for measuring durations. |
 | `elapsed_ms(start)` | Milliseconds since a `monotonic()` reading. |
 | `parse_duration(raw)` | Parse a duration token (`45s`, `30m`, `2h`, `7d`, `1w`, `3mo`, `1ye`) into a `timedelta`, or `None` when invalid. |
