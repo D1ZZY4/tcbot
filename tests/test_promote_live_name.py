@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot.modules.admins import on_promote_role_btn
+from tcbot.modules.helper.identity import Identity
 
 
 class _FakeQuery:
@@ -86,9 +87,20 @@ def test_picker_resolves_live_name_on_cache_miss(
     async def _owner() -> int | None:
         return 999_999_001
 
+    async def _classify(
+        bot: Any,
+        executor_id: int,
+        target_id: int,
+        target_fname: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        _ = (bot, executor_id, target_id, target_fname, kwargs)
+        return Identity("user", target_id, target_fname or str(target_id))
+
     monkeypatch.setattr("tcbot.modules.admins.locale_for_update", _locale)
     monkeypatch.setattr("tcbot.modules.admins.check_callback_staff", _staff)
     monkeypatch.setattr("tcbot.modules.admins.identity.is_proven_bot", _not_bot)
+    monkeypatch.setattr("tcbot.modules.admins.identity.classify", _classify)
     monkeypatch.setattr("tcbot.database.users_cache.get_first_name", _first_name)
     monkeypatch.setattr("tcbot.database.users_roles.get_effective_role", _role)
     monkeypatch.setattr("tcbot.database.users_roles.get_owner_id", _owner)

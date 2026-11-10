@@ -43,6 +43,10 @@ Aliases (matched in any prefix configured by `cfg.prefixes`):
 
 The target is resolved by `extraction.extract_target`; accepts a reply, user ID, or resolvable `@username`.
 
+A target with an active federation ban cannot gain a role. The ban is enforced per group by Telegram and not by the bot's own role resolution, so a banned holder of a staff role would keep moderating from every chat where the ban did not land. The guard fails closed: a failed ban lookup refuses the promotion instead of granting rank on an unknown state. It applies to the direct command, the role-picker callback, the public request path, and the Founder's approval of a queued request, so a request filed before the ban landed cannot be approved into a role.
+
+Both the command and the role-picker callback apply the same identity refusal (`identity.refuse_message("promote", ...)`), so neither entry point can grant a role to the anonymous-admin placeholder or a Telegram service account.
+
 A bare role token with no reply target (e.g. `/tcpromote developer`) is treated as role-only input: the command asks for an explicit target instead of fuzzy-matching the token against cached names, so a cached namesake can never be promoted by accident. Promote a namesake by ID, `@username`, or reply.
 
 ## Role aliases
@@ -83,10 +87,10 @@ await Promote.request_admin(
 | Member | Purpose |
 |---|---|
 | `Promote.available_roles_for(executor_role)` | Returns the roles an executor with `executor_role` can assign. |
-| `Promote.execute(...)` | Full role-assignment flow used by `/tcpromote` (command + inline button). Routes to `_assign_admin`, `_assign_subrole`, or `request_admin` depending on requested role and executor role. |
+| `Promote.execute(...)` | Full role-assignment flow used by `/tcpromote` (command + inline button). Routes to `assign_admin`, `assign_subrole`, or `request_admin` depending on requested role and executor role. A target with an active ban is refused before any role is written. |
 | `Promote.request_admin(...)` | Enqueues an Admin promotion request and notifies the Founder via DM, with the log channel as a fallback. |
-| `Promote._assign_admin(...)` | Founder-only path that upserts `tc_admins`, removes any existing Developer/Tester role, sends the promotion log, and DMs the target. |
-| `Promote._assign_subrole(...)` | Founder/Admin path for Developer/Tester role; atomically replaces any previous custom role via `users_roles.set_role` (upsert, no separate remove step), sends the promotion log, and DMs the target. |
+| `assign_admin(...)` | Founder-only path that upserts `tc_admins`, removes any existing Developer/Tester role, sends the promotion log, and DMs the target. |
+| `assign_subrole(...)` | Founder/Admin path for Developer/Tester role; atomically replaces any previous custom role via `users_roles.set_role` (upsert, no separate remove step), sends the promotion log, and DMs the target. |
 
 ## Permission matrix
 

@@ -467,6 +467,35 @@ def can_demote_admin(executor_role: str | None, target_role: str | None) -> bool
     return not (target_role == "admin" and executor_role != "founder")
 
 
+async def banned_target_refusal(
+    target_id: int,
+    locale: str | None,
+    *,
+    log_label: str,
+) -> str | None:
+    """Return a refusal line when the target holds an active ban.
+
+    A banned user must not gain federation rank. The ban is enforced per
+    group by Telegram, not by the bot's own role resolution, so a banned
+    holder of a staff role keeps moderating from every chat where the ban
+    did not land (including DMs). This mirrors the ownership-transfer
+    guard, which already refuses a banned successor.
+
+    Fails closed: a failed ban lookup refuses the action instead of
+    granting rank on an unknown state. Cancellation always propagates.
+    """
+    try:
+        target_ban = await db.bans_db.get_active_ban(target_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning("%s ban lookup failed for %d: %s", log_label, target_id, exc)
+        return replies.err_db_retry(locale, plain=True)
+    if target_ban is not None:
+        return t("admins.error.banned_target", locale, plain=True)
+    return None
+
+
 @dataclass(frozen=True)
 class ModTarget:
     """Resolved moderation target shared by the ban/kick/mute/warn entries.

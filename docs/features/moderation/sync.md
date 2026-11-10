@@ -45,6 +45,8 @@ The target is resolved by `extraction.extract_target`; accepts a reply, user ID,
 
 Federation origin: `/tcsync` may start from bot DM or any connected or primary group. Non-benign `BadRequest` refusals now count as failures under `is_benign_telegram_error`, not as skipped absences, so a permission or validation failure surfaces in the failed count instead of disappearing into the skip total.
 
+Executor rank gates the role stripping: the sweep removes stale staff rank from banned or muted holders before enforcing. A Developer may not strip an Admin role (only the Founder may), so the bare command resolves the executor rank first and passes it into the sweep; a failed rank lookup refuses the command. The scheduled job has no human executor and keeps system-sweep semantics, which may strip any staff role as a reconcile of existing records.
+
 ## How a run works
 
 1. The bot replies `Syncing enforcement state...` with its own status message (kept for the final edit, since the operator's command message cannot be edited by the bot).
@@ -57,6 +59,10 @@ Federation origin: `/tcsync` may start from bot DM or any connected or primary g
    - Unexpected failures: `error` (retryable).
 4. Benign Telegram refusals (`USER_NOT_PARTICIPANT` and friends, via `is_benign_telegram_error`) count as absent, never as failures.
 5. The status message is edited to the summary; on edit failure the summary is sent as a reply instead.
+
+## Staff rank reconciliation
+
+Both the bare sweep and the targeted run strip federation roles from banned or muted holders before enforcement, so a banned user cannot keep moderating. The gate is the executor rank: `can_demote_admin` requires the Founder to remove an Admin role, and every other staff role follows the normal rank rule. The bare command resolves the executor rank with a fresh read and refuses when the lookup fails; the scheduled sweep passes no executor rank and therefore reconciles every staff role.
 
 ## Scheduled sweep (opt-in)
 

@@ -14,6 +14,7 @@ from pymongo.errors import DuplicateKeyError
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, messages
+from tcbot.modules.helper.decorators.checks import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_user
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
@@ -182,6 +183,14 @@ async def request_admin(
     locale: str | None = None,
 ) -> tuple[bool, str]:
     """Enqueue an Admin promotion request and notify the Founder."""
+    # * A banned user must not reach the Founder's approval card: the
+    # * request path is public, so the guard belongs here as well as on
+    # * the approval itself.
+    refusal = await banned_target_refusal(
+        target_id, locale, log_label="promote request ban-guard"
+    )
+    if refusal is not None:
+        return False, refusal
     try:
         existing = await db.queues_db.get_request(target_id)
     except Exception:
@@ -300,6 +309,15 @@ class Promote:
                 current_role or "", current_role or ""
             )
             return False, t("admins.promote.holds_role", locale, role=label)
+        # * Single chokepoint for every direct promotion (the command and the
+        # * role-picker callback both land here): a banned user must not gain
+        # * federation rank, because the ban is enforced per group by
+        # * Telegram and not by the bot's own role resolution.
+        refusal = await banned_target_refusal(
+            target_id, locale, log_label="promote ban-guard"
+        )
+        if refusal is not None:
+            return False, refusal
         if role == "admin":
             if executor_role == "founder":
                 return await assign_admin(

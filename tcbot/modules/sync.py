@@ -354,13 +354,23 @@ async def _demote_staff_holdings(
             log.warning("sync stripped role %s from banned/muted user %d", role, uid)
 
 
-async def run_ban_sync(bot: Bot, *, max_checks: int = _SYNC_MAX_CHECKS) -> SyncCounts:
+async def run_ban_sync(
+    bot: Bot,
+    *,
+    max_checks: int = _SYNC_MAX_CHECKS,
+    executor_role: str | None = None,
+) -> SyncCounts:
     """Sweep active bans and mutes against connected groups, bounded by ``max_checks``.
 
     Shared by the ``/tcsync`` command and the optional scheduled job: no
     Telegram replies inside, only logs plus the returned counts. Ban pairs
     take budget first so a huge mute backlog can never starve the ban sweep;
     a mute-fetch outage skips only the mute replay with a loud log.
+
+    ``executor_role`` names the rank allowed to strip staff roles during the
+    sweep. ``None`` means the system sweep (scheduled job), which may strip
+    any staff role as a reconcile of existing records; a human executor must
+    pass their own rank so a Developer cannot strip an Admin.
     """
     groups, ban_uids = await asyncio.gather(
         db.groups_db.active_groups(),
@@ -384,7 +394,7 @@ async def run_ban_sync(bot: Bot, *, max_checks: int = _SYNC_MAX_CHECKS) -> SyncC
     }
     pairs, truncated = take_pairs(sorted(ban_uids), chat_ids, max_checks)
     # * Strip stale staff rank before enforcing.
-    await _demote_staff_holdings([uid for uid, _cid in pairs])
+    await _demote_staff_holdings([uid for uid, _cid in pairs], executor_role)
     # * Bounded fan-out plus per-pair probe timeout.
     outcomes: list = []
     if pairs:
@@ -533,7 +543,9 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # * Targeted runs enforce one user both directions, so they carry the
     # * same executor-versus-target rank gate as direct unban. The bare
-    # * sweep reconciles existing records and has no single target to gate.
+    # * sweep reconciles existing records and has no single target to gate,
+    # * but the executor rank still decides which staff roles the sweep may
+    # * strip: a Developer must not remove an Admin's role.
     target_id: int | None = None
     executor_role: str | None = None
     if args:
@@ -556,6 +568,20 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if checked == (None, None):
             return
         executor_role = checked[0]
+    else:
+        # * Fail closed: without the executor rank the sweep would run with
+        # * system-sweep semantics and could strip an Admin's role.
+        role_r = await db.users_roles.get_effective_role(executor.id, fresh=True)
+        if not isinstance(role_r, str):
+            log.warning("cmd_sync executor role lookup failed: %s", role_r)
+            await safe_reply(
+                msg,
+                replies.err_db_retry(locale, plain=True),
+                log_label="cmd_sync role-lookup-failed",
+                parse_mode=None,
+            )
+            return
+        executor_role = role_r
 
     try:
         status = await msg.reply_text(t("syncing.status.sending", locale, plain=True))
@@ -572,7 +598,7 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 locale=locale,
             )
         else:
-            counts = await run_ban_sync(ctx.bot)
+            counts = await run_ban_sync(ctx.bot, executor_role=executor_role)
             text = _render_summary(
                 counts,
                 target=t("syncing.target.sweep", locale, plain=True),

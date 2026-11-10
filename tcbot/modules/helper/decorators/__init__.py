@@ -15,6 +15,7 @@ from tcbot.modules.helper.decorators.auth import (
 from tcbot.modules.helper.decorators.checks import (
     ModTarget,
     action_owner_mismatch,
+    banned_target_refusal,
     can_demote_admin,
     cancel_owner_mismatch,
     check_callback_staff,

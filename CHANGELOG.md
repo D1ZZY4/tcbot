@@ -354,6 +354,12 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Scheduler startup no longer stalls the event loop** (`tcbot/database/scheduler.py`): the job store performs blocking database calls, which ran on the event loop and froze the webhook receiver while MongoDB was unreachable. Behavior changes: a degraded database delays startup instead of hanging the running bot.
 
+- **The bare sync sweep keeps Admin roles from a Developer** (`tcbot/modules/sync.py`): the sweep stripped staff rank from banned or muted holders and only the targeted run carried the executor rank, so a Developer could remove an Admin role through the command. Behavior changes: a Developer cannot strip an Admin role; the scheduled sweep still reconciles every staff role.
+
+- **A banned user cannot gain federation rank** (`tcbot/modules/helper/decorators/checks.py`, `tcbot/modules/helper/pipelines/promote_flow.py`, `tcbot/modules/helper/pipelines/promo_decision_flow.py`): the promotion paths never checked for an active ban, so a banned user could hold staff rank and moderate from any chat where the ban did not land. Behavior changes: promotions, promotion requests, and the approval of a queued request refuse a banned target and fail closed when the ban state cannot be read.
+
+- **The promote callback applies the command path's identity refusal** (`tcbot/modules/admins.py`): the role-picker button granted roles without the refusal the command applies. Behavior changes: neither entry point grants a role to the anonymous-admin placeholder or a Telegram service account.
+
 - **An invalidation is no longer undone by an in-flight read** (`tcbot/database/cache/twolevel/core.py`): a fetch that started before a revocation wrote the revoked value back into the in-memory and shared caches. Behavior changes: a revoked role or connection state is not resurrected for the cache lifetime.
 
 - **Zero duration no longer becomes a permanent mute** (`tcbot/utils/time_and_date.py`): `parse_duration` rejects a zero value instead of returning a falsy delta the mute executor coerced to permanent. Behavior changes: `/tcmute <target> 0s` now errors instead of muting forever.

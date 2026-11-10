@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import replies
+from tcbot.modules.helper.decorators.checks import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
     promote_approved_log,
@@ -145,6 +146,25 @@ async def execute_promo_decision(
     lc, lt = cfg.logs
 
     if action == "promo_approve":
+        # * A banned target must not gain rank through a queued request:
+        # * the request may have been filed before the ban landed, and the
+        # * Founder's tap must not override the ban.
+        ban_refusal = await banned_target_refusal(
+            target_id,
+            await locale_for_update(update),
+            log_label="promo_approve ban-guard",
+        )
+        if ban_refusal is not None:
+            await safe_edit_cb(
+                q,
+                ban_refusal,
+                parse_mode=None,
+                reply_markup=None,
+                log_level="debug",
+                log_label="promo_approve banned-target",
+                catch_all=True,
+            )
+            return
         # * Resolve-first claim, then grant: the atomic resolve decides a
         # * concurrent approve/reject race. Granting before the claim (old
         # * order) could add admin after a winning reject, granting rank

@@ -334,6 +334,23 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         )
         return
 
+    # * Same identity refusal the command path applies: the callback reaches
+    # * the same promotion, so it must not grant rank to the anonymous-admin
+    # * placeholder or a Telegram service account.
+    ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    refusal = identity.refuse_message("promote", ident, await locale_for_update(update))
+    if refusal is not None:
+        await safe_edit_cb(
+            q,
+            refusal,
+            parse_mode=None,
+            reply_markup=None,
+            log_level="debug",
+            log_label="on_promote_role_btn refusal",
+            catch_all=True,
+        )
+        return
+
     _, text = await Promote.execute(
         ctx.bot,
         admin.id,
