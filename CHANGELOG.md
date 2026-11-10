@@ -334,6 +334,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **Database calls get their own worker pool and a per-call budget** (`tcbot/database/mongos.py`): database work shared the event loop's default executor with other blocking calls, and a caller waited for the full socket timeout on a hung operation. Behavior changes: database calls run on a dedicated bounded pool, a hung operation releases the caller after 20 seconds, and the timeout counts as an outage signal for the circuit breaker.
+
 - **The primary group is recognised again** (`tcbot/__init__.py`): the primary-group check rejected every chat ID below zero, but Telegram group and channel IDs are negative, so the main group never matched. Behavior changes: the main group is recognised as a primary destination, federation moderation is accepted from it, join enforcement runs there, and it can no longer be disconnected, removed, or connected like an ordinary group.
 
 - **Zero duration no longer becomes a permanent mute** (`tcbot/utils/time_and_date.py`): `parse_duration` rejects a zero value instead of returning a falsy delta the mute executor coerced to permanent. Behavior changes: `/tcmute <target> 0s` now errors instead of muting forever.

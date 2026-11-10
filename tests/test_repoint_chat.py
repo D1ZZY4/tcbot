@@ -15,7 +15,7 @@ import pytest
 from tcbot.database import _migration
 
 
-async def _identity(op: Any) -> Any:
+async def _identity(op: Any, **_kwargs: Any) -> Any:
     return op()
 
 

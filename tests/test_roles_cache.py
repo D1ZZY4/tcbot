@@ -15,7 +15,7 @@ from tcbot.database import users_roles
 from tcbot.database.cache import _OWNER_KEY
 
 
-async def _identity(op: Any) -> Any:
+async def _identity(op: Any, **_kwargs: Any) -> Any:
     return op()
 
 

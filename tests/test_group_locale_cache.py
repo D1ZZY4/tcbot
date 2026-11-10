@@ -25,7 +25,7 @@ def test_set_group_locale_invalidates_active_groups_cache(
         def invalidate(self, key: str) -> None:
             seen.append(key)
 
-    async def _db_call(op: Any) -> Any:
+    async def _db_call(op: Any, **_kwargs: Any) -> Any:
         return SimpleNamespace(matched_count=1)
 
     class _Groups:
@@ -53,7 +53,7 @@ def test_set_group_locale_none_also_invalidates(
         def invalidate(self, key: str) -> None:
             seen.append(key)
 
-    async def _db_call(op: Any) -> Any:
+    async def _db_call(op: Any, **_kwargs: Any) -> Any:
         return SimpleNamespace(matched_count=0)
 
     class _Groups:

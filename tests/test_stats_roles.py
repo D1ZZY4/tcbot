@@ -27,7 +27,7 @@ class _SpyCollection:
         return 42
 
 
-async def _identity(op: Any) -> Any:
+async def _identity(op: Any, **_kwargs: Any) -> Any:
     return op()
 
 

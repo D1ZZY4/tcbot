@@ -29,7 +29,7 @@ class _FakeCollection:
 
 
 def _patch(monkeypatch: pytest.MonkeyPatch, *, fail_counts: bool) -> None:
-    async def _db_call(op: Any) -> Any:
+    async def _db_call(op: Any, **_kwargs: Any) -> Any:
         return op()
 
     monkeypatch.setattr(jobs, "_db_call", _db_call)

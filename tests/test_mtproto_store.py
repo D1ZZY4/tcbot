@@ -120,7 +120,7 @@ def _run(coro: Any) -> Any:
     return asyncio.run(coro)
 
 
-async def _run_op(op: Any) -> Any:
+async def _run_op(op: Any, **_kwargs: Any) -> Any:
     """Fake db_call transport: run the thunk inline (no circuit, no thread).
 
     Keeps ``_retry_write`` tests hermetic: they exercise retry/degrade

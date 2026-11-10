@@ -7,8 +7,12 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
+import functools
+import os
 import secrets
 import string
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -59,6 +63,28 @@ _MONGO_MAX_POOL_SIZE: int = 20
 _MONGO_MIN_POOL_SIZE: int = 2
 _MONGO_MAX_IDLE_MS: int = 60_000
 _MONGO_HEARTBEAT_MS: int = 30_000
+
+# ────────────────────── Database worker pool ──────────────────── #
+# * Database calls run on a dedicated thread pool, not on the event
+# * loop's default executor. The default executor is shared with other
+# * blocking work: the speedtest holds one of its threads for minutes, so
+# * a handful of hung database calls could starve it and stall unrelated
+# * work. The pool is sized above the pymongo connection pool so a few
+# * stuck operations cannot exhaust it.
+_DB_WORKER_MIN: int = 8
+_DB_WORKER_MAX: int = 24
+_DB_WORKER_COUNT: int = min(
+    _DB_WORKER_MAX, max(_DB_WORKER_MIN, (os.cpu_count() or 4) + 4)
+)
+
+# * Upper bound for a single database call. The pymongo socket timeout is
+# * the last line of defence (45 s); this bound releases the caller
+# * earlier so a request waiting on a role lookup fails fast instead of
+# * hanging. Callers whose operation is legitimately long (index builds,
+# * bulk deletes) pass ``timeout=None``.
+_DB_CALL_TIMEOUT_S: float = 20.0
+
+_db_executor: ThreadPoolExecutor | None = None
 
 # ──────────────────────── Index TTL Constants ───────────────────── #
 # * MongoDB TTL index for member_cache: auto-expire docs after 90 days.
@@ -192,11 +218,16 @@ def close() -> None:
     """Close the shared client, releasing pooled sockets (shutdown path).
 
     Called after every drain in ``_post_shutdown`` so no in-flight write
-    outlives the pool. Safe to call without a prior connect.
+    outlives the pool. The database worker pool is shut down with it, so
+    a later start (serverless warm invocation) recreates it lazily. Safe
+    to call without a prior connect.
     """
-    global _client, _db
+    global _client, _db, _db_executor
     client, _client = _client, None
     _db = None
+    executor, _db_executor = _db_executor, None
+    if executor is not None:
+        executor.shutdown(wait=False)
     if client is not None:
         try:
             client.close()
@@ -214,17 +245,30 @@ def is_connected() -> bool:
     return _db is not None
 
 
-async def db_call[T](op: Callable[[], T]) -> T:
+async def db_call[T](
+    op: Callable[[], T],
+    *,
+    timeout: float | None = _DB_CALL_TIMEOUT_S,
+) -> T:
     """Execute a synchronous pymongo operation through the MongoDB circuit.
 
     ``op`` is a zero-argument callable (a thunk) that performs the sync
-    operation; it runs in a worker thread so the event loop never blocks.
-    Use this inside database helper modules for operations where a full
-    socket-timeout wait is undesirable when the cluster is unreachable.
+    operation; it runs on the dedicated database worker pool so the event
+    loop never blocks. Use this inside database helper modules for
+    operations where a full socket-timeout wait is undesirable when the
+    cluster is unreachable.
+
+    ``timeout`` bounds how long the caller waits for the operation. On
+    expiry the caller raises ``TimeoutError`` and the worker thread is
+    left to finish on its own (the same late-commit behaviour a cancelled
+    call already has). Pass ``timeout=None`` for operations that are
+    legitimately long, such as index builds and bulk deletes.
 
     Only transient Mongo errors (see :func:`is_transient_mongo_error`)
     count toward opening the circuit; application errors propagate without
     recording a failure, so a bad write cannot masquerade as an outage.
+    A call timeout counts as transient: a hung operation is an outage
+    signal and must open the circuit like any other connection failure.
     Cancellation propagates immediately; a cancelled background thread may
     still finish its operation, which the atomic read patterns tolerate
     (they can only under-count, never double-count, on a late cancellation).
@@ -232,13 +276,36 @@ async def db_call[T](op: Callable[[], T]) -> T:
     Raises:
         CircuitOpenError: Circuit is OPEN; the call was rejected without
             touching MongoDB.
+        TimeoutError: The operation exceeded ``timeout``.
         Any exception the operation raises (propagates to the caller
             unchanged).
 
     """
-    return await _mongo_cb.call(
-        asyncio.to_thread(op), count_failure=_counts_toward_circuit
-    )
+    loop = asyncio.get_running_loop()
+    # * The request context is copied into the worker thread explicitly:
+    # * run_in_executor does not propagate contextvars, and the log
+    # * context (user/chat/update ids) must survive into the database
+    # * layer's log lines.
+    ctx = contextvars.copy_context()
+
+    async def _run() -> T:
+        call = functools.partial(ctx.run, op)
+        if timeout is None:
+            return await loop.run_in_executor(_db_pool(), call)
+        async with asyncio.timeout(timeout):
+            return await loop.run_in_executor(_db_pool(), call)
+
+    return await _mongo_cb.call(_run(), count_failure=_counts_toward_circuit)
+
+
+def _db_pool() -> ThreadPoolExecutor:
+    """Return the dedicated database worker pool, creating it on first use."""
+    global _db_executor
+    if _db_executor is None:
+        _db_executor = ThreadPoolExecutor(
+            max_workers=_DB_WORKER_COUNT, thread_name_prefix="tcbot-db"
+        )
+    return _db_executor
 
 
 # ──────────────────────────── Indexes ──────────────────────────── #
@@ -440,7 +507,10 @@ async def ensure_indexes() -> None:
             expireAfterSeconds=_MEMBER_CACHE_EXPIRE_S,
         ),
     ]
-    results = await gather_bounded([db_call(op) for op in index_ops])
+    # * Index builds are the one operation that may legitimately run for
+    # * minutes on a large collection, so the per-call bound does not
+    # * apply to them.
+    results = await gather_bounded([db_call(op, timeout=None) for op in index_ops])
     failed = [r for r in results if isinstance(r, BaseException)]
     if failed:
         for exc in failed:

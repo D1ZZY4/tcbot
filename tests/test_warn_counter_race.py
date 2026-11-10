@@ -29,7 +29,7 @@ def _dup_error() -> DuplicateKeyError:
     )
 
 
-async def _identity(op: Any) -> Any:
+async def _identity(op: Any, **_kwargs: Any) -> Any:
     return op()
 
 

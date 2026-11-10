@@ -30,7 +30,7 @@ class _FakeRequests:
         self.docs.append(dict(doc))
 
 
-async def _identity(op: Any) -> Any:
+async def _identity(op: Any, **_kwargs: Any) -> Any:
     return op()
 
 
