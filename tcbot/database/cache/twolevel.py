@@ -13,14 +13,13 @@ import msgspec
 
 import tcbot.database.redis_client as _redis_mod
 from tcbot import cfg
-from tcbot.database import cache as _cache_pkg
+from tcbot.database.cache import redis_io
 from tcbot.database.cache.codec import (
     _decode_redis_value,
     _msgspec_enc_hook,
     _tag_scalars,
 )
 from tcbot.database.cache.memory import CACHE_MISS, TTLCache
-from tcbot.database.cache.twolevel.queue import _QueueMixin
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -34,11 +33,8 @@ log = get_logger(__name__)
 # * hints (umention) may drop; the next update refreshes them.
 _REVOCATION_PREFIXES: frozenset[str] = frozenset({"role", "conn", "groups", "owner"})
 
-# * Client and timeouts resolve via the package namespace so patching
-# * tcbot.database.cache keeps working as with the old single module.
 
-
-class TwoLevelCache[T](_QueueMixin):
+class TwoLevelCache[T]:
     """Two-level cache: in-memory L1 (fast) + Redis L2 (distributed, optional).
 
     When Redis is unavailable the cache degrades to pure in-memory behaviour
@@ -133,12 +129,12 @@ class TwoLevelCache[T](_QueueMixin):
                 while True:
                     cursor, keys = await asyncio.wait_for(
                         live.scan(cursor, match=pattern, count=100),
-                        timeout=_cache_pkg._REDIS_WRITE_TIMEOUT_S,
+                        timeout=redis_io._REDIS_WRITE_TIMEOUT_S,
                     )
                     if keys:
                         await asyncio.wait_for(
                             live.unlink(*keys),
-                            timeout=_cache_pkg._REDIS_WRITE_TIMEOUT_S,
+                            timeout=redis_io._REDIS_WRITE_TIMEOUT_S,
                         )
                     if cursor == 0:
                         break
@@ -151,19 +147,21 @@ class TwoLevelCache[T](_QueueMixin):
                     exc,
                 )
 
-        task = self._enqueue_redis_mutation(_clear_redis, droppable=False)
+        task = redis_io.enqueue_redis_mutation(
+            self._redis_prefix, _clear_redis, droppable=False
+        )
         if task is not None:
             try:
                 await asyncio.wait_for(
                     asyncio.shield(task),
-                    timeout=_cache_pkg._CLEAR_ALL_TIMEOUT_S,
+                    timeout=redis_io._CLEAR_ALL_TIMEOUT_S,
                 )
             except TimeoutError:
                 log.warning(
                     "Redis clear_all for prefix %s still running after %ds; "
                     "continuing with L1 cleared.",
                     self._redis_prefix,
-                    _cache_pkg._CLEAR_ALL_TIMEOUT_S,
+                    redis_io._CLEAR_ALL_TIMEOUT_S,
                 )
 
     # ── Async hot-path ── #
@@ -205,7 +203,7 @@ class TwoLevelCache[T](_QueueMixin):
                     try:
                         raw = await asyncio.wait_for(
                             rc.get(rkey),
-                            timeout=_cache_pkg._REDIS_GET_TIMEOUT_S,
+                            timeout=redis_io._REDIS_GET_TIMEOUT_S,
                         )
                     except asyncio.CancelledError:
                         raise
@@ -266,7 +264,8 @@ class TwoLevelCache[T](_QueueMixin):
                     log.debug("Redis payload encode failed for %s: %s", rkey, exc)
                 else:
                     if cfg.redis_url:
-                        self._enqueue_redis_mutation(
+                        redis_io.enqueue_redis_mutation(
+                            self._redis_prefix,
                             lambda: self._redis_set(rkey, payload),
                             droppable=self._redis_prefix not in _REVOCATION_PREFIXES,
                         )
@@ -285,13 +284,13 @@ class TwoLevelCache[T](_QueueMixin):
     async def _client(self) -> Any:
         """Return the Redis client, reconnecting after a failed startup.
 
-        The client is resolved through the package namespace first so a
-        patched client keeps working; only a missing client triggers the
+        The client is resolved through the redis_io module so a patched
+        client keeps working; only a missing client triggers the
         reconnect, which the client module rate-limits.
         """
-        rc = _cache_pkg._redis_client()
+        rc = redis_io.redis_client()
         if rc is None:
-            rc = await _cache_pkg.acquire_redis_client()
+            rc = await redis_io.acquire_redis_client()
         return rc
 
     def _rkey(self, key: Any) -> str:
@@ -315,7 +314,8 @@ class TwoLevelCache[T](_QueueMixin):
         except Exception as exc:
             log.debug("Redis payload encode failed for %s: %s", rkey, exc)
             return
-        self._enqueue_redis_mutation(
+        redis_io.enqueue_redis_mutation(
+            self._redis_prefix,
             lambda: self._redis_set(rkey, payload),
             droppable=self._redis_prefix not in _REVOCATION_PREFIXES,
         )
@@ -325,8 +325,10 @@ class TwoLevelCache[T](_QueueMixin):
         if not cfg.redis_url:
             return
         rkey = self._rkey(key)
-        self._enqueue_redis_mutation(
-            lambda: self._redis_delete(rkey), droppable=droppable
+        redis_io.enqueue_redis_mutation(
+            self._redis_prefix,
+            lambda: self._redis_delete(rkey),
+            droppable=droppable,
         )
 
     async def _redis_set(self, rkey: str, payload: str) -> None:
@@ -343,7 +345,7 @@ class TwoLevelCache[T](_QueueMixin):
         try:
             await asyncio.wait_for(
                 rc.set(rkey, payload, ex=self._redis_ttl),
-                timeout=_cache_pkg._REDIS_WRITE_TIMEOUT_S,
+                timeout=redis_io._REDIS_WRITE_TIMEOUT_S,
             )
         except Exception as exc:
             _redis_mod.mark_op(ok=False)
@@ -359,7 +361,7 @@ class TwoLevelCache[T](_QueueMixin):
         try:
             await asyncio.wait_for(
                 rc.delete(rkey),
-                timeout=_cache_pkg._REDIS_WRITE_TIMEOUT_S,
+                timeout=redis_io._REDIS_WRITE_TIMEOUT_S,
             )
         except Exception as exc:
             _redis_mod.mark_op(ok=False)

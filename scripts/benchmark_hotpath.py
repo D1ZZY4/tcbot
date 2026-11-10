@@ -27,8 +27,8 @@ import time
 from tcbot import cfg
 from tcbot.database import mongos
 from tcbot.database import redis_client as redis_client_mod
-from tcbot.database.cache.twolevel import core as cache_core
-from tcbot.database.cache.twolevel.core import TwoLevelCache
+from tcbot.database.cache import twolevel as cache_twolevel
+from tcbot.database.cache.twolevel import TwoLevelCache
 from tcbot.utils.dispatch import fan_out
 
 # * Iterations per scenario. Small enough to run in a second, large enough
@@ -45,7 +45,7 @@ def _disable_redis() -> None:
     measures the local primitives, so the shared cache is turned off.
     """
     local = dataclasses.replace(cfg, redis_url=None)
-    cache_core.cfg = local
+    cache_twolevel.cfg = local
     mongos.cfg = local
     redis_client_mod.cfg = local
 

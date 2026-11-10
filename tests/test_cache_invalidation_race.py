@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from tcbot.database.cache.twolevel.core import TwoLevelCache
+from tcbot.database.cache.twolevel import TwoLevelCache
 
 
 def _cache() -> TwoLevelCache[str]:

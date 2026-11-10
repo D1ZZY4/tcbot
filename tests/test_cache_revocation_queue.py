@@ -7,12 +7,15 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from typing import Any
 
 import pytest
 
 import tcbot.database.cache as cache_mod
-from tcbot.database.cache import mutations
+from tcbot import cfg
+from tcbot.database.cache import redis_io
+from tcbot.database.cache import twolevel as cache_twolevel
 
 
 class _FakeOkRedis:
@@ -25,11 +28,18 @@ class _FakeOkRedis:
 
 @pytest.fixture(autouse=True)
 def _clean_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(cache_mod, "_redis_client", lambda: _FakeOkRedis())
-    mutations._redis_pending.clear()
-    mutations._redis_tails.clear()
-    mutations._redis_bg_tasks.clear()
-    mutations._redis_drop_warned.clear()
+    monkeypatch.setattr(redis_io, "redis_client", lambda: _FakeOkRedis())
+    # * The cache only enqueues L2 mutations when Redis is configured: with
+    # * no REDIS_URL there is no L2 to mutate, so the queue stays empty.
+    monkeypatch.setattr(
+        cache_twolevel,
+        "cfg",
+        dataclasses.replace(cfg, redis_url="redis://localhost:6379"),
+    )
+    redis_io._redis_pending.clear()
+    redis_io._redis_tails.clear()
+    redis_io._redis_bg_tasks.clear()
+    redis_io._redis_drop_warned.clear()
 
 
 def _cache(prefix: str) -> cache_mod.TwoLevelCache[Any]:
@@ -42,19 +52,19 @@ def test_role_delete_survives_sat_queue_but_mention_drops() -> None:
         role_cache = _cache("role")
         mention_cache = _cache("umention")
         # Saturate both prefixes to the bound.
-        mutations._redis_pending[("role", loop)] = mutations._REDIS_MAX_PENDING
-        mutations._redis_pending[("umention", loop)] = mutations._REDIS_MAX_PENDING
-        before_role = mutations._redis_pending[("role", loop)]
-        before_mention = mutations._redis_pending[("umention", loop)]
-        tasks_before = set(mutations._redis_bg_tasks)
+        redis_io._redis_pending[("role", loop)] = redis_io._REDIS_MAX_PENDING
+        redis_io._redis_pending[("umention", loop)] = redis_io._REDIS_MAX_PENDING
+        before_role = redis_io._redis_pending[("role", loop)]
+        before_mention = redis_io._redis_pending[("umention", loop)]
+        tasks_before = set(redis_io._redis_bg_tasks)
 
         role_cache.invalidate(123)
         mention_cache.invalidate(123)
 
         # Role delete enqueued despite the bound; mention delete dropped.
-        assert mutations._redis_pending[("role", loop)] == before_role + 1
-        assert mutations._redis_pending[("umention", loop)] == before_mention
-        new_tasks = set(mutations._redis_bg_tasks) - tasks_before
+        assert redis_io._redis_pending[("role", loop)] == before_role + 1
+        assert redis_io._redis_pending[("umention", loop)] == before_mention
+        new_tasks = set(redis_io._redis_bg_tasks) - tasks_before
         assert len(new_tasks) == 1
         for task in new_tasks:
             task.cancel()
@@ -67,14 +77,14 @@ def test_role_put_survives_sat_queue() -> None:
     async def _scenario() -> None:
         loop = asyncio.get_running_loop()
         role_cache = _cache("role")
-        mutations._redis_pending[("role", loop)] = mutations._REDIS_MAX_PENDING
-        before = mutations._redis_pending[("role", loop)]
-        tasks_before = set(mutations._redis_bg_tasks)
+        redis_io._redis_pending[("role", loop)] = redis_io._REDIS_MAX_PENDING
+        before = redis_io._redis_pending[("role", loop)]
+        tasks_before = set(redis_io._redis_bg_tasks)
 
         role_cache.put(123, "admin")
 
-        assert mutations._redis_pending[("role", loop)] == before + 1
-        new_tasks = set(mutations._redis_bg_tasks) - tasks_before
+        assert redis_io._redis_pending[("role", loop)] == before + 1
+        new_tasks = set(redis_io._redis_bg_tasks) - tasks_before
         assert len(new_tasks) == 1
         for task in new_tasks:
             task.cancel()

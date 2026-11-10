@@ -11,7 +11,7 @@ import asyncio
 import pytest
 
 import tcbot.database.cache as cache_mod
-from tcbot.database.cache import mutations
+from tcbot.database.cache import redis_io
 
 
 class _FakeOkRedis:
@@ -24,11 +24,11 @@ class _FakeOkRedis:
 
 @pytest.fixture(autouse=True)
 def _clean_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(cache_mod, "_redis_client", lambda: _FakeOkRedis())
-    mutations._redis_pending.clear()
-    mutations._redis_tails.clear()
-    mutations._redis_bg_tasks.clear()
-    mutations._redis_drop_warned.clear()
+    monkeypatch.setattr(redis_io, "redis_client", lambda: _FakeOkRedis())
+    redis_io._redis_pending.clear()
+    redis_io._redis_tails.clear()
+    redis_io._redis_bg_tasks.clear()
+    redis_io._redis_drop_warned.clear()
 
 
 def _cache() -> cache_mod.TwoLevelCache[str]:
@@ -41,7 +41,6 @@ def _cache() -> cache_mod.TwoLevelCache[str]:
 
 def test_cancelled_predecessor_does_not_drop_successor() -> None:
     async def _scenario() -> list[str]:
-        cache = _cache()
         ran: list[str] = []
         first_started = asyncio.Event()
         first_gate = asyncio.Event()
@@ -57,9 +56,9 @@ def test_cancelled_predecessor_does_not_drop_successor() -> None:
         async def _third() -> None:
             ran.append("third")
 
-        first = cache._enqueue_redis_mutation(_first)
-        second = cache._enqueue_redis_mutation(_second, droppable=False)
-        third = cache._enqueue_redis_mutation(_third, droppable=False)
+        first = redis_io.enqueue_redis_mutation("test-fifo", _first)
+        second = redis_io.enqueue_redis_mutation("test-fifo", _second, droppable=False)
+        third = redis_io.enqueue_redis_mutation("test-fifo", _third, droppable=False)
         assert first is not None and second is not None and third is not None
         await first_started.wait()
         first_gate.set()
@@ -75,7 +74,6 @@ def test_cancelled_predecessor_does_not_drop_successor() -> None:
 
 def test_self_cancellation_still_aborts() -> None:
     async def _scenario() -> list[str]:
-        cache = _cache()
         ran: list[str] = []
         second_started = asyncio.Event()
         second_gate = asyncio.Event()
@@ -88,8 +86,8 @@ def test_self_cancellation_still_aborts() -> None:
             await second_gate.wait()
             ran.append("second")
 
-        first = cache._enqueue_redis_mutation(_first)
-        second = cache._enqueue_redis_mutation(_second, droppable=False)
+        first = redis_io.enqueue_redis_mutation("test-fifo", _first)
+        second = redis_io.enqueue_redis_mutation("test-fifo", _second, droppable=False)
         assert first is not None and second is not None
         await first
         await second_started.wait()
