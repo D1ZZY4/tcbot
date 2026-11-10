@@ -140,7 +140,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * or target outranks executor); end the handler.
         return
 
-    staff_roles = ("admin", "developer", "tester")
+    staff_roles = db.users_roles.STAFF_ROLES
     refusal = identity.refuse_message("unban", ident, locale)
     # * Hard identity refusals (self, bot, telegram, anon_admin, founder)
     # * always block, regardless of federation role.

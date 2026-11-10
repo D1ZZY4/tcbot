@@ -362,7 +362,7 @@ def staff_notice(
     locale: str | None = None,
 ) -> str | None:
     """Return a heads-up line when acting on staff, or ``None`` otherwise."""
-    if ident.kind not in ("admin", "developer", "tester"):
+    if ident.kind not in db.users_roles.STAFF_ROLES:
         return None
     return t(
         "identity.staff.notice",

@@ -167,9 +167,7 @@ class CheckProfileMixin:
             if not isinstance(r_ident, BaseException):
                 identity_note = profile_note(cast("Identity", r_ident), locale)
         role_label = (
-            db.users_roles.ROLE_LABEL.get(
-                role or "", t("checking.profile.regular", locale)
-            )
+            db.users_roles.role_label(role)
             if role
             else (
                 t("checking.profile.unknown", locale)

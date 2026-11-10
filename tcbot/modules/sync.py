@@ -331,7 +331,7 @@ async def _demote_staff_holdings(
         if isinstance(role, BaseException):
             log.warning("sync demote role lookup failed for %d: %s", uid, role)
             continue
-        if role not in _STAFF_ROLES:
+        if role not in db.users_roles.STAFF_ROLES:
             continue
         if role == "admin" and executor_role is not None and executor_role != "founder":
             log.warning(

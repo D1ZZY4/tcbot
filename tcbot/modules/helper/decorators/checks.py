@@ -94,7 +94,7 @@ async def resolve_and_check(
     if target_role and db.users_roles.role_rank(
         executor_role
     ) <= db.users_roles.role_rank(target_role):
-        label = db.users_roles.ROLE_LABEL.get(target_role, target_role.capitalize())
+        label = db.users_roles.role_label(target_role)
         await safe_reply(
             msg,
             replies.refuse_outranked(label, locale, plain=True),
@@ -390,7 +390,10 @@ async def check_callback_staff(
     throw_if_cancelled((role_r, answer_r))
     if isinstance(answer_r, BaseException):
         log.debug("callback answer failed: %s", answer_r)
-    if isinstance(role_r, BaseException) or role_r not in ("founder", "admin"):
+    if (
+        isinstance(role_r, BaseException)
+        or role_r not in db.users_roles.FOUNDER_ADMIN_ROLES
+    ):
         await safe_edit_cb(
             q,
             replies.err_perm_expired(await locale_for_update(update), plain=True),

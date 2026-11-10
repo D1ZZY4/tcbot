@@ -107,7 +107,7 @@ class Demote:
                     target_id,
                 )
                 live_role = target_role
-            if live_role not in ("admin", "developer", "tester"):
+            if live_role not in db.users_roles.STAFF_ROLES:
                 return True
             chat = msg.chat
             mod_locale = await effective_locale(
@@ -134,9 +134,7 @@ class Demote:
             executor_fname,
         )
 
-        role_label = db.users_roles.ROLE_LABEL.get(
-            target_role, target_role.capitalize()
-        )
+        role_label = db.users_roles.role_label(target_role)
         target_locale = await locale_for_user(target_id)
         if trigger is None:
             user_msg = t(

@@ -274,7 +274,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         )
         return
 
-    if role not in ("admin", "developer", "tester"):
+    if role not in db.users_roles.STAFF_ROLES:
         await safe_edit_cb(
             q,
             replies.err_unknown_role(await locale_for_update(update), plain=True),
@@ -468,7 +468,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
+    role_label = db.users_roles.role_label(target_role)
     await safe_reply(
         msg,
         t(
@@ -616,7 +616,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
-    role_label = db.users_roles.ROLE_LABEL.get(target_role, target_role)
+    role_label = db.users_roles.role_label(target_role)
     await safe_edit_cb(
         q,
         t(
@@ -742,8 +742,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         )
         return
     if existing_role:
-        label = db.users_roles.ROLE_LABEL.get(existing_role, existing_role or "unknown")
-        label = label.capitalize()
+        label = db.users_roles.role_label(existing_role)
         await safe_reply(
             msg,
             t("admins.request.already_role", locale, role=label, plain=True),

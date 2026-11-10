@@ -47,10 +47,32 @@ ROLE_LABEL: dict[str, str] = {
     "tester": "Tester",
 }
 
+# * Single owner for the two role sets the moderation paths test against.
+# * Open-coding them per call site let a new tier land in ROLE_RANK and be
+# * missed by every set check, so the rank gate and the staff gate would
+# * disagree about the same user.
+# * STAFF_ROLES holds every role that can be demoted (Founder is protected
+# * and never demoted); FOUNDER_ADMIN_ROLES holds the roles that count as
+# * federation staff for permission gates.
+STAFF_ROLES: frozenset[str] = frozenset({"admin", "developer", "tester"})
+FOUNDER_ADMIN_ROLES: frozenset[str] = frozenset({"founder", "admin"})
+
 
 def role_rank(role: str | None) -> int:
     """Convert a role string to its numeric rank value for comparison."""
     return ROLE_RANK.get(role or "", 0)
+
+
+def role_label(role: str | None) -> str:
+    """Return the human label for a role, falling back to the role itself.
+
+    Single owner for the label lookup, so every surface renders a role the
+    same way. A role outside the known set falls back to its own name,
+    which keeps a legacy row readable instead of blank.
+    """
+    if not role:
+        return ""
+    return ROLE_LABEL.get(role, role.capitalize())
 
 
 # ───────────────────────── Owner CRUD ────────────────────────── #
@@ -303,7 +325,7 @@ async def is_staff(user_id: int, *, fresh: bool = False) -> bool:
     except Exception as exc:
         log.warning("is_staff role check failed for %d: %s", user_id, exc)
         return False
-    return role in ("founder", "admin")
+    return role in FOUNDER_ADMIN_ROLES
 
 
 async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None:
@@ -407,8 +429,10 @@ async def role_meta(user_id: int) -> tuple[str | None, int | None, datetime | No
 
 
 __all__ = [
+    "FOUNDER_ADMIN_ROLES",
     "ROLE_LABEL",
     "ROLE_RANK",
+    "STAFF_ROLES",
     "VALID_ROLES",
     "add_admin",
     "admin_count",
@@ -426,6 +450,7 @@ __all__ = [
     "remove_admin",
     "remove_role",
     "role_count",
+    "role_label",
     "role_meta",
     "role_rank",
     "set_owner",

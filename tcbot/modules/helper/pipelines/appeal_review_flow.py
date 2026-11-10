@@ -427,7 +427,7 @@ class AppealReviewMixin(AppealVerdictsMixin):
             except Exception as exc:
                 log.debug("Appeal role-lookup answer failed: %s", exc)
             return
-        if role_result not in ("founder", "admin"):
+        if role_result not in db.users_roles.FOUNDER_ADMIN_ROLES:
             try:
                 await q.answer(
                     t("appeals.review.not_authorized", locale, plain=True),

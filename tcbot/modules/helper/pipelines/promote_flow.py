@@ -109,7 +109,7 @@ async def assign_subrole(
 ) -> tuple[bool, str]:
     """Founder/Admin path for Developer/Tester role assignment."""
     if current_role == "admin":
-        label = db.users_roles.ROLE_LABEL.get(role, role)
+        label = db.users_roles.role_label(role)
         return (
             False,
             t(
@@ -133,7 +133,7 @@ async def assign_subrole(
         log.warning(
             "_assign_subrole: upsert_user failed for target=%d: %s", target_id, exc
         )
-    role_label = db.users_roles.ROLE_LABEL.get(role, role)
+    role_label = db.users_roles.role_label(role)
     log_text = messages.promoted(target_id, target_fname, role, admin_id, admin_fname)
     target_locale = await locale_for_user(target_id)
     subrole_results = await asyncio.gather(
@@ -301,9 +301,7 @@ class Promote:
         if current_role == "founder":
             return False, t("admins.promote.target_is_founder", locale)
         if db.users_roles.role_rank(current_role) >= db.users_roles.role_rank(role):
-            label = db.users_roles.ROLE_LABEL.get(
-                current_role or "", current_role or ""
-            )
+            label = db.users_roles.role_label(current_role)
             return False, t("admins.promote.holds_role", locale, role=label)
         # * Single chokepoint for every direct promotion (the command and the
         # * role-picker callback both land here): a banned user must not gain
@@ -328,7 +326,7 @@ class Promote:
             return await cls.request_admin(
                 bot, admin_id, target_id, target_fname, locale=locale
             )
-        if executor_role not in ("founder", "admin"):
+        if executor_role not in db.users_roles.FOUNDER_ADMIN_ROLES:
             return False, t("admins.promote.no_assign_perms", locale)
         return await assign_subrole(
             bot,

@@ -492,11 +492,6 @@ def appeal_unban_log(
 # ──────────────────────── Roles logs ─────────────────────── #
 
 
-def _role_title(role: str) -> str:
-    """Return the human-readable label for a role string."""
-    return db.users_roles.ROLE_LABEL.get(role, role.capitalize())
-
-
 def promoted(
     target_id: int,
     target_fname: str,
@@ -508,7 +503,7 @@ def promoted(
 
     Single shape: the role is shown as a field below the user, not in the title.
     """
-    role_label = _role_title(role)
+    role_label = db.users_roles.role_label(role)
     return (
         LogBuilder(f"New {cfg.community_name} Promoted")
         .mention_field("User", target_id, target_fname)
@@ -531,7 +526,7 @@ def demoted(
     by_fname: str,
 ) -> str:
     """Unified demotion audit-log: manual demote and ban/kick demote share one format."""
-    role_label = _role_title(role)
+    role_label = db.users_roles.role_label(role)
     return (
         LogBuilder(f"{cfg.community_name} Demoted")
         .mention_field("User", target_id, target_fname)

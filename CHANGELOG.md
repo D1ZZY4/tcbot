@@ -13,6 +13,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Federation log delivery has one owner** (`tcbot/modules/helper/messages/safe_edits.py`): `send_log` posts the audit log to the configured destination as MarkdownV2 in the configured thread, replacing twenty-seven hand-written copies of the same call.
 
+- **Role sets and role labels have one owner** (`tcbot/database/users_roles.py`): `STAFF_ROLES`, `FOUNDER_ADMIN_ROLES`, and `role_label` replace eleven inline role-set literals and two different label fallbacks.
+
 - **MongoDB query shapes are verified without a live server** (`pyproject.toml`, `uv.lock`, `tests/test_ban_uniqueness_mongo.py`): the duplicate-ban migration and the one-active-ban guarantee depend on MongoDB semantics a hand-written double cannot prove, so the in-memory MongoDB engine runs the same aggregation pipeline and the same partial unique index. Behavior changes: none; the dependency is development-only.
 - **Production observability via optional extras** (`tcbot/alive.py`, `tcbot/__main__.py`, `tcbot/__init__.py`, `config.env.example`): a `/metrics` endpoint on the keep-alive server when prometheus-client is installed, the uvloop event loop policy on Linux when the package is present, and Sentry initialisation when `SENTRY_DSN` is set. Behavior changes: the operations surfaces appear only with their extras configured.
 
@@ -70,6 +72,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **Speedtest probes servers concurrently** (`tcbot/modules/netspeed.py`): best-server latency probes now run in parallel instead of one server after another. Behavior changes: server selection is faster on far routes; results keep the same fields.
 
 ### Changed
+
+- **One owner for the role sets** (`tcbot/database/users_roles.py`): `STAFF_ROLES` and `FOUNDER_ADMIN_ROLES` replace eleven inline role-set literals across the moderation paths, so a new tier cannot land in the rank table and be missed by every set check. Behavior changes: none.
 
 - **The error reporter is an application service** (`tcbot/error_reporter.py`, `tcbot/utils/logger.py`): the reporter moved from the utils layer to the package root, and it registers its shipping sink with the logger instead of the logger importing it. The utils layer no longer depends on the layer above it. Behavior changes: none; error reports still reach the same channel.
 

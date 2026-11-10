@@ -257,7 +257,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if user_role in ("developer", "tester"):
-        role_label = db.users_roles.ROLE_LABEL.get(user_role, user_role)
+        role_label = db.users_roles.role_label(user_role)
         await safe_reply(
             msg,
             t(
