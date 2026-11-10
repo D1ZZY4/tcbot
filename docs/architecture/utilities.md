@@ -13,9 +13,9 @@ flowchart TD
     Utils --> Dispatch[dispatch.py<br/>fan_out concurrency]
     Utils --> Prefixes[prefixes.py<br/>command prefix builders]
     Utils --> Logging[logger.py<br/>logger config]
-    Utils --> ErrorReporter[error_reporter.py<br/>error sink]
+    Utils --> ErrorReporter[logger error sink<br/>registered by the reporter]
     Utils --> TimeDate[time_and_date.py<br/>UTC + display + measure]
-    Utils --> Pagination[pagination.py<br/>paginate, nav_row, date_or_unknown]
+    Utils --> Pagination[pagination.py<br/>paginate, clamp_page]
     Utils --> Fmt[formatter.py<br/>MarkdownV2 escape, bold, code, user_ref]
     Utils --> I18n[i18n.py<br/>TOML localization engine]
     Dispatch --> CB
@@ -48,12 +48,13 @@ States and transitions:
 CLOSED --[5 consecutive TimedOut/NetworkError]--> OPEN
 OPEN   --[60s elapsed]--> HALF_OPEN
 HALF_OPEN --[probe succeeds]--> CLOSED
-HALF_OPEN --[probe fails]--> OPEN
+HALF_OPEN --[probe reaches the service but is refused]--> CLOSED
+HALF_OPEN --[probe fails transiently]--> OPEN
 ```
 
 `CircuitBreaker.call(coro)` executes the coroutine through the breaker: a `CircuitOpenError` is raised without touching the service when the circuit is OPEN; any exception from the coroutine is re-raised after being counted against the circuit.
 
-`record_success()` and `record_failure()` are public methods for callers that manage their own try/except (for example, `dispatch.fan_out` which only counts network errors, not expected API refusals).
+`record_success()` and `record_failure()` are public methods for callers that manage their own try/except (for example, `dispatch.fan_out` which only counts network errors, not expected API refusals). `release_probe(reached_service=True)` marks the probe as having reached the service: a refusal or an application error proves the transport is healthy, so a HALF_OPEN circuit closes instead of admitting one caller at a time and rejecting every concurrent one.
 
 The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the `/health` endpoint under `circuit_telegram` and `circuit_mongodb`. After recovery, `CircuitBreaker.try_acquire()` admits only one `HALF_OPEN` probe; concurrent callers are rejected until that probe completes.
 
@@ -111,7 +112,8 @@ Logging setup is installed from `tcbot.__main__.main()`.
 | Export | Purpose |
 |---|---|
 | `BotLogFormatter` | Colored console formatter with time, date, module, line, request context, level, and message. Every record renders colored, including loguru and third-party records. |
-| `TelegramErrorHandler` | Logging handler that forwards error-level records to `error_reporter`. |
+| `TelegramErrorHandler` | Logging handler that forwards error-level records to the registered sink. |
+| `set_record_sink(sink)` | Register the coroutine that ships a log record to the error channel. The error reporter registers itself at startup; the logger never imports it, because the reporter lives above the utils layer and a direct import would close a cycle. |
 | `setup(level=logging.INFO)` | Installs console and Telegram error handlers on the root logger and quiets noisy libraries. |
 | `get_logger(name)` | Return the loguru-backed logger for a module. Records bridge through the same stdlib handlers, so coloring, shipping, and level discipline match plain loggers. |
 | `bind_request_context(...)` / `clear_request_context()` | Bind `update_id`/`user_id`/`chat_id` rendered on every subsequent line until cleared. `log_execution` binds on handler entry and clears in a `finally` block, so concurrent updates never leak context (contextvars are task-local). |
@@ -120,7 +122,10 @@ Third-party loggers such as `httpx`, `telegram`, and `pymongo` are capped to red
 
 ## `error_reporter.py`
 
-Error reporting sends structured MarkdownV2 messages to `LOGS_ERRORS`.
+Error reporting sends structured MarkdownV2 messages to `LOGS_ERRORS`. The
+module lives at the package root (`tcbot/error_reporter.py`), not in
+`utils/`: it is an application service, not shared plumbing, and the utils
+layer must not depend on it.
 
 | Export | Purpose |
 |---|---|
@@ -157,19 +162,25 @@ Do not call `datetime.utcnow()` or `datetime.now(timezone.utc)` outside this uti
 
 ## `pagination.py`
 
-Shared pagination helpers used by `stats_flow.py` and `check_flow.py` drill-down pages.
+Page arithmetic shared by the `stats_flow.py` and `check_flow.py` views. Pure
+list maths: no Telegram types and no localisation, so the helpers stay usable
+by any view that pages a list or a row count.
 
 | Export | Purpose |
 |---|---|
 | `paginate(items, page, page_size)` | Slice a list for a 0-based page number. Returns `(chunk, total_pages, clamped_page)`. |
-| `nav_row(page, total_pages, cb_prefix)` | Build a `[« Prev]` / `[Next »]` inline keyboard row when there is more than one page. Buttons use `cb_prefix:<page>` callback data. |
-| `date_or_unknown(value)` | Format a datetime field via `fmt_dt` or return `"Unknown"` if the value is falsy. |
+| `clamp_page(total, page, page_size)` | Return `(total_pages, clamped_page)` for a total row count. Single owner for the page arithmetic, so a view that pages a database query clamps the same way. |
 
 Always import these from `tcbot.utils.pagination`; do not reimplement pagination logic inside individual flow files.
 
+The previous/next keyboard row and the "Unknown" date fallback live with
+their owners: `nav_row` in `helper/keyboards/nav.py` (it builds
+`InlineKeyboardButton`s) and `date_or_unknown` in `time_and_date.py` (it
+formats a timestamp).
+
 ## `formatter.py`
 
-Single source of truth for all Telegram Markdown markup. Both the utils layer (e.g. `error_reporter.py`) and the modules layer import from here.
+Single source of truth for all Telegram Markdown markup. Both the utils layer and the modules layer import from here.
 
 | Function | Output/use |
 |---|---|
@@ -244,6 +255,18 @@ Single owner for the outbound Telegram transport tuning used by every runtime en
 | `API_POOL_SIZE` | Connection pool size for the underlying httpx client. |
 
 Both `tcbot/__main__.py` (webhook and polling) and `tcbot/serverless.py` (Vercel) import these instead of redefining them, so timeout and pool behavior stays identical across transports.
+
+## `secrets.py`
+
+Single owner for the constant-time comparison of inbound credentials (Telegram webhook secret, cron bearer token).
+
+| Export | Purpose |
+|---|---|
+| `secret_matches(provided, expected)` | Return True when the two strings are equal, compared in constant time on UTF-8 bytes. |
+
+`hmac.compare_digest` raises `TypeError` on non-ASCII strings, so a credential header carrying a non-ASCII byte would otherwise fail inside the request handler and surface as an unhandled 500 instead of a clean rejection. Comparing bytes keeps the timing-safe guarantee and turns every malformed credential into an ordinary mismatch. Callers must refuse an unset secret before calling the helper: a missing secret fails closed rather than matching an empty header.
+
+Both the Flask receiver (`tcbot/alive.py`) and the Vercel endpoints (`api/webhook.py`, `api/cron.py`) use this helper, so the rejection contract stays identical across deployments.
 
 ## Utility boundaries
 

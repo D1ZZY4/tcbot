@@ -125,7 +125,7 @@ The review card contains two inline buttons:
 
 Both callbacks use the underscore-delimited `<action>_<ban_id>` shape that
 the handler registers and parses (`appeals.py` pattern
-`^appeal_(approve|reject)_\S+$`; `appeal_review_flow/` slices the tail
+`^appeal_(approve|reject)_\S+$`; `appeal_review_flow.py` slices the tail
 after `appeal_reject_`). Both `keyboards.appeal_review_kb()` buttons emit
 this underscore shape, so Approve and Reject taps reach the review handler.
 
@@ -158,7 +158,6 @@ The following fields are read or updated on ban documents:
 The update helpers involved are:
 
 - `bans_db.set_review_if_absent(ban_id, review_msg_id)` (atomic claim; returns whether this submit won the review slot)
-- `bans_db.set_review(ban_id, review_msg_id)` (unconditional write; kept for backward compatibility)
 - `bans_db.set_appeal_log_msg(ban_id, appeal_log_msg_id, appeal_link=...)`
 - `bans_db.deactivate_all_active_bans(user_id)` on approval (clears all active records atomically)
 - `users_cache.upsert_user(...)` after submission

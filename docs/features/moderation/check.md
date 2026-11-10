@@ -33,8 +33,8 @@ flowchart TD
 
 | Command | Aliases | Who can use | Where |
 |---|---|---|---|
-| `/checkme` | `/cme` | Anyone (for themselves) | Bot PM, exec group, any connected group |
-| `/check` | `/c` | Anyone | Bot PM, exec group, any connected group |
+| `/checkme` | `/cme` | Anyone (for themselves) | Bot PM, the main group, any connected group |
+| `/check` | `/c` | Anyone | Bot PM, the main group, any connected group |
 
 `/check` is public by design: anyone may look up any user's federation
 history. The staff-only warn list (`/warns`) stays staff-gated because it is
@@ -226,7 +226,7 @@ user.
 
 | Collection | Index | Powers |
 |---|---|---|
-| `bans` | `(banned_user_id, timestamp -1)` | `user_bans` history list |
+| `bans` | `(banned_user_id, timestamp -1, ban_id -1)` | `user_bans` history list |
 | `bans` | `(is_active, timestamp -1, ban_id -1)` | active counts, active list scans |
 | `warns` | `(user_id, timestamp -1)` | federation warn aggregates |
 | `warns` | `(user_id, chat_id, timestamp -1)` | per-chat warn list |

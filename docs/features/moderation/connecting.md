@@ -44,7 +44,7 @@ The connection process also replays active federation bans and mutes onto the ne
 
 Commands use the project's configured prefixes; slash commands are examples.
 
-There is no `/tcconnect` alias for the auto-prompt path; the prompt uses inline `Connect` / `Cancel` buttons with callback data `tc_join` and `tc_cancel` (see `BuildConnection` defaults in `connected_flow/`).
+There is no `/tcconnect` alias for the auto-prompt path; the prompt uses inline `Connect` / `Cancel` buttons with callback data `tc_join` and `tc_cancel` (see `BuildConnection` defaults in `connected_flow.py`).
 
 ## `/tcconnect` flow
 
@@ -123,7 +123,7 @@ The function returns normally only after `add_group` has succeeded. If the `add_
 - `can_restrict_members`
 - `can_invite_users`
 
-These are defined as `_REQUIRED_PERMS` in `connected_flow/`. The same tuple is exposed via `connection.perms_required_message()` so the help text matches.
+These are defined as `_REQUIRED_PERMS` in `connected_flow.py`. The same tuple is exposed via `connection.perms_required_message()` so the help text matches.
 
 ## Database impact
 
@@ -174,7 +174,7 @@ Key behaviors to keep in mind:
 3. The bot must hold `can_delete_messages`, `can_restrict_members`, and `can_invite_users` before `complete_join` fires.
 4. The four precondition checks (member, is_connected, pending, bot perms) run in parallel.
 5. `complete_join` is awaited before the success reply so DB failures cannot produce a false "connected" confirmation.
-6. `complete_join` replays every active ban via `fan_out(bot.ban_chat_member)` and every active mute via `fan_out(bot.restrict_chat_member)`.
+6. `complete_join` replays every active ban via `fan_out(bot.ban_chat_member)` and every active mute via `fan_out(bot.restrict_chat_member)`. The replay is bounded by a time budget: Telegram admits 20 requests a minute per group, so a long enforcement list would otherwise keep the connect handler running for a quarter of an hour. The replay stops at the budget, logs the number of bans and mutes that were not applied, and reports the connect as a blind replay so the owner runs `/tcsync` to finish it.
 7. `complete_join` posts a `group_connected_log` to `cfg.logs` regardless of how many bans/mutes were successfully applied.
 8. Adding the bot to a group auto-sends a `Connect` / `Cancel` prompt and writes a `pending_joins` entry.
 9. Anonymous-admin adds do not produce a prompt.

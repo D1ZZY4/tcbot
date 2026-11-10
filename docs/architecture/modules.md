@@ -113,7 +113,7 @@ Command modules pass their entry function and command filter into workflow facto
 Callback data should be namespace-prefixed and matched with explicit regexes:
 
 ```python
-CallbackQueryHandler(on_demote_confirm, pattern=r"^demote_confirm:\d+$")
+CallbackQueryHandler(on_demote_confirm, pattern=r"^demote_confirm:\d+(:\d+)?$")
 ```
 
 Always call `await q.answer()` at the beginning of callback handlers.

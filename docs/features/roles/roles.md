@@ -76,7 +76,7 @@ Common moderation thresholds:
 | `/tcwarn` | Tester |
 | `/tcunwarn` | Tester/Admin/Founder via `basic_mod_only` |
 | `/resetwarns` | Tester/Admin/Founder via `basic_mod_only` |
-| Appeal decision buttons | Founder or Admin via `users_roles.is_staff` |
+| Appeal decision buttons | Founder or Admin via `users_roles.get_effective_role` (fresh read) |
 | `/tcpromote` | Founder or Admin |
 | `/tcdemote` | Founder or Admin |
 | `/transferowner` | Founder only |

@@ -24,7 +24,7 @@ flowchart TD
 
 ## Purpose
 
-Demotion removes a federation role from a user. Six invocation paths reach the same `Demote.execute` method (entry points plus pre-fan-out re-demotes share these paths):
+Demotion removes a federation role from a user. Seven invocation paths reach the same `Demote.execute` method (entry points plus pre-fan-out re-demotes share these paths):
 
 1. `/tcdemote`: manual demotion by Founder or Admin.
 2. Ban entry handler (`/tcban`): demote a role-holding target before the federation ban.
@@ -32,6 +32,7 @@ Demotion removes a federation role from a user. Six invocation paths reach the s
 4. Mute entry handler (`/tcmute`): demote a role-holding target before the per-group mute.
 5. Join ban / mute re-apply (`greeting._handle_member` and `on_join_request_approved`): demote a role-holding target before enforcing on join.
 6. Warn-limit threshold ban (`warn_flow.execute_warn`): demote when a warned user about to be federation-banned happens to hold a role.
+7. Unban paths (`/tcunban` and the appeal-approve flow): demote a role-holding target before the ban is lifted.
 
 The same log format is emitted in every case; there is no separate demote template.
 
@@ -68,7 +69,8 @@ await Demote.execute(bot,
 |---|---|
 | `Demote.remove_role(target_id, target_role)` | Deletes the matching record from `tc_admins` (when `target_role == "admin"`) or `tc_roles` (Developer/Tester). Returns True if a record was actually removed. |
 | `Demote.execute(...)` | Removes the role, posts the federation log, and DMs the target. With `msg=None` returns True if the role was removed. With `msg` set (ban/kick/mute entries) replies with the abort notice and returns False when the role survives, True when the caller may proceed. Supports both manual and demote-before-enforcement callers via the `trigger` keyword. |
-| Pre-fan-out re-demote | The ban/kick/mute executors re-read the live role immediately before enforcement and run `execute` when the target holds one, closing the proof-collection TOCTOU window. Best-effort: every failure logs loudly and the caller always proceeds. |
+| `demote_before_enforcement(...)` | Best-effort pre-fan-out re-demote: reads the live role and removes it. A lookup or demote failure logs loudly and enforcement still runs. Used by the ban, kick, mute, and join executors to close the proof-collection TOCTOU window. |
+| `demote_before_unban(...)` | Fail-closed pre-unban gate. Returns `UnbanGate.PROCEED` only when the role is gone; `DEMOTE_FAILED` and `ROLE_SURVIVED` block the unban. Used by `/tcunban` and the appeal-approve path. |
 
 The `trigger` parameter controls only the DM body wording:
 

@@ -97,6 +97,7 @@ Current stack:
 ├── tcbot/                    Main bot package
 │   ├── __init__.py           Config loader, env parsing, immutable Configs model
 │   ├── __main__.py           App lifecycle, builder, errors, and main startup
+│   ├── error_reporter.py     Error classification, dedup, and shipping to LOGS_ERRORS
 │   ├── alive.py              Flask keep-alive and webhook receiver
 │   ├── serverless.py         Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 │   ├── database/             MongoDB helpers, one package per collection/domain
@@ -108,7 +109,7 @@ Current stack:
 │   │   ├── kicks_db.py       Kicks
 │   │   ├── mutes_db.py       Mutes
 │   │   ├── queues_db.py      Promotion requests
-│   │   ├── cache/            TwoLevelCache: codec, L1 memory, FIFO mutations, singletons, twolevel core/queue
+│   │   ├── cache/            TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
 │   │   ├── scheduler.py      APScheduler background task + MongoDBJobStore
 │   │   ├── mongos.py         MongoDB client/indexes
@@ -122,12 +123,13 @@ Current stack:
 │   │   ├── helper/           Shared helper code and conversation workflows
 │   │   │   ├── pipelines/    ConversationHandler flows (one `*_flow.py` module each)
 │   │   │   ├── keyboards/    Inline keyboard builders
+│   │   │   │   └── nav.py     Previous/next row for paged views
 │   │   │   ├── decorators/    Rate limiter, role checks, execution logging
 │   │   │   ├── extraction/   Target/user extraction helpers
 │   │   │   ├── identity.py   Self/bot/Telegram/Founder/staff classification
 │   │   │   ├── locale.py     Render-locale resolution (per-update locale)
 │   │   │   ├── parse_link.py  `t.me/c/...` deep-link builders
-│   │   │   ├── messages/       Safe edits and federation log message renderers
+│   │   │   ├── messages/       Safe edits, channel delivery, and federation log renderers
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
 │   │   │   └── replies.py     Localized reply functions and HelpEntry shape
 │   │   ├── bans.py           /tcban command
@@ -162,6 +164,7 @@ Current stack:
 │       ├── logger.py          Logging setup
 │       ├── pagination.py      Paginated message rendering
 │       ├── prefixes.py        Command prefix resolution
+│       ├── secrets.py         Constant-time secret comparison for inbound credentials
 │       ├── time_and_date.py    Central clock: UTC store/display + measure + durations
 │       └── transport.py        Shared PTB HTTP timeouts and pool size
 ├── docs/                     Developer documentation grouped by category
@@ -170,7 +173,7 @@ Current stack:
 ├── i18n/                      Localized message catalogs (en-US source of truth)
 ├── tests/                     Automated checks (run with the dummy-env suite)
 ├── api/                       Vercel serverless endpoints (webhook, cron)
-├── scripts/                   One-shot operator tools (proof migration runbook)
+├── scripts/                   One-shot operator tools (proof migration runbook, hot-path benchmark)
 ├── config.env.example        Environment variable template
 ├── docker-compose.yml        Local bot + MongoDB + Redis compose setup
 ├── Dockerfile                Container image definition
@@ -180,6 +183,8 @@ Current stack:
 ├── uv.lock                   Locked dependency graph
 ├── pyrightconfig.json        pyright type checker configuration
 ├── CONTRIBUTING.md           Contribution workflow and review checklist
+├── CHANGELOG.md              Version history
+├── SECURITY.md               Security policy
 ├── README.md                 User-facing setup and architecture overview
 ├── AGENTS.md                 Top-level project guide (this file)
 └── replit.md                 Replit deployment notes
@@ -244,7 +249,7 @@ Important non-secret/runtime variables include:
 - `COMMUNITY_NAME`: display name used in bot messages and logs.
 - `PREFIXES`: command prefix list, default `['/', '!', '.']`.
 - `PORT`: Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
-- `MAIN_GROUP`, `MAIN_CHANNEL`, `COMMUNITY_GROUP_URL`: community chat IDs / links.
+- `MAIN_GROUP`, `COMMUNITY_GROUP_URL`: community chat IDs / links.
 - `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`: log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id` (channel, group, or forum thread).
 - `ALBUM_DEBOUNCE_SECONDS`: proof silence window before the ban executor runs.
 - `LOG_LEVEL`: bot log level.

@@ -38,8 +38,8 @@ Aliases (matched in any prefix configured by `cfg.prefixes`):
 
 | Command | Who can use | Purpose |
 |---|---|---|
-| `/tcsync` | Developer and above (`@mod_only`) | Sweep every active ban against every connected group, bounded. |
-| `/tcsync <target>` | Developer and above | Verify one user both directions in every connected group. |
+| `/tcsync` | Developer and above (`@mod_only`) | Sweep every active ban against every connected group plus the main group, bounded. |
+| `/tcsync <target>` | Developer and above | Verify one user both directions in every connected group plus the main group. |
 
 The target is resolved by `extraction.extract_target`; accepts a reply, user ID, or resolvable `@username`.
 
@@ -51,6 +51,10 @@ Executor rank gates the role stripping: the sweep removes stale staff rank from 
 
 1. The bot replies `Syncing enforcement state...` with its own status message (kept for the final edit, since the operator's command message cannot be edited by the bot).
 2. Bare run: builds the `(banned user x connected group)` cross product capped at 200 pairs (`take_pairs`, stable order, truncation flagged), then the `(muted user x connected group)` pairs with the remaining budget. Ban pairs take budget first so a huge mute backlog can never starve the ban sweep. Both ID lists are sorted before pairing, so the sweep order (and which pairs truncate) is identical run to run. Targeted run: one user against every connected group (bounded by group count).
+
+   Two bounds keep the sweep inside the Telegram per-group rate. Telegram admits 20 requests a minute per group and one pair costs up to two requests (the membership probe plus the enforcement write), so each group stops at 8 pairs per run and the ban and mute passes share that one budget. Without the cap a small federation queued every probe behind the rate limiter and the queued probes were cancelled by their own timeout, which the sweep then reported as enforcement failures that never happened. Because the cap means one run cannot check every banned user in every group, each run starts where the previous one stopped, so the users past the cap are covered by the next run instead of being starved.
+
+   The sweep scope is the connected groups plus the main group, merged through `groups_db.with_primary_groups`, exactly the set the ban, mute, and unban executors enforce in. The main group is not part of `federated_groups`, so it never appears in `active_groups()`; without it in scope, a drift in the main group could never be repaired because sync would never look there. The main group leads the sweep order so it always fits inside the pair budget; the connected groups follow in ascending ID order, so the sweep order (and which pairs truncate) stays identical run to run.
 3. Each pair probes membership with a bounded `get_chat_member` (3 s), then enforces through `fan_out`:
    - Active ban + present and not kicked: `ban_chat_member` (`enforced`).
    - Already kicked, absent, or privileged (admin/owner): skipped, never counted as failure.
@@ -101,5 +105,5 @@ checked/enforced/skipped/failed/truncated counts.
 
 ## Validation hints
 
-- `tests/test_syncing.py` covers pair bounding, outcome classification per status, and summary rendering with fakes (no I/O).
+- `tests/test_syncing.py` covers pair bounding, outcome classification per status, summary rendering with fakes (no I/O), and the primary-group scope of the sweep.
 - `uv run ruff check tcbot/modules/sync.py` plus an import check of the module.

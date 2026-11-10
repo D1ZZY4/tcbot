@@ -114,9 +114,9 @@ All fields are optional `total=False`; a real document always carries `user_id` 
 ### Mutations
 
 - `upsert_user(user_id: int, username: str | None, first_name: str, last_name: str | None = None) -> None`
-  Unconditional upsert. `None` for `username`/`last_name` means "unknown, preserve the stored value"; pass `""` to clear a field. Sets `last_updated` to now and `commit_date` only on insert. Invalidates the `user_mention_cache` entry so the next read reflects the update.
+  Unconditional upsert. `None` for `username`/`last_name` means "unknown, preserve the stored value"; pass `""` to clear a field. Sets `last_updated` to now and `commit_date` only on insert. Populates the `user_mention_cache` entry when the write carried every field; a partial write (a preserved `username` or `last_name`) invalidates the entry instead, because the stored triple cannot be reconstructed from the write alone.
 - `upsert_user_if_changed(user_id: int, username: str | None, first_name: str, last_name: str | None = None) -> bool`
-  Change-detection write. Compares the incoming `(first_name, username, last_name)` triple against the L1 mention-cache entry and skips the MongoDB write entirely on a match. Returns `True` when a DB write occurred, `False` when skipped. Legacy two-element cache entries count as changed. This is the hot-path writer.
+  Change-detection write. Compares the incoming `(first_name, username, last_name)` triple against the L1 mention-cache entry and skips the MongoDB write entirely on a match. Returns `True` when a DB write occurred, `False` when skipped. Legacy two-element cache entries count as changed. This is the hot-path writer, and the guard only works because `upsert_user` populates the mention cache on a complete write.
 - `harvest_user_identity(user_id: int, username: str | None, first_name: str, last_name: str | None = None) -> bool`
   Snapshot write for data taken from a live Telegram `User` object. Unlike `upsert_user_if_changed`, `None` means "absent on Telegram": fields the object omits are cleared via `""` so removals propagate. Delegates to `upsert_user_if_changed`. Never use with partial data from ban/promote/check-by-ID paths (those must keep `None`).
 - `remember_identity(user_id: int, first_name: str | None, username: str | None, last_name: str | None) -> None`
@@ -139,7 +139,9 @@ All fields are optional `total=False`; a real document always carries `user_id` 
 - `all_users_page(*, skip: int = 0, limit: int = 200, sort_by: str = "first_name") -> list[UserDoc]`
   One server-side page. `sort_by` is validated against `_ALLOWED_USER_SORTS` (`user_id`, `username`, `first_name`, `last_name`, `commit_date`, `last_updated`), falling back to `first_name`; `last_updated` sorts descending, everything else ascending. `limit` is clamped to at least 1 and used for both cursor limit and fetch length.
 - `search_by_name(needle: str, limit: int = 5) -> list[UserDoc]`
-  Target-resolution search. Server-side regex, case-insensitive and anchored (`^<escaped needle>`), over `first_name` or `username`, capped at `limit` results. Only `user_id`, `first_name`, `username` are projected.
+  Target-resolution search. Server-side anchored prefix regex (`^<escaped needle>`) over the lowercase mirror fields `first_name_lower` and `username_lower`, capped at `limit` results. Only `user_id`, `first_name`, `username` are projected. The mirrors exist because MongoDB cannot use an index for a case-insensitive regex: the old query scanned the whole collection on every search, while a case-sensitive prefix on an indexed mirror is a range scan. `mongos._migrate_member_cache_lower_names()` fills the mirrors for the rows older releases wrote, and `upsert_user` keeps them current.
+- `is_placeholder_name(name: str | None) -> bool`
+  Return True when a display name is a fallback rather than a real name: empty, a bare numeric ID, or the legacy `User <id>` form. Single owner for that rule, so no surface renders a placeholder as a name.
 
 **Performance tip:** use the batch functions whenever data for more than one user is needed in a list view or fan-out result; calling single-user functions in a loop is an N+1 anti-pattern. Both batch functions are served by the covered-query index `(user_id, first_name, username, last_name)`. For partial-name target resolution use `search_by_name`; for paginated list views use `all_users_page`.
 
@@ -179,6 +181,9 @@ founder = 4 > admin = 3 > developer = 2 > tester = 1 > none = 0
 - `VALID_ROLES`: `{"developer", "tester"}` (the only roles assignable via `set_role`).
 - `role_rank(role: str | None) -> int`: maps a role string to its rank, `0` for `None`/unknown.
 - `ROLE_LABEL`: human labels (`Founder`, `Admin`, `Developer`, `Tester`).
+- `role_label(role: str | None) -> str`: the human label for a role, falling back to the role itself. Single owner for the label lookup, so every surface renders a role the same way.
+- `STAFF_ROLES`: `{"admin", "developer", "tester"}`, every role that can be demoted (the Founder is protected and never demoted).
+- `FOUNDER_ADMIN_ROLES`: `{"founder", "admin"}`, the roles that count as federation staff for permission gates. Both sets live here so a new tier cannot land in the rank table and be missed by every set check.
 
 ### Effective-role resolution
 
@@ -592,7 +597,7 @@ Bare `cachetools` L1 caches (no Redis, no L2): `groups_db._GROUP_LOCALE_L1` (max
 - `liveness() -> bool | None`
   Last known Redis liveness (`None` = no operation observed yet), used by the synchronous `/health` route.
 
-Pool parameters: `decode_responses=True`, `max_connections=20`, `socket_connect_timeout=5 s`, `socket_timeout=10 s`, `health_check_interval=30 s`.
+Pool parameters: `decode_responses=True`, `max_connections=20`, `socket_connect_timeout=5 s`, `socket_timeout=2 s`, `health_check_interval=30 s`.
 
 ### Cache error/failure behavior
 
@@ -656,8 +661,8 @@ The legacy plain `until_date_1` index on `active_mutes` is dropped first, as a s
 | `pending_joins` | unique `(chat_id)` | One pending request per chat. |
 | `member_cache` | unique `(user_id)` | One profile per user. |
 | `member_cache` | `(user_id, first_name, username, last_name)` | Covered-query index for batch `get_mention_data_batch` / `get_first_names_batch` `$in` projections. |
-| `member_cache` | `(username)` | Username lookups / search. |
-| `member_cache` | `(first_name)` | Name search. |
+| `member_cache` | `(username_lower)` | Name search: the case-sensitive prefix query on the lowercase mirror. |
+| `member_cache` | `(first_name_lower)` | Name search: the case-sensitive prefix query on the lowercase mirror. |
 | `member_cache` | `(last_updated)` TTL `expireAfterSeconds=7776000` | Auto-expiry of profiles older than 90 days. |
 | `user_settings` | unique `(user_id)` | One preference row per user. |
 | `warns` | `(user_id, chat_id, timestamp desc)` | Per-group newest-first history. |

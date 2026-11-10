@@ -88,7 +88,7 @@ pre-escaped.
 
 ## Adding a locale
 
-1. Copy `en-US/` to `<locale>/` (BCP 47 shape, e.g. `id`, `pt-BR`).
+1. Copy `en-US/` to `<locale>/` (BCP 47 shape, e.g. `pt-BR`, `fr-CA`).
 2. Set `button.language_name` to the locale display name.
 3. Translate values. Partial files are legal: missing keys fall back
    to `en-US` per key at runtime. Button labels render as plain text;

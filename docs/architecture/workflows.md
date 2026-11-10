@@ -87,7 +87,7 @@ Ban differs from the shared reason flow:
 - Proof is required by UI (`skip_allowed=False`).
 - An active ban triggers a confirmation card (`WAITING_UPDATE_CONFIRM` with `View Log` / `View Proof` URLs and `Cancel` / `Continue`) before proof collection; `Continue` demotes role holders first, exactly like the fresh-ban path.
 - Proof media accumulate in one session keyed by `(chat_id, user_id)` and flush on `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap; the flush claim is a synchronous check-and-set so Done and the timer can never double-execute.
-- `_execute_ban()` uploads proof, then writes the `bans` document and posts the audit log in parallel (`_execute_new_ban` / `_execute_ban_update` return `(log_msg_id, db_ok)`). When the database write fails the flow aborts before `fan_out()` so no group is touched. Only after the record lands does it fan out bans to active groups with `fan_out()`, then edit the prompt summary and DM the appeal link.
+- `_execute_ban()` uploads proof, then writes the `bans` document and posts the audit log sequentially (`_execute_ban_record` returns `(log_msg_id, db_ok)`). When the database write fails the flow aborts before `fan_out()` so no group is touched. Only after the record lands does it fan out bans to active groups with `fan_out()`, then edit the prompt summary and DM the appeal link.
 
 ```mermaid
 flowchart TD
@@ -119,7 +119,7 @@ Kick is current-group-only. It bans the user from the current chat and immediate
 | Factory | `mute_conversation(entry_fn, entry_filter, escape_filter=None)` |
 | Module instances | `reason = BuildReason("mute")`, `proof = BuildProof("mute")` |
 | Duration parser | `parse_duration(raw)` in `tcbot/utils/time_and_date.py` |
-| Formatter | `fmt_duration(td)` in `tcbot/utils/time_and_date.py` |
+| Formatter | `fmt_duration(td, locale)` in `tcbot/utils/time_and_date.py` |
 | Executors | `_execute_mute(...)`, `execute_unmute(...)` |
 
 Duration tokens are parsed before entering the conversation.
@@ -244,6 +244,13 @@ Demotion is not a conversation. `Demote.execute(...)` in `pipelines/demote_flow.
 | `Demote.execute(..., trigger="mute")` | `"mute"` | Auto-demote before a federation-wide mute: same silent role-removal path as `"ban"` and `"kick"`. |
 
 `Demote.remove_role(target_id, target_role)` is the shared DB write used by all four paths. It delegates to `users_roles` and returns `True` if a role was actually removed.
+
+Two gates wrap that call and own the failure policy, so the rule cannot drift between the flows that use it:
+
+| Gate | Policy | Users |
+|---|---|---|
+| `demote_before_enforcement(bot, target_id, target_fname, *, trigger, executor_id=0, executor_fname="")` | Best effort. A lookup or demote failure is logged loudly and enforcement still runs, because the moderation record already exists and enforcement is the side effect. | Ban, kick, mute, and join enforcement (the pre-fan-out re-check that closes the proof-collection race window). |
+| `demote_before_unban(bot, target_id, target_fname, target_role, executor_id, executor_fname)` | Fail closed. Returns `UnbanGate.PROCEED` only when the role is gone; `DEMOTE_FAILED` and `ROLE_SURVIVED` block the unban so a staff holder never keeps rank after the ban lifts. | `/tcunban` and the appeal-approve path. |
 
 ## Ownership transfer: `transfer_flow.py`
 

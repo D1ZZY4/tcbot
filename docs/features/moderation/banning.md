@@ -185,14 +185,14 @@ The executor must have rank >= Developer. The target check behaves as follows:
 - If the target has a role with rank greater than or equal to the executor's rank, the action is blocked.
 - If the target has a lower role, the bot automatically removes that role before continuing with the ban.
 
-Auto-demotion is handled by `Demote.auto_demote_or_abort(..., trigger="ban")` from `pipelines/demote_flow.py` (also used by the kick and mute entries with their own trigger nouns). The helper runs `Demote.execute`, and if the demote raises it replies with a localized notice telling the executor to demote manually and signals abort by returning `False`; the ban never proceeds on a role holder:
+Auto-demotion is handled by `Demote.execute(..., msg=msg, trigger="ban")` from `pipelines/demote_flow.py` (also used by the kick and mute entries with their own trigger nouns). The helper removes the role record, and if the role still resolves afterwards it replies with a localized notice telling the executor to demote manually and signals abort by returning `False`; the ban never proceeds on a role holder:
 
 - Admin targets are removed from `tc_admins`.
 - Developer/Tester targets are removed from `tc_roles`.
 - A role auto-demotion log is sent to the federation logs channel.
 - The target is notified by DM when possible.
 
-Immediately before the enforcement fan-out, `_execute_ban` runs the best-effort `Demote.redemote_before_fanout(..., trigger="ban")` re-check to close the proof-collection TOCTOU window; enforcement proceeds regardless (the ban record is already written).
+Immediately before the enforcement fan-out, `_execute_ban` runs the best-effort `demote_before_enforcement(..., trigger="ban")` re-check to close the proof-collection TOCTOU window; enforcement proceeds regardless (the ban record is already written).
 
 ## Ban database schema impact
 
@@ -227,6 +227,7 @@ Indexes are ensured for:
 
 - `bans`: `(banned_user_id, is_active, timestamp desc, ban_id desc)` compound (serves `get_active_ban` filter+sort)
 - `bans`: unique `ban_id`
+- `bans`: unique partial `(banned_user_id)` where `is_active` is true (one active ban per user, enforced by the database)
 
 Active-ban reads are deterministic: when duplicate active records exist for the same user, `get_active_ban` returns the newest by `timestamp` and then `ban_id`.
 

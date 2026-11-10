@@ -36,7 +36,7 @@ Aliases:
 
 | Command | Aliases | Who can use | Where |
 |---|---|---|---|
-| `/tcstats` | `/tcs` | Anyone | Bot PM, exec group, or supported federation group context |
+| `/tcstats` | `/tcs` | Anyone | Bot PM, the main group, or a supported federation group context |
 
 Only the `Users` pane is Owner/Founder only; the overview, staff roster,
 connected chats, and active-ban panes are public by design (a community
@@ -155,9 +155,7 @@ The free-text input handler is scoped to private chats and only fires while the 
 `Stats` is a stateless container. Every view builder is a `@classmethod` (except `clear_search`, a `@staticmethod`) returning `(text, InlineKeyboardMarkup)`. Callbacks pair an `await q.answer()` with `safe_edit_cb()` so the same content can be re-tapped without raising `Message is not modified`.
 
 ```python
-class Stats:
-    PAGE_SIZE = 6
-
+class Stats(OverviewViews, PeopleViews, ChatViews, BanViews, SearchViews):
     @classmethod async def main(*, viewer_id=None, locale=None) -> tuple[str, InlineKeyboardMarkup]
     @classmethod async def staff_roster(locale=None) -> tuple[str, InlineKeyboardMarkup]
     @classmethod async def users_list(page, locale=None) -> tuple[str, InlineKeyboardMarkup]

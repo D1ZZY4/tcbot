@@ -188,7 +188,7 @@ If the counter update fails after the warning insert, the inserted warning is de
 
 `warns_db.warn_count(...)` reads `warn_counts`. If a counter document is missing but historical warnings exist, it backfills the counter from the warning history.
 
-`warns_db.clear_warns(...)` deletes all warning documents for the user/chat pair and deletes the counter document. A warns-delete failure raises instead of returning 0, so callers never misreport an outage as "no warnings to clear"; counter-delete failures stay error-logged for operator repair.
+`warns_db.clear_warns(...)` deletes all warning documents for the user/chat pair and deletes the counter document. A warns-delete failure raises instead of returning 0, so callers never misreport an outage as "no warnings to clear"; counter-delete failures are repaired (the pair is recounted, or the delete is retried) and stay non-fatal.
 
 Executor database reads fail closed with a retry notice instead of ending the conversation silently: a failed warn insert, count read, warn list, reset clear, or federation aggregate replies `I couldn't reach the database right now.` (the warn itself stays recorded when the insert already landed, and the threshold re-check is left to a retry).
 

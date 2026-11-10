@@ -43,15 +43,15 @@ Commands use the project's configured prefixes; slash commands are examples.
 
 1. Fetches the active-groups list with `db.groups_db.active_groups()`. This call is backed by the L1+L2 cache defined in `tcbot/database/cache/`, so repeat calls within the cache TTL are free.
 2. If the list is empty, replies `No groups are currently connected to <community>.` and stops.
-3. Otherwise replies with the simple view rendered by `_render(groups, detailed=False)`.
+3. Otherwise replies with the simple view rendered by `render_groups(groups, detailed=False)`.
 4. The reply keyboard is `tcgroups_kb(detailed=False)` from `tcbot/modules/helper/keyboards/` and shows a single `Details` button (localized `button.details_toggle`).
 
 ## Render helpers
 
-`_render(groups, *, detailed, locale)` is the local helper in `groups.py`:
+`render_groups(groups, *, detailed, locale)` is the shared helper in `groups.py` (also used by the start-menu groups list):
 
 ```python
-def _render(groups, *, detailed, locale=None):
+def render_groups(groups, *, detailed, locale=None):
     header = t("groups.list.header", locale, n=len(groups))
     lines = [header]
     used = len(header) + 1
@@ -89,7 +89,7 @@ Both call the shared `_toggle(update, ctx, detailed=...)` helper:
 
 1. Runs `q.answer()` and `db.groups_db.active_groups()` in parallel via `asyncio.gather(..., return_exceptions=True)`.
 2. On a fetch failure, edits the prompt to the localized `replies.err_groups_load_failed(locale)` text while keeping the toggle keyboard (so the user can retry), and returns without rendering an empty list.
-3. On success, edits the existing message in place via `safe_edit(message, _render(groups, detailed=..., locale=...), reply_markup=tcgroups_kb(detailed=..., locale=...))`.
+3. On success, edits the existing message in place via `safe_edit(message, render_groups(groups, detailed=..., locale=...), reply_markup=tcgroups_kb(detailed=..., locale=...))`.
 
 There is **no** per-user `ctx.user_data["groups_cache"]` snapshot. Every toggle reads the shared L1+L2 `active_groups_cache` (30 s TTL), so connects, disconnects, and title refreshes that happened elsewhere in the federation become visible as soon as the cache layer expires.
 

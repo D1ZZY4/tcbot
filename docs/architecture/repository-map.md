@@ -58,6 +58,7 @@ and `rules/asyncio-gather-rules.md`.
 tcbot/
 ├── __init__.py             Config loader, env parsing, immutable Configs model
 ├── __main__.py             App lifecycle, builder, errors, and main startup
+├── error_reporter.py       Telegram error classification and shipping to LOGS_ERRORS
 ├── alive.py                Flask health endpoint and webhook receiver
 ├── serverless.py           Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 ├── database/
@@ -71,7 +72,7 @@ tcbot/
 │   ├── kicks_db.py         Kick audit records (incl. per-user history)
 │   ├── mutes_db.py         Mute audit records (incl. per-user history)
 │   ├── queues_db.py        Promotion request queue
-│   ├── cache/              TwoLevelCache: codec, L1 memory, FIFO mutations, singletons, twolevel core/queue
+│   ├── cache/              TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   ├── redis_client.py     Optional async Redis client (owns the connect/degrade decision)
 │   ├── scheduler.py        APScheduler background jobs (MongoDBJobStore, library default collection)
 │   ├── mtproto.py          Bot-token MTProto client: resolve + member harvest
@@ -88,9 +89,10 @@ tcbot/
 │       ├── extraction/     Target resolution
 │       ├── identity.py     Identity classification, group-permission checks, refusal messages
 │       ├── keyboards/      Inline keyboard factories
+│       │   └── nav.py         Previous/next row for paged views
 │       ├── locale.py       Render-locale resolution shared by handlers, callbacks, flows
 │       ├── parse_link.py   `t.me/c/...` deep-link builders
-│       ├── messages/       Safe edits and federation log message renderers
+│       ├── messages/       Safe edits, channel delivery, and federation log renderers
 │       │   ├── safe_edits.py    Safe-edit transport helpers
 │       │   └── audit_logs.py    Audit-log builders (LogBuilder + per-event logs)
 │       ├── replies.py      Shared localized reply and help-text strings, HelpEntry shape
@@ -99,13 +101,13 @@ tcbot/
 └── utils/
     ├── circuit_breaker.py  Async circuit breaker for Telegram + MongoDB
     ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)
-    ├── error_reporter.py     Telegram error classification and reporting
     ├── formatter.py        MarkdownV2 escaping and formatting (single source of truth)
     ├── i18n.py             TOML locale catalogs, lookup, and interpolation
     ├── logger.py           Console formatter and error log handler
-    ├── pagination.py       Shared paginate(), nav_row(), date_or_unknown() helpers
+    ├── pagination.py       Shared paginate() and clamp_page() page arithmetic
     ├── prefixes.py         Prefix parsing and command filters
-    ├── time_and_date.py    Central clock: UTC store/display + measure + durations
+    ├── secrets.py          Constant-time secret comparison for inbound credentials
+    ├── time_and_date.py    Central clock: UTC store/display + measure + durations + date_or_unknown()
     └── transport.py        Shared PTB HTTP timeouts and pool size for all entry points
 ```
 

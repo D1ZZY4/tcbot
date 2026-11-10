@@ -1,7 +1,7 @@
 # Miscellaneous Modules
 
 This document inventories the modules that do not have a dedicated feature
-page: `start`, `about`, `additional`, `privacy`, `help`, `broadcasting`,
+page: `start`, `about`, `additional`, `privacy`, `help`, `broadcast`,
 `greeting`, `maintenance`, `netspeed`, and `admins` (the promote/demote
 flows themselves live in [`roles/roles.md`](roles/roles.md),
 [`roles/promote.md`](roles/promote.md), and [`roles/demote.md`](roles/demote.md)).

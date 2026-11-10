@@ -131,7 +131,6 @@ PROOFS="-1001234567890"
 | `PREFIXES` | No | Python-style list or CSV | Command prefixes. Default is `["/", "!", "."]`. |
 | `PORT` | No | integer or `auto` | Flask keep-alive port. `auto`, invalid, or out-of-range values resolve to `5000`. |
 | `MAIN_GROUP` | Usually | integer chat ID | Main community group or forum. |
-| `MAIN_CHANNEL` | No | integer chat ID | Optional announcement channel reference. |
 | `PROOFS` | Usually | `chat_id` or `chat_id/thread_id` | Destination for ban proof media. Defaults to the community proof channel (`-1003997518221`); override to use a different chat or forum thread. |
 | `LOGS` | Yes | `chat_id` or `chat_id/thread_id` | Audit-log destination. |
 | `LOGS_ERRORS` | Recommended | `chat_id` or `chat_id/thread_id` | Error-report destination. When empty, reports fall back to the owner DM instead of being dropped. |

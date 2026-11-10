@@ -54,7 +54,7 @@ Commands use the project's configured prefixes; slash commands are examples.
 1. Rejects private chat with `replies.err_group_only(locale)`.
 2. Fetches three independent reads in parallel via `asyncio.gather(..., return_exceptions=True)`:
    - `db.groups_db.is_connected(chat.id)`.
-   - `db.users_roles.is_staff(user.id)`.
+   - `can_manage_group(ctx.bot, chat.id, user.id, fresh=True)` (federation staff or group creator, read fresh).
    - `bot.get_chat_member(chat.id, user.id)` bounded with `asyncio.wait_for(timeout=3.0)`.
 3. If `is_connected` raised, replies the localized `disconnecting.state.status_failed` notice (`Could not verify the group status. Please try again.`) and stops. If `is_connected` is `False`, replies the localized `disconnecting.state.not_connected` notice (`This group is not connected to <community>.`) and stops.
 4. If the member lookup raised, replies `replies.err_role_verify(locale)` and stops.
