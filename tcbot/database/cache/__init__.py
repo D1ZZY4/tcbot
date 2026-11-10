@@ -30,6 +30,7 @@ from .mutations import (
     _redis_pending,
     _redis_tails,
     _release_redis_slot,
+    acquire_redis_client,
     drain_redis_mutations,
 )
 from .singletons import (
@@ -95,6 +96,7 @@ __all__ = [
     "_release_redis_slot",
     "_restore_tagged",
     "_tag_scalars",
+    "acquire_redis_client",
     "active_groups_cache",
     "connected_cache",
     "drain_redis_mutations",

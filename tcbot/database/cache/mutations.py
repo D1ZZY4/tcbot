@@ -87,6 +87,19 @@ def _redis_client() -> Any:
     return _redis_mod.client()
 
 
+async def acquire_redis_client() -> Any:
+    """Return the Redis client, reconnecting after a failed startup.
+
+    The shared cache is optional, so a Redis that was down at boot must
+    not disable it for the rest of the process lifetime. The reconnect is
+    rate-limited by the client module; this helper only awaits it.
+    """
+    client = _redis_mod.client()
+    if client is not None:
+        return client
+    return await _redis_mod.ensure_connected()
+
+
 def _log_redis_task_error(task: asyncio.Task[None]) -> None:
     """Done-callback: log Redis background task errors without raising."""
     if not task.cancelled() and task.exception() is not None:

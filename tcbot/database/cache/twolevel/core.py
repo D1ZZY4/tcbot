@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 import msgspec
 
 import tcbot.database.redis_client as _redis_mod
+from tcbot import cfg
 from tcbot.database import cache as _cache_pkg
 from tcbot.database.cache.codec import (
     _decode_redis_value,
@@ -113,7 +114,7 @@ class TwoLevelCache[T](_QueueMixin):
         pattern = f"tcbot:{self._redis_prefix}:v2:*"
 
         async def _clear_redis() -> None:
-            live = _cache_pkg._redis_client()
+            live = await self._client()
             if live is None:
                 return
             cursor: int = 0
@@ -187,7 +188,7 @@ class TwoLevelCache[T](_QueueMixin):
                     return cast("T", val)
 
                 # L2: Redis (bounded: a stalled Redis must not hold the hot path)
-                rc = _cache_pkg._redis_client()
+                rc = await self._client()
                 if rc is not None:
                     rkey = self._rkey(key)
                     try:
@@ -233,10 +234,11 @@ class TwoLevelCache[T](_QueueMixin):
                     # * L1 already serves this value: never fail the hot path here.
                     log.debug("Redis payload encode failed for %s: %s", rkey, exc)
                 else:
-                    self._enqueue_redis_mutation(
-                        lambda: self._redis_set(rkey, payload),
-                        droppable=self._redis_prefix not in _REVOCATION_PREFIXES,
-                    )
+                    if cfg.redis_url:
+                        self._enqueue_redis_mutation(
+                            lambda: self._redis_set(rkey, payload),
+                            droppable=self._redis_prefix not in _REVOCATION_PREFIXES,
+                        )
 
                 return cast("T", val)
         finally:
@@ -249,6 +251,18 @@ class TwoLevelCache[T](_QueueMixin):
 
     # ── Internal helpers ── #
 
+    async def _client(self) -> Any:
+        """Return the Redis client, reconnecting after a failed startup.
+
+        The client is resolved through the package namespace first so a
+        patched client keeps working; only a missing client triggers the
+        reconnect, which the client module rate-limits.
+        """
+        rc = _cache_pkg._redis_client()
+        if rc is None:
+            rc = await _cache_pkg.acquire_redis_client()
+        return rc
+
     def _rkey(self, key: Any) -> str:
         return f"tcbot:{self._redis_prefix}:v2:{key}"
 
@@ -259,8 +273,7 @@ class TwoLevelCache[T](_QueueMixin):
         connection-flag write (for example a disconnect) would leave other
         processes serving the pre-write state until the key TTL.
         """
-        rc = _cache_pkg._redis_client()
-        if rc is None:
+        if not cfg.redis_url:
             return
         rkey = self._rkey(key)
         # * L1 already serves this value: skip the L2 write, never raise.
@@ -278,8 +291,7 @@ class TwoLevelCache[T](_QueueMixin):
 
     def _redis_del_background(self, key: Any, *, droppable: bool = True) -> None:
         """Fire-and-forget Redis key deletion without blocking the caller."""
-        rc = _cache_pkg._redis_client()
-        if rc is None:
+        if not cfg.redis_url:
             return
         rkey = self._rkey(key)
         self._enqueue_redis_mutation(
@@ -294,7 +306,7 @@ class TwoLevelCache[T](_QueueMixin):
         The per-op wait_for abandons a stalled write (the socket timeout
         bounds the underlying op); abandonment only delays an L2 hint.
         """
-        rc = _cache_pkg._redis_client()
+        rc = await self._client()
         if rc is None:
             return
         try:
@@ -310,7 +322,7 @@ class TwoLevelCache[T](_QueueMixin):
 
     async def _redis_delete(self, rkey: str) -> None:
         """Delete one Redis value and keep failures observable but non-fatal."""
-        rc = _cache_pkg._redis_client()
+        rc = await self._client()
         if rc is None:
             return
         try:

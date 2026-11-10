@@ -10,6 +10,7 @@ import redis.asyncio as aioredis
 
 from tcbot import cfg
 from tcbot.utils.logger import get_logger
+from tcbot.utils.time_and_date import monotonic
 
 # * hiredis is optional at import time: only required when REDIS_URL is set.
 # * This allows the bot to start with in-memory caching only when Redis is
@@ -54,6 +55,12 @@ _SOCKET_CONNECT_TIMEOUT_S: float = 5.0
 _SOCKET_TIMEOUT_S: float = 2.0
 _MAX_CONNECTIONS: int = 20
 _HEALTH_CHECK_INTERVAL_S: int = 30
+
+# * Backoff between reconnect attempts after a failed connection. The
+# * shared cache is optional, so a dead Redis must never delay a request;
+# * the reconnect runs on the cache's own schedule instead.
+_RECONNECT_BACKOFF_S: float = 30.0
+_reconnect_attempted_at: float = 0.0
 
 
 # ──────────────────────── Public API ────────────────────────────── #
@@ -122,6 +129,34 @@ async def connect_if_configured() -> None:
             )
     else:
         log.info("REDIS_URL not set; in-memory cache only.")
+
+
+async def ensure_connected() -> aioredis.Redis | None:
+    """Return the active client, reconnecting once after a failed startup.
+
+    A Redis outage during boot used to disable the shared cache for the
+    whole process lifetime, so cross-process role and connection state
+    diverged until the key TTL expired. The client is re-established
+    lazily here, at most once per backoff window, so a Redis that comes
+    back is picked up without a bot restart. Never raises: the cache
+    degrades to its in-memory layer instead.
+    """
+    global _client, _reconnect_attempted_at
+    if _client is not None:
+        return _client
+    url = cfg.redis_url
+    if not url:
+        return None
+    now = monotonic()
+    if now - _reconnect_attempted_at < _RECONNECT_BACKOFF_S:
+        return None
+    _reconnect_attempted_at = now
+    try:
+        await connect(url)
+    except Exception as exc:
+        log.warning("Redis reconnect failed; running in-memory only: %s", exc)
+        return None
+    return _client
 
 
 async def close() -> None:
