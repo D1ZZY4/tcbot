@@ -106,7 +106,7 @@ Command modules pass their entry function and command filter into workflow facto
 - `ban_conversation(cmd_ban_start, _BAN_CMDS)`
 - `kick_conversation(cmd_kick, _KICK_CMDS)`
 - `mute_conversation(cmd_mute, _MUTE_CMDS, escape_filter=_UNMUTE_CMDS)`
-- `warn_conversation(cmd_warn_entry, _WARN_CMDS, escape_filter=_WARN_ESCAPE_CMDS)`
+- `warn_conversation(cmd_warn, _WARN_CMDS, escape_filter=_WARN_ESCAPE_CMDS)`
 
 ### Callback handlers
 

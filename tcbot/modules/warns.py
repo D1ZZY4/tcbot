@@ -104,7 +104,7 @@ __help_sections__ = __help__["sections"]
 @decorators.ratelimiter(limit=_RL_WARN_LIMIT, period=_RL_CMD_PERIOD_S)
 @decorators.basic_mod_only
 @decorators.log_execution
-async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Entry point for the warn flow.
 
     Resolves the target, runs identity and role checks in parallel, then either
@@ -120,7 +120,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         action="warn",
         min_role="tester",
         allow_private=False,
-        log_prefix="cmd_warn_entry",
+        log_prefix="cmd_warn",
         bot_check=True,
     )
     if resolved is None or ctx.user_data is None:
@@ -146,14 +146,14 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         await safe_reply(
             msg,
             reason_too_long_text(len(inline_reason), locale),
-            log_label="cmd_warn_entry reason-too-long",
+            log_label="cmd_warn reason-too-long",
             parse_mode=None,
         )
         return ConversationHandler.END
 
     notice = identity.staff_notice("warn", ident, cfg.community_name, locale)
     if notice is not None:
-        await safe_reply(msg, notice, log_label="cmd_warn_entry staff notice")
+        await safe_reply(msg, notice, log_label="cmd_warn staff notice")
 
     ctx.user_data.update(
         {
@@ -175,7 +175,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                 reply_markup=proof.keyboard(locale),
             )
         except Exception as exc:
-            log.debug("cmd_warn_entry proof-prompt reply failed: %s", exc)
+            log.debug("cmd_warn proof-prompt reply failed: %s", exc)
             for key in (*_WARN_KEYS, "warn_reason"):
                 ctx.user_data.pop(key, None)
             return ConversationHandler.END
@@ -188,7 +188,7 @@ async def cmd_warn_entry(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             reply_markup=reason.keyboard(locale),
         )
     except Exception as exc:
-        log.debug("cmd_warn_entry reason-prompt reply failed: %s", exc)
+        log.debug("cmd_warn reason-prompt reply failed: %s", exc)
         for key in _WARN_KEYS:
             ctx.user_data.pop(key, None)
         return ConversationHandler.END
@@ -382,7 +382,7 @@ _RESET_CMDS = build_prefixed_filters("resetwarns") | build_prefixed_filters(
 _WARN_ESCAPE_CMDS = _UNWARN_CMDS | _WARNLIST_CMDS | _RESET_CMDS
 
 __handlers__ = [
-    warn_conversation(cmd_warn_entry, _WARN_CMDS, escape_filter=_WARN_ESCAPE_CMDS),
+    warn_conversation(cmd_warn, _WARN_CMDS, escape_filter=_WARN_ESCAPE_CMDS),
     MessageHandler(_UNWARN_CMDS, cmd_unwarn),
     MessageHandler(_WARNLIST_CMDS, cmd_warnlist),
     MessageHandler(_RESET_CMDS, cmd_resetwarns),

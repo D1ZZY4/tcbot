@@ -69,6 +69,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **One configuration model instead of an adapter layer** (`tcbot/__init__.py`): the runtime configuration was parsed into one model and then forwarded property by property through a second class. Behavior changes: none; the same values are available under the same names, the list settings are immutable, and the model rejects mutation after loading.
 
+- **The warn entry handler is named `cmd_warn`** (`tcbot/modules/warns.py`, `docs/architecture/modules.md`): the handler name matched its role in the flow rather than the command it serves. Behavior changes: none; the command, aliases, and replies are unchanged.
+
 - **Local artifacts stay out of version control** (`.gitignore`): coverage data, pytest and hypothesis caches, HTML reports, and the proof-migration resume state are ignored, so local runs never leak into commits. Behavior changes: none for operators.
 - **Manifest realigned to grouped dependency sets** (`pyproject.toml`, `uv.lock`): runtime, optional, and development dependencies are organised by responsibility; the test lint ignores narrow to the specific doc rules tests actually skip, and coverage is wired into the test workflow. Behavior changes: none for operators.
 
