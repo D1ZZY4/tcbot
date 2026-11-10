@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import itertools
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -16,7 +15,9 @@ from telegram import ChatPermissions
 from telegram.constants import ChatMemberStatus
 from telegram.ext import ContextTypes, MessageHandler
 
+from tcbot import cfg
 from tcbot import database as db
+from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, extraction, replies
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply
@@ -29,6 +30,8 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT, to_utc
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from telegram import Bot, Update
 
 log = get_logger(__name__)
@@ -44,6 +47,21 @@ _RL_SYNC_LIMIT: int = 2
 # * Telegram budget for tens of minutes on large federations and starve
 # * real commands. The cap keeps one run to roughly a minute worst case.
 _SYNC_MAX_CHECKS: int = 200
+
+# * Telegram admits 20 requests a minute per group, and one pair costs up
+# * to two requests (the membership probe plus the enforcement write), so
+# * a group may carry at most eight pairs per run. Without the cap a small
+# * federation queued every probe behind the rate limiter and the queued
+# * requests were cancelled by their own timeout, which the sweep then
+# * reported as enforcement failures that never happened.
+_SYNC_MAX_PAIRS_PER_CHAT: int = 8
+
+# * Sweep cursors. The per-group pair cap means one run cannot check every
+# * banned user in every group, so each run starts where the previous one
+# * stopped. Without the cursor every run would start at the first user
+# * again and the users past the cap would never be checked at all.
+_ban_sweep_offset: int = 0
+_mute_sweep_offset: int = 0
 
 # * Per-call budget for membership probes, mirroring the cleanup membership
 # * check: a stalled probe must not hold its fan_out slot. Single owner in
@@ -111,21 +129,54 @@ class SyncCounts:
 
 
 def take_pairs(
-    user_ids: list[int], chat_ids: list[int], max_checks: int
-) -> tuple[list[tuple[int, int]], bool]:
+    user_ids: list[int],
+    chat_ids: list[int],
+    max_checks: int,
+    *,
+    per_chat_cap: int = _SYNC_MAX_PAIRS_PER_CHAT,
+    used: dict[int, int] | None = None,
+    offset: int = 0,
+) -> tuple[list[tuple[int, int]], bool, int]:
     """Take up to ``max_checks`` (user, chat) pairs in stable order.
 
-    Pure function (no I/O) so the bounding policy is unit-testable: callers
-    never build an unbounded cross product. Returns the pairs plus whether
-    the full cross product was truncated.
+    The pairs are user-major, so every group carries the same number of
+    checks. Each group stops at ``per_chat_cap`` pairs, which keeps the
+    run inside the per-group Telegram rate.
+
+    ``used`` carries the per-group pair count from an earlier pass so two
+    passes over the same groups share one budget; it is updated in place.
+    ``offset`` rotates the user list so consecutive runs cover different
+    users instead of starving the ones past the cap.
+
+    Returns the pairs, whether the full cross product was truncated, and
+    the number of distinct users the pairs cover.
     """
     # * Lazy islice, never a full materialization: a 10k-ban by 100-group
     # * sweep builds two pairs, not a million-row list, before truncating.
+    # * User-major order spreads the sweep evenly: every chat carries the
+    # * same number of pairs, so no chat is loaded past the per-chat
+    # * Telegram limit while others are untouched.
     limit = max(0, max_checks)
-    pairs = list(
-        itertools.islice(((uid, cid) for uid in user_ids for cid in chat_ids), limit)
-    )
-    return pairs, len(user_ids) * len(chat_ids) > len(pairs)
+    per_chat = used if used is not None else {}
+    users = list(user_ids)
+    if offset and users:
+        shift = offset % len(users)
+        users = users[shift:] + users[:shift]
+    pairs: list[tuple[int, int]] = []
+    for uid in users:
+        for cid in chat_ids:
+            taken = per_chat.get(cid, 0)
+            if taken >= per_chat_cap:
+                continue
+            pairs.append((uid, cid))
+            per_chat[cid] = taken + 1
+            if len(pairs) >= limit:
+                break
+        if len(pairs) >= limit:
+            break
+    truncated = len(user_ids) * len(chat_ids) > len(pairs)
+    covered = len({uid for uid, _ in pairs})
+    return pairs, truncated, covered
 
 
 async def _member_status(bot: Bot, chat_id: int, user_id: int) -> Any | BaseException:
@@ -305,8 +356,30 @@ def _summarize(
 
 # ──────────────────────── Sync entry points ──────────────────────── #
 
-# * Sync strips staff rank from banned/muted holders (founder lives on owner row).
-_STAFF_ROLES: tuple[str, ...] = ("admin", "developer", "tester")
+
+def _enforcement_scope(groups: Sequence[GroupDoc]) -> tuple[list[int], dict[int, str]]:
+    """Return the chat IDs and titles sync must reconcile against.
+
+    The scope is the connected groups plus the federation primary group,
+    which is exactly the set the ban, mute, and unban executors enforce in.
+    The primary group is not part of ``federated_groups``, so it never
+    appears in ``active_groups()``; without it here a drift in the main
+    group could never be repaired, since sync would never look there.
+
+    The primary group leads the order so it always fits inside the pair
+    budget: the remaining groups follow in ascending ID order, so the
+    sweep order (and which pairs truncate) is identical run to run.
+    """
+    scope = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
+    entries = [
+        (int(g["chat_id"]), g.get("title") or str(g["chat_id"]))
+        for g in scope
+        if g.get("chat_id")
+    ]
+    titles = dict(entries)
+    rest = sorted(cid for cid, _ in entries if cid != cfg.main_group)
+    main = [cfg.main_group] if cfg.main_group in titles else []
+    return [*main, *rest], titles
 
 
 async def _demote_staff_holdings(
@@ -372,6 +445,7 @@ async def run_ban_sync(
     any staff role as a reconcile of existing records; a human executor must
     pass their own rank so a Developer cannot strip an Admin.
     """
+    global _ban_sweep_offset, _mute_sweep_offset
     groups, ban_uids = await asyncio.gather(
         db.groups_db.active_groups(),
         db.bans_db.active_ban_user_ids(),
@@ -383,16 +457,20 @@ async def run_ban_sync(
     except Exception:
         log.exception("sync sweep: active_mute_docs failed; mute replay skipped")
         mute_docs = []
-    # * Deterministic sweep order: Mongo returns insertion order, so without a
-    # * sort the truncation victims (and the audit log) would differ run to run.
-    chat_ids = sorted({g.get("chat_id", 0) for g in groups if g.get("chat_id", 0)})
-    titles = {
-        c: (g.get("title") or str(c))
-        for g in groups
-        for c in [g.get("chat_id", 0)]
-        if c
-    }
-    pairs, truncated = take_pairs(sorted(ban_uids), chat_ids, max_checks)
+    chat_ids, titles = _enforcement_scope(groups)
+    # * One per-group budget for the whole sweep: the ban and mute passes
+    # * share it, because a group must not receive more requests than the
+    # * Telegram per-group rate allows.
+    per_chat: dict[int, int] = {}
+    pairs, truncated, ban_covered = take_pairs(
+        sorted(ban_uids),
+        chat_ids,
+        max_checks,
+        used=per_chat,
+        offset=_ban_sweep_offset,
+    )
+    if ban_uids:
+        _ban_sweep_offset = (_ban_sweep_offset + ban_covered) % len(ban_uids)
     # * Strip stale staff rank before enforcing.
     await _demote_staff_holdings([uid for uid, _cid in pairs], executor_role)
     # * Bounded fan-out plus per-pair probe timeout.
@@ -403,9 +481,14 @@ async def run_ban_sync(
     mute_uids = sorted(uid for uid in mute_until if uid)
     mute_truncated = False
     if mute_uids:
-        mute_pairs, mute_truncated = take_pairs(
-            mute_uids, chat_ids, max(0, max_checks - len(pairs))
+        mute_pairs, mute_truncated, mute_covered = take_pairs(
+            mute_uids,
+            chat_ids,
+            max(0, max_checks - len(pairs)),
+            used=per_chat,
+            offset=_mute_sweep_offset,
         )
+        _mute_sweep_offset = (_mute_sweep_offset + mute_covered) % len(mute_uids)
         if mute_pairs:
             mute_outcomes = await fan_out(
                 [
@@ -447,17 +530,10 @@ async def verify_user(
     except Exception:
         log.exception("verify_user: mute read failed for user=%d", user_id)
         mute = None
-    # * Same deterministic order as the sweep above (see run_ban_sync).
-    chat_ids = sorted({g.get("chat_id", 0) for g in groups if g.get("chat_id", 0)})
-    titles = {
-        c: (g.get("title") or str(c))
-        for g in groups
-        for c in [g.get("chat_id", 0)]
-        if c
-    }
+    chat_ids, titles = _enforcement_scope(groups)
     # * Bound like the sweep: one targeted verify must not probe hundreds
     # * of groups in a single command on a huge federation.
-    pairs, truncated = take_pairs([user_id], chat_ids, _SYNC_MAX_CHECKS)
+    pairs, truncated, _ = take_pairs([user_id], chat_ids, _SYNC_MAX_CHECKS)
     if not pairs:
         return SyncCounts()
     if ban or mute is not None:
@@ -475,7 +551,7 @@ async def verify_user(
         # * join or a demotion gap may have restored posting rights that the
         # * active record still forbids. Never unrestricts: a restricted
         # * non-muted user may hold a manual admin restriction.
-        mute_pairs, mute_truncated = take_pairs(
+        mute_pairs, mute_truncated, _ = take_pairs(
             [user_id], chat_ids, max(0, _SYNC_MAX_CHECKS - len(pairs))
         )
         if mute_pairs:

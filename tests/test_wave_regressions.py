@@ -181,17 +181,24 @@ def test_sync_sweep_sorts_ids(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(sy.db.groups_db, "active_groups", _groups)
     monkeypatch.setattr(sy.db.bans_db, "active_ban_user_ids", _bans)
+    # * The sweep cursor is process state: reset it so the pair order this
+    # * test asserts does not depend on an earlier sweep.
+    monkeypatch.setattr(sy, "_ban_sweep_offset", 0)
+    monkeypatch.setattr(sy, "_mute_sweep_offset", 0)
     seen: dict[str, Any] = {}
     orig_take = sy.take_pairs
 
     def _spy(
-        user_ids: list[int], chat_ids: list[int], max_checks: int
-    ) -> tuple[list[tuple[int, int]], bool]:
+        user_ids: list[int],
+        chat_ids: list[int],
+        max_checks: int,
+        **kwargs: Any,
+    ) -> tuple[list[tuple[int, int]], bool, int]:
         seen["uids"] = list(user_ids)
         seen["cids"] = list(chat_ids)
-        pairs, truncated = orig_take(user_ids, chat_ids, max_checks)
+        pairs, truncated, covered = orig_take(user_ids, chat_ids, max_checks, **kwargs)
         seen["pairs"] = list(pairs)
-        return pairs, truncated
+        return pairs, truncated, covered
 
     monkeypatch.setattr(sy, "take_pairs", _spy)
 
