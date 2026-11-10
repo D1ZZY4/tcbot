@@ -73,6 +73,9 @@ class TwoLevelCache[T](_QueueMixin):
     def put(self, key: Any, val: T) -> None:
         """Store in memory and enqueue an ordered Redis write."""
         self._mem.put(key, val)
+        # * Drop the per-key lock so a fetch that started before this write
+        # * cannot overwrite the newer value with an older one.
+        self._locks.pop(key, None)
         self._redis_put_background(key, val)
 
     def invalidate(self, key: Any) -> None:
@@ -84,7 +87,9 @@ class TwoLevelCache[T](_QueueMixin):
         """
         self._mem.invalidate(key)
         # * Drop the per-key lock so high-cardinality callers do not
-        # * accumulate a stale lock for every key ever fetched.
+        # * accumulate a stale lock for every key ever fetched. The drop
+        # * also signals the in-flight fetch for this key that its result
+        # * predates the invalidation (see get_or_fetch).
         self._locks.pop(key, None)
         self._redis_del_background(
             key, droppable=self._redis_prefix not in _REVOCATION_PREFIXES
@@ -93,6 +98,9 @@ class TwoLevelCache[T](_QueueMixin):
     def clear(self) -> None:
         """Clear the in-memory layer (does not flush Redis keys)."""
         self._mem.clear()
+        # * Drop the per-key locks so a fetch that started before the clear
+        # * cannot write its pre-clear value back into L1.
+        self._locks.clear()
 
     async def clear_all(self) -> None:
         """Clear the in-memory layer AND delete all matching keys from Redis.
@@ -111,6 +119,9 @@ class TwoLevelCache[T](_QueueMixin):
         (the sweep keeps running in the background and L1 is already clear).
         """
         self._mem.clear()
+        # * Drop the per-key locks so a fetch that started before the sweep
+        # * cannot write its pre-clear value back into L1.
+        self._locks.clear()
         pattern = f"tcbot:{self._redis_prefix}:v2:*"
 
         async def _clear_redis() -> None:
@@ -216,6 +227,18 @@ class TwoLevelCache[T](_QueueMixin):
                                     exc,
                                 )
                             else:
+                                if self._locks.get(key) is not lock:
+                                    # * The key was invalidated while the
+                                    # * Redis read was in flight: the payload
+                                    # * predates the change and must not be
+                                    # * cached, or the revoked value comes
+                                    # * back for a whole TTL.
+                                    log.debug(
+                                        "Discarding stale Redis hit for "
+                                        "invalidated key %s",
+                                        key,
+                                    )
+                                    return loaded
                                 self._mem.put(key, loaded)
                                 return loaded
 
@@ -224,6 +247,14 @@ class TwoLevelCache[T](_QueueMixin):
                 # * Enqueued unconditionally so a reconnect before the
                 # * write still lands the value.
                 val = await fetch()
+                if self._locks.get(key) is not lock:
+                    # * The key was invalidated or overwritten while the
+                    # * fetch was in flight. The fetched value predates the
+                    # * change, so caching it would resurrect a revoked
+                    # * privilege for the whole L1/L2 TTL. The caller still
+                    # * receives the value it asked for.
+                    log.debug("Discarding stale fetch for invalidated key %s", key)
+                    return cast("T", val)
                 self._mem.put(key, val)
                 rkey = self._rkey(key)
                 try:

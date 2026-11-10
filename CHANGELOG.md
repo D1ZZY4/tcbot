@@ -346,6 +346,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The primary group is recognised again** (`tcbot/__init__.py`): the primary-group check rejected every chat ID below zero, but Telegram group and channel IDs are negative, so the main group never matched. Behavior changes: the main group is recognised as a primary destination, federation moderation is accepted from it, join enforcement runs there, and it can no longer be disconnected, removed, or connected like an ordinary group.
 
+- **An invalidation is no longer undone by an in-flight read** (`tcbot/database/cache/twolevel/core.py`): a fetch that started before a revocation wrote the revoked value back into the in-memory and shared caches. Behavior changes: a revoked role or connection state is not resurrected for the cache lifetime.
+
 - **Zero duration no longer becomes a permanent mute** (`tcbot/utils/time_and_date.py`): `parse_duration` rejects a zero value instead of returning a falsy delta the mute executor coerced to permanent. Behavior changes: `/tcmute <target> 0s` now errors instead of muting forever.
 
 - **New bans without proof no longer proceed** (`tcbot/modules/helper/pipelines/ban_flow.py`): a new ban whose proof upload returns nothing now aborts before any group is touched and explains the failure on the prompt. Behavior changes: proof-less new bans are refused instead of stored with proof zero.
