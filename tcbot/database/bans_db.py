@@ -13,12 +13,15 @@ from pymongo.errors import DuplicateKeyError
 
 from tcbot.database.documents import BanDoc
 from tcbot.database.mongos import col, db_call, make_short_id
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from datetime import datetime
 
     from pymongo.collection import Collection
+
+log = get_logger(__name__)
 
 # ────────────────────────── Collection ─────────────────────────── #
 
@@ -77,7 +80,22 @@ async def create_ban(
         if not auto_id:
             raise
         doc["ban_id"] = make_ban_id()
-        await db_call(lambda: _bans().insert_one(doc))
+        try:
+            await db_call(lambda: _bans().insert_one(doc))
+        except DuplicateKeyError:
+            # * The unique partial index allows only one active ban per
+            # * user, so a concurrent ban for the same target loses the
+            # * race here. The existing record is the canonical one: the
+            # * caller keeps it and the moderation continues.
+            existing = await get_active_ban(target_id)
+            if existing is None:
+                raise
+            log.warning(
+                "Concurrent ban for user %d lost the race; reusing ban %s",
+                target_id,
+                existing.get("ban_id", ""),
+            )
+            return cast("BanDoc", existing)
     return cast("BanDoc", doc)
 
 

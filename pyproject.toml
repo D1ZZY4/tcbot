@@ -64,6 +64,10 @@ dev = [
     "pytest-cov>=7.1,<8",
     "hypothesis>=6.170.15,<7",
 
+    # Database test double: verifies the MongoDB query shapes (aggregation
+    # pipeline, partial unique index) without a live server.
+    "mongomock>=4.3,<5",
+
     # Development workflow
     "pre-commit>=4.7,<5",
 

@@ -349,6 +349,67 @@ async def _drop_legacy_active_mutes_index() -> None:
         return
 
 
+async def _migrate_duplicate_active_bans() -> None:
+    """Converge duplicate active bans onto one canonical record per user.
+
+    The unique partial index on ``bans`` can only exist when no user holds
+    two active bans. Older releases could store a second record when two
+    moderators hit the warn threshold at the same moment, so the duplicate
+    is deactivated here before the index is built. The canonical record is
+    the one ``get_active_ban`` returns: the newest by timestamp, then by
+    ban id. The deactivated record keeps its history; nothing is deleted.
+    """
+    groups = await db_call(
+        lambda: list(
+            col("bans").aggregate(
+                [
+                    {"$match": {"is_active": True}},
+                    {"$sort": {"timestamp": -1, "ban_id": -1}},
+                    {
+                        "$group": {
+                            "_id": "$banned_user_id",
+                            "canonical": {"$first": "$ban_id"},
+                            "ban_ids": {"$push": "$ban_id"},
+                        }
+                    },
+                    {"$match": {"ban_ids.1": {"$exists": True}}},
+                ]
+            )
+        ),
+        timeout=None,
+    )
+    if not groups:
+        return
+    total = 0
+    for group in groups:
+        user_id = group.get("_id")
+        canonical = group.get("canonical")
+        ban_ids = [b for b in group.get("ban_ids", []) if b and b != canonical]
+        if not user_id or not ban_ids:
+            continue
+        result = await db_call(
+            lambda user_id=user_id, ban_ids=ban_ids: col("bans").update_many(
+                {
+                    "banned_user_id": user_id,
+                    "is_active": True,
+                    "ban_id": {"$in": ban_ids},
+                },
+                {"$set": {"is_active": False}},
+            ),
+            timeout=None,
+        )
+        total += result.modified_count
+        log.warning(
+            "Deactivated %d duplicate active ban(s) for user %s; kept %s.",
+            result.modified_count,
+            user_id,
+            canonical,
+        )
+    log.info(
+        "Duplicate active ban migration finished: %d record(s) deactivated.", total
+    )
+
+
 async def ensure_indexes() -> None:
     """Create all critical collection indexes in parallel. No-op if they already exist.
 
@@ -363,6 +424,12 @@ async def ensure_indexes() -> None:
     # * until_date_1 index must be gone before the TTL recreate runs, or
     # * the recreate conflicts and this same fail-fast fires.
     await _drop_legacy_active_mutes_index()
+    # * Second sequential pre-step: the unique partial index on the active
+    # * bans can only be created once every user holds at most one active
+    # * record, so the duplicates left by older releases are converged
+    # * first. A failure here aborts the boot instead of serving without
+    # * the constraint that keeps a single canonical ban per user.
+    await _migrate_duplicate_active_bans()
     # * Each create_index runs through the MongoDB circuit (outages feed the
     # * breaker instead of bypassing it) and the batch is bounded to the
     # * fan-out cap of 10, inside the 20-connection pymongo pool: the old raw
@@ -380,6 +447,17 @@ async def ensure_indexes() -> None:
             ],
         ),
         partial(col("bans").create_index, [("ban_id", 1)], unique=True),
+        # * One active ban per user, enforced by the database: two
+        # * moderators reaching the warn threshold at the same moment could
+        # * otherwise store two records, so the profile and the appeal link
+        # * would disagree on which ban is real. The migration above
+        # * converges the duplicates older releases left behind.
+        partial(
+            col("bans").create_index,
+            [("banned_user_id", 1)],
+            unique=True,
+            partialFilterExpression={"is_active": True},
+        ),
         partial(col("tc_owners").create_index, [("user_id", 1)], unique=True),
         # * Serves user_appeal_count() which filters on banned_user_id + appeal_log_msg_id presence
         partial(

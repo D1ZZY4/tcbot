@@ -8,6 +8,8 @@ All notable changes to this project are documented here. For workflow details, s
 <summary>Unreleased changes (click to collapse)</summary>
 
 ### Added
+
+- **MongoDB query shapes are verified without a live server** (`pyproject.toml`, `uv.lock`, `tests/test_ban_uniqueness_mongo.py`): the duplicate-ban migration and the one-active-ban guarantee depend on MongoDB semantics a hand-written double cannot prove, so the in-memory MongoDB engine runs the same aggregation pipeline and the same partial unique index. Behavior changes: none; the dependency is development-only.
 - **Production observability via optional extras** (`tcbot/alive.py`, `tcbot/__main__.py`, `tcbot/__init__.py`, `config.env.example`): a `/metrics` endpoint on the keep-alive server when prometheus-client is installed, the uvloop event loop policy on Linux when the package is present, and Sentry initialisation when `SENTRY_DSN` is set. Behavior changes: the operations surfaces appear only with their extras configured.
 
 - **Property-based invariant checks** (`tests/test_property.py`): hypothesis-backed checks that `esc()` never emits an unescaped special, `parse_list` never raises, and `message_link` stays canonical. Behavior changes: none for operators.
@@ -335,6 +337,8 @@ All notable changes to this project are documented here. For workflow details, s
 ### Fixed
 
 - **Database calls get their own worker pool and a per-call budget** (`tcbot/database/mongos.py`): database work shared the event loop's default executor with other blocking calls, and a caller waited for the full socket timeout on a hung operation. Behavior changes: database calls run on a dedicated bounded pool, a hung operation releases the caller after 20 seconds, and the timeout counts as an outage signal for the circuit breaker.
+
+- **One active ban per user is enforced by the database** (`tcbot/database/mongos.py`, `tcbot/database/bans_db.py`): two moderators reaching the warn threshold at the same moment could store two active bans, so the profile and the appeal link disagreed on which ban was real. Behavior changes: a unique partial index keeps one active ban per user, the duplicates older releases left behind are deactivated (never deleted) on the next startup, and a lost insert race reuses the winning record instead of failing the moderation action.
 
 - **The primary group is recognised again** (`tcbot/__init__.py`): the primary-group check rejected every chat ID below zero, but Telegram group and channel IDs are negative, so the main group never matched. Behavior changes: the main group is recognised as a primary destination, federation moderation is accepted from it, join enforcement runs there, and it can no longer be disconnected, removed, or connected like an ordinary group.
 
