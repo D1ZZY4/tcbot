@@ -139,7 +139,7 @@ class CircuitBreaker:
             result: T = await coro
         except Exception as exc:
             if count_failure is not None and not count_failure(exc):
-                self._release_probe()
+                self._record_reached_service()
             else:
                 self._record_failure()
             raise exc from None
@@ -162,9 +162,19 @@ class CircuitBreaker:
             self._half_open_probe_in_flight = True
         return True
 
-    def release_probe(self) -> None:
-        """Release a HALF_OPEN probe without changing the circuit state."""
-        self._release_probe()
+    def release_probe(self, *, reached_service: bool = False) -> None:
+        """Release a HALF_OPEN probe.
+
+        With ``reached_service=True`` the downstream answered (a refusal or
+        an application error, not a transport failure), so the transport is
+        healthy. A HALF_OPEN probe that ends that way closes the circuit:
+        leaving it HALF_OPEN would admit one caller at a time and reject
+        every concurrent one as if the service were still down.
+        """
+        if reached_service:
+            self._record_reached_service()
+        else:
+            self._release_probe()
 
     def record_success(self) -> None:
         """Record a successful outcome (use when not wrapping via call()).
@@ -214,6 +224,22 @@ class CircuitBreaker:
                 self._success_streak = 0
         self._release_probe()
 
+    def _record_reached_service(self) -> None:
+        # * The downstream answered, so the transport is healthy even though
+        # * the call did not succeed. A HALF_OPEN probe must close the
+        # * circuit here: staying HALF_OPEN admits one caller at a time
+        # * and rejects every concurrent one, which would serialise the
+        # * database layer and starve a federation fan-out.
+        if self._state is CircuitState.HALF_OPEN:
+            log.info(
+                "Circuit [%s]: HALF_OPEN -> CLOSED (probe reached the service).",
+                self._name,
+            )
+            self._state = CircuitState.CLOSED
+            self._failure_count = 0
+            self._success_streak = 0
+        self._release_probe()
+
     def _record_failure(self) -> None:
         self._failure_count += 1
         self._success_streak = 0
@@ -257,12 +283,3 @@ mongodb: CircuitBreaker = CircuitBreaker(
     failure_threshold=_DEFAULT_FAILURE_THRESHOLD,
     recovery_timeout=_DEFAULT_RECOVERY_TIMEOUT,
 )
-
-
-__all__ = [
-    "CircuitBreaker",
-    "CircuitOpenError",
-    "CircuitState",
-    "mongodb",
-    "telegram",
-]

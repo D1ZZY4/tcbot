@@ -112,7 +112,7 @@ async def fan_out[T](
                 # ! consecutive fan-out refusals and skipped the remaining
                 # ! groups unenforced. Refusals must not touch the circuit.
                 if isinstance(exc, BadRequest):
-                    _cb.telegram.release_probe()
+                    _cb.telegram.release_probe(reached_service=True)
                     log.debug(
                         "fan_out: API refusal (not counted against circuit): %s", exc
                     )
@@ -124,7 +124,10 @@ async def fan_out[T](
                 _cb.telegram.release_probe()
                 raise
             except Exception as exc:
-                _cb.telegram.release_probe()
+                # * The call reached Telegram and came back with an
+                # * application error, so the transport is healthy: a
+                # * HALF_OPEN probe closes instead of stranding the circuit.
+                _cb.telegram.release_probe(reached_service=True)
                 log.debug(
                     "fan_out: coroutine failed (not counted against circuit): %s", exc
                 )
