@@ -27,6 +27,7 @@ from tcbot.utils.dispatch import (
     count_transient_errors,
     failed_groups,
     fan_out,
+    log_fanout_error,
     throw_if_cancelled,
     transient_groups,
 )
@@ -288,7 +289,15 @@ async def execute_warn(
         total_groups = len(groups)
         failures = failed_groups(groups, ban_results)
         transient = transient_groups(groups, ban_results)
-        failed = count_transient_errors(ban_results)
+        # * The error-level fan-out summary is shared by every federation
+        # * executor so a partial failure always reaches LOG_ERRORS with the
+        # * real Telegram exception attached.
+        failed = log_fanout_error(
+            ban_results,
+            action="Warn threshold ban",
+            total=total_groups,
+            target_id=target_id,
+        )
         applied = total_groups - failed
         any_ban_ok = applied > 0
         for grp, exc in failures:
