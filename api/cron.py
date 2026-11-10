@@ -6,12 +6,12 @@
 
 from __future__ import annotations
 
-import hmac
 from http.server import BaseHTTPRequestHandler
 
 from tcbot import cfg
 from tcbot.serverless import run, run_warn_expiry
 from tcbot.utils.logger import get_logger
+from tcbot.utils.secrets import secret_matches
 
 log = get_logger(__name__)
 
@@ -40,7 +40,7 @@ class handler(BaseHTTPRequestHandler):
             self._reply(503, "cron secret not configured")
             return
         auth = self.headers.get("Authorization", "")
-        if not hmac.compare_digest(auth, f"Bearer {secret}"):
+        if not secret_matches(auth, f"Bearer {secret}"):
             log.warning("cron: rejected request with invalid bearer token.")
             self._reply(401, "Unauthorized")
             return

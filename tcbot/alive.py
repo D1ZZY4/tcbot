@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-import hmac
 import socket
 import threading
 from typing import TYPE_CHECKING
@@ -23,6 +22,7 @@ from tcbot.database import scheduler as sched_mod
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
 from tcbot.utils.logger import get_logger
+from tcbot.utils.secrets import secret_matches
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -191,10 +191,10 @@ def register_webhook(
 def webhook_route() -> tuple[str, int]:
     """Receive Telegram update via webhook POST, validate, and enqueue for PTB."""
     # * Validate secret token before touching the payload (OWASP guideline).
-    # * Use hmac.compare_digest for timing-safe comparison to prevent timing
-    # * attacks that could be used to brute-force the secret token byte-by-byte.
+    # * Use a timing-safe comparison to prevent timing attacks that could be
+    # * used to brute-force the secret token byte-by-byte.
     token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if not _wh_secret or not hmac.compare_digest(token, _wh_secret):
+    if not _wh_secret or not secret_matches(token, _wh_secret):
         log.warning("Webhook: rejected request with invalid or missing secret token.")
         return "Forbidden", 403
 

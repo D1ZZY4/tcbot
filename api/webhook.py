@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import hmac
 from http.server import BaseHTTPRequestHandler
 
 import msgspec
@@ -14,6 +13,7 @@ import msgspec
 from tcbot import cfg
 from tcbot.serverless import handle_telegram_payload, run
 from tcbot.utils.logger import get_logger
+from tcbot.utils.secrets import secret_matches
 
 log = get_logger(__name__)
 
@@ -50,7 +50,7 @@ class handler(BaseHTTPRequestHandler):
             self._reply(503, "webhook secret not configured")
             return
         token = self.headers.get(_SECRET_HEADER, "")
-        if not hmac.compare_digest(token, expected):
+        if not secret_matches(token, expected):
             log.warning("webhook: rejected request with invalid secret token.")
             self._reply(403, "Forbidden")
             return
