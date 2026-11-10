@@ -114,3 +114,10 @@ def fmt_duration(td: timedelta | None, locale: str | None = None) -> str:
     if days < _DAYS_PER_YEAR:
         return f"{days // 30}mo"
     return f"{days // _DAYS_PER_YEAR}ye"
+
+
+def date_or_unknown(value: datetime | None, locale: str | None = None) -> str:
+    """Format a datetime field or a localized Unknown fallback if missing."""
+    return (
+        fmt_dt(value) if value else t("common.action.unknown_date", locale, plain=True)
+    )

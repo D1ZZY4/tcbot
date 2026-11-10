@@ -6,7 +6,8 @@
 
 from __future__ import annotations
 
-from tcbot.utils.pagination import nav_row, paginate
+from tcbot.modules.helper.keyboards import nav_row
+from tcbot.utils.pagination import clamp_page, paginate
 
 
 def test_paginate_slices_and_counts() -> None:
@@ -24,6 +25,19 @@ def test_paginate_clamps_out_of_range_page() -> None:
 
 def test_paginate_empty() -> None:
     assert paginate([], 0, 5) == ([], 1, 0)
+
+
+def test_clamp_page_matches_the_slicing_helper() -> None:
+    """The row-count clamp and the in-memory slice must agree."""
+    for total in (0, 1, 9, 10, 11):
+        for page in (-3, 0, 1, 7):
+            total_pages, clamped = clamp_page(total, page, 5)
+            _, sliced_pages, sliced_page = paginate(list(range(total)), page, 5)
+            assert (total_pages, clamped) == (sliced_pages, sliced_page)
+
+
+def test_clamp_page_handles_a_degenerate_page_size() -> None:
+    assert clamp_page(10, 3, 0) == (1, 0)
 
 
 def test_nav_row_middle_has_both_directions() -> None:

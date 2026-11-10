@@ -17,6 +17,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Callback payloads have one owner** (`tcbot/modules/helper/messages/safe_edits.py`): `callback_args` and `callback_numbers` own the shape check, so a stale button is answered instead of reaching a handler that did not guard it.
 
+- **Page arithmetic has one owner** (`tcbot/utils/pagination.py`): `clamp_page` holds the page count and clamp rules, so the views that page a database query and the views that page a list agree on the boundaries.
+
 - **Role sets and role labels have one owner** (`tcbot/database/users_roles.py`): `STAFF_ROLES`, `FOUNDER_ADMIN_ROLES`, and `role_label` replace eleven inline role-set literals and two different label fallbacks.
 
 - **Name placeholders have one owner** (`tcbot/database/users_cache.py`): `is_placeholder_name` decides what counts as a real name, so the legacy `User <id>` form is no longer rendered as a name on some surfaces and not on others.
@@ -84,6 +86,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **One owner for the explicit-target rule** (`tcbot/modules/helper/extraction/resolve.py`, `tcbot/modules/admins.py`): the promotion entry now uses the shared target-shape helper instead of an open-coded copy that treated a bare `@` as a target. Behavior changes: `/tcpromote @ developer` no longer consumes the `@` token as the target.
 
 - **Warn-threshold ban reports partial failures like every other federation executor** (`tcbot/modules/helper/pipelines/warn_flow.py`): the threshold ban now emits the shared error-level fan-out summary, so a partial enforcement reaches the error channel with the real Telegram exception attached. Behavior changes: none.
+
+- **The shared foundation holds only shared code** (`tcbot/utils/pagination.py`, `tcbot/modules/helper/keyboards/nav.py`, `tcbot/utils/time_and_date.py`): the page arithmetic stays in the utils layer, while the previous/next button row moved to the keyboard builders and the "Unknown" date fallback to the clock helpers. Each piece now lives with the layer that owns it. Behavior changes: none.
 
 - **The error reporter is an application service** (`tcbot/error_reporter.py`, `tcbot/utils/logger.py`): the reporter moved from the utils layer to the package root, and it registers its shipping sink with the logger instead of the logger importing it. The utils layer no longer depends on the layer above it. Behavior changes: none; error reports still reach the same channel.
 

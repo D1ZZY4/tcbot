@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
+from tcbot.modules.helper.keyboards.nav import nav_row
 from tcbot.utils.i18n import t
-from tcbot.utils.pagination import nav_row
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

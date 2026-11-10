@@ -27,14 +27,15 @@ from tcbot.modules.helper.keyboards import (
     check_warn_groups_kb,
     check_warns_back_row,
     detail_kb,
+    nav_row,
     paged_drill_kb,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, italic, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.pagination import date_or_unknown, nav_row
-from tcbot.utils.time_and_date import fmt_dt
+from tcbot.utils.pagination import clamp_page
+from tcbot.utils.time_and_date import date_or_unknown, fmt_dt
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -359,8 +360,7 @@ async def _ban_list_render(
         count_failed = True
     else:
         count_failed = False
-    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-    page = max(0, min(page, total_pages - 1))
+    total_pages, page = clamp_page(total, page, _PAGE_SIZE)
     try:
         chunk = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
         chunk_failed = False
@@ -370,7 +370,7 @@ async def _ban_list_render(
         chunk_failed = True
     if count_failed:
         total = len(chunk)
-        total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+        total_pages, _ = clamp_page(total, page, _PAGE_SIZE)
     if not chunk:
         if count_failed or chunk_failed:
             text = t("checking.warns.db_fail", locale)
@@ -514,8 +514,7 @@ class CheckEventsMixin:
             count_failed = True
         else:
             count_failed = False
-        total_pages = max(1, (count + _PAGE_SIZE - 1) // _PAGE_SIZE)
-        page = max(0, min(page, total_pages - 1))
+        total_pages, page = clamp_page(count, page, _PAGE_SIZE)
         try:
             warns = await db.warns_db.get_warns(
                 target_id,
@@ -533,7 +532,7 @@ class CheckEventsMixin:
             warns_failed = True
         if count_failed:
             count = len(warns)
-            total_pages = max(1, (count + _PAGE_SIZE - 1) // _PAGE_SIZE)
+            total_pages, _ = clamp_page(count, page, _PAGE_SIZE)
         title = titles.get(chat_id) or str(chat_id)
         if not warns:
             text = t("checking.warns.in_empty", locale, title=title)
@@ -638,8 +637,7 @@ async def _per_chat_event_list(
         count_failed = True
     else:
         count_failed = False
-    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-    page = max(0, min(page, total_pages - 1))
+    total_pages, page = clamp_page(total, page, _PAGE_SIZE)
     try:
         records = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
         records_failed = False
@@ -649,7 +647,7 @@ async def _per_chat_event_list(
         records_failed = True
     if count_failed:
         total = len(records)
-        total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+        total_pages, _ = clamp_page(total, page, _PAGE_SIZE)
     if not records:
         if count_failed or records_failed:
             text = t("checking.warns.db_fail", locale)

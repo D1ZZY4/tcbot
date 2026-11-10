@@ -50,6 +50,7 @@ from tcbot.modules.helper.keyboards.menus import (
     main_menu_kb,
     tcgroups_kb,
 )
+from tcbot.modules.helper.keyboards.nav import nav_row
 from tcbot.modules.helper.keyboards.stats import (
     stats_back_kb,
     stats_back_row,

@@ -38,8 +38,11 @@ from tcbot.utils.dispatch import gather_bounded, throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.pagination import date_or_unknown, paginate
-from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
+from tcbot.utils.pagination import clamp_page, paginate
+from tcbot.utils.time_and_date import (
+    TELEGRAM_LOOKUP_TIMEOUT,
+    date_or_unknown,
+)
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
@@ -328,8 +331,7 @@ class PeopleViews:
         """Paginated list of every cached user."""
         try:
             total = await db.users_cache.total_users()
-            total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-            page = max(0, min(page, total_pages - 1))
+            total_pages, page = clamp_page(total, page, _PAGE_SIZE)
             chunk = await db.users_cache.all_users_page(
                 skip=page * _PAGE_SIZE, limit=_PAGE_SIZE
             )
@@ -525,8 +527,7 @@ class BanViews:
         """Paginated list of every active federation ban."""
         try:
             total = await db.bans_db.active_ban_count()
-            total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
-            page = max(0, min(page, total_pages - 1))
+            total_pages, page = clamp_page(total, page, _PAGE_SIZE)
             chunk = await db.bans_db.active_bans_page(page * _PAGE_SIZE, _PAGE_SIZE)
         except asyncio.CancelledError:
             raise

@@ -2,63 +2,33 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Shared pagination helpers used by check_flow and stats_flow."""
+"""Page arithmetic shared by the check and statistics views.
+
+Pure list maths only: no Telegram types and no localisation, so the
+helpers stay usable by any view that pages a list or a row count.
+"""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 
-from telegram import InlineKeyboardButton
+def clamp_page(total: int, page: int, page_size: int) -> tuple[int, int]:
+    """Return ``(total_pages, clamped_page)`` for a total row count.
 
-from tcbot.utils.i18n import t
-from tcbot.utils.time_and_date import fmt_dt
-
-if TYPE_CHECKING:
-    from datetime import datetime
+    Single owner for the page arithmetic. Views that page a database query
+    instead of an in-memory list cannot use :func:`paginate`, but they must
+    clamp the same way or a stale page number would read past the end.
+    """
+    if total <= 0 or page_size <= 0:
+        return 1, 0
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    return total_pages, max(0, min(page, total_pages - 1))
 
 
 def paginate[T](items: list[T], page: int, page_size: int) -> tuple[list[T], int, int]:
     """Slice ``items`` for ``page`` (0-based). Returns ``(chunk, total_pages, clamped_page)``."""
     total = len(items)
+    total_pages, page = clamp_page(total, page, page_size)
     if total == 0 or page_size <= 0:
-        return [], 1, 0
-    total_pages = max(1, (total + page_size - 1) // page_size)
-    page = max(0, min(page, total_pages - 1))
+        return [], total_pages, page
     start = page * page_size
     return items[start : start + page_size], total_pages, page
-
-
-def nav_row(
-    page: int,
-    total_pages: int,
-    cb_prefix: str,
-    locale: str | None = None,
-) -> list[InlineKeyboardButton]:
-    """Build a prev/next navigation row when there is more than one page.
-
-    Labels render from the shared button catalog so paged lists follow
-    the viewer's locale like every other keyboard.
-    """
-    row: list[InlineKeyboardButton] = []
-    if page > 0:
-        row.append(
-            InlineKeyboardButton(
-                t("button.prev", locale, plain=True),
-                callback_data=f"{cb_prefix}:{page - 1}",
-            )
-        )
-    if page < total_pages - 1:
-        row.append(
-            InlineKeyboardButton(
-                t("button.next", locale, plain=True),
-                callback_data=f"{cb_prefix}:{page + 1}",
-            )
-        )
-    return row
-
-
-def date_or_unknown(value: datetime | None, locale: str | None = None) -> str:
-    """Format a datetime field or a localized Unknown fallback if missing."""
-    return (
-        fmt_dt(value) if value else t("common.action.unknown_date", locale, plain=True)
-    )
