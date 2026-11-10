@@ -88,7 +88,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
             f"{bold('/tcsync')}: {replies.perm_dev_above(locale, plain=False)}",
             locale,
         ),
-        replies.where_section(replies.context_exec_or_group(locale), locale),
+        replies.where_section(replies.context_bot_or_group(locale), locale),
         (
             "/tcsync",
             t("syncing.help.sync.body", locale),

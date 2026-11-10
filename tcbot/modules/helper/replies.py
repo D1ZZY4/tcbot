@@ -83,13 +83,8 @@ def err_db_retry(locale: str | None = None, *, plain: bool) -> str:
 
 
 def context_bot_or_group(locale: str | None = None) -> str:
-    """Bot-or-group scope body in the render locale."""
+    """Scope body for commands usable from the bot PM or a federation group."""
     return t("common.context.bot_or_group", locale, plain=False)
-
-
-def context_exec_or_group(locale: str | None = None) -> str:
-    """Exec-or-group scope body in the render locale."""
-    return t("common.context.exec_or_group", locale, plain=False)
 
 
 def context_anyone(locale: str | None = None) -> str:

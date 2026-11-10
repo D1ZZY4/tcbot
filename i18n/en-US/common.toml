@@ -61,8 +61,7 @@ examples = "Examples"
 target = "Target syntax"
 
 [context]
-bot_or_group = "Bot PM, exec group, or any connected group."
-exec_or_group = "Exec group, any connected group, or bot PM."
+bot_or_group = "Bot PM, the main group, or any connected group."
 anyone = "Anyone, no special permissions needed."
 connected_group = "Inside any connected group."
 

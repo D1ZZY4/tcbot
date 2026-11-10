@@ -18,7 +18,7 @@ body = """
 [help.where]
 body = """
 */tcdisconnect*: di dalam grup yang ingin diputus.
-*/rmtc*: grup exec atau PM Bot (bisa jarak jauh via ID chat)."""
+*/rmtc*: grup utama atau PM Bot (bisa jarak jauh via ID chat)."""
 
 [help.what]
 body = """
@@ -37,7 +37,7 @@ body = """
 
 [state]
 usage = "Pakai: /rmtc <chat_id>"
-primary_refused = "Ini grup primer federasi (main atau exec). Ia tidak bisa diputus: grup primer menampung penegakan dan log federasi, jadi bot harus tetap di sini."
+primary_refused = "Ini grup utama federasi. Ia tidak bisa diputus: grup utama menampung penegakan dan log federasi, jadi bot harus tetap di sini."
 status_failed = "Tidak bisa memverifikasi status grup. Coba lagi."
 not_connected = "Grup ini tidak terhubung ke {community}."
 anon_admin = "Mode admin anonim aktif. Kirim perintah ini dari akun pribadimu, atau minta Staf TC menjalankan /rmtc."

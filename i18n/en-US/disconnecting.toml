@@ -18,7 +18,7 @@ body = """
 [help.where]
 body = """
 */tcdisconnect*: inside the group you want to disconnect.
-*/rmtc*: exec group or Bot PM (works remotely by chat ID)."""
+*/rmtc*: main group or Bot PM (works remotely by chat ID)."""
 
 [help.what]
 body = """
@@ -37,7 +37,7 @@ body = """
 
 [state]
 usage = "Usage: /rmtc <chat_id>"
-primary_refused = "This is a primary group of the federation (main or exec). It cannot be disconnected: primary groups host enforcement and the federation log, so the bot must stay."
+primary_refused = "This is the main group of the federation. It cannot be disconnected: the main group hosts enforcement and the federation log, so the bot must stay."
 status_failed = "Could not verify the group status. Please try again."
 not_connected = "This group is not connected to {community}."
 anon_admin = "Anonymous admin mode is active. Please send this command from your personal account, or ask TC Staff to run /rmtc."

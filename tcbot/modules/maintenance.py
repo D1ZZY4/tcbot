@@ -56,7 +56,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
             f"{bold('/cleanup')}: {replies.perm_staff_only(locale, plain=False)}",
             locale,
         ),
-        replies.where_section(replies.context_exec_or_group(locale), locale),
+        replies.where_section(replies.context_bot_or_group(locale), locale),
         (
             "/leaveall",
             t("maintenance.help.leaveall.body", locale),

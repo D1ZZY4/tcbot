@@ -50,7 +50,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
             t("unbanning.help.commands.body", locale),
         ),
         replies.who_section(replies.perm_dev_above(locale, plain=False), locale),
-        replies.where_section(replies.context_exec_or_group(locale), locale),
+        replies.where_section(replies.context_bot_or_group(locale), locale),
         (
             replies.sec_what(locale),
             t("unbanning.help.what.body", locale),

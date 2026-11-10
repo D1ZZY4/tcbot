@@ -212,10 +212,10 @@ async def _handle_member(
 
 @decorators.log_execution
 async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Enforce bans on new members in all connected groups; greet only in primary groups.
+    """Enforce bans on new members in all connected groups; greet only in the main group.
 
-    Previously this handler returned early for chats that were not the primary
-    or exec group, meaning a federation-banned user who joined a secondary
+    Previously this handler returned early for chats that were not the main
+    group, meaning a federation-banned user who joined a secondary
     connected group would not be removed. This version checks ``is_connected``
     for non-primary chats (the result is L1+L2 cached) and runs
     ``_handle_member`` with ``greet=False`` for them so bans are enforced
@@ -439,7 +439,7 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
 @decorators.log_execution
 async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Announce when a non-bot member leaves the main or exec group."""
+    """Announce when a non-bot member leaves the main group."""
     msg = update.effective_message
     chat = update.effective_chat
     if msg is None or chat is None:

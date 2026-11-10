@@ -62,8 +62,7 @@ examples = "Contoh"
 target = "Format target"
 
 [context]
-bot_or_group = "PM bot, grup exec, atau grup terhubung mana pun."
-exec_or_group = "Grup exec, grup terhubung mana pun, atau PM bot."
+bot_or_group = "PM bot, grup utama, atau grup terhubung mana pun."
 anyone = "Siapa pun, tanpa izin khusus."
 connected_group = "Di dalam grup terhubung mana pun."
 

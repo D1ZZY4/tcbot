@@ -48,7 +48,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
             t("broadcasting.help.commands.body", locale),
         ),
         replies.who_section(replies.perm_staff_only(locale, plain=False), locale),
-        replies.where_section(replies.context_exec_or_group(locale), locale),
+        replies.where_section(replies.context_bot_or_group(locale), locale),
         (
             replies.sec_what(locale),
             t("broadcasting.help.what.body", locale, community=cfg.community_name),
