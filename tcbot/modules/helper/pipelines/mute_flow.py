@@ -15,7 +15,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, messages, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_edit_message, safe_reply
+from tcbot.modules.helper.messages import safe_edit_message, safe_reply, send_log
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
@@ -216,7 +216,6 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         done=len(groups) - failed,
         total=len(groups),
     )
-    lc, lt = cfg.logs
     log_text = messages.mute_log(
         target_id,
         target_fname,
@@ -226,11 +225,9 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         dur_str,
     )
     log_send_r, edit_r = await asyncio.gather(
-        bot.send_message(
-            lc,
+        send_log(
+            bot,
             log_text,
-            parse_mode="MarkdownV2",
-            message_thread_id=lt,
             reply_markup=proof_kb,
         ),
         bot.edit_message_text(
@@ -349,7 +346,7 @@ async def execute_unmute(
             log_label="execute_unmute partial-fail",
         )
         return
-    lc, lt = cfg.logs
+    logs_chat, _ = cfg.logs
     log_text = messages.unmute_log(
         target_id,
         target_name,
@@ -374,10 +371,11 @@ async def execute_unmute(
             parse_mode=None,
         )
         return
-    if lc:
+    if logs_chat:
         results2 = await asyncio.gather(
-            ctx.bot.send_message(
-                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            send_log(
+                ctx.bot,
+                log_text,
             ),
             msg.reply_text(reply, parse_mode="MarkdownV2"),
             return_exceptions=True,

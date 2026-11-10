@@ -16,6 +16,7 @@ from tcbot import database as db
 from tcbot.modules.helper import keyboards, messages
 from tcbot.modules.helper.decorators.checks import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_user
+from tcbot.modules.helper.messages import send_log
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -63,13 +64,12 @@ async def assign_admin(
             log.warning(
                 "_assign_admin cleanup step failed for target=%d: %s", target_id, _r
             )
-    lc, lt = cfg.logs
     log_text = messages.promoted(
         target_id, target_fname, "admin", admin_id, admin_fname
     )
     target_locale = await locale_for_user(target_id)
     admin_results = await asyncio.gather(
-        bot.send_message(lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt),
+        send_log(bot, log_text),
         bot.send_message(
             target_id,
             t(
@@ -134,11 +134,10 @@ async def assign_subrole(
             "_assign_subrole: upsert_user failed for target=%d: %s", target_id, exc
         )
     role_label = db.users_roles.ROLE_LABEL.get(role, role)
-    lc, lt = cfg.logs
     log_text = messages.promoted(target_id, target_fname, role, admin_id, admin_fname)
     target_locale = await locale_for_user(target_id)
     subrole_results = await asyncio.gather(
-        bot.send_message(lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt),
+        send_log(bot, log_text),
         bot.send_message(
             target_id,
             t(
@@ -231,7 +230,6 @@ async def request_admin(
     req_text = messages.promote_request_log(
         target_id, target_fname, target_username, request_id
     )
-    lc, lt = cfg.logs
     notified = False
     if owner_id:
         try:
@@ -246,11 +244,9 @@ async def request_admin(
             log.warning("Owner DM failed, falling back to log channel: %s", exc)
     if not notified:
         try:
-            await bot.send_message(
-                lc,
+            await send_log(
+                bot,
                 req_text,
-                parse_mode="MarkdownV2",
-                message_thread_id=lt,
                 reply_markup=keyboards.promo_decision_kb(request_id),
             )
         except Exception:

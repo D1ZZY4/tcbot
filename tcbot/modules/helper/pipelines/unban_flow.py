@@ -14,7 +14,7 @@ from tcbot import database as db
 from tcbot.database import documents as docs
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_reply
+from tcbot.modules.helper.messages import safe_reply, send_log
 from tcbot.utils.dispatch import (
     fan_out,
     is_benign_telegram_error,
@@ -179,7 +179,6 @@ async def execute_unban(
         if isinstance(r, BaseException) and not is_benign_telegram_error(r)
     ]
 
-    lc, lt = cfg.logs
     # * effective_user can be None for anonymous admins; attribute the action
     # * to an anonymous admin rather than to the target, which would read as
     # * a self-unban in the audit trail.
@@ -219,8 +218,9 @@ async def execute_unban(
     # * send log; reply only if we have an effective_message.
     if msg is not None:
         log_r, reply_r = await asyncio.gather(
-            ctx.bot.send_message(
-                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            send_log(
+                ctx.bot,
+                log_text,
             ),
             msg.reply_text(
                 t(
@@ -237,8 +237,9 @@ async def execute_unban(
         if isinstance(reply_r, BaseException):
             log.debug("Unban reply failed for user %d: %s", target_id, reply_r)
     else:
-        log_r = await ctx.bot.send_message(
-            lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+        log_r = await send_log(
+            ctx.bot,
+            log_text,
         )
     if isinstance(log_r, BaseException):
         log.error("Unban log send failed for user %d: %s", target_id, log_r)

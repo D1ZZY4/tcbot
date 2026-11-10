@@ -15,7 +15,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.locale import effective_locale, locale_for_user
-from tcbot.modules.helper.messages import safe_reply
+from tcbot.modules.helper.messages import safe_reply, send_log
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.formatter import bold, user_ref
 from tcbot.utils.i18n import Safe, t
@@ -126,7 +126,6 @@ class Demote:
             )
             return False
 
-        lc, lt = cfg.logs
         log_text = messages.demoted(
             target_id,
             target_fname,
@@ -163,8 +162,9 @@ class Demote:
             )
 
         log_result, dm_result = await asyncio.gather(
-            bot.send_message(
-                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            send_log(
+                bot,
+                log_text,
             ),
             bot.send_message(target_id, user_msg, parse_mode="MarkdownV2"),
             return_exceptions=True,

@@ -16,7 +16,7 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, messages, replies
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID, can_manage_group
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_reply
+from tcbot.modules.helper.messages import safe_reply, send_log
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
@@ -145,7 +145,6 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    lc, lt = cfg.logs
     # * Deactivate first: only leave after the DB confirms, otherwise a
     # * deactivate failure leaves a ghost (bot gone, DB still active).
     try:
@@ -164,13 +163,11 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
     log_r, reply_r, leave_r = await asyncio.gather(
-        ctx.bot.send_message(
-            lc,
+        send_log(
+            ctx.bot,
             messages.group_disconnected_log(
                 chat.id, chat.title or "Unknown", user.id, user.first_name
             ),
-            parse_mode="MarkdownV2",
-            message_thread_id=lt,
         ),
         msg.reply_text(
             t(
@@ -249,19 +246,16 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if removed:
-        lc, lt = cfg.logs
         # * log, leave, and reply all run in parallel
         log_r, leave_r, reply_r = await asyncio.gather(
-            ctx.bot.send_message(
-                lc,
+            send_log(
+                ctx.bot,
                 messages.group_disconnected_log(
                     chat_id,
                     str(chat_id),
                     admin.id,
                     admin.first_name,
                 ),
-                parse_mode="MarkdownV2",
-                message_thread_id=lt,
             ),
             ctx.bot.leave_chat(chat_id),
             msg.reply_text(

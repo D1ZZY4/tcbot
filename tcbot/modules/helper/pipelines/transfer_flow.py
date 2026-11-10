@@ -11,13 +11,12 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes
 
-from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import identity, replies
 from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.extraction import extract_target
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import ownership_transferred, safe_reply
+from tcbot.modules.helper.messages import ownership_transferred, safe_reply, send_log
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.utils import error_reporter
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -183,7 +182,6 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     except Exception:
         prev_owner_admin_ok = False
         log.exception("cmd_transfer add_admin failed after set_owner")
-    lc, lt = cfg.logs
     log_text = ownership_transferred(
         target_id,
         target_fname or str(target_id),
@@ -204,8 +202,9 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             ),
         )
     transfer_log_r, transfer_reply_r = await asyncio.gather(
-        ctx.bot.send_message(
-            lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+        send_log(
+            ctx.bot,
+            log_text,
         ),
         msg.reply_text(
             transfer_note,

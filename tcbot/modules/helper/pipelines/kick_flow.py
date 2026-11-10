@@ -13,7 +13,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, messages, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_reply
+from tcbot.modules.helper.messages import safe_reply, send_log
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
@@ -111,7 +111,6 @@ async def execute_kick(
                 proof_link = message_link(pc, proof_msg_id, pt)
         proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
         chat_title = effective_chat.title or str(chat_id)
-        lc, lt = cfg.logs
         log_text = messages.kick_log(
             target_id,
             target_name,
@@ -166,11 +165,9 @@ async def execute_kick(
                 )
         unban_result, log_send_result = await asyncio.gather(
             ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
-            ctx.bot.send_message(
-                lc,
+            send_log(
+                ctx.bot,
                 log_text,
-                parse_mode="MarkdownV2",
-                message_thread_id=lt,
                 reply_markup=proof_kb,
             ),
             return_exceptions=True,

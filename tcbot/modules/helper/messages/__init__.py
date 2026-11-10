@@ -44,4 +44,5 @@ from tcbot.modules.helper.messages.safe_edits import (
     safe_edit_cb,
     safe_edit_message,
     safe_reply,
+    send_log,
 )

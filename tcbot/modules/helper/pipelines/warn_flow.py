@@ -15,7 +15,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, messages, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_reply
+from tcbot.modules.helper.messages import safe_reply, send_log
 from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
@@ -71,7 +71,6 @@ async def execute_warn(
         return
     admin_id = admin.id
     admin_fname = admin.first_name
-    lc, lt = cfg.logs
     locale = await locale_for_update(update)
     proof_task: asyncio.Task[int | None] | None = None
     pc, pt = cfg.proofs
@@ -265,11 +264,9 @@ async def execute_warn(
                         target_id,
                     )
         try:
-            log_msg = await ctx.bot.send_message(
-                lc,
+            log_msg = await send_log(
+                ctx.bot,
                 log_text,
-                parse_mode="MarkdownV2",
-                message_thread_id=lt,
                 reply_markup=proof_kb,
             )
         except asyncio.CancelledError:
@@ -388,11 +385,9 @@ async def execute_warn(
             )
         return
     results2 = await asyncio.gather(
-        ctx.bot.send_message(
-            lc,
+        send_log(
+            ctx.bot,
             log_text,
-            parse_mode="MarkdownV2",
-            message_thread_id=lt,
             reply_markup=proof_kb,
         ),
         msg.reply_text(
@@ -492,7 +487,6 @@ async def execute_unwarn(
     admin = update.effective_user
     if admin is None:
         return
-    lc, lt = cfg.logs
     log_text = messages.unwarn_log(
         target_id,
         target_name,
@@ -548,8 +542,9 @@ async def execute_unwarn(
         chat_title,
     )
     results = await asyncio.gather(
-        ctx.bot.send_message(
-            lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+        send_log(
+            ctx.bot,
+            log_text,
         ),
         msg.reply_text(
             t(
@@ -656,7 +651,6 @@ async def execute_resetwarns(
         return
     chat_id = chat.id
     chat_title = chat.title or str(chat_id)
-    lc, lt = cfg.logs
     locale = await locale_for_update(update)
     removed = 0
     try:
@@ -691,8 +685,9 @@ async def execute_resetwarns(
         chat_title,
     )
     results = await asyncio.gather(
-        ctx.bot.send_message(
-            lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+        send_log(
+            ctx.bot,
+            log_text,
         ),
         msg.reply_text(
             t(

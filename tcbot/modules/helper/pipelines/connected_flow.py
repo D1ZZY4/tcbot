@@ -24,7 +24,7 @@ from tcbot import database as db
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.keyboards import connect_join_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_edit_cb
+from tcbot.modules.helper.messages import safe_edit_cb, send_log
 from tcbot.utils.dispatch import (
     count_transient_errors,
     drain_tasks,
@@ -150,7 +150,6 @@ class ConnectionAddedMixin:
         new_status = cmc.new_chat_member.status
         old_status = cmc.old_chat_member.status if cmc.old_chat_member else None
         by_user = cmc.from_user
-        lc, lt = cfg.logs
         if new_status in (ChatMemberStatus.LEFT, ChatMemberStatus.BANNED):
             conn_results = await asyncio.gather(
                 db.groups_db.is_connected(chat.id, fresh=True),
@@ -169,13 +168,11 @@ class ConnectionAddedMixin:
                 was_connected = False
             if was_connected:
                 try:
-                    await ctx.bot.send_message(
-                        lc,
+                    await send_log(
+                        ctx.bot,
                         messages.group_bot_removed_log(
                             chat.id, chat.title or "Unknown"
                         ),
-                        parse_mode="MarkdownV2",
-                        message_thread_id=lt,
                     )
                 except Exception:
                     log.exception("Bot removed log failed for %d", chat.id)
@@ -194,11 +191,9 @@ class ConnectionAddedMixin:
                     " admin rights are restored\\."
                 )
                 try:
-                    await ctx.bot.send_message(
-                        lc,
+                    await send_log(
+                        ctx.bot,
                         warning_text,
-                        parse_mode="MarkdownV2",
-                        message_thread_id=lt,
                     )
                 except Exception as exc:
                     log.warning(
@@ -372,7 +367,6 @@ class ConnectionDecisionMixin:
             except Exception as exc:
                 log.debug("Join decision primary-group answer failed: %s", exc)
             return
-        lc, lt = cfg.logs
         locale = await locale_for_update(update)
         member_res, ans_res = await asyncio.gather(
             asyncio.wait_for(
@@ -504,16 +498,14 @@ class ConnectionDecisionMixin:
                 log.exception("remove_pending failed for chat %d on cancel", chat.id)
             cancel_results = await asyncio.gather(
                 q.edit_message_text(self.declined_message(locale), reply_markup=None),
-                ctx.bot.send_message(
-                    lc,
+                send_log(
+                    ctx.bot,
                     messages.group_connection_rejected_log(
                         chat.id,
                         chat.title or "Unknown",
                         user.id,
                         user.first_name,
                     ),
-                    parse_mode="MarkdownV2",
-                    message_thread_id=lt,
                 ),
                 ctx.bot.leave_chat(chat.id),
                 return_exceptions=True,
@@ -697,15 +689,12 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
                 log.debug("Harvest task skipped: no running event loop.")
         applied_bans = await self._replay_bans(bot, chat_id, ban_uids)
         applied_mutes = await self._replay_mutes(bot, chat_id, mute_docs)
-        lc, lt = cfg.logs
         try:
-            await bot.send_message(
-                lc,
+            await send_log(
+                bot,
                 messages.group_connected_log(
                     chat_id, chat_title, owner_id, owner_fname, chat_username
                 ),
-                parse_mode="MarkdownV2",
-                message_thread_id=lt,
             )
         except Exception:
             log.exception("Group connect log failed")

@@ -20,6 +20,7 @@ from tcbot.modules.helper.messages import (
     promote_approved_log,
     promote_rejected_log,
     safe_edit_cb,
+    send_log,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import esc
@@ -143,7 +144,6 @@ async def execute_promo_decision(
         return
     target_id = req.get("target_id", 0)
     target_fname = req.get("first_name", str(target_id))
-    lc, lt = cfg.logs
 
     if action == "promo_approve":
         # * A banned target must not gain rank through a queued request:
@@ -277,8 +277,9 @@ async def execute_promo_decision(
                     plain=True,
                 ),
             ),
-            ctx.bot.send_message(
-                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            send_log(
+                ctx.bot,
+                log_text,
             ),
             return_exceptions=True,
         )
@@ -339,8 +340,9 @@ async def execute_promo_decision(
                 target_id,
                 t("admins.decision.reject_dm", target_locale, plain=True),
             ),
-            ctx.bot.send_message(
-                lc, log_text, parse_mode="MarkdownV2", message_thread_id=lt
+            send_log(
+                ctx.bot,
+                log_text,
             ),
             return_exceptions=True,
         )

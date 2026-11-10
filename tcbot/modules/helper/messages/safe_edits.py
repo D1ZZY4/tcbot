@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Safe message edits and callback acknowledgements."""
+"""Safe message delivery: channel posts, edits, and callback acknowledgements."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from telegram.error import BadRequest
 
+from tcbot import cfg
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
 
@@ -204,6 +205,24 @@ async def ack_and_render(
         return
     text, kb = result
     await safe_edit_cb(q, text, reply_markup=kb)
+
+
+async def send_log(bot: Bot, text: str, **kwargs: Any) -> Message:
+    """Post a federation log message to the configured logs destination.
+
+    Single owner for the log delivery contract: the destination comes from
+    ``cfg.logs`` and the message always renders as MarkdownV2 inside the
+    configured thread. Every federation executor posts its audit log
+    through here, so a change to the contract lands in one place.
+    """
+    chat_id, thread_id = cfg.logs
+    return await bot.send_message(
+        chat_id,
+        text,
+        parse_mode="MarkdownV2",
+        message_thread_id=thread_id,
+        **kwargs,
+    )
 
 
 async def safe_reply(

@@ -17,7 +17,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import messages, replies
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
-from tcbot.modules.helper.messages import safe_edit_cb
+from tcbot.modules.helper.messages import safe_edit_cb, send_log
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.utils.dispatch import (
     fan_out,
@@ -68,7 +68,7 @@ async def _update_or_send_log(
         except Exception as exc:
             log.warning("Could not edit appeal submitted log: %s", exc)
     try:
-        await bot.send_message(lc, text, parse_mode="MarkdownV2", message_thread_id=lt)
+        await send_log(bot, text)
     except Exception as exc:
         log.debug("Could not send appeal submitted log: %s", exc)
 
@@ -235,8 +235,8 @@ class ApproveMixin:
                     appeal_submitted_at,
                 ),
             ),
-            bot.send_message(
-                lc,
+            send_log(
+                bot,
                 messages.appeal_unban_log(
                     target_id,
                     target_fname,
@@ -244,8 +244,6 @@ class ApproveMixin:
                     admin.first_name,
                     ban_id,
                 ),
-                parse_mode="MarkdownV2",
-                message_thread_id=lt,
             ),
             return_exceptions=True,
         )

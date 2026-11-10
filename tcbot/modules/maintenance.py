@@ -17,7 +17,7 @@ from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, messages, replies
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_reply
+from tcbot.modules.helper.messages import safe_reply, send_log
 from tcbot.utils.dispatch import fan_out, gather_bounded, throw_if_cancelled
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import Safe, t
@@ -138,16 +138,14 @@ async def _leave_one(
     leave_result, deactivate_result, log_result = await asyncio.gather(
         bot.leave_chat(chat_id),
         db.groups_db.deactivate_group(chat_id),
-        bot.send_message(
-            lc,
+        send_log(
+            bot,
             messages.group_disconnected_log(
                 chat_id,
                 title,
                 admin_id,
                 admin_name,
             ),
-            parse_mode="MarkdownV2",
-            message_thread_id=lt,
         ),
         return_exceptions=True,
     )
