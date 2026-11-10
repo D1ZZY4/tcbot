@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Configuration singleton: env parsing, Configs dataclass, and cfg adapter."""
+"""Configuration singleton: env parsing and the immutable Configs model."""
 
 from __future__ import annotations
 
@@ -187,30 +187,52 @@ def _resolve_webhook_secret() -> str:
     return explicit if explicit else secrets.token_hex(32)
 
 
+def _chat_id_from_env(key: str) -> int:
+    """Read a plain chat-id env var; unset or invalid values resolve to 0."""
+    raw = os.getenv(key, "").strip()
+    if not raw:
+        return 0
+    try:
+        return int(raw)
+    except ValueError:
+        log.warning("Invalid %s '%s', defaulting to 0.", key, raw)
+        return 0
+
+
+def _env_or(key: str, default: str) -> str:
+    """Read an env var, falling back to *default* when it is blank."""
+    return os.getenv(key, "").strip() or default
+
+
 # ─────────────────────────────── Config model ────────────────────────────── #
 
 
 @dataclass(frozen=True)
 class Configs:
-    """Immutable configuration loaded from environment variables."""
+    """Immutable runtime configuration loaded from environment variables.
+
+    Every field is already parsed and validated: consumers never re-parse
+    env values, so an invalid setting fails once at load time instead of
+    silently degrading at every call site.
+    """
 
     bot_token: str
-    owner_id: int
+    initial_owner_id: int
     mongodb_uri: str
     db_name: str
     community_name: str
-    prefixes: list[str]
-    port: str
-    main_group: str
-    main_channel: str
-    proofs: str
-    logs: str
-    logs_errors: str
-    appeals: str
-    album_debounce_seconds: int
+    prefixes: tuple[str, ...]
+    port: int
+    main_group: int
+    main_channel: int
+    logs: tuple[int, int | None]
+    logs_errors: tuple[int, int | None]
+    proofs: tuple[int, int | None]
+    appeals: tuple[int, int | None]
+    album_debounce: int
     log_level: int
-    modules_load: list[str]
-    modules_no_load: list[str]
+    modules_load: tuple[str, ...]
+    modules_no_load: tuple[str, ...]
     redis_url: str | None
     warn_expiry_days: int
     sync_interval_hours: int
@@ -230,54 +252,27 @@ class Configs:
     mtproto_session: str
     sentry_dsn: str
 
-    @property
-    def port_int(self) -> int:
-        """Parse PORT into an int, falling back to 5000 on invalid values."""
-        return parse_port(self.port)
+    def is_primary_group(self, chat_id: int | None) -> bool:
+        """Check whether the chat is the main group.
+
+        ``0`` is the unset sentinel for an unconfigured ``MAIN_GROUP``.
+        Telegram group and channel IDs are negative, so only that exact
+        sentinel is rejected: a ``<= 0`` guard would silently exclude every
+        real group and never match the primary group at all.
+        """
+        if chat_id is None or chat_id == 0 or self.main_group == 0:
+            return False
+        return chat_id == self.main_group
 
     @property
-    def main_group_id(self) -> int:
-        """Return MAIN_GROUP as int, or 0 when unset or invalid."""
-        if not self.main_group:
-            return 0
-        try:
-            return int(self.main_group)
-        except ValueError:
-            log.warning("Invalid MAIN_GROUP '%s', defaulting to 0.", self.main_group)
-            return 0
+    def is_webhook_mode(self) -> bool:
+        """True when a public webhook URL is available."""
+        return bool(self.webhook_url)
 
     @property
-    def main_channel_id(self) -> int:
-        """Return MAIN_CHANNEL as int, or 0 when unset or invalid."""
-        if not self.main_channel:
-            return 0
-        try:
-            return int(self.main_channel)
-        except ValueError:
-            log.warning(
-                "Invalid MAIN_CHANNEL '%s', defaulting to 0.", self.main_channel
-            )
-            return 0
-
-    @property
-    def logs_tuple(self) -> tuple[int, int | None]:
-        """Parse LOGS into a (chat_id, thread_id) tuple."""
-        return parse_chat_id(self.logs)
-
-    @property
-    def proofs_id(self) -> tuple[int, int | None]:
-        """Parse PROOFS into a (chat_id, thread_id) tuple."""
-        return parse_chat_id(self.proofs)
-
-    @property
-    def logs_errors_id(self) -> tuple[int, int | None]:
-        """Parse LOGS_ERRORS into a (chat_id, thread_id) tuple."""
-        return parse_chat_id(self.logs_errors)
-
-    @property
-    def appeals_id(self) -> tuple[int, int | None]:
-        """Parse APPEALS into a (chat_id, thread_id) tuple."""
-        return parse_chat_id(self.appeals)
+    def mtproto_enabled(self) -> bool:
+        """True when API_ID + API_HASH are set."""
+        return self.api_id > 0 and bool(self.api_hash)
 
     @staticmethod
     def load(env_file: str = "config.env") -> Configs:
@@ -288,27 +283,25 @@ class Configs:
         mongodb_uri = _required_env("MONGODB_URI")
         _warn_mongodb_uri_fmt(mongodb_uri)
         raw_prefixes = os.getenv("PREFIXES", '["/", "!", "."]')
-        prefixes = parse_list(raw_prefixes) or ["/", "!", "."]
+        prefixes = tuple(parse_list(raw_prefixes) or ["/", "!", "."])
         return Configs(
             bot_token=token,
-            owner_id=_owner_id_from_env(),
+            initial_owner_id=_owner_id_from_env(),
             mongodb_uri=mongodb_uri,
             db_name=os.getenv("DB_NAME", "tcbot").strip() or "tcbot",
             community_name=os.getenv("COMMUNITY_NAME", "Bot").strip() or "Bot",
             prefixes=prefixes,
-            port=os.getenv("PORT", str(_DEFAULT_PORT)).strip(),
-            main_group=os.getenv("MAIN_GROUP", "").strip(),
-            main_channel=os.getenv("MAIN_CHANNEL", "").strip(),
-            proofs=os.getenv("PROOFS", "").strip() or _DEFAULT_PROOFS,
-            logs=os.getenv("LOGS", "").strip(),
-            logs_errors=os.getenv("LOGS_ERRORS", "").strip(),
-            appeals=os.getenv("APPEALS", "").strip(),
-            album_debounce_seconds=_int_from_env(
-                "ALBUM_DEBOUNCE_SECONDS", 4, minimum=1
-            ),
+            port=parse_port(os.getenv("PORT", str(_DEFAULT_PORT)).strip()),
+            main_group=_chat_id_from_env("MAIN_GROUP"),
+            main_channel=_chat_id_from_env("MAIN_CHANNEL"),
+            logs=parse_chat_id(os.getenv("LOGS", "").strip()),
+            logs_errors=parse_chat_id(os.getenv("LOGS_ERRORS", "").strip()),
+            proofs=parse_chat_id(os.getenv("PROOFS", "").strip() or _DEFAULT_PROOFS),
+            appeals=parse_chat_id(os.getenv("APPEALS", "").strip()),
+            album_debounce=_int_from_env("ALBUM_DEBOUNCE_SECONDS", 4, minimum=1),
             log_level=_parse_log_level(os.getenv("LOG_LEVEL", "INFO")),
-            modules_load=_env_list("MODULES_LOAD"),
-            modules_no_load=_env_list("MODULES_NO_LOAD"),
+            modules_load=tuple(_env_list("MODULES_LOAD")),
+            modules_no_load=tuple(_env_list("MODULES_NO_LOAD")),
             redis_url=os.getenv("REDIS_URL", "").strip() or None,
             warn_expiry_days=_int_from_env("WARN_EXPIRY_DAYS", 0, minimum=0),
             sync_interval_hours=_int_from_env("SYNC_INTERVAL_HOURS", 0, minimum=0),
@@ -318,244 +311,34 @@ class Configs:
             webhook_secret=_resolve_webhook_secret(),
             webhook_secret_explicit=os.getenv("WEBHOOK_SECRET", "").strip(),
             cron_secret=os.getenv("CRON_SECRET", "").strip(),
-            community_channel_url=os.getenv(
+            community_channel_url=_env_or(
                 "COMMUNITY_CHANNEL_URL", _DEFAULT_COMMUNITY_CHANNEL_URL
-            ).strip()
-            or _DEFAULT_COMMUNITY_CHANNEL_URL,
-            community_group_url=os.getenv(
+            ),
+            community_group_url=_env_or(
                 "COMMUNITY_GROUP_URL", _DEFAULT_COMMUNITY_GROUP_URL
-            ).strip()
-            or _DEFAULT_COMMUNITY_GROUP_URL,
-            community_appeal_url=os.getenv(
+            ),
+            community_appeal_url=_env_or(
                 "COMMUNITY_APPEAL_URL", _DEFAULT_COMMUNITY_APPEAL_URL
-            ).strip()
-            or _DEFAULT_COMMUNITY_APPEAL_URL,
-            community_logs_url=os.getenv(
+            ),
+            community_logs_url=_env_or(
                 "COMMUNITY_LOGS_URL", _DEFAULT_COMMUNITY_LOGS_URL
-            ).strip()
-            or _DEFAULT_COMMUNITY_LOGS_URL,
-            community_travel_url=os.getenv(
+            ),
+            community_travel_url=_env_or(
                 "COMMUNITY_TRAVEL_URL", _DEFAULT_COMMUNITY_TRAVEL_URL
-            ).strip()
-            or _DEFAULT_COMMUNITY_TRAVEL_URL,
+            ),
             api_id=_int_from_env("API_ID", 0, minimum=0),
             api_hash=os.getenv("API_HASH", "").strip(),
-            mtproto_session=os.getenv("MTPROTO_SESSION", "tcbot_mtproto").strip()
-            or "tcbot_mtproto",
+            mtproto_session=_env_or("MTPROTO_SESSION", "tcbot_mtproto"),
             sentry_dsn=os.getenv("SENTRY_DSN", "").strip(),
         )
 
 
-# ─────────────────────────────── cfg adapter ─────────────────────────────── #
-
-
-class _CfgAdapter:
-    """Thin adapter exposing Configs fields with short canonical names."""
-
-    def __init__(self, c: Configs) -> None:
-        self._c = c
-
-    @property
-    def bot_token(self) -> str:
-        """Telegram bot token from BOT_TOKEN."""
-        return self._c.bot_token
-
-    @property
-    def initial_owner_id(self) -> int:
-        """Telegram user ID of the initial Founder."""
-        return self._c.owner_id
-
-    @property
-    def community_name(self) -> str:
-        """Display name used in bot messages and logs."""
-        return self._c.community_name
-
-    @property
-    def mongodb_uri(self) -> str:
-        """MongoDB connection string from MONGODB_URI."""
-        return self._c.mongodb_uri
-
-    @property
-    def db_name(self) -> str:
-        """MongoDB database name (defaults to 'tcbot')."""
-        return self._c.db_name
-
-    @property
-    def prefixes(self) -> list[str]:
-        """Command prefix characters (e.g. ['/', '!', '.'])."""
-        return list(self._c.prefixes)
-
-    @property
-    def port(self) -> int:
-        """Flask / webhook port; falls back to 5000 when invalid."""
-        return self._c.port_int
-
-    @property
-    def main_group(self) -> int:
-        """Main community group chat ID, or 0 when unset."""
-        return self._c.main_group_id
-
-    @property
-    def main_channel(self) -> int:
-        """Announcement channel chat ID, or 0 when unset."""
-        return self._c.main_channel_id
-
-    def is_primary_group(self, chat_id: int | None) -> bool:
-        """Check whether the chat is the main group."""
-        if chat_id is None or chat_id <= 0:
-            return False
-        return chat_id == self.main_group
-
-    @property
-    def logs(self) -> tuple[int, int | None]:
-        """Moderation log destination as (chat_id, thread_id)."""
-        return self._c.logs_tuple
-
-    @property
-    def logs_errors(self) -> tuple[int, int | None]:
-        """Error report destination as (chat_id, thread_id)."""
-        return self._c.logs_errors_id
-
-    @property
-    def proofs(self) -> tuple[int, int | None]:
-        """Ban proof destination as (chat_id, thread_id)."""
-        return self._c.proofs_id
-
-    @property
-    def appeals(self) -> tuple[int, int | None]:
-        """Appeal record destination as (chat_id, thread_id)."""
-        return self._c.appeals_id
-
-    @property
-    def album_debounce(self) -> int:
-        """Album grouping window in seconds for ban proofs."""
-        return self._c.album_debounce_seconds
-
-    @property
-    def log_level(self) -> int:
-        """Logging verbosity as a stdlib logging int constant."""
-        return self._c.log_level
-
-    @property
-    def modules_load(self) -> list[str]:
-        """Optional allowlist of module names; empty means load all."""
-        return self._c.modules_load
-
-    @property
-    def modules_no_load(self) -> list[str]:
-        """Optional denylist of module names to skip."""
-        return self._c.modules_no_load
-
-    @property
-    def redis_url(self) -> str | None:
-        """Redis URL from REDIS_URL (None when not configured)."""
-        return self._c.redis_url
-
-    @property
-    def warn_expiry_days(self) -> int:
-        """Days before warn records expire; 0 = disabled."""
-        return self._c.warn_expiry_days
-
-    @property
-    def sync_interval_hours(self) -> int:
-        """Hours between scheduled sync sweeps; 0 = disabled."""
-        return self._c.sync_interval_hours
-
-    @property
-    def fed_warn_limit(self) -> int:
-        """Federation-wide warn threshold for threshold ban; 0 = disabled."""
-        return self._c.fed_warn_limit
-
-    @property
-    def warn_limit(self) -> int:
-        """Per-group warn threshold for threshold ban (minimum 1, default 3)."""
-        return self._c.warn_limit
-
-    @property
-    def webhook_url(self) -> str:
-        """Public webhook base URL; empty means polling fallback."""
-        return self._c.webhook_url
-
-    @property
-    def webhook_secret(self) -> str:
-        """Secret token Telegram sends in the webhook header."""
-        return self._c.webhook_secret
-
-    @property
-    def webhook_secret_explicit(self) -> str:
-        """Explicit WEBHOOK_SECRET; empty when unset (no generated fallback)."""
-        return self._c.webhook_secret_explicit
-
-    @property
-    def cron_secret(self) -> str:
-        """Bearer token for the serverless cron endpoint."""
-        return self._c.cron_secret
-
-    @property
-    def is_webhook_mode(self) -> bool:
-        """True when a public webhook URL is available."""
-        return bool(self._c.webhook_url)
-
-    @property
-    def community_channel_url(self) -> str:
-        """Public URL of the main community channel."""
-        return self._c.community_channel_url
-
-    @property
-    def community_group_url(self) -> str:
-        """Public URL of the main community discussion group."""
-        return self._c.community_group_url
-
-    @property
-    def community_appeal_url(self) -> str:
-        """Public URL of the appeals channel."""
-        return self._c.community_appeal_url
-
-    @property
-    def community_logs_url(self) -> str:
-        """Public URL of the logs channel."""
-        return self._c.community_logs_url
-
-    @property
-    def community_travel_url(self) -> str:
-        """Public URL or invite link of the TRAVEL community."""
-        return self._c.community_travel_url
-
-    @property
-    def mtproto_enabled(self) -> bool:
-        """True when API_ID + API_HASH are set."""
-        return self._c.api_id > 0 and bool(self._c.api_hash)
-
-    @property
-    def api_id(self) -> int:
-        """Telegram API ID for MTProto, or 0 when not configured."""
-        return self._c.api_id
-
-    @property
-    def api_hash(self) -> str:
-        """Telegram API hash for MTProto (empty when not configured)."""
-        return self._c.api_hash
-
-    @property
-    def mtproto_session(self) -> str:
-        """Namespace for the shared MTProto session in MongoDB."""
-        return self._c.mtproto_session
-
-    @property
-    def sentry_dsn(self) -> str:
-        """Sentry DSN from SENTRY_DSN (empty disables error monitoring)."""
-        return self._c.sentry_dsn
-
-
-configs = Configs.load()
-cfg = _CfgAdapter(configs)
+cfg = Configs.load()
 
 __all__ = [
     "Configs",
-    "_CfgAdapter",
     "_env_list",
     "cfg",
-    "configs",
     "parse_chat_id",
     "parse_list",
     "parse_port",

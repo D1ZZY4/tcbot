@@ -162,9 +162,10 @@ def test_parse_chat_id_accepts_plain_and_thread_forms() -> None:
     assert parse_chat_id("not-a-chat") == (0, None)
 
 
-def test_cfg_prefixes_returns_copy() -> None:
+def test_cfg_prefixes_is_immutable() -> None:
     first = cfg.prefixes
-    first.append("__mutant__")
+    with pytest.raises(AttributeError):
+        first.append("__mutant__")  # type: ignore[attr-defined]
     assert "__mutant__" not in cfg.prefixes
 
 

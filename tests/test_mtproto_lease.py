@@ -190,9 +190,9 @@ def _reset_mtproto_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mtproto, "_heartbeat_task", None)
     monkeypatch.setattr(mtproto, "_auth_dead", False)
     monkeypatch.setattr(
-        mtproto.cfg,
-        "_c",
-        dataclasses.replace(mtproto.cfg._c, mtproto_session="test-ns"),
+        mtproto,
+        "cfg",
+        dataclasses.replace(mtproto.cfg, mtproto_session="test-ns"),
     )
 
 

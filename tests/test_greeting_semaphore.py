@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from types import SimpleNamespace
 from typing import Any
 
@@ -40,7 +41,7 @@ def test_join_sem_is_module_global_singleton(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(asyncio, "Semaphore", _CountingSemaphore)
     monkeypatch.setattr(greeting_mod, "_handle_member", _noop)
-    monkeypatch.setattr(cfg, "is_primary_group", lambda _chat_id: True)
+    monkeypatch.setattr(greeting_mod, "cfg", dataclasses.replace(cfg, main_group=-100))
 
     asyncio.run(
         greeting_mod.on_new_member(
@@ -65,7 +66,7 @@ def test_join_batch_still_bounded(monkeypatch: Any) -> None:
             state["inflight"] -= 1
 
     monkeypatch.setattr(greeting_mod, "_handle_member", _slow)
-    monkeypatch.setattr(cfg, "is_primary_group", lambda _chat_id: True)
+    monkeypatch.setattr(greeting_mod, "cfg", dataclasses.replace(cfg, main_group=-100))
 
     asyncio.run(
         greeting_mod.on_new_member(

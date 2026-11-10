@@ -95,7 +95,7 @@ Current stack:
 ```text
 <project root>/
 ├── tcbot/                    Main bot package
-│   ├── __init__.py           Config loader, parsing, Configs model, cfg adapter
+│   ├── __init__.py           Config loader, env parsing, immutable Configs model
 │   ├── __main__.py           App lifecycle, builder, errors, and main startup
 │   ├── alive.py              Flask keep-alive and webhook receiver
 │   ├── serverless.py         Vercel lifecycle: shared PTB app, update dispatch, cron expiry

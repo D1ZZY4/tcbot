@@ -27,9 +27,9 @@ def _with_creds(monkeypatch: pytest.MonkeyPatch, api_id: int, api_hash: str) -> 
     monkeypatch.setattr(mtproto, "_heartbeat_task", None)
     monkeypatch.setattr(mtproto, "_auth_dead", False)
     monkeypatch.setattr(
-        mtproto.cfg,
-        "_c",
-        dataclasses.replace(mtproto.cfg._c, api_id=api_id, api_hash=api_hash),
+        mtproto,
+        "cfg",
+        dataclasses.replace(mtproto.cfg, api_id=api_id, api_hash=api_hash),
     )
 
 
@@ -54,7 +54,7 @@ def _stub_lease(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_client_raises_without_creds(monkeypatch: pytest.MonkeyPatch) -> None:
     _with_creds(monkeypatch, 0, "")
 
-    assert mtproto.is_configured() is False
+    assert mtproto.cfg.mtproto_enabled is False
     with pytest.raises(RuntimeError, match="API_ID/API_HASH"):
         mtproto.client()
 
