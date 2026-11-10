@@ -44,10 +44,17 @@ async def resolve_and_check(
     Replies on the message itself when the executor lacks rank or the target
     outranks the executor, then returns ``(None, None)``.
 
+    The executor's role is read from the cache and the target's role is
+    read fresh. Every caller sits behind an authorization decorator that
+    already resolved the executor's rank with a fresh read moments
+    earlier, and that fresh read refreshes the cache, so the cached value
+    is the one the decorator validated. The target keeps the fresh read
+    because a demotion there must never be hidden behind a TTL.
+
     On success, returns ``(executor_role, target_role)``.
     """
     executor_role, target_role = await asyncio.gather(
-        db.users_roles.get_effective_role(executor_id, fresh=True),
+        db.users_roles.get_effective_role(executor_id),
         db.users_roles.get_effective_role(target_id, fresh=True),
         return_exceptions=True,
     )
@@ -276,11 +283,16 @@ async def resolve_executor_target(
     role-less executor denied silently like the decorator would).
     Callers pass their already-resolved locale so the two DB reads behind
     locale resolution do not run twice per command.
+
+    The executor's role comes from the cache and the target's from a fresh
+    read, for the same reason as :func:`resolve_and_check`: the decorator
+    in front of the handler already validated the executor's rank with a
+    fresh read, and the target must never be read from a stale cache.
     """
     if locale is None:
         locale = await locale_for_update(update)
     _exec_r, _target_r = await asyncio.gather(
-        db.users_roles.get_effective_role(admin_id, fresh=True),
+        db.users_roles.get_effective_role(admin_id),
         extraction.extract_target(update, args, bot),
         return_exceptions=True,
     )
