@@ -16,7 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import extraction, identity
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
-from tcbot.modules.helper.messages import replies, safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import cb_error_edit, replies, safe_reply
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -406,14 +406,11 @@ async def check_callback_staff(
         isinstance(role_r, BaseException)
         or role_r not in db.users_roles.FOUNDER_ADMIN_ROLES
     ):
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             replies.err_perm_expired(await locale_for_update(update), plain=True),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="callback perm-expired",
-            catch_all=True,
+            parse_mode=None,
         )
         return None
     return role_r
@@ -527,7 +524,93 @@ class ModTarget:
     has_explicit_target: bool
     args: list[str]
     ident: identity.Identity
-    target_role: str | None
+
+
+@dataclass(frozen=True)
+class StaffTarget:
+    """Resolved target of a single-action moderation command.
+
+    The commands that act once and finish (unwarn, resetwarns, unmute)
+    share the same entry sequence and need nothing more than the target
+    and the identity that was classified for it.
+    """
+
+    target_id: int
+    target_name: str
+    ident: identity.Identity
+    locale: str
+
+
+async def resolve_staff_target(
+    update: Update,
+    ctx: ContextTypes.DEFAULT_TYPE,
+    *,
+    action: str,
+    min_role: str,
+    log_prefix: str,
+    bot_check: bool = True,
+) -> StaffTarget | None:
+    """Run the shared entry sequence for single-action moderation commands.
+
+    Checks the federation origin, resolves the target, classifies it, and
+    refuses the protected identities. Replies on the message and returns
+    ``None`` on any failure, so the caller only performs its own action.
+
+    ``bot_check`` verifies the target is not a proven bot before the
+    classification, so a bot is refused rather than acted on. Cancellation
+    always propagates.
+    """
+    msg = update.effective_message
+    admin = update.effective_user
+    if msg is None or admin is None:
+        return None
+    locale = await locale_for_update(update)
+    if not await require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=False,
+        log_label=f"{log_prefix} origin",
+    ):
+        return None
+    args = parse_cmd_args(msg.text)
+    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
+    if not target_id:
+        await safe_reply(
+            msg,
+            replies.err_cannot_resolve(locale, plain=True),
+            log_label=f"{log_prefix} no-target",
+            parse_mode=None,
+        )
+        return None
+    classified = await classify_and_check(
+        ctx.bot,
+        admin.id,
+        target_id,
+        target_name,
+        msg,
+        action=action,
+        min_role=min_role,
+        target_is_bot=(
+            await identity.is_proven_bot(update, target_id, ctx.bot)
+            if bot_check
+            else None
+        ),
+    )
+    if classified is None:
+        return None
+    ident, _target_role = classified
+    refusal = identity.refuse_message(action, ident, locale)
+    if refusal is not None:
+        await safe_reply(msg, refusal, log_label=f"{log_prefix} refusal")
+        return None
+    return StaffTarget(
+        target_id=target_id,
+        target_name=target_name or str(target_id),
+        ident=ident,
+        locale=locale,
+    )
 
 
 async def resolve_mod_target(

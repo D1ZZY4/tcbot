@@ -24,7 +24,7 @@ from tcbot import database as db
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.keyboards import connect_join_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_edit_cb, send_log
+from tcbot.modules.helper.messages import cb_error_edit, send_log
 from tcbot.utils.dispatch import (
     count_transient_errors,
     drain_tasks,
@@ -415,14 +415,11 @@ class ConnectionDecisionMixin:
                 )
             except Exception as exc:
                 log.debug("Join decision permission check failed: %s", exc)
-                await safe_edit_cb(
+                await cb_error_edit(
                     q,
                     t("connecting.state.bot_perms_verify", locale, plain=True),
-                    parse_mode=None,
-                    reply_markup=None,
-                    log_level="debug",
                     log_label="Join decision perms-verify",
-                    catch_all=True,
+                    parse_mode=None,
                 )
                 return
             if not self.check_perms(bot_member):
@@ -436,24 +433,18 @@ class ConnectionDecisionMixin:
                     )
                 except Exception:
                     log.exception("add_pending failed for chat %d", chat.id)
-                    await safe_edit_cb(
+                    await cb_error_edit(
                         q,
                         t("connecting.state.complete_join", locale, plain=True),
-                        parse_mode=None,
-                        reply_markup=None,
-                        log_level="debug",
                         log_label="Join decision db-error",
-                        catch_all=True,
+                        parse_mode=None,
                     )
                     return
-                await safe_edit_cb(
+                await cb_error_edit(
                     q,
                     self.perms_required_message(locale),
-                    parse_mode=None,
-                    reply_markup=None,
-                    log_level="debug",
                     log_label="Join decision perms-required",
-                    catch_all=True,
+                    parse_mode=None,
                 )
                 return
             try:
@@ -467,14 +458,11 @@ class ConnectionDecisionMixin:
                     )
                 return
             if already_connected:
-                await safe_edit_cb(
+                await cb_error_edit(
                     q,
                     self.already_connected_message(locale),
-                    parse_mode=None,
-                    reply_markup=None,
-                    log_level="debug",
                     log_label="Join decision already-connected",
-                    catch_all=True,
+                    parse_mode=None,
                 )
                 return
             with contextlib.suppress(Exception):

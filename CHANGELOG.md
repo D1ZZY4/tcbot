@@ -9,6 +9,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Added
 
+- **Callback refusal notices have one owner** (`tcbot/modules/helper/messages/safe_edits.py`, `tests/test_cb_error_contract.py`): `cb_error_edit` drops the keyboard so a refused button cannot be pressed again, logs the failure at debug level because a refusal is a normal outcome, and pins the render mode to the way the notice text was produced.
+
 - **Authorization and expiry contracts are pinned** (`tests/test_moderation_contracts.py`, `tests/test_role_assignment_rules.py`): the role-rank table, the rate-limit exemption and throttle tiers, the mute expiry clauses, the atomic appeal and ban claims, the primary-group merge, the promotion rules, and the ownership transfer are covered as executable contracts. Behavior changes: none.
 
 - **Demote gates have one owner** (`tcbot/modules/helper/pipelines/demote_flow.py`): `demote_before_enforcement` and `demote_before_unban` replace the four copies of the pre-fan-out re-demote and the two copies of the pre-unban demote. The enforcement gate stays best effort, the unban gate fails closed. Behavior changes: none for the enforcement paths; the appeal-approve path now blocks the unban when the role survives the demote.
@@ -383,6 +385,12 @@ All notable changes to this project are documented here. For workflow details, s
 - **Join notices await directly** (`tcbot/modules/greeting.py`): the single banned-joiner notice now awaits its reply directly instead of gathering a zero-or-one item list, keeping the same debug log and cancellation propagation with one less indirection. Behavior changes: none; replies and logs are unchanged.
 
 ### Fixed
+
+- **A callback refusal no longer crashes or shows raw markup** (`tcbot/modules/helper/messages/safe_edits.py`, `tcbot/modules/admins.py`, `tcbot/modules/check.py`, `tcbot/modules/helper/pipelines/appeal_review_flow.py`, `tcbot/modules/helper/pipelines/promo_decision_flow.py`, `tcbot/modules/helper/decorators/checks.py`): the shared refusal helper was introduced with a narrower signature than its call sites assumed, so several refusals raised an unexpected-keyword error instead of answering the tap, and the ban detail card was routed through it and lost its keyboard and its formatting. Every refusal now renders in the mode its text was produced in. Behavior changes: a refused tap always answers, and the ban detail card keeps its back button.
+
+- **Four refusals no longer fail silently** (`tcbot/modules/admins.py`, `tcbot/modules/helper/pipelines/appeal_review_flow.py`, `tcbot/modules/helper/pipelines/promo_decision_flow.py`): a demote lookup failure, a demote that cleared no role, a missing ban record, and an already-resolved promotion request sent raw text as MarkdownV2. Telegram rejects an unescaped message outright, so the edit never landed and the moderator got no feedback at all. The notices now render as plain text and drop the keyboard.
+
+- **Two appeal refusals no longer fail silently** (`tcbot/modules/helper/pipelines/appeal_submit_flow.py`): the session end and the unexpected-message notice sent plain text as MarkdownV2, which Telegram rejects outright, so the edit never landed and the user got no feedback. Both notices now render as plain text. Behavior changes: none.
 
 - **Approving an appeal no longer unbans a user who kept their role** (`tcbot/modules/helper/pipelines/appeal_review_flow.py`, `tcbot/modules/unban.py`, `tcbot/modules/helper/pipelines/demote_flow.py`): the appeal-approve path demoted a role-holding target but ignored the result, while the `/tcunban` path checked it and aborted when the role survived. A target whose role outlived the demote was therefore unbanned with federation rank intact. Behavior changes: approving an appeal now blocks when the demote fails or when the role still resolves, replies with a localized notice, and leaves the ban active so the reviewer can retry.
 

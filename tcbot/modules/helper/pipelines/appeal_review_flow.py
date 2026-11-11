@@ -17,7 +17,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
-from tcbot.modules.helper.messages import safe_edit_cb, send_log
+from tcbot.modules.helper.messages import cb_error_edit, send_log
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
 from tcbot.utils.dispatch import (
     fan_out,
@@ -290,17 +290,15 @@ class RejectMixin:
         ):
             log.debug("reject_appeal name fetch failed: %s", name_r)
         target_locale = await locale_for_user(target_id)
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             t(
                 "appeals.decision.reject_card",
                 staff_locale,
                 admin=Safe(user_ref(admin.id, admin.first_name)),
             ),
-            reply_markup=None,
-            log_level="warning",
             log_label="reject_appeal review-card",
-            catch_all=True,
+            log_level="warning",
         )
         results = await asyncio.gather(
             bot.send_message(
@@ -421,14 +419,11 @@ class AppealReviewMixin(AppealVerdictsMixin):
                 log.debug("Appeal ban-retry answer failed: %s", exc)
             return
         if not ban_result:
-            await safe_edit_cb(
+            await cb_error_edit(
                 q,
                 t("appeals.review.ban_not_found", locale, plain=True),
-                parse_mode=None,
-                reply_markup=None,
-                log_level="debug",
                 log_label="Appeal ban-not-found (empty)",
-                catch_all=True,
+                parse_mode=None,
             )
             return
         ban: BanDoc = ban_result
@@ -440,14 +435,11 @@ class AppealReviewMixin(AppealVerdictsMixin):
                     log.exception(
                         "Appeal stale-card clear_review failed for ban %s", ban_id
                     )
-                await safe_edit_cb(
+                await cb_error_edit(
                     q,
                     t("appeals.review.already_resolved", locale, plain=True),
-                    parse_mode=None,
-                    reply_markup=None,
-                    log_level="debug",
                     log_label="Appeal already-resolved",
-                    catch_all=True,
+                    parse_mode=None,
                 )
             else:
                 try:

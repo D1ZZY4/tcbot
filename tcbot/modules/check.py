@@ -20,6 +20,7 @@ from tcbot.modules.helper.messages import (
     ack_and_render,
     callback_args,
     callback_numbers,
+    cb_error_edit,
     message_link,
     replies,
     safe_edit_cb,
@@ -306,18 +307,17 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         log.debug("checkme_detail ownership mismatch ban=%s", ban_id)
         return
     if not ban or not ban.get("is_active"):
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             t("checking.error.ban_inactive", locale, plain=True),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="checkme_detail error",
-            catch_all=True,
+            parse_mode=None,
         )
         return
 
     text, proof_link = await build_ban_detail(ban, locale=locale)
+    # * The detail card is a normal navigation, not a refusal: it keeps the
+    # * back keyboard and renders as MarkdownV2 like every other card.
     await safe_edit_cb(
         q,
         text,
@@ -349,14 +349,11 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         log.debug("checkme_back ownership mismatch ban=%s", ban_id)
         return
     if not ban:
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             t("checking.error.ban_not_found", locale, plain=True),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="checkme_back error",
-            catch_all=True,
+            parse_mode=None,
         )
         return
 

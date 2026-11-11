@@ -22,6 +22,7 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ack_and_render,
     answer_and_edit,
+    callback_args_optional,
     callback_numbers,
     replies,
     safe_edit_message,
@@ -149,18 +150,15 @@ def _parse_item_callback(
     reject a record shifted by a concurrent list mutation. Three-part
     callbacks from older keyboards keep working without the check.
     """
+    args = callback_args_optional(q, 3)
+    if args is None:
+        return None
     try:
-        parts = (q.data or "").split(":")
-        if len(parts) == 4:
-            _, page_str, idx_str, stable = parts
-        else:
-            _, page_str, idx_str = parts
-            stable = None
-        return int(page_str), int(idx_str), stable
+        page, idx = int(args[0]), int(args[1])
     except ValueError:
         return None
-    except IndexError:
-        return None
+    stable = args[2] if len(args) > 2 else None
+    return page, idx, stable
 
 
 # ────────────────────────── Search callbacks ───────────────────────── #
@@ -237,16 +235,16 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     q = update.callback_query
     if q is None:
         return
-    parts = (q.data or "").split(":")
+    args = callback_args_optional(q, 2)
+    if args is None:
+        await q.answer()
+        return
     try:
-        idx = int(parts[1])
+        idx = int(args[0])
     except ValueError:
         await q.answer()
         return
-    except IndexError:
-        await q.answer()
-        return
-    stable = parts[2] if len(parts) > 2 else None
+    stable = args[1] if len(args) > 1 else None
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
     await ack_and_render(
         q, Stats.search_detail(results, idx, await locale_for_update(update), stable)

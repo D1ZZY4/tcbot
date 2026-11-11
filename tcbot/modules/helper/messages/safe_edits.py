@@ -249,6 +249,24 @@ def callback_args(q: CallbackQuery, count: int) -> list[str] | None:
     return segments[1:]
 
 
+def callback_args_optional(q: CallbackQuery, count: int) -> list[str] | None:
+    """Return the callback payload arguments, allowing one extra segment.
+
+    Some keyboards grew a trailing identifier: the prompt opener of a
+    role picker, or the stable entity id of a paged record. The payload
+    therefore has *count* segments, or *count + 1* when that identifier is
+    present. Both shapes are accepted and the extra segment is returned as
+    the last element, so the caller reads it when it is there.
+    """
+    data = q.data
+    if not data:
+        return None
+    segments = data.split(":")
+    if len(segments) not in (count, count + 1):
+        return None
+    return segments[1:]
+
+
 def callback_numbers(q: CallbackQuery, count: int) -> list[int] | None:
     """Return the callback payload arguments parsed as integers.
 
@@ -263,6 +281,41 @@ def callback_numbers(q: CallbackQuery, count: int) -> list[int] | None:
         return [int(arg) for arg in args]
     except ValueError:
         return None
+
+
+async def cb_error_edit(
+    q: CallbackQuery,
+    text: str,
+    *,
+    log_label: str,
+    parse_mode: str | None = "MarkdownV2",
+    log_level: str = "debug",
+) -> None:
+    """Replace a callback message with a notice and drop its keyboard.
+
+    Single owner for the refusal shape: the keyboard is removed so the
+    button cannot be tapped again, the failure is logged at ``debug``
+    because a refused callback is a normal outcome rather than a fault, and
+    a generic error is swallowed so one broken edit never fails a handler.
+
+    ``parse_mode`` follows the same convention as :func:`safe_edit_cb`:
+    MarkdownV2 by default, and ``None`` for text produced with
+    ``t(..., plain=True)``. The two must match, because a plain-text
+    notice sent as MarkdownV2 fails to parse and a MarkdownV2 notice sent
+    as plain text shows the escape backslashes to the user.
+
+    Every callback handler that refuses a tap uses this, so the notice
+    looks the same and the keyboard always disappears.
+    """
+    await safe_edit_cb(
+        q,
+        text,
+        parse_mode=parse_mode,
+        reply_markup=None,
+        log_level=log_level,
+        log_label=log_label,
+        catch_all=True,
+    )
 
 
 async def safe_reply(

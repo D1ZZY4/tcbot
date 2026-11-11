@@ -669,6 +669,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
                     plain=True,
                 ),
                 log_label="Appeal _end",
+                parse_mode=None,
             )
         return ConversationHandler.END
 
@@ -686,6 +687,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
                     plain=True,
                 ),
                 log_label="Appeal unexpected-type",
+                parse_mode=None,
             )
         return WAITING_APPEAL
 

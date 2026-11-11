@@ -23,7 +23,13 @@ from tcbot.modules.helper.decorators import (
 )
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import (
+    callback_args_optional,
+    cb_error_edit,
+    replies,
+    safe_edit_cb,
+    safe_reply,
+)
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.promo_decision_flow import execute_promo_decision
 from tcbot.modules.helper.pipelines.promote_flow import ROLE_ALIASES, Promote
@@ -230,11 +236,11 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if admin is None:
         await q.answer()
         return
-    parts = q.data.split(":")
-    if len(parts) not in (3, 4):
+    args = callback_args_optional(q, 3)
+    if args is None:
         await q.answer()
         return
-    _, role, target_id_str = parts[:3]
+    role, target_id_str = args[0], args[1]
     try:
         target_id = int(target_id_str)
     except ValueError:
@@ -248,30 +254,24 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         return
 
     if await identity.is_proven_bot(update, target_id, ctx.bot):
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             t(
                 "admins.error.bot_target",
                 await locale_for_update(update),
                 plain=True,
             ),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="on_promote_role_btn bot-target",
-            catch_all=True,
+            parse_mode=None,
         )
         return
 
     if role not in db.users_roles.STAFF_ROLES:
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             replies.err_unknown_role(await locale_for_update(update), plain=True),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="admins promote unknown-role",
-            catch_all=True,
+            parse_mode=None,
         )
         return
     target_fname_r, current_role = await asyncio.gather(
@@ -308,18 +308,15 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             target_id,
             current_role,
         )
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             t(
                 "admins.error.role_lookup_failed",
                 await locale_for_update(update),
                 plain=True,
             ),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="on_promote_role_btn role-lookup-failed",
-            catch_all=True,
+            parse_mode=None,
         )
         return
 
@@ -329,14 +326,10 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
     refusal = identity.refuse_message("promote", ident, await locale_for_update(update))
     if refusal is not None:
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             refusal,
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="on_promote_role_btn refusal",
-            catch_all=True,
         )
         return
 
@@ -496,12 +489,12 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if admin is None:
         await q.answer()
         return
-    parts = q.data.split(":")
-    if len(parts) not in (2, 3):
+    args = callback_args_optional(q, 2)
+    if args is None:
         await q.answer()
         return
     try:
-        target_id = int(parts[1])
+        target_id = int(args[0])
     except ValueError:
         await q.answer()
         return
@@ -523,18 +516,15 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             target_id,
             target_role,
         )
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             t(
                 "admins.error.role_lookup_failed",
                 await locale_for_update(update),
                 plain=True,
             ),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="on_demote_confirm role-lookup-failed",
-            catch_all=True,
+            parse_mode=None,
         )
         return
     if isinstance(mention_data, BaseException):
@@ -543,34 +533,28 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         target_fname, target_uname = mention_data
 
     if not target_role or target_role == "founder":
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             t(
                 "admins.error.no_longer_removable",
                 await locale_for_update(update),
                 plain=True,
             ),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="on_demote_confirm no-longer-removable",
-            catch_all=True,
+            parse_mode=None,
         )
         return
 
     if not can_demote_admin(executor_role, target_role):
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             t(
                 "admins.error.founder_demote_only",
                 await locale_for_update(update),
                 plain=True,
             ),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="on_demote_confirm founder-only",
-            catch_all=True,
+            parse_mode=None,
         )
         return
 
@@ -590,18 +574,15 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         removed = False
     if not removed:
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             t(
                 "admins.error.role_clear_failed",
                 await locale_for_update(update),
                 plain=True,
             ),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="on_demote_confirm role-clear-failed",
-            catch_all=True,
+            parse_mode=None,
         )
         return
 

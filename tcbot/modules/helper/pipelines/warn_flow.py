@@ -512,6 +512,7 @@ async def execute_unwarn(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="execute_unwarn db_retry",
+            parse_mode=None,
         )
         return
     if not removed:

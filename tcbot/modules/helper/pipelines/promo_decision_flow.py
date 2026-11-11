@@ -16,6 +16,7 @@ from tcbot import database as db
 from tcbot.modules.helper.decorators.checks import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
+    cb_error_edit,
     promote_approved_log,
     promote_rejected_log,
     replies,
@@ -70,28 +71,23 @@ async def execute_promo_decision(
         log.debug("on_promo_decision answer failed: %s", answer_r)
     if isinstance(is_owner, BaseException):
         log.warning("on_promo_decision owner check failed: %s", is_owner)
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             t(
                 "admins.error.role_lookup_failed",
                 await locale_for_update(update),
                 plain=True,
             ),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="on_promo_decision lookup-fail",
-            catch_all=True,
+            parse_mode=None,
         )
         return
     if not is_owner:
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             replies.perm_founder_only(await locale_for_update(update), plain=True),
             parse_mode=None,
-            log_level="debug",
             log_label="on_promo_decision perm-denied",
-            catch_all=True,
         )
         return
     if isinstance(req_result, BaseException):
@@ -128,18 +124,15 @@ async def execute_promo_decision(
     # * resolve() below is atomic, but refuse early so a stale card never
     # * shows a second success message.
     if req.get("status") != "pending":
-        await safe_edit_cb(
+        await cb_error_edit(
             q,
             t(
                 "admins.error.request_not_found",
                 await locale_for_update(update),
                 plain=True,
             ),
-            parse_mode=None,
-            reply_markup=None,
-            log_level="debug",
             log_label="on_promo_decision resolved",
-            catch_all=True,
+            parse_mode=None,
         )
         return
     target_id = req.get("target_id", 0)
@@ -155,14 +148,11 @@ async def execute_promo_decision(
             log_label="promo_approve ban-guard",
         )
         if ban_refusal is not None:
-            await safe_edit_cb(
+            await cb_error_edit(
                 q,
                 ban_refusal,
-                parse_mode=None,
-                reply_markup=None,
-                log_level="debug",
                 log_label="promo_approve banned-target",
-                catch_all=True,
+                parse_mode=None,
             )
             return
         # * Resolve-first claim, then grant: the atomic resolve decides a
@@ -175,33 +165,27 @@ async def execute_promo_decision(
             db_resolve_r = await db.queues_db.resolve(request_id, "approved", admin.id)
         except Exception:
             log.exception("resolve(approved) failed for request %s", request_id)
-            await safe_edit_cb(
+            await cb_error_edit(
                 q,
                 t(
                     "admins.decision.approve_fail",
                     await locale_for_update(update),
                     plain=True,
                 ),
-                parse_mode=None,
-                reply_markup=None,
-                log_level="debug",
                 log_label="promo_approve db-fail",
-                catch_all=True,
+                parse_mode=None,
             )
             return
         if db_resolve_r is False:
-            await safe_edit_cb(
+            await cb_error_edit(
                 q,
                 t(
                     "admins.error.request_not_found",
                     await locale_for_update(update),
                     plain=True,
                 ),
-                parse_mode=None,
-                reply_markup=None,
-                log_level="debug",
                 log_label="promo_approve already-resolved",
-                catch_all=True,
+                parse_mode=None,
             )
             return
         try:
@@ -212,18 +196,15 @@ async def execute_promo_decision(
                 target_id,
                 request_id,
             )
-            await safe_edit_cb(
+            await cb_error_edit(
                 q,
                 t(
                     "admins.decision.approve_fail",
                     await locale_for_update(update),
                     plain=True,
                 ),
-                parse_mode=None,
-                reply_markup=None,
-                log_level="debug",
                 log_label="promo_approve db-fail",
-                catch_all=True,
+                parse_mode=None,
             )
             return
         # * A Developer/Tester row left beside the new Admin record
@@ -297,18 +278,15 @@ async def execute_promo_decision(
             log.exception("resolve(rejected) failed for request %s", request_id)
             resolved = False
         if not resolved:
-            await safe_edit_cb(
+            await cb_error_edit(
                 q,
                 t(
                     "admins.decision.reject_fail",
                     await locale_for_update(update),
                     plain=True,
                 ),
-                parse_mode=None,
-                reply_markup=None,
-                log_level="debug",
                 log_label="promo_reject db-fail",
-                catch_all=True,
+                parse_mode=None,
             )
             return
         log_text = promote_rejected_log(
