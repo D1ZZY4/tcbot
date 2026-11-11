@@ -22,7 +22,10 @@ from tcbot.modules.helper.messages import (
     send_log,
 )
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
-from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
+from tcbot.modules.helper.pipelines.proof_flow import (
+    BuildProof,
+    upload_proof_for_action,
+)
 from tcbot.modules.helper.pipelines.reason_flow import (
     BuildReason,
     build_modaction_conv,
@@ -163,13 +166,9 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     ]
     proof_link: str | None = None
     if proof_msgs:
-        pc, pt = cfg.proofs
-        proof_caption = messages.proof_caption_new(
-            target_id, admin_id, admin_fname, utc_now()
-        )
         fanout_results, upload_result = await asyncio.gather(
             fan_out(restrict_coros),
-            upload_proof(bot, proof_msgs, proof_caption, pc, pt),
+            upload_proof_for_action(bot, proof_msgs, target_id, admin_id, admin_fname),
             return_exceptions=True,
         )
         if isinstance(fanout_results, BaseException):
@@ -178,11 +177,8 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         throw_if_cancelled((upload_result,))
         if isinstance(upload_result, BaseException):
             log.warning("Mute proof upload skipped for target=%d", target_id)
-            proof_msg_id = None
         else:
-            proof_msg_id = upload_result
-        if proof_msg_id:
-            proof_link = message_link(pc, proof_msg_id, pt)
+            proof_link = upload_result.link
     else:
         results = await fan_out(restrict_coros)
     outcome = summarize_fanout(groups, results, action="Mute", target_id=target_id)

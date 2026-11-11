@@ -17,7 +17,11 @@ from tcbot.modules.helper import keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
 from tcbot.modules.helper.pipelines.demote_flow import Demote
-from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
+from tcbot.modules.helper.pipelines.proof_flow import (
+    BuildProof,
+    ProofUpload,
+    upload_proof_for_action,
+)
 from tcbot.modules.helper.pipelines.reason_flow import (
     BuildReason,
     build_modaction_conv,
@@ -31,7 +35,6 @@ from tcbot.utils.dispatch import (
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -71,14 +74,12 @@ async def execute_warn(
     admin_id = admin.id
     admin_fname = admin.first_name
     locale = await locale_for_update(update)
-    proof_task: asyncio.Task[int | None] | None = None
-    pc, pt = cfg.proofs
+    proof_task: asyncio.Task[ProofUpload] | None = None
     if proof_msgs:
-        proof_caption = messages.proof_caption_new(
-            target_id, admin_id, admin_fname, utc_now()
-        )
         proof_task = asyncio.create_task(
-            upload_proof(ctx.bot, proof_msgs, proof_caption, pc, pt)
+            upload_proof_for_action(
+                ctx.bot, proof_msgs, target_id, admin_id, admin_fname
+            )
         )
     warn_limit = cfg.warn_limit
     try:
@@ -101,15 +102,15 @@ async def execute_warn(
     warn_proof_id: int | None = None
     if proof_task is not None:
         try:
-            warn_proof_id = await proof_task
+            upload = await proof_task
         except asyncio.CancelledError:
             proof_task.cancel()
             raise
         except Exception:
             log.warning("Warn proof upload skipped for target=%d", target_id)
-            warn_proof_id = None
-        if warn_proof_id:
-            proof_link = message_link(pc, warn_proof_id, pt)
+        else:
+            warn_proof_id = upload.message_id
+            proof_link = upload.link
     proof_kb = keyboards.action_proof_kb(target_id, proof_link)
     log_text = messages.warn_log(
         target_id,

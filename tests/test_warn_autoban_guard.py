@@ -14,6 +14,7 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import warn_flow
+from tcbot.modules.helper.pipelines.proof_flow import ProofUpload
 
 
 class _FakeMsg:
@@ -100,8 +101,8 @@ def test_threshold_ban_stores_warn_proof_on_ban_record(
     async def _add_warn(*args: Any, **kwargs: Any) -> int:
         return 3
 
-    async def _upload(*args: Any, **kwargs: Any) -> int:
-        return 77
+    async def _upload(*args: Any, **kwargs: Any) -> ProofUpload:
+        return ProofUpload(message_id=77, link="https://t.me/c/1/77")
 
     async def _role_lookup(user_id: int, *, fresh: bool = False) -> None:
         return None
@@ -130,7 +131,7 @@ def test_threshold_ban_stores_warn_proof_on_ban_record(
         return 1
 
     monkeypatch.setattr(warn_flow, "locale_for_update", _locale)
-    monkeypatch.setattr(warn_flow, "upload_proof", _upload)
+    monkeypatch.setattr(warn_flow, "upload_proof_for_action", _upload)
     monkeypatch.setattr(db.warns_db, "add_warn", _add_warn)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role_lookup)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)

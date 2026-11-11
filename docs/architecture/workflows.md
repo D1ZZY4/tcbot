@@ -30,6 +30,9 @@ Conversation and multi-step logic lives in `tcbot/modules/helper/pipelines/`. Ea
 | `BuildProof.step_prompt(...)` | Prompt after an in-conversation reason. |
 | `BuildProof.noted_prompt(...)` | Prompt when a reason was provided inline. |
 | `upload_proof(bot, msgs, caption, proof_chat, proof_thread)` | Uploads proof media and returns the first uploaded message ID. Photos and videos travel as one media group (caption on the first item); GIFs and files are sent individually after the gallery. Returns `None` fast without Telegram I/O on empty input or a batch with no usable item; a failed gallery falls through to the document loop, and a failed document is logged and skipped. |
+| `upload_proof_media(bot, msgs, caption)` | Single owner for the "upload the proof and remember where it landed" step. Reads the destination from the configured proof channel, returns a `ProofUpload` (`message_id`, `link`), and never raises: a proof that could not be stored must not void the moderation action. |
+| `upload_proof_for_action(bot, msgs, target_id, admin_id, admin_fname)` | The same, with the standard caption that names the target, the acting staff member, and the time. Used by the kick, mute, and warn executors. |
+| `ProofUpload.landed` | True when at least one proof message reached the channel. The ban executor requires a proof and checks this before writing the ban record. |
 
 ## Shared reason factory: `reason_flow.py`
 

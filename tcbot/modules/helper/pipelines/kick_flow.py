@@ -9,19 +9,22 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
-from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
+from tcbot.modules.helper.pipelines.proof_flow import (
+    BuildProof,
+    ProofUpload,
+    upload_proof_for_action,
+)
 from tcbot.modules.helper.pipelines.reason_flow import BuildReason, build_modaction_conv
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT, utc_now
+from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -67,14 +70,12 @@ async def execute_kick(
     # * lands and before the keyboards are built; on ban failure it is
     # * cancelled so no orphan upload outlives the executor. An upload failure
     # * still degrades to no proof link, exactly as before.
-    proof_task: asyncio.Task[int | None] | None = None
-    pc, pt = cfg.proofs
+    proof_task: asyncio.Task[ProofUpload] | None = None
     if proof_msgs:
-        caption = messages.proof_caption_new(
-            target_id, admin_id, admin_fname, utc_now()
-        )
         proof_task = asyncio.create_task(
-            upload_proof(ctx.bot, proof_msgs, caption, pc, pt)
+            upload_proof_for_action(
+                ctx.bot, proof_msgs, target_id, admin_id, admin_fname
+            )
         )
 
     # * Audit first: the DB kick record must exist before enforcement.
@@ -84,6 +85,12 @@ async def execute_kick(
         await db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id)
     except Exception:
         log.exception("log_kick DB write failed for target=%d", target_id)
+        # * The kick was never recorded, so the proof upload must not
+        # * outlive it: an orphan proof in the proofs channel points at a
+        # * moderation action that does not exist.
+        if proof_task is not None and not proof_task.done():
+            proof_task.cancel()
+            await asyncio.gather(proof_task, return_exceptions=True)
         await safe_reply(
             msg,
             replies.err_db_retry(locale, plain=True),
@@ -99,15 +106,13 @@ async def execute_kick(
         proof_link: str | None = None
         if proof_task is not None:
             try:
-                proof_msg_id = await proof_task
+                proof_link = (await proof_task).link
             except asyncio.CancelledError:
                 proof_task.cancel()
                 raise
             except Exception:
                 log.warning("Kick proof upload skipped for target=%d", target_id)
-                proof_msg_id = None
-            if proof_msg_id:
-                proof_link = message_link(pc, proof_msg_id, pt)
+                proof_link = None
         proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
         chat_title = effective_chat.title or str(chat_id)
         log_text = messages.kick_log(

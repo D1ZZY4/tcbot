@@ -39,7 +39,7 @@ from tcbot.modules.helper.pipelines.demote_flow import (
 from tcbot.modules.helper.pipelines.proof_flow import (
     PROOF_MEDIA_FILTER,
     BuildProof,
-    upload_proof,
+    upload_proof_media,
 )
 from tcbot.utils.dispatch import (
     fan_out,
@@ -348,17 +348,14 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         else:
             prev_proof_link = None
             caption = messages.proof_caption_new(target_id, admin_id, admin_fname, now)
-        proof_msg_id = await upload_proof(bot, msgs, caption, proof_chat, proof_thread)
-        proof_link = (
-            message_link(proof_chat, proof_msg_id, proof_thread)
-            if proof_msg_id
-            else None
-        )
+        upload = await upload_proof_media(bot, msgs, caption)
+        proof_msg_id = upload.message_id
+        proof_link = upload.link
         logs_chat, logs_thread = cfg.logs
         # * Proof is required for new bans: a proof-less record would let
         # * /check and audit logs reference evidence that never landed.
         # * Updates keep the old proof via the re-ban branch.
-        if not is_update and proof_msg_id is None:
+        if not is_update and not upload.landed:
             log.error(
                 "Ban aborted for target=%d: proof upload returned None", target_id
             )

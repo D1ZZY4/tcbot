@@ -18,10 +18,14 @@ from telegram import (
 from telegram.ext import filters
 from telegram.ext.filters import BaseFilter
 
+from tcbot import cfg
 from tcbot.modules.helper.keyboards import proof_step_kb
+from tcbot.modules.helper.messages.audit_logs import proof_caption_new
+from tcbot.modules.helper.messages.links import message_link
 from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
+from tcbot.utils.time_and_date import utc_now
 
 log = get_logger(__name__)
 
@@ -260,3 +264,75 @@ async def upload_proof(
     if docs:
         log.info("Proof documents uploaded alongside message_id=%s", first_id)
     return first_id
+
+
+# ─────────────────────── Proof upload owner ──────────────────────── #
+
+
+@dataclass(frozen=True)
+class ProofUpload:
+    """One uploaded proof: its message id and its deep link.
+
+    ``message_id`` is the id of the first proof message that landed, and
+    ``link`` is the deep link to it. Both are None when the upload
+    produced nothing.
+    """
+
+    message_id: int | None = None
+    link: str | None = None
+
+    @property
+    def landed(self) -> bool:
+        """True when at least one proof message reached the channel."""
+        return self.message_id is not None
+
+
+async def upload_proof_media(
+    bot: Bot,
+    msgs: list[Message],
+    caption: str,
+) -> ProofUpload:
+    """Upload proof media with an explicit caption and build its link.
+
+    Single owner for the "upload the proof and remember where it landed"
+    step that the ban, kick, mute, and warn executors each ran. The
+    destination comes from the configured proof channel, so a channel
+    change lands in one place.
+
+    A failed upload yields an empty :class:`ProofUpload` rather than
+    raising: the moderation action is the important side effect, and a
+    proof that could not be stored must not void it. The ban executor,
+    which requires a proof, checks :attr:`ProofUpload.landed` itself.
+    """
+    if not msgs:
+        return ProofUpload()
+    proof_chat, proof_thread = cfg.proofs
+    try:
+        message_id = await upload_proof(bot, msgs, caption, proof_chat, proof_thread)
+    except Exception:
+        log.exception("Proof upload failed")
+        return ProofUpload()
+    if message_id is None:
+        return ProofUpload()
+    return ProofUpload(
+        message_id=message_id,
+        link=message_link(proof_chat, message_id, proof_thread),
+    )
+
+
+async def upload_proof_for_action(
+    bot: Bot,
+    msgs: list[Message],
+    target_id: int,
+    admin_id: int,
+    admin_fname: str,
+) -> ProofUpload:
+    """Upload the proof media with the standard caption for an action.
+
+    The caption names the target, the acting staff member, and the time.
+    Only the ban executor uses a different caption (the re-ban caption
+    carries the previous proof link), so it calls
+    :func:`upload_proof_media` directly.
+    """
+    caption = proof_caption_new(target_id, admin_id, admin_fname, utc_now())
+    return await upload_proof_media(bot, msgs, caption)
