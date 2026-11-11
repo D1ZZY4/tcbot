@@ -607,27 +607,3 @@ async def federation_warn_count(user_id: int) -> int:
     # * the user's own rows and stays inside the default call budget.
     result = await db_call(lambda: list(_warn_counts().aggregate(pipeline)))
     return int(result[0]["total"]) if result else 0
-
-
-__all__ = [
-    "_clear_warn_docs",
-    "_inc_warn_count",
-    "_recount_and_store",
-    "_repair_counter_delete",
-    "_store_warn_count",
-    "_sync_warn_count",
-    "_warn_counts",
-    "_warn_key",
-    "_warns",
-    "add_warn",
-    "clear_all_warns",
-    "clear_warns",
-    "clear_warns_for_chats",
-    "federation_warn_count",
-    "get_warns",
-    "migrate_records",
-    "remove_last_warn",
-    "user_total_warns",
-    "user_warn_groups",
-    "warn_count",
-]

@@ -292,11 +292,3 @@ async def demote_before_unban(
         )
         return UnbanGate.ROLE_SURVIVED
     return UnbanGate.PROCEED
-
-
-__all__ = [
-    "Demote",
-    "UnbanGate",
-    "demote_before_enforcement",
-    "demote_before_unban",
-]

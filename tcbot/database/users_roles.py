@@ -426,33 +426,3 @@ async def role_meta(user_id: int) -> tuple[str | None, int | None, datetime | No
     if doc:
         return role, doc.get("assigned_by"), doc.get("assigned_at")
     return role, None, None
-
-
-__all__ = [
-    "FOUNDER_ADMIN_ROLES",
-    "ROLE_LABEL",
-    "ROLE_RANK",
-    "STAFF_ROLES",
-    "VALID_ROLES",
-    "add_admin",
-    "admin_count",
-    "all_admins",
-    "all_by_role",
-    "effective_role_cache",
-    "ensure_initial_owner",
-    "get_effective_role",
-    "get_owner_id",
-    "get_role",
-    "is_admin",
-    "is_owner",
-    "is_staff",
-    "owner_id_cache",
-    "remove_admin",
-    "remove_role",
-    "role_count",
-    "role_label",
-    "role_meta",
-    "role_rank",
-    "set_owner",
-    "set_role",
-]

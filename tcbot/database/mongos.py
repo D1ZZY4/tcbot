@@ -727,35 +727,3 @@ async def ensure_indexes() -> None:
     # * so the "missing mirror" query is served by the new index instead of
     # * a collection scan.
     await _migrate_member_cache_lower_names()
-
-
-__all__ = [
-    "_ID_ALPHABET",
-    "_LEGACY_UNTIL_DATE_INDEX",
-    "_MEMBER_CACHE_EXPIRE_S",
-    "_MEMBER_CACHE_TTL_DAYS",
-    "_MONGO_CONNECT_TIMEOUT_MS",
-    "_MONGO_HEARTBEAT_MS",
-    "_MONGO_MAX_IDLE_MS",
-    "_MONGO_MAX_POOL_SIZE",
-    "_MONGO_MIN_POOL_SIZE",
-    "_MONGO_SERVER_SELECTION_MS",
-    "_MONGO_SOCKET_TIMEOUT_MS",
-    "_RESOLV_CONF",
-    "_client",
-    "_db",
-    "_drop_legacy_active_mutes_index",
-    "_patch_dns_if_needed",
-    "close",
-    "col",
-    "connect",
-    "db",
-    "db_call",
-    "ensure_indexes",
-    "is_connected",
-    "is_transient_mongo_error",
-    "log",
-    "make_short_id",
-    "mongo_client_kwargs",
-    "mongo_jobstore_kwargs",
-]

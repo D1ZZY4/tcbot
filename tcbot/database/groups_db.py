@@ -374,24 +374,3 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
             connected_cache.put(new_chat_id, True)  # noqa: FBT003
             active_groups_cache.invalidate(_ALL_GROUPS_KEY)
     return matched_any
-
-
-__all__ = [
-    "_GROUP_LOCALE_L1",
-    "_groups",
-    "_pending",
-    "active_group_count",
-    "active_groups",
-    "add_group",
-    "add_pending",
-    "deactivate_group",
-    "get_group_locale",
-    "get_group_titles",
-    "get_pending",
-    "is_connected",
-    "migrate_group",
-    "refresh_group_title",
-    "remove_pending",
-    "set_group_locale",
-    "with_primary_groups",
-]

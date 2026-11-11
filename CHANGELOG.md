@@ -105,6 +105,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The message helpers own every message concern** (`tcbot/modules/helper/messages/`): the Telegram link builders and the shared reply strings moved into the message package, so the builder now holds everything that produces a user-facing message: the safe-edit transport, the audit-log builders, the link builders, and the reply notices. The link builder was renamed from `parse_link.py` to `links.py` because it builds links rather than parsing them. Behavior changes: none; the link helpers keep their names and are re-exported by the package.
 
+- **Modules declare their public surface only where it matters** (`tcbot/`): the per-module `__all__` lists were dropped from the implementation modules, because the project never uses wildcard imports and the lists had drifted out of sync with the code. The package `__init__.py` files and the entry point keep theirs, so the re-export surfaces stay explicit. Behavior changes: none.
+
 - **The legacy help attributes are gone** (`tcbot/modules/help.py`, `tcbot/modules/`): every help-bearing module declared the same content three times, and the builder read the two legacy copies. The builder now reads the unified entry through the module's `get_help(locale)` builder. Behavior changes: none; the help output is unchanged.
 
 - **The paged users list is served by the indexes** (`tcbot/database/mongos.py`, `tcbot/database/users_cache.py`): the name mirrors now carry a compound index with the user id tie-break the page order needs, so the list no longer sorts in memory over the whole member cache. Behavior changes: the user list is ordered by the lowercase name mirrors, so a capitalised name no longer sorts before every lowercase one.

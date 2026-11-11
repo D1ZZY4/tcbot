@@ -500,32 +500,3 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
                 log.debug("Member harvest partial flush failed: %s", flush_exc)
             return count
         raise
-
-
-__all__ = [
-    "_HARVEST_BUDGET_S",
-    "_HEARTBEAT_S",
-    "_LEASE_TTL_S",
-    "_START_TIMEOUT_S",
-    "_auth_dead",
-    "_client",
-    "_fetch_user",
-    "_heartbeat_lease",
-    "_heartbeat_task",
-    "_instance_id",
-    "_lease_owner",
-    "_release_lease_quietly",
-    "cfg",
-    "client",
-    "handle_auth_failure",
-    "harvest_group_members",
-    "is_auth_dead",
-    "is_auth_key_duplicated",
-    "is_auth_key_not_found",
-    "is_bot_user",
-    "monotonic",
-    "resolve_user",
-    "resolve_username",
-    "start",
-    "stop",
-]

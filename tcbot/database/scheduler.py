@@ -650,33 +650,3 @@ def is_ready() -> bool:
         and _sched_ready.is_set()
         and _sched_error is None
     )
-
-
-__all__ = [
-    "_CLEANUP_SCHEDULE_ID",
-    "_EXPIRE_OP_TIMEOUT_S",
-    "_JOBSTORE_ALIAS",
-    "_STOP_TIMEOUT_S",
-    "_SYNC_RUN_TIMEOUT_S",
-    "_SYNC_SCHEDULE_ID",
-    "_WARN_EXPIRY_SCHEDULE_ID",
-    "_bootstrap_scheduler",
-    "_cleanup_old_records",
-    "_ensure_job",
-    "_reconcile_schedules",
-    "_remove_job",
-    "_run_scheduled_sync",
-    "_sched_error",
-    "_sched_ready",
-    "_sched_stop",
-    "_sched_task",
-    "_schedule_matches",
-    "_scheduler",
-    "_scheduler_background",
-    "_sync_bot",
-    "_sync_runner",
-    "expire_old_warns",
-    "is_ready",
-    "start",
-    "stop",
-]
