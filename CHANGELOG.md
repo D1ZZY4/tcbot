@@ -23,8 +23,6 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Demote gates have one owner** (`tcbot/modules/helper/pipelines/demote_flow.py`): `demote_before_enforcement` and `demote_before_unban` replace the four copies of the pre-fan-out re-demote and the two copies of the pre-unban demote. The enforcement gate stays best effort, the unban gate fails closed. Behavior changes: none for the enforcement paths; the appeal-approve path now blocks the unban when the role survives the demote.
 
-- **The layer boundaries are executable contracts** (`tests/test_layering.py`): the shared foundation may not import the database or helper layers, and the helper and database layers may not import a command module. The rule is now checked by the suite instead of resting on discipline.
-
 - **Federation log delivery has one owner** (`tcbot/modules/helper/messages/safe_edits.py`): `send_log` posts the audit log to the configured destination as MarkdownV2 in the configured thread, replacing twenty-seven hand-written copies of the same call.
 
 - **Callback payloads have one owner** (`tcbot/modules/helper/messages/safe_edits.py`): `callback_args` and `callback_numbers` own the shape check, so a stale button is answered instead of reaching a handler that did not guard it.
@@ -104,6 +102,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **The panel renderers live in the message helpers** (`tcbot/modules/helper/messages/panels.py`, `tcbot/modules/about.py`, `tcbot/modules/groups.py`, `tcbot/modules/start.py`): the start menu reached into the About and Groups command modules for their renderers, which was the only place one command module imported another. The renderers moved into the message package, so both sides reach the same code without depending on each other. Behavior changes: none; the rendered text is unchanged.
 
 - **The demote helper has one contract** (`tcbot/modules/helper/pipelines/demote_flow.py`): `Demote.execute` carried an optional message parameter that no caller used, and with it a second, unreachable failure policy. The helper now always removes the role, returns whether a row was cleared, and leaves the failure decision to the two gates around it. Behavior changes: none; the enforcement gate still proceeds on failure and the unban gate still blocks.
+
+- **The layer boundaries are executable contracts** (`tests/test_layering.py`): the resolver turned a relative import into a filesystem path, so a helper could reach into a command module with `from ..bans import ...` without the rule noticing. Relative imports now resolve to dotted names, command modules are checked against importing each other, and the 1000-line file budget is checked by the suite instead of resting on discipline. Behavior changes: none; the checks only run in the test suite.
 
 - **The message helpers own every message concern** (`tcbot/modules/helper/messages/`): the Telegram link builders and the shared reply strings moved into the message package, so the builder now holds everything that produces a user-facing message: the safe-edit transport, the audit-log builders, the link builders, and the reply notices. The link builder was renamed from `parse_link.py` to `links.py` because it builds links rather than parsing them. Behavior changes: none; the link helpers keep their names and are re-exported by the package.
 

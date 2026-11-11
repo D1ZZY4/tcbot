@@ -53,6 +53,22 @@ builder that returns a non-empty entry. Modules without one are therefore
 omitted from `/help`; this is a help-discovery convention, not a
 handler-registration switch.
 
+## Command-module isolation
+
+A command module must not import another command module. Two modules
+importing each other is a cycle in the making, and it also defeats
+`MODULES_NO_LOAD`: the filter stops a module from registering its
+handlers, but an import still pulls it in.
+
+The shared code that two command modules need belongs in
+`tcbot/modules/helper/`. The panel renderers the start menu and the About
+and Groups commands share are the worked example: they live in
+`helper/messages/panels.py`, so both sides reach the same renderer
+without depending on each other.
+
+The rule is checked by `tests/test_layering.py` together with the rest of
+the layer boundaries.
+
 ## Command modules
 
 | Module | Visible help topic | Main handlers/commands | Notes |

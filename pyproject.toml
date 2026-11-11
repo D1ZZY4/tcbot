@@ -162,8 +162,3 @@ source = ["tcbot"]
 
 show_missing = true
 skip_covered = true
-
-
-[tool.pylint.format]
-
-max-module-lines = 1000

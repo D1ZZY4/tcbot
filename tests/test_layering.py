@@ -32,14 +32,18 @@ _TCBOT_ROOT = Path(__file__).resolve().parent.parent / "tcbot"
 # * helper layer both build on it, so it must not depend on either.
 _FORBIDDEN_IN_UTILS = ("tcbot.modules", "tcbot.database", "tcbot.error_reporter")
 
+# * Hard per-module line budget from the project rules. A module that
+# * reaches it is split into a same-named package with focused submodules.
+_FILE_BUDGET_LINES = 1000
 
-def _command_modules() -> set[str]:
+
+def _command_modules(root: Path = _TCBOT_ROOT) -> set[str]:
     """Return the import paths of the command modules under ``tcbot/modules``.
 
     The helper package lives under the same parent but is shared code, so
     it is excluded: only the command handlers count as the layer above.
     """
-    modules_dir = _TCBOT_ROOT / "modules"
+    modules_dir = root / "modules"
     names: set[str] = set()
     for path in modules_dir.glob("*.py"):
         if path.name != "__init__.py":
@@ -50,16 +54,22 @@ def _command_modules() -> set[str]:
     return names
 
 
-def _imported_names(path: Path) -> set[str]:
+def _imported_names(path: Path, root: Path = _TCBOT_ROOT) -> set[str]:
     """Return every absolute module name imported by *path*.
 
-    Relative imports are resolved against the package that holds the file,
-    so a sibling import inside ``tcbot/utils`` is reported as
-    ``tcbot.utils.<name>`` and stays inside the allowed layer.
+    Relative imports are resolved against the package that holds the file
+    and rendered as dotted names, so a sibling import inside
+    ``tcbot/utils`` is reported as ``tcbot.utils.<name>`` and a relative
+    import that reaches across a layer boundary is reported the same way
+    an absolute one is.
+
+    *root* is the package directory the dotted names are relative to; the
+    tests point it at a temporary tree so they never write into the
+    source tree.
     """
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    package = _TCBOT_ROOT
-    for part in path.relative_to(_TCBOT_ROOT).parts[:-1]:
+    package = root
+    for part in path.relative_to(root).parts[:-1]:
         package = package / part
     names: set[str] = set()
     for node in ast.walk(tree):
@@ -70,7 +80,11 @@ def _imported_names(path: Path) -> set[str]:
                 base = package
                 for _ in range(node.level - 1):
                     base = base.parent
-                target = str(base / (node.module or "")).replace("\\", "/")
+                # * ``base`` is a path; the dotted name is what the layer
+                # * rules compare against.
+                target = ".".join(base.relative_to(root.parent).parts)
+                if node.module:
+                    target = f"{target}.{node.module}"
                 names.add(target)
                 names.update(f"{target}.{alias.name}" for alias in node.names)
                 continue
@@ -111,6 +125,50 @@ def _report(offenders: list[str]) -> str:
     extra = len(offenders) - 10
     tail = f"\n  ... and {extra} more" if extra > 0 else ""
     return f"\n  {shown}{tail}"
+
+
+def _probe_tree(tmp_path: Path, source: str) -> Path:
+    """Return a temporary package root holding *source* as a helper module.
+
+    The probe lives in a temporary tree, never in the source tree, so the
+    test cannot race with a parallel run that walks the real files.
+    """
+    root = tmp_path / "tcbot"
+    helper = root / "modules" / "helper"
+    helper.mkdir(parents=True)
+    (root / "modules" / "bans.py").write_text("", encoding="utf-8")
+    probe = helper / "probe.py"
+    probe.write_text(source, encoding="utf-8")
+    return root
+
+
+def test_relative_imports_resolve_to_dotted_names(tmp_path: Path) -> None:
+    """A relative import must be reported as a dotted module name.
+
+    The layer rules compare dotted names. Resolving a relative import to a
+    filesystem path made every relative import look like an unrelated
+    absolute one, so a helper could reach into a command module with
+    ``from ..bans import ...`` without the rule noticing.
+    """
+    root = _probe_tree(tmp_path, "from ..bans import cmd_ban\n")
+    names = _imported_names(root / "modules" / "helper" / "probe.py", root)
+    assert "tcbot.modules.bans" in names
+    assert "tcbot.modules.bans.cmd_ban" in names
+
+
+def test_a_helper_cannot_reach_a_command_module_through_a_relative_import(
+    tmp_path: Path,
+) -> None:
+    """The helper rule must catch the relative form of the same import."""
+    root = _probe_tree(tmp_path, "from ..bans import cmd_ban\n")
+    probe = root / "modules" / "helper" / "probe.py"
+    commands = _command_modules(root)
+    offenders = [
+        name
+        for name in _imported_names(probe, root)
+        if name in commands or any(name.startswith(f"{cmd}.") for cmd in commands)
+    ]
+    assert any("tcbot.modules.bans" in name for name in offenders)
 
 
 def test_utils_stays_below_the_database_and_helper_layers() -> None:
@@ -169,3 +227,48 @@ def test_database_stays_below_the_command_modules() -> None:
     assert not offenders, "database must not import a command module:" + _report(
         offenders
     )
+
+
+def test_a_command_module_does_not_import_another() -> None:
+    """Command modules must not reach into each other.
+
+    Two command modules importing each other is a cycle in the making:
+    the shared code they both need belongs in the helper layer, where
+    both can reach it without depending on each other. It also breaks
+    ``MODULES_NO_LOAD``: the filter stops a module from registering its
+    handlers, but the import still pulls it in.
+    """
+    modules_dir = _TCBOT_ROOT / "modules"
+    commands = _command_modules()
+    offenders: list[str] = []
+    for path in sorted(modules_dir.glob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        self_name = f"tcbot.modules.{path.stem}"
+        for name in _imported_names(path):
+            if name == self_name:
+                continue
+            # * A command module imported by name, or one of its members.
+            if name in commands or any(name.startswith(f"{cmd}.") for cmd in commands):
+                offenders.append(f"{path.name} imports {name}")
+    assert not offenders, "command modules must not import each other:" + _report(
+        offenders
+    )
+
+
+def test_no_module_exceeds_the_file_budget() -> None:
+    """Every module stays inside the documented 1000-line budget.
+
+    The budget is a hard limit in the project rules. Leaving it to
+    discipline let two modules reach 90 percent of it, so it is checked
+    here instead. A module that grows past the budget is split into a
+    same-named package with focused submodules.
+    """
+    oversized: list[str] = []
+    for path in sorted(_TCBOT_ROOT.rglob("*.py")):
+        line_count = len(path.read_text(encoding="utf-8").splitlines())
+        if line_count > _FILE_BUDGET_LINES:
+            oversized.append(
+                f"{path.relative_to(_TCBOT_ROOT.parent)}: {line_count} lines"
+            )
+    assert not oversized, "modules over the file budget:" + _report(oversized)
