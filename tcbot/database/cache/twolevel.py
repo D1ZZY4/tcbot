@@ -166,6 +166,53 @@ class TwoLevelCache[T]:
 
     # ── Async hot-path ── #
 
+    async def peek(self, key: Any) -> T | object:
+        """Return the cached value from L1 or L2, or ``CACHE_MISS``.
+
+        Reads the cached value without falling back to a database fetch.
+        A caller that only wants to compare against the cached value (a
+        change detector) must not pay for a round trip it does not need,
+        but it must still see the L2 entry: the in-memory layer is bounded
+        and thrashes once the federation is larger than its capacity.
+
+        The value may be stale: an invalidation queues the Redis delete,
+        so a read that races it can still observe the old entry. Use this
+        for display hints, not for authoritative state; the revocation
+        prefixes read through :meth:`get_or_fetch`, which discards a value
+        whose key was invalidated while the read was in flight.
+
+        A Redis outage is a miss, not an error: the caller decides what an
+        unknown value means.
+        """
+        val = self._mem.get(key)
+        if val is not CACHE_MISS:
+            return val
+        rc = await self._client()
+        if rc is None:
+            return CACHE_MISS
+        rkey = self._rkey(key)
+        try:
+            raw = await asyncio.wait_for(
+                rc.get(rkey),
+                timeout=redis_io._REDIS_GET_TIMEOUT_S,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            _redis_mod.mark_op(ok=False)
+            log.debug("Redis peek failed for %s: %s", rkey, exc)
+            return CACHE_MISS
+        _redis_mod.mark_op(ok=True)
+        if raw is None:
+            return CACHE_MISS
+        try:
+            loaded: T = _decode_redis_value(raw)
+        except Exception as exc:
+            log.debug("Redis payload decode failed for %s: %s", rkey, exc)
+            return CACHE_MISS
+        self._mem.put(key, loaded)
+        return loaded
+
     async def get_or_fetch(
         self,
         key: Any,

@@ -19,7 +19,12 @@ from typing import TYPE_CHECKING, Any
 
 import certifi
 from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure, ExecutionTimeout, WriteConcernError
+from pymongo.errors import (
+    ConnectionFailure,
+    ExecutionTimeout,
+    OperationFailure,
+    WriteConcernError,
+)
 
 from tcbot import cfg
 from tcbot.utils.circuit_breaker import mongodb as _mongo_cb
@@ -313,6 +318,14 @@ def _db_pool() -> ThreadPoolExecutor:
 # * Auto-name shared by the retired plain until_date index and the current
 # * TTL one (MongoDB names both "until_date_1").
 _LEGACY_UNTIL_DATE_INDEX: str = "until_date_1"
+# * Single-field member_cache name indexes superseded by the compound
+# * (mirror, user_id) variants that also serve the paged users list sort.
+_LEGACY_MEMBER_CACHE_NAME_INDEXES: tuple[str, ...] = (
+    "first_name_lower_1",
+    "username_lower_1",
+)
+# * MongoDB error code for "index not found".
+_INDEX_NOT_FOUND_CODE: int = 27
 
 
 async def _drop_legacy_active_mutes_index() -> None:
@@ -347,6 +360,35 @@ async def _drop_legacy_active_mutes_index() -> None:
             return
         log.info("Dropped legacy non-TTL active_mutes.until_date_1 index.")
         return
+
+
+async def _drop_legacy_member_cache_name_indexes() -> None:
+    """Drop the single-field member_cache name indexes the compound ones replace.
+
+    The name mirrors are now indexed as ``(first_name_lower, user_id)`` and
+    ``(username_lower, user_id)`` so the paged users list can sort on them
+    without an in-memory sort. The older single-field indexes keep the same
+    prefix, so they serve no query the compound one does not, and leaving
+    them in place doubles the write amplification of every member-cache
+    upsert. Dropping them is safe: the compound index is created right
+    after, and its prefix serves the same name-search range scan.
+    """
+    for index_name in _LEGACY_MEMBER_CACHE_NAME_INDEXES:
+        try:
+            await db_call(lambda name=index_name: col("member_cache").drop_index(name))
+        except OperationFailure as exc:
+            if exc.code == _INDEX_NOT_FOUND_CODE:
+                continue
+            log.warning(
+                "Dropping legacy member_cache index %s failed: %s", index_name, exc
+            )
+            continue
+        except Exception as exc:
+            log.warning(
+                "Dropping legacy member_cache index %s failed: %s", index_name, exc
+            )
+            continue
+        log.info("Dropped superseded member_cache index %s.", index_name)
 
 
 async def _migrate_duplicate_active_bans() -> None:
@@ -471,6 +513,11 @@ async def ensure_indexes() -> None:
     # * until_date_1 index must be gone before the TTL recreate runs, or
     # * the recreate conflicts and this same fail-fast fires.
     await _drop_legacy_active_mutes_index()
+    # * Third sequential pre-step: the single-field member_cache name
+    # * indexes are replaced by compound ones that also serve the paged
+    # * users list sort. Dropping them keeps the write amplification of
+    # * every member-cache upsert at one index instead of two.
+    await _drop_legacy_member_cache_name_indexes()
     # * Second sequential pre-step: the unique partial index on the active
     # * bans can only be created once every user holds at most one active
     # * record, so the duplicates left by older releases are converged
@@ -549,8 +596,15 @@ async def ensure_indexes() -> None:
         # * case-sensitive prefix query, which uses an index range scan.
         # * A case-insensitive regex on the raw fields could not use any
         # * index and scanned the whole collection.
-        partial(col("member_cache").create_index, [("username_lower", 1)]),
-        partial(col("member_cache").create_index, [("first_name_lower", 1)]),
+        # * The compound form adds the user_id tie-break the paged users
+        # * list sorts on, so the sort is served by the index instead of a
+        # * blocking in-memory sort over the whole collection.
+        partial(
+            col("member_cache").create_index, [("username_lower", 1), ("user_id", 1)]
+        ),
+        partial(
+            col("member_cache").create_index, [("first_name_lower", 1), ("user_id", 1)]
+        ),
         # * Serves user_settings lookups by user: one preference row per user.
         partial(col("user_settings").create_index, [("user_id", 1)], unique=True),
         partial(
@@ -632,6 +686,12 @@ async def ensure_indexes() -> None:
             col("member_cache").create_index,
             [("last_updated", 1)],
             expireAfterSeconds=_MEMBER_CACHE_EXPIRE_S,
+        ),
+        # * Serves the last_updated sort of the paged users list. The TTL
+        # * index above covers the same key but cannot add the user_id
+        # * tie-break that keeps the page order stable.
+        partial(
+            col("member_cache").create_index, [("last_updated", -1), ("user_id", 1)]
         ),
     ]
     # * Index builds are the one operation that may legitimately run for

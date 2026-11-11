@@ -412,9 +412,12 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * returned nothing) -- in that case we let Check.profile do the
     # * heavy lifting via _resolve_user_info (which tries get_chat_member
     # * on each connected group) and we trust its lookup result.
+    # * The refresh only writes when the name actually changed: an
+    # * unconditional write cost a MongoDB round trip and evicted the
+    # * mention cache on every /check.
     if target_fname and not db.users_cache.is_placeholder_name(target_fname):
         try:
-            await db.users_cache.upsert_user(target_id, None, target_fname)
+            await db.users_cache.refresh_display_name(target_id, target_fname)
         except Exception as exc:
             log.debug("users_cache upsert failed for %d: %s", target_id, exc)
 

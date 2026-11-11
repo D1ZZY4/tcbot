@@ -107,6 +107,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The legacy help attributes are gone** (`tcbot/modules/help.py`, `tcbot/modules/`): every help-bearing module declared the same content three times, and the builder read the two legacy copies. The builder now reads the unified entry through the module's `get_help(locale)` builder. Behavior changes: none; the help output is unchanged.
 
+- **The paged users list is served by the indexes** (`tcbot/database/mongos.py`, `tcbot/database/users_cache.py`): the name mirrors now carry a compound index with the user id tie-break the page order needs, so the list no longer sorts in memory over the whole member cache. Behavior changes: the user list is ordered by the lowercase name mirrors, so a capitalised name no longer sorts before every lowercase one.
+
 - **One owner for the role sets** (`tcbot/database/users_roles.py`): `STAFF_ROLES` and `FOUNDER_ADMIN_ROLES` replace eleven inline role-set literals across the moderation paths, so a new tier cannot land in the rank table and be missed by every set check. Behavior changes: none.
 
 - **One owner for the explicit-target rule** (`tcbot/modules/helper/extraction/resolve.py`, `tcbot/modules/admins.py`): the promotion entry now uses the shared target-shape helper instead of an open-coded copy that treated a bare `@` as a target. Behavior changes: `/tcpromote @ developer` no longer consumes the `@` token as the target.

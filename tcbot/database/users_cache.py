@@ -225,29 +225,42 @@ async def total_users() -> int:
     return await db_call(lambda: _members().estimated_document_count())
 
 
-# * Allowed sort keys for all_users_page(). Unvalidated strings would force an
-# * unindexed COLLSCAN plus an in-memory sort. Only indexed fields qualify:
-# * member_cache has indexes on user_id, username, first_name, and
-# * last_updated (TTL); last_name and commit_date sorts are refused.
-_ALLOWED_USER_SORTS: frozenset[str] = frozenset(
-    {"user_id", "username", "first_name", "last_updated"}
-)
+# * Sort keys for all_users_page(). Unvalidated strings would force an
+# * unindexed COLLSCAN plus an in-memory sort. Every key maps to a field
+# * that carries an index, and to the tie-break field that keeps the page
+# * order stable across pages.
+# * The name sorts run on the lowercase mirrors, which are the fields the
+# * name search already indexes. Sorting on the raw fields instead would
+# * need a second index per field and would order the list by raw byte
+# * value, so every capitalised name would sort before every lowercase one.
+_USER_SORT_FIELDS: dict[str, tuple[str, int, str]] = {
+    "first_name": ("first_name_lower", 1, "user_id"),
+    "username": ("username_lower", 1, "user_id"),
+    "user_id": ("user_id", 1, "user_id"),
+    "last_updated": ("last_updated", -1, "user_id"),
+}
+_DEFAULT_USER_SORT: str = "first_name"
 
 
 async def all_users_page(
-    *, skip: int = 0, limit: int = 200, sort_by: str = "first_name"
+    *, skip: int = 0, limit: int = 200, sort_by: str = _DEFAULT_USER_SORT
 ) -> list[UserDoc]:
     """Return one page of cached users (server-side skip/limit).
 
     Prefer this over :func:`all_users` for paginated views: only the
     visible slice travels over the wire regardless of cache size.
     """
-    if sort_by not in _ALLOWED_USER_SORTS:
-        sort_by = "first_name"
-    sort_dir = 1 if sort_by != "last_updated" else -1
+    field, direction, tie_break = _USER_SORT_FIELDS.get(
+        sort_by, _USER_SORT_FIELDS[_DEFAULT_USER_SORT]
+    )
     # * Clamp once so cursor limit and fetch length can never disagree;
     # * callers always pass positive values, this only pins the edge.
     page_size = max(1, limit)
+    sort_spec: list[tuple[str, int]] = [(field, direction)]
+    # * The tie-break keeps the order stable when two rows share the sort
+    # * key, so a user cannot appear on two pages or on none.
+    if tie_break != field:
+        sort_spec.append((tie_break, 1))
     return await db_call(
         lambda: list(
             _members()
@@ -263,7 +276,7 @@ async def all_users_page(
                     "last_updated": 1,
                 },
             )
-            .sort(sort_by, sort_dir)
+            .sort(sort_spec)
             .skip(max(0, skip))
             .limit(page_size)
         )
@@ -366,12 +379,17 @@ async def upsert_user_if_changed(
 ) -> bool:
     """Write user profile to DB only when identity data has changed since last cache entry.
 
-    Checks the L1 in-memory mention cache first.  When the cached
+    Checks the mention cache first.  When the cached
     (first_name, username, last_name) triple matches the incoming data, the
     DB write is skipped entirely and False is returned.  This eliminates
     the MongoDB round-trip for the vast majority of updates (where identity
     data has not changed) and makes the hot-path member-cache handler
     nearly free.  Legacy two-element cache entries count as changed.
+
+    Both cache layers are consulted.  The in-memory layer is bounded and
+    thrashes once the federation holds more active users than it can hold,
+    so an L1-only check would fall through to a MongoDB write for every
+    message of every user outside the working set.
 
     The guard only works because :func:`upsert_user` populates the mention
     cache on a complete write; invalidating instead would leave every
@@ -379,7 +397,7 @@ async def upsert_user_if_changed(
 
     Returns True when a DB write was performed, False when skipped.
     """
-    cached = user_mention_cache.get(user_id)
+    cached = await user_mention_cache.peek(user_id)
     # * Compare the full triple: last_name-only changes must also write.
     if isinstance(cached, list) and _cached_triple(cached) == (
         first_name,
@@ -388,6 +406,24 @@ async def upsert_user_if_changed(
     ):
         return False
     await upsert_user(user_id, username, first_name, last_name)
+    return True
+
+
+async def refresh_display_name(user_id: int, first_name: str) -> bool:
+    """Store a freshly resolved display name when it differs from the cache.
+
+    A read-only view that resolves a name must not pay for a MongoDB
+    write and a cache eviction on every lookup: the mention cache already
+    holds the name the view would store, so the write only runs when the
+    name actually changed. Returns True when a write was performed.
+
+    Only the display name is refreshed. The username and the last name
+    stay as they are: the caller resolved a name, not a full profile.
+    """
+    cached = await user_mention_cache.peek(user_id)
+    if isinstance(cached, list) and _cached_triple(cached)[0] == first_name:
+        return False
+    await upsert_user(user_id, None, first_name)
     return True
 
 
