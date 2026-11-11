@@ -640,9 +640,14 @@ async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         # * Fail closed: without the executor rank the sweep would run with
         # * system-sweep semantics and could strip an Admin's role.
-        role_r = await db.users_roles.get_effective_role(executor.id, fresh=True)
+        try:
+            role_r = await db.users_roles.get_effective_role(executor.id, fresh=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning("cmd_sync executor role lookup failed: %s", exc)
+            role_r = None
         if not isinstance(role_r, str):
-            log.warning("cmd_sync executor role lookup failed: %s", role_r)
             await safe_reply(
                 msg,
                 replies.err_db_retry(locale, plain=True),
