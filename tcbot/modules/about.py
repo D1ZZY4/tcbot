@@ -10,39 +10,14 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes
 
-from tcbot import cfg
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import answer_and_edit
-from tcbot.utils.formatter import bold
-from tcbot.utils.i18n import Safe, t
+from tcbot.modules.helper.messages import about_msg, answer_and_edit
 
 if TYPE_CHECKING:
     from telegram import Update
 
 __module_name__ = None
-
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-
-
-# ────────────────────────── About Message ───────────────────────── #
-
-# * Raw community name; the template escapes it at render time.
-
-
-def about_msg(locale: str | None = None) -> str:
-    """Render the About page in the given locale."""
-    cname = cfg.community_name
-    disc = Safe(t("about.page.disclaimer_text", locale, community=cname))
-    return (
-        f"{t('about.page.title', locale, title=Safe(bold(cname)))}\n\n"
-        f"{t('about.page.intro', locale)}\n\n"
-        f"{t('about.page.how_title', locale)}\n"
-        f"{t('about.page.how_body', locale)}\n\n"
-        f"{t('about.page.history_title', locale)}\n"
-        f"{t('about.page.history_body', locale, community=cname)}\n\n"
-        f"{t('about.page.disclaimer', locale, disc=disc)}"
-    )
 
 
 # ──────────────────────── Callback Handler ──────────────────────── #

@@ -23,8 +23,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.locale import locale_for_chat, locale_for_update
-from tcbot.modules.helper.messages import safe_reply
-from tcbot.modules.helper.parse_link import appeal_deep_link
+from tcbot.modules.helper.messages import appeal_deep_link, safe_reply
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import link, user_ref

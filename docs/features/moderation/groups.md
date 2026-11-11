@@ -48,7 +48,7 @@ Commands use the project's configured prefixes; slash commands are examples.
 
 ## Render helpers
 
-`render_groups(groups, *, detailed, locale)` is the shared helper in `groups.py` (also used by the start-menu groups list):
+`render_groups(groups, *, detailed, locale)` is the shared helper in `tcbot/modules/helper/messages/panels.py` (also used by the start-menu groups list). It lives in the message package rather than in `groups.py` so the command module and the start menu reach the same renderer without importing each other:
 
 ```python
 def render_groups(groups, *, detailed, locale=None):

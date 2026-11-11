@@ -13,10 +13,10 @@ from telegram import InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import database as db
-from tcbot.modules.helper import decorators, keyboards, replies
+from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.identity import can_manage_group
 from tcbot.modules.helper.locale import effective_locale
-from tcbot.modules.helper.messages import safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import replies, safe_edit_cb, safe_reply
 from tcbot.utils.i18n import (
     available_locales,
     display_name,

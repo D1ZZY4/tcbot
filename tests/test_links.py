@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from tcbot.modules.helper.parse_link import (
+from tcbot.modules.helper.messages import (
     appeal_deep_link,
     chat_id_to_link_id,
     message_link,

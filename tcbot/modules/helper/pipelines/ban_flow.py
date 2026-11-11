@@ -21,15 +21,17 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, keyboards, messages, replies
+from tcbot.modules.helper import decorators, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
+    appeal_deep_link,
     clear_markup_cb,
+    message_link,
+    replies,
     safe_edit_cb,
     safe_edit_message,
     safe_reply,
 )
-from tcbot.modules.helper.parse_link import appeal_deep_link, message_link
 from tcbot.modules.helper.pipelines.demote_flow import (
     Demote,
     demote_before_enforcement,

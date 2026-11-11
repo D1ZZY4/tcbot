@@ -13,17 +13,18 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, extraction, keyboards, replies
+from tcbot.modules.helper import decorators, extraction, keyboards
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ack_and_render,
     callback_args,
     callback_numbers,
+    message_link,
+    replies,
     safe_edit_cb,
     safe_reply,
 )
-from tcbot.modules.helper.parse_link import message_link
 from tcbot.modules.helper.pipelines.check_flow import Check
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code, user_ref

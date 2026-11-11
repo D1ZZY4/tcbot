@@ -13,7 +13,7 @@ from typing import Any, cast
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper import replies
+from tcbot.modules.helper.messages import replies
 from tcbot.modules.helper.pipelines import mute_flow
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t

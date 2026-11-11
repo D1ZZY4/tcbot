@@ -13,10 +13,14 @@ from telegram import Bot, ChatPermissions, Update
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, messages, replies
+from tcbot.modules.helper import keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_edit_message, safe_reply, send_log
-from tcbot.modules.helper.parse_link import message_link
+from tcbot.modules.helper.messages import (
+    replies,
+    safe_edit_message,
+    safe_reply,
+    send_log,
+)
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import BuildProof, upload_proof
 from tcbot.modules.helper.pipelines.reason_flow import (

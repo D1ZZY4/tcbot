@@ -17,12 +17,13 @@ from telegram.ext import (
 )
 
 from tcbot import database as db
-from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper import decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ack_and_render,
     answer_and_edit,
     callback_numbers,
+    replies,
     safe_edit_message,
     safe_reply,
 )

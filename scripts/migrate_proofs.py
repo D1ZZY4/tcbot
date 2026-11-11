@@ -45,7 +45,12 @@ _MAX_FLOOD_WAIT_S = 300
 
 
 def chat_link_id(chat_id: int) -> str:
-    """Strip the -100 supergroup prefix for t.me/c/ URLs (mirrors parse_link)."""
+    """Strip the -100 supergroup prefix for t.me/c/ URLs.
+
+    Mirrors ``tcbot.modules.helper.messages.links.chat_id_to_link_id``. The
+    helper is repeated rather than imported because this script must run
+    without the bot package, its configuration, or its dependencies.
+    """
     s = str(chat_id)
     if s.startswith("-100"):
         return s[4:]

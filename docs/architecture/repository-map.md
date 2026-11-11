@@ -91,11 +91,11 @@ tcbot/
 │       ├── keyboards/      Inline keyboard factories
 │       │   └── nav.py         Previous/next row for paged views
 │       ├── locale.py       Render-locale resolution shared by handlers, callbacks, flows
-│       ├── parse_link.py   `t.me/c/...` deep-link builders
 │       ├── messages/       Safe edits, channel delivery, and federation log renderers
 │       │   ├── safe_edits.py    Safe-edit transport helpers
-│       │   └── audit_logs.py    Audit-log builders (LogBuilder + per-event logs)
-│       ├── replies.py      Shared localized reply and help-text strings, HelpEntry shape
+│       │   ├── audit_logs.py    Audit-log builders (LogBuilder + per-event logs)
+│       │   ├── links.py         Telegram link builders (`t.me/c/...`, appeal deep links)
+│       │   └── replies.py       Shared localized reply and help-text strings, HelpEntry shape
 │       └── pipelines/
 │           └── *_flow.py modules   Conversation factories, plus Promote / Demote / Check classes
 └── utils/

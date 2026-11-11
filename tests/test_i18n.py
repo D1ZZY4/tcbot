@@ -38,9 +38,10 @@ from tcbot.modules import (
     warns,
 )
 from tcbot.modules import help as helpmod
-from tcbot.modules.helper import keyboards, replies
+from tcbot.modules.helper import keyboards
 from tcbot.modules.helper.identity import can_manage_group
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
+from tcbot.modules.helper.messages import replies
 from tcbot.modules.helper.pipelines.appeal_review_flow import LOCK_HOURS
 from tcbot.utils.formatter import bold, code, esc, pre
 from tcbot.utils.i18n import (

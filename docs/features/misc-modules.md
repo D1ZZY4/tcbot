@@ -54,6 +54,10 @@ No commands. A single callback renders the About page.
 
 Also reachable via `/start about`. Rate limit: 15 callbacks per 30 s.
 
+The page body is rendered by `about_msg(locale)` in
+`tcbot/modules/helper/messages/panels.py`, because the start menu reaches
+the same page.
+
 ## Additional: `additional.py`
 
 No commands. A single callback renders the community links menu.

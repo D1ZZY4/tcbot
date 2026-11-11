@@ -18,9 +18,9 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
-from tcbot.modules.helper import decorators, extraction, replies
+from tcbot.modules.helper import decorators, extraction
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_reply
+from tcbot.modules.helper.messages import replies, safe_reply
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.utils.dispatch import fan_out, gather_bounded, is_benign_telegram_error
 from tcbot.utils.formatter import bold, code

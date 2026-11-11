@@ -128,8 +128,11 @@ Current stack:
 │   │   │   ├── extraction/   Target/user extraction helpers
 │   │   │   ├── identity.py   Self/bot/Telegram/Founder/staff classification
 │   │   │   ├── locale.py     Render-locale resolution (per-update locale)
-│   │   │   ├── parse_link.py  `t.me/c/...` deep-link builders
 │   │   │   ├── messages/       Safe edits, channel delivery, and federation log renderers
+│   │   │   │   ├── safe_edits.py    Safe-edit transport helpers
+│   │   │   │   ├── audit_logs.py    Audit-log builders
+│   │   │   │   ├── links.py         Telegram link builders (`t.me/c/...`, appeal deep links)
+│   │   │   │   └── replies.py       Localized reply functions and HelpEntry shape
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
 │   │   │   └── replies.py     Localized reply functions and HelpEntry shape
 │   │   ├── bans.py           /tcban command

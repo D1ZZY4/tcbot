@@ -183,9 +183,9 @@ The `decorators/` module centralizes both auth-guard decorators and the shared e
 
 Ban, kick, and mute entry points pair this with `Demote.execute(..., trigger="ban"/"kick"/"mute")` from `pipelines/demote_flow.py` to remove the target's role before the moderation action.
 
-## `replies.py`
+## `messages/replies.py`
 
-Shared bot-reply strings and the typed help-entry interface used by multiple command modules. Import with `from tcbot.modules.helper import replies`.
+Shared bot-reply strings and the typed help-entry interface used by multiple command modules. Import with `from tcbot.modules.helper.messages import replies`.
 
 Every reply is now a function of the render `locale`, not a module-level string constant. Functions whose output may be parsed take a required `*, plain` keyword: `plain=True` returns text for contexts Telegram never parses (callback alerts), `plain=False` returns MarkdownV2-escaped text. Section labels and scope bodies are pre-escaped internally (`plain=True` to the catalog) so buttons render them raw while titles escape them via `bold()`.
 
@@ -234,7 +234,9 @@ Command modules import from `replies.py` instead of inlining these strings.
 
 `build_ban_detail(ban, target_fname=None, locale=None)` returns `(formatted_text, proof_link_or_none)` MarkdownV2 ban details and an optional proof link. It is shared by checking and stats flows to avoid duplicate ban rendering.
 
-## `parse_link.py`
+## `messages/links.py`
+
+Telegram link builders. The three functions are re-exported by the `messages` package, so call sites use `from tcbot.modules.helper.messages import message_link` (and the same for the other two).
 
 | Function | Purpose |
 |---|---|
@@ -244,7 +246,11 @@ Command modules import from `replies.py` instead of inlining these strings.
 
 ## `messages/`
 
-This package owns message sending and editing plus MarkdownV2 audit-log building for moderation, appeals, staff roles, group connections, broadcasts, and auto-demotions. `messages/safe_edits.py` holds the safe-edit transport (`safe_edit`, `safe_edit_cb`, `safe_edit_message`, `clear_markup_cb`, `answer_and_edit`, `ack_and_render`, `safe_reply`), the federation log delivery (`send_log`), and the callback-payload parsers (`callback_args`, `callback_numbers`); `messages/audit_logs.py` holds `LogBuilder` and every audit-log builder. The package `__init__.py` re-exports the full surface, so `from tcbot.modules.helper.messages import safe_reply` keeps working.
+This package owns message sending and editing plus MarkdownV2 audit-log building for moderation, appeals, staff roles, group connections, broadcasts, and auto-demotions. `messages/safe_edits.py` holds the safe-edit transport (`safe_edit`, `safe_edit_cb`, `safe_edit_message`, `clear_markup_cb`, `answer_and_edit`, `ack_and_render`, `safe_reply`), the callback-refusal notice (`cb_error_edit`), the federation log delivery (`send_log`), and the callback-payload parsers (`callback_args`, `callback_numbers`, `callback_args_optional`); `messages/audit_logs.py` holds `LogBuilder` and every audit-log builder; `messages/links.py` holds the Telegram link builders; `messages/panels.py` holds the informational panel renderers (`about_msg`, `render_groups`) that the start menu and their own commands share; `messages/replies.py` holds the shared reply strings and the `HelpEntry` shape. The package `__init__.py` re-exports the transport, audit-log, link, and panel surfaces, so `from tcbot.modules.helper.messages import safe_reply` keeps working. The reply strings stay a module (`from tcbot.modules.helper.messages import replies`) because they form a namespace of forty notices rather than a flat surface.
+
+The panel renderers live here rather than in their command modules so the start menu and the commands reach the same renderer. A command module importing another command module would create a cycle in the making and would defeat `MODULES_NO_LOAD`, which stops a module from registering its handlers but not from being imported.
+
+`cb_error_edit(q, text, *, log_label, parse_mode="MarkdownV2", log_level="debug")` is the single owner of the "a tap was refused" shape: it drops the keyboard so the button cannot be pressed again, logs the failure at debug level because a refusal is a normal outcome, and swallows a generic error so one broken edit never fails a handler. `parse_mode` follows the same convention as `safe_edit_cb`: MarkdownV2 by default, and `None` for text produced with `t(..., plain=True)`. The two must match, because a plain-text notice sent as MarkdownV2 fails to parse and never reaches the user, while a MarkdownV2 notice sent as plain text shows the escape backslashes.
 
 Audit-log families:
 

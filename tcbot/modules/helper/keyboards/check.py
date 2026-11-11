@@ -9,7 +9,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.parse_link import appeal_deep_link
+from tcbot.modules.helper.messages import appeal_deep_link
 from tcbot.utils.i18n import t
 
 # * Warn button titles embed the group name; cap it so a long title cannot

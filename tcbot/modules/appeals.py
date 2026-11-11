@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from telegram.ext import CallbackQueryHandler, MessageHandler, filters
 
-from tcbot.modules.helper import replies
+from tcbot.modules.helper.messages import replies
 from tcbot.modules.helper.pipelines.appeal_review_flow import LOCK_HOURS
 from tcbot.modules.helper.pipelines.appeal_submit_flow import appeal
 from tcbot.utils.formatter import bold, pre

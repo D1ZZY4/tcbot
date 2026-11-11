@@ -13,10 +13,10 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, messages, replies
+from tcbot.modules.helper import decorators, messages
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID, can_manage_group
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_reply, send_log
+from tcbot.modules.helper.messages import replies, safe_reply, send_log
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t

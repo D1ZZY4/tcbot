@@ -13,12 +13,12 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import replies
 from tcbot.modules.helper.decorators.checks import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
     promote_approved_log,
     promote_rejected_log,
+    replies,
     safe_edit_cb,
     send_log,
 )

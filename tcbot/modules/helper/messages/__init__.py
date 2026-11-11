@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Message helpers: safe edits and audit-log builders."""
+"""Message helpers: safe edits, audit-log builders, links, and replies."""
 
 from __future__ import annotations
 
@@ -35,6 +35,15 @@ from tcbot.modules.helper.messages.audit_logs import (
     unmute_log,
     unwarn_log,
     warn_log,
+)
+from tcbot.modules.helper.messages.links import (
+    appeal_deep_link,
+    chat_id_to_link_id,
+    message_link,
+)
+from tcbot.modules.helper.messages.panels import (
+    about_msg,
+    render_groups,
 )
 from tcbot.modules.helper.messages.safe_edits import (
     ack_and_render,

@@ -14,7 +14,7 @@ from telegram.ext import ConversationHandler
 
 from tcbot import database as db
 from tcbot.modules import kick as kicking
-from tcbot.modules.helper import replies
+from tcbot.modules.helper.messages import replies
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

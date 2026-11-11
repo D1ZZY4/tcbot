@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import database as db
-from tcbot.modules.helper import decorators, extraction, identity, keyboards, replies
+from tcbot.modules.helper import decorators, extraction, identity, keyboards
 from tcbot.modules.helper.decorators import (
     action_owner_mismatch,
     can_demote_admin,
@@ -23,7 +23,7 @@ from tcbot.modules.helper.decorators import (
 )
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import replies, safe_edit_cb, safe_reply
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.promo_decision_flow import execute_promo_decision
 from tcbot.modules.helper.pipelines.promote_flow import ROLE_ALIASES, Promote

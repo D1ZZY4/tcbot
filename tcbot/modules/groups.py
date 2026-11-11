@@ -17,22 +17,14 @@ from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from telegram import Update
-from tcbot.database.documents import GroupDoc
-from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper import decorators
 from tcbot.modules.helper.keyboards import tcgroups_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_edit, safe_reply
-from tcbot.utils.formatter import code
-from tcbot.utils.i18n import Safe, t
+from tcbot.modules.helper.messages import render_groups, replies, safe_edit, safe_reply
+from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters
 
 log = get_logger(__name__)
-
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-
-# * Telegram caps message text at ~4096 chars; render_groups() truncates to this
-# * budget so large federations get a partial list instead of an error.
-_MAX_RENDER_CHARS: int = 3800
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -64,45 +56,6 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
 __help__: replies.HelpEntry = get_help()
 __help_text__ = __help__["overview"]
 __help_sections__ = __help__["sections"]
-
-
-# ──────────────────────── Helper Functions ──────────────────────── #
-
-
-def render_groups(
-    groups: list[GroupDoc], *, detailed: bool, locale: str | None = None
-) -> str:
-    """Render the group list, truncating to fit Telegram's message limit.
-
-    Shared with the start-menu groups view: one renderer so truncation
-    and item shapes cannot drift between the command and the menu.
-
-    Telegram rejects messages over ~4096 chars; an unbounded render raises
-    BadRequest (swallowed by callers, leaving the user with nothing) on
-    large federations. Cap the body and name the remainder instead.
-    """
-    header = t("groups.list.header", locale, n=len(groups))
-    lines = [header]
-    used = len(header) + 1
-    for i, g in enumerate(groups):
-        title = g.get("title", "Unknown")
-        if detailed:
-            line = t(
-                "groups.list.item_detailed",
-                locale,
-                title=title,
-                id=Safe(code(str(g.get("chat_id", 0)))),
-            )
-        else:
-            line = t("groups.list.item", locale, title=title)
-        if used + len(line) + 1 > _MAX_RENDER_CHARS:
-            lines.append(
-                t("groups.list.more", locale, n=len(groups) - i),
-            )
-            break
-        lines.append(line)
-        used += len(line) + 1
-    return "\n".join(lines)
 
 
 # ────────── Command for see Connected Groups </tcgroups> ────────── #

@@ -27,8 +27,7 @@ from tcbot import database as db
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.keyboards import appeal_cancel_kb, appeal_review_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_reply, send_log
-from tcbot.modules.helper.parse_link import message_link
+from tcbot.modules.helper.messages import message_link, safe_reply, send_log
 from tcbot.modules.helper.pipelines.appeal_review_flow import AppealReviewMixin
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import pre

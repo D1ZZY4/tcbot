@@ -10,7 +10,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from tcbot import parse_list
-from tcbot.modules.helper.parse_link import chat_id_to_link_id, message_link
+from tcbot.modules.helper.messages import chat_id_to_link_id, message_link
 from tcbot.utils.formatter import _MD_V2_TEXT_SPECIAL, esc
 
 # * Keep examples fast: the suite already covers behaviour with unit tests,

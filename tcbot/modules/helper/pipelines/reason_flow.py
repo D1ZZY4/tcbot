@@ -20,10 +20,10 @@ from telegram.ext import (
 )
 from telegram.ext.filters import BaseFilter
 
-from tcbot.modules.helper import decorators, replies
+from tcbot.modules.helper import decorators
 from tcbot.modules.helper.keyboards import reason_step_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_reply
+from tcbot.modules.helper.messages import replies, safe_reply
 from tcbot.modules.helper.pipelines.proof_flow import (
     PROOF_MEDIA_FILTER,
     BuildProof,

@@ -14,9 +14,9 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import extraction, identity, replies
+from tcbot.modules.helper import extraction, identity
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
-from tcbot.modules.helper.messages import safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import replies, safe_edit_cb, safe_reply
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
