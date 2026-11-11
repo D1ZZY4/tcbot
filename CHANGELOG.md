@@ -115,6 +115,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The schedules run on UTC** (`tcbot/database/scheduler.py`): the schedules inherited the host's local zone, which is unpicklable when the zone came from a file stream and host-dependent besides, so the daily expiry fired at a different local midnight on every machine. The schedules and the stored triggers now run on UTC. Behavior changes: none; the daily expiry fires at the same wall-clock time everywhere.
 
+- **The runtime dependencies are declared where they are imported** (`pyproject.toml`, `uv.lock`, `Dockerfile`): `uvloop` and `dnspython` were imported directly but reached through an optional extra or a transitive package, so a plain install could miss them. Both are runtime dependencies now, the `performance` extra is gone, and the container image installs the observability extra so the advertised endpoints exist. Behavior changes: `uv sync --extra performance` is no longer a valid extra.
+
 - **One owner for the role sets** (`tcbot/database/users_roles.py`): `STAFF_ROLES` and `FOUNDER_ADMIN_ROLES` replace eleven inline role-set literals across the moderation paths, so a new tier cannot land in the rank table and be missed by every set check. Behavior changes: none.
 
 - **One owner for the explicit-target rule** (`tcbot/modules/helper/extraction/resolve.py`, `tcbot/modules/admins.py`): the promotion entry now uses the shared target-shape helper instead of an open-coded copy that treated a bare `@` as a target. Behavior changes: `/tcpromote @ developer` no longer consumes the `@` token as the target.

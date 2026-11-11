@@ -31,6 +31,15 @@ dependencies = [
 
     # Logging
     "loguru>=0.7.3,<1",
+
+    # Event loop: the bot installs the uvloop policy on Linux. Imported
+    # directly, so it is declared here rather than relied on through the
+    # kurigram[fast] extra that happens to pull it in.
+    "uvloop>=0.23,<0.24; sys_platform == 'linux'",
+
+    # DNS resolver used by the resolver fallback when the sandbox has no
+    # usable /etc/resolv.conf. Imported directly by the database layer.
+    "dnspython>=2.7,<3",
 ]
 
 
@@ -40,11 +49,6 @@ dependencies = [
 observability = [
     "prometheus-client>=0.26,<0.27",
     "sentry-sdk[loguru]>=2.74,<3",
-]
-
-# Optional asyncio performance optimization for Linux
-performance = [
-    "uvloop>=0.23,<0.24; sys_platform == 'linux'",
 ]
 
 
