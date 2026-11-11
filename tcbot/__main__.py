@@ -151,17 +151,30 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
         log.debug("benign check failed, treating as reportable: %s", check_exc)
     context_parts: list[str] = []
     if isinstance(update, Update):
+        chat = update.effective_chat
+        # * A private chat must not leak its contents into an operator
+        # * channel: the raw message may carry personal data the sender
+        # * never intended to share, and the chat identifier is private
+        # * too. Private chats keep the display name only.
+        is_private = getattr(chat, "type", None) == "private"
         if update.effective_user:
             u = update.effective_user
-            context_parts.append(f"User: {u.first_name} ({u.id})")
-        if update.effective_chat:
-            c = update.effective_chat
-            context_parts.append(f"Chat: {c.title or 'DM'} ({c.id})")
-        if update.effective_message and update.effective_message.text:
             context_parts.append(
-                f"Text: {update.effective_message.text[:_ERROR_CONTEXT_TEXT_LEN]}"
+                f"User: {u.first_name}"
+                if is_private
+                else f"User: {u.first_name} ({u.id})"
             )
-        elif update.callback_query:
+        if chat:
+            c = chat
+            context_parts.append(
+                "Chat: DM" if is_private else f"Chat: {c.title or 'group'} ({c.id})"
+            )
+        if update.effective_message and update.effective_message.text:
+            if not is_private:
+                context_parts.append(
+                    f"Text: {update.effective_message.text[:_ERROR_CONTEXT_TEXT_LEN]}"
+                )
+        elif update.callback_query and not is_private:
             context_parts.append(f"CBQ data: {update.callback_query.data}")
     context_str = (
         error_reporter.scrub_text(" | ".join(context_parts)) if context_parts else None
