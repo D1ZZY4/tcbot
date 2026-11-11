@@ -20,6 +20,7 @@ from tcbot.modules.helper.pipelines.proof_flow import (
     upload_proof_for_action,
 )
 from tcbot.modules.helper.pipelines.reason_flow import BuildReason, build_modaction_conv
+from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -236,19 +237,20 @@ async def execute_kick(
 
 
 async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Pop kick data from user_data and call execute_kick."""
+    """Pop kick data from the conversation scope and call execute_kick."""
     if ctx.user_data is None:
         log.warning("_exec_kick called without user_data")
         return
-    target_id = ctx.user_data.pop("kick_target_id", 0)
-    target_name = ctx.user_data.pop("kick_target_name", "")
-    reason_text = ctx.user_data.pop(
+    scope = flow_scope(ctx, update)
+    target_id = scope.pop("kick_target_id", 0)
+    target_name = scope.pop("kick_target_name", "")
+    reason_text = scope.pop(
         "kick_reason", replies.no_reason(await locale_for_update(update), plain=True)
     )
-    proof_msgs = ctx.user_data.pop("kick_proof_msgs", None)
-    prompt_chat = ctx.user_data.pop("kick_prompt_chat", None)
-    prompt_id = ctx.user_data.pop("kick_prompt_id", None)
-    ctx.user_data.pop("kick_extra_info", None)
+    proof_msgs = scope.pop("kick_proof_msgs", None)
+    prompt_chat = scope.pop("kick_prompt_chat", None)
+    prompt_id = scope.pop("kick_prompt_id", None)
+    scope.pop("kick_extra_info", None)
     await execute_kick(
         update,
         ctx,

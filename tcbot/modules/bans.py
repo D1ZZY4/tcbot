@@ -31,6 +31,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
     parse_inline_reason,
     reason_too_long_text,
 )
+from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -146,12 +147,13 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    ctx.user_data["ban_target_id"] = target_id
-    ctx.user_data["ban_target_fname"] = target_fname or str(target_id)
-    ctx.user_data["ban_reason"] = ban_reason
-    ctx.user_data["ban_admin_id"] = admin.id
-    ctx.user_data["ban_admin_fname"] = admin.first_name
-    ctx.user_data["ban_locale"] = locale
+    scope = flow_scope(ctx, update)
+    scope["ban_target_id"] = target_id
+    scope["ban_target_fname"] = target_fname or str(target_id)
+    scope["ban_reason"] = ban_reason
+    scope["ban_admin_id"] = admin.id
+    scope["ban_admin_fname"] = admin.first_name
+    scope["ban_locale"] = locale
 
     # * Re-ban check before any side effect: demotion must not land when
     # * the admin may still cancel at the confirmation below. A lookup
@@ -170,7 +172,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             parse_mode=None,
         )
         for key in BAN_USER_DATA_KEYS:
-            ctx.user_data.pop(key, None)
+            scope.pop(key, None)
         return ConversationHandler.END
 
     if existing is not None:
@@ -207,12 +209,12 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     )
     try:
         prompt = await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=kb)
-        ctx.user_data["ban_prompt_msg_id"] = prompt.message_id
-        ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
+        scope["ban_prompt_msg_id"] = prompt.message_id
+        scope["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:
         log.debug("cmd_ban_start proof-prompt reply failed: %s", exc)
         for key in BAN_USER_DATA_KEYS:
-            ctx.user_data.pop(key, None)
+            scope.pop(key, None)
         return ConversationHandler.END
 
     return WAITING_PROOF
@@ -257,14 +259,15 @@ async def _ask_update_confirm(
         old_reason=str(existing.get("reason", "")),
         new_reason=ban_reason,
     )
+    scope = flow_scope(ctx, update)
     try:
         prompt = await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=kb)
-        ctx.user_data["ban_prompt_msg_id"] = prompt.message_id
-        ctx.user_data["ban_prompt_chat_id"] = msg.chat.id
+        scope["ban_prompt_msg_id"] = prompt.message_id
+        scope["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:
         log.debug("cmd_ban_start confirm-prompt reply failed: %s", exc)
         for key in BAN_USER_DATA_KEYS:
-            ctx.user_data.pop(key, None)
+            scope.pop(key, None)
         return ConversationHandler.END
     return WAITING_UPDATE_CONFIRM
 

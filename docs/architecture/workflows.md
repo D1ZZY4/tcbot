@@ -54,13 +54,23 @@ Exports:
 | `BuildReason(...)` | Configures reason-step prompts and buttons. |
 | `build_modaction_conv(reason, proof, entry_fn, executor, entry_filter, escape_filter=None)` | Builds the shared kick/mute/warn conversation. |
 
-The shared factory stores action-specific values in `ctx.user_data`, then calls the supplied executor adapter. When a moderator submits proof media, `_on_proof` stores the actual `Message` objects (`{action}_proof_msgs`) in `user_data`. Executors pop `{action}_proof_msgs` and upload them to the proof channel via `upload_proof()`; the resulting URL is shown as an inline keyboard button via `keyboards.action_proof_kb()`.
+The shared factory stores action-specific values in the conversation scope, then calls the supplied executor adapter. When a moderator submits proof media, `_on_proof` stores the actual `Message` objects (`{action}_proof_msgs`) in that scope. Executors pop `{action}_proof_msgs` and upload them to the proof channel via `upload_proof()`; the resulting URL is shown as an inline keyboard button via `keyboards.action_proof_kb()`.
 
 `_on_proof` buffers every proof item (`{action}_proof_msgs`) until the moderator taps `Done`; `_on_done_proof` runs the executor with the live tap update. Tapping `Done` with nothing collected answers with a retry alert and stays put.
 
 - `{action}_executing` - set to `True` before the first `await` in the Done/Skip handlers; any duplicate call (double-tap, racing media) that arrives while the executor is running returns `ConversationHandler.END` immediately.
 
-The key is cleared automatically by `_clear_user_data` (prefix `{action}_`) on cancel, timeout, and END.
+The keys are cleared automatically by `_clear_scope` (prefix `{action}_`) on cancel, timeout, and END.
+
+### Conversation scope: `helper/scope.py`
+
+Every flow reads and writes its payload through `scope.flow_scope(ctx, update)`, never through `ctx.user_data` directly. The reason is that python-telegram-bot keys `ctx.user_data` by user id alone, so one dict is shared by every chat a user is in, while the conversations are registered `per_chat=True, per_user=True`. A payload kept in the shared dict belongs to two conversations at once: a moderator who starts a second action in another group overwrites the target, the reason, and the prompt of the first one, and the first group then enforces against the second target.
+
+| Export | Purpose |
+|---|---|
+| `conversation_key(update)` | The `(chat_id, user_id)` key python-telegram-bot builds for a conversation registered `per_chat=True, per_user=True`. `None` when the update carries no chat or no user. |
+| `flow_scope(ctx, update)` | The payload dict owned by that conversation. Created on first use and stored under one key of `ctx.user_data`, so it disappears with that user's data. |
+| `clear_flow_scope(ctx, update)` | Drops the payload of that conversation and removes the scope entry when it was the last one. |
 
 ```mermaid
 flowchart TD

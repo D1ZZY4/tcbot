@@ -26,6 +26,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
     BuildReason,
     build_modaction_conv,
 )
+from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
@@ -698,15 +699,16 @@ async def execute_resetwarns(
 
 
 async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Pop warn data from user_data and call execute_warn."""
+    """Pop warn data from the conversation scope and call execute_warn."""
     if ctx.user_data is None:
         log.warning("_exec_warn called without user_data")
         return
-    target_id = ctx.user_data.pop("warn_target_id", 0)
-    target_name = ctx.user_data.pop("warn_target_name", "")
-    reason_text = ctx.user_data.pop("warn_reason", "")
-    proof_msgs = ctx.user_data.pop("warn_proof_msgs", None)
-    ctx.user_data.pop("warn_extra_info", None)
+    scope = flow_scope(ctx, update)
+    target_id = scope.pop("warn_target_id", 0)
+    target_name = scope.pop("warn_target_name", "")
+    reason_text = scope.pop("warn_reason", "")
+    proof_msgs = scope.pop("warn_proof_msgs", None)
+    scope.pop("warn_extra_info", None)
     await execute_warn(
         update, ctx, target_id, target_name, reason_text, proof_msgs=proof_msgs
     )

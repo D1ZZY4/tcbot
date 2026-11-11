@@ -30,6 +30,7 @@ from tcbot.modules.helper.pipelines.warn_flow import (
     reason,
     warn_conversation,
 )
+from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.formatter import bold, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -148,7 +149,8 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_warn staff notice")
 
-    ctx.user_data.update(
+    scope = flow_scope(ctx, update)
+    scope.update(
         {
             "warn_target_id": target_id,
             "warn_target_name": target_name or str(target_id),
@@ -158,7 +160,7 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     target_mention = user_ref(target_id, target_name or str(target_id))
 
     if inline_reason:
-        ctx.user_data["warn_reason"] = inline_reason
+        scope["warn_reason"] = inline_reason
         try:
             await msg.reply_text(
                 proof.noted_prompt(
@@ -170,7 +172,7 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         except Exception as exc:
             log.debug("cmd_warn proof-prompt reply failed: %s", exc)
             for key in (*_WARN_KEYS, "warn_reason"):
-                ctx.user_data.pop(key, None)
+                scope.pop(key, None)
             return ConversationHandler.END
         return WAITING_PROOF
 
@@ -183,7 +185,7 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     except Exception as exc:
         log.debug("cmd_warn reason-prompt reply failed: %s", exc)
         for key in _WARN_KEYS:
-            ctx.user_data.pop(key, None)
+            scope.pop(key, None)
         return ConversationHandler.END
     return WAITING_REASON
 

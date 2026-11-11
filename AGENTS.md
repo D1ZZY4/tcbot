@@ -134,7 +134,7 @@ Current stack:
 │   │   │   │   ├── links.py         Telegram link builders (`t.me/c/...`, appeal deep links)
 │   │   │   │   └── replies.py       Localized reply functions and HelpEntry shape
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
-│   │   │   └── replies.py     Localized reply functions and HelpEntry shape
+│   │   │   └── scope.py       Per-conversation payload scope for the moderation flows
 │   │   ├── bans.py           /tcban command
 │   │   ├── kick.py           /tckick command
 │   │   ├── mute.py           /tcmute command

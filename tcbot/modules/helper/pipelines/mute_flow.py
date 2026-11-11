@@ -30,6 +30,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
     BuildReason,
     build_modaction_conv,
 )
+from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
     fan_out,
     summarize_fanout,
@@ -371,12 +372,13 @@ async def execute_unmute(
 
 
 async def _exec_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Copy mute data from user_data, clean up, then call _execute_mute."""
+    """Copy mute data from the conversation scope, clean up, then call _execute_mute."""
     meta: dict[str, Any] = {}
     if ctx.user_data is not None:
-        meta = {k: v for k, v in ctx.user_data.items() if k.startswith("mute_")}
+        scope = flow_scope(ctx, update)
+        meta = {k: v for k, v in scope.items() if k.startswith("mute_")}
         for k in list(meta):
-            ctx.user_data.pop(k, None)
+            scope.pop(k, None)
     await _execute_mute(ctx.bot, update, meta)
 
 

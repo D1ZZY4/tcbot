@@ -246,7 +246,7 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 - There is no `ConversationHandler.TIMEOUT` state. Conversations end only via escape commands, cancel, or successful submission.
 - Any recognized command during the waiting state ends the session with `Appeal session ended.`
 - Cancel ends the session without writing appeal metadata.
-- If the user sends `#appeal` after the session state has expired or the ban ID is missing from `ctx.user_data`, the bot asks them to start the appeal again.
+- If the user sends `#appeal` after the session state has expired or the ban ID is missing from the conversation scope, the bot asks them to start the appeal again.
 
 ## Edge cases
 

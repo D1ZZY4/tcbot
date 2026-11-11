@@ -27,6 +27,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
     parse_inline_reason,
     reason_too_long_text,
 )
+from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.formatter import code, esc, user_ref
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -180,7 +181,8 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     dur_str = esc(fmt_duration(duration, locale))
     extra_info = f"{code(str(target_id))}: {dur_str}"
 
-    ctx.user_data.update(
+    scope = flow_scope(ctx, update)
+    scope.update(
         {
             "mute_target_id": target_id,
             "mute_target_fname": target_fname or str(target_id),
@@ -194,7 +196,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
     if inline_reason:
-        ctx.user_data["mute_reason"] = inline_reason
+        scope["mute_reason"] = inline_reason
         try:
             prompt = await msg.reply_text(
                 proof.noted_prompt(
@@ -207,11 +209,11 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                 parse_mode="MarkdownV2",
                 reply_markup=proof.keyboard(locale),
             )
-            ctx.user_data["mute_prompt_id"] = prompt.message_id
+            scope["mute_prompt_id"] = prompt.message_id
         except Exception as exc:
             log.debug("cmd_mute proof-prompt send failed: %s", exc)
             for key in _MUTE_KEYS:
-                ctx.user_data.pop(key, None)
+                scope.pop(key, None)
             return ConversationHandler.END
         return WAITING_PROOF
 
@@ -221,11 +223,11 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             parse_mode="MarkdownV2",
             reply_markup=reason.keyboard(locale),
         )
-        ctx.user_data["mute_prompt_id"] = prompt.message_id
+        scope["mute_prompt_id"] = prompt.message_id
     except Exception as exc:
         log.debug("cmd_mute reason-prompt send failed: %s", exc)
         for key in _MUTE_KEYS:
-            ctx.user_data.pop(key, None)
+            scope.pop(key, None)
         return ConversationHandler.END
     return WAITING_REASON
 

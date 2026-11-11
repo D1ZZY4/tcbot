@@ -143,7 +143,7 @@ The mute conversation uses `BuildReason("mute")` and `BuildProof("mute")` (both 
 - Reason: text, `Skip`, `Cancel`.
 - Proof: photo, video, GIF, file, `Skip`, `Done`, `Cancel`.
 
-The `_ModActionFlow` class in `reason_flow.py` enforces the same race-safe semantics described in [`kicking.md`](kicking.md): proof buffering until `Done`, double-submit guard via `ctx.user_data[mute_executing]`, fallback cancel on any unrecognized command.
+The `_ModActionFlow` class in `reason_flow.py` enforces the same race-safe semantics described in [`kicking.md`](kicking.md): proof buffering until `Done`, double-submit guard via the `mute_executing` key of the conversation scope, fallback cancel on any unrecognized command.
 
 ## Auto-demote before mute
 

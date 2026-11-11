@@ -41,6 +41,7 @@ from tcbot.modules.helper.pipelines.proof_flow import (
     BuildProof,
     upload_proof_media,
 )
+from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
     fan_out,
     summarize_fanout,
@@ -90,7 +91,7 @@ class _ProofSession:
 
     msgs: list[Message] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
-    user_data: dict[str, Any] | None = None
+    scope: dict[str, Any] = field(default_factory=dict)
     deadline: float = 0.0
     last_arrival: float = 0.0
     flushing: bool = False
@@ -101,20 +102,20 @@ class _ProofSession:
 _proof_sessions: dict[tuple[int, int], _ProofSession] = {}
 
 
-def _clear_ban_state(user_data: dict[str, Any] | None) -> None:
-    """Remove all ban-related keys from user_data."""
-    if user_data is None:
+def _clear_ban_state(scope: dict[str, Any] | None) -> None:
+    """Remove all ban-related keys from the conversation scope."""
+    if scope is None:
         return
     for key in BAN_USER_DATA_KEYS:
-        user_data.pop(key, None)
+        scope.pop(key, None)
 
 
-def _cancel_proof_session(user_data: dict[str, Any] | None) -> None:
+def _cancel_proof_session(scope: dict[str, Any] | None) -> None:
     """Cancel in-flight flush tasks and clear all ban state."""
-    _clear_ban_state(user_data)
-    if user_data is None:
+    _clear_ban_state(scope)
+    if scope is None:
         return
-    for key in [k for k, s in _proof_sessions.items() if s.user_data is user_data]:
+    for key in [k for k, s in _proof_sessions.items() if s.scope is scope]:
         session = _proof_sessions.pop(key)
         session.cancelled = True
         if session.flush_task is not None:
@@ -186,7 +187,7 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
     finally:
         if session is not None and _proof_sessions.get(key) is session:
             _proof_sessions.pop(key, None)
-            _clear_ban_state(session.user_data)
+            _clear_ban_state(session.scope)
 
 
 # ────────────────────────── Ban executors ───────────────────────── #
@@ -579,9 +580,10 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     msg = update.effective_message
     if q is None or msg is None or ctx.user_data is None:
         return ConversationHandler.END
+    scope = flow_scope(ctx, update)
     if not isinstance(msg, Message):
         for key in BAN_USER_DATA_KEYS:
-            ctx.user_data.pop(key, None)
+            scope.pop(key, None)
         return ConversationHandler.END
     await q.answer()
     tapper = update.effective_user
@@ -589,14 +591,11 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
         msg, tapper.id, min_role="developer"
     ):
         for key in BAN_USER_DATA_KEYS:
-            ctx.user_data.pop(key, None)
+            scope.pop(key, None)
         return ConversationHandler.END
-    target_id = int(ctx.user_data.get("ban_target_id", 0) or 0)
-    target_fname = str(ctx.user_data.get("ban_target_fname") or target_id)
-    reason = str(ctx.user_data.get("ban_reason") or "")
-    admin_id = int(ctx.user_data.get("ban_admin_id", 0) or 0)
-    admin_fname = str(ctx.user_data.get("ban_admin_fname") or "Admin")
-    target_role = ctx.user_data.get("ban_target_role")
+    target_id = int(scope.get("ban_target_id", 0) or 0)
+    target_fname = str(scope.get("ban_target_fname") or target_id)
+    reason = str(scope.get("ban_reason") or "")
     if not target_id or not reason:
         return ConversationHandler.END
     if isinstance(target_role, str) and not await Demote.execute(
@@ -618,7 +617,7 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     except Exception as exc:
         log.debug("Ban continue prompt edit failed: %s", exc)
         for key in BAN_USER_DATA_KEYS:
-            ctx.user_data.pop(key, None)
+            scope.pop(key, None)
         return ConversationHandler.END
     return WAITING_PROOF
 
@@ -635,18 +634,22 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
         return WAITING_PROOF
     if ctx.user_data is None:
         return ConversationHandler.END
-    if not ctx.user_data.get("ban_target_id"):
+    scope = flow_scope(ctx, update)
+    if not scope.get("ban_target_id"):
         return ConversationHandler.END
     key = (chat.id, user.id)
     session = _proof_sessions.get(key)
     if session is not None and session.flushing:
         return ConversationHandler.END
     if session is None:
-        ctx.user_data["ban_executing"] = True
+        scope["ban_executing"] = True
         now = monotonic()
         session = _ProofSession(
-            meta=dict(ctx.user_data),
-            user_data=ctx.user_data,
+            # * The snapshot carries this conversation's payload only, so a
+            # * second action in another group cannot change the target the
+            # * flush enforces against.
+            meta=dict(scope),
+            scope=scope,
             deadline=now + _PROOF_COLLECT_MAX_S,
             last_arrival=now,
         )
@@ -669,9 +672,10 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     key = (chat.id, user.id) if chat is not None and user is not None else None
     if key is None:
         return ConversationHandler.END
+    scope = flow_scope(ctx, update)
     session = _proof_sessions.get(key)
     if session is None or session.flushing or not session.msgs:
-        if not ctx.user_data.get("ban_target_id"):
+        if not scope.get("ban_target_id"):
             try:
                 await q.answer()
             except Exception as exc:
@@ -701,7 +705,7 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if not session.meta.get("ban_target_id") or not session.meta.get("ban_admin_id"):
         log.warning("Done-proof flush aborted: meta missing target_id or admin_id")
         _proof_sessions.pop(key, None)
-        _clear_ban_state(session.user_data)
+        _clear_ban_state(session.scope)
         return ConversationHandler.END
     tap_msg = update.effective_message
     if user is None or not isinstance(tap_msg, Message):
@@ -710,7 +714,7 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         except Exception as exc:
             log.debug("Ban done-proof recheck answer failed: %s", exc)
         _proof_sessions.pop(key, None)
-        _clear_ban_state(session.user_data)
+        _clear_ban_state(session.scope)
         return ConversationHandler.END
     if not await decorators.recheck_executor_rank(
         tap_msg, user.id, min_role="developer"
@@ -720,7 +724,7 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         except Exception as exc:
             log.debug("Ban done-proof recheck answer failed: %s", exc)
         _proof_sessions.pop(key, None)
-        _clear_ban_state(session.user_data)
+        _clear_ban_state(session.scope)
         return ConversationHandler.END
     try:
         await _execute_ban(ctx.bot, session.msgs, session.meta)
@@ -729,13 +733,13 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     finally:
         if _proof_sessions.get(key) is session:
             _proof_sessions.pop(key, None)
-            _clear_ban_state(session.user_data)
+            _clear_ban_state(session.scope)
     return ConversationHandler.END
 
 
 async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Reject unexpected message types during proof collection."""
-    if ctx.user_data is not None and not ctx.user_data.get("ban_target_id"):
+    if ctx.user_data is not None and not flow_scope(ctx, update).get("ban_target_id"):
         return ConversationHandler.END
     if update.effective_message:
         await safe_reply(
@@ -756,16 +760,16 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     q = update.callback_query
     if q is None:
         return ConversationHandler.END
+    scope = flow_scope(ctx, update)
     # * Once flushing has started the ban is executing; cancelling mid-
     # * _execute_ban would cancel the in-flight fan-out (partial ban, DB
     # * written, no summary). Ignore the tap and let execution finish.
-    if ctx.user_data is not None:
-        for sess in list(_proof_sessions.values()):
-            if sess.user_data is ctx.user_data and sess.flushing:
-                await q.answer()
-                return ConversationHandler.END
+    for sess in list(_proof_sessions.values()):
+        if sess.scope is scope and sess.flushing:
+            await q.answer()
+            return ConversationHandler.END
     await q.answer()
-    _cancel_proof_session(ctx.user_data)
+    _cancel_proof_session(scope)
     await safe_edit_cb(
         q, t("banning.state.cancelled", await locale_for_update(update), plain=False)
     )
@@ -775,15 +779,15 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
 
 async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Notify the user that the proof window expired."""
-    had_state = bool((ctx.user_data or {}).get("ban_target_id"))
+    scope = flow_scope(ctx, update)
+    had_state = bool(scope.get("ban_target_id"))
     prompt_chat: int | None = None
     prompt_msg_id: int | None = None
-    if ctx.user_data is not None:
-        raw_chat = ctx.user_data.get("ban_prompt_chat_id")
-        raw_msg = ctx.user_data.get("ban_prompt_msg_id")
-        prompt_chat = raw_chat if isinstance(raw_chat, int) else None
-        prompt_msg_id = raw_msg if isinstance(raw_msg, int) else None
-    _cancel_proof_session(ctx.user_data)
+    raw_chat = scope.get("ban_prompt_chat_id")
+    raw_msg = scope.get("ban_prompt_msg_id")
+    prompt_chat = raw_chat if isinstance(raw_chat, int) else None
+    prompt_msg_id = raw_msg if isinstance(raw_msg, int) else None
+    _cancel_proof_session(scope)
     if prompt_chat and prompt_msg_id:
         try:
             await ctx.bot.edit_message_reply_markup(

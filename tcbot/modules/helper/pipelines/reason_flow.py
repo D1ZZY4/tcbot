@@ -28,6 +28,7 @@ from tcbot.modules.helper.pipelines.proof_flow import (
     PROOF_MEDIA_FILTER,
     BuildProof,
 )
+from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, esc, user_ref
 from tcbot.utils.i18n import Safe, t
@@ -155,26 +156,22 @@ class _FlowBase:
         self._prompt_id_key = f"{action}_prompt_id"
         self._exec_key = f"{action}_executing"
 
-    def _get_target(self, ctx: ContextTypes.DEFAULT_TYPE, locale: str | None) -> str:
-        if ctx.user_data is None:
-            return t("reason.target.fallback", locale, plain=True)
+    def _get_target(self, scope: dict[str, Any], locale: str | None) -> str:
         raw: str = (
-            ctx.user_data.get(f"{self.action}_target_name")
-            or ctx.user_data.get(f"{self.action}_target_fname")
+            scope.get(f"{self.action}_target_name")
+            or scope.get(f"{self.action}_target_fname")
             or t("reason.target.fallback", locale, plain=True)
         )
-        tid: int | None = ctx.user_data.get(f"{self.action}_target_id")
+        tid: int | None = scope.get(f"{self.action}_target_id")
         if tid:
             return user_ref(tid, raw)
         return esc(raw)
 
-    def _clear_user_data(self, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Remove all action keys from user_data."""
-        if ctx.user_data is None:
-            return
+    def _clear_scope(self, scope: dict[str, Any]) -> None:
+        """Remove all action keys from the conversation scope."""
         prefix = f"{self.action}_"
-        for key in [k for k in ctx.user_data if k.startswith(prefix)]:
-            ctx.user_data.pop(key, None)
+        for key in [k for k in scope if k.startswith(prefix)]:
+            scope.pop(key, None)
 
     async def _recheck_tapper(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -199,14 +196,14 @@ class _FlowBase:
                 await q.answer()
             except Exception as exc:
                 log.debug("%s recheck q.answer failed: %s", self.action, exc)
-        self._clear_user_data(ctx)
+        self._clear_scope(flow_scope(ctx, update))
         return False
 
     async def _on_cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         q = update.callback_query
         if q is None:
             return ConversationHandler.END
-        self._clear_user_data(ctx)
+        self._clear_scope(flow_scope(ctx, update))
         locale = await locale_for_update(update)
         results = await asyncio.gather(
             q.answer(),
@@ -225,7 +222,7 @@ class _FlowBase:
         return ConversationHandler.END
 
     async def _on_end_conv(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        self._clear_user_data(ctx)
+        self._clear_scope(flow_scope(ctx, update))
         if update.effective_message:
             locale = await locale_for_update(update)
             await safe_reply(
@@ -252,11 +249,12 @@ class _ProofStepMixin(_FlowBase):
         msg = update.effective_message
         if msg is None or ctx.user_data is None:
             return WAITING_PROOF
-        if ctx.user_data.get(self._exec_key):
+        scope = flow_scope(ctx, update)
+        if scope.get(self._exec_key):
             return ConversationHandler.END
         if msg.photo or msg.video or msg.animation or msg.document:
-            existing: list = ctx.user_data.get(self._proof_msgs_key, [])
-            ctx.user_data[self._proof_msgs_key] = [*existing, msg]
+            existing: list = scope.get(self._proof_msgs_key, [])
+            scope[self._proof_msgs_key] = [*existing, msg]
         return WAITING_PROOF
 
     async def _on_done_proof(
@@ -266,8 +264,9 @@ class _ProofStepMixin(_FlowBase):
         q = update.callback_query
         if q is None or ctx.user_data is None:
             return ConversationHandler.END
+        scope = flow_scope(ctx, update)
         locale = await locale_for_update(update)
-        msgs: list = ctx.user_data.get(self._proof_msgs_key, [])
+        msgs: list = scope.get(self._proof_msgs_key, [])
         if not msgs:
             try:
                 await q.answer(
@@ -282,16 +281,21 @@ class _ProofStepMixin(_FlowBase):
             except Exception as exc:
                 log.debug("%s done-proof empty answer failed: %s", self.action, exc)
             return WAITING_PROOF
-        if ctx.user_data.get(self._exec_key):
+        if scope.get(self._exec_key):
             try:
                 await q.answer()
             except Exception as exc:
                 log.debug("%s done-proof dup q.answer failed: %s", self.action, exc)
             return ConversationHandler.END
+        # * Claim the execution slot before the first await. The flag is the
+        # * only replay guard and two taps on the same button can be
+        # * processed concurrently, so claiming it after the role recheck
+        # * would let both taps through and the loser would run with an
+        # * empty target.
+        scope[self._exec_key] = True
         if not await self._recheck_tapper(update, ctx):
+            scope.pop(self._exec_key, None)
             return ConversationHandler.END
-        # * Executing flag is set before the first await: duplicate taps end at once.
-        ctx.user_data[self._exec_key] = True
         try:
             await q.answer()
         except Exception as exc:
@@ -299,9 +303,9 @@ class _ProofStepMixin(_FlowBase):
         try:
             await self.executor(update, ctx)
         except BaseException:
-            self._clear_user_data(ctx)
+            self._clear_scope(scope)
             raise
-        self._clear_user_data(ctx)
+        self._clear_scope(scope)
         return ConversationHandler.END
 
     async def _on_skip_proof(
@@ -310,15 +314,20 @@ class _ProofStepMixin(_FlowBase):
         q = update.callback_query
         if q is None or ctx.user_data is None:
             return WAITING_PROOF
-        if ctx.user_data.get(self._exec_key):
+        scope = flow_scope(ctx, update)
+        if scope.get(self._exec_key):
             try:
                 await q.answer()
             except Exception as exc:
                 log.debug("%s skip-proof dup q.answer failed: %s", self.action, exc)
             return ConversationHandler.END
+        # * Claim the execution slot before the first await, exactly like the
+        # * Done button does, so a concurrent double tap cannot run the
+        # * executor twice.
+        scope[self._exec_key] = True
         if not await self._recheck_tapper(update, ctx):
+            scope.pop(self._exec_key, None)
             return ConversationHandler.END
-        ctx.user_data[self._exec_key] = True
         qa_result, exec_result = await asyncio.gather(
             q.answer(),
             self.executor(update, ctx),
@@ -328,9 +337,9 @@ class _ProofStepMixin(_FlowBase):
         if isinstance(qa_result, BaseException):
             log.debug("%s skip-proof q.answer failed: %s", self.action, qa_result)
         if isinstance(exec_result, BaseException):
-            self._clear_user_data(ctx)
+            self._clear_scope(scope)
             raise exec_result
-        self._clear_user_data(ctx)
+        self._clear_scope(scope)
         return ConversationHandler.END
 
     async def _on_proof_unexpected(
@@ -370,6 +379,7 @@ class _ReasonStepMixin(_FlowBase):
             return WAITING_REASON
         if not await self._recheck_tapper(update, ctx):
             return ConversationHandler.END
+        scope = flow_scope(ctx, update)
         text = msg.text.strip()
         if is_reason_too_long(text):
             await safe_reply(
@@ -379,14 +389,14 @@ class _ReasonStepMixin(_FlowBase):
                 parse_mode=None,
             )
             return WAITING_REASON
-        ctx.user_data[self._reason_key] = text
-        extra_info = ctx.user_data.get(self._extra_info_key, "")
+        scope[self._reason_key] = text
+        extra_info = scope.get(self._extra_info_key, "")
         locale = await locale_for_update(update)
         prompt_txt = self.proof.step_prompt(
-            self._get_target(ctx, locale), self.action, text, extra_info, locale
+            self._get_target(scope, locale), self.action, text, extra_info, locale
         )
-        prompt_chat = ctx.user_data.get(self._prompt_chat_key)
-        prompt_id = ctx.user_data.get(self._prompt_id_key)
+        prompt_chat = scope.get(self._prompt_chat_key)
+        prompt_id = scope.get(self._prompt_id_key)
         prompt_sent = False
         if prompt_id is not None and prompt_chat is not None:
             try:
@@ -411,7 +421,7 @@ class _ReasonStepMixin(_FlowBase):
             except Exception as exc:
                 log.debug("%s reason-text fallback reply failed: %s", self.action, exc)
         if not prompt_sent:
-            self._clear_user_data(ctx)
+            self._clear_scope(scope)
             return ConversationHandler.END
         return WAITING_PROOF
 
@@ -423,11 +433,12 @@ class _ReasonStepMixin(_FlowBase):
             return WAITING_REASON
         if not await self._recheck_tapper(update, ctx):
             return ConversationHandler.END
+        scope = flow_scope(ctx, update)
         locale = await locale_for_update(update)
-        ctx.user_data[self._reason_key] = replies.no_reason(locale, plain=True)
-        extra_info = ctx.user_data.get(self._extra_info_key, "")
+        scope[self._reason_key] = replies.no_reason(locale, plain=True)
+        extra_info = scope.get(self._extra_info_key, "")
         prompt_txt = self.proof.step_prompt(
-            self._get_target(ctx, locale),
+            self._get_target(scope, locale),
             self.action,
             replies.no_reason(locale, plain=True),
             extra_info,
@@ -447,7 +458,7 @@ class _ReasonStepMixin(_FlowBase):
             log.debug(
                 "%s prompt edit failed (skip-reason step): %s", self.action, results[1]
             )
-            self._clear_user_data(ctx)
+            self._clear_scope(scope)
             return ConversationHandler.END
         return WAITING_PROOF
 

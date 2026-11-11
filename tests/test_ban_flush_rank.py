@@ -20,7 +20,7 @@ class _DummyBot:
     username = "testbot"
 
 
-def _prefilled_user_data() -> dict[str, Any]:
+def _prefilled_scope() -> dict[str, Any]:
     return dict.fromkeys(ban_flow.BAN_USER_DATA_KEYS, "value")
 
 
@@ -42,7 +42,7 @@ def _session(
     return ban_flow._ProofSession(
         msgs=[object()],  # type: ignore[list-item]
         meta={"ban_target_id": target_id, "ban_admin_id": admin_id},
-        user_data=_prefilled_user_data(),
+        scope=_prefilled_scope(),
         last_arrival=now - 1000.0,
         deadline=now + 60.0,
     )

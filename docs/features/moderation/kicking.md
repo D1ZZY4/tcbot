@@ -104,7 +104,7 @@ The reason keyboard is built by `reason.keyboard()` and the proof keyboard by `p
 
 - `_on_proof` buffers every proof item (album parts and sequential sends alike) and the executor runs only when the moderator taps `Done`. A second concurrent update while executing returns `ConversationHandler.END` immediately.
 - Tapping `Done` with nothing collected answers with a retry alert and stays in `WAITING_PROOF` instead of executing an empty proof.
-- The proof prompt message ID is stashed in `ctx.user_data` so the reason step can edit it in place when transitioning to `WAITING_PROOF`.
+- The proof prompt message ID is stashed in the conversation scope so the reason step can edit it in place when transitioning to `WAITING_PROOF`.
 - The fallback filter swallows any other command during the conversation unless the user types a recognized command, in which case the conversation ends with `<action> operation cancelled.`
 
 ## Auto-demote before kick

@@ -19,6 +19,7 @@ from tcbot.modules.helper.pipelines.appeal_submit_flow import (
     WAITING_APPEAL,
     AppealSubmitMixin,
 )
+from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 
 
@@ -99,21 +100,21 @@ def test_review_post_failure_stays_retryable(
 
     bot = _FakeBot(main_group=-1002)
     msg = _FakeMsg("#appeal please review my case")
-    ctx = SimpleNamespace(
-        bot=bot,
-        user_data={
-            "appeal_ban_id": "abc123def4",
-            "appeal_log_msg_id": 0,
-            "appeal_instruction_msg_id": 777,
-        },
-    )
+    update = _update(msg, bot)
+    ctx = SimpleNamespace(bot=bot, user_data={})
+    # * The appeal payload lives in the (chat, user) conversation scope, not
+    # * in the per-user data PTB shares across chats.
+    scope = flow_scope(ctx, update)  # type: ignore[arg-type]
+    scope["appeal_ban_id"] = "abc123def4"
+    scope["appeal_log_msg_id"] = 0
+    scope["appeal_instruction_msg_id"] = 777
 
     result = asyncio.run(
-        AppealSubmitMixin()._on_message(_update(msg, bot), ctx)  # type: ignore[arg-type]
+        AppealSubmitMixin()._on_message(update, ctx)  # type: ignore[arg-type]
     )
 
     assert result == WAITING_APPEAL
     assert result != ConversationHandler.END
     # * State intact for an in-place retry; card shows the retry prompt.
-    assert ctx.user_data.get("appeal_ban_id") == "abc123def4"
+    assert scope.get("appeal_ban_id") == "abc123def4"
     assert bot.edits[-1] == t("appeals.submit.delivery_failed", "en-US", plain=True)

@@ -15,6 +15,7 @@ from telegram import Chat, Message
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import ban_flow
+from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.time_and_date import monotonic
 
 
@@ -56,8 +57,20 @@ class _FakeCtx:
         self.bot = _DummyBot()  # type: ignore[assignment]
 
 
-def _prefilled_user_data() -> dict[str, Any]:
+def _prefilled_scope() -> dict[str, Any]:
     return dict.fromkeys(ban_flow.BAN_USER_DATA_KEYS, "value")
+
+
+def _ctx_for(update: Any, payload: dict[str, Any]) -> _FakeCtx:
+    """Return a ctx whose conversation scope holds ``payload``.
+
+    The flow payload lives in the (chat, user) scope, so a test that wants
+    a live conversation has to seed that scope instead of the per-user
+    data PTB shares across chats.
+    """
+    ctx = _FakeCtx({})
+    flow_scope(ctx, update).update(payload)  # type: ignore[arg-type]
+    return ctx
 
 
 def _install_flush_sleep_spy(
@@ -91,14 +104,14 @@ def _flush_sleep_scenario(
     key = (11, 22)
     now = monotonic()
     first = ban_flow._ProofSession(
-        user_data=_prefilled_user_data(),
+        scope=_prefilled_scope(),
         last_arrival=now,
         deadline=now + 60,
     )
     successor = None
     if with_successor:
         successor = ban_flow._ProofSession(
-            user_data=_prefilled_user_data(),
+            scope=_prefilled_scope(),
             last_arrival=now,
             deadline=now + 60,
         )
@@ -118,7 +131,7 @@ def _flush_sleep_scenario(
         task.cancel()
         if successor is not None:
             registry.pop(key, None)
-            ban_flow._clear_ban_state(first.user_data)
+            ban_flow._clear_ban_state(first.scope)
             registry[key] = successor
         events[1].set()
         try:
@@ -138,7 +151,7 @@ def test_flush_finally_does_not_clear_successor_session(
     registry, successor = _flush_sleep_scenario(monkeypatch, with_successor=True)
     assert successor is not None
     assert registry[(_FakeChat.id, _FakeUser.id)] is successor
-    assert successor.user_data == _prefilled_user_data()
+    assert successor.scope == _prefilled_scope()
 
 
 def test_flush_finally_clears_own_session(
@@ -153,18 +166,22 @@ def test_done_proof_finally_guard_regression(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     key = (_FakeChat.id, _FakeUser.id)
+    update = _FakeUpdate()
+    ctx = _FakeCtx({})
+    scope = flow_scope(ctx, update)  # type: ignore[arg-type]
+    scope.update(_prefilled_scope())
     first = ban_flow._ProofSession(
         msgs=[object()],  # type: ignore[list-item]
         meta={"ban_target_id": 33, "ban_admin_id": 44},
-        user_data=_prefilled_user_data(),
+        scope=scope,
     )
-    successor = ban_flow._ProofSession(user_data=_prefilled_user_data())
+    successor = ban_flow._ProofSession(scope=_prefilled_scope())
     registry: dict[tuple[int, int], Any] = {}
     monkeypatch.setattr(ban_flow, "_proof_sessions", registry)
 
     async def _replace_while_executing(*args: Any, **kwargs: Any) -> None:
         registry.pop(key, None)
-        ban_flow._clear_ban_state(first.user_data)
+        ban_flow._clear_ban_state(first.scope)
         registry[key] = successor
 
     async def _scenario() -> object:
@@ -175,15 +192,12 @@ def test_done_proof_finally_guard_regression(
             return "founder"
 
         monkeypatch.setattr(db.users_roles, "get_effective_role", _founder)
-        return await ban_flow.on_done_proof(
-            _FakeUpdate(),  # type: ignore[arg-type]
-            _FakeCtx(first.user_data),  # type: ignore[arg-type]
-        )
+        return await ban_flow.on_done_proof(update, ctx)  # type: ignore[arg-type]
 
     outcome = asyncio.run(_scenario())
     assert outcome == ban_flow.ConversationHandler.END
     assert registry[key] is successor
-    assert successor.user_data == _prefilled_user_data()
+    assert successor.scope == _prefilled_scope()
 
 
 # ─────────────────── Post-flush zombie guards ─────────────────── #
@@ -298,11 +312,8 @@ def test_live_unexpected_still_nags(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     msg = _ZombieMessage()
     update = _ZombieUpdate(message=msg)
-    outcome = asyncio.run(
-        ban_flow.on_proof_unexpected(
-            update,  # type: ignore[arg-type]
-            _ZombieCtx({"ban_target_id": 33}),  # type: ignore[arg-type]
-        )
-    )
+    ctx = _ZombieCtx({})
+    flow_scope(ctx, update).update({"ban_target_id": 33})  # type: ignore[arg-type]
+    outcome = asyncio.run(ban_flow.on_proof_unexpected(update, ctx))  # type: ignore[arg-type]
     assert outcome == ban_flow.WAITING_PROOF
     assert len(msg.replies) == 1

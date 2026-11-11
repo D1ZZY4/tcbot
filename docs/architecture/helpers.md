@@ -245,6 +245,18 @@ Telegram link builders. The three functions are re-exported by the `messages` pa
 | `message_link(chat_id, message_id, thread_id=None)` | Builds a private-channel/group message link; pass `thread_id` for topic threads. |
 | `appeal_deep_link(bot_username, ban_id)` | Builds `https://t.me/<bot>?start=appeal_<ban_id>`. |
 
+## `scope.py`
+
+Owner of the per-conversation payload scope used by every moderation flow.
+
+| Function | Purpose |
+|---|---|
+| `conversation_key(update)` | The `(chat_id, user_id)` key python-telegram-bot builds for a conversation registered `per_chat=True, per_user=True`. `None` when the update carries no chat or no user. |
+| `flow_scope(ctx, update)` | The payload dict owned by that conversation. Created on first use and stored under one key of `ctx.user_data`, so it disappears with that user's data. |
+| `clear_flow_scope(ctx, update)` | Drops the payload of that conversation and removes the scope entry when it was the last one. |
+
+python-telegram-bot keys `ctx.user_data` by user id alone, so one dict is shared by every chat a user is in. The moderation conversations are registered `per_chat=True, per_user=True`, so a payload kept directly in `ctx.user_data` belongs to two conversations at once: a moderator who starts a second action in another group overwrites the target, the reason, and the prompt of the first one, and the first group then enforces against the second target. Flows therefore read and write their payload through `flow_scope(ctx, update)`, never through `ctx.user_data` directly.
+
 ## `messages/`
 
 This package owns message sending and editing plus MarkdownV2 audit-log building for moderation, appeals, staff roles, group connections, broadcasts, and auto-demotions. `messages/safe_edits.py` holds the safe-edit transport (`safe_edit`, `safe_edit_cb`, `safe_edit_message`, `clear_markup_cb`, `answer_and_edit`, `ack_and_render`, `safe_reply`), the callback-refusal notice (`cb_error_edit`), the federation log delivery (`send_log`), and the callback-payload parsers (`callback_args`, `callback_numbers`, `callback_args_optional`); `messages/audit_logs.py` holds `LogBuilder` and every audit-log builder; `messages/links.py` holds the Telegram link builders; `messages/panels.py` holds the informational panel renderers (`about_msg`, `render_groups`) that the start menu and their own commands share; `messages/replies.py` holds the shared reply strings and the `HelpEntry` shape. The package `__init__.py` re-exports the transport, audit-log, link, and panel surfaces, so `from tcbot.modules.helper.messages import safe_reply` keeps working. The reply strings stay a module (`from tcbot.modules.helper.messages import replies`) because they form a namespace of forty notices rather than a flat surface.

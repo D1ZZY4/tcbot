@@ -11,7 +11,7 @@ import contextlib
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from telegram import Message, Update
 from telegram.ext import (
@@ -29,6 +29,7 @@ from tcbot.modules.helper.keyboards import appeal_cancel_kb, appeal_review_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import message_link, safe_reply, send_log
 from tcbot.modules.helper.pipelines.appeal_review_flow import AppealReviewMixin
+from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import pre
 from tcbot.utils.i18n import t
@@ -72,12 +73,10 @@ def text_references_log_message(text: str, msg_id: int) -> bool:
     return bool(re.search(rf"\b{msg_id}\b", text))
 
 
-def _clear_appeal_state(user_data: dict[str, object] | None) -> None:
+def _clear_appeal_state(scope: dict[str, Any]) -> None:
     """Remove appeal conversation keys so retries start clean."""
-    if not user_data:
-        return
     for key in _APPEAL_STATE_KEYS:
-        user_data.pop(key, None)
+        scope.pop(key, None)
 
 
 def _is_stale_review(review_ts: datetime | None) -> bool:
@@ -168,11 +167,12 @@ async def handle_group_appeal(
         return
     if ctx.user_data is None:
         return
-    ctx.user_data["appeal_ban_id"] = bid
-    ctx.user_data["appeal_log_msg_id"] = ban.get("log_message_id", 0)
+    scope = flow_scope(ctx, update)
+    scope["appeal_ban_id"] = bid
+    scope["appeal_log_msg_id"] = ban.get("log_message_id", 0)
     result = await on_message(update, ctx)
     if result != WAITING_APPEAL:
-        _clear_appeal_state(ctx.user_data)
+        _clear_appeal_state(scope)
 
 
 # ─────────────────────────── Submit step ────────────────────────── #
@@ -212,8 +212,9 @@ class SubmitMessageMixin:
         if ctx.user_data is None:
             log.error("ctx.user_data is None in appeal_flow _on_message")
             return ConversationHandler.END
-        ban_id = ctx.user_data.get("appeal_ban_id")
-        log_msg_id = ctx.user_data.get("appeal_log_msg_id", 0)
+        scope = flow_scope(ctx, update)
+        ban_id = scope.get("appeal_ban_id")
+        log_msg_id = scope.get("appeal_log_msg_id", 0)
         if not ban_id:
             await safe_reply(
                 msg,
@@ -234,7 +235,7 @@ class SubmitMessageMixin:
                 log_label="Appeal _on_message expired-ban",
                 parse_mode=None,
             )
-            _clear_appeal_state(ctx.user_data)
+            _clear_appeal_state(scope)
             return ConversationHandler.END
         if fresh_ban.get("review_message_id"):
             if _is_stale_review(fresh_ban.get("review_timestamp")):
@@ -257,7 +258,7 @@ class SubmitMessageMixin:
                                 plain=True,
                             )
                         )
-                    _clear_appeal_state(ctx.user_data)
+                    _clear_appeal_state(scope)
                     return ConversationHandler.END
             else:
                 await safe_reply(
@@ -271,7 +272,7 @@ class SubmitMessageMixin:
                     log_label="Appeal _on_message pending-review",
                     parse_mode=None,
                 )
-                _clear_appeal_state(ctx.user_data)
+                _clear_appeal_state(scope)
                 return ConversationHandler.END
         remaining_h = _cooldown_remaining_h(fresh_ban.get("rejected_at"))
         if remaining_h is not None:
@@ -287,7 +288,7 @@ class SubmitMessageMixin:
                 log_label="Appeal _on_message cooldown",
                 parse_mode=None,
             )
-            _clear_appeal_state(ctx.user_data)
+            _clear_appeal_state(scope)
             return ConversationHandler.END
         if not log_msg_id:
             log_msg_id = fresh_ban.get("log_message_id", 0)
@@ -301,7 +302,7 @@ class SubmitMessageMixin:
             return WAITING_APPEAL
         user = update.effective_user
         if user is None:
-            _clear_appeal_state(ctx.user_data)
+            _clear_appeal_state(scope)
             return ConversationHandler.END
         return await post_appeal(update, ctx, msg, user, user.id, str(ban_id), locale)
 
@@ -322,6 +323,7 @@ async def post_appeal(
     if ctx.user_data is None:
         log.error("ctx.user_data is None in appeal posting")
         return ConversationHandler.END
+    scope = flow_scope(ctx, update)
     appeal_chat, appeal_thread = cfg.appeals
     appeal_msg_id: int | None = None
     try:
@@ -411,7 +413,7 @@ async def post_appeal(
                 log_label="Appeal race-loser",
                 parse_mode=None,
             )
-            _clear_appeal_state(ctx.user_data)
+            _clear_appeal_state(scope)
             return ConversationHandler.END
     if appeal_log_sent_id and ban_id:
         try:
@@ -420,7 +422,7 @@ async def post_appeal(
             )
         except Exception:
             log.exception("Appeal DB write failed for ban_id=%s", ban_id)
-    instr_mid = ctx.user_data.get("appeal_instruction_msg_id")
+    instr_mid = scope.get("appeal_instruction_msg_id")
     edit_coro = (
         ctx.bot.edit_message_text(
             t("appeals.submit.submitted", locale, plain=True),
@@ -473,7 +475,7 @@ async def post_appeal(
             except Exception as exc:
                 log.debug("submit_appeal delivery-failed reply failed: %s", exc)
         return WAITING_APPEAL
-    _clear_appeal_state(ctx.user_data)
+    _clear_appeal_state(scope)
     return ConversationHandler.END
 
 
@@ -596,8 +598,9 @@ class AppealSubmitMixin(SubmitMessageMixin):
         if ctx.user_data is None:
             log.error("ctx.user_data is None in appeal_flow _start")
             return ConversationHandler.END
-        ctx.user_data["appeal_ban_id"] = ban_id
-        ctx.user_data["appeal_log_msg_id"] = ban.get("log_message_id", 0)
+        scope = flow_scope(ctx, update)
+        scope["appeal_ban_id"] = ban_id
+        scope["appeal_log_msg_id"] = ban.get("log_message_id", 0)
         try:
             instr = await msg.reply_text(
                 self.instruction_text(locale),
@@ -608,10 +611,10 @@ class AppealSubmitMixin(SubmitMessageMixin):
                     locale,
                 ),
             )
-            ctx.user_data["appeal_instruction_msg_id"] = instr.message_id
+            scope["appeal_instruction_msg_id"] = instr.message_id
         except Exception as exc:
             log.debug("Appeal instruction send failed for user %d: %s", uid, exc)
-            _clear_appeal_state(ctx.user_data)
+            _clear_appeal_state(scope)
             return ConversationHandler.END
         return WAITING_APPEAL
 
@@ -636,7 +639,8 @@ class AppealSubmitMixin(SubmitMessageMixin):
         q = update.callback_query
         if q is None:
             return ConversationHandler.END
-        live_mid = (ctx.user_data or {}).get("appeal_instruction_msg_id")
+        scope = flow_scope(ctx, update)
+        live_mid = scope.get("appeal_instruction_msg_id")
         tap_mid = q.message.message_id if q.message is not None else None
         if live_mid is not None and tap_mid is not None and tap_mid != live_mid:
             try:
@@ -644,7 +648,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
             except Exception as exc:
                 log.debug("appeal stale-cancel answer failed: %s", exc)
             return ConversationHandler.END
-        _clear_appeal_state(ctx.user_data)
+        _clear_appeal_state(scope)
         try:
             await q.answer()
         except Exception as exc:
@@ -658,7 +662,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
 
     async def _end(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Fallback handler; fires on any unrecognised command."""
-        _clear_appeal_state(ctx.user_data)
+        _clear_appeal_state(flow_scope(ctx, update))
         msg = update.effective_message
         if msg:
             await safe_reply(
