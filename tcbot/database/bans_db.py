@@ -70,32 +70,35 @@ async def create_ban(
     }
     try:
         await db_call(lambda: _bans().insert_one(doc))
-    except DuplicateKeyError:
-        # * 10-char random ID collision (vanishingly rare but possible under
-        # * concurrent bans): retry once with a fresh ID instead of failing
-        # * the moderation action. Only safe for auto-generated IDs: callers
-        # * that pass an explicit ban_id reuse it for the appeal link and log
-        # * patch, so a silent swap would orphan those references. A second
-        # * collision (or any explicit-ID collision) propagates to the caller.
-        if not auto_id:
-            raise
-        doc["ban_id"] = make_ban_id()
-        try:
-            await db_call(lambda: _bans().insert_one(doc))
-        except DuplicateKeyError:
-            # * The unique partial index allows only one active ban per
-            # * user, so a concurrent ban for the same target loses the
-            # * race here. The existing record is the canonical one: the
-            # * caller keeps it and the moderation continues.
-            existing = await get_active_ban(target_id)
-            if existing is None:
-                raise
-            log.warning(
-                "Concurrent ban for user %d lost the race; reusing ban %s",
-                target_id,
-                existing.get("ban_id", ""),
-            )
-            return cast("BanDoc", existing)
+    except DuplicateKeyError as insert_error:
+        if auto_id:
+            # * 10-char random ID collision (vanishingly rare but possible
+            # * under concurrent bans): retry once with a fresh ID instead
+            # * of failing the moderation action.
+            doc["ban_id"] = make_ban_id()
+            try:
+                await db_call(lambda: _bans().insert_one(doc))
+            except DuplicateKeyError:
+                pass
+            else:
+                return cast("BanDoc", doc)
+        # * The unique partial index allows only one active ban per user,
+        # * so a concurrent ban for the same target loses the race here.
+        # * The existing record is the canonical one: the caller keeps it
+        # * and the moderation continues.
+        existing = await get_active_ban(target_id)
+        if existing is None:
+            raise insert_error
+        if not auto_id and str(existing.get("ban_id", "")) == str(ban_id):
+            # * The explicit id itself is taken, so the caller must not be
+            # * handed a record it cannot reference.
+            raise insert_error
+        log.warning(
+            "Concurrent ban for user %d lost the race; reusing ban %s",
+            target_id,
+            existing.get("ban_id", ""),
+        )
+        return cast("BanDoc", existing)
     return cast("BanDoc", doc)
 
 

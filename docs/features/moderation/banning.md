@@ -322,8 +322,8 @@ Manual unban does not currently edit any pending appeal review card. It deactiva
 - Empty proof input returns `None` fast; a failed photo gallery upload falls through to the document loop so collected file proof still lands instead of being discarded. Only a batch with no usable item stores `0` as proof ID.
 - If the ban log send fails, the database write may still complete, but no log message ID is stored.
 - If active group enforcement partially fails, the ban record remains active and the summary reports partial success.
-- A duplicate active ban is updated rather than creating another active record through the command path.
-- A lower-ranked staff target is auto-demoted before the ban is enforced.
+- A duplicate active ban is updated rather than creating another active record through the command path. Two moderators banning the same target at the same moment race on the one-active-ban index: the record that lands first stays canonical, and the second ban logs and enforces against that canonical record instead of failing with a database error.
+- A lower-ranked staff target is auto-demoted when the ban is enforced.
 - Same-rank and higher-rank staff targets are protected.
 - Self-ban and bot-ban attempts are rejected before database writes.
 - The proof conversation is per-chat and per-user, so simultaneous ban flows are isolated by moderator/chat. The flow payload lives in the same per-chat, per-user scope (`helper/scope.py`), so a second action in another group cannot overwrite the target of the first one.

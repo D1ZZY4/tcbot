@@ -124,3 +124,62 @@ def test_deactivate_extra_active_bans_keeps_one_record(
     active = list(mongo_bans.find({"is_active": True}))
     assert [doc["ban_id"] for doc in active] == ["new"]
     assert mongo_bans.count_documents({"banned_user_id": 42}) == 2
+
+
+def test_create_ban_returns_the_canonical_record_when_the_race_is_lost(
+    monkeypatch: pytest.MonkeyPatch, mongo_bans: Any
+) -> None:
+    """A concurrent ban for the same target must not fail the second ban.
+
+    The partial unique index allows one active ban per user, so the second
+    moderator to insert loses the race. The surviving record is canonical:
+    the caller keeps it and the moderation continues instead of reporting a
+    database failure.
+    """
+    mongo_bans.create_index(
+        _ACTIVE_UNIQUE_INDEX,
+        unique=True,
+        partialFilterExpression={"is_active": True},
+    )
+    monkeypatch.setattr(bans_db, "_bans", lambda: mongo_bans)
+    monkeypatch.setattr(bans_db, "get_active_ban", _active_ban_reader(mongo_bans))
+
+    winner = asyncio.run(bans_db.create_ban(42, "spam", 7, 1, 0, "winnerid"))
+    assert winner.get("ban_id") == "winnerid"
+
+    loser = asyncio.run(bans_db.create_ban(42, "spam", 8, 2, 0, "loserid"))
+
+    assert loser.get("ban_id") == "winnerid"
+    assert mongo_bans.count_documents({"banned_user_id": 42}) == 1
+
+
+def test_create_ban_still_fails_on_a_real_id_collision(
+    monkeypatch: pytest.MonkeyPatch, mongo_bans: Any
+) -> None:
+    """An explicit id that is already taken must not be silently swapped.
+
+    The caller reuses the id for the appeal link and the log patch, so
+    handing back a different record would orphan those references.
+    """
+    mongo_bans.create_index(
+        _ACTIVE_UNIQUE_INDEX,
+        unique=True,
+        partialFilterExpression={"is_active": True},
+    )
+    mongo_bans.create_index([("ban_id", 1)], unique=True)
+    monkeypatch.setattr(bans_db, "_bans", lambda: mongo_bans)
+    monkeypatch.setattr(bans_db, "get_active_ban", _active_ban_reader(mongo_bans))
+
+    asyncio.run(bans_db.create_ban(42, "spam", 7, 1, 0, "takenid"))
+
+    with pytest.raises(DuplicateKeyError):
+        asyncio.run(bans_db.create_ban(99, "spam", 7, 1, 0, "takenid"))
+
+
+def _active_ban_reader(mongo_bans: Any) -> Any:
+    """Return a ``get_active_ban`` double backed by the collection."""
+
+    async def _reader(target_id: int) -> Any:
+        return mongo_bans.find_one({"banned_user_id": target_id, "is_active": True})
+
+    return _reader

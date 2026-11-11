@@ -100,7 +100,7 @@ Ban differs from the shared reason flow:
 - Proof is required by UI (`skip_allowed=False`).
 - An active ban triggers a confirmation card (`WAITING_UPDATE_CONFIRM` with `View Log` / `View Proof` URLs and `Cancel` / `Continue`) before proof collection.
 - Proof media accumulate in one session keyed by `(chat_id, user_id)` and flush on `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap; the flush claim is a synchronous check-and-set so Done and the timer can never double-execute.
-- `_execute_ban()` uploads proof, then writes the `bans` document and posts the audit log sequentially (`_execute_ban_record` returns `(log_msg_id, db_ok)`). When the database write fails the flow aborts before `fan_out()` so no group is touched. Only after the record lands does it fan out bans to active groups with `fan_out()`, then edit the prompt summary and DM the appeal link.
+- `_execute_ban()` uploads proof, then writes the `bans` document and posts the audit log (`_execute_ban_record` returns `(log_msg_id, db_ok, canonical_ban_id)`). The record is written before the log is rendered, so a concurrent ban for the same target that wins the insert race hands back the canonical ban id and the log, its appeal link, and the target's appeal button all name the record that exists. When the database write fails the flow aborts before `fan_out()` so no group is touched. Only after the record lands does it fan out bans to active groups with `fan_out()`, then edit the prompt summary and DM the appeal link.
 
 ```mermaid
 flowchart TD
