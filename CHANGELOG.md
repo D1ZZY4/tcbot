@@ -9,6 +9,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Added
 
+- **One entry sequence for the single-action moderation commands** (`tcbot/modules/helper/decorators/checks.py`, `tcbot/modules/warns.py`, `tcbot/modules/mute.py`): unwarn, resetwarns, and unmute each repeated the same origin check, target resolution, classification, and refusal. `resolve_staff_target` now owns that sequence. Behavior changes: none; the replies and the checks are unchanged.
+
 - **Callback refusal notices have one owner** (`tcbot/modules/helper/messages/safe_edits.py`, `tests/test_cb_error_contract.py`): `cb_error_edit` drops the keyboard so a refused button cannot be pressed again, logs the failure at debug level because a refusal is a normal outcome, and pins the render mode to the way the notice text was produced.
 
 - **Authorization and expiry contracts are pinned** (`tests/test_moderation_contracts.py`, `tests/test_role_assignment_rules.py`): the role-rank table, the rate-limit exemption and throttle tiers, the mute expiry clauses, the atomic appeal and ban claims, the primary-group merge, the promotion rules, and the ownership transfer are covered as executable contracts. Behavior changes: none.

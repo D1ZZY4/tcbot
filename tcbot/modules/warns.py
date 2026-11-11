@@ -203,54 +203,23 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
     if msg is None:
         return
-    admin = update.effective_user
-    if admin is None:
-        return
-    locale = await locale_for_update(update)
-    if not await decorators.require_federation_origin(
-        msg,
-        chat_id=msg.chat.id,
-        chat_type=msg.chat.type,
-        locale=locale,
-        allow_private=False,
-        log_label="cmd_unwarn origin",
-    ):
-        return
-    args = parse_cmd_args(msg.text)
-    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
-    if not target_id:
-        await safe_reply(
-            msg,
-            replies.err_cannot_resolve(locale, plain=True),
-            log_label="cmd_unwarn no-target",
-            parse_mode=None,
-        )
-        return
-
-    classified = await decorators.classify_and_check(
-        ctx.bot,
-        admin.id,
-        target_id,
-        target_name,
-        msg,
+    resolved = await decorators.resolve_staff_target(
+        update,
+        ctx,
         action="unwarn",
         min_role="tester",
-        target_is_bot=await identity.is_proven_bot(update, target_id, ctx.bot),
+        log_prefix="cmd_unwarn",
     )
-    if classified is None:
-        return
-    ident, _ = classified
-
-    refusal = identity.refuse_message("unwarn", ident, locale)
-    if refusal is not None:
-        await safe_reply(msg, refusal, log_label="cmd_unwarn refusal")
+    if resolved is None:
         return
 
-    notice = identity.staff_notice("unwarn", ident, cfg.community_name, locale)
+    notice = identity.staff_notice(
+        "unwarn", resolved.ident, cfg.community_name, resolved.locale
+    )
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_unwarn notice")
 
-    await execute_unwarn(update, ctx, target_id, target_name or str(target_id))
+    await execute_unwarn(update, ctx, resolved.target_id, resolved.target_name)
 
 
 # ─────────────────── Command Warn List </warns> ─────────────────── #
@@ -312,54 +281,23 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     msg = update.effective_message
     if msg is None:
         return
-    admin = update.effective_user
-    if admin is None:
-        return
-    locale = await locale_for_update(update)
-    if not await decorators.require_federation_origin(
-        msg,
-        chat_id=msg.chat.id,
-        chat_type=msg.chat.type,
-        locale=locale,
-        allow_private=False,
-        log_label="cmd_resetwarns origin",
-    ):
-        return
-    args = parse_cmd_args(msg.text)
-    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
-    if not target_id:
-        await safe_reply(
-            msg,
-            replies.err_cannot_resolve(locale, plain=True),
-            log_label="cmd_resetwarns no-target",
-            parse_mode=None,
-        )
-        return
-
-    classified = await decorators.classify_and_check(
-        ctx.bot,
-        admin.id,
-        target_id,
-        target_name,
-        msg,
+    resolved = await decorators.resolve_staff_target(
+        update,
+        ctx,
         action="resetwarns",
         min_role="tester",
-        target_is_bot=await identity.is_proven_bot(update, target_id, ctx.bot),
+        log_prefix="cmd_resetwarns",
     )
-    if classified is None:
-        return
-    ident, _ = classified
-
-    refusal = identity.refuse_message("resetwarns", ident, locale)
-    if refusal is not None:
-        await safe_reply(msg, refusal, log_label="cmd_resetwarns refusal")
+    if resolved is None:
         return
 
-    notice = identity.staff_notice("resetwarns", ident, cfg.community_name, locale)
+    notice = identity.staff_notice(
+        "resetwarns", resolved.ident, cfg.community_name, resolved.locale
+    )
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_resetwarns notice")
 
-    await execute_resetwarns(update, ctx, target_id, target_name or str(target_id))
+    await execute_resetwarns(update, ctx, resolved.target_id, resolved.target_name)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

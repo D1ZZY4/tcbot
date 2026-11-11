@@ -680,7 +680,7 @@ async def resolve_mod_target(
     )
     if classified is None:
         return None
-    ident, target_role = classified
+    ident, _target_role = classified
     refusal = identity.refuse_message(action, ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label=f"{log_prefix} refusal")
@@ -694,5 +694,4 @@ async def resolve_mod_target(
         has_explicit_target=has_explicit_target,
         args=args,
         ident=ident,
-        target_role=target_role,
     )

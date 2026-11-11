@@ -336,3 +336,135 @@ def test_resolve_mod_target_replies_no_target(
     )
     assert resolved is None
     assert len(log.texts) == 1
+
+
+def test_resolve_staff_target_returns_resolved_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The single-action commands share one entry sequence."""
+    log = _ReplyLog()
+    _install(monkeypatch, log)
+    update, ctx = _update_ctx()
+
+    async def _locale(upd: Any) -> str:
+        return "en-US"
+
+    async def _origin(msg: Any, **kwargs: Any) -> bool:
+        return True
+
+    async def _extract(upd: Any, args: Any, bot: Any) -> tuple[Any, Any]:
+        return (22, "Target")
+
+    async def _classify(
+        bot: Any,
+        admin_id: int,
+        target_id: int,
+        target_name: Any,
+        msg: Any,
+        **kwargs: Any,
+    ) -> tuple[Any, Any]:
+        return SimpleNamespace(kind="user"), None
+
+    async def _not_bot(upd: Any, target_id: int, bot: Any) -> bool:
+        return False
+
+    monkeypatch.setattr(checks, "locale_for_update", _locale)
+    monkeypatch.setattr(checks, "require_federation_origin", _origin)
+    monkeypatch.setattr(checks.extraction, "extract_target", _extract)
+    monkeypatch.setattr(checks, "classify_and_check", _classify)
+    monkeypatch.setattr(checks.identity, "is_proven_bot", _not_bot)
+    monkeypatch.setattr(checks.identity, "refuse_message", lambda *a: None)
+
+    resolved = asyncio.run(
+        checks.resolve_staff_target(
+            update,
+            ctx,
+            action="unwarn",
+            min_role="tester",
+            log_prefix="cmd_unwarn",
+        )
+    )
+    assert resolved is not None
+    assert resolved.target_id == 22
+    assert resolved.target_name == "Target"
+    assert resolved.locale == "en-US"
+    assert log.texts == []
+
+
+def test_resolve_staff_target_refuses_a_protected_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A protected target is refused and the command does not run."""
+    log = _ReplyLog()
+    _install(monkeypatch, log)
+    update, ctx = _update_ctx()
+
+    async def _locale(upd: Any) -> str:
+        return "en-US"
+
+    async def _origin(msg: Any, **kwargs: Any) -> bool:
+        return True
+
+    async def _extract(upd: Any, args: Any, bot: Any) -> tuple[Any, Any]:
+        return (22, "Target")
+
+    async def _classify(
+        bot: Any,
+        admin_id: int,
+        target_id: int,
+        target_name: Any,
+        msg: Any,
+        **kwargs: Any,
+    ) -> tuple[Any, Any]:
+        return SimpleNamespace(kind="founder"), None
+
+    async def _not_bot(upd: Any, target_id: int, bot: Any) -> bool:
+        return False
+
+    monkeypatch.setattr(checks, "locale_for_update", _locale)
+    monkeypatch.setattr(checks, "require_federation_origin", _origin)
+    monkeypatch.setattr(checks.extraction, "extract_target", _extract)
+    monkeypatch.setattr(checks, "classify_and_check", _classify)
+    monkeypatch.setattr(checks.identity, "is_proven_bot", _not_bot)
+    monkeypatch.setattr(
+        checks.identity, "refuse_message", lambda *a: "refused, founder"
+    )
+
+    resolved = asyncio.run(
+        checks.resolve_staff_target(
+            update,
+            ctx,
+            action="unmute",
+            min_role="tester",
+            log_prefix="cmd_unmute",
+        )
+    )
+    assert resolved is None
+    assert len(log.texts) == 1
+    assert "refused" in log.texts[0]
+
+
+def test_resolve_staff_target_refuses_a_disconnected_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The origin guard runs before the target is resolved."""
+    log = _ReplyLog()
+    _install(monkeypatch, log)
+    update, ctx = _update_ctx()
+
+    async def _locale(upd: Any) -> str:
+        return "en-US"
+
+    async def _origin(msg: Any, **kwargs: Any) -> bool:
+        return False
+
+    resolved = asyncio.run(
+        checks.resolve_staff_target(
+            update,
+            ctx,
+            action="resetwarns",
+            min_role="tester",
+            log_prefix="cmd_resetwarns",
+        )
+    )
+    assert resolved is None

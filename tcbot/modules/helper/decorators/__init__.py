@@ -14,6 +14,7 @@ from tcbot.modules.helper.decorators.auth import (
 )
 from tcbot.modules.helper.decorators.checks import (
     ModTarget,
+    StaffTarget,
     action_owner_mismatch,
     banned_target_refusal,
     can_demote_admin,
@@ -27,6 +28,7 @@ from tcbot.modules.helper.decorators.checks import (
     resolve_and_check,
     resolve_executor_target,
     resolve_mod_target,
+    resolve_staff_target,
 )
 from tcbot.modules.helper.decorators.ratelimit import (
     THROTTLE_BULK,

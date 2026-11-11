@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot import cfg
-from tcbot.modules.helper import decorators, extraction, identity
-from tcbot.modules.helper.locale import locale_for_update
+from tcbot.modules.helper import decorators, identity
 from tcbot.modules.helper.messages import replies, safe_reply
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.mute_flow import (
@@ -31,7 +30,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
 from tcbot.utils.formatter import code, esc, user_ref
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+from tcbot.utils.prefixes import build_prefixed_filters
 from tcbot.utils.time_and_date import fmt_duration, parse_duration
 
 if TYPE_CHECKING:
@@ -245,55 +244,25 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ``execute_unmute``.
     """
     msg = update.effective_message
-    admin = update.effective_user
-    if msg is None or admin is None:
+    if msg is None:
         return
-    locale = await locale_for_update(update)
-    if not await decorators.require_federation_origin(
-        msg,
-        chat_id=msg.chat.id,
-        chat_type=msg.chat.type,
-        locale=locale,
-        allow_private=False,
-        log_label="cmd_unmute origin",
-    ):
-        return
-    args = parse_cmd_args(msg.text)
-    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
-    if not target_id:
-        await safe_reply(
-            msg,
-            replies.err_cannot_resolve(locale, plain=True),
-            log_label="cmd_unmute no-target",
-            parse_mode=None,
-        )
-        return
-
-    # * return_exceptions=True prevents a DB error from leaving the command silently dead.
-    classified = await decorators.classify_and_check(
-        ctx.bot,
-        admin.id,
-        target_id,
-        target_name,
-        msg,
+    resolved = await decorators.resolve_staff_target(
+        update,
+        ctx,
         action="unmute",
         min_role="tester",
-        target_is_bot=await identity.is_proven_bot(update, target_id, ctx.bot),
+        log_prefix="cmd_unmute",
     )
-    if classified is None:
-        return
-    ident, _ = classified
-
-    refusal = identity.refuse_message("unmute", ident, locale)
-    if refusal is not None:
-        await safe_reply(msg, refusal, log_label="cmd_unmute refusal")
+    if resolved is None:
         return
 
-    notice = identity.staff_notice("unmute", ident, cfg.community_name, locale)
+    notice = identity.staff_notice(
+        "unmute", resolved.ident, cfg.community_name, resolved.locale
+    )
     if notice is not None:
         await safe_reply(msg, notice, log_label="cmd_unmute notice")
 
-    await execute_unmute(update, ctx, target_id, target_name or str(target_id))
+    await execute_unmute(update, ctx, resolved.target_id, resolved.target_name)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
