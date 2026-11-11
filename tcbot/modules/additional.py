@@ -21,10 +21,6 @@ if TYPE_CHECKING:
 
 __module_name__ = None
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-_RL_PERIOD_S: int = 30
-_RL_CB_LIMIT: int = 15
-
 
 # ─────────────────────── Additional Message ─────────────────────── #
 
@@ -37,7 +33,7 @@ def additional_msg(locale: str | None = None) -> str:
 # ──────────────────────── Callback Handler ──────────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the Additional Info page when the button is tapped."""

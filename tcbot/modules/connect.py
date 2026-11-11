@@ -36,10 +36,6 @@ log = get_logger(__name__)
 
 # * Connect runtime prose lives in connecting.toml [state].
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-_RL_PERIOD_S: int = 60
-_RL_LIMIT: int = 3
-
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -87,7 +83,7 @@ __help_sections__ = __help__["sections"]
 # ───────────── Command to Connect a Group </tcconnect> ──────────── #
 
 
-@decorators.ratelimiter(limit=_RL_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.log_execution
 async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Request to connect the current group to the federation.

@@ -29,6 +29,16 @@ from tcbot.modules.helper.decorators.checks import (
     resolve_mod_target,
 )
 from tcbot.modules.helper.decorators.ratelimit import (
+    THROTTLE_BULK,
+    THROTTLE_CALLBACK,
+    THROTTLE_CALLBACK_DEEP,
+    THROTTLE_CRITICAL,
+    THROTTLE_FEDERATION,
+    THROTTLE_MODERATION,
+    THROTTLE_READ,
+    THROTTLE_STAFF,
+    THROTTLE_SWEEP,
+    Throttle,
     global_rate_limit_handler,
     ratelimiter,
 )

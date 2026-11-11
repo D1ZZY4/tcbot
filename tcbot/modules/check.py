@@ -39,12 +39,6 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# ────────────────────── Rate-limiter constants ───────────────────── #
-RL_PERIOD_S: int = 30
-RL_CMD_LIMIT: int = 8
-RL_CHECKME_CB_LIMIT: int = 15
-RL_CHECK_CB_LIMIT: int = 20
-
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -178,7 +172,7 @@ async def _ban_summary(
     return text, proof_link
 
 
-@decorators.ratelimiter(limit=RL_CMD_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
 async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the caller's federation status (ban / staff role / clean record).
@@ -287,7 +281,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     return
 
 
-@decorators.ratelimiter(limit=RL_CHECKME_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show detailed ban information from the /checkme ban card.
@@ -330,7 +324,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
-@decorators.ratelimiter(limit=RL_CHECKME_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to the ban summary card from the detail view.
@@ -391,7 +385,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 # ───────────────────────── Profile (/check) ────────────────────────── #
 
 
-@decorators.ratelimiter(limit=RL_CMD_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
 async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show a comprehensive profile (identity + bans + warns + kicks + mutes + appeals)."""
@@ -439,7 +433,7 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-@decorators.ratelimiter(limit=RL_CHECK_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
 async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level profile summary for the checked user."""
@@ -464,7 +458,7 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-@decorators.ratelimiter(limit=RL_CHECK_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
 async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of federation bans for the checked user."""
@@ -480,7 +474,7 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await ack_and_render(q, Check.bans_list(target_id, page, locale))
 
 
-@decorators.ratelimiter(limit=RL_CHECK_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
 async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the full detail view for a single federation ban record."""
@@ -501,7 +495,7 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     await ack_and_render(q, Check.ban_detail(target_id, ban_id, locale))
 
 
-@decorators.ratelimiter(limit=RL_CHECK_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
 async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the per-group warning summary for the checked user."""
@@ -517,7 +511,7 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ack_and_render(q, Check.warns_by_group(target_id, locale))
 
 
-@decorators.ratelimiter(limit=RL_CHECK_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
 async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of warnings for the checked user in a specific group."""
@@ -536,7 +530,7 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
-@decorators.ratelimiter(limit=RL_CHECK_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
 async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of kick records for the checked user."""
@@ -552,7 +546,7 @@ async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ack_and_render(q, Check.kicks_list(target_id, page, locale))
 
 
-@decorators.ratelimiter(limit=RL_CHECK_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
 async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of mute records for the checked user."""
@@ -568,7 +562,7 @@ async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ack_and_render(q, Check.mutes_list(target_id, page, locale))
 
 
-@decorators.ratelimiter(limit=RL_CHECK_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
 async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of appeal records for the checked user."""

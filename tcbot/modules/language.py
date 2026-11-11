@@ -31,10 +31,6 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-_RL_PERIOD_S: int = 30
-_RL_CMD_LIMIT: int = 10
-_RL_CB_LIMIT: int = 15
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -116,7 +112,7 @@ def _confirmation_text(scope: str, chosen: str) -> str:
 # ──────────────────────── Command Handlers ───────────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
 async def cmd_language(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the language panel: personal in PM, group-wide in groups."""
@@ -143,7 +139,7 @@ async def cmd_language(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ──────────────────────── Callback Handlers ──────────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_language_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Open the personal language panel from the start-menu Language button."""
@@ -172,7 +168,7 @@ async def on_language_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Re-render the option list (Back target of confirmations)."""
@@ -210,7 +206,7 @@ async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Save the tapped locale and edit the panel into a confirmation."""

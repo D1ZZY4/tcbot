@@ -42,11 +42,6 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-RL_PERIOD_S: int = 30
-RL_CMD_LIMIT: int = 8
-RL_CB_LIMIT: int = 15
-
 
 __module_name__ = "Stats"
 
@@ -129,7 +124,7 @@ async def _require_founder_list(
     return True
 
 
-@decorators.ratelimiter(limit=RL_CMD_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
 async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Send the federation overview message."""
@@ -170,7 +165,7 @@ def _parse_item_callback(
 # ────────────────────────── Search callbacks ───────────────────────── #
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Open the user search prompt within the stats ban view."""
@@ -181,7 +176,7 @@ async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     await answer_and_edit(q, text, reply_markup=kb)
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Free-text query message handler; only reacts when the search panel is active."""
@@ -234,7 +229,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         )
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a search result selected by the user."""
@@ -257,7 +252,7 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     )
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to search results (or the open-search prompt) without re-running the query."""
@@ -280,7 +275,7 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         )
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_search_cancel(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -296,7 +291,7 @@ async def on_stats_search_cancel(
 # ────────────────────────── Drill-down callbacks ───────────────────── #
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the top-level stats menu."""
@@ -313,7 +308,7 @@ async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the current staff roster page."""
@@ -325,7 +320,7 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of cached users."""
@@ -345,7 +340,7 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ack_and_render(q, Stats.users_list(page, await locale_for_update(update)))
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single cached user entry."""
@@ -368,7 +363,7 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of connected groups."""
@@ -383,7 +378,7 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await ack_and_render(q, Stats.chats_list(page, await locale_for_update(update)))
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single connected group entry."""
@@ -401,7 +396,7 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated ban-list page and clear any active search state."""
@@ -417,7 +412,7 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await ack_and_render(q, Stats.bans_list(page, await locale_for_update(update)))
 
 
-@decorators.ratelimiter(limit=RL_CB_LIMIT, period=RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the detail view for a single ban entry from the stats list."""

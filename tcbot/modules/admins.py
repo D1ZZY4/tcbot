@@ -39,15 +39,6 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# * Rate-limiter windows shared by every admins command and callback.
-_RL_PERIOD_S: int = 30
-_RL_PERIOD_LONG_S: int = 60
-_RL_PERIOD_BULK_S: int = 300
-_RL_CMD_LIMIT: int = 10
-_RL_QUERY_LIMIT: int = 5
-_RL_BULK_LIMIT: int = 3
-
-
 __module_name__ = "Admin"
 
 
@@ -101,7 +92,7 @@ __help_sections__ = __help__["sections"]
 # ────────────────────────── Promote command ────────────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_QUERY_LIMIT, period=_RL_PERIOD_LONG_S)
+@decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -216,7 +207,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
 async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the role-selection inline button from /tcpromote.
@@ -370,7 +361,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     )
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
 async def on_promote_role_cancel(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -405,7 +396,7 @@ async def on_promote_role_cancel(
 # ────────────────────────── Demote command ─────────────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_QUERY_LIMIT, period=_RL_PERIOD_LONG_S)
+@decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -482,7 +473,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
 async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Confirm the demote action from the inline keyboard.
@@ -630,7 +621,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
 async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Acknowledge the cancel button and collapse the demotion confirmation prompt.
@@ -659,7 +650,7 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 # ────────────────────── Transfer command ────────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_BULK_LIMIT, period=_RL_PERIOD_BULK_S)
+@decorators.ratelimiter(decorators.THROTTLE_BULK)
 @decorators.owner_only
 @decorators.log_execution
 async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -675,7 +666,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ───────────────────── Promotion queue commands ────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_BULK_LIMIT, period=_RL_PERIOD_BULK_S)
+@decorators.ratelimiter(decorators.THROTTLE_BULK)
 @decorators.log_execution
 async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Submit a promotion request to the Founder.
@@ -771,7 +762,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     await safe_reply(msg, reply, log_label="cmd_promote_request result")
 
 
-@decorators.ratelimiter(limit=_RL_QUERY_LIMIT, period=_RL_PERIOD_LONG_S)
+@decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -863,7 +854,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 # ────────────────────── Promotion decisions ────────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
 async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle approve / reject decisions on promotion request cards.

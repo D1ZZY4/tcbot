@@ -33,11 +33,6 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-
-_RL_PERIOD_S: int = 60
-_RL_CMD_LIMIT: int = 3
-
 # * Upper bound for one full bandwidth run (config + servers + ping +
 # * download + upload). Slow links finish well under this; the handler
 # * bounds the whole run so a hung route cannot stall moderation traffic.
@@ -383,7 +378,7 @@ def _run_speedtest() -> dict:
 # ──────────────────────── Command handlers ──────────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.owner_only
 @decorators.log_execution
 async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -412,7 +407,7 @@ async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.owner_only
 @decorators.log_execution
 async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

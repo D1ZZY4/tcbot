@@ -28,13 +28,31 @@ Decorators provide authorization, handler-level rate limiting, and debug tracing
 
 | Decorator/helper | Purpose |
 |---|---|
-| `ratelimiter(limit=5, period=60.0)` | Per-handler sliding-window user throttle backed by Redis sorted set when available; falls back to in-process sliding window. Use as the outermost command decorator. The current Founder (cached owner ID, 300 s TTL) bypasses per-handler quotas so incident response never stalls; everyone else shares the same bucket. |
+| `ratelimiter(throttle)` | Per-handler sliding-window user throttle backed by Redis sorted set when available; falls back to in-process sliding window. Use as the outermost command decorator and pass one of the shared `THROTTLE_*` tiers. The current Founder (cached owner ID, 300 s TTL) bypasses per-handler quotas so incident response never stalls; everyone else shares the same bucket. |
 | `log_execution` | DEBUG-level entry/exit/exception tracing. Use as the innermost decorator. |
 | `owner_only` | Founder-only commands. |
 | `staff_only` | Founder/Admin commands. |
 | `mod_only` | Developer+ commands, such as ban and unban. |
 | `basic_mod_only` | Tester+ commands, such as kick, mute, and warn. |
 | `global_rate_limit_handler` | Universal rate limiter registered by `__main__.py` at group `-1`. Uses `_AsyncRateLimiter` (Redis sorted-set + in-process fallback) for both command and callback-query buckets. The Founder bypasses both buckets; plain chat messages are never limited. |
+
+### Throttle tiers
+
+`Throttle(limit, period)` is the single owner of the per-handler budgets. Every command module draws its tier from this table instead of declaring its own constants, so two handlers that mean the same thing throttle the same way.
+
+| Tier | Budget | Used by |
+|---|---|---|
+| `THROTTLE_READ` | 8 calls / 30 s | Read-only commands (`/help`, `/stats`, `/tcgroups`, the warn listing). |
+| `THROTTLE_CALLBACK` | 15 presses / 30 s | Buttons that only open a view. |
+| `THROTTLE_CALLBACK_DEEP` | 20 presses / 30 s | Buttons that open a paginated drill-down. |
+| `THROTTLE_STAFF` | 10 calls / 30 s | Staff commands that change federation state. |
+| `THROTTLE_MODERATION` | 5 calls / 60 s | Destructive moderation commands (ban, kick, mute, warn, unban). |
+| `THROTTLE_FEDERATION` | 3 calls / 60 s | Federation-wide commands that fan out over every group. |
+| `THROTTLE_BULK` | 3 calls / 300 s | Bulk commands that run for minutes. |
+| `THROTTLE_CRITICAL` | 1 call / 300 s | A single destructive operation per window. |
+| `THROTTLE_SWEEP` | 2 calls / 300 s | The scheduled federation sweep. |
+
+The Redis key already carries the handler name, so two handlers on the same tier keep independent buckets.
 
 ### Rate limiter backend
 
@@ -49,7 +67,7 @@ Decorators provide authorization, handler-level rate limiting, and debug tracing
 Typical command decorator order:
 
 ```python
-@decorators.ratelimiter(limit=5, period=60)
+@decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.mod_only
 @decorators.log_execution
 async def cmd_example(update, ctx): ...

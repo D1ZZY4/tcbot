@@ -29,10 +29,6 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-_RL_PERIOD_S: int = 60
-_RL_LIMIT: int = 3
-
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -69,7 +65,7 @@ __help_sections__ = __help__["sections"]
 # ──────────────── Command Broadcast </tcbroadcast> ──────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

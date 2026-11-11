@@ -29,9 +29,6 @@ from tcbot.utils.prefixes import build_prefixed_filters
 log = get_logger(__name__)
 
 # ─────────────────────── Rate-limiter constants ──────────────────── #
-_RL_PERIOD_S: int = 30
-_RL_CMD_LIMIT: int = 8
-_RL_CB_LIMIT: int = 15
 
 # * Telegram caps message text at ~4096 chars; render_groups() truncates to this
 # * budget so large federations get a partial list instead of an error.
@@ -111,7 +108,7 @@ def render_groups(
 # ────────── Command for see Connected Groups </tcgroups> ────────── #
 
 
-@decorators.ratelimiter(limit=_RL_CMD_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
 async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Reply with the list of all currently active connected groups (truncated to fit)."""
@@ -192,14 +189,14 @@ async def _toggle(
     )
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Switch the groups listing to detailed view (shows full chat IDs)."""
     await _toggle(update, ctx, detailed=True)
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Switch the groups listing to simple view (condensed, no full chat IDs)."""

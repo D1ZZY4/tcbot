@@ -30,11 +30,6 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-_RL_PERIOD_LONG_S: int = 60
-_RL_PERIOD_BULK_S: int = 300
-_RL_CLEANUP_LIMIT: int = 3
-_RL_LEAVEALL_LIMIT: int = 1
 
 # * Bound for one membership probe; single owner in time_and_date.
 _MEMBERSHIP_CHECK_TIMEOUT = TELEGRAM_LOOKUP_TIMEOUT
@@ -171,7 +166,7 @@ async def _leave_one(
     )
 
 
-@decorators.ratelimiter(limit=_RL_LEAVEALL_LIMIT, period=_RL_PERIOD_BULK_S)
+@decorators.ratelimiter(decorators.THROTTLE_CRITICAL)
 @decorators.owner_only
 @decorators.log_execution
 async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -305,7 +300,7 @@ async def _should_remove(bot: Bot, grp: GroupDoc) -> bool:
         return False
 
 
-@decorators.ratelimiter(limit=_RL_CLEANUP_LIMIT, period=_RL_PERIOD_LONG_S)
+@decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

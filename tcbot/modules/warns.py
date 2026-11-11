@@ -40,11 +40,6 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-_RL_PERIOD_S: int = 30
-_RL_CMD_PERIOD_S: int = 60
-_RL_WARN_LIMIT: int = 5
-_RL_READ_LIMIT: int = 8
 
 # * user_data keys for one warn flow; popped on prompt failure.
 _WARN_KEYS = ("warn_target_id", "warn_target_name")
@@ -101,7 +96,7 @@ __help_sections__ = __help__["sections"]
 # ───────────────────── Command Warn </tcwarn> ───────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_WARN_LIMIT, period=_RL_CMD_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -198,7 +193,7 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 # ─────────────────── Command Unwarn </tcunwarn> ─────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_WARN_LIMIT, period=_RL_CMD_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -263,7 +258,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ─────────────────── Command Warn List </warns> ─────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_READ_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -307,7 +302,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ──────────────── Command Reset Warns </resetwarns> ─────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_WARN_LIMIT, period=_RL_CMD_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

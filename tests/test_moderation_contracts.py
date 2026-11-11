@@ -45,6 +45,31 @@ def test_role_rank_orders_the_federation_hierarchy() -> None:
 # ───────────────────────── Rate-limit exemption ───────────────────────── #
 
 
+def test_the_throttle_tiers_keep_their_budgets() -> None:
+    """The shared throttle tiers must keep the budgets they replaced.
+
+    Every command module used to declare its own pair of constants. The
+    shared table replaced those, so the numbers are pinned here: a change
+    to a tier is a deliberate change to how hard the bot throttles a user.
+    """
+    expected = {
+        "THROTTLE_READ": (8, 30.0),
+        "THROTTLE_CALLBACK": (15, 30.0),
+        "THROTTLE_CALLBACK_DEEP": (20, 30.0),
+        "THROTTLE_STAFF": (10, 30.0),
+        "THROTTLE_MODERATION": (5, 60.0),
+        "THROTTLE_FEDERATION": (3, 60.0),
+        "THROTTLE_BULK": (3, 300.0),
+        "THROTTLE_CRITICAL": (1, 300.0),
+        "THROTTLE_SWEEP": (2, 300.0),
+    }
+    actual = {
+        name: (getattr(ratelimit, name).limit, getattr(ratelimit, name).period)
+        for name in expected
+    }
+    assert actual == expected
+
+
 def test_founder_bypasses_the_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     """The Founder is exempt from the per-user quotas."""
 

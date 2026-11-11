@@ -36,11 +36,6 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-
-_RL_PERIOD_BULK_S: int = 300
-_RL_SYNC_LIMIT: int = 2
-
 # * Bounds for one sync run. Each (user x group) pair costs at least one
 # * get_chat_member read plus, on a miss, one enforcement write; an
 # * unbounded cross product (bans x groups) would burn the 30 req/s global
@@ -596,7 +591,7 @@ def _render_summary(
 # ─────────────────── Command Sync </tcsync> ─────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_SYNC_LIMIT, period=_RL_PERIOD_BULK_S)
+@decorators.ratelimiter(decorators.THROTTLE_SWEEP)
 @decorators.mod_only
 @decorators.log_execution
 async def cmd_sync(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

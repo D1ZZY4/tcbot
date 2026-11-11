@@ -10,6 +10,7 @@ import asyncio
 import functools
 import time
 from collections import deque
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from telegram.ext import ApplicationHandlerStop, ContextTypes
@@ -30,6 +31,50 @@ if TYPE_CHECKING:
     from telegram import Update
 
 log = get_logger(__name__)
+
+
+# ─────────────────────── Shared throttle presets ─────────────────── #
+# * Single owner for the per-handler throttle tiers. Every command module
+# * used to declare its own pair of constants, which produced four
+# * different spellings for the same values and let a tier drift apart
+# * between two modules that meant the same thing.
+# *
+# * The tiers are named by what they protect, not by their numbers, so a
+# * handler reads as "a destructive command" or "a read-only listing"
+# * rather than as "limit 8, period 30".
+
+
+@dataclass(frozen=True)
+class Throttle:
+    """One named per-handler throttle tier.
+
+    ``limit`` calls are allowed per ``period`` seconds, per user, per
+    handler. The Redis key already carries the handler name, so two
+    handlers on the same tier keep independent buckets.
+    """
+
+    limit: int
+    period: float
+
+
+# * Read-only commands: /help, /stats, /tcgroups, /warns listing.
+THROTTLE_READ = Throttle(limit=8, period=30.0)
+# * Button presses that only open a view.
+THROTTLE_CALLBACK = Throttle(limit=15, period=30.0)
+# * Button presses that open a paginated drill-down with more rows.
+THROTTLE_CALLBACK_DEEP = Throttle(limit=20, period=30.0)
+# * Staff commands that change federation state (promote, demote).
+THROTTLE_STAFF = Throttle(limit=10, period=30.0)
+# * Destructive moderation commands (ban, kick, mute, warn).
+THROTTLE_MODERATION = Throttle(limit=5, period=60.0)
+# * Federation-wide commands that fan out over every group.
+THROTTLE_FEDERATION = Throttle(limit=3, period=60.0)
+# * Bulk commands that run for minutes (cleanup, leave-all).
+THROTTLE_BULK = Throttle(limit=3, period=300.0)
+# * A single destructive operation per window (leave-all).
+THROTTLE_CRITICAL = Throttle(limit=1, period=300.0)
+# * The scheduled federation sweep.
+THROTTLE_SWEEP = Throttle(limit=2, period=300.0)
 
 
 # ────────────── Per-user sliding-window rate limiter ────────────── #
@@ -284,7 +329,7 @@ async def global_rate_limit_handler(
 
 
 def ratelimiter[R](
-    limit: int = 5, period: float = 60.0
+    throttle: Throttle,
 ) -> Callable[
     [Callable[..., Coroutine[Any, Any, R]]],
     Callable[..., Coroutine[Any, Any, R | None]],
@@ -294,6 +339,9 @@ def ratelimiter[R](
     Backed by Redis when available; falls through to in-process sliding window
     otherwise.  The Redis key prefix includes the wrapped function name so each
     handler gets an independent quota bucket per user.
+
+    Takes one of the shared :class:`Throttle` tiers so every handler draws
+    its budget from the same table.
     """
 
     def decorator(
@@ -301,8 +349,8 @@ def ratelimiter[R](
     ) -> Callable[..., Coroutine[Any, Any, R | None]]:
         """Wrap ``func`` with a sliding-window per-user rate check."""
         _limiter = _AsyncRateLimiter(
-            max_calls=limit,
-            window=period,
+            max_calls=throttle.limit,
+            window=throttle.period,
             prefix=f"h:{func.__module__}.{func.__name__}",
         )
 

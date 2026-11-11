@@ -20,9 +20,6 @@ from tcbot.utils.i18n import t
 if TYPE_CHECKING:
     from telegram import Update
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-_RL_PERIOD_S: int = 30
-_RL_CB_LIMIT: int = 15
 
 __module_name__ = None
 
@@ -68,7 +65,7 @@ def _section_body(idx: int, locale: str | None = None) -> tuple[str, str]:
 # ──────────────────────── Callback Handlers ─────────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render the data-collection privacy notice when the Privacy button is tapped."""
@@ -85,7 +82,7 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_privacy_policy_menu(
     update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -106,7 +103,7 @@ async def on_privacy_policy_menu(
     )
 
 
-@decorators.ratelimiter(limit=_RL_CB_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a single privacy policy section."""

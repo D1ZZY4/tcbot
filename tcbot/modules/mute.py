@@ -39,9 +39,6 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-_RL_PERIOD_S: int = 60
-_RL_LIMIT: int = 5
 
 # * user_data keys for one mute flow; popped on prompt failure.
 _MUTE_KEYS = (
@@ -101,7 +98,7 @@ __help_sections__ = __help__["sections"]
 # ───────────────────── Command Mute </tcmute> ───────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -239,7 +236,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 # ─────────────────── Command Unmute </tcunmute> ─────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.basic_mod_only
 @decorators.log_execution
 async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

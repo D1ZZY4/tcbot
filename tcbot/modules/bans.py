@@ -45,10 +45,6 @@ log = get_logger(__name__)
 # ──────────────── User-facing reply constants ──────────────────── #
 # * Ban runtime prose lives in banning.toml; no constants stay here.
 
-# ─────────────────────── Rate-limiter constants ──────────────────── #
-_RL_PERIOD_S: int = 60
-_RL_LIMIT: int = 3
-
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -90,7 +86,7 @@ __help_sections__ = __help__["sections"]
 # ────────────────────── Command Ban </tcban> ────────────────────── #
 
 
-@decorators.ratelimiter(limit=_RL_LIMIT, period=_RL_PERIOD_S)
+@decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.mod_only
 @decorators.log_execution
 async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:

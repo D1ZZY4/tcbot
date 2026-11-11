@@ -85,6 +85,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **One throttle table for every command module** (`tcbot/modules/helper/decorators/ratelimit.py`, `tcbot/modules/`): the twenty-three command modules each declared their own rate-limit constants, in four different spellings, so two handlers that meant the same thing could throttle differently. Nine named tiers now hold every budget, and each handler names the tier it draws from. Behavior changes: none; every handler keeps the exact limit and window it had before.
+
 - **One owner for the role sets** (`tcbot/database/users_roles.py`): `STAFF_ROLES` and `FOUNDER_ADMIN_ROLES` replace eleven inline role-set literals across the moderation paths, so a new tier cannot land in the rank table and be missed by every set check. Behavior changes: none.
 
 - **One owner for the explicit-target rule** (`tcbot/modules/helper/extraction/resolve.py`, `tcbot/modules/admins.py`): the promotion entry now uses the shared target-shape helper instead of an open-coded copy that treated a bare `@` as a target. Behavior changes: `/tcpromote @ developer` no longer consumes the `@` token as the target.
