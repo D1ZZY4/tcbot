@@ -86,15 +86,51 @@ async def set_active_mute(user_id: int, *, until: datetime | None = None) -> Non
     Pass ``until=None`` for a permanent mute.  For timed mutes, pass the
     UTC datetime when the restriction expires (matches the ``until_date``
     value passed to ``restrict_chat_member``).
+
+    The stored expiry only ever moves further into the future. A permanent
+    mute is never downgraded to a timed one: overwriting a stored
+    ``until_date`` of ``None`` with a deadline would let the TTL index
+    delete the record when that deadline passes, and the bot would lose the
+    enforcement state for a user it still restricts. For the same reason a
+    timed mute never shortens an expiry that already reaches further.
     """
+    now = utc_now()
+    if until is None:
+        # * A permanent mute always wins: it outranks every deadline.
+        await db_call(
+            lambda: _active_mutes().update_one(
+                {"user_id": UserId(user_id)},
+                {
+                    "$set": {
+                        "user_id": UserId(user_id),
+                        "until_date": None,
+                        "timestamp": now,
+                    }
+                },
+                upsert=True,
+            )
+        )
+        return
+    # * Extend an existing timed expiry, never shorten one and never
+    # * downgrade a permanent mute: the filter matches only a stored date
+    # * that is present and strictly earlier than the new deadline.
+    await db_call(
+        lambda: _active_mutes().update_one(
+            {"user_id": UserId(user_id), "until_date": {"$ne": None, "$lt": until}},
+            {"$set": {"until_date": until, "timestamp": now}},
+        )
+    )
+    # * Create the record when it does not exist yet. $setOnInsert only
+    # * fires on insert, so an existing record keeps the value the step
+    # * above decided on.
     await db_call(
         lambda: _active_mutes().update_one(
             {"user_id": UserId(user_id)},
             {
-                "$set": {
+                "$setOnInsert": {
                     "user_id": UserId(user_id),
                     "until_date": until,
-                    "timestamp": utc_now(),
+                    "timestamp": now,
                 }
             },
             upsert=True,

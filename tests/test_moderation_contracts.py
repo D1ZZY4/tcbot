@@ -197,7 +197,10 @@ def test_permanent_mute_row_is_never_ttl_pruned(
             self, filt: dict[str, Any], update: dict[str, Any], **kw: Any
         ) -> None:
             _ = (filt, kw)
-            captured["until"] = update["$set"]["until_date"]
+            if "$set" in update:
+                captured["until"] = update["$set"].get("until_date")
+            else:
+                captured["until"] = update["$setOnInsert"].get("until_date")
 
     monkeypatch.setattr(mutes_db, "_active_mutes", lambda: _Collection())
 
@@ -208,6 +211,40 @@ def test_permanent_mute_row_is_never_ttl_pruned(
         mutes_db.set_active_mute(42, until=datetime.now(UTC) + timedelta(hours=1))
     )
     assert captured["until"] is not None
+
+
+def test_timed_mute_never_overwrites_a_permanent_mute(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A timed mute must not downgrade a permanent one.
+
+    Overwriting the stored null expiry with a deadline would let the TTL
+    index delete the record when the deadline passes, so the bot would lose
+    the enforcement state for a user it still restricts.
+    """
+    writes: list[dict[str, Any]] = []
+
+    class _Collection:
+        def update_one(
+            self, filt: dict[str, Any], update: dict[str, Any], **kw: Any
+        ) -> None:
+            _ = (kw,)
+            writes.append({"filter": filt, "update": update})
+
+    monkeypatch.setattr(mutes_db, "_active_mutes", lambda: _Collection())
+
+    asyncio.run(
+        mutes_db.set_active_mute(42, until=datetime.now(UTC) + timedelta(hours=1))
+    )
+    # * The write that could shorten an existing expiry is guarded by a
+    # * filter that only matches a stored date that is present and earlier.
+    guarded = writes[0]
+    until_filter = guarded["filter"]["until_date"]
+    assert until_filter["$ne"] is None
+    assert "$lt" in until_filter
+    # * The insert path carries the requested deadline, so a first-time
+    # * timed mute is not stored as permanent.
+    assert writes[1]["update"]["$setOnInsert"]["until_date"] is not None
 
 
 # ─────────────────────────── Ban DB atomicity ─────────────────────────── #
