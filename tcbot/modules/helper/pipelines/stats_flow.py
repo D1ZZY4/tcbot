@@ -34,7 +34,7 @@ from tcbot.modules.helper.keyboards import (
     stats_search_results_kb,
     stats_search_row,
 )
-from tcbot.utils.dispatch import gather_bounded, throw_if_cancelled
+from tcbot.utils.dispatch import drain_tasks, gather_bounded, throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -91,6 +91,11 @@ def launch_group_title_refresh(bot: Bot, chat_id: int) -> None:
         return
     _refresh_tasks.add(task)
     task.add_done_callback(_refresh_tasks.discard)
+
+
+async def drain_refresh_tasks() -> None:
+    """Await the pending group-title refreshes so none outlives the shutdown."""
+    await drain_tasks(_refresh_tasks, label="group title refresh")
 
 
 # ─────────────────────── Overview and roster ────────────────────── #

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+from itertools import batched
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -26,6 +27,12 @@ if TYPE_CHECKING:
     from pymongo.collection import Collection
 
 log = get_logger(__name__)
+
+# * Number of counter rows merged per batch during a chat migration. The
+# * merge runs one find_one_and_delete plus one update per counter, so an
+# * unbounded batch would create an unbounded number of pending round
+# * trips on a legacy group that holds a counter per warned user.
+_MIGRATION_CHUNK_SIZE: int = 200
 
 # ──────────────────────────── Collection ─────────────────────────── #
 
@@ -562,8 +569,15 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
     # * concurrently under the shared database cap instead of one user at
     # * a time (a large legacy group could otherwise stall for hundreds
     # * of sequential trips).
-    results = await gather_bounded([_merge_one_counter(doc) for doc in old_counters])
-    matched_any = matched_any or any(r is True for r in results)
+    # * The counter list is chunked: a legacy group can hold a counter per
+    # * warned user, and creating one task per counter up front would
+    # * build an unbounded task list and an unbounded number of pending
+    # * round trips.
+    merged = False
+    for chunk in batched(old_counters, _MIGRATION_CHUNK_SIZE, strict=False):
+        results = await gather_bounded([_merge_one_counter(doc) for doc in chunk])
+        merged = merged or any(r is True for r in results)
+    matched_any = matched_any or merged
     try:
         await db_call(lambda: _warn_counts().delete_many({"chat_id": old_chat_id}))
     except asyncio.CancelledError:

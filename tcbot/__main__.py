@@ -37,7 +37,14 @@ from tcbot.database.mongos import close as close_mongo
 from tcbot.database.mongos import connect, ensure_indexes
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
+from tcbot.modules.helper.extraction.sync import (
+    drain_refresh_tasks as drain_identity_refresh_tasks,
+)
+from tcbot.modules.helper.pipelines.ban_flow import drain_proof_sessions
 from tcbot.modules.helper.pipelines.connected_flow import drain_harvest_tasks
+from tcbot.modules.helper.pipelines.stats_flow import (
+    drain_refresh_tasks as drain_title_refresh_tasks,
+)
 from tcbot.modules.sync import run_ban_sync
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitOpenError
@@ -338,6 +345,9 @@ async def _post_shutdown(app: Application) -> None:
     await drain_tasks(_startup_tasks, label="startup warm-up")
     await drain_tasks(_asyncio_report_tasks, label="async error reports")
     await drain_harvest_tasks()
+    await drain_identity_refresh_tasks()
+    await drain_title_refresh_tasks()
+    await drain_proof_sessions()
     await logger_mod.drain_pending()
     await drain_redis_mutations()
     shutdown_results = await asyncio.gather(
@@ -409,7 +419,14 @@ async def _run_webhook_mode(app: Application) -> None:
         loop.add_signal_handler(signal.SIGTERM, shutdown_event.set)
         loop.add_signal_handler(signal.SIGINT, shutdown_event.set)
     async with app:
-        await _post_init(app)
+        try:
+            await _post_init(app)
+        except BaseException:
+            # * PTB's shutdown() does not run post_shutdown, so a boot
+            # * failure after connect() would leave the Mongo client, the
+            # * Redis pool, the MTProto client and the scheduler running.
+            await _post_shutdown(app)
+            raise
         await app.start()
         try:
             log.info("Registering webhook at %s ...", full_url)

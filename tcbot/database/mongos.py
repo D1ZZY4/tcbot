@@ -208,12 +208,24 @@ async def connect() -> None:
         compressors=["zlib"],
         retryWrites=True,
         retryReads=True,
+        # * Read datetimes back as aware UTC values. The code writes aware
+        # * UTC timestamps, so a naive read would have to be converted at
+        # * every arithmetic site, and a value handed to the Telegram API
+        # * would be interpreted in the local zone instead of UTC.
+        tz_aware=True,
         **client_kwargs,
     )
-    await _mongo_cb.call(
-        asyncio.to_thread(client.admin.command, "ping"),
-        count_failure=_counts_toward_circuit,
-    )
+    try:
+        await _mongo_cb.call(
+            asyncio.to_thread(client.admin.command, "ping"),
+            count_failure=_counts_toward_circuit,
+        )
+    except BaseException:
+        # * The client is not published yet, so close() can never reclaim it.
+        # * Leaking it would keep a monitor thread and a socket alive per
+        # * failed attempt, which accumulates on the serverless path.
+        client.close()
+        raise
     _client = client
     _db = client[cfg.db_name]
     log.info("MongoDB connected → %s", cfg.db_name)

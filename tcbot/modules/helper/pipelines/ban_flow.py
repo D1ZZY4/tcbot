@@ -81,6 +81,8 @@ WAITING_PROOF = 0
 WAITING_UPDATE_CONFIRM = 1
 proof = BuildProof("ban", skip_allowed=False)
 _PROOF_COLLECT_MAX_S: float = 60.0
+# * Upper bound for the shutdown drain of the pending proof flushes.
+_PROOF_DRAIN_TIMEOUT_S: float = 30.0
 
 
 @dataclass
@@ -118,6 +120,38 @@ def _cancel_proof_session(scope: dict[str, Any] | None) -> None:
         session.cancelled = True
         if session.flush_task is not None:
             session.flush_task.cancel()
+
+
+async def drain_proof_sessions() -> None:
+    """Let the pending proof flushes finish so no ban is left half-applied.
+
+    A flush that is already executing the ban must not be cancelled: the
+    ban record may already be stored while the Telegram fan-out is still
+    running, and cancelling there would leave the federation with a ban
+    nobody was told about. The drain waits for the running flushes and
+    only cancels the ones that are still waiting for their silence window.
+    """
+    pending = [s.flush_task for s in _proof_sessions.values() if s.flush_task]
+    if not pending:
+        return
+    live = [t for t in pending if not t.done()]
+    if not live:
+        return
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*live, return_exceptions=True),
+            timeout=_PROOF_DRAIN_TIMEOUT_S,
+        )
+        return
+    except TimeoutError:
+        log.warning(
+            "Ban proof flush still running after %.0fs; cancelling.",
+            _PROOF_DRAIN_TIMEOUT_S,
+        )
+    for task in live:
+        if not task.done():
+            task.cancel()
+    await asyncio.gather(*[t for t in live if not t.done()], return_exceptions=True)
 
 
 # ─────────────────────── Proof session flush ────────────────────── #

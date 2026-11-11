@@ -107,7 +107,15 @@ async def get_app() -> Application:
     app = build_serverless_app()
     register_handlers(app)
     await app.initialize()
-    await _init_subsystems(app)
+    try:
+        await _init_subsystems(app)
+    except BaseException:
+        # * The initialised application owns an httpx client and a
+        # * connection pool. Without this cleanup every failed warm
+        # * invocation would leak one, because _app stays None and the
+        # * next invocation builds a fresh application.
+        await app.shutdown()
+        raise
     _app = app
     return app
 

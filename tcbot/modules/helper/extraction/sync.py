@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from tcbot import database as db
 from tcbot.modules.helper.extraction.resolve import _GET_CHAT_TIMEOUT
+from tcbot.utils.dispatch import drain_tasks
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import to_utc, utc_now
 
@@ -259,3 +260,8 @@ def launch_identity_refresh(bot: Bot, target_id: int) -> None:
         return
     _refresh_tasks.add(task)
     task.add_done_callback(_refresh_tasks.discard)
+
+
+async def drain_refresh_tasks() -> None:
+    """Await the pending identity refreshes so none outlives the shutdown."""
+    await drain_tasks(_refresh_tasks, label="identity refresh")
