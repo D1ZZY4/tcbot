@@ -132,7 +132,7 @@ def test_classify_raises_when_the_role_cannot_be_resolved(
     lose the protection that keeps a Founder from being moderated.
     """
 
-    async def _boom(_user_id: int) -> str:
+    async def _boom(_user_id: int, *, fresh: bool = False) -> str:
         raise _database_outage()
 
     async def _name(_user_id: int) -> tuple[str, str | None]:
@@ -151,7 +151,7 @@ def test_classify_still_resolves_when_only_the_name_lookup_fails(
 ) -> None:
     """The display name is not an authorization input, so it may degrade."""
 
-    async def _role(_user_id: int) -> str:
+    async def _role(_user_id: int, *, fresh: bool = False) -> str:
         return "founder"
 
     async def _boom(_user_id: int) -> tuple[str, str | None]:

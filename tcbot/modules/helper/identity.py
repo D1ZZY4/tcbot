@@ -93,10 +93,15 @@ async def classify(
 ) -> Identity:
     """Return an :class:`Identity` for ``target_id`` relative to ``executor_id``.
 
-    The name-cache and role-cache reads are independent, so they run in
+    The name read and the role read are independent, so they run in
     parallel and the total latency is one round trip rather than two, even
     when the role is ultimately unused (self, bot, and Telegram targets
     return before any role check).
+
+    The role is read fresh rather than from the cache. The protected-target
+    refusals are keyed on the role kind, so a cached role could show a
+    Founder as an ordinary user for the whole cache TTL and let the action
+    reach its prompt.
 
     A role-lookup failure is raised, never degraded. The protected-target
     refusals are keyed on the role kind, so a target that resolved to
@@ -106,13 +111,16 @@ async def classify(
     fail-closed without asking every caller for a second role read.
     Cancellation always propagates.
     """
-    # * Both are independent cached reads; run in parallel.
+    # * Both are independent reads; run them in parallel. The role is read
+    # * fresh: the refusal table is keyed on the role kind, so a cached
+    # * role could show a Founder as an ordinary user for the whole cache
+    # * TTL and let the action reach its prompt.
     # * return_exceptions=True keeps the two failure modes apart: the name
     # * lookup is display-only and degrades, the role lookup decides
     # * whether the action is allowed and must not.
     mention_data, role_result = await asyncio.gather(
         db.users_cache.get_user_mention_data(target_id),
-        db.users_roles.get_effective_role(target_id),
+        db.users_roles.get_effective_role(target_id, fresh=True),
         return_exceptions=True,
     )
     throw_if_cancelled((mention_data, role_result))

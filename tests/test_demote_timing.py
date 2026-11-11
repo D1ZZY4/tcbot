@@ -121,6 +121,14 @@ def test_the_kick_executor_demotes_before_the_fan_out(
     """The enforcement path removes the role before the kick lands."""
     order: list[str] = []
 
+    # * The enforcement path re-checks the executor against the target
+    # * before it records anything. The executor is a developer and the
+    # * target holds no role, so the action is allowed.
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        return "developer" if user_id == 111 else None
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+
     async def _demote_before_enforcement(
         bot: Any,
         target_id: int,

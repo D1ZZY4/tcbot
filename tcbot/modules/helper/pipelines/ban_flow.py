@@ -358,6 +358,35 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     prompt_chat_id: int = meta.get("ban_prompt_chat_id", 0)
     now = utc_now()
     proof_chat, proof_thread = cfg.proofs
+    # * Re-check the executor against the target before anything is
+    # * recorded or uploaded. The entry command compared the two roles,
+    # * but the proof window can stay open for a minute, and a target
+    # * promoted in that window must not be banned by a moderator who no
+    # * longer outranks them. The check runs first so a refused ban
+    # * leaves no record, no proof, and no partial fan-out behind.
+    verdict, target_label = await decorators.enforcement_verdict(admin_id, target_id)
+    if verdict is not decorators.EnforcementVerdict.ALLOWED:
+        log.warning(
+            "Ban refused for target=%d: executor=%d (%s)",
+            target_id,
+            admin_id,
+            verdict.value,
+        )
+        if prompt_msg_id and prompt_chat_id:
+            await safe_edit_message(
+                bot,
+                prompt_chat_id,
+                prompt_msg_id,
+                (
+                    replies.refuse_outranked(target_label or "", locale, plain=True)
+                    if verdict is decorators.EnforcementVerdict.OUTRANKED
+                    else replies.refuse_role_lookup(locale, plain=True)
+                ),
+                log_level="debug",
+                log_label="Ban rank-refusal prompt",
+                catch_all=True,
+            )
+        return
     # * Groups prefetch concurrently with the ban write; cancelled on any failure.
     _groups_task: asyncio.Task[list] = asyncio.create_task(db.groups_db.active_groups())
     try:

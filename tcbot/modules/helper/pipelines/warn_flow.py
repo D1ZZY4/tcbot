@@ -13,7 +13,7 @@ from telegram import Message, Update
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, messages
+from tcbot.modules.helper import decorators, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
 from tcbot.modules.helper.pipelines.demote_flow import Demote
@@ -75,6 +75,32 @@ async def execute_warn(
     admin_id = admin.id
     admin_fname = admin.first_name
     locale = await locale_for_update(update)
+    warn_limit = cfg.warn_limit
+    # * Re-check the executor against the target before anything is
+    # * recorded or uploaded. The entry command compared the two roles,
+    # * but the proof window can stay open for a minute, and a target
+    # * promoted in that window must not be warned by a moderator who no
+    # * longer outranks them. The check runs first so a refused warning
+    # * leaves no record, no counter, no demotion, and no orphan proof.
+    verdict, target_label = await decorators.enforcement_verdict(admin_id, target_id)
+    if verdict is not decorators.EnforcementVerdict.ALLOWED:
+        log.warning(
+            "Warn refused for target=%d: executor=%d (%s)",
+            target_id,
+            admin_id,
+            verdict.value,
+        )
+        await safe_reply(
+            msg,
+            (
+                replies.refuse_outranked(target_label or "", locale, plain=True)
+                if verdict is decorators.EnforcementVerdict.OUTRANKED
+                else replies.refuse_role_lookup(locale, plain=True)
+            ),
+            log_label="execute_warn rank-refusal",
+            parse_mode=None,
+        )
+        return
     proof_task: asyncio.Task[ProofUpload] | None = None
     if proof_msgs:
         proof_task = asyncio.create_task(
@@ -82,7 +108,6 @@ async def execute_warn(
                 ctx.bot, proof_msgs, target_id, admin_id, admin_fname
             )
         )
-    warn_limit = cfg.warn_limit
     try:
         count = await db.warns_db.add_warn(target_id, reason_text, admin_id, chat_id)
     except Exception:

@@ -13,6 +13,7 @@ from tcbot.modules.helper.decorators.auth import (
     staff_only,
 )
 from tcbot.modules.helper.decorators.checks import (
+    EnforcementVerdict,
     ModTarget,
     StaffTarget,
     action_owner_mismatch,
@@ -22,6 +23,7 @@ from tcbot.modules.helper.decorators.checks import (
     check_callback_staff,
     classify_and_check,
     classify_and_load_role,
+    enforcement_verdict,
     prompt_owner_mismatch,
     recheck_executor_rank,
     require_federation_origin,

@@ -10,7 +10,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, messages
+from tcbot.modules.helper import decorators, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
@@ -65,6 +65,32 @@ async def execute_kick(
     admin_id = effective_user.id
     admin_fname = effective_user.first_name
     locale = await locale_for_update(update)
+
+    # * Re-check the executor against the target before anything is
+    # * recorded. The entry command compared the two roles, but the proof
+    # * window can stay open for a minute, and a target promoted in that
+    # * window must not be actioned by a moderator who no longer outranks
+    # * them. The check runs before the audit row and the proof upload so
+    # * a refused kick leaves no record and no orphan proof behind.
+    verdict, target_label = await decorators.enforcement_verdict(admin_id, target_id)
+    if verdict is not decorators.EnforcementVerdict.ALLOWED:
+        log.warning(
+            "Kick refused for target=%d: executor=%d (%s)",
+            target_id,
+            admin_id,
+            verdict.value,
+        )
+        await safe_reply(
+            msg,
+            (
+                replies.refuse_outranked(target_label or "", locale, plain=True)
+                if verdict is decorators.EnforcementVerdict.OUTRANKED
+                else replies.refuse_role_lookup(locale, plain=True)
+            ),
+            log_label="execute_kick rank-refusal",
+            parse_mode=None,
+        )
+        return
 
     # * Upload proof concurrently with enforcement: the ban below must not wait
     # * for the proof-channel round trip. The task is awaited after the ban

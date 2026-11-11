@@ -13,7 +13,7 @@ from telegram import Bot, ChatPermissions, Update
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, messages
+from tcbot.modules.helper import decorators, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     replies,
@@ -78,6 +78,34 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     chat_id = update.effective_chat.id if update.effective_chat else None
     if chat_id is None:
         log.warning("_execute_mute called without effective_chat")
+        return
+    # * Re-check the executor against the target before anything is
+    # * recorded. The entry command compared the two roles, but the proof
+    # * window can stay open for a minute, and a target promoted in that
+    # * window must not be actioned by a moderator who no longer outranks
+    # * them. The check runs before the active-mute record so a refused
+    # * mute leaves no state behind.
+    verdict, target_label = await decorators.enforcement_verdict(admin_id, target_id)
+    if verdict is not decorators.EnforcementVerdict.ALLOWED:
+        log.warning(
+            "Mute refused for target=%d: executor=%d (%s)",
+            target_id,
+            admin_id,
+            verdict.value,
+        )
+        await safe_edit_message(
+            bot,
+            prompt_chat,
+            prompt_id,
+            (
+                replies.refuse_outranked(target_label or "", locale, plain=True)
+                if verdict is decorators.EnforcementVerdict.OUTRANKED
+                else replies.refuse_role_lookup(locale, plain=True)
+            ),
+            log_level="debug",
+            log_label="_execute_mute rank-refusal",
+            catch_all=True,
+        )
         return
     try:
         groups = await db.groups_db.active_groups()

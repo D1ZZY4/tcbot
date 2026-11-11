@@ -35,6 +35,21 @@ async def _stub_locale(*args: Any, **kwargs: Any) -> str:
     return "en"
 
 
+def _install_role_stub(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let the enforcement-time rank check pass.
+
+    The ban executor re-checks the executor against the target before it
+    records anything. The executor is a moderator and the target holds no
+    role, so the action is allowed and the test reaches the code path it
+    is about.
+    """
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        return "developer" if user_id == 44 else None
+
+    monkeypatch.setattr(ban_flow.db.users_roles, "get_effective_role", _role)
+
+
 def _install_create_task_spy(monkeypatch: pytest.MonkeyPatch) -> list[asyncio.Task]:
     """Record tasks created via the module's asyncio.create_task reference.
 
@@ -68,6 +83,7 @@ def test_propagated_error_retrieves_groups_task(
 
     monkeypatch.setattr(ban_flow, "locale_for_user", _stub_locale)
     monkeypatch.setattr(ban_flow.db.bans_db, "get_active_ban", _boom)
+    _install_role_stub(monkeypatch)
     created = _install_create_task_spy(monkeypatch)
 
     with pytest.raises(RuntimeError, match="mongo down"):
@@ -84,6 +100,7 @@ def test_cancellation_still_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(ban_flow, "locale_for_user", _stub_locale)
     monkeypatch.setattr(ban_flow.db.bans_db, "get_active_ban", _cancel)
+    _install_role_stub(monkeypatch)
     created = _install_create_task_spy(monkeypatch)
 
     with pytest.raises(asyncio.CancelledError):

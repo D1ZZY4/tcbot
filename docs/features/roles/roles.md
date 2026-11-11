@@ -66,6 +66,8 @@ Only `developer` and `tester` are valid custom roles in `tc_roles`. Founder and 
 
 The helper `role_rank(role)` converts an effective role into its numeric rank. Executor-versus-target checks go through `decorators.resolve_and_check()`, which allows the action only when the executor rank is strictly greater than the target rank. If either role lookup fails, the check fails closed with a retry reply rather than treating the failed lookup as a user with no role; cancellation always propagates.
 
+The rule is applied at two moments. The entry command compares the roles when the moderator starts the flow, and `decorators.enforcement_verdict()` compares them again when the action is enforced, because the reason and proof steps stay open for a minute. A target promoted in that window would otherwise be actioned by a moderator who no longer outranks them, so the ban, kick, mute, and warn executors re-read both roles fresh and refuse the action. The refusal happens before anything is recorded, so it leaves no audit row, no ban record, no warning counter, and no orphan proof behind. A role lookup that fails refuses the action as well.
+
 Common moderation thresholds:
 
 | Action | Minimum effective role |

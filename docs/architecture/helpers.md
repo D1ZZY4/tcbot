@@ -175,6 +175,7 @@ The `decorators/` module centralizes both auth-guard decorators and the shared e
 | `resolve_executor_target(msg, admin_id, update, args, bot, *, action, locale=None)` | Shared executor-role plus target fetch for the promote/demote commands: parallel reads, fail closed with a retry reply on outage. Returns `(executor_role, target_id, target_fname)` or `None`. |
 | `classify_and_check(bot, admin_id, target_id, target_name, msg, *, action, min_role, target_is_bot=None)` | Shared identity classification plus executor-vs-target rank validation for the kick/mute/warn entries: parallel reads, fail closed with the refusal reply already sent. Returns `(ident, target_role)` or `None`. |
 | `recheck_executor_rank(msg, executor_id, *, min_role)` | Re-verifies the executor still meets `min_role` at enforcement time (Done/Skip/Continue taps): a mid-window demotion blocks enforcement fail closed. Returns `True` when the tap may proceed, `False` after replying on failure. |
+| `enforcement_verdict(executor_id, target_id)` | Re-checks the executor against the target at enforcement time: both roles are read fresh and the executor must still outrank the target, exactly like `resolve_and_check` does at entry. Returns `(EnforcementVerdict, role_label)` where the verdict is `ALLOWED`, `OUTRANKED`, or `LOOKUP_FAILED`; a lookup failure fails closed. |
 | `classify_and_load_role(bot, admin_id, target_id, target_fname, msg, *, action, locale=None)` | Shared identity classification plus live target-role fetch for the promote/demote commands: parallel reads, fail closed. Returns `(ident, current_role)` or `None`. |
 | `check_callback_staff(admin_id, q, update)` | Re-checks Founder/Admin rank in parallel with `q.answer()`; returns the role or `None` after editing the perm-expired notice. |
 | `prompt_owner_mismatch(q, update, *, min_parts, key)` | Alert-denies a prompt tap from anyone but the recorded opener (new callbacks carry `{...}:{executor}`; legacy taps without the segment keep working). `cancel_owner_mismatch` and `action_owner_mismatch` are the cancel/action wrappers. |
@@ -183,6 +184,8 @@ The `decorators/` module centralizes both auth-guard decorators and the shared e
 | `require_federation_origin(msg, chat_id, chat_type, locale, allow_private=...)` | Enforces that moderation entries originate from a connected group or a primary group (private only when `allow_private` is set for federation-wide entries). A disconnected group, or a private chat where `allow_private` is false, replies with the shared notice and blocks the action; a connection-state outage replies with the database retry notice and blocks (fail closed). |
 
 Ban, kick, and mute pair this with the enforcement-time demote from `pipelines/demote_flow.py`, which removes the target's role right before the moderation action is applied.
+
+The entry check and the enforcement check are two moments, so the rule is applied twice. The reason and proof steps of a moderation flow stay open for a minute, and a target promoted in that window would otherwise be actioned by a moderator who no longer outranks them. The ban, kick, mute, and warn executors therefore call `enforcement_verdict` before they record anything, so a refused action leaves no audit row, no ban record, no warning counter, and no orphan proof behind.
 
 ## `messages/replies.py`
 

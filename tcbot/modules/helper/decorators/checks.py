@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes
@@ -30,6 +31,56 @@ if TYPE_CHECKING:
     from tcbot.modules.helper.identity import Identity
 
 log = get_logger(__name__)
+
+
+class EnforcementVerdict(Enum):
+    """Outcome of the enforcement-time executor-versus-target check."""
+
+    ALLOWED = "allowed"
+    OUTRANKED = "outranked"
+    LOOKUP_FAILED = "lookup_failed"
+
+
+async def enforcement_verdict(
+    executor_id: int, target_id: int
+) -> tuple[EnforcementVerdict, str | None]:
+    """Re-check the executor against the target at enforcement time.
+
+    The entry command compares the two roles, but an enforcement can land
+    a minute later, after the proof window. A target promoted in that
+    window would otherwise be actioned by a moderator who no longer
+    outranks them, and the rule that refused the action at entry would be
+    silently bypassed. The enforcement path therefore re-reads both roles
+    fresh and applies the same rule as :func:`resolve_and_check`.
+
+    The check fails closed: a role lookup that fails refuses the
+    enforcement, exactly like the entry check does.
+
+    Returns the verdict and, when the target outranks the executor, the
+    target's role label for the refusal message.
+    """
+    try:
+        executor_role, target_role = await asyncio.gather(
+            db.users_roles.get_effective_role(executor_id, fresh=True),
+            db.users_roles.get_effective_role(target_id, fresh=True),
+            return_exceptions=True,
+        )
+    except asyncio.CancelledError:
+        raise
+    if isinstance(executor_role, BaseException) or isinstance(
+        target_role, BaseException
+    ):
+        log.warning(
+            "enforcement verdict: role lookup failed (executor=%d target=%d)",
+            executor_id,
+            target_id,
+        )
+        return EnforcementVerdict.LOOKUP_FAILED, None
+    if target_role and db.users_roles.role_rank(
+        executor_role
+    ) <= db.users_roles.role_rank(target_role):
+        return EnforcementVerdict.OUTRANKED, db.users_roles.role_label(target_role)
+    return EnforcementVerdict.ALLOWED, None
 
 
 async def resolve_and_check(
