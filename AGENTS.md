@@ -161,11 +161,10 @@ Current stack:
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
 │       ├── circuit_breaker.py  Telegram/MongoDB circuit breaker
 │       ├── dispatch.py        fan_out() bounded concurrency dispatcher
-│       ├── error_reporter.py  Error reporting to LOGS_ERRORS
 │       ├── formatter.py       MarkdownV2 formatter (esc, code, user_ref, bold)
 │       ├── i18n.py            TOML catalog, t() and locale resolution
 │       ├── logger.py          Logging setup
-│       ├── pagination.py      Paginated message rendering
+│       ├── pagination.py      Page arithmetic (clamp_page) for paged views
 │       ├── prefixes.py        Command prefix resolution
 │       ├── secrets.py         Constant-time secret comparison for inbound credentials
 │       ├── time_and_date.py    Central clock: UTC store/display + measure + durations

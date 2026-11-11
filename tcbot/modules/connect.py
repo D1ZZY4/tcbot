@@ -88,8 +88,9 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     Group-only command. Checks admin status, existing connection, and pending
     requests in parallel (Telegram lookup is bounded to avoid stalls). On
-    success, creates a pending request and notifies the main group for founder
-    approval.
+    success, the group is connected right away: the command requires Telegram
+    administrator rights in the group, which is the authorization, so no
+    separate founder approval step exists.
     """
     chat = update.effective_chat
     user = update.effective_user

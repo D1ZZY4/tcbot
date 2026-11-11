@@ -718,6 +718,10 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Documentation
 
+- **The guides describe the throttle tiers that ship** (`docs/architecture/helpers.md`, `docs/architecture/utilities.md`, `docs/features/roles/demote.md`, `docs/features/roles/promote.md`, `docs/features/moderation/kicking.md`, `docs/architecture/workflows.md`): the per-handler throttle table, the new fan-out and proof-upload owners, the single demote contract, and the promotion-approval order now match the code. The approval path is documented as resolve-then-grant, the order the atomic claim requires. Behavior changes: none, docs only.
+
+- **The stale map and the promotion order are corrected** (`AGENTS.md`, `docs/architecture/repository-map.md`, `docs/features/roles/promote.md`): the repository map still listed the error reporter in the utilities layer and the retired page helper, and the promotion guide described the grant before the atomic claim. The map and the guide now match the code. Behavior changes: none, docs only.
+
 - **The guides describe the demote API that ships** (`docs/features/moderation/banning.md`, `docs/features/moderation/kicking.md`, `docs/features/moderation/muting.md`, `docs/features/roles/demote.md`, `docs/architecture/workflows.md`, `docs/architecture/helpers.md`): three guides named a demote helper that does not exist, and the shared gates that replaced the copies are now documented with their failure policy. Behavior changes: none, docs only.
 
 - **The guides describe the layout that ships** (`AGENTS.md`, `docs/architecture/repository-map.md`, `docs/architecture/utilities.md`, `docs/architecture/helpers.md`, `docs/architecture/database.md`, `docs/features/moderation/sync.md`): the repository map, the utility and helper tables, the database reference, and the sweep guide now list the error reporter at the package root, the navigation-row builder, the page arithmetic, the log delivery helper, the role sets and labels, the placeholder-name rule, the lowercase name mirrors, and the per-group sweep budget. Behavior changes: none, docs only.

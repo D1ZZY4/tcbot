@@ -105,7 +105,7 @@ tcbot/
     ├── formatter.py        MarkdownV2 escaping and formatting (single source of truth)
     ├── i18n.py             TOML locale catalogs, lookup, and interpolation
     ├── logger.py           Console formatter and error log handler
-    ├── pagination.py       Shared paginate() and clamp_page() page arithmetic
+    ├── pagination.py       Shared clamp_page() page arithmetic
     ├── prefixes.py         Prefix parsing and command filters
     ├── secrets.py          Constant-time secret comparison for inbound credentials
     ├── time_and_date.py    Central clock: UTC store/display + measure + durations + date_or_unknown()
