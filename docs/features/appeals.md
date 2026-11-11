@@ -199,17 +199,18 @@ The callback handler always answers the callback query before continuing once it
 
 When a staff member approves an appeal:
 
-1. Active connected groups are fetched from `groups_db.active_groups()`, with the primary group (`cfg.main_group`) appended when absent. If the fetch fails, approval aborts before deactivation with the review card untouched (a re-tap retries the full sequence); deactivating first would leave chats unbanned-nowhere with no record to re-drive.
-2. If the banned user currently holds a federation staff role, that role is demoted before deactivation, mirroring `/tcunban`. A role-lookup outage or a demote failure aborts with the review card untouched and a retry alert.
-3. All active bans for the user are deactivated with `bans_db.deactivate_all_active_bans(user_id)`, which clears any duplicate active records in one atomic operation. If this write fails, approval aborts before any group is touched (mirroring `execute_unban`): unbanning chats while the database still marks the user banned would split-brain and re-ban them on next join. The review card stays actionable and the tapper gets a retry alert, so a re-tap retries the full sequence.
-4. The review marker is cleared with `bans_db.clear_review(ban_id)` so a concurrent second decision sees no live review and stands down.
-5. The user is unbanned from every group with `unban_chat_member(..., only_if_banned=True)` through bounded fan-out. Partial transient failures are logged at error level.
-6. The user receives a DM telling them the appeal was approved.
-7. The review message is edited to show who approved it and the inline keyboard is removed.
-8. The submitted-appeal log message is edited to an approved version when possible.
-9. A separate `Unban (via Appeal)` log is sent to the federation logs channel.
+1. The approver's effective role is read fresh and must outrank the target's current role. Approving strips the target's federation role (the ban lift requires it) and lifts the ban everywhere, which is the same irreversible action as `/tcunban`, and that command path refuses an equal-rank target. An Admin therefore cannot approve an appeal against a peer Admin; the tap is refused with the shared outrank notice and nothing is changed.
+2. Active connected groups are fetched from `groups_db.active_groups()`, with the primary group (`cfg.main_group`) appended when absent. If the fetch fails, approval aborts before deactivation with the review card untouched (a re-tap retries the full sequence); deactivating first would leave chats unbanned-nowhere with no record to re-drive.
+3. If the banned user currently holds a federation staff role, that role is demoted before deactivation, mirroring `/tcunban`. A role-lookup outage or a demote failure aborts with the review card untouched and a retry alert.
+4. All active bans for the user are deactivated with `bans_db.deactivate_all_active_bans(user_id)`, which clears any duplicate active records in one atomic operation. If this write fails, approval aborts before any group is touched (mirroring `execute_unban`): unbanning chats while the database still marks the user banned would split-brain and re-ban them on next join. The review card stays actionable and the tapper gets a retry alert, so a re-tap retries the full sequence.
+5. The review marker is cleared with `bans_db.clear_review(ban_id)` so a concurrent second decision sees no live review and stands down.
+6. The user is unbanned from every group with `unban_chat_member(..., only_if_banned=True)` through bounded fan-out. Partial transient failures are logged at error level.
+7. The user receives a DM telling them the appeal was approved.
+8. The review message is edited to show who approved it and the inline keyboard is removed.
+9. The submitted-appeal log message is edited to an approved version when possible.
+10. A separate `Unban (via Appeal)` log is sent to the federation logs channel.
 
-Each notification in steps 6-9 is inspected separately and logged (warning for the user DM, card edit, and appeal-log update; error for the unban log), so a silent Telegram failure is visible to operators.
+Each notification in steps 7-10 is inspected separately and logged (warning for the user DM, card edit, and appeal-log update; error for the unban log), so a silent Telegram failure is visible to operators.
 
 Approval is a federation unban. It removes the Telegram ban across all connected groups and deactivates the persistent ban record. It runs its own inline deactivate-plus-fan-out sequence that mirrors `execute_unban`; it does not call `execute_unban` directly.
 

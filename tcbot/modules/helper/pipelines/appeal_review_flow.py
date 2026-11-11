@@ -73,14 +73,21 @@ async def _update_or_send_log(
         log.debug("Could not send appeal submitted log: %s", exc)
 
 
-async def _answer_review(q: CallbackQuery, locale: str | None, key: str) -> None:
+async def _answer_review(
+    q: CallbackQuery, locale: str | None, key: str, *, role: str | None = None
+) -> None:
     """Answer the review card with a localized plain-text alert; never raises.
 
     Callback alerts are plain text (Telegram does not parse MarkdownV2 in
-    an answer), so the message is rendered with ``plain=True``.
+    an answer), so the message is rendered with ``plain=True``. ``role`` is
+    the optional placeholder of the refusal copy; templates that do not use
+    it ignore the value.
     """
     try:
-        await q.answer(t(key, locale, plain=True), show_alert=True)
+        await q.answer(
+            t(key, locale, role=role or "", plain=True),
+            show_alert=True,
+        )
     except Exception as exc:
         log.debug("Appeal review answer failed for %s: %s", key, exc)
 
@@ -104,14 +111,9 @@ class ApproveMixin:
         lc: int,
         lt: int | None,
         update: Update,
+        approver_role: str | None,
     ) -> None:
         locale = await locale_for_update(update)
-        try:
-            groups = await db.groups_db.active_groups()
-        except Exception:
-            log.exception("approve_appeal: groups fetch failed for user=%d", target_id)
-            await _answer_review(q, locale, "common.err.groups_load_failed")
-            return
         # * The target name is resolved alongside the role so the demote audit
         # * log records the real name instead of the raw ID.
         role_result, name_result = await asyncio.gather(
@@ -132,6 +134,36 @@ class ApproveMixin:
             await _answer_review(q, locale, "appeals.review.db_retry")
             return
         target_role = role_result
+        # ! CRITICAL: The approver must outrank the target. Approving
+        # ! strips the target's federation role (the ban lift requires it)
+        # ! and lifts the ban everywhere, which is the same irreversible
+        # ! action as /tcunban. Without this gate an Admin could strip a
+        # ! peer Admin's rank and lift their ban, an outcome the sibling
+        # ! command path refuses for equal rank.
+        if target_role and db.users_roles.role_rank(
+            approver_role
+        ) <= db.users_roles.role_rank(target_role):
+            log.warning(
+                "approve_appeal refused: approver %d (role=%s) does not outrank "
+                "target %d (role=%s)",
+                admin.id,
+                approver_role,
+                target_id,
+                target_role,
+            )
+            await _answer_review(
+                q,
+                locale,
+                "common.refuse.outranked",
+                role=db.users_roles.role_label(target_role),
+            )
+            return
+        try:
+            groups = await db.groups_db.active_groups()
+        except Exception:
+            log.exception("approve_appeal: groups fetch failed for user=%d", target_id)
+            await _answer_review(q, locale, "common.err.groups_load_failed")
+            return
         if target_role in db.users_roles.STAFF_ROLES:
             # * Fail closed: the shared gate blocks the approval when the
             # * demote raised, or when it cleared no row while the role still
@@ -518,7 +550,16 @@ class AppealReviewMixin(AppealVerdictsMixin):
         lc, lt = cfg.logs
         if action == "approve":
             await self._approve_appeal(
-                ctx.bot, q, ban, ban_id, target_id, admin, lc, lt, update
+                ctx.bot,
+                q,
+                ban,
+                ban_id,
+                target_id,
+                admin,
+                lc,
+                lt,
+                update,
+                approver_role=role_result,
             )
         elif action == "reject":
             await self._reject_appeal(

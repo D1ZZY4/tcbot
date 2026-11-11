@@ -123,7 +123,7 @@ def _wire_approve(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return record
 
 
-def _run_approve(query: _FakeQuery) -> None:
+def _run_approve(query: _FakeQuery, approver_role: str = "founder") -> None:
     """Run the approve executor against a staff-banned target."""
     admin = type("Admin", (), {"id": 1, "first_name": "Admin"})()
     ban: dict[str, Any] = {
@@ -151,6 +151,7 @@ def _run_approve(query: _FakeQuery) -> None:
             0,
             None,
             _fake_update(query, 1),  # type: ignore[arg-type]
+            approver_role=approver_role,
         )
     )
 
@@ -240,6 +241,62 @@ def test_approve_blocks_when_the_demote_raises(
         t("appeals.review.demote_blocked", "en-US", plain=True),
         True,
     )
+
+
+def test_approve_blocks_when_the_approver_does_not_outrank_the_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An approver must outrank the target before the ban is lifted.
+
+    Approving strips the target's federation role and lifts the ban
+    everywhere, which is the same irreversible action as /tcunban. That
+    command path refuses an equal-rank target, so the callback path must
+    refuse it too: an Admin must not strip a peer Admin's rank.
+    """
+    record = _wire_approve(monkeypatch)
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "admin"
+
+    async def _fake_demote(*a: Any, **k: Any) -> bool:
+        record["demoted"].append((9, "admin"))
+        return True
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+
+    query = _FakeQuery("appeal_approve_abc")
+    _run_approve(query, approver_role="admin")
+
+    assert record["demoted"] == []
+    assert record["deactivated"] == []
+    assert query.answers[-1] == (
+        t("common.refuse.outranked", "en-US", role="Admin", plain=True),
+        True,
+    )
+
+
+def test_approve_proceeds_when_the_approver_outranks_the_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A higher-ranked approver keeps the approval working."""
+    record = _wire_approve(monkeypatch)
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "admin" if user_id == 9 else "founder"
+
+    async def _fake_demote(*a: Any, **k: Any) -> bool:
+        record["demoted"].append((9, "admin"))
+        return True
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+
+    query = _FakeQuery("appeal_approve_abc")
+    _run_approve(query, approver_role="founder")
+
+    assert record["demoted"] == [(9, "admin")]
+    assert record["deactivated"] == [9]
 
 
 def test_approve_proceeds_when_the_role_is_already_gone(
