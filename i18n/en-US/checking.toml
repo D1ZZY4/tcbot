@@ -88,12 +88,10 @@ pending = "Pending / Rejected"
 item = "{i}. {status}\n   Ban ID: {ban} | {ts}"
 
 [warns]
-title = "*Warnings*"
 empty = "*Warnings*\n\nNo warning records for {user}."
 header = "*Warnings*: {n} total across {groups} group(s)"
 group_line = "- {title}: {n}"
 group_button = "{title} ({n})"
-in_title = "*Warnings in* {title}"
 in_empty = "*Warnings in* {title}\n\nNo warning records here."
 in_header = "*Warnings in* {title}: {n} total, page {page}/{pages}"
 in_item = "{i}. {ts}\n   {reason}\n   By {admin}"

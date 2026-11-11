@@ -88,12 +88,10 @@ pending = "Tertunda / Ditolak"
 item = "{i}. {status}\n   ID Ban: {ban} | {ts}"
 
 [warns]
-title = "*Peringatan*"
 empty = "*Peringatan*\n\nTidak ada catatan peringatan untuk {user}."
 header = "*Peringatan*: {n} total di {groups} grup"
 group_line = "- {title}: {n}"
 group_button = "{title} ({n})"
-in_title = "*Peringatan di* {title}"
 in_empty = "*Peringatan di* {title}\n\nTidak ada catatan peringatan di sini."
 in_header = "*Peringatan di* {title}: {n} total, halaman {page}/{pages}"
 in_item = "{i}. {ts}\n   {reason}\n   Oleh {admin}"

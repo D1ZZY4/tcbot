@@ -97,6 +97,72 @@ def _catalog() -> dict[str, dict[str, str]]:
     return load_catalog(ROOT)
 
 
+def _keys_used_in_code() -> set[str]:
+    """Return every catalog key the source refers to by its literal name.
+
+    Only literal keys count: a key built at runtime from a prefix cannot
+    be resolved statically, so the dynamic prefixes are listed separately
+    in :data:`_DYNAMIC_KEY_PREFIXES`.
+    """
+    used: set[str] = set()
+    pattern = re.compile(r"""["']([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)["']""")
+    for path in sorted((ROOT.parent / "tcbot").rglob("*.py")):
+        for match in pattern.finditer(path.read_text(encoding="utf-8")):
+            used.add(match.group(1))
+    return used
+
+
+# * Key prefixes that are completed at runtime, so the keys under them
+# * cannot be matched statically. Every key below them is exempt from the
+# * orphan check.
+_DYNAMIC_KEY_PREFIXES = (
+    "admins.promote.",
+    "admins.decision.",
+    "admins.list.",
+    "admins.request.",
+    "admins.error.",
+    "banning.",
+    "checking.appeals_list.",
+    "checking.bans.",
+    "checking.events.",
+    "checking.warns.",
+    "connecting.",
+    "disconnecting.",
+    "identity.note.",
+    "identity.refuse.",
+    "kicking.",
+    "muting.",
+    "privacy.section.",
+    "proof.action.",
+    "reason.",
+    "stats.",
+    "syncing.",
+    "unbanning.",
+    "warnings.",
+)
+
+
+def test_no_catalog_key_is_orphaned() -> None:
+    """Every catalog entry must be reachable from the source.
+
+    An unused entry is dead weight in every locale: a translator spends
+    time on a string no user will ever read, and the two locales can
+    drift apart unnoticed. The dynamic prefixes are exempt because
+    their keys are completed at runtime.
+    """
+    catalog = _catalog()
+    used = _keys_used_in_code()
+    orphans: list[str] = []
+    for locale, keys in catalog.items():
+        for key in keys:
+            if any(key.startswith(prefix) for prefix in _DYNAMIC_KEY_PREFIXES):
+                continue
+            if key in used:
+                continue
+            orphans.append(f"{locale}:{key}")
+    assert not orphans, "unused catalog entries: " + ", ".join(sorted(orphans))
+
+
 # ──────────────────────── Catalog loading ───────────────────────── #
 
 

@@ -112,17 +112,6 @@ def available_locales(catalog: dict[str, dict[str, str]] | None = None) -> list[
     return sorted(data)
 
 
-def is_known_locale(
-    locale: str | None, catalog: dict[str, dict[str, str]] | None = None
-) -> bool:
-    """Return True when ``locale`` has a catalog (case-insensitive)."""
-    if not locale:
-        return False
-    data = catalog if catalog is not None else _ensure_loaded()
-    wanted = locale.strip()
-    return any(existing.lower() == wanted.lower() for existing in data)
-
-
 def _canonical_locale(
     locale: str | None, catalog: dict[str, dict[str, str]]
 ) -> str | None:
@@ -139,6 +128,20 @@ def _canonical_locale(
             if existing.lower() == alias_target.lower():
                 return existing
     return None
+
+
+def is_known_locale(
+    locale: str | None, catalog: dict[str, dict[str, str]] | None = None
+) -> bool:
+    """Return True when ``locale`` has a catalog (case-insensitive).
+
+    Aliases count as known: the engine resolves ``id`` to ``id-ID``, so an
+    in-flight callback carrying the alias must not be rejected as unknown.
+    """
+    if not locale:
+        return False
+    data = catalog if catalog is not None else _ensure_loaded()
+    return _canonical_locale(locale, data) is not None
 
 
 def display_name(locale: str, catalog: dict[str, dict[str, str]] | None = None) -> str:

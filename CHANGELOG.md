@@ -11,6 +11,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **One entry sequence for the single-action moderation commands** (`tcbot/modules/helper/decorators/checks.py`, `tcbot/modules/warns.py`, `tcbot/modules/mute.py`): unwarn, resetwarns, and unmute each repeated the same origin check, target resolution, classification, and refusal. `resolve_staff_target` now owns that sequence. Behavior changes: none; the replies and the checks are unchanged.
 
+- **No catalog entry goes unused** (`tests/test_i18n.py`): the translation catalogs carried entries no code path reached, and the locale-to-locale comparison could not see them. The suite now reports an entry that no source refers to. Behavior changes: none; the two unused warning headings were removed from both locales.
+
 - **Conversation-scoped moderation payloads** (`tcbot/modules/helper/scope.py`, `tests/test_flow_scope.py`): `flow_scope` owns the payload of one chat and user pair, so a moderator running an action in two groups at once keeps two independent flows. The scope key matches the one python-telegram-bot builds for a per-chat, per-user conversation.
 
 - **One conversation at a time, the rest of the federation concurrent** (`tcbot/utils/update_processor.py`, `tests/test_update_processor.py`): python-telegram-bot documents that its conversation handler relies on updates being processed one by one, but the stock concurrent setting started every update at once, so two taps on the same button could interleave and lose a state transition. Updates of one chat and user pair now run in order while different conversations still run in parallel.
