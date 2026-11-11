@@ -182,7 +182,7 @@ The `decorators/` module centralizes both auth-guard decorators and the shared e
 | `banned_target_refusal(target_id, locale, *, log_label)` | Returns a refusal line when the target holds an active ban, `None` when it does not. Used by the promotion paths so a banned user cannot gain federation rank. Fails closed: a failed ban lookup refuses the action. |
 | `require_federation_origin(msg, chat_id, chat_type, locale, allow_private=...)` | Enforces that moderation entries originate from a connected group or a primary group (private only when `allow_private` is set for federation-wide entries). A disconnected group, or a private chat where `allow_private` is false, replies with the shared notice and blocks the action; a connection-state outage replies with the database retry notice and blocks (fail closed). |
 
-Ban, kick, and mute entry points pair this with `Demote.execute(..., trigger="ban"/"kick"/"mute")` from `pipelines/demote_flow.py` to remove the target's role before the moderation action.
+Ban, kick, and mute pair this with the enforcement-time demote from `pipelines/demote_flow.py`, which removes the target's role right before the moderation action is applied.
 
 ## `messages/replies.py`
 

@@ -99,6 +99,19 @@ async def execute_kick(
             parse_mode=None,
         )
         return
+    # * Demote before the ban lands: a role-holding target must not keep
+    # * federation rank while the ban is live. This closes the TOCTOU
+    # * window the cancelable reason and proof steps opened.
+    # * Best-effort by design: the audit row above already exists, so a
+    # * lookup failure must not skip the enforcement.
+    await demote_before_enforcement(
+        ctx.bot,
+        target_id,
+        target_name,
+        trigger="kick",
+        executor_id=admin_id,
+        executor_fname=admin_fname,
+    )
     try:
         await asyncio.wait_for(
             ctx.bot.ban_chat_member(chat_id, target_id),
@@ -130,20 +143,8 @@ async def execute_kick(
         # * federation log-channel post. The audit write already landed
         # * above, so a failure here can never leave an unaudited kick.
         # * The user-facing reply runs *after* the unban completes so we
-        # * the unban failed -- otherwise the admin would see "kicked" while
-        # * the user is still banned.
-        # * The entry demote ran before the proof-collection window, so
-        # * re-demote here to close the TOCTOU gap before the unban fan-out.
-        # * Best-effort: ban_chat_member above already ran, so a lookup
-        # * failure must not skip the unban and turn this kick into a ban.
-        await demote_before_enforcement(
-            ctx.bot,
-            target_id,
-            target_name,
-            trigger="kick",
-            executor_id=admin_id,
-            executor_fname=admin_fname,
-        )
+        # * know whether the unban failed -- otherwise the admin would see
+        # * "kicked" while the user is still banned.
         unban_result, log_send_result = await asyncio.gather(
             ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
             send_log(

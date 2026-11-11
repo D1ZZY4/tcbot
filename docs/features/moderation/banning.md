@@ -14,14 +14,12 @@ flowchart TD
     Cmd[/tcban command/] --> Permission{Developer+ check}
     Permission -->|denied| End1[Reject]
     Permission -->|allowed| Target[Resolve target]
-    Target --> RoleCheck{Has federation role?}
-    RoleCheck -->|yes| AutoDemote[Auto-demote first]
-    RoleCheck -->|no| ProofStep[WAITING_PROOF]
-    AutoDemote --> ProofStep
+    Target --> ProofStep[WAITING_PROOF]
     ProofStep --> UploadProof[Upload proof to PROOFS]
     UploadProof --> StoreBan[Write ban record]
     StoreBan --> PostLog[Post ban log]
-    PostLog --> FanOut[Fan-out to all groups]
+    PostLog --> AutoDemote[Auto-demote role holder]
+    AutoDemote --> FanOut[Fan-out to all groups]
     FanOut --> Summary[Edit prompt summary + DM appeal link]
 ```
 
@@ -139,7 +137,7 @@ If `bot.username` is unavailable (e.g. before bot initialization completes), the
 
 ## Updating an existing active ban
 
-If the target already has an active ban, the bot first shows a confirmation card (existing Ban ID and reason, the new reason, plus `View Log` / `View Proof` links and `Cancel` / `Continue` buttons) instead of updating silently. Only `Continue` proceeds to proof collection (with auto-demote first when the target holds a role); `Cancel` aborts with no ban and no demotion. The confirmation lives in the `WAITING_UPDATE_CONFIRM` conversation state; a lookup outage degrades to the old straight-to-proof path.
+If the target already has an active ban, the bot first shows a confirmation card (existing Ban ID and reason, the new reason, plus `View Log` / `View Proof` links and `Cancel` / `Continue` buttons) instead of updating silently. Only `Continue` proceeds to proof collection; `Cancel` aborts with no ban. The confirmation lives in the `WAITING_UPDATE_CONFIRM` conversation state; a lookup outage degrades to the old straight-to-proof path.
 
 The update flow (after `Continue`):
 
@@ -183,16 +181,18 @@ The executor must have rank >= Developer. The target check behaves as follows:
 
 - If the target is Founder, they cannot be banned.
 - If the target has a role with rank greater than or equal to the executor's rank, the action is blocked.
-- If the target has a lower role, the bot automatically removes that role before continuing with the ban.
+- If the target has a lower role, the bot removes that role when the ban is enforced.
 
-Auto-demotion is handled by `Demote.execute(..., msg=msg, trigger="ban")` from `pipelines/demote_flow.py` (also used by the kick and mute entries with their own trigger nouns). The helper removes the role record, and if the role still resolves afterwards it replies with a localized notice telling the executor to demote manually and signals abort by returning `False`; the ban never proceeds on a role holder:
+Auto-demotion is handled by `demote_before_enforcement(..., trigger="ban")` from `pipelines/demote_flow.py` (also used by the kick and mute flows with their own trigger nouns). It runs at enforcement time, right before the ban fan-out, not when the command starts: the reason and proof steps are still cancelable, and a demote that ran at the entry would strip the target's role, log it, and tell the target they were banned even when the moderator cancelled the flow and no ban ever existed.
+
+The helper removes the role record, posts the federation demote log, and notifies the target by DM when possible:
 
 - Admin targets are removed from `tc_admins`.
 - Developer/Tester targets are removed from `tc_roles`.
 - A role auto-demotion log is sent to the federation logs channel.
 - The target is notified by DM when possible.
 
-Immediately before the enforcement fan-out, `_execute_ban` runs the best-effort `demote_before_enforcement(..., trigger="ban")` re-check to close the proof-collection TOCTOU window; enforcement proceeds regardless (the ban record is already written).
+The step is best-effort: the ban record is already written at that point, so a role lookup or demote failure is logged loudly and the ban is enforced anyway. The target keeps their rank only until a later repair pass (`/tcsync` or join-time enforcement) removes it.
 
 ## Ban database schema impact
 
@@ -338,9 +338,9 @@ Key behaviors to keep in mind:
 3. `/tcban <target>` without a reason is rejected.
 4. Self-ban and bot-ban attempts are rejected.
 5. Same-rank or higher-rank targets are protected.
-6. Lower-ranked staff targets are auto-demoted before ban enforcement.
+6. Lower-ranked staff targets are auto-demoted when the ban is enforced.
 7. The proof prompt has no `Skip` option for bans.
-8. Cancel during proof collection issues no ban.
+8. Cancel during proof collection issues no ban and leaves the target's role untouched.
 9. A single photo proof creates a ban, uploads proof, logs the ban, and bans active groups.
 10. Proof media accumulate in one session (album or sequential sends, photos/videos/GIFs/files) and flush on `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s cap; photos and videos upload as one album, GIFs and files individually.
 11. A second ban against an already active-banned target asks for confirmation first, then updates the existing ban and preserves previous proof/log IDs.

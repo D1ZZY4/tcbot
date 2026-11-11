@@ -15,15 +15,15 @@ from telegram.error import Forbidden
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import messages
-from tcbot.modules.helper.locale import effective_locale, locale_for_user
-from tcbot.modules.helper.messages import safe_reply, send_log
+from tcbot.modules.helper.locale import locale_for_user
+from tcbot.modules.helper.messages import send_log
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
-from tcbot.utils.formatter import bold, user_ref
+from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    from telegram import Bot, Message
+    from telegram import Bot
 
 log = get_logger(__name__)
 
@@ -55,6 +55,10 @@ class Demote:
     * ``execute(trigger="ban")`` / ``"kick"`` / ``"mute"`` runs the
       demote-before-enforcement path used by the ban, kick, and mute flows
       before the actual action.
+
+    The two enforcement gates around it differ on purpose:
+    :func:`demote_before_enforcement` proceeds after a failure, and
+    :func:`demote_before_unban` blocks.
     """
 
     @staticmethod
@@ -83,27 +87,20 @@ class Demote:
         executor_fname: str,
         *,
         trigger: str | None = None,
-        msg: Message | None = None,
     ) -> bool:
         """Remove the role, post a federation log, and DM the target.
 
-        With ``msg=None`` returns True if the role was removed.
-        With ``msg`` set (ban/kick/mute entries) returns True when the
-        caller may proceed: a surviving role replies with the abort
-        notice and returns False; an already-gone role proceeds.
+        Returns True when a role row was actually removed. A role that was
+        already gone returns False without raising: the caller decides
+        whether that is a no-op (the manual demote reports it) or a
+        split-brain it must re-check (the unban gate does).
+
+        ``trigger`` selects the DM wording only. The enforcement path is
+        best effort by design: the moderation record already exists when
+        it runs, so a failure must never block the action. The unban path
+        enforces the fail-closed rule itself in :func:`demote_before_unban`.
         """
-        try:
-            removed = await cls.remove_role(target_id, target_role)
-        except Exception:
-            if msg is None:
-                raise
-            log.exception(
-                "Demote before %s failed for target=%d role=%s",
-                trigger,
-                target_id,
-                target_role,
-            )
-            removed = False
+        removed = await cls.remove_role(target_id, target_role)
         if not removed:
             # * No row in the expected collection: normally already-gone
             # * (safe to proceed), but loud so a stale-cache wrong-collection
@@ -112,35 +109,6 @@ class Demote:
                 "Demote found no %s row for target=%d; proceeding",
                 target_role,
                 target_id,
-            )
-            if msg is None:
-                return False
-            try:
-                live_role = await db.users_roles.get_effective_role(
-                    target_id, fresh=True
-                )
-            except Exception:
-                log.exception(
-                    "live role re-read failed after no-op demote for target=%d",
-                    target_id,
-                )
-                live_role = target_role
-            if live_role not in db.users_roles.STAFF_ROLES:
-                return True
-            chat = msg.chat
-            mod_locale = await effective_locale(
-                getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
-            )
-            await safe_reply(
-                msg,
-                t(
-                    "demote.abort.body",
-                    mod_locale,
-                    user=Safe(user_ref(target_id, target_fname)),
-                    target_role=live_role,
-                    action=trigger,
-                ),
-                log_label="demote-fail",
             )
             return False
 

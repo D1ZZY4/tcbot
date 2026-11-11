@@ -25,7 +25,6 @@ from tcbot.modules.helper.pipelines.ban_flow import (
     ban_conversation,
     proof_prompt_content,
 )
-from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.reason_flow import (
     is_reason_too_long,
     parse_inline_reason,
@@ -116,7 +115,6 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     target_fname = resolved.target_name
     has_explicit_target = resolved.has_explicit_target
     raw_args = resolved.args
-    target_role = resolved.target_role
 
     ban_reason = parse_inline_reason(
         raw_args,
@@ -176,7 +174,6 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     if existing is not None:
-        ctx.user_data["ban_target_role"] = target_role
         return await _ask_update_confirm(
             msg,
             ctx,
@@ -188,21 +185,11 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             locale=locale,
         )
 
-    # * Demote is required before the ban to preserve the
-    # * role-vs-state invariant: a banned user must not still hold a
-    # * federation role. The helper replies and signals abort when the
-    # * demote fails, so the ban never proceeds on a role holder.
-    if target_role and not await Demote.execute(
-        ctx.bot,
-        target_id,
-        target_fname or str(target_id),
-        target_role,
-        admin.id,
-        admin.first_name,
-        trigger="ban",
-        msg=msg,
-    ):
-        return ConversationHandler.END
+    # * The demote runs at enforcement time, not here: the proof step is
+    # * still cancelable, and a demote that lands on a cancelled flow
+    # * strips a federation role and tells the target they were banned
+    # * without anything ever happening to them. The enforcement-time
+    # * demote closes the same role-vs-state invariant.
 
     text, kb = proof_prompt_content(
         target_id, target_fname or str(target_id), ban_reason, locale

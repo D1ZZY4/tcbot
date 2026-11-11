@@ -169,9 +169,13 @@ async def execute_warn(
             return
         # * Staff are exempt from warn threshold ban; demoted first so rank never survives.
         if target_role:
-            demoted = True
+            demoted = False
             try:
-                await Demote.execute(
+                # * The return value is the source of truth: a role that was
+                # * already gone is a no-op, and reporting it as a demotion
+                # * would tell the moderator a rank was removed when it
+                # * was not.
+                demoted = await Demote.execute(
                     ctx.bot,
                     target_id,
                     target_name,

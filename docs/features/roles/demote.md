@@ -24,15 +24,18 @@ flowchart TD
 
 ## Purpose
 
-Demotion removes a federation role from a user. Seven invocation paths reach the same `Demote.execute` method (entry points plus pre-fan-out re-demotes share these paths):
+Demotion removes a federation role from a user. Five invocation paths reach the same `Demote.execute` method (entry points plus pre-fan-out re-demotes share these paths):
 
 1. `/tcdemote`: manual demotion by Founder or Admin.
-2. Ban entry handler (`/tcban`): demote a role-holding target before the federation ban.
-3. Kick entry handler (`/tckick`): demote a role-holding target before the per-group kick.
-4. Mute entry handler (`/tcmute`): demote a role-holding target before the per-group mute.
+2. Ban executor (`_execute_ban`): demote a role-holding target before the federation ban.
+3. Kick executor (`execute_kick`): demote a role-holding target before the per-group kick.
+4. Mute executor (`_execute_mute`): demote a role-holding target before the per-group mute.
 5. Join ban / mute re-apply (`greeting._handle_member` and `on_join_request_approved`): demote a role-holding target before enforcing on join.
+
+Two more paths use `Demote.execute` with a different gate around it:
+
 6. Warn-limit threshold ban (`warn_flow.execute_warn`): demote when a warned user about to be federation-banned happens to hold a role.
-7. Unban paths (`/tcunban` and the appeal-approve flow): demote a role-holding target before the ban is lifted.
+7. Unban paths (`/tcunban` and the appeal-approve flow): demote a role-holding target before the ban is lifted, through the fail-closed `demote_before_unban` gate.
 
 The same log format is emitted in every case; there is no separate demote template.
 
@@ -61,14 +64,13 @@ await Demote.execute(bot,
                      target_id, target_fname, target_role,
                      executor_id, executor_fname,
                      *,
-                     trigger: str | None = None,
-                     msg: Message | None = None)              # bool
+                     trigger: str | None = None)              # bool
 ```
 
 | Member | Purpose |
 |---|---|
 | `Demote.remove_role(target_id, target_role)` | Deletes the matching record from `tc_admins` (when `target_role == "admin"`) or `tc_roles` (Developer/Tester). Returns True if a record was actually removed. |
-| `Demote.execute(...)` | Removes the role, posts the federation log, and DMs the target. With `msg=None` returns True if the role was removed. With `msg` set (ban/kick/mute entries) replies with the abort notice and returns False when the role survives, True when the caller may proceed. Supports both manual and demote-before-enforcement callers via the `trigger` keyword. |
+| `Demote.execute(...)` | Removes the role, posts the federation log, and DMs the target. Returns True when a role row was actually removed, False when the role was already gone. A database failure propagates to the caller, which decides whether to proceed. Supports both manual and demote-before-enforcement callers via the `trigger` keyword. |
 | `demote_before_enforcement(...)` | Best-effort pre-fan-out re-demote: reads the live role and removes it. A lookup or demote failure logs loudly and enforcement still runs. Used by the ban, kick, mute, and join executors to close the proof-collection TOCTOU window. |
 | `demote_before_unban(...)` | Fail-closed pre-unban gate. Returns `UnbanGate.PROCEED` only when the role is gone; `DEMOTE_FAILED` and `ROLE_SURVIVED` block the unban. Used by `/tcunban` and the appeal-approve path. |
 
@@ -108,23 +110,24 @@ Callback data: `demote_confirm:<target_id>:<executor_id>` and `demote_cancel:<ta
 
 ## Demote flow (ban / kick / mute)
 
-`/tcban`, `/tckick`, and `/tcmute` entry handlers call `Demote.execute(...)` with the appropriate trigger and `msg=msg` after `resolve_and_check` confirms the executor outranks a role-holding target, before the actual moderation action. On demote failure the helper replies and returns False so the entry aborts without enforcing.
+The demote runs at enforcement time, next to the Telegram call it protects. The reason and proof steps of the ban, kick, and mute flows are cancelable, so a demote that ran at the entry would strip the target's federation role, post a federation log, and tell the target they were banned, muted, or kicked. Cancelling the flow then leaves all three side effects in place with no action behind them.
+
+The three executors therefore call `demote_before_enforcement(...)` themselves, right before the enforcement call, after the moderation record is written:
 
 ```python
-if target_role and not await Demote.execute(
+await demote_before_enforcement(
     ctx.bot,
     target_id,
     target_fname or str(target_id),
-    target_role,
-    admin.id,
-    admin.first_name,
     trigger="ban",  # or "kick" or "mute"
-    msg=msg,
-):
-    return ConversationHandler.END
+    executor_id=admin.id,
+    executor_fname=admin.first_name,
+)
 ```
 
-The ban, kick, and mute executors then re-read the live role and run `Demote.execute(...)` with the same trigger immediately before enforcement, closing the TOCTOU window between the entry demote and the fan-out (a concurrent promotion during reason/proof collection). The re-demote is best-effort: the moderation record already exists at that point, so enforcement always proceeds and failures only log loudly.
+The gate reads the target's live role fresh and removes it. It closes the TOCTOU window the cancelable steps opened: a concurrent promotion during reason and proof collection is stripped before the ban lands. The re-demote is best-effort: the moderation record already exists at that point, so enforcement always proceeds and failures only log loudly.
+
+The unban path is the opposite and fails closed. `demote_before_unban(...)` blocks the unban when the demote raises (`DEMOTE_FAILED`) or when it cleared no row while the role still resolves (`ROLE_SURVIVED`), so a staff holder never keeps rank after the ban lifts.
 
 The warn-limit path above is an edge case; staff should not normally accumulate warnings.
 
@@ -173,7 +176,7 @@ Both helpers invalidate the affected user's entry in `effective_role_cache` so t
 - Log and DM failures are logged asymmetrically in `Demote.execute`: a failed federation log send logs at error level (a silent audit gap ships to `LOG_ERRORS`), a DM refused with `Forbidden` or another benign Telegram error (target never started the bot, blocked it, or deleted the account) logs at info level, and any other DM failure logs at warning level.
 - Self-demotion is rejected by `cmd_demote` via identity refusal (`Demoting yourself? Bold. Ask a higher-up if you really mean it.`).
 - Founder demotion is rejected by identity refusal before the role check (`... is the Founder - try /transferowner ...`); the no-role message only fires for genuinely role-less targets.
-- Demote failure is best-effort: a failure inside `warn_flow.execute_warn` is logged via `log.exception` but never aborts the surrounding action; the executors that need to abort on demote failure use `Demote.execute(msg=msg)` instead.
+- A demote failure never blocks the ban, kick, or mute: the moderation record already exists at that point, so the enforcement proceeds and the failure is logged loudly. Only the unban path fails closed on a demote failure.
 
 ## Behavior reference
 
@@ -181,6 +184,6 @@ Both helpers invalidate the affected user's entry in `effective_role_cache` so t
 - Admin cannot demote Admin; Founder is required.
 - Confirmation callback re-checks executor permission at click time.
 - Confirm removes the correct collection record (`tc_admins` for Admin, `tc_roles` for Developer/Tester).
-- Ban / kick on a role-holding target removes the role before the destructive action.
+- Ban / kick / mute on a role-holding target removes the role before the destructive action.
 - The demote DM mentions the trigger verb (banned/kicked/muted); the federation log does not.
 - A pre-existing role record that is missing causes `Demote.execute` to return False without raising.

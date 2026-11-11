@@ -10,7 +10,7 @@ factories, and callback details, see
 |---|---|---|---|---|
 | Ban | `/tcban`, `/tcb` | Developer+ | All connected groups | Requires inline reason and proof media; updates existing active ban instead of duplicating. |
 | Unban | `/tcunban`, `/tcunb` | Developer+ | All connected groups | Direct command; resolves an active ban and removes it federation-wide. |
-| Kick | `/tckick`, `/tck` | Tester+ | Current group only | Conversation asks for reason/proof; auto-demotes role holders before kicking. |
+| Kick | `/tckick`, `/tck` | Tester+ | Current group only | Conversation asks for reason/proof; auto-demotes role holders when the kick is enforced. |
 | Mute | `/tcmute`, `/tcm` | Tester+ | All connected groups | Optional duration token before reason, for example `7d`. |
 | Unmute | `/tcunmute`, `/tcunm`, `/tcum` | Tester+ | All connected groups | Direct command; restores send permissions. |
 | Warn | `/tcwarn`, `/tcw` | Tester+ | Current group warning history | Reason required; auto-ban at `WARN_LIMIT` (default 3) per group or when `FED_WARN_LIMIT` (env, default disabled) is crossed across all groups. |
@@ -27,17 +27,15 @@ flowchart TD
     B -- Yes --> C{Active ban already exists?}
     C -- Yes --> D[Show update-confirm card with Continue / Cancel]
     D -- Cancel --> X
-    D -- Continue --> E
-    C -- No --> E{Target has a federation role?}
-    E -- Yes --> F[Auto-demote target before banning]
-    E -- No --> G[Prompt for proof]
-    F --> G
+    C -- No --> G[Prompt for proof]
+    D -- Continue --> G
     G --> H[Admin sends photos, videos, GIFs, or files]
     H --> I{Done button, silence flush, or 60 s cap}
     I --> J[Upload proof to proof destination]
     J --> K[Create or update ban record]
     K --> L[Post federation log]
-    L --> M[fan_out ban across connected groups]
+    L --> F[Auto-demote a role-holding target]
+    F --> M[fan_out ban across connected groups]
     M --> N[Edit prompt summary + DM appeal link]
 ```
 

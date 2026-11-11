@@ -12,7 +12,6 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.messages import replies, safe_reply
-from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.kick_flow import kick_conversation, proof, reason
 from tcbot.modules.helper.pipelines.reason_flow import (
     WAITING_PROOF,
@@ -106,13 +105,11 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if resolved is None or ctx.user_data is None:
         return ConversationHandler.END
     msg = resolved.msg
-    admin = resolved.admin
     locale = resolved.locale
     target_id = resolved.target_id
     target_name = resolved.target_name
     has_explicit_target = resolved.has_explicit_target
     args = resolved.args
-    target_role = resolved.target_role
 
     inline_reason = parse_inline_reason(
         args,
@@ -132,20 +129,10 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    # * Demote must succeed before the kick to preserve the
-    # * role-vs-state invariant. The helper replies and signals abort
-    # * when the demote fails, so the kick never proceeds on a role holder.
-    if target_role and not await Demote.execute(
-        ctx.bot,
-        target_id,
-        target_name or str(target_id),
-        target_role,
-        admin.id,
-        admin.first_name,
-        trigger="kick",
-        msg=msg,
-    ):
-        return ConversationHandler.END
+    # * The demote runs at enforcement time, not here: the reason and proof
+    # * steps are still cancelable, and a demote that lands on a cancelled
+    # * flow strips a federation role and tells the target they were
+    # * kicked without anything ever happening to them.
 
     scope = flow_scope(ctx, update)
     scope.update(

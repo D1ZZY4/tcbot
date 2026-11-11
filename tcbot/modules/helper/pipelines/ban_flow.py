@@ -33,7 +33,6 @@ from tcbot.modules.helper.messages import (
     safe_reply,
 )
 from tcbot.modules.helper.pipelines.demote_flow import (
-    Demote,
     demote_before_enforcement,
 )
 from tcbot.modules.helper.pipelines.proof_flow import (
@@ -75,7 +74,6 @@ BAN_USER_DATA_KEYS = (
     "ban_admin_fname",
     "ban_prompt_msg_id",
     "ban_prompt_chat_id",
-    "ban_target_role",
     "ban_executing",
     "ban_locale",
 )
@@ -598,17 +596,10 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     reason = str(scope.get("ban_reason") or "")
     if not target_id or not reason:
         return ConversationHandler.END
-    if isinstance(target_role, str) and not await Demote.execute(
-        ctx.bot,
-        target_id,
-        target_fname,
-        target_role,
-        admin_id,
-        admin_fname,
-        trigger="ban",
-        msg=msg,
-    ):
-        return ConversationHandler.END
+    # * The demote runs at enforcement time, not here: the proof step that
+    # * follows is still cancelable, and a demote that lands on a cancelled
+    # * flow strips a federation role and tells the target they were banned
+    # * without the re-ban ever happening.
     text, kb = proof_prompt_content(
         target_id, target_fname, reason, await locale_for_update(update)
     )

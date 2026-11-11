@@ -16,11 +16,7 @@ flowchart TD
     Duration --> Target[Resolve target]
     Target --> Ident{Self / bot / Founder?}
     Ident -->|self or bot| Refuse[identity.refuse_message]
-    Ident -->|allowed| RoleCheck{Target holds federation role?}
-    RoleCheck -->|yes| AutoDemote[Demote.execute trigger mute]
-    RoleCheck -->|no| ReasonStep
-    AutoDemote -->|demote failed| Abort[Abort with error reply]
-    AutoDemote -->|demote ok| ReasonStep[Inline reason present?]
+    Ident -->|allowed| ReasonStep[Inline reason present?]
     ReasonStep -->|yes| ProofStep[WAITING_PROOF]
     ReasonStep -->|no| ReasonPrompt[WAITING_REASON]
     ReasonPrompt --> ProofStep
@@ -40,7 +36,7 @@ flowchart TD
 
 ## Purpose
 
-A federation mute restricts a user from sending messages, media, stickers, and polls across all active connected groups at once, plus the primary groups (`cfg.main_group`). Mutes may be timed (with a duration token) or permanent (`until_date=None`). The mute flow accepts an optional inline reason and optional proof, posts a federation mute log, writes an audit row to the `mutes` collection, and persists an active-mute record in `active_mutes` so unmute and group-connect replay can find it. Targets that hold a federation role are auto-demoted before the mute.
+A federation mute restricts a user from sending messages, media, stickers, and polls across all active connected groups at once, plus the primary groups (`cfg.main_group`). Mutes may be timed (with a duration token) or permanent (`until_date=None`). The mute flow accepts an optional inline reason and optional proof, posts a federation mute log, writes an audit row to the `mutes` collection, and persists an active-mute record in `active_mutes` so unmute and group-connect replay can find it. Targets that hold a federation role are auto-demoted when the mute is enforced.
 
 `/tcunmute` clears the active-mute record and restores full send permissions across the same set of groups.
 
@@ -64,12 +60,11 @@ The mute command is a `ConversationHandler` built by `reason_flow.build_modactio
 3. The executor must have at least Tester rank.
 4. The target must resolve to a Telegram user ID.
 5. The bot rejects attempts to mute itself or the executor's own account via `identity.refuse_message`.
-6. If the target holds a federation role, `Demote.execute(..., trigger="mute")` runs first. On a demote failure the helper replies with a localized notice telling the executor to demote manually and returns `False`; the command ends and the mute is not attempted.
-7. The bot parses an optional duration token from the first remaining argument.
-8. If an inline reason was supplied, the bot skips directly to proof collection (`WAITING_PROOF`). Otherwise it prompts for a reason (`WAITING_REASON`).
-9. Reason is skippable via the `Skip` button.
-10. Proof is skippable via the `Skip` button.
-11. `_execute_mute` restricts the target across all active connected groups plus primary groups, writes the active-mute record, posts the mute log, and edits the prompt to a summary.
+6. The bot parses an optional duration token from the first remaining argument.
+7. If an inline reason was supplied, the bot skips directly to proof collection (`WAITING_PROOF`). Otherwise it prompts for a reason (`WAITING_REASON`).
+8. Reason is skippable via the `Skip` button.
+9. Proof is skippable via the `Skip` button.
+10. `_execute_mute` restricts the target across all active connected groups plus primary groups, writes the active-mute record, posts the mute log, and edits the prompt to a summary.
 
 ## Duration token format
 
@@ -145,11 +140,13 @@ The mute conversation uses `BuildReason("mute")` and `BuildProof("mute")` (both 
 
 The `_ModActionFlow` class in `reason_flow.py` enforces the same race-safe semantics described in [`kicking.md`](kicking.md): proof buffering until `Done`, double-submit guard via the `mute_executing` key of the conversation scope, fallback cancel on any unrecognized command.
 
-## Auto-demote before mute
+## Auto-demote at mute time
 
-If the target holds a federation role, `cmd_mute` calls `Demote.execute(ctx.bot, target_id, ..., trigger="mute", msg=msg)` before opening the reason prompt.
+If the target holds a federation role, the role is removed when the mute is enforced, not when the command starts. `_execute_mute` calls `demote_before_enforcement(..., trigger="mute")` right before the restriction fan-out.
 
-`Demote.execute` removes the role record, posts the federation demote log, and DMs the target. If the demote raises, or the role still resolves after the removal, it replies with the localized `demote.abort.body` notice (English default: `{user} holds a federation role ({target_role}) and the demote step failed, so the {action} cannot proceed safely. Demote them manually with /tcdemote and retry the {action}.`) and returns `False`, so `cmd_mute` ends without muting; previously this exception was swallowed silently and the mute would still proceed on a role-holding target.
+The demote runs at enforcement time because the reason and proof steps are still cancelable. A demote at the entry would strip the target's role, post the federation demote log, and DM the target that they were muted even when the moderator cancelled the flow and no mute ever happened.
+
+`demote_before_enforcement` removes the role record, posts the federation demote log, and DMs the target. The step is best-effort: a role lookup or demote failure is logged loudly and the mute proceeds, because the mute record is already stored. The target keeps their rank only until a later repair pass (`/tcsync` or join-time enforcement) removes it.
 
 ## `execute_mute` behavior
 
@@ -161,7 +158,7 @@ Execution order:
 2. Build the active-groups list: `groups_db.active_groups()` plus any primary groups (`cfg.main_group`) that are not already present. A fetch outage aborts with a retry notice and no group is touched.
 3. Persist `db.mutes_db.log_mute(...)` and `db.mutes_db.set_active_mute(target_id, until=until)` first. Either write failing aborts with a retry notice and no group is touched (fail-closed, mirroring the ban flow and the warn auto-ban): enforcing chats without an `active_mutes` row would leave a restriction that `/tcunmute` refuses to lift.
 4. Build the restriction `ChatPermissions(can_send_messages=False)` and the `until_date` value (`utc_now() + duration` or `None` for permanent).
-5. Re-check the target's effective role via `demote_before_enforcement(..., trigger="mute")`, closing the proof-collection TOCTOU window (best-effort; the mute proceeds even if the re-demote fails).
+5. Remove the target's effective role via `demote_before_enforcement(..., trigger="mute")` (best-effort; the mute proceeds even if the demote fails).
 6. Fan `restrict_chat_member` across the group list with `fan_out(...)` while uploading proof to `cfg.proofs` concurrently (caption `messages.proof_caption_new`). Failed calls are counted with `count_transient_errors(results)`; an upload failure degrades to no proof link.
 7. Run two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
     - `bot.send_message(cfg.logs, mute_log, ..., reply_markup=proof_kb)`.
@@ -240,7 +237,7 @@ The reply and federation log use `keyboards.action_proof_kb(target_id, proof_lin
 ## Edge cases
 
 - A duration token that fails the regex is silently dropped and treated as part of the reason text.
-- Auto-demote failure aborts the mute before the reason prompt; previously the failure was swallowed and the mute proceeded anyway.
+- A demote failure is logged loudly and the mute still proceeds; the target's rank is repaired by a later `/tcsync` or join-time enforcement pass.
 - `execute_unmute` with no active mute record replies `<user> has no active federation mute.` and does not fan `restrict_chat_member` across the groups.
 - A failed active-mute read fails closed with a retry notice instead of being treated as "no active mute".
 - A failed group-list fetch inside `execute_unmute` aborts with the same retry notice before any group is touched, so the active record stays and a retry works; the unmute never ends silently.
@@ -258,7 +255,7 @@ Key behaviors to keep in mind:
 3. `/tcmute` without a target is rejected with `replies.err_cannot_resolve(locale)`.
 4. Self-mute and bot-mute attempts are rejected by `identity.refuse_message`.
 5. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
-6. Role-holding targets are auto-demoted before the mute; if the demote fails the mute is aborted with an error reply.
+6. Role-holding targets are auto-demoted when the mute is enforced.
 7. Reason is skippable; skipped reason records as the localized `replies.no_reason(locale)` text.
 8. Proof is skippable; skipped proof records nothing.
 9. The `_UNMUTE_CMDS` filter is excluded from the mute conversation fallback so unmute can interrupt a pending mute conversation.

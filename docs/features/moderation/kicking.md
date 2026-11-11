@@ -16,11 +16,7 @@ flowchart TD
     Perm -->|allowed| Target[Resolve target]
     Target --> Ident{Self / bot / Founder?}
     Ident -->|self or bot| Refuse[identity.refuse_message]
-    Ident -->|allowed| RoleCheck{Target holds federation role?}
-    RoleCheck -->|yes| AutoDemote[Demote.execute trigger kick]
-    RoleCheck -->|no| ReasonStep
-    AutoDemote -->|demote failed| Abort[Abort with error reply]
-    AutoDemote -->|demote ok| ReasonStep[Inline reason present?]
+    Ident -->|allowed| ReasonStep[Inline reason present?]
     ReasonStep -->|yes| ProofStep[WAITING_PROOF]
     ReasonStep -->|no| ReasonPrompt[WAITING_REASON]
     ReasonPrompt --> ProofStep
@@ -33,7 +29,7 @@ flowchart TD
 
 ## Purpose
 
-A kick removes a user from the current group only, not from the federation. The implementation ban-then-unbans the user in the current chat so they can rejoin via invite link; federation-wide enforcement is reserved for `/tcban`. The kick flow accepts an optional inline reason, supports optional proof, posts a kick log, and writes an audit row to the `kicks` collection. Targets that hold a federation role are auto-demoted before the kick to preserve the role-vs-state invariant.
+A kick removes a user from the current group only, not from the federation. The implementation ban-then-unbans the user in the current chat so they can rejoin via invite link; federation-wide enforcement is reserved for `/tcban`. The kick flow accepts an optional inline reason, supports optional proof, posts a kick log, and writes an audit row to the `kicks` collection. Targets that hold a federation role are auto-demoted when the kick is enforced, which preserves the role-vs-state invariant.
 
 ## Commands and aliases
 
@@ -54,11 +50,10 @@ The kick command is a `ConversationHandler` built by `reason_flow.build_modactio
 3. The executor must have at least Tester rank.
 4. The target must resolve to a Telegram user ID.
 5. The bot rejects attempts to kick itself or the executor's own account via `identity.refuse_message`.
-6. If the target holds a federation role, `Demote.execute(..., trigger="kick")` runs first. On a demote failure the helper replies with a localized notice telling the executor to demote manually and returns `False`; the command ends and the kick is not attempted.
-7. If an inline reason was supplied, the bot skips directly to proof collection (`WAITING_PROOF`). Otherwise it prompts for a reason (`WAITING_REASON`).
-8. Reason is skippable via the `Skip` button; the recorded reason becomes the localized `replies.no_reason(locale)` text when skipped.
-9. Proof is skippable via the `Skip` button. When supplied, one or more photos/videos upload to `cfg.proofs` through `proof_flow.upload_proof`.
-10. `execute_kick` ban-then-unbans the target in the current chat, writes a `kicks_db.log_kick(...)` audit row, posts a kick log to `cfg.logs`, and replies with the summary.
+6. If an inline reason was supplied, the bot skips directly to proof collection (`WAITING_PROOF`). Otherwise it prompts for a reason (`WAITING_REASON`).
+7. Reason is skippable via the `Skip` button; the recorded reason becomes the localized `replies.no_reason(locale)` text when skipped.
+8. Proof is skippable via the `Skip` button. When supplied, one or more photos/videos upload to `cfg.proofs` through `proof_flow.upload_proof`.
+9. `execute_kick` ban-then-unbans the target in the current chat, writes a `kicks_db.log_kick(...)` audit row, posts a kick log to `cfg.logs`, and replies with the summary.
 
 ## Target resolution and reason parsing
 
@@ -107,11 +102,13 @@ The reason keyboard is built by `reason.keyboard()` and the proof keyboard by `p
 - The proof prompt message ID is stashed in the conversation scope so the reason step can edit it in place when transitioning to `WAITING_PROOF`.
 - The fallback filter swallows any other command during the conversation unless the user types a recognized command, in which case the conversation ends with `<action> operation cancelled.`
 
-## Auto-demote before kick
+## Auto-demote at kick time
 
-If the target holds a federation role, `cmd_kick` calls `Demote.execute(ctx.bot, target_id, ..., trigger="kick", msg=msg)` before opening the reason prompt.
+If the target holds a federation role, the role is removed when the kick is enforced, not when the command starts. `execute_kick` calls `demote_before_enforcement(..., trigger="kick")` right before the ban-then-unban fan-out, after the kick audit row is written.
 
-`Demote.execute` removes the role record (`tc_admins` for Admin, `tc_roles` for Developer/Tester), posts the federation demote log, and DMs the target. If the demote raises, or the role still resolves after the removal, it replies with the localized `demote.abort.body` notice (English default: `{user} holds a federation role ({target_role}) and the demote step failed, so the {action} cannot proceed safely. Demote them manually with /tcdemote and retry the {action}.`) and returns `False`, so `cmd_kick` ends without kicking.
+The demote runs at enforcement time because the reason and proof steps are still cancelable. A demote at the entry would strip the target's role, post the federation demote log, and DM the target that they were kicked even when the moderator cancelled the flow and no kick ever happened.
+
+`demote_before_enforcement` removes the role record (`tc_admins` for Admin, `tc_roles` for Developer/Tester), posts the federation demote log, and DMs the target. The step is best-effort: a role lookup or demote failure is logged loudly and the kick proceeds, because the kick audit row has already been written. The target keeps their rank only until a later repair pass (`/tcsync` or join-time enforcement) removes it.
 
 ## `execute_kick` behavior
 
@@ -121,9 +118,9 @@ Execution order:
 
 1. Write the audit row with `db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id)` first. A failed write aborts with a retry reply and no group is touched, so an enforced kick is never missing from `/check` history.
 2. When `proof_msgs` is non-empty, start the proof upload to `cfg.proofs` as a background task (caption `messages.proof_caption_new`). If upload fails, the kick still proceeds with no proof link.
-3. Call `ctx.bot.ban_chat_member(chat_id, target_id)` to remove the user immediately, without waiting for the proof-channel round trip. On ban failure the in-flight upload is cancelled and the executor replies with a permissions/retry hint.
-4. Await the upload and build the proof keyboard from the resulting link.
-5. Re-check the target's effective role via `demote_before_enforcement(..., trigger="kick")`, closing the proof-collection TOCTOU window (best-effort; the kick proceeds even if the re-demote fails).
+3. Remove the target's effective role via `demote_before_enforcement(..., trigger="kick")` (best-effort; the kick proceeds even if the demote fails). The demote runs before the ban so a role-holding target never keeps federation rank while the ban is live.
+4. Call `ctx.bot.ban_chat_member(chat_id, target_id)` to remove the user immediately, without waiting for the proof-channel round trip. On ban failure the in-flight upload is cancelled and the executor replies with a permissions/retry hint.
+5. Await the upload and build the proof keyboard from the resulting link.
 6. Fan two independent side-effects in parallel with `asyncio.gather(..., return_exceptions=True)`:
    - `unban_chat_member(chat_id, target_id, only_if_banned=True)` - the "user can rejoin" step.
    - `ctx.bot.send_message(cfg.logs, kick_log, ..., reply_markup=proof_kb)` - federation log post. The audit write already landed before enforcement, so a failure here can never leave an unaudited kick.
@@ -169,7 +166,7 @@ The reply and federation log use `keyboards.action_proof_kb(target_id, proof_lin
 - A DB `log_kick` failure aborts the kick with a retry reply before any group is touched, so an enforced kick is never missing from `/check` history.
 - Federation log send failure does not stop the kick reply.
 - If the post-ban `unban_chat_member` fails, the user is effectively banned in this chat. The reply now appends a `WARNING:` line explaining this and recommending a manual chat-member unban (previously the failure was a silent false success).
-- Auto-demote failure aborts the kick before the reason prompt; previously the failure was swallowed and the kick proceeded anyway.
+- A demote failure is logged loudly and the kick still proceeds; the target's rank is repaired by a later `/tcsync` or join-time enforcement pass.
 - The reason and proof conversation is per-chat and per-user, so simultaneous kick flows are isolated.
 - The kick command is **group-only**: the entry rejects a private chat with the localized `replies.err_group_only(locale)` notice (English default: `Use this command in a group.`) before any role or target I/O, and `execute_kick` acts on the current chat (`ban_chat_member` then `unban_chat_member` in `effective_chat.id`). Rank gating is Tester or above via `basic_mod_only`; the decorator itself performs no group-membership check beyond the entry's private-chat guard.
 - The `/tckick` executor is not gated on `mod_only`; any Tester or higher can issue it.
@@ -183,7 +180,7 @@ Key behaviors to keep in mind:
 3. `/tckick` without a target is rejected with `replies.err_cannot_resolve(locale)`.
 4. Self-kick and bot-kick attempts are rejected by `identity.refuse_message`.
 5. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
-6. Role-holding targets are auto-demoted before the kick; if the demote fails the kick is aborted with an error reply.
+6. Role-holding targets are auto-demoted when the kick is enforced.
 7. Reason is skippable; skipped reason records as the localized `replies.no_reason(locale)` text.
 8. Proof is skippable; skipped proof records nothing.
 9. The `WAITING_PROOF` step accepts photos, videos, GIFs, and files; other messages bounce with a friendly prompt.

@@ -98,7 +98,7 @@ Ban differs from the shared reason flow:
 
 - The reason must be supplied in the command message.
 - Proof is required by UI (`skip_allowed=False`).
-- An active ban triggers a confirmation card (`WAITING_UPDATE_CONFIRM` with `View Log` / `View Proof` URLs and `Cancel` / `Continue`) before proof collection; `Continue` demotes role holders first, exactly like the fresh-ban path.
+- An active ban triggers a confirmation card (`WAITING_UPDATE_CONFIRM` with `View Log` / `View Proof` URLs and `Cancel` / `Continue`) before proof collection.
 - Proof media accumulate in one session keyed by `(chat_id, user_id)` and flush on `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap; the flush claim is a synchronous check-and-set so Done and the timer can never double-execute.
 - `_execute_ban()` uploads proof, then writes the `bans` document and posts the audit log sequentially (`_execute_ban_record` returns `(log_msg_id, db_ok)`). When the database write fails the flow aborts before `fan_out()` so no group is touched. Only after the record lands does it fan out bans to active groups with `fan_out()`, then edit the prompt summary and DM the appeal link.
 
@@ -247,7 +247,7 @@ Promotion is not a conversation. `Promote.execute(...)` in `pipelines/promote_fl
 
 ## Demotion: `demote_flow.py`
 
-Demotion is not a conversation. `Demote.execute(...)` in `pipelines/demote_flow.py` handles two distinct paths controlled by the optional `trigger` argument:
+Demotion is not a conversation. `Demote.execute(...)` in `pipelines/demote_flow.py` handles two distinct paths controlled by the optional `trigger` argument. It returns `True` when a role row was actually removed and `False` when the role was already gone; a database failure propagates to the caller, which owns the failure policy.
 
 | Call | Trigger | Path |
 |---|---|---|
@@ -257,6 +257,8 @@ Demotion is not a conversation. `Demote.execute(...)` in `pipelines/demote_flow.
 | `Demote.execute(..., trigger="mute")` | `"mute"` | Auto-demote before a federation-wide mute: same silent role-removal path as `"ban"` and `"kick"`. |
 
 `Demote.remove_role(target_id, target_role)` is the shared DB write used by all four paths. It delegates to `users_roles` and returns `True` if a role was actually removed.
+
+The demote runs at enforcement time, next to the Telegram call it protects, never at the entry. The reason and proof steps of the ban, kick, and mute flows are cancelable, so an entry-time demote would strip the target's role, log it, and tell the target they were banned while the moderator could still cancel the action.
 
 Two gates wrap that call and own the failure policy, so the rule cannot drift between the flows that use it:
 

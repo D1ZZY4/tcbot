@@ -13,7 +13,6 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 from tcbot import cfg
 from tcbot.modules.helper import decorators, identity
 from tcbot.modules.helper.messages import replies, safe_reply
-from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.mute_flow import (
     execute_unmute,
     mute_conversation,
@@ -125,7 +124,6 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     target_fname = resolved.target_name
     has_explicit_target = resolved.has_explicit_target
     raw_args = resolved.args
-    target_role = resolved.target_role
 
     remaining_args = list(raw_args[1:] if has_explicit_target else raw_args)
 
@@ -162,21 +160,10 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    # * Demote must succeed before the federation-wide mute to
-    # * preserve the role-vs-state invariant. The helper replies and
-    # * signals abort when the demote fails, so the mute never proceeds
-    # * on a role holder.
-    if target_role and not await Demote.execute(
-        ctx.bot,
-        target_id,
-        target_fname or str(target_id),
-        target_role,
-        admin.id,
-        admin.first_name,
-        trigger="mute",
-        msg=msg,
-    ):
-        return ConversationHandler.END
+    # * The demote runs at enforcement time, not here: the reason and proof
+    # * steps are still cancelable, and a demote that lands on a cancelled
+    # * flow strips a federation role and tells the target they were
+    # * muted without anything ever happening to them.
     target_mention = user_ref(target_id, target_fname or str(target_id))
     dur_str = esc(fmt_duration(duration, locale))
     extra_info = f"{code(str(target_id))}: {dur_str}"
