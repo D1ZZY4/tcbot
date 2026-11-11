@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import pytest
 from telegram.error import BadRequest, Forbidden, TimedOut
@@ -16,6 +17,7 @@ from tcbot.utils.dispatch import (
     fan_out,
     gather_bounded,
     is_benign_telegram_error,
+    summarize_fanout,
 )
 
 
@@ -44,6 +46,52 @@ def test_count_transient_errors_excludes_benign_refusals() -> None:
         TimedOut("t"),
     ]
     assert count_transient_errors(results) == 2
+
+
+def test_summarize_fanout_counts_a_benign_refusal_as_applied() -> None:
+    """A group the user was never in counts as applied, not failed.
+
+    There was nothing to enforce there, so the action landed as far as it
+    could. Only a real failure counts against the action.
+    """
+    groups = [
+        {"chat_id": -1, "title": "One"},
+        {"chat_id": -2, "title": "Two"},
+        {"chat_id": -3, "title": "Three"},
+    ]
+    results = [True, BadRequest("USER_NOT_PARTICIPANT"), TimedOut("slow")]
+
+    outcome = summarize_fanout(groups, results, action="Ban", target_id=42)
+
+    assert outcome.total == 3
+    assert outcome.applied == 2
+    assert outcome.failed == 1
+    assert [grp["chat_id"] for grp, _exc in outcome.transient] == [-3]
+
+
+def test_summarize_fanout_reports_no_failures_when_all_applied() -> None:
+    groups = [{"chat_id": -1, "title": "One"}]
+    outcome = summarize_fanout(groups, [True], action="Unban", target_id=42)
+
+    assert outcome.applied == 1
+    assert outcome.failed == 0
+    assert outcome.transient == ()
+
+
+def test_summarize_fanout_logs_the_failing_group(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The operator sees which group failed, not only how many."""
+    groups = [{"chat_id": -2, "title": "Broken"}]
+
+    with caplog.at_level(logging.WARNING, logger="tcbot.utils.dispatch"):
+        summarize_fanout(groups, [TimedOut("slow")], action="Ban", target_id=42)
+
+    assert any(
+        "Ban enforcement failed for user=42" in record.getMessage()
+        and "Broken" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_fan_out_returns_regular_errors_as_data() -> None:

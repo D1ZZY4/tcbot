@@ -66,7 +66,26 @@ The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the 
 | `gather_bounded(coros, max_concurrent=10)` | Same result contract as `fan_out` with no circuit interaction. Use it for pure database bursts (for example bulk deactivations during cleanup) where the Telegram breaker must not gate the work. |
 | `is_benign_telegram_error(exc)` | Return True for known-benign Telegram refusals (user not participant, chat gone, bot demoted). |
 | `count_transient_errors(results)` | Count only non-benign failures. Used by moderation fan-outs (ban, unban, mute, warn auto-ban) so benign refusals do not look like failed groups. |
+| `failed_groups(groups, results)` | Return the groups whose action raised, with the exception. |
+| `transient_groups(groups, results)` | Return the failed groups whose failure is not a benign refusal. |
+| `first_transient_error(results)` | Return the first non-benign failure, so an error-level log carries the real exception instead of a placeholder. |
+| `log_fanout_error(results, action, total, target_id)` | Emit the error-level fan-out summary and return the transient-failure count. |
+| `summarize_fanout(groups, results, action, target_id)` | Single owner for the reporting every federation executor repeats: the per-group warning line, the error-level summary, and the applied/failed arithmetic. Returns a `FanoutOutcome`. |
 | `throw_if_cancelled(results)` | Re-raise the first `asyncio.CancelledError` in `gather(return_exceptions=True)` results; other exceptions pass through untouched. Single owner for the cancellation check repeated at every gather site so shutdown is never coerced into data. |
+| `drain_tasks(tasks, label, timeout=5.0)` | Await a set of fire-and-forget tasks at shutdown, then cancel the leftovers. Never raises. |
+
+`FanoutOutcome` carries `total` (the groups the action targeted), `applied`
+(the groups that accepted it), `failed` (the difference), and `transient`
+(the failed groups with their exception, so the operator reply can name
+them). A benign refusal counts as applied: there was nothing to enforce
+in that group.
+
+```python
+results = await fan_out(
+    [ctx.bot.ban_chat_member(group["chat_id"], target_id) for group in groups]
+)
+outcome = summarize_fanout(groups, results, action="Ban", target_id=target_id)
+```
 
 `fan_out` behavior:
 
@@ -90,7 +109,7 @@ burst stays bounded without being skipped while the circuit is OPEN.
 results = await fan_out(
     [ctx.bot.ban_chat_member(group["chat_id"], target_id) for group in groups]
 )
-errors = count_transient_errors(results)
+outcome = summarize_fanout(groups, results, action="Ban", target_id=target_id)
 ```
 
 ## `prefixes.py`

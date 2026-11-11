@@ -6,9 +6,12 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 from tcbot.utils.i18n import t
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 class HelpEntry(TypedDict):
@@ -198,7 +201,7 @@ def applied_summary(
     *,
     total: int,
     failed: int,
-    transient: list[tuple[dict, BaseException]],
+    transient: Sequence[tuple[dict, BaseException]],
 ) -> str:
     """Build the fan-out applied-to line shared by ban and warn threshold ban.
 

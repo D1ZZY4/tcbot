@@ -17,9 +17,8 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply, send_log
 from tcbot.utils.dispatch import (
     fan_out,
-    log_fanout_error,
+    summarize_fanout,
     throw_if_cancelled,
-    transient_groups,
 )
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -166,14 +165,9 @@ async def execute_unban(
             for grp in groups
         ]
     )
-    failed = log_fanout_error(
-        results, action="Unban", total=len(groups), target_id=target_id
-    )
-    # * Name the still-banned groups for the operator reply below (mirrors
-    # * the ban executor's applied-line): counts alone never tell the
-    # * operator where to look, and a re-run of /tcunban would report "no
-    # * active ban" since the record is already gone.
-    transient = transient_groups(groups, results)
+    outcome = summarize_fanout(groups, results, action="Unban", target_id=target_id)
+    failed = outcome.failed
+    transient = outcome.transient
 
     # * effective_user can be None for anonymous admins; attribute the action
     # * to an anonymous admin rather than to the target, which would read as

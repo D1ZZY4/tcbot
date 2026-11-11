@@ -29,7 +29,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
 )
 from tcbot.utils.dispatch import (
     fan_out,
-    log_fanout_error,
+    summarize_fanout,
     throw_if_cancelled,
 )
 from tcbot.utils.formatter import bold, user_ref
@@ -185,9 +185,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             proof_link = message_link(pc, proof_msg_id, pt)
     else:
         results = await fan_out(restrict_coros)
-    failed = log_fanout_error(
-        results, action="Mute", total=len(groups), target_id=target_id
-    )
+    outcome = summarize_fanout(groups, results, action="Mute", target_id=target_id)
     proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
     summary = t(
         "muting.summary.body",
@@ -195,8 +193,8 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         user=Safe(user_ref(target_id, target_fname)),
         dur=Safe(bold(dur_str)),
         reason=reason_text,
-        done=len(groups) - failed,
-        total=len(groups),
+        done=outcome.applied,
+        total=outcome.total,
     )
     log_text = messages.mute_log(
         target_id,
@@ -300,10 +298,9 @@ async def execute_unmute(
             for grp in groups
         ]
     )
-    failed = log_fanout_error(
-        results, action="Unmute", total=len(groups), target_id=target_id
-    )
-    if groups and failed >= len(groups):
+    outcome = summarize_fanout(groups, results, action="Unmute", target_id=target_id)
+    failed = outcome.failed
+    if groups and failed >= outcome.total:
         await safe_reply(
             msg,
             t(

@@ -42,11 +42,9 @@ from tcbot.modules.helper.pipelines.proof_flow import (
     upload_proof,
 )
 from tcbot.utils.dispatch import (
-    failed_groups,
     fan_out,
-    log_fanout_error,
+    summarize_fanout,
     throw_if_cancelled,
-    transient_groups,
 )
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -476,31 +474,20 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
     )
-    failures = failed_groups(groups, results)
-    transient = transient_groups(groups, results)
-    for grp, exc in failures:
-        log.warning(
-            "Ban enforcement failed for user=%d in group=%s (%d): %s",
-            target_id,
-            grp.get("title", ""),
-            grp["chat_id"],
-            exc,
-        )
-    failed = log_fanout_error(
-        results, action="Ban", total=len(groups), target_id=target_id
-    )
+    outcome = summarize_fanout(groups, results, action="Ban", target_id=target_id)
+    failed = outcome.failed
     log.info(
         "Ban enforced: target=%d applied=%d/%d",
         target_id,
-        len(groups) - failed,
-        len(groups),
+        outcome.applied,
+        outcome.total,
     )
     applied_line = replies.applied_summary(
         locale,
         "banning.applied",
-        total=len(groups),
+        total=outcome.total,
         failed=failed,
-        transient=transient,
+        transient=outcome.transient,
     )
     if groups_fetch_failed:
         applied_line += t("banning.applied.scope_warn", locale)

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from telegram.error import BadRequest, NetworkError, TimedOut
@@ -360,3 +361,62 @@ def log_fanout_error(
             exc_info=first_transient_error(results),
         )
     return failed
+
+
+# ─────────────────── Federation enforcement outcome ────────────────── #
+
+
+@dataclass(frozen=True)
+class FanoutOutcome:
+    """How one federation-wide enforcement action landed.
+
+    ``applied`` counts the groups that accepted the action. A benign
+    Telegram refusal (the user was never in the chat, the chat is gone)
+    counts as applied: there was nothing to enforce there. Only a
+    transient failure counts against the action, and those groups are
+    listed in ``transient`` so the operator can name them.
+    """
+
+    total: int
+    applied: int
+    transient: tuple[tuple[dict[str, Any], BaseException], ...]
+
+    @property
+    def failed(self) -> int:
+        """The number of groups that did not accept the action."""
+        return self.total - self.applied
+
+
+def summarize_fanout(
+    groups: Sequence[dict[str, Any]],
+    results: Sequence[object],
+    *,
+    action: str,
+    target_id: int,
+) -> FanoutOutcome:
+    """Report one federation fan-out and return its outcome.
+
+    Single owner for the reporting every federation executor repeats:
+    the per-group warning line, the error-level summary that reaches
+    ``LOGS_ERRORS``, and the applied/failed arithmetic the user-facing
+    summary is built from. The wording of the user-facing summary stays
+    with each action, because every action renders it differently.
+    """
+    for grp, exc in failed_groups(groups, results):
+        log.warning(
+            "%s enforcement failed for user=%d in group=%s (%d): %s",
+            action,
+            target_id,
+            grp.get("title", ""),
+            grp["chat_id"],
+            exc,
+        )
+    transient = transient_groups(groups, results)
+    failed = log_fanout_error(
+        results, action=action, total=len(groups), target_id=target_id
+    )
+    return FanoutOutcome(
+        total=len(groups),
+        applied=len(groups) - failed,
+        transient=tuple(transient),
+    )

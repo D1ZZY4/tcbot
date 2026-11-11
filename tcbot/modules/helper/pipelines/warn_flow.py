@@ -24,11 +24,9 @@ from tcbot.modules.helper.pipelines.reason_flow import (
 )
 from tcbot.utils.dispatch import (
     count_transient_errors,
-    failed_groups,
     fan_out,
-    log_fanout_error,
+    summarize_fanout,
     throw_if_cancelled,
-    transient_groups,
 )
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -285,28 +283,12 @@ async def execute_warn(
         ban_results = await fan_out(
             [ctx.bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
         )
-        total_groups = len(groups)
-        failures = failed_groups(groups, ban_results)
-        transient = transient_groups(groups, ban_results)
-        # * The error-level fan-out summary is shared by every federation
-        # * executor so a partial failure always reaches LOG_ERRORS with the
-        # * real Telegram exception attached.
-        failed = log_fanout_error(
-            ban_results,
-            action="Warn threshold ban",
-            total=total_groups,
-            target_id=target_id,
+        outcome = summarize_fanout(
+            groups, ban_results, action="Warn threshold ban", target_id=target_id
         )
-        applied = total_groups - failed
+        total_groups = outcome.total
+        applied = outcome.applied
         any_ban_ok = applied > 0
-        for grp, exc in failures:
-            log.warning(
-                "Warn threshold ban enforcement failed for user=%d in group=%s (%d): %s",
-                target_id,
-                grp.get("title", ""),
-                grp["chat_id"],
-                exc,
-            )
         log.info(
             "Warn threshold ban enforced (%s): target=%d applied=%d/%d",
             threshold_trigger,
@@ -318,8 +300,8 @@ async def execute_warn(
             locale,
             "warnings.autoban",
             total=total_groups,
-            failed=failed,
-            transient=transient,
+            failed=outcome.failed,
+            transient=outcome.transient,
         )
         if groups_fetch_failed:
             applied_line += t("warnings.autoban.scope_warn", locale)

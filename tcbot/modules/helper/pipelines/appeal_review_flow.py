@@ -21,7 +21,7 @@ from tcbot.modules.helper.messages import cb_error_edit, send_log
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
 from tcbot.utils.dispatch import (
     fan_out,
-    log_fanout_error,
+    summarize_fanout,
     throw_if_cancelled,
 )
 from tcbot.utils.formatter import code, user_ref
@@ -172,10 +172,10 @@ class ApproveMixin:
                 for grp in groups
             ]
         )
-        log_fanout_error(
+        summarize_fanout(
+            groups,
             unban_results,
             action="Appeal-approve",
-            total=len(groups),
             target_id=target_id,
         )
         appeal_link = ban.get("appeal_link") or ""
