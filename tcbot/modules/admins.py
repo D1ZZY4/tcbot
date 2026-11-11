@@ -21,7 +21,6 @@ from tcbot.modules.helper.decorators import (
     classify_and_load_role,
     resolve_executor_target,
 )
-from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     callback_args_optional,
@@ -668,7 +667,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     # * Reject anonymous admins: a request from the group placeholder would
     # * reach the Founder with no attributable sender. Real humans send from
     # * their own account.
-    if user.id == ANONYMOUS_BOT_ID:
+    if identity.is_anon_admin(user):
         await safe_reply(
             msg,
             t("admins.request.anon_admin", locale, plain=True),

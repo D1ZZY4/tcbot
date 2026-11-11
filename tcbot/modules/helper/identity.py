@@ -33,6 +33,19 @@ TELEGRAM_USER_ID = 777000
 # * The true identity is unknown to the bot, so federation commands are refused.
 ANONYMOUS_BOT_ID = 1087968824
 
+
+def is_anon_admin(user: object) -> bool:
+    """Return True when ``user`` is the anonymous admin placeholder.
+
+    Single owner for the GroupAnonymousBot check. The placeholder appears
+    as the sender when a real admin posts through "send message as group",
+    so the true identity is unknown and every federation command must
+    refuse it.
+    """
+    user_id = getattr(user, "id", None)
+    return isinstance(user_id, int) and user_id == ANONYMOUS_BOT_ID
+
+
 IdentityKind = Literal[
     "self",  # the executor targeted themselves
     "this_bot",  # this bot is the target

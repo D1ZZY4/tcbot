@@ -640,6 +640,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Removed
 
+- **The duplicate anonymous-admin check is gone** (`tcbot/modules/helper/identity.py`, `tcbot/modules/helper/decorators/auth.py`, `tcbot/modules/connect.py`, `tcbot/modules/disconnecting.py`, `tcbot/modules/admins.py`): the identity helper that was meant to own the GroupAnonymousBot check was never called, and four modules inlined the same comparison instead. The helper is now the one owner. Behavior changes: none; the same placeholder is refused on the same paths.
+
 - **The unused announcement channel setting is gone** (`tcbot/__init__.py`, `config.env.example`, `README.md`, `AGENTS.md`, `docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `.github/workflows/run-bot.yml`): `MAIN_CHANNEL` was loaded into the runtime configuration but never read, so it had no effect on any message, log, or enforcement path. Behavior changes: the setting is no longer read. Migration: drop `MAIN_CHANNEL` from the environment, the config template, and the repository secrets; use `COMMUNITY_CHANNEL_URL` for the community channel button in the additional menu.
 
 - **Dead re-export surfaces removed** (`tcbot/database/cache/__init__.py`, `tcbot/database/cache/twolevel.py`, `tcbot/modules/helper/keyboards/__init__.py`): the cache package re-exported roughly thirty private names that no caller imported, and the keyboards package re-exported private helpers plus a Telegram markup class. The keyboards package no longer leaks the markup type into command modules, which import it from `telegram` directly. Behavior changes: none; the package import paths and the public factory names are unchanged.

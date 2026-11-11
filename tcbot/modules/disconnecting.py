@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, messages
-from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID, can_manage_group
+from tcbot.modules.helper.identity import can_manage_group, is_anon_admin
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -129,7 +129,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     if not await can_manage_group(ctx.bot, chat.id, user.id, fresh=True):
-        if user.id == ANONYMOUS_BOT_ID:
+        if is_anon_admin(user):
             msg_text = t("disconnecting.state.anon_admin", locale, plain=True)
         else:
             msg_text = t("disconnecting.state.not_authorized", locale, plain=True)

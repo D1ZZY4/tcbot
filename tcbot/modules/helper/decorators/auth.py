@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 from tcbot import database as db
-from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID
+from tcbot.modules.helper.identity import is_anon_admin
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply
 
@@ -39,12 +39,6 @@ _REFUSAL_BY_LABEL: dict[str, Any] = {
 }
 
 
-def _is_anon_admin(update: Update) -> bool:
-    """Return True when the effective user is the anonymous admin placeholder bot."""
-    u = update.effective_user
-    return u is not None and u.id == ANONYMOUS_BOT_ID
-
-
 def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
     """Build one of the four federated-tier authorization decorators.
 
@@ -58,7 +52,7 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
         async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             """Allow the call only when the invoking user passes the tier check."""
             locale = await locale_for_update(update)
-            if _is_anon_admin(update):
+            if is_anon_admin(update.effective_user):
                 if update.effective_message:
                     await safe_reply(
                         update.effective_message,
