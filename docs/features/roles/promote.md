@@ -158,7 +158,7 @@ A user submits a request for themselves to become Admin. `cmd_promote_request` f
 | Cancel | `promo_role_cancel:<target_id>:<executor_id>` (legacy `:<target_id>` still works) | `on_promote_role_cancel` |
 | Approve / Reject (Founder DM) | `promo_approve:<request_id>` / `promo_reject:<request_id>` | `on_promo_decision` |
 
-All callbacks re-check the tapper's current effective role (Founder/Admin) before applying any write, so a user who lost permission between selecting and confirming is rejected with an alert. New prompts carry the opener in both the role buttons and the cancel button, so only that staffer can act on or collapse the picker; a different tapper gets an alert and the prompt stays live. Legacy taps without an executor segment act as the tapper with the rank re-check, and callbacks do not re-run identity refusal.
+All callbacks re-check the tapper's current effective role (Founder/Admin) before applying any write, so a user who lost permission between selecting and confirming is rejected with an alert. New prompts carry the opener in both the role buttons and the cancel button, so only that staffer can act on or collapse the picker; a different tapper gets an alert and the prompt stays live. Legacy taps without an executor segment act as the tapper with the rank re-check. The role and demote-confirm callbacks re-run the same identity refusal as the command path, so the anonymous-admin placeholder, a Telegram service account, and the tapper themselves cannot be reached through a callback either.
 
 ### Approval path
 

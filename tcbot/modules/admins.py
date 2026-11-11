@@ -555,6 +555,19 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
 
+    # * Same identity refusal the command path applies: the callback reaches
+    # * the same demotion, so it must not strip the role of the anonymous
+    # * admin placeholder, a Telegram service account, or the tapper.
+    ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    refusal = identity.refuse_message("demote", ident, await locale_for_update(update))
+    if refusal is not None:
+        await cb_error_edit(
+            q,
+            refusal,
+            log_label="on_demote_confirm refusal",
+        )
+        return
+
     try:
         removed = await Demote.execute(
             ctx.bot,

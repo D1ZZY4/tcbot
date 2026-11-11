@@ -434,7 +434,10 @@ async def prompt_owner_mismatch(
     try:
         owner_id = int(parts[-1])
     except ValueError:
-        return False
+        # * Fail closed: a payload whose owner segment is not a user id
+        # * cannot prove who opened the prompt, so the tapper is not
+        # * treated as the owner.
+        return True
     tapper = update.effective_user
     if tapper is None or tapper.id == owner_id:
         return False
