@@ -63,8 +63,6 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
 
 
 __help__: replies.HelpEntry = get_help()
-__help_text__ = __help__["overview"]
-__help_sections__ = __help__["sections"]
 
 # ─────────────────────── Callback Data Shapes ────────────────────── #
 # * lang:list:<scope> opens the option list; lang:set:<scope>:<locale>

@@ -68,38 +68,11 @@ def _builder_help(
 
 # ─────────────────────── Module-Level State ─────────────────────── #
 
-HELP_CONTENT = _builder_help()
-
-# * Sorted by display name (case-insensitive)
-_TOPICS_SORTED: list[tuple[str, str]] = sorted(
-    ((entry[0], key) for key, entry in HELP_CONTENT.items()),
-    key=lambda t: t[0].lower(),
-)
-
-# * Menu-path topics; an explicit copy so a future mutation of one list
-# * cannot silently reshape the other path's keyboard.
-HELP_TOPICS_MENU: list[tuple[str, str]] = list(_TOPICS_SORTED)
-
-# * Command-path topics; callback keys become "helpc_<mod>"
-HELP_TOPICS_CMD: list[tuple[str, str]] = [
-    (name, "helpc_" + key[5:]) for name, key in _TOPICS_SORTED
-]
-
-# * Module name → help key mapping for /help <module> lookup
-# * (default-locale snapshot; per-request paths rebuild for the tapper's
-# * locale via _module_map_for_locale below).
-_MODULE_NAME_MAP: dict[str, str] = {}
-for _key, _entry in HELP_CONTENT.items():
-    _module_slug = _key[5:]
-    _MODULE_NAME_MAP[_module_slug.lower()] = _key
-    _MODULE_NAME_MAP[_entry[0].lower()] = _key
-
 
 def _topics_for_locale(locale: str | None, *, menu: bool) -> list[tuple[str, str]]:
     """Build the help-index topic list in ``locale`` (names + callbacks).
 
-    The module-level ``HELP_TOPICS_*`` lists are default-locale snapshots
-    for import-time use; index renders call this so topic names follow the
+    The topic list is rebuilt per request so the topic names follow the
     tapper's locale like every other keyboard.
     """
     content = _builder_help(locale)

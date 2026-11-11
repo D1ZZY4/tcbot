@@ -82,8 +82,6 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
 
 
 __help__: replies.HelpEntry = get_help()
-__help_text__ = __help__["overview"]
-__help_sections__ = __help__["sections"]
 
 
 # ──────────────────────── Size formatter ────────────────────────── #

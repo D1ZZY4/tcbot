@@ -198,7 +198,7 @@ class HelpEntry(TypedDict):
     sections: list[tuple[str, str]]  # (section_header, section_body) pairs
 ```
 
-Each help-bearing module declares exactly one `__help__: replies.HelpEntry = {...}` instead of three separate attributes. `help.py` reads this dict via `_builder_help()` and falls back to the legacy `__module_name__` / `__help_text__` / `__help_sections__` attributes for backward compatibility during migration.
+Each help-bearing module declares exactly one `__help__: replies.HelpEntry = {...}` instead of three separate attributes. `help.py` reads it through the module's `get_help(locale)` builder via `_builder_help()`, which rebuilds the content per request so the topic names and bodies follow the tapper's locale.
 
 ### Section constructor helpers
 

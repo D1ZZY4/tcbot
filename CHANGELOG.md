@@ -93,6 +93,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The message helpers own every message concern** (`tcbot/modules/helper/messages/`): the Telegram link builders and the shared reply strings moved into the message package, so the builder now holds everything that produces a user-facing message: the safe-edit transport, the audit-log builders, the link builders, and the reply notices. The link builder was renamed from `parse_link.py` to `links.py` because it builds links rather than parsing them. Behavior changes: none; the link helpers keep their names and are re-exported by the package.
 
+- **The legacy help attributes are gone** (`tcbot/modules/help.py`, `tcbot/modules/`): every help-bearing module declared the same content three times, and the builder read the two legacy copies. The builder now reads the unified entry through the module's `get_help(locale)` builder. Behavior changes: none; the help output is unchanged.
+
 - **One owner for the role sets** (`tcbot/database/users_roles.py`): `STAFF_ROLES` and `FOUNDER_ADMIN_ROLES` replace eleven inline role-set literals across the moderation paths, so a new tier cannot land in the rank table and be missed by every set check. Behavior changes: none.
 
 - **One owner for the explicit-target rule** (`tcbot/modules/helper/extraction/resolve.py`, `tcbot/modules/admins.py`): the promotion entry now uses the shared target-shape helper instead of an open-coded copy that treated a bare `@` as a target. Behavior changes: `/tcpromote @ developer` no longer consumes the `@` token as the target.

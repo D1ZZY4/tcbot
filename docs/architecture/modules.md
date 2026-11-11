@@ -48,10 +48,10 @@ __help__: replies.HelpEntry = {
 __handlers__ = [...]
 ```
 
-The help builder includes a module only when it has a non-empty unified
-`__help__` entry or legacy `__module_name__` and `__help_text__` values. Modules
-with `__module_name__ = None` are therefore omitted from `/help`; this is a
-help-discovery convention, not a handler-registration switch.
+The help builder includes a module only when it exposes a `get_help(locale)`
+builder that returns a non-empty entry. Modules without one are therefore
+omitted from `/help`; this is a help-discovery convention, not a
+handler-registration switch.
 
 ## Command modules
 
