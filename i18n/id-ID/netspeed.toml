@@ -31,6 +31,7 @@ body = """
 pinging = "Ping..."
 running = "Tes kecepatan berjalan, tunggu sebentar..."
 timeout = "Tes kecepatan habis waktu. Coba lagi nanti."
+busy = "Tes kecepatan sudah berjalan. Tunggu sampai selesai."
 failed = "Tes kecepatan gagal. Coba lagi nanti."
 parse_failed = "Tes kecepatan selesai tetapi hasilnya tidak bisa dibaca. Coba lagi nanti."
 

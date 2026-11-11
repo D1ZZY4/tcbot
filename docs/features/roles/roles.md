@@ -94,7 +94,7 @@ Common moderation thresholds:
 
 Indexes are ensured for unique user IDs in `tc_owners`, `tc_admins`, and `tc_roles`. `promotion_requests` carries a unique `request_id`, a compound `(target_id, status)`, a compound `(status, requested_date)` that serves the pending-list sort, and a partial unique index on `target_id` restricted to `status: "pending"` so each user has at most one open request (the dedup guard both `cmd_promote_request` and the Admin request path rely on).
 
-Role and owner/admin writes invalidate relevant cache entries so permission checks see updated state. Effective-role and owner reads are cached: the per-user effective role serves from an L1 cache with a 60 s TTL and the owner ID from one with a 300 s TTL, so repeated authorization checks (auth decorators, `is_staff`, rate-limit tiering, promotion-request guards) cost zero MongoDB round trips on a hit. `set_owner` clears the entire effective-role cache because the previous owner's key is unknown.
+Role and owner/admin writes invalidate relevant cache entries so permission checks see updated state. Effective-role and owner reads are cached: the per-user effective role serves from an L1 cache with a 60 s TTL and the owner ID from one with a 300 s TTL, so repeated authorization checks (auth decorators, `is_staff`, rate-limit tiering, promotion-request guards) cost zero database round trips on a hit. `set_owner` clears the entire effective-role cache because the previous owner's key is unknown.
 
 ## `/tcpromote` behavior
 

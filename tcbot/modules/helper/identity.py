@@ -98,27 +98,34 @@ async def classify(
     when the role is ultimately unused (self, bot, and Telegram targets
     return before any role check).
 
-    A role-lookup failure degrades to ``kind="user"`` (fail open), so every
-    moderation caller must pair this with an independent fail-closed role
-    read: ``resolve_and_check`` for ban, kick, mute, warn, and unban entries,
-    or a guarded ``get_effective_role`` fetch for promote and demote. The
-    paired read rejects the action on lookup failure, which keeps the
-    degraded ``"user"`` kind from becoming an authorization bypass.
-    Cancellation always propagates; only ordinary lookup failures degrade.
+    A role-lookup failure is raised, never degraded. The protected-target
+    refusals are keyed on the role kind, so a target that resolved to
+    ``"user"`` because of a database outage would silently lose the
+    protection that keeps a Founder from being moderated. Callers already
+    treat a failure as a refusal, so raising keeps the classification
+    fail-closed without asking every caller for a second role read.
+    Cancellation always propagates.
     """
     # * Both are independent cached reads; run in parallel.
-    # * return_exceptions=True prevents a transient DB error from propagating
-    # * to every moderation command that calls classify().
+    # * return_exceptions=True keeps the two failure modes apart: the name
+    # * lookup is display-only and degrades, the role lookup decides
+    # * whether the action is allowed and must not.
     mention_data, role_result = await asyncio.gather(
         db.users_cache.get_user_mention_data(target_id),
         db.users_roles.get_effective_role(target_id),
         return_exceptions=True,
     )
     throw_if_cancelled((mention_data, role_result))
+    if isinstance(role_result, BaseException):
+        # ! CRITICAL: Never degrade an unresolved role into "no role".
+        # ! The refusal table is keyed on the role kind, so a degraded
+        # ! classification would let a database outage turn a Founder
+        # ! into an ordinary user and bypass the protection.
+        raise role_result
     (cached_fname, target_username) = (
         mention_data if not isinstance(mention_data, BaseException) else (None, None)
     )
-    role = role_result if not isinstance(role_result, BaseException) else None
+    role = role_result
     # * Override fname when it looks like a fallback: missing, the legacy
     # * "User <id>" format, or a bare numeric string returned by _best_name().
     if db.users_cache.is_placeholder_name(target_fname):
@@ -243,7 +250,7 @@ async def can_manage_group(
     outage never grants. Cancellation always propagates.
 
     With ``fresh=True`` the staff check reads the effective role directly
-    from MongoDB so a demotion in another process is never hidden for up
+    from the database so a demotion in another process is never hidden for up
     to the 60 s role TTL. Enforcement callers use it; display-only callers
     keep the cached fast path.
     """

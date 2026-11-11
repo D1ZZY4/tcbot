@@ -15,7 +15,6 @@ import warnings
 from typing import TYPE_CHECKING
 
 import telegram.error as te
-from pymongo.errors import ConnectionFailure
 from telegram import Bot, LinkPreviewOptions, Update
 from telegram.ext import (
     AIORateLimiter,
@@ -29,29 +28,25 @@ from telegram.ext import (
 from tcbot import cfg, error_reporter
 from tcbot import database as db
 from tcbot.alive import register_webhook, start_keepalive
+from tcbot.database import engine as db_engine
 from tcbot.database import mtproto as mtproto_mod
 from tcbot.database import redis_client
 from tcbot.database import scheduler as sched_mod
 from tcbot.database.cache import drain_redis_mutations
-from tcbot.database.mongos import close as close_mongo
-from tcbot.database.mongos import connect, ensure_indexes
+from tcbot.database.engine import close as close_database
+from tcbot.database.engine import connect
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
-from tcbot.modules.helper.extraction.sync import (
-    drain_refresh_tasks as drain_identity_refresh_tasks,
-)
+from tcbot.modules.helper.extraction import refresh as identity_refresh
+from tcbot.modules.helper.pipelines import connected_flow, stats_flow
 from tcbot.modules.helper.pipelines.ban_flow import drain_proof_sessions
-from tcbot.modules.helper.pipelines.connected_flow import drain_harvest_tasks
-from tcbot.modules.helper.pipelines.stats_flow import (
-    drain_refresh_tasks as drain_title_refresh_tasks,
-)
 from tcbot.modules.sync import run_ban_sync
-from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitOpenError
-from tcbot.utils.dispatch import drain_tasks, throw_if_cancelled
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import _ensure_loaded
 from tcbot.utils.logger import get_logger
 from tcbot.utils.logger import setup as setup_logging
+from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.transport import (
     API_POOL_SIZE,
     HTTP_CONNECT_TIMEOUT,
@@ -81,6 +76,13 @@ log = get_logger(__name__)
 # ─────────────────────────────── Constants ───────────────────────────────── #
 
 _UPDATES_POOL_SIZE: int = 4
+# * Flood-wait retries for the rate limiter. Telegram answers a request
+# * that exceeds a limit with ``RetryAfter``; without a retry budget the
+# * request fails outright and a federation-wide action silently misses
+# * the affected groups. The limiter waits out the requested delay and
+# * pauses the other requests meanwhile, which is the behaviour Telegram
+# * asks for.
+_RATE_LIMIT_RETRIES: int = 2
 _LINK_PREVIEW_DISABLED: LinkPreviewOptions = LinkPreviewOptions(is_disabled=True)
 _HANDLER_GROUP_RATE_LIMITER: int = -1
 _HANDLER_GROUP_CACHE: int = 10
@@ -89,9 +91,12 @@ _FATAL_BORDER_WIDTH: int = 70
 _FATAL_RED: str = "\033[38;5;203m"
 _FATAL_RESET: str = "\033[0m"
 _ERROR_CONTEXT_TEXT_LEN: int = 120
-_member_cache_tasks: set[asyncio.Task[None]] = set()
-_startup_tasks: set[asyncio.Task[None]] = set()
-_asyncio_report_tasks: set[asyncio.Task[None]] = set()
+# * Owners of the fire-and-forget task sets. Every background task the
+# * bot schedules is tracked by one of these, so the shutdown drains them
+# * in one place instead of every owner exposing its own helper.
+_member_cache_tasks = TaskTracker("member cache")
+_startup_tasks = TaskTracker("startup warm-up")
+_asyncio_report_tasks = TaskTracker("async error reports")
 _MEMBER_CACHE_MAX_CONCURRENT: int = 20
 
 warnings.filterwarnings(
@@ -117,14 +122,9 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         except Exception as exc:
             log.debug("Member cache update failed for %d: %s", uid, exc)
 
-    if len(_member_cache_tasks) >= _MEMBER_CACHE_MAX_CONCURRENT:
+    if _member_cache_tasks.pending >= _MEMBER_CACHE_MAX_CONCURRENT:
         return
-    try:
-        task = asyncio.get_running_loop().create_task(_do_cache())
-        _member_cache_tasks.add(task)
-        task.add_done_callback(_member_cache_tasks.discard)
-    except RuntimeError:
-        log.debug("Member cache warmup skipped: no running event loop.")
+    _member_cache_tasks.spawn(_do_cache())
 
 
 # ──────────────────────────── Error layers ─────────────────────────────── #
@@ -135,7 +135,9 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     exc = ctx.error
     if exc is None:
         return
-    if isinstance(exc, (ConnectionFailure, CircuitOpenError)):
+    if exc is not None and (
+        db_engine.is_connection_error(exc) or isinstance(exc, CircuitOpenError)
+    ):
         log.warning("Handler aborted: %s", exc)
         return
     if isinstance(exc, (te.NetworkError, te.TimedOut, te.RetryAfter)):
@@ -189,12 +191,10 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await error_reporter.report_exc(exc, context=context_str)
 
 
-def _make_asyncio_exc_handler(
-    loop: asyncio.AbstractEventLoop,
-) -> Callable[[asyncio.AbstractEventLoop, dict], None]:
+def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], None]:
     """Return an asyncio exception handler mirroring errors to the reporter."""
 
-    def handler(lp: asyncio.AbstractEventLoop, context: dict) -> None:
+    def handler(_loop: asyncio.AbstractEventLoop, context: dict) -> None:
         """Forward asyncio exceptions to the error reporter."""
         exc = context.get("exception")
         msg = context.get("message", "Unhandled asyncio exception")
@@ -231,7 +231,9 @@ def _make_asyncio_exc_handler(
         if isinstance(exc, (te.NetworkError, te.TimedOut, te.RetryAfter)):
             log.debug("[asyncio] transient (not reported): %s", exc)
             return
-        if isinstance(exc, (ConnectionFailure, CircuitOpenError)):
+        if exc is not None and (
+            db_engine.is_connection_error(exc) or isinstance(exc, CircuitOpenError)
+        ):
             log.debug("[asyncio] transient (not reported): %s", exc)
             return
         if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
@@ -248,25 +250,26 @@ def _make_asyncio_exc_handler(
             if mtproto_mod.is_auth_dead():
                 log.debug("[asyncio] dead MTProto auth key suppressed.")
                 return
-            try:
-                park = lp.create_task(mtproto_mod.handle_auth_failure())
-                _asyncio_report_tasks.add(park)
-                park.add_done_callback(_asyncio_report_tasks.discard)
-            except Exception as err:
-                log.debug("Failed to schedule MTProto park task: %s", err)
-        try:
-            task = lp.create_task(
-                error_reporter.report_exc(exc or RuntimeError(detail), context=detail)
-            )
-            _asyncio_report_tasks.add(task)
-            task.add_done_callback(_asyncio_report_tasks.discard)
-        except Exception as err:
-            log.debug("Failed to schedule async error report: %s", err)
+            _asyncio_report_tasks.spawn(mtproto_mod.handle_auth_failure())
+        _asyncio_report_tasks.spawn(
+            error_reporter.report_exc(exc or RuntimeError(detail), context=detail)
+        )
 
     return handler
 
 
 # ─────────────────────────────── Lifecycle ─────────────────────────────── #
+
+
+def loop_factory() -> Callable[[], asyncio.AbstractEventLoop] | None:
+    """Return the uvloop loop factory, or None when the package is absent.
+
+    The event loop policy API is deprecated in Python 3.14 and removed in
+    3.16, and so is ``uvloop.EventLoopPolicy``. A loop factory is the
+    supported replacement: it makes the loop the transports create a uvloop
+    loop without touching the global policy.
+    """
+    return None if uvloop is None else uvloop.new_event_loop
 
 
 async def _warm_hot_caches() -> None:
@@ -289,30 +292,26 @@ async def _warm_hot_caches() -> None:
 
 
 async def init_shared_subsystems(bot: Bot, *, start_mtproto: bool) -> None:
-    """Connect MongoDB/Redis and attach the error reporter (both transports)."""
+    """Connect PostgreSQL/Redis and attach the error reporter (both transports)."""
     _ensure_loaded()
-    log.info("Connecting to MongoDB...")
+    log.info("Connecting to PostgreSQL...")
     await connect()
-    log.info("Running parallel setup (indexes, owner seed, Redis)...")
+    log.info("Running parallel setup (owner seed, Redis)...")
     if start_mtproto:
-        indexes_r, owner_r, _, _mtproto_r = await asyncio.gather(
-            ensure_indexes(),
+        owner_r, _, _mtproto_r = await asyncio.gather(
             db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
             redis_client.connect_if_configured(),
             mtproto_mod.start(),
             return_exceptions=True,
         )
     else:
-        indexes_r, owner_r, _ = await asyncio.gather(
-            ensure_indexes(),
+        owner_r, _ = await asyncio.gather(
             db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
             redis_client.connect_if_configured(),
             return_exceptions=True,
         )
         _mtproto_r = True
-    throw_if_cancelled((indexes_r, owner_r, _mtproto_r))
-    if isinstance(indexes_r, BaseException):
-        raise indexes_r
+    throw_if_cancelled((owner_r, _mtproto_r))
     if isinstance(owner_r, BaseException):
         log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
     if start_mtproto:
@@ -335,18 +334,14 @@ async def _post_init(app: Application) -> None:
         )
     await init_shared_subsystems(app.bot, start_mtproto=True)
     await sched_mod.start(
-        cfg.mongodb_uri,
-        cfg.db_name,
+        cfg.database_url,
         cfg.warn_expiry_days,
         bot=app.bot,
         sync_interval_hours=cfg.sync_interval_hours,
         sync_runner=run_ban_sync,
     )
-    loop = asyncio.get_running_loop()
-    _t = loop.create_task(_warm_hot_caches(), name="tcbot.cache_warmup")
-    _startup_tasks.add(_t)
-    _t.add_done_callback(_startup_tasks.discard)
-    loop.set_exception_handler(_make_asyncio_exc_handler(loop))
+    _startup_tasks.spawn(_warm_hot_caches())
+    asyncio.get_running_loop().set_exception_handler(_make_asyncio_exc_handler())
     lec, _ = cfg.logs_errors
     log.info("Bot initialised.")
     log.debug("Owner: %d | LOG_ERRORS: %d", cfg.initial_owner_id, lec)
@@ -354,14 +349,14 @@ async def _post_init(app: Application) -> None:
 
 async def _post_shutdown(app: Application) -> None:
     """Drain tasks, stop the scheduler, and close clients."""
-    await drain_tasks(_member_cache_tasks, label="member cache")
-    await drain_tasks(_startup_tasks, label="startup warm-up")
-    await drain_tasks(_asyncio_report_tasks, label="async error reports")
-    await drain_harvest_tasks()
-    await drain_identity_refresh_tasks()
-    await drain_title_refresh_tasks()
+    await _member_cache_tasks.drain()
+    await _startup_tasks.drain()
+    await _asyncio_report_tasks.drain()
+    await identity_refresh.identity_refresh_tasks.drain()
+    await connected_flow.harvest_tasks.drain()
+    await stats_flow.title_refresh_tasks.drain()
     await drain_proof_sessions()
-    await logger_mod.drain_pending()
+    await error_reporter.drain_pending()
     await drain_redis_mutations()
     shutdown_results = await asyncio.gather(
         sched_mod.stop(),
@@ -375,7 +370,7 @@ async def _post_shutdown(app: Application) -> None:
         ):
             log.warning("Shutdown step failed (non-fatal): %s", _result)
     throw_if_cancelled(shutdown_results)
-    close_mongo()
+    await close_database()
 
 
 def base_builder() -> ApplicationBuilder:
@@ -393,7 +388,7 @@ def base_builder() -> ApplicationBuilder:
         .write_timeout(HTTP_WRITE_TIMEOUT)
         .connect_timeout(HTTP_CONNECT_TIMEOUT)
         .pool_timeout(HTTP_POOL_TIMEOUT)
-        .rate_limiter(AIORateLimiter())
+        .rate_limiter(AIORateLimiter(max_retries=_RATE_LIMIT_RETRIES))
     )
 
 
@@ -436,7 +431,7 @@ async def _run_webhook_mode(app: Application) -> None:
             await _post_init(app)
         except BaseException:
             # * PTB's shutdown() does not run post_shutdown, so a boot
-            # * failure after connect() would leave the Mongo client, the
+            # * failure after connect() would leave the database pool, the
             # * Redis pool, the MTProto client and the scheduler running.
             await _post_shutdown(app)
             raise
@@ -492,8 +487,6 @@ def main() -> None:
     """Configure and start the PTB application in webhook or polling mode."""
     stage = "logging setup"
     try:
-        if uvloop is not None:
-            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
         setup_logging(level=cfg.log_level)
         _init_sentry()
         log.info("Starting %s bot...", cfg.community_name)
@@ -510,7 +503,7 @@ def main() -> None:
                 cfg.webhook_url,
             )
             stage = "webhook"
-            asyncio.run(_run_webhook_mode(app))
+            asyncio.run(_run_webhook_mode(app), loop_factory=loop_factory())
         else:
             log.warning(
                 "No WEBHOOK_URL or REPLIT_DEV_DOMAIN found. "
@@ -518,6 +511,12 @@ def main() -> None:
             )
             log.info("Starting long-polling...")
             stage = "polling"
+            # * The polling transport builds its own loop through
+            # * asyncio.get_event_loop(), so the uvloop loop is installed
+            # * as the current loop rather than through a policy.
+            factory = loop_factory()
+            if factory is not None:
+                asyncio.set_event_loop(factory())
             app.run_polling(
                 drop_pending_updates=True,
                 allowed_updates=Update.ALL_TYPES,
@@ -578,6 +577,7 @@ __all__ = [
     "build_application",
     "init_shared_subsystems",
     "log",
+    "loop_factory",
     "main",
     "register_handlers",
 ]

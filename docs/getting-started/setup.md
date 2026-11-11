@@ -11,7 +11,7 @@ Replit-specific deployment, see [`../../replit.md`](../../replit.md).
   package floor is `>=3.14` and it is also the tested runtime).
 - [`uv`](https://docs.astral.sh/uv/) for dependency and lockfile management.
 - A Telegram bot token from BotFather.
-- A MongoDB deployment, local or hosted.
+- A PostgreSQL deployment, local or hosted (the bot applies its own schema migrations).
 - Telegram destination chats for logs, errors, proofs, and appeals.
 
 ## Local setup
@@ -39,20 +39,21 @@ uv run pyright .
 
 ## Docker setup
 
-The repository includes a Docker Compose stack with the bot, `mongo:7`, and Redis.
-Compose reads `.env`, not `config.env`, and maps the bot's port as `${PORT:-5000}:${PORT:-5000}`.
-Create a Docker-specific environment file before starting the stack:
+The repository includes a Docker Compose stack with the bot, `postgres:16-alpine`,
+and Redis. Compose reads `.env`, not `config.env`, and maps the bot's port as
+`${PORT:-5000}:${PORT:-5000}`. Create a Docker-specific environment file before
+starting the stack:
 
 ```bash
 cp config.env.example .env
 # Edit .env and set at least:
-# MONGODB_URI=mongodb://mongo:27017
+# DATABASE_URL=postgresql://tcbot:tcbot@postgres:5432/tcbot
 # REDIS_URL=redis://redis:6379/0
 docker compose up --build
 ```
 
 Set `BOT_TOKEN`, `OWNER_ID`, and the destination variables required by the
-features you enable in `.env`. The `bot` service waits for both MongoDB and
+features you enable in `.env`. The `bot` service waits for both PostgreSQL and
 Redis health checks before startup. The image runs:
 
 ```bash
@@ -63,7 +64,7 @@ uv run --frozen python -m tcbot
 
 For Replit or another hosting platform:
 
-1. Store `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` in the platform secret
+1. Store `BOT_TOKEN`, `DATABASE_URL`, and `OWNER_ID` in the platform secret
    manager or its environment configuration.
 2. Store the required destination values (`LOGS`, plus `PROOFS` and `APPEALS`
    when those features are enabled) as environment variables or secrets.
@@ -97,8 +98,7 @@ Recommended `config.env` syntax:
 ```env
 BOT_TOKEN="<telegram-bot-token>"
 OWNER_ID="123456789"
-MONGODB_URI="mongodb+srv://<user>:<password>@<cluster>/<options>"
-DB_NAME="tcbot"
+DATABASE_URL="postgresql://<user>:<password>@<host>:5432/tcbot"
 COMMUNITY_NAME="TCF - Transsion Core Federation"
 PREFIXES='["/", "!", "."]'
 PORT="5000"
@@ -125,8 +125,7 @@ PROOFS="-1001234567890"
 |---|---:|---|---|
 | `BOT_TOKEN` | Yes | string | Telegram bot token. Never commit it. |
 | `OWNER_ID` | Yes | positive integer | Initial Founder user ID. Startup fails if missing or invalid. |
-| `MONGODB_URI` | Yes | MongoDB URI | PyMongo connection string. Never commit it. |
-| `DB_NAME` | No | string | MongoDB database name. Defaults to `tcbot`. |
+| `DATABASE_URL` | Yes | PostgreSQL URL | SQLAlchemy connection string, e.g. `postgresql://user:password@host:5432/tcbot`. The bot applies the schema migrations at startup, so the role needs permission to create tables. Never commit it. |
 | `COMMUNITY_NAME` | No | string | Display name in messages and logs. Defaults to `Bot`. |
 | `PREFIXES` | No | Python-style list or CSV | Command prefixes. Default is `["/", "!", "."]`. |
 | `PORT` | No | integer or `auto` | Flask keep-alive port. `auto`, invalid, or out-of-range values resolve to `5000`. |
@@ -138,7 +137,7 @@ PROOFS="-1001234567890"
 | `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. |
 | `API_ID` | Yes | integer | Telegram API ID for MTProto identity lookups. The bot refuses to boot without it. |
 | `API_HASH` | Yes | string | Telegram API hash matching `API_ID`. Never commit the real value. |
-| `MTPROTO_SESSION` | No | string | Namespace for the shared MTProto session in MongoDB. Default `tcbot_mtproto`. |
+| `MTPROTO_SESSION` | No | string | Namespace for the shared MTProto session in PostgreSQL. Default `tcbot_mtproto`. |
 | `LOG_LEVEL` | No | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Runtime logging level. Default `INFO`. |
 | `MODULES_LOAD` | No | comma-separated module names | Optional allowlist, e.g. `bans,appeals`. |
 | `MODULES_NO_LOAD` | No | comma-separated module names | Optional denylist, e.g. `maintenance,broadcast`. |
@@ -163,7 +162,7 @@ MTProto runs on the bot token alone: no phone number, no login code, no
 session file. Fill `API_ID` / `API_HASH` and boot connects a bot-token
 session automatically; lookups keep working with zero manual steps.
 
-Run exactly one live long-lived instance at a time. The MongoDB session
+Run exactly one live long-lived instance at a time. The MTProto session
 is shared, but Telegram kills the auth key when two clients connect with
 it at once (`406 AUTH_KEY_DUPLICATED`): instances elect a single owner
 through a short-lived lease, and losers serve Bot-API-only until the
@@ -173,8 +172,8 @@ a Replit deploy plus a GitHub runner side by side is not: stop one of
 them. If the key is already invalidated (either `406 AUTH_KEY_DUPLICATED`
 from a duplicate connection or transport `404 AUTH_KEY_NOT_FOUND` when
 Telegram reports the key is gone), stop every instance, purge the
-session docs (`db.mtproto_state.deleteMany({_id: /^<MTPROTO_SESSION>:/})`
-in `mongosh`), then boot exactly one instance and the bot-token login
+session rows (`DELETE FROM mtproto_state WHERE id LIKE '<MTPROTO_SESSION>:%'`),
+then boot exactly one instance and the bot-token login
 mints a fresh key automatically. The bot token itself never needs
 rotating for this incident. The bot parks MTProto and stays on
 Bot-API-only until the purge and reboot, so moderation never goes
@@ -182,13 +181,13 @@ offline over this dead key.
 
 ## Startup sequence
 
-1. `tcbot.__init__` loads configuration into `cfg` and fails fast when `BOT_TOKEN`, `MONGODB_URI`, or `OWNER_ID` are missing.
+1. `tcbot.__init__` loads configuration into `cfg` and fails fast when `BOT_TOKEN`, `DATABASE_URL`, or `OWNER_ID` are missing.
 2. `tcbot.__main__.main()` configures logging.
 3. `tcbot.alive.start_keepalive()` starts Flask on `0.0.0.0:PORT`.
 4. PTB `ApplicationBuilder` builds the bot application.
 5. `tcbot.modules.get_handlers()` imports active modules and stops startup if an enabled module fails to import.
 6. Signal handlers (`SIGTERM`, `SIGINT`) are registered immediately before the PTB lifecycle begins.
-7. `_post_init()` connects MongoDB, ensures indexes, seeds the initial owner, connects the optional Redis cache, starts the APScheduler, connects MTProto (bot-token session; missing `API_ID`/`API_HASH` aborts boot), and attaches the error reporter.
+7. `_post_init()` connects PostgreSQL (applying the pending schema migrations first), seeds the initial owner, connects the optional Redis cache, starts the APScheduler, connects MTProto (bot-token session; missing `API_ID`/`API_HASH` aborts boot), and attaches the error reporter.
 8. **Webhook mode** (when `WEBHOOK_URL` or `REPLIT_DEV_DOMAIN` resolves to a URL): `bot.set_webhook()` registers the URL, `register_webhook()` wires Flask's `POST /webhook` to PTB's update queue, and the bot waits for `SIGTERM`/`SIGINT`.
 9. **Polling mode** (when no webhook URL is available): `run_polling()` starts with `drop_pending_updates=True`. A `WARNING` log identifies this local-development fallback.
 
@@ -202,17 +201,17 @@ Set `BOT_TOKEN` in `config.env` or the host secret manager.
 
 Set `OWNER_ID` to your numeric Telegram user ID, not a username.
 
-### `MONGODB_URI is required but not set`
+### `DATABASE_URL is required but not set`
 
-Set `MONGODB_URI` in `config.env` or the host secret manager. Do not paste real connection strings into logs or documentation.
+Set `DATABASE_URL` in `config.env` or the host secret manager. Do not paste real connection strings into logs or documentation.
 
-### MongoDB connection failure
+### PostgreSQL connection failure
 
-Check `MONGODB_URI`, network access, Atlas IP allowlists, and database credentials.
+Check `DATABASE_URL`, network access, the host firewall, and the database credentials. The bot applies its schema migrations at startup, so the role also needs permission to create tables in the target database.
 
-### MongoDB `CERTIFICATE_VERIFY_FAILED` (`unable to get local issuer certificate`)
+### PostgreSQL `CERTIFICATE_VERIFY_FAILED` (`unable to get local issuer certificate`)
 
-The host's system CA store is empty or outdated, so the Atlas TLS chain cannot be verified. The bot pins TLS trust to the `certifi` Mozilla bundle (`tlsCAFile` in `tcbot/database/mongos.py`), which fixes minimal sandboxes without one. If this error persists, the `certifi` install is stale (`uv sync --frozen` refreshes it) or `MONGODB_URI` carries a conflicting TLS option; an explicit `tlsCAFile` in the URI always wins over the bundled default. Never disable TLS verification to work around this.
+The host's system CA store is empty or outdated, so the server TLS chain cannot be verified. Point the driver at a usable bundle with `?sslrootcert=/path/to/ca.pem` in `DATABASE_URL`, or install the system CA package. Never disable TLS verification to work around this.
 
 ### `Module import failed for: ...`
 

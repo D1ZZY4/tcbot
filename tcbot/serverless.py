@@ -20,9 +20,10 @@ from tcbot import cfg
 from tcbot.__main__ import (
     base_builder,
     init_shared_subsystems,
+    loop_factory,
     register_handlers,
 )
-from tcbot.database.mongos import connect, is_connected
+from tcbot.database.engine import connect, is_connected
 from tcbot.database.scheduler import expire_old_warns
 from tcbot.utils.logger import get_logger
 
@@ -35,8 +36,8 @@ log = get_logger(__name__)
 # ─────────────── Instance event loop (warm-invocation reuse) ────────────── #
 # * Vercel freezes the process between invocations, so a module-level asyncio
 # * loop survives across warm invocations while a per-request asyncio.run()
-# * loop would orphan every cached client (PyMongo, httpx) on a closed loop.
-# * One shared loop keeps the PTB Application, MongoDB client, and Redis
+# * loop would orphan every cached client (the SQLAlchemy pool, httpx) on a closed loop.
+# * One shared loop keeps the PTB Application, the database pool, and Redis
 # * client usable across invocations.  Access is serialised: overlapping
 # * invocations on one instance take turns instead of racing the loop.
 
@@ -49,7 +50,8 @@ def _instance_loop() -> asyncio.AbstractEventLoop:
     global _LOOP
     with _LOOP_LOCK:
         if _LOOP is None or _LOOP.is_closed():
-            _LOOP = asyncio.new_event_loop()
+            factory = loop_factory()
+            _LOOP = factory() if factory is not None else asyncio.new_event_loop()
         return _LOOP
 
 
@@ -82,14 +84,14 @@ def build_serverless_app() -> Application:
 
 
 async def _init_subsystems(app: Application) -> None:
-    """Connect MongoDB/Redis and attach the error reporter (no scheduler on serverless).
+    """Connect PostgreSQL/Redis and attach the error reporter (no scheduler on serverless).
 
     APScheduler is intentionally NOT started here: a frozen serverless
     instance cannot fire persistent schedules.  Recurring maintenance
     (warn expiry) runs through the Vercel Cron endpoint instead.
 
     MTProto is intentionally NOT started here either: a serverless
-    instance cannot hold the long-lived session the shared MongoDB store
+    instance cannot hold the long-lived session the shared MTProto store
     assumes, so identity resolution degrades to Bot-API-only and returns
     None for MTProto-only lookups. Long-lived transports fail closed at
     boot without API_ID/API_HASH; serverless stays available without

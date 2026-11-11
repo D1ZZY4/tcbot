@@ -31,6 +31,7 @@ body = """
 pinging = "Pinging..."
 running = "Running speed test, please wait..."
 timeout = "Speed test timed out. Please try again later."
+busy = "A speed test is already running. Please wait for it to finish."
 failed = "Speed test failed. Please try again later."
 parse_failed = "Speed test finished but the results could not be read. Please try again later."
 

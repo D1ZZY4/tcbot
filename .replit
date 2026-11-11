@@ -1,10 +1,14 @@
 modules = ["nix", "python-3.14", "nodejs-24"]
+
 [agent]
 expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["uv", "nano", "gnupg"]
+packages = ["uv", "nano", "gnupg", "gcc-unwrapped"]
+
+[env]
+LD_LIBRARY_PATH = "/nix/store/bmi5znnqk4kg2grkrhk6py0irc8phf6l-gcc-14.2.1.20250322-lib/lib"
 
 [workflows]
 runButton = "Project"
@@ -26,6 +30,19 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "uv run python -m tcbot"
+
+[[ports]]
+localPort = 5098
+externalPort = 3000
+
+[[ports]]
+localPort = 5099
+externalPort = 3002
+
+[[ports]]
+localPort = 5432
+externalPort = 3001
+exposeLocalhost = true
 
 [[ports]]
 localPort = 8080

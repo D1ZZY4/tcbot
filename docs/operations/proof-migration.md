@@ -3,7 +3,7 @@
 This runbook moves every stored ban proof from the old proof chat into a new
 channel and repoints every reference at the new messages. It uses the
 one-shot operator script in [`../../scripts/migrate_proofs.py`](../../scripts/migrate_proofs.py).
-The bot itself is not part of the script; the script talks to MongoDB and
+The bot itself is not part of the script; the script talks to PostgreSQL and
 Telegram directly.
 
 ## What gets migrated
@@ -33,7 +33,7 @@ message id, so they follow the migration automatically.
   the new channel (post).
 - The bot can edit its own messages in the logs chat (it sent the ban log
   messages, so it can rewrite their buttons).
-- The environment provides `BOT_TOKEN`, `MONGODB_URI`, `API_ID`, `API_HASH`,
+- The environment provides `BOT_TOKEN`, `DATABASE_URL`, `API_ID`, `API_HASH`,
   and optionally `DB_NAME` (default `tcbot`). The script reads the process
   environment directly (no `config.env` dotenv), so export the variables
   before running rather than relying on the file.

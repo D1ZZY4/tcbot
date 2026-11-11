@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Health endpoint: mongodb verdict requires a fully CLOSED circuit."""
+"""Health endpoint: the database verdict requires a fully CLOSED circuit."""
 
 from __future__ import annotations
 
@@ -34,16 +34,18 @@ class _FakeCircuit:
 
 
 class _FakeBreakers:
-    """Break-alarm double exposing mongodb and telegram circuits."""
+    """Break-alarm double exposing the postgres and telegram circuits."""
 
     def __init__(
-        self, mongodb_state: CircuitState, telegram_state: CircuitState
+        self, postgres_state: CircuitState, telegram_state: CircuitState
     ) -> None:
-        self.mongodb = _FakeCircuit(mongodb_state)
+        self.postgres = _FakeCircuit(postgres_state)
         self.telegram = _FakeCircuit(telegram_state)
 
 
-class _FakeMongos:
+class _FakeEngine:
+    """Engine double pinned to one connection state."""
+
     def __init__(self, *, connected: bool) -> None:
         self._connected = connected
 
@@ -62,7 +64,7 @@ class _FakeScheduler:
 @pytest.fixture
 def _health_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pin every health input to the healthy state; tests override as needed."""
-    monkeypatch.setattr(alive_mod, "mongos", _FakeMongos(connected=True))
+    monkeypatch.setattr(alive_mod, "db_engine", _FakeEngine(connected=True))
     monkeypatch.setattr(alive_mod, "sched_mod", _FakeScheduler(ready=True))
     monkeypatch.setattr(
         alive_mod,
@@ -86,11 +88,11 @@ def _call_health() -> tuple[dict, int]:
 def test_health_ok_when_all_closed(_health_no_io: None) -> None:
     payload, code = _call_health()
     assert payload["status"] == "ok"
-    assert payload["mongodb"] == "ok"
+    assert payload["database"] == "ok"
     assert code == 200
 
 
-def test_health_503_when_mongodb_open(
+def test_health_503_when_database_circuit_open(
     _health_no_io: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
@@ -100,11 +102,11 @@ def test_health_503_when_mongodb_open(
     )
     payload, code = _call_health()
     assert payload["status"] == "degraded"
-    assert payload["mongodb"] == "error"
+    assert payload["database"] == "error"
     assert code == 503
 
 
-def test_health_503_when_mongodb_half_open(
+def test_health_503_when_database_circuit_half_open(
     _health_no_io: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
@@ -114,7 +116,7 @@ def test_health_503_when_mongodb_half_open(
     )
     payload, code = _call_health()
     assert payload["status"] == "degraded"
-    assert payload["mongodb"] == "error"
+    assert payload["database"] == "error"
     assert code == 503
 
 
@@ -166,7 +168,7 @@ def test_health_never_flips_telegram_circuit(
     monkeypatch.setattr(
         alive_mod,
         "_cb",
-        SimpleNamespace(mongodb=_FakeCircuit(CircuitState.CLOSED), telegram=overdue),
+        SimpleNamespace(postgres=_FakeCircuit(CircuitState.CLOSED), telegram=overdue),
     )
     payload, code = _call_health()
 

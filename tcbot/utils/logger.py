@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import copy
 import logging
 from contextvars import ContextVar
@@ -16,7 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from loguru import logger
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
+    from collections.abc import Callable
 
 # ────────────────────── Request context ─────────────────────────────── #
 
@@ -132,16 +131,6 @@ class BotLogFormatter(logging.Formatter):
 
 # ─────────────────── Telegram Error Log Handler ─────────────────── #
 
-_tg_tasks: set[asyncio.Task[None]] = set()
-
-
-async def drain_pending() -> None:
-    """Await in-flight Telegram log-shipping tasks at shutdown (bounded)."""
-    from tcbot.utils.dispatch import drain_tasks  # noqa: PLC0415
-
-    await drain_tasks(_tg_tasks, label="log shipping")
-
-
 _SUPPRESS_PREFIXES: tuple[str, ...] = (
     "tcbot.error_reporter",
     "httpcore",
@@ -152,36 +141,21 @@ _SUPPRESS_PREFIXES: tuple[str, ...] = (
 # * the utils layer, so the logger must not import it: a direct import
 # * would close a cycle between the two. Registering the sink keeps the
 # * dependency one-way.
-_record_sink: Callable[[logging.LogRecord], Coroutine[Any, Any, None]] | None = None
+_record_sink: Callable[[logging.LogRecord], None] | None = None
 
 
-def set_record_sink(
-    sink: Callable[[logging.LogRecord], Coroutine[Any, Any, None]] | None,
-) -> None:
-    """Register the coroutine that ships a log record to the error channel.
+def set_record_sink(sink: Callable[[logging.LogRecord], None] | None) -> None:
+    """Register the callable that ships a log record to the error channel.
 
-    Pass ``None`` to stop shipping. Without a registered sink the logger
-    still writes the record to the console; only the Telegram delivery is
-    skipped.
+    The callable is invoked synchronously from the logging handler and is
+    responsible for scheduling the delivery itself; the logger only
+    forwards the record. That keeps the delivery lifecycle with the owner
+    of the delivery instead of with the formatter. Pass ``None`` to stop
+    shipping. Without a registered sink the logger still writes the record
+    to the console; only the Telegram delivery is skipped.
     """
     global _record_sink
     _record_sink = sink
-
-
-def _log_task_failure(task: asyncio.Task[None]) -> None:
-    """Retrieve a failed report task's exception so asyncio stays quiet.
-
-    An unretrieved task exception is reported by asyncio as "Task exception
-    was never retrieved" through the root logger, which would start the
-    reporting loop again. Retrieving it here keeps the failure visible
-    without the noise.
-    """
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is None:
-        return
-    logger.bind(module=__name__).warning("Telegram error report task failed: %s", exc)
 
 
 class TelegramErrorHandler(logging.Handler):
@@ -192,27 +166,19 @@ class TelegramErrorHandler(logging.Handler):
         super().__init__(logging.ERROR)
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Schedule an async Telegram error report for the record."""
+        """Forward the record to the registered sink."""
         if any(record.name.startswith(p) for p in _SUPPRESS_PREFIXES):
             return
         sink = _record_sink
         if sink is None:
             return
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # * No running loop (the process is shutting down or the record
-            # * was emitted outside async code): the report cannot be
-            # * shipped. handleError() would print a misleading
-            # * "Logging error" traceback for a normal condition.
-            return
-        # * Snapshot now: _bridge_to_stdlib clears exc_info on the live
-        # * record after callHandlers, which would otherwise erase the
-        # * traceback before this async task reads it.
-        task = loop.create_task(sink(copy.copy(record)))
-        _tg_tasks.add(task)
-        task.add_done_callback(_tg_tasks.discard)
-        task.add_done_callback(_log_task_failure)
+            # * Snapshot now: _bridge_to_stdlib clears exc_info on the live
+            # * record after callHandlers, which would otherwise erase the
+            # * traceback before the delivery reads it.
+            sink(copy.copy(record))
+        except Exception as exc:
+            logger.bind(module=__name__).debug("Error log sink failed: %s", exc)
 
 
 # ─────────────────────── Logging Setup ──────────────────────────── #
@@ -271,7 +237,7 @@ def setup(level: int = logging.INFO) -> None:
         root.addHandler(con_handler)
     if not any(isinstance(handler, TelegramErrorHandler) for handler in root.handlers):
         root.addHandler(TelegramErrorHandler())
-    for lib in ("httpx", "telegram", "pymongo"):
+    for lib in ("httpx", "telegram", "sqlalchemy", "apscheduler"):
         logging.getLogger(lib).setLevel(logging.WARNING)
 
 

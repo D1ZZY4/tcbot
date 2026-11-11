@@ -17,7 +17,8 @@ from flask import Flask, request
 from telegram import Update
 
 from tcbot import cfg
-from tcbot.database import mongos, redis_client
+from tcbot.database import engine as db_engine
+from tcbot.database import redis_client
 from tcbot.database import scheduler as sched_mod
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
@@ -71,37 +72,38 @@ class _HealthPayload(msgspec.Struct):
     """Typed /health body: fixed string fields in a stable key order."""
 
     status: str
-    mongodb: str
+    database: str
     redis: str
     scheduler: str
     circuit_telegram: str
-    circuit_mongodb: str
+    circuit_database: str
     update_queue: int | None
     ts: str
 
 
 @_app.route("/health")
 def health() -> tuple[str, int, dict[str, str]]:
-    """Detailed health status as JSON: mongodb, redis, scheduler, queue, and timestamp.
+    """Detailed health status as JSON: database, redis, scheduler, queue, and timestamp.
 
     Returns HTTP 200 when all core subsystems are ready, 503 when degraded.
-    Note: mongodb and scheduler state reflect the last-known connection status
-    established during startup; no live pings are issued (those require async).
+    Note: the database and scheduler state reflect the last-known connection
+    status established during startup; no live pings are issued (those require
+    async).
     """
-    mongodb_ok = mongos.is_connected()
+    database_ok = db_engine.is_connected()
     scheduler_ok = sched_mod.is_ready()
 
     # * is_connected() is a sticky startup flag (never cleared on partition),
     # * so AND it with the live circuit state: after 5 consecutive DB failures
-    # * the mongodb breaker opens and the field must read error, matching the
+    # * the database breaker opens and the field must read error, matching the
     # * overall verdict below.
-    db_state = _cb.mongodb.peek_state()
+    db_state = _cb.postgres.peek_state()
     # * Circuit must be fully CLOSED for the DB to count healthy: HALF_OPEN
     # * (recovery probe pending or timed out) is a degraded state, and OPEN
     # * is a hard failure. peek_state() reads without transitioning, so an
     # * uptime poll cannot silently move OPEN -> HALF_OPEN.
     if db_state is not CircuitState.CLOSED:
-        mongodb_ok = False
+        database_ok = False
 
     if not cfg.redis_url:
         redis_status = "disabled"
@@ -125,7 +127,7 @@ def health() -> tuple[str, int, dict[str, str]]:
     overall = (
         "ok"
         if (
-            mongodb_ok
+            database_ok
             and scheduler_ok
             and tg_state is CircuitState.CLOSED
             and db_state is CircuitState.CLOSED
@@ -134,11 +136,11 @@ def health() -> tuple[str, int, dict[str, str]]:
     )
     payload = _HealthPayload(
         status=overall,
-        mongodb="ok" if mongodb_ok else "error",
+        database="ok" if database_ok else "error",
         redis=redis_status,
         scheduler="ok" if scheduler_ok else "error",
         circuit_telegram=tg_state.value,
-        circuit_mongodb=db_state.value,
+        circuit_database=db_state.value,
         # * Backpressure signal: watchdogs page when this climbs, because a
         # * growing queue means the PTB loop is not keeping up with Telegram.
         update_queue=_wh_queue.qsize() if _wh_queue is not None else None,
@@ -253,11 +255,18 @@ def webhook_route() -> tuple[str, int]:
 # * Blocking call: must run in a separate thread, never on the event loop.
 def _run() -> None:
     """Start the Flask server with production-safe settings."""
+    # * Threaded on purpose: the development server handles one request
+    # * at a time otherwise, so every webhook POST would queue behind the
+    # * previous one. Each POST waits up to a second for the PTB loop to
+    # * accept the update, and Telegram delivers updates concurrently.
+    # * One process, many request threads: the update queue and the event
+    # * loop stay in the main thread, so the threads only do the HTTP work.
     _app.run(
         host="0.0.0.0",
         port=cfg.port,
         debug=False,
         use_reloader=False,
+        threaded=True,
     )
 
 

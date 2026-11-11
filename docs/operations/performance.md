@@ -7,7 +7,7 @@ command, see
 
 This guide documents the performance techniques present in the code and the
 checks to use when extending them. It does not promise fixed latency:
-MongoDB, Redis, Telegram, network distance, workload, and the hosting platform
+PostgreSQL, Redis, Telegram, network distance, workload, and the hosting platform
 all affect response time.
 
 ## Current design
@@ -15,15 +15,14 @@ all affect response time.
 The bot currently uses:
 
 - batch queries in list and detail views to avoid repeated user and group reads;
-- MongoDB projections and indexes for frequently accessed fields;
+- PostgreSQL projections and indexes for frequently accessed fields;
 - `asyncio.gather()` for independent database and Telegram operations;
 - `TwoLevelCache` with an in-process L1 and optional Redis L2: L2 reads are
   bounded (1 s cap) so a stalled Redis falls through to the DB fetch instead
   of holding the hot path, and L2 writes are fire-and-forget FIFO mutations
   that can never fail the fetch (a payload-encode failure degrades to
   L1-only);
-- `estimated_document_count()` for count-only views where an exact count is not
-  required;
+- `COUNT(*)` on the narrowest index for count-only views;
 - callback acknowledgement alongside independent callback work where safe;
 - `fan_out()` from `tcbot/utils/dispatch.py` to bound concurrent work across
   groups (batch joins use a local semaphore with the same bound);
@@ -33,7 +32,7 @@ The bot currently uses:
 - cached auth reads (`owner_only` via the cached owner ID, `staff_only` via
   the cached effective role) so repeated permission checks cost no database
   round trip on cache hits;
-- circuit breakers around MongoDB and Telegram operations.
+- circuit breakers around PostgreSQL and Telegram operations.
 
 The webhook receiver and polling fallback affect transport latency, but neither
 removes the network time required by Telegram API calls.
@@ -62,7 +61,7 @@ Available batch helpers include:
 
 Batch helpers check the in-memory mention cache first: cached IDs are served
 without I/O and repeat IDs are dropped, so only the uncached remainder hits
-one MongoDB query. Users absent from the database get a not-found sentinel
+one database query. Users absent from the database get a not-found sentinel
 cached so repeat renders skip the round-trip.
 
 For partial-name target resolution, use
@@ -79,22 +78,22 @@ be reviewed together.
 
 ### Keep indexes aligned with query shapes
 
-Startup index creation lives in `tcbot/database/mongos.py`. Current examples
-include:
+The index definitions live in `tcbot/database/base.py` and are created by
+the Alembic migration. Current examples:
 
 ```text
-member_cache: user_id, first_name, username
+member_cache: (username_lower, user_id) and (first_name_lower, user_id), both with text_pattern_ops
 bans: (banned_user_id, is_active, timestamp desc, ban_id desc) compound for get_active_ban filter+sort
-warns: user_id + chat_id + timestamp
-warn_counts: unique user_id + chat_id
+warns: (user_id, chat_id, timestamp desc)
+warn_counts: primary key (user_id, chat_id)
 ```
 
 When adding a query with a new filter or sort order:
 
 1. inspect the existing indexes;
-2. add the index in `ensure_indexes()` when needed;
-3. keep the database helper and its document typing in sync;
-4. use MongoDB `explain()` or production metrics to verify the change.
+2. add the index in `base.py` when needed and generate the matching Alembic revision;
+3. keep the database helper and its row typing in sync;
+4. use PostgreSQL `EXPLAIN (ANALYZE, BUFFERS)` or production metrics to verify the change.
 
 ## Async concurrency
 
@@ -165,24 +164,30 @@ Polling mode adds a dedicated getUpdates connection pool of 4
 `fan_out()` caps in-flight Telegram calls at 10 via its semaphore, so the
 connection count stays bounded regardless of how many groups are connected.
 
-## Database worker pool and per-call budget
+## Connection pool and per-call budget
 
-Database calls do not run on the event loop's default executor. They use a
-dedicated pool (`tcbot/database/mongos.py`) sized from the CPU count, with a
-floor of 8 and a ceiling of 24 workers. The isolation matters because the
-default executor is shared with other blocking work: the speedtest holds one
-of its threads for minutes, so a few hung database calls could otherwise
-starve it and stall unrelated work.
+Database calls are asynchronous: the driver awaits the server on the event
+loop, so no worker thread is involved and no default-executor slot can be
+starved by a slow query. The pool is sized explicitly in
+`tcbot/database/engine.py`: 20 pooled connections plus 10 overflow, a 10 s
+pool timeout, and a 30-minute recycle so a proxy never hands out a dropped
+connection.
 
 Every call is also bounded. `db_call(op, timeout=...)` defaults to 20 s and
-raises `TimeoutError` when the operation does not answer in time; the worker
-thread finishes on its own, so the bound releases the caller, not the thread.
-A timeout counts as a transient failure and therefore opens the MongoDB
-circuit like any other connection error.
+raises `TimeoutError` when the operation does not answer in time. A timeout
+counts as a transient failure and therefore opens the PostgreSQL circuit like
+any other connection error.
 
-Operations that are legitimately long pass `timeout=None`: index builds in
-`ensure_indexes()`, the warn-expiry bulk deletes, and the warn-history and
-counter deletes.
+Reads do not open a transaction. `fetch_all`, `fetch_one`, `fetch_value`,
+`fetch_count`, and `count_rows` run on an autocommit connection, so a read
+is one round trip instead of one plus the `COMMIT` that would close the
+transaction. Measured against the deployment schema, a single-row lookup
+drops from 0.77 ms to 0.47 ms. The isolation level is reverted when the
+connection returns to the pool, so a write that follows still runs in a
+normal transaction.
+
+Operations that are legitimately long pass `timeout=None`: the warn-expiry
+bulk deletes and the warn-history and counter deletes.
 
 ## Redis reconnect
 
@@ -213,7 +218,7 @@ uv run py-spy record --pid <PID> --duration 60 --rate 20 --format speedscope --o
 
 The in-process micro-benchmark measures the primitives every request pays for
 (the database call transport, the two-level cache, and the bounded fan-out).
-It needs no MongoDB, Redis, or Telegram connection, so it runs anywhere:
+It needs no PostgreSQL, Redis, or Telegram connection, so it runs anywhere:
 
 ```bash
 uv run python scripts/benchmark_hotpath.py

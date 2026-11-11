@@ -229,7 +229,7 @@ class TwoLevelCache[T]:
         A per-key ``asyncio.Lock`` serialises concurrent misses for the same
         key so that only one ``fetch()`` runs; the winner populates the cache
         and all waiters read the same result. Different keys remain fully
-        parallel. Mirrors ``TTLCache.get_or_fetch`` semantics.
+        parallel.
         """
         val = self._mem.get(key)
         if val is not CACHE_MISS:

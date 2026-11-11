@@ -27,9 +27,9 @@ flowchart TD
     WH --> SL[tcbot/serverless.py]
     SL --> PTB[Shared PTB Application<br/>updater=None, process_update]
     PTB --> Handlers[Same handlers as webhook/polling]
-    Handlers --> Mongo[(MongoDB via pymongo)]
+    Handlers --> DB[(PostgreSQL via SQLAlchemy)]
     Cron[Vercel Cron<br/>daily 02:00 UTC] -->|GET| CR["/api/cron (api/cron.py)"]
-    CR --> EXP[expire_old_warns in MongoDB]
+    CR --> EXP[expire_old_warns in PostgreSQL]
 ```
 
 - Each Telegram update runs in its own invocation: `/api/webhook`
@@ -42,13 +42,13 @@ flowchart TD
 - APScheduler never starts on Vercel. Warn expiry (`WARN_EXPIRY_DAYS > 0`)
   runs via the daily Vercel Cron job hitting `/api/cron`, which calls the
   same `expire_old_warns()` the scheduler uses. `member_cache` cleanup still
-  runs through the MongoDB TTL index and needs nothing.
+  runs through the daily cleanup job and needs nothing.
 - `GET /api/webhook` returns `OK` as a liveness probe.
 - Response contract, mirroring the Flask receiver in `alive.py`: `200`
   acknowledges handled or benign updates (Telegram stops retrying), `400`
   rejects malformed JSON, `403` rejects a bad secret, and `500`/`503` are
   retryable - `500` for update-processing failures and `503` when the
-  instance is not ready (a cold start whose MongoDB/Redis init failed, or no
+  instance is not ready (a cold start whose database/Redis init failed, or no
   `WEBHOOK_SECRET` configured). Telegram retries every non-2xx delivery.
 
 ## Setup
@@ -61,7 +61,7 @@ Never commit real values.
 | Variable | Required on Vercel | Notes |
 |---|---|---|
 | `BOT_TOKEN` | Yes | Telegram bot token from BotFather. |
-| `MONGODB_URI` | Yes | Reachable from Vercel (Atlas with network access for `0.0.0.0/0`, or equivalent). |
+| `DATABASE_URL` | Yes | Reachable from Vercel (a managed PostgreSQL instance with network access for `0.0.0.0/0`, or equivalent). |
 | `OWNER_ID` | Yes | Seeded as Founder on first init. |
 | `WEBHOOK_SECRET` | **Yes** | Explicit secret for update validation. The endpoint fails closed (`503`) without it: the auto-generated startup token changes per cold start and can never match Telegram's copy. |
 | `CRON_SECRET` | **Yes** | Bearer token for `/api/cron`. The endpoint fails closed (`503`) without it. |
@@ -108,7 +108,7 @@ to `0`). Re-run after every redeploy that changes the project URL.
 - `GET https://<project>.vercel.app/api/cron` with
   `Authorization: Bearer <CRON_SECRET>` → `200` with an expiry summary.
 - Vercel dashboard → Functions logs show `serverless: subsystems ready.`
-  on first cold start (MongoDB connect + index ensure + owner seed).
+  on first cold start (database connect + migrations + owner seed).
 
 ## Limitations (read before relying on Vercel mode)
 
@@ -137,9 +137,9 @@ to `0`). Re-run after every redeploy that changes the project URL.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Every update → `503` | `WEBHOOK_SECRET` unset | Set explicit `WEBHOOK_SECRET`, redeploy, re-run `setWebhook` with it. |
-| Every update → `503` on a cold start | Subsystem init failed before the loop was ready (MongoDB/Redis unreachable) | Fix database access and re-verify; retries are automatic. |
+| Every update → `503` on a cold start | Subsystem init failed before the loop was ready (database/Redis unreachable) | Fix database access and re-verify; retries are automatic. |
 | Every update → `403` | Secret mismatch | `secret_token` in `setWebhook` must equal `WEBHOOK_SECRET`. |
-| First update slow, then fast | Cold start (Mongo connect + indexes) | Expected; warms after first invocation. |
+| First update slow, then fast | Cold start (database connect + migrations) | Expected; warms after first invocation. |
 | `Conflict` errors in logs | Another instance still running (Replit/polling) | Stop all other transports for this token. |
 | Cron → `401` | Wrong/missing bearer | Send `Authorization: Bearer <CRON_SECRET>`; compare with project env. |
 | Cron → `503` | `CRON_SECRET` unset | Set explicit `CRON_SECRET` and redeploy. |

@@ -36,7 +36,7 @@ Three workflows with identical triggers (push to `main`, `feat/**`,
 **What they share:**
 - `uv sync --frozen` installs from the lockfile before every job.
 - **Fails the PR** if any step exits with a non-zero code.
-- Dummy but shape-valid `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` values
+- Dummy but shape-valid `BOT_TOKEN`, `DATABASE_URL`, and `OWNER_ID` values
   (validated at import time, never connecting), so fork PRs without
   repository secrets still pass.
 
@@ -159,7 +159,7 @@ Review the dependency changes and CI results before merging.
 - The cron schedule (every 15 minutes) acts as a resurrection fallback if the chain breaks or no PAT is configured. The `concurrency` group (`cancel-in-progress: false`) serializes runs: a cron tick while a run is active queues behind it instead of being discarded, so ticks can pile up behind a long holder
 - A `concurrency` group (`tcf-bot-runner`, `cancel-in-progress: false`) prevents overlapping bot instances. This avoids duplicate update processing in polling mode and keeps webhook ownership unambiguous
 - **Graceful stop before artifacts:** at the window end the bot gets SIGTERM (`uv run` forwards it to the child) and the script waits up to 60 s for exit before the scrub/upload steps, so the artifact keeps its final lines. The bot is backgrounded directly (`$!` stays a real child job) so the wait supervises the actual process; a stubborn process is left for runner teardown inside the 30 min post-window buffer
-- Bot configuration comes from repository secrets (`BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, etc.), plus the optional `BOT_PAT` for self-chaining. The push restart needs no extra secret: `cancel-in-progress: false` means the successor queues behind the live run, and the live run itself detects the runtime diff (self-preempt poll) and stops, freeing the gate
+- Bot configuration comes from repository secrets (`BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, etc.), plus the optional `BOT_PAT` for self-chaining. The push restart needs no extra secret: `cancel-in-progress: false` means the successor queues behind the live run, and the live run itself detects the runtime diff (self-preempt poll) and stops, freeing the gate
 - **Log artifacts are scrubbed:** workflow logs and artifacts on a public repository are world-readable, so before the crash tail is printed or uploaded, token-shaped (`id:hash`) and URI-auth substrings are redacted with the same patterns as `error_reporter.py`. Message excerpts remain by design so crashes stay debuggable; artifacts are kept 7 days
 
 ---
@@ -199,7 +199,7 @@ Configure these in GitHub repository settings → Secrets:
 | Secret | Purpose | Required |
 |--------|---------|----------|
 | `BOT_TOKEN` | Telegram bot token (bot runtime + notifications) | Yes |
-| `MONGODB_URI` | MongoDB connection string for the bot runtime | Yes |
+| `DATABASE_URL` | PostgreSQL connection string for the bot runtime | Yes |
 | `OWNER_ID` | Your Telegram user ID (initial owner + notifications) | Yes |
 | `WEBHOOK_URL` | Public HTTPS URL for Telegram webhook (e.g. `https://your-domain.com`). When set, bot runs in webhook mode; absent means polling fallback | Recommended |
 | `WEBHOOK_SECRET` | Secret token for `set_webhook` and `X-Telegram-Bot-Api-Secret-Token` validation. Auto-generated when omitted | Recommended |
@@ -218,7 +218,7 @@ secrets, so every runtime variable must be set there for the runner: `DB_NAME`,
 `WARN_LIMIT`, `FED_WARN_LIMIT`, `API_ID`, `API_HASH`,
 `ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, `MODULES_NO_LOAD`, `SENTRY_DSN`,
 `MTPROTO_SESSION`, `SYNC_INTERVAL_HOURS`, the `COMMUNITY_*_URL` links,
-alongside `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_URL`, and
+alongside `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `WEBHOOK_URL`, and
 `WEBHOOK_SECRET`. Only `CRON_SECRET` is **not** forwarded by the runner: the
 cron endpoint is Vercel-only, and the long-lived transport schedules
 maintenance through APScheduler instead.
@@ -275,7 +275,7 @@ View workflow
 - Same repository toggle as above: without `Allow GitHub Actions to create and approve pull requests`, `gh pr create` fails even with the right permissions (the `deps/auto-update-*` branch is already pushed, so re-running or opening the PR manually recovers)
 
 ### Bot not staying online (Run Bot)
-- Verify `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_ID` secrets are set
+- Verify `BOT_TOKEN`, `DATABASE_URL`, and `OWNER_ID` secrets are set
 - For seamless 24/7, set `BOT_PAT` (a PAT with the `workflow` scope) so the run can dispatch its successor; otherwise only the 15-minute cron fallback restarts it
 - A `409 Conflict` from Telegram means two instances are polling at once; the `tcf-bot-runner` concurrency group should prevent this, so check for a stray manual run
 

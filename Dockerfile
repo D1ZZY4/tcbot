@@ -1,5 +1,12 @@
 FROM python:3.14-slim
 
+# * libstdc++6 provides the runtime the greenlet extension links
+# * against. greenlet comes with sqlalchemy[asyncio], so the async
+# * engine cannot start without it.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /usr/local/bin/uv
 
 WORKDIR /app
@@ -15,12 +22,18 @@ RUN uv sync --frozen --no-dev --no-install-project --extra observability
 # * i18n/ is mandatory at runtime: the TOML catalog loads from the
 # * project root on first t() call, so an image without it fails every
 # * handler with I18nError.
+# * alembic/ and alembic.ini are mandatory too: the bot applies the
+# * schema migrations at startup, so an image without them cannot open
+# * the database.
 COPY tcbot/ ./tcbot/
 COPY i18n/ ./i18n/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./alembic.ini
 RUN uv sync --frozen --no-dev --extra observability
 
-# Verify hiredis C extension is present
+# Verify the C extensions the runtime imports are present
 RUN uv run --frozen -- python -c "import hiredis; print('hiredis C extension verified')"
+RUN uv run --frozen -- python -c "import greenlet; print('greenlet C extension verified')"
 
 ARG PORT=5000
 EXPOSE 5000

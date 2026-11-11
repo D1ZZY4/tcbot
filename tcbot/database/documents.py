@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""TypedDict document schemas for MongoDB collections."""
+"""TypedDict row schemas for the PostgreSQL tables."""
 
 from __future__ import annotations
 
@@ -13,14 +13,12 @@ from tcbot.database.types import BanId, ChatId, GroupId, UserId
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from bson import ObjectId
-
 RoleName = Literal["founder", "admin", "developer", "tester"]
 RequestStatus = Literal["pending", "approved", "rejected"]
 
 
 class AdminDoc(TypedDict, total=False):
-    """MongoDB document for a federation admin record."""
+    """Row shape of a federation admin record."""
 
     user_id: UserId
     promoted_by: UserId
@@ -28,7 +26,7 @@ class AdminDoc(TypedDict, total=False):
 
 
 class BanDoc(TypedDict, total=False):
-    """MongoDB document for a federation ban record."""
+    """Row shape of a federation ban record."""
 
     ban_id: BanId
     banned_user_id: UserId
@@ -55,7 +53,7 @@ class BanDoc(TypedDict, total=False):
 
 
 class GroupDoc(TypedDict, total=False):
-    """MongoDB document for a connected group."""
+    """Row shape of a connected group."""
 
     chat_id: GroupId
     title: str
@@ -66,7 +64,7 @@ class GroupDoc(TypedDict, total=False):
 
 
 class PendingGroupDoc(TypedDict, total=False):
-    """MongoDB document for a group awaiting connection approval."""
+    """Row shape of a group awaiting connection approval."""
 
     chat_id: ChatId
     title: str
@@ -76,7 +74,7 @@ class PendingGroupDoc(TypedDict, total=False):
 
 
 class RoleDoc(TypedDict, total=False):
-    """MongoDB document for a user's federation role assignment."""
+    """Row shape of a user's federation role assignment."""
 
     user_id: UserId
     role: RoleName
@@ -91,7 +89,7 @@ class RoleRefDoc(TypedDict, total=False):
 
 
 class UserDoc(TypedDict, total=False):
-    """MongoDB document for a cached user profile."""
+    """Row shape of a cached user profile."""
 
     user_id: UserId
     username: str | None
@@ -102,10 +100,10 @@ class UserDoc(TypedDict, total=False):
 
 
 class UserSettingsDoc(TypedDict, total=False):
-    """MongoDB document for per-user settings (locale preferences).
+    """Row shape of a per-user settings row (locale preferences).
 
-    Lives in its own ``user_settings`` collection so preference-only rows
-    never inflate member_cache user counts or appear in user listings.
+    Lives in its own ``user_settings`` table so preference-only rows never
+    inflate member_cache user counts or appear in user listings.
     """
 
     user_id: UserId
@@ -113,7 +111,7 @@ class UserSettingsDoc(TypedDict, total=False):
 
 
 class KickDoc(TypedDict, total=False):
-    """MongoDB document for a single kick event (append-only audit record)."""
+    """Row shape of a single kick event (append-only audit record)."""
 
     user_id: UserId
     chat_id: ChatId
@@ -123,7 +121,7 @@ class KickDoc(TypedDict, total=False):
 
 
 class MuteDoc(TypedDict, total=False):
-    """MongoDB document for a single mute event (append-only audit record).
+    """Row shape of a single mute event (append-only audit record).
 
     ``duration_secs`` is absent for permanent mutes and present (int) for
     timed mutes, reflecting how long the restriction was intended to last.
@@ -138,16 +136,16 @@ class MuteDoc(TypedDict, total=False):
 
 
 class ActiveMuteDoc(TypedDict, total=False):
-    """MongoDB document tracking a currently active federation mute.
+    """Row shape of a currently active federation mute.
 
-    Stored in the ``active_mutes`` collection: one document per muted user.
+    Stored in the ``active_mutes`` table: one row per muted user.
     ``until_date`` is ``None`` for a permanent mute or a UTC datetime for a
-    timed mute.  Documents for timed mutes are auto-filtered by ``until_date``
-    at query time (documents with ``until_date`` in the past are treated as
-    expired and ignored).  A TTL index additionally prunes expired timed rows
-    from storage; permanent mutes are never TTL-expired.  Use
-    ``set_active_mute`` / ``clear_active_mute`` from ``mutes_db`` to manage
-    this collection; do not write directly.
+    timed mute.  Rows for timed mutes are auto-filtered by ``until_date``
+    at query time (rows with ``until_date`` in the past are treated as
+    expired and ignored).  The daily cleanup job additionally prunes the
+    expired timed rows from storage; permanent mutes are never expired.
+    Use ``set_active_mute`` / ``clear_active_mute`` from ``mutes_db`` to
+    manage this table; do not write directly.
     """
 
     user_id: UserId
@@ -156,9 +154,8 @@ class ActiveMuteDoc(TypedDict, total=False):
 
 
 class WarnDoc(TypedDict, total=False):
-    """MongoDB document for a single warning issued to a user."""
+    """Row shape of a single warning issued to a user."""
 
-    _id: ObjectId
     user_id: UserId
     reason: str
     admin_id: UserId
@@ -167,7 +164,7 @@ class WarnDoc(TypedDict, total=False):
 
 
 class WarnCountDoc(TypedDict, total=False):
-    """MongoDB document tracking the running warning total for a user in a chat."""
+    """Row shape of the running warning total for a user in a chat."""
 
     user_id: UserId
     chat_id: ChatId
@@ -176,7 +173,7 @@ class WarnCountDoc(TypedDict, total=False):
 
 
 class PromotionRequestDoc(TypedDict, total=False):
-    """MongoDB document for a pending or resolved staff promotion request."""
+    """Row shape of a pending or resolved staff promotion request."""
 
     request_id: str
     target_id: UserId

@@ -143,9 +143,9 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     # * Federation staff-ness comes from the fail-closed role read
-    # * (resolve_and_check), not from identity.classify, which degrades to
-    # * "user" on a transient DB failure. Keying the staff branch off the
-    # * degraded kind would skip the demote-before-unban cleanup below.
+    # * (resolve_and_check), not from identity.classify. Keying the staff
+    # * branch off the classification kind would skip the
+    # * demote-before-unban cleanup below.
     target_role = role_result[1] if isinstance(role_result, tuple) else None
     is_staff_target = target_role in staff_roles or (
         refusal is not None and ident.kind in staff_roles

@@ -17,7 +17,7 @@ def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
     """Load a fresh Configs with *env* applied over the required defaults."""
     base: dict[str, str] = {
         "BOT_TOKEN": "000000:dummy-token-for-lint000000000000000",
-        "MONGODB_URI": "mongodb://localhost:27017",
+        "DATABASE_URL": "postgresql://localhost:5432/tcbot",
         "OWNER_ID": "1",
     }
     base.update(env)
@@ -34,7 +34,6 @@ def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
         "CRON_SECRET",
         "REDIS_URL",
         "COMMUNITY_NAME",
-        "DB_NAME",
         "MTPROTO_SESSION",
         "SENTRY_DSN",
         "API_ID",
@@ -158,9 +157,9 @@ def test_env_fallbacks_use_documented_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Blank optional variables fall back to their documented defaults."""
-    loaded = _load(monkeypatch, COMMUNITY_NAME="  ", DB_NAME="")
+    loaded = _load(monkeypatch, COMMUNITY_NAME="  ")
     assert loaded.community_name == "Bot"
-    assert loaded.db_name == "tcbot"
+    assert loaded.community_channel_url == "https://t.me/TranssionCoreFederation"
 
 
 def test_optional_secrets_stay_empty_when_unset(

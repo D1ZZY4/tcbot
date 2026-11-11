@@ -11,10 +11,17 @@ import os
 import re
 import secrets
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from dotenv import find_dotenv, load_dotenv
 
 from tcbot.utils.logger import get_logger
+
+if TYPE_CHECKING:
+    # * The configuration is built on first access (see ``__getattr__``).
+    # * The declaration keeps the type checker aware of the attribute the
+    # * module exposes at runtime.
+    cfg: Configs
 
 log = get_logger(__name__)
 
@@ -126,12 +133,12 @@ def _warn_bot_token_fmt(token: str) -> None:
         )
 
 
-def _warn_mongodb_uri_fmt(uri: str) -> None:
-    """Warn if the MongoDB URI does not start with a recognised scheme."""
-    if not uri.startswith(("mongodb://", "mongodb+srv://")):
+def _warn_database_url_fmt(url: str) -> None:
+    """Warn if the database URL does not start with a recognised scheme."""
+    if not url.startswith(("postgresql://", "postgresql+psycopg://", "postgres://")):
         log.warning(
-            "MONGODB_URI does not start with 'mongodb://' or 'mongodb+srv://'. "
-            "The MongoDB client will fail at connect time if the value is wrong."
+            "DATABASE_URL does not start with 'postgresql://'. "
+            "The database client will fail at connect time if the value is wrong."
         )
 
 
@@ -218,8 +225,7 @@ class Configs:
 
     bot_token: str
     initial_owner_id: int
-    mongodb_uri: str
-    db_name: str
+    database_url: str
     community_name: str
     prefixes: tuple[str, ...]
     port: int
@@ -279,15 +285,14 @@ class Configs:
         load_dotenv(find_dotenv(env_file) or find_dotenv(".env"))
         token = _required_env("BOT_TOKEN")
         _warn_bot_token_fmt(token)
-        mongodb_uri = _required_env("MONGODB_URI")
-        _warn_mongodb_uri_fmt(mongodb_uri)
+        database_url = _required_env("DATABASE_URL")
+        _warn_database_url_fmt(database_url)
         raw_prefixes = os.getenv("PREFIXES", '["/", "!", "."]')
         prefixes = tuple(parse_list(raw_prefixes) or ["/", "!", "."])
         return Configs(
             bot_token=token,
             initial_owner_id=_owner_id_from_env(),
-            mongodb_uri=mongodb_uri,
-            db_name=os.getenv("DB_NAME", "tcbot").strip() or "tcbot",
+            database_url=database_url,
             community_name=os.getenv("COMMUNITY_NAME", "Bot").strip() or "Bot",
             prefixes=prefixes,
             port=parse_port(os.getenv("PORT", str(_DEFAULT_PORT)).strip()),
@@ -331,7 +336,26 @@ class Configs:
         )
 
 
-cfg = Configs.load()
+# * The configuration is built on first access (PEP 562) instead of at
+# * import time. Importing the package must not require the bot
+# * credentials: the Alembic environment, the migration generator, and
+# * the test collection all import ``tcbot`` submodules without a
+# * running bot. The first read still fails fast when a required
+# * setting is missing, and the bot reads it while starting up.
+_cfg: Configs | None = None
+
+
+def __getattr__(name: str) -> Configs:
+    """Return the configuration singleton, building it on first access."""
+    if name != "cfg":
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    global _cfg
+    if _cfg is None:
+        _cfg = Configs.load()
+        # * Cache it as a real module attribute so later reads skip this hook.
+        globals()["cfg"] = _cfg
+    return _cfg
+
 
 __all__ = [
     "Configs",

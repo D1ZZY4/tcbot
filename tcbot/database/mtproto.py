@@ -12,8 +12,6 @@ import secrets
 import socket
 from typing import TYPE_CHECKING
 
-from pymongo.errors import ConnectionFailure
-
 from tcbot import cfg
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.dispatch import gather_bounded
@@ -24,7 +22,7 @@ if TYPE_CHECKING:
     from pyrogram import Client
     from pyrogram.types import User
 
-    from tcbot.database.mtproto_store import MongoStorage
+    from tcbot.database.mtproto_store import PostgresStorage
 
 log = get_logger(__name__)
 
@@ -79,7 +77,7 @@ def client() -> Client:
     )
 
     from tcbot.database.mtproto_store import (  # noqa: PLC0415 (same; keeps startup lean)
-        MongoStorage,
+        PostgresStorage,
     )
 
     _client = Client(
@@ -87,7 +85,7 @@ def client() -> Client:
         api_id=cfg.api_id,
         api_hash=cfg.api_hash,
         bot_token=cfg.bot_token,
-        storage_engine=MongoStorage(cfg.mtproto_session),
+        storage_engine=PostgresStorage(cfg.mtproto_session),
     )
     return _client
 
@@ -118,11 +116,11 @@ async def start() -> bool:
     if c.is_connected:
         return True
     from tcbot.database.mtproto_store import (  # noqa: PLC0415 (same as client())
-        MongoStorage,
+        PostgresStorage,
     )
 
     owner = _instance_id()
-    store = MongoStorage(cfg.mtproto_session)
+    store = PostgresStorage(cfg.mtproto_session)
     try:
         claimed = await store.claim_owner(owner, ttl_s=_LEASE_TTL_S)
     except asyncio.CancelledError:
@@ -182,7 +180,7 @@ async def start() -> bool:
     return True
 
 
-async def _release_lease_quietly(store: MongoStorage, owner: str) -> None:
+async def _release_lease_quietly(store: PostgresStorage, owner: str) -> None:
     """Release the owner lease; expiry covers leftovers, never raises."""
     try:
         await store.release_owner(owner)
@@ -192,7 +190,7 @@ async def _release_lease_quietly(store: MongoStorage, owner: str) -> None:
         log.debug("MTProto lease release failed (expiry covers it): %s", exc)
 
 
-async def _heartbeat_lease(c: Client, store: MongoStorage, owner: str) -> None:
+async def _heartbeat_lease(c: Client, store: PostgresStorage, owner: str) -> None:
     """Renew the owner lease until cancelled; park the client when fenced out.
 
     Owned by start()/stop(): stop() cancels this task on shutdown. A lost
@@ -207,7 +205,7 @@ async def _heartbeat_lease(c: Client, store: MongoStorage, owner: str) -> None:
                 held = await store.refresh_owner(owner, ttl_s=_LEASE_TTL_S)
             except asyncio.CancelledError:
                 raise
-            except (CircuitOpenError, ConnectionFailure) as exc:
+            except CircuitOpenError as exc:
                 # * Expected outage shape: keep the error-level shipper
                 # * quiet by logging at warning without a traceback.
                 log.warning("MTProto lease heartbeat deferred: %s", exc)
@@ -249,12 +247,12 @@ async def stop() -> None:
     if owner is not None:
         try:
             from tcbot.database.mtproto_store import (  # noqa: PLC0415 (same as client())
-                MongoStorage,
+                PostgresStorage,
             )
         except ImportError:
             pass
         else:
-            await _release_lease_quietly(MongoStorage(cfg.mtproto_session), owner)
+            await _release_lease_quietly(PostgresStorage(cfg.mtproto_session), owner)
     c, _client = _client, None
     if c is None:
         return

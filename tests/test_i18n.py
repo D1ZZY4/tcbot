@@ -12,12 +12,17 @@ import re
 import string
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
 from tcbot import cfg
+from tcbot.database import engine as engine_module
 from tcbot.database import groups_db, settings_db, users_roles
+from tcbot.database.base import federated_groups, user_settings
 from tcbot.modules import (
     admins,
     appeals,
@@ -400,115 +405,65 @@ def test_legacy_id_alias_resolves_to_indonesian() -> None:
 # ─────────────────── Persistence fakes and tests ─────────────────── #
 
 
-class _FakeResult:
-    def __init__(self, matched_count: int = 0) -> None:
-        self.matched_count = matched_count
-
-
-class _FakeCollection:
-    """Minimal pymongo stand-in for the locale helpers."""
-
-    def __init__(self) -> None:
-        self.docs: dict[int, dict[str, Any]] = {}
-        self.reads: int = 0
-
-    def _key(self, filt: dict[str, Any]) -> int:
-        return int(filt.get("user_id", filt.get("chat_id", 0)))
-
-    def find_one(
-        self, filt: dict[str, Any], proj: dict[str, Any] | None = None
-    ) -> dict[str, Any] | None:
-        _ = proj
-        self.reads += 1
-        doc = self.docs.get(self._key(filt))
-        return dict(doc) if doc is not None else None
-
-    def update_one(
-        self,
-        filt: dict[str, Any],
-        update: dict[str, Any],
-        *,
-        upsert: bool = False,
-    ) -> _FakeResult:
-        key = self._key(filt)
-        doc = self.docs.get(key)
-        if doc is None:
-            if not upsert:
-                return _FakeResult(0)
-            doc = dict(filt)
-            self.docs[key] = doc
-        for field, value in update.get("$set", {}).items():
-            doc[field] = value
-        for field in update.get("$unset", {}):
-            doc.pop(field, None)
-        return _FakeResult(1)
-
-    def delete_one(self, filt: dict[str, Any]) -> _FakeResult:
-        return _FakeResult(1 if self.docs.pop(self._key(filt), None) is not None else 0)
-
-
-@pytest.fixture()
-def fake_user_col(monkeypatch: pytest.MonkeyPatch) -> _FakeCollection:
-
-    fake = _FakeCollection()
-    monkeypatch.setattr(settings_db, "col", lambda _name: fake)
+@pytest.fixture
+async def locale_db(postgres_db: str) -> AsyncIterator[str]:
+    """Start from empty user-settings and group tables."""
+    await engine_module.run(user_settings.delete())
+    await engine_module.run(federated_groups.delete())
     settings_db._LOCALE_L1.clear()
-    return fake
-
-
-@pytest.fixture()
-def fake_group_col(monkeypatch: pytest.MonkeyPatch) -> _FakeCollection:
-
-    fake = _FakeCollection()
-    monkeypatch.setattr(groups_db, "col", lambda _name: fake)
     groups_db._GROUP_LOCALE_L1.clear()
-    return fake
+    yield postgres_db
+    await engine_module.run(user_settings.delete())
+    await engine_module.run(federated_groups.delete())
+    settings_db._LOCALE_L1.clear()
+    groups_db._GROUP_LOCALE_L1.clear()
 
 
-def test_user_locale_roundtrip(fake_user_col: _FakeCollection) -> None:
-    async def run() -> None:
-        assert await settings_db.get_user_locale(1) is None
-        await settings_db.set_user_locale(1, "en-US")
-        assert await settings_db.get_user_locale(1) == "en-US"
-        await settings_db.set_user_locale(1, None)
-        assert await settings_db.get_user_locale(1) is None
-        assert 1 not in fake_user_col.docs
+def _count_reads(monkeypatch: pytest.MonkeyPatch, module: Any) -> list[int]:
+    """Count the database reads one helper module performs."""
+    reads: list[int] = []
+    real_fetch_one = module.fetch_one
 
-    asyncio.run(run())
+    async def _fetch_one(stmt: Any) -> Any:
+        reads.append(1)
+        return await real_fetch_one(stmt)
 
-
-def test_user_locales_isolated(fake_user_col: _FakeCollection) -> None:
-
-    async def run() -> None:
-        await settings_db.set_user_locale(1, "en-US")
-        await settings_db.set_user_locale(2, "en-US")
-        await settings_db.set_user_locale(1, None)
-        assert await settings_db.get_user_locale(1) is None
-        assert await settings_db.get_user_locale(2) == "en-US"
-
-    asyncio.run(run())
+    monkeypatch.setattr(module, "fetch_one", _fetch_one)
+    return reads
 
 
-def test_group_locale_roundtrip(fake_group_col: _FakeCollection) -> None:
+async def test_user_locale_roundtrip(locale_db: str) -> None:
+    assert await settings_db.get_user_locale(1) is None
+    await settings_db.set_user_locale(1, "en-US")
+    assert await settings_db.get_user_locale(1) == "en-US"
+    await settings_db.set_user_locale(1, None)
+    assert await settings_db.get_user_locale(1) is None
+    stored = await engine_module.fetch_one(
+        user_settings.select().where(user_settings.c.user_id == 1)
+    )
+    assert stored is None
 
-    async def run() -> None:
-        fake_group_col.docs[10] = {"chat_id": 10}
-        assert await groups_db.get_group_locale(10) is None
-        assert await groups_db.set_group_locale(10, "en-US") is True
-        assert await groups_db.get_group_locale(10) == "en-US"
-        assert await groups_db.set_group_locale(10, None) is True
-        assert await groups_db.get_group_locale(10) is None
 
-    asyncio.run(run())
+async def test_user_locales_isolated(locale_db: str) -> None:
+    await settings_db.set_user_locale(1, "en-US")
+    await settings_db.set_user_locale(2, "en-US")
+    await settings_db.set_user_locale(1, None)
+    assert await settings_db.get_user_locale(1) is None
+    assert await settings_db.get_user_locale(2) == "en-US"
 
 
-def test_group_locale_missing_group(fake_group_col: _FakeCollection) -> None:
+async def test_group_locale_roundtrip(locale_db: str) -> None:
+    await groups_db.add_group(10, "Group", 1)
+    assert await groups_db.get_group_locale(10) is None
+    assert await groups_db.set_group_locale(10, "en-US") is True
+    assert await groups_db.get_group_locale(10) == "en-US"
+    assert await groups_db.set_group_locale(10, None) is True
+    assert await groups_db.get_group_locale(10) is None
 
-    async def run() -> None:
-        assert await groups_db.get_group_locale(999) is None
-        assert await groups_db.set_group_locale(999, "en-US") is False
 
-    asyncio.run(run())
+async def test_group_locale_missing_group(locale_db: str) -> None:
+    assert await groups_db.get_group_locale(999) is None
+    assert await groups_db.set_group_locale(999, "en-US") is False
 
 
 # ─────────────────── Module wiring and callbacks ────────────────── #
@@ -671,33 +626,34 @@ def test_help_index_golden() -> None:
     )
 
 
-def test_user_locale_l1_serves_hits(fake_user_col: _FakeCollection) -> None:
-    async def run() -> None:
-        await settings_db.set_user_locale(9, "en-US")
-        assert fake_user_col.reads == 0
-        assert await settings_db.get_user_locale(9) == "en-US"
-        assert fake_user_col.reads == 1
-        assert await settings_db.get_user_locale(9) == "en-US"
-        assert fake_user_col.reads == 1
-        await settings_db.set_user_locale(9, None)
-        assert await settings_db.get_user_locale(9) is None
-        assert fake_user_col.reads == 2
+async def test_user_locale_l1_serves_hits(
+    locale_db: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reads = _count_reads(monkeypatch, settings_db)
+    await settings_db.set_user_locale(9, "en-US")
+    assert len(reads) == 0
+    assert await settings_db.get_user_locale(9) == "en-US"
+    assert len(reads) == 1
+    assert await settings_db.get_user_locale(9) == "en-US"
+    assert len(reads) == 1
+    await settings_db.set_user_locale(9, None)
+    assert await settings_db.get_user_locale(9) is None
+    assert len(reads) == 2
 
-    asyncio.run(run())
 
-
-def test_group_locale_l1_serves_hits(fake_group_col: _FakeCollection) -> None:
-    async def run() -> None:
-        fake_group_col.docs[-100] = {"chat_id": -100, "locale": "en-US"}
-        assert await groups_db.get_group_locale(-100) == "en-US"
-        assert fake_group_col.reads == 1
-        assert await groups_db.get_group_locale(-100) == "en-US"
-        assert fake_group_col.reads == 1
-        await groups_db.set_group_locale(-100, None)
-        assert await groups_db.get_group_locale(-100) is None
-        assert fake_group_col.reads == 2
-
-    asyncio.run(run())
+async def test_group_locale_l1_serves_hits(
+    locale_db: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await groups_db.add_group(-100, "Group", 1)
+    await groups_db.set_group_locale(-100, "en-US")
+    reads = _count_reads(monkeypatch, groups_db)
+    assert await groups_db.get_group_locale(-100) == "en-US"
+    assert len(reads) == 1
+    assert await groups_db.get_group_locale(-100) == "en-US"
+    assert len(reads) == 1
+    await groups_db.set_group_locale(-100, None)
+    assert await groups_db.get_group_locale(-100) is None
+    assert len(reads) == 2
 
 
 # ─────── Runtime locale resolution ─────── #
@@ -1346,8 +1302,8 @@ def test_language_menu_back_label_resolves(monkeypatch: pytest.MonkeyPatch) -> N
     asyncio.run(run())
 
 
-def test_on_lang_set_user_saves(
-    monkeypatch: pytest.MonkeyPatch, fake_user_col: _FakeCollection
+async def test_on_lang_set_user_saves(
+    locale_db: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
 
     async def _owner() -> int:
@@ -1355,19 +1311,15 @@ def test_on_lang_set_user_saves(
 
     monkeypatch.setattr(users_roles, "get_owner_id", _owner)
 
-    async def run() -> None:
-        query = _FakeQuery("lang:set:user:en-US")
-        update, _ = _update(chat_type="private", query=query)
-        await language.on_lang_set(update, SimpleNamespace())
-        assert query.answers
-        assert len(query.edits) == 1
-        text, kwargs = query.edits[0]
-        assert kwargs.get("parse_mode") == "MarkdownV2"
-        assert find_unescaped(text) == []
-        assert await settings_db.get_user_locale(1) == "en-US"
-
-    monkeypatch.setattr(settings_db, "col", lambda _name: fake_user_col)
-    asyncio.run(run())
+    query = _FakeQuery("lang:set:user:en-US")
+    update, _ = _update(chat_type="private", query=query)
+    await language.on_lang_set(update, SimpleNamespace())
+    assert query.answers
+    assert len(query.edits) == 1
+    text, kwargs = query.edits[0]
+    assert kwargs.get("parse_mode") == "MarkdownV2"
+    assert find_unescaped(text) == []
+    assert await settings_db.get_user_locale(1) == "en-US"
 
 
 def test_on_lang_set_group_denied(monkeypatch: pytest.MonkeyPatch) -> None:

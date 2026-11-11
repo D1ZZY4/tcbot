@@ -222,7 +222,7 @@ user.
 
 ## Indexes
 
-`mongos.ensure_indexes()` creates the indexes that make this view fast:
+The indexes declared in `tcbot/database/base.py` make this view fast:
 
 | Collection | Index | Powers |
 |---|---|---|

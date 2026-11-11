@@ -2,33 +2,100 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Database module - exposes all database collection helpers and queries under tcbot.database.*."""
+"""Database package: the schema, the engine, and one module per domain.
+
+The table helpers are imported on demand rather than eagerly. The
+package holds the SQLAlchemy engine, the APScheduler job store, the
+Redis client, and the MTProto session store, and importing all of them
+made the schema tools (the Alembic environment, the migration
+generator) load the whole application before they could read a table
+definition.
+"""
 
 from __future__ import annotations
 
-from . import bans_db as bans_db
-from . import groups_db as groups_db
-from . import kicks_db as kicks_db
-from . import mtproto as mtproto
-from . import mutes_db as mutes_db
-from . import queues_db as queues_db
-from . import redis_client as redis_client
-from . import scheduler as scheduler
-from . import settings_db as settings_db
-from . import users_cache as users_cache
-from . import users_roles as users_roles
-from . import warns_db as warns_db
+import importlib
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    from . import (
+        bans_db,
+        base,
+        documents,
+        engine,
+        groups_db,
+        kicks_db,
+        migrations,
+        mtproto,
+        mutes_db,
+        queues_db,
+        redis_client,
+        scheduler,
+        settings_db,
+        types,
+        users_cache,
+        users_roles,
+        warns_db,
+    )
+
+# * Every module the package exposes. The list is the single source of
+# * truth for the lazy import and for the package surface.
+_SUBMODULES: frozenset[str] = frozenset(
+    {
+        "bans_db",
+        "base",
+        "documents",
+        "engine",
+        "groups_db",
+        "kicks_db",
+        "migrations",
+        "mtproto",
+        "mutes_db",
+        "queues_db",
+        "redis_client",
+        "scheduler",
+        "settings_db",
+        "types",
+        "users_cache",
+        "users_roles",
+        "warns_db",
+    }
+)
+
+
+def __getattr__(name: str) -> ModuleType:
+    """Import one table helper on first access (PEP 562)."""
+    if name not in _SUBMODULES:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = importlib.import_module(f".{name}", __name__)
+    # * The import machinery already binds the submodule on the package,
+    # * so later reads skip this hook.
+    globals()[name] = module
+    return module
+
+
+def __dir__() -> list[str]:
+    """Return the package surface, including the lazy submodules."""
+    return sorted(_SUBMODULES)
+
 
 __all__ = [
     "bans_db",
+    "base",
+    "documents",
+    "engine",
     "groups_db",
     "kicks_db",
+    "migrations",
     "mtproto",
     "mutes_db",
     "queues_db",
     "redis_client",
     "scheduler",
     "settings_db",
+    "types",
     "users_cache",
     "users_roles",
     "warns_db",

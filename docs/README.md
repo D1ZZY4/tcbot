@@ -32,7 +32,7 @@ deployment, see [`../replit.md`](../replit.md). For contribution workflow, see
 |---|---|
 | [Repository map](architecture/repository-map.md) | Repository structure, package ownership, startup flow, and service boundaries. |
 | [Modules](architecture/modules.md) | Command modules, dynamic discovery, handler registration, and command ownership. |
-| [Database layer](architecture/database.md) | MongoDB collections, helper modules, indexes, document shapes, and cache rules. |
+| [Database layer](architecture/database.md) | PostgreSQL tables, helper modules, indexes, row shapes, and cache rules. |
 | [Helper package](architecture/helpers.md) | Formatting, decorators, target extraction, keyboards, role guards, and log builders. |
 | [Runtime utilities](architecture/utilities.md) | Circuit breaker, dispatch, prefixes, logging, error reporting, and datetime utilities. |
 | [Workflow internals](architecture/workflows.md) | Conversation factories, state constants, callback patterns, and flow internals. |
@@ -64,7 +64,7 @@ deployment, see [`../replit.md`](../replit.md). For contribution workflow, see
 
 | Document | Purpose |
 |---|---|
-| [Backup and restore](operations/backup-and-restore.md) | MongoDB backup, restore, post-restore checks, and security notes. |
+| [Backup and restore](operations/backup-and-restore.md) | PostgreSQL backup, restore, post-restore checks, and security notes. |
 | [Proof migration](operations/proof-migration.md) | One-shot migration of stored ban proofs to a new channel and repointing of logs and links. |
 | [CI/CD workflows](operations/ci-cd.md) | GitHub Actions triggers, required secrets, notifications, and troubleshooting. |
 | [Performance](operations/performance.md) | Batch query patterns, cache and concurrency guidance, and measurement practices. |
@@ -93,8 +93,8 @@ flowchart TD
     Config --> Main[tcbot.__main__]
     Main --> Flask[tcbot.alive keep-alive]
     Main --> PTB[python-telegram-bot Application]
-    Main --> Mongo[tcbot.database.mongos]
-    Mongo --> Collections[(MongoDB collections)]
+    Main --> Engine[tcbot.database.engine]
+    Engine --> Postgres[(PostgreSQL)]
     Main --> Modules[tcbot.modules dynamic loader]
     Modules --> CommandModules[tcbot.modules/*.py]
     CommandModules --> Helpers[tcbot.modules.helper]
@@ -104,17 +104,17 @@ flowchart TD
     CommandModules --> Utils[tcbot.utils]
 ```
 
-Runtime starts with `uv run python -m tcbot`. The entry point loads configuration, starts the Flask health endpoint, builds the Telegram application, connects MongoDB, ensures indexes, seeds the initial owner, dynamically loads handlers, and starts webhook transport when `WEBHOOK_URL` or `REPLIT_DEV_DOMAIN` is available. Local development without a public URL falls back to polling.
+Runtime starts with `uv run python -m tcbot`. The entry point loads configuration, starts the Flask health endpoint, builds the Telegram application, connects PostgreSQL, applies the schema migrations, seeds the initial owner, dynamically loads handlers, and starts webhook transport when `WEBHOOK_URL` or `REPLIT_DEV_DOMAIN` is available. Local development without a public URL falls back to polling.
 
 ## Core rules
 
 - Keep command handlers in `tcbot/modules/`.
 - Keep shared handler helpers in `tcbot/modules/helper/`.
 - Keep conversation factories in `tcbot/modules/helper/pipelines/*_flow.py`.
-- Keep MongoDB reads and writes behind `tcbot/database/*_db.py` helpers.
+- Keep database reads and writes behind `tcbot/database/*_db.py` helpers.
 - Keep runtime utilities in `tcbot/utils/`.
 - Use MarkdownV2 parse mode for bot messages and escape user-provided text through formatter helpers.
-- Keep bot tokens, MongoDB URIs, private chat IDs, passwords, and API keys out
+- Keep bot tokens, database URLs, private chat IDs, passwords, and API keys out
   of the repository.
 
 ## Development commands

@@ -33,7 +33,9 @@ This page maps the repository structure and the service boundaries between packa
 ├── SECURITY.md             Security policy
 ├── replit.md               Replit deployment notes
 ├── CHANGELOG.md            Version history
-├── docker-compose.yml      Bot + MongoDB + Redis local stack
+├── docker-compose.yml      Bot + PostgreSQL + Redis local stack
+├── alembic.ini             Alembic migration configuration
+├── alembic/                Alembic environment and versioned migrations
 └── Dockerfile              Container image
 ```
 
@@ -62,8 +64,9 @@ tcbot/
 ├── alive.py                Flask health endpoint and webhook receiver
 ├── serverless.py           Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 ├── database/
-│   ├── mongos.py           pymongo client, collection accessor, indexes
-│   ├── _migration.py       Shared chat-repoint helper for basic-group to supergroup migrations
+│   ├── base.py              Table, column, constraint, and index definitions (schema source of truth)
+│   ├── engine.py            Async engine, session boundary, circuit-breaker guard, query helpers
+│   ├── migrations.py        Alembic wiring: applies the pending revisions at startup
 │   ├── bans_db.py          Federation ban records (incl. per-user history)
 │   ├── groups_db.py        Connected groups and pending joins
 │   ├── users_cache.py      Member profile cache operations
@@ -74,9 +77,9 @@ tcbot/
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache/              TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   ├── redis_client.py     Optional async Redis client (owns the connect/degrade decision)
-│   ├── scheduler.py        APScheduler background jobs (MongoDBJobStore, library default collection)
+│   ├── scheduler.py        APScheduler background jobs (SQLAlchemyJobStore)
 │   ├── mtproto.py          Bot-token MTProto client: resolve + member harvest
-│   ├── mtproto_store.py    MongoDB-backed Kurigram storage engine
+│   ├── mtproto_store.py    PostgreSQL-backed Kurigram storage engine
 │   ├── settings_db.py      Per-user settings (locale preferences)
 │   ├── documents.py        TypedDict document shapes
 │   └── types.py            NewType ID primitives
@@ -86,7 +89,7 @@ tcbot/
 │   └── helper/
 │       ├── ban_info.py     Ban detail renderer
 │       ├── decorators/     Auth, per-handler rate limits, tracing, resolve_and_check
-│       ├── extraction/     Target resolution
+│       ├── extraction/     Target resolution and live identity refresh
 │       ├── identity.py     Identity classification, group-permission checks, refusal messages
 │       ├── keyboards/      Inline keyboard factories
 │       │   └── nav.py         Previous/next row for paged views
@@ -100,7 +103,7 @@ tcbot/
 │       └── pipelines/
 │           └── *_flow.py modules   Conversation factories, plus Promote / Demote / Check classes
 └── utils/
-    ├── circuit_breaker.py  Async circuit breaker for Telegram + MongoDB
+    ├── circuit_breaker.py  Async circuit breaker for Telegram + PostgreSQL
     ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)
     ├── formatter.py        MarkdownV2 escaping and formatting (single source of truth)
     ├── i18n.py             TOML locale catalogs, lookup, and interpolation
@@ -108,6 +111,7 @@ tcbot/
     ├── pagination.py       Shared clamp_page() page arithmetic
     ├── prefixes.py         Prefix parsing and command filters
     ├── secrets.py          Constant-time secret comparison for inbound credentials
+    ├── tasks.py            Background task lifecycle owner (TaskTracker)
     ├── time_and_date.py    Central clock: UTC store/display + measure + durations + date_or_unknown()
     ├── transport.py        Shared PTB HTTP timeouts and pool size for all entry points
     └── update_processor.py Per-conversation update serialization for PTB
@@ -118,10 +122,10 @@ tcbot/
 | Area | Owns | Must not own |
 |---|---|---|
 | `tcbot/__main__.py` | App lifecycle, handler wiring, DB init, and webhook transport (polling fallback for local dev only) | Feature business logic |
-| `tcbot/modules/*.py` | Command entry points, handler registration, user-facing permissions | Raw MongoDB writes, duplicate conversation state handlers |
+| `tcbot/modules/*.py` | Command entry points, handler registration, user-facing permissions | Raw SQL writes, duplicate conversation state handlers |
 | `tcbot/modules/helper/` | Shared handler helpers and keyboard factories | Top-level command registration |
 | `tcbot/modules/helper/pipelines/*_flow.py` | Conversation factories, state transitions, flow executors | Module discovery or `__handlers__` exports |
-| `tcbot/database/*_db.py` | Collection-specific DB operations | Telegram API calls |
+| `tcbot/database/*_db.py` | Table-specific DB operations | Telegram API calls |
 | `tcbot/utils/` | Runtime infrastructure utilities | Feature-specific moderation policy |
 
 ```mermaid
@@ -148,7 +152,7 @@ sequenceDiagram
     participant Config as tcbot.__init__
     participant Main as tcbot.__main__
     participant Alive as tcbot.alive
-    participant DB as database.mongos
+    participant DB as database.engine
     participant Mods as tcbot.modules
     participant PTB as PTB Application
 
@@ -162,9 +166,8 @@ sequenceDiagram
     Mods-->>Main: handlers
     Main->>PTB: add handlers and error handler
     Main->>PTB: initialize() + post_init (explicit; not called by PTB in webhook mode)
-    Main->>DB: connect()
+    Main->>DB: connect() (apply Alembic revisions, create engine, ping)
     par parallel setup
-        Main->>DB: ensure_indexes()
         Main->>DB: ensure_initial_owner()
         Main->>Main: connect Redis (optional)
         Main->>Main: start MTProto (fail fast without API_ID/API_HASH)

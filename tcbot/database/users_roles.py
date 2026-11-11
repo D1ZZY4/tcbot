@@ -9,15 +9,26 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Literal, cast
 
-from pymongo.errors import DuplicateKeyError
+from sqlalchemy import delete, func, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 
+from tcbot.database.base import tc_admins, tc_owners, tc_roles
 from tcbot.database.cache import (
     _OWNER_KEY,
     effective_role_cache,
     owner_id_cache,
 )
 from tcbot.database.documents import AdminDoc, RoleDoc, RoleRefDoc
-from tcbot.database.mongos import col, db_call
+from tcbot.database.engine import (
+    constraint_name,
+    db_call,
+    fetch_all,
+    fetch_one,
+    fetch_value,
+    run,
+    run_transaction,
+)
 from tcbot.database.types import UserId
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
@@ -26,7 +37,15 @@ from tcbot.utils.time_and_date import utc_now
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql import Executable
+
 log = get_logger(__name__)
+
+# * Advisory lock key for the owner transfer. Any fixed value works as long
+# * as it is unique among the locks this application takes; it is scoped
+# * to the transaction, so it is released on commit and on rollback.
+_OWNER_TRANSFER_LOCK_KEY: int = 7_313_919_265_517_001
 
 # ────────────────────── Role hierarchy tables ───────────────────── #
 # * Numeric ranks compare executor vs target; labels render to humans.
@@ -57,6 +76,9 @@ ROLE_LABEL: dict[str, str] = {
 STAFF_ROLES: frozenset[str] = frozenset({"admin", "developer", "tester"})
 FOUNDER_ADMIN_ROLES: frozenset[str] = frozenset({"founder", "admin"})
 
+# * Name of the primary key that rejects a duplicate owner row.
+_CONSTRAINT_OWNERS_PKEY: str = "tc_owners_pkey"
+
 
 def role_rank(role: str | None) -> int:
     """Convert a role string to its numeric rank value for comparison."""
@@ -75,6 +97,17 @@ def role_label(role: str | None) -> str:
     return ROLE_LABEL.get(role, role.capitalize())
 
 
+async def _count(stmt: Executable) -> int:
+    """Return the row count of one COUNT query as a plain integer."""
+    value = await db_call(lambda: fetch_value(stmt))
+    return int(value or 0)
+
+
+async def _owner_count() -> int:
+    """Return how many owner rows the table currently holds."""
+    return await _count(select(func.count()).select_from(tc_owners))
+
+
 # ───────────────────────── Owner CRUD ────────────────────────── #
 
 
@@ -82,18 +115,19 @@ async def get_owner_id(*, fresh: bool = False) -> int | None:
     """Return the current owner's user ID (L1->L2->DB cached).
 
     With ``fresh=True`` the cache is bypassed and the row is read directly
-    from MongoDB, then the cache is refreshed. Enforcement decisions use
-    ``fresh=True`` so a transfer in another process is never hidden for
+    from the owners table, then the cache is refreshed. Enforcement decisions
+    use ``fresh=True`` so a transfer in another process is never hidden for
     up to the 300 s owner TTL; display reads keep the cached fast path.
     """
 
     async def _fetch() -> int | None:
-        doc: AdminDoc | None = await db_call(
-            lambda: col("tc_owners").find_one(
-                {}, {"_id": 0, "user_id": 1}, sort=[("user_id", 1)]
+        # * The lowest owner row wins, exactly like the old sorted read.
+        row = await db_call(
+            lambda: fetch_one(
+                select(tc_owners.c.user_id).order_by(tc_owners.c.user_id).limit(1)
             )
         )
-        return doc["user_id"] if doc else None
+        return row["user_id"] if row else None
 
     if fresh:
         owner = await _fetch()
@@ -106,81 +140,79 @@ async def is_owner(user_id: int, *, fresh: bool = False) -> bool:
     """Return True if user_id belongs to the bot owner.
 
     Served from the cached owner ID (300 s L1 TTL, invalidated on
-    transfer) instead of a dedicated ``find_one`` so hot auth paths pay
-    zero MongoDB round trips on cache hits. Errors propagate like the
+    transfer) instead of a dedicated row read so hot auth paths pay
+    zero database round trips on cache hits. Errors propagate like the
     previous direct read so decorators keep their fail-closed retry reply.
 
-    With ``fresh=True`` the owner row is read directly from MongoDB
-    (mirroring ``get_owner_id(fresh=True)``) so an ownership transfer in
-    another process is never hidden for up to the 300 s owner TTL.
-    Enforcement gates use it; display reads keep the cached fast path.
+    With ``fresh=True`` the owner row is read directly from the owners
+    table (mirroring ``get_owner_id(fresh=True)``) so an ownership
+    transfer in another process is never hidden for up to the 300 s owner
+    TTL. Enforcement gates use it; display reads keep the cached fast path.
     """
     return (await get_owner_id(fresh=fresh)) == user_id
 
 
 async def ensure_initial_owner(initial_id: int) -> None:
-    """Create the first owner entry if the owners collection is empty."""
-    if await db_call(lambda: col("tc_owners").estimated_document_count()) > 0:
+    """Create the first owner entry if the owners table is empty."""
+    if await _owner_count() > 0:
         return
     try:
-        await db_call(lambda: col("tc_owners").insert_one({"user_id": initial_id}))
+        await db_call(lambda: run(pg_insert(tc_owners).values(user_id=initial_id)))
         owner_id_cache.put(_OWNER_KEY, initial_id)
-    except DuplicateKeyError:
+    except IntegrityError as insert_error:
+        if constraint_name(insert_error) != _CONSTRAINT_OWNERS_PKEY:
+            # * Only the owner primary key may lose the startup race. Any
+            # * other integrity error is a real defect and must not be
+            # * swallowed here.
+            raise
         # * Another instance won the startup race; drop the cache so the next read refreshes.
         owner_id_cache.invalidate(_OWNER_KEY)
 
 
 async def set_owner(user_id: int) -> None:
     """Replace the current owner with user_id; clears the role cache."""
-    # * Single upsert write: find_one_and_replace on an empty filter inserts
-    # * when the collection is empty and replaces the lowest-id row
-    # * otherwise, so a mid-flight crash can never leave zero owner rows
-    # * (the old insert-then-delete pair could). A leftover second row from
-    # * an earlier split brain is still removed below for convergence; the
-    # * delete retries briefly so a transient failure cannot strand two
-    # * owner rows without operator guidance.
-    await db_call(
-        lambda: col("tc_owners").find_one_and_replace(
-            {},
-            {"user_id": user_id},
-            upsert=True,
-            sort=[("user_id", 1)],
+
+    # * The transfer runs in one transaction: the insert and the
+    # * convergence delete commit together, so a crash between them cannot
+    # * leave one or two owner rows.
+    # * The advisory lock serialises concurrent transfers. Without it two
+    # * transfers interleave (insert A, insert B, delete != A, delete != B)
+    # * and the table ends up with no owner row at all, which would leave
+    # * the whole federation without a Founder until the next restart.
+    async def _work(sess: AsyncSession) -> None:
+        await sess.execute(
+            text("SELECT pg_advisory_xact_lock(:key)"),
+            {"key": _OWNER_TRANSFER_LOCK_KEY},
         )
-    )
-    # * Convergence delete with a bounded retry: a transient failure backs
-    # * off and retries (three attempts total), while a persistent failure
-    # * logs operator guidance and still raises so the transfer fails closed
-    # * exactly as before. Cancellation propagates immediately.
-    for attempt in range(3):
-        try:
-            await db_call(
-                lambda: col("tc_owners").delete_many({"user_id": {"$ne": user_id}})
-            )
-            break
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            if attempt < 2:
-                await asyncio.sleep(0.5 * (attempt + 1))
-                continue
-            log.exception(
-                "set_owner cleanup delete failed for user %d: tc_owners may "
-                "still hold two owner rows (split brain). Owner resolution "
-                "picks the lowest user_id, so the previous Founder can be "
-                "left without founder or admin role. Inspect the tc_owners "
-                "collection and delete the row whose user_id != %d manually, "
-                "then retry the transfer.",
-                user_id,
-                user_id,
-            )
-            raise
+        await sess.execute(
+            pg_insert(tc_owners)
+            .values(user_id=user_id)
+            .on_conflict_do_nothing(index_elements=["user_id"])
+        )
+        await sess.execute(delete(tc_owners).where(tc_owners.c.user_id != user_id))
+
+    try:
+        await db_call(lambda: run_transaction(_work))
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        # * The transaction rolled back, so the previous owner still holds
+        # * the role. Fail the transfer closed and point the operator at
+        # * the table, because a silent split brain is worse than a
+        # * refused transfer.
+        log.exception(
+            "set_owner failed for user %d: the transfer was rolled back and "
+            "the previous Founder keeps the role. Inspect the tc_owners "
+            "table and retry the transfer.",
+            user_id,
+        )
+        raise
     owner_id_cache.put(_OWNER_KEY, user_id)
-    # * The two writes above are not atomic: a crash between them can leave
-    # * one or two owner rows (never zero; the first write upserts). Verify
-    # * the invariant and log loudly so a split brain is noticed instead of
+    # * The transaction above is atomic, so the invariant holds. Verify it
+    # * anyway and log loudly, so a split brain is noticed instead of
     # * serving nondeterministic owners.
     try:
-        owner_rows = await db_call(lambda: col("tc_owners").estimated_document_count())
+        owner_rows = await _owner_count()
     except Exception:
         log.exception("set_owner verification read failed for user %d", user_id)
     else:
@@ -202,27 +234,28 @@ async def set_owner(user_id: int) -> None:
 
 async def is_admin(user_id: int) -> bool:
     """Return True if user_id is a registered admin."""
-    return (
-        await db_call(
-            lambda: col("tc_admins").find_one({"user_id": user_id}, {"_id": 1})
+    row = await db_call(
+        lambda: fetch_one(
+            select(tc_admins.c.user_id).where(tc_admins.c.user_id == user_id)
         )
-        is not None
     )
+    return row is not None
 
 
 async def add_admin(user_id: int, promoted_by: int) -> None:
     """Add a new admin via upsert; no-op if already present."""
+    # * The conflict action is DO NOTHING: a repeated promotion leaves the
+    # * stored promoter and promotion date untouched, matching the old
+    # * insert-only upsert.
     await db_call(
-        lambda: col("tc_admins").update_one(
-            {"user_id": user_id},
-            {
-                "$setOnInsert": {
-                    "user_id": user_id,
-                    "promoted_by": promoted_by,
-                    "promoted_date": utc_now(),
-                }
-            },
-            upsert=True,
+        lambda: run(
+            pg_insert(tc_admins)
+            .values(
+                user_id=user_id,
+                promoted_by=promoted_by,
+                promoted_date=utc_now(),
+            )
+            .on_conflict_do_nothing(index_elements=["user_id"])
         )
     )
     effective_role_cache.invalidate(user_id)
@@ -230,21 +263,22 @@ async def add_admin(user_id: int, promoted_by: int) -> None:
 
 async def remove_admin(user_id: int) -> bool:
     """Remove an admin; return True if the entry was deleted."""
-    r = await db_call(lambda: col("tc_admins").delete_one({"user_id": user_id}))
+    deleted = await db_call(
+        lambda: run(delete(tc_admins).where(tc_admins.c.user_id == user_id))
+    )
     effective_role_cache.invalidate(user_id)
-    return r.deleted_count > 0
+    return deleted > 0
 
 
 async def all_admins() -> list[AdminDoc]:
     """Return all admin documents."""
-    return await db_call(
-        lambda: list(col("tc_admins").find({}, {"_id": 0, "user_id": 1}))
-    )
+    rows = await db_call(lambda: fetch_all(select(tc_admins.c.user_id)))
+    return cast("list[AdminDoc]", rows)
 
 
 async def admin_count() -> int:
     """Return the total count of registered admins."""
-    return await db_call(lambda: col("tc_admins").estimated_document_count())
+    return await _count(select(func.count()).select_from(tc_admins))
 
 
 # ──────────────────────── Custom roles ────────────────────────── #
@@ -263,11 +297,25 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
         "assigned_by": UserId(assigned_by),
         "assigned_at": utc_now(),
     }
+    # * The upsert overwrites the stored role, promoter, and timestamp on
+    # * every call: the old write replaced the whole role document.
     await db_call(
-        lambda: col("tc_roles").update_one(
-            {"user_id": user_id},
-            {"$set": row},
-            upsert=True,
+        lambda: run(
+            pg_insert(tc_roles)
+            .values(
+                user_id=row["user_id"],
+                role=row["role"],
+                assigned_by=row["assigned_by"],
+                assigned_at=row["assigned_at"],
+            )
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_={
+                    "role": row["role"],
+                    "assigned_by": row["assigned_by"],
+                    "assigned_at": row["assigned_at"],
+                },
+            )
         )
     )
     effective_role_cache.invalidate(user_id)
@@ -275,29 +323,34 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
 
 async def remove_role(user_id: int) -> bool:
     """Remove a user's custom role from the database."""
-    r = await db_call(lambda: col("tc_roles").delete_one({"user_id": user_id}))
+    deleted = await db_call(
+        lambda: run(delete(tc_roles).where(tc_roles.c.user_id == user_id))
+    )
     effective_role_cache.invalidate(user_id)
-    return r.deleted_count > 0
+    return deleted > 0
 
 
 async def get_role(user_id: int) -> str | None:
     """Get a user's custom role from the database only."""
-    doc = await db_call(
-        lambda: col("tc_roles").find_one({"user_id": user_id}, {"role": 1})
+    row = await db_call(
+        lambda: fetch_one(select(tc_roles.c.role).where(tc_roles.c.user_id == user_id))
     )
-    return doc["role"] if doc else None
+    return row["role"] if row else None
 
 
 async def all_by_role(role: str) -> list[RoleRefDoc]:
     """Get all users with a specific custom role."""
-    return await db_call(
-        lambda: list(col("tc_roles").find({"role": role}, {"_id": 0, "user_id": 1}))
+    rows = await db_call(
+        lambda: fetch_all(select(tc_roles.c.user_id).where(tc_roles.c.role == role))
     )
+    return cast("list[RoleRefDoc]", rows)
 
 
 async def role_count(role: str) -> int:
     """Count role members (count-only views; avoids fetching documents)."""
-    return await db_call(lambda: col("tc_roles").count_documents({"role": role}))
+    return await _count(
+        select(func.count()).select_from(tc_roles).where(tc_roles.c.role == role)
+    )
 
 
 # ─────────────────────── Role resolution ──────────────────────── #
@@ -307,15 +360,14 @@ async def is_staff(user_id: int, *, fresh: bool = False) -> bool:
     """Return True if user_id is owner or admin.
 
     Served from the cached effective role (60 s L1 TTL) instead of two
-    uncached ``find_one`` reads. Lookup failures keep the historical
-    contract: log at warning level and return False (callers that need a
-    retry hint on outage should use ``get_effective_role`` directly, as
-    the appeal-review path and the auth decorators do). Cancellation
-    still propagates.
+    uncached role reads. Lookup failures keep the historical contract: log at
+    warning level and return False (callers that need a retry hint on outage
+    should use ``get_effective_role`` directly, as the appeal-review path
+    and the auth decorators do). Cancellation still propagates.
 
-    With ``fresh=True`` the effective role is read directly from MongoDB
-    so a demotion in another process is never hidden for up to the 60 s
-    role TTL. Enforcement gates use it; display reads keep the cached
+    With ``fresh=True`` the effective role is read directly from the
+    database so a demotion in another process is never hidden for up to the
+    60 s role TTL. Enforcement gates use it; display reads keep the cached
     fast path.
     """
     try:
@@ -332,7 +384,7 @@ async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None
     """Resolve a user's full effective role including owner/admin status (L1->L2->DB cached).
 
     With ``fresh=True`` the effective-role, owner, and profile caches are
-    bypassed and the three rows are read directly from MongoDB, then the
+    bypassed and the three rows are read directly from the database, then the
     effective-role cache is refreshed with the result. Enforcement gates
     (decorators, re-checks, demote repair, threshold ban exemption, appeal
     decisions) use ``fresh=True`` so a demotion in another process is never
@@ -349,12 +401,14 @@ async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None
         if fresh:
 
             async def _owner_direct() -> bool:
-                doc = await db_call(
-                    lambda: col("tc_owners").find_one(
-                        {"user_id": user_id}, {"_id": 1}, sort=[("user_id", 1)]
+                row = await db_call(
+                    lambda: fetch_one(
+                        select(tc_owners.c.user_id).where(
+                            tc_owners.c.user_id == user_id
+                        )
                     )
                 )
-                return doc is not None
+                return row is not None
 
             owner, admin, role = await asyncio.gather(
                 _owner_direct(),
@@ -409,18 +463,20 @@ async def role_meta(user_id: int) -> tuple[str | None, int | None, datetime | No
         return role, None, None
     if role == "admin":
         doc = await db_call(
-            lambda: col("tc_admins").find_one(
-                {"user_id": user_id},
-                {"_id": 0, "promoted_by": 1, "promoted_date": 1},
+            lambda: fetch_one(
+                select(tc_admins.c.promoted_by, tc_admins.c.promoted_date).where(
+                    tc_admins.c.user_id == user_id
+                )
             )
         )
         if doc:
             return role, doc.get("promoted_by"), doc.get("promoted_date")
         return role, None, None
     doc = await db_call(
-        lambda: col("tc_roles").find_one(
-            {"user_id": user_id},
-            {"_id": 0, "assigned_by": 1, "assigned_at": 1},
+        lambda: fetch_one(
+            select(tc_roles.c.assigned_by, tc_roles.c.assigned_at).where(
+                tc_roles.c.user_id == user_id
+            )
         )
     )
     if doc:

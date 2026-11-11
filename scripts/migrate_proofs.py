@@ -6,12 +6,12 @@
 
 Copies every stored proof message from the old proof chat into a new channel,
 updates ``proof_message_id`` / ``previous_proof_message_id`` in the bans
-collection, rewrites the proof deep-link buttons on the stored ban log
+table, rewrites the proof deep-link buttons on the stored ban log
 messages, and fixes any old proof link inside the copied captions.
 
 This is an operator runbook tool (see docs/operations/proof-migration.md),
-not part of the bot runtime: it talks to MongoDB and Telegram directly and
-does not import tcbot. Stop the bot while it runs.
+not part of the bot runtime: it talks to PostgreSQL and Telegram directly
+and does not import tcbot. Stop the bot while it runs.
 """
 
 from __future__ import annotations
@@ -24,7 +24,9 @@ import pathlib
 import sys
 from typing import TYPE_CHECKING
 
-from pymongo import MongoClient
+import psycopg
+from psycopg import sql
+from psycopg.rows import dict_row
 from pyrogram import Client
 from pyrogram.types import MessageEntity
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
@@ -319,7 +321,7 @@ async def migrate_ban(
     *,
     client: Client,
     bot: Bot,
-    bans,
+    conn: psycopg.Connection,
     ban: dict,
     old_chat: int,
     new_chat: int,
@@ -380,7 +382,16 @@ async def migrate_ban(
     if old_prev and new_prev:
         update["previous_proof_message_id"] = new_prev
     if update:
-        await bans.update_one({"ban_id": ban_id}, {"$set": update})
+        # * The column names come from the fixed set above, but they are
+        # * identifiers, so they are composed with psycopg.sql instead of
+        # * being interpolated into the statement text.
+        assignments = sql.SQL(", ").join(
+            sql.SQL("{} = %s").format(sql.Identifier(column)) for column in update
+        )
+        statement = sql.SQL("UPDATE bans SET {} WHERE ban_id = %s").format(assignments)
+        with conn.cursor() as cur:
+            cur.execute(statement, [*update.values(), ban_id])
+        conn.commit()
 
     links = {
         **build_link_map(old_chat, new_chat, old_proof, new_proof),
@@ -417,6 +428,35 @@ async def migrate_ban(
     return True, f"migrated ban {ban_id}"
 
 
+def _database_url() -> str:
+    """Return the PostgreSQL URL with the plain psycopg scheme."""
+    url = os.environ.get("DATABASE_URL", "").strip()
+    for prefix in ("postgresql+psycopg://", "postgresql+psycopg2://"):
+        if url.startswith(prefix):
+            return "postgresql://" + url[len(prefix) :]
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
+    return url
+
+
+def _load_bans(conn: psycopg.Connection, ban_id: str | None) -> list[dict]:
+    """Return every ban that carries a proof, oldest first."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        if ban_id:
+            cur.execute(
+                "SELECT * FROM bans WHERE ban_id = %s ORDER BY timestamp, ban_id",
+                (ban_id,),
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM bans "
+                "WHERE (proof_message_id IS NOT NULL AND proof_message_id > 0) "
+                "   OR previous_proof_message_id IS NOT NULL "
+                "ORDER BY timestamp, ban_id"
+            )
+        return [dict(row) for row in cur.fetchall()]
+
+
 async def run(args: argparse.Namespace) -> int:
     """Execute the migration per parsed args. Returns a process exit code."""
     if args.old_proof_chat == args.new_proof_chat:
@@ -426,8 +466,7 @@ async def run(args: argparse.Namespace) -> int:
         return 2
 
     token = os.environ.get("BOT_TOKEN", "").strip()
-    mongo_uri = os.environ.get("MONGODB_URI", "").strip()
-    db_name = os.environ.get("DB_NAME", "tcbot").strip() or "tcbot"
+    database_url = _database_url()
     try:
         api_id = int(os.environ.get("API_ID", "0"))
     except ValueError:
@@ -437,7 +476,7 @@ async def run(args: argparse.Namespace) -> int:
         name
         for name, val in (
             ("BOT_TOKEN", token),
-            ("MONGODB_URI", mongo_uri),
+            ("DATABASE_URL", database_url),
             ("API_ID", str(api_id) if api_id else ""),
             ("API_HASH", api_hash),
         )
@@ -452,37 +491,24 @@ async def run(args: argparse.Namespace) -> int:
     print(f"  old proof chat : {args.old_proof_chat}")
     print(f"  new proof chat : {args.new_proof_chat}")
     print(f"  logs chat      : {args.logs_chat}")
-    print(f"  database       : {db_name}")
+    print(f"  database       : {database_url.split('@')[-1]}")
     print(f"  mode           : {'APPLY' if args.apply else 'DRY-RUN (no writes)'}")
     print("  Stop the bot before --apply: the MTProto login is bot-token based.")
     print("=" * 64)
 
-    mongo = MongoClient(mongo_uri)
-    bans = mongo[db_name]["bans"]
-    if args.ban_id:
-        query: dict = {"ban_id": args.ban_id}
-    else:
-        query = {
-            "$or": [
-                {"proof_message_id": {"$gt": 0, "$exists": True}},
-                {"previous_proof_message_id": {"$ne": None, "$exists": True}},
-            ]
-        }
-    # * Sync read: this is a one-shot operator script, not the hot path.
-    all_bans = list(
-        bans.find(query, {"_id": 0}).sort([("timestamp", 1), ("ban_id", 1)])
-    )
-    state = load_state(args.state)
-    pending = ban_ids_pending(all_bans, state)
-    if args.limit:
-        pending = pending[: args.limit]
-    by_id = {str(b.get("ban_id")): b for b in all_bans}
-    print(f"  bans with proofs: {len(all_bans)}, pending: {len(pending)}")
-
-    ok = 0
-    failures: list[str] = []
-    bot = Bot(token)
+    conn = psycopg.connect(database_url)
     try:
+        all_bans = _load_bans(conn, args.ban_id)
+        state = load_state(args.state)
+        pending = ban_ids_pending(all_bans, state)
+        if args.limit:
+            pending = pending[: args.limit]
+        by_id = {str(b.get("ban_id")): b for b in all_bans}
+        print(f"  bans with proofs: {len(all_bans)}, pending: {len(pending)}")
+
+        ok = 0
+        failures: list[str] = []
+        bot = Bot(token)
         client = Client(
             args.session,
             api_id=api_id,
@@ -497,7 +523,7 @@ async def run(args: argparse.Namespace) -> int:
                     success, note = await migrate_ban(
                         client=client,
                         bot=bot,
-                        bans=bans,
+                        conn=conn,
                         ban=ban,
                         old_chat=args.old_proof_chat,
                         new_chat=args.new_proof_chat,
@@ -524,7 +550,7 @@ async def run(args: argparse.Namespace) -> int:
             if asyncio.iscoroutine(maybe):
                 await maybe
     finally:
-        mongo.close()
+        conn.close()
 
     print("=" * 64)
     print(f"  done: {ok} ok, {len(failures)} failed")

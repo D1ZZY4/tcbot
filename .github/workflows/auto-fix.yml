@@ -65,7 +65,7 @@ jobs:
         id: pyright
         env:
           BOT_TOKEN: "000000:dummy-token-for-ci00000000000000000"
-          MONGODB_URI: "mongodb://localhost:27017"
+          DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
           OWNER_ID: "1"
         run: |
           uv run pyright 2>&1 | tee pyright.log || true
@@ -78,7 +78,7 @@ jobs:
         id: pytest
         env:
           BOT_TOKEN: "000000:dummy-token-for-ci00000000000000000"
-          MONGODB_URI: "mongodb://localhost:27017"
+          DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
           OWNER_ID: "1"
         run: |
           uv run pytest tests/ -q -n auto 2>&1 | tee pytest.log || true

@@ -149,14 +149,14 @@ Rules for `/tcwarn`:
 
 ## Database impact
 
-Warnings use two collections:
+Warnings use two tables:
 
-| Collection | Purpose |
+| Table | Purpose |
 |---|---|
-| `warns` | Stores individual warning history documents. |
+| `warns` | Stores the individual warning history rows. |
 | `warn_counts` | Stores the current atomic counter for each `(user_id, chat_id)` pair. |
 
-A warning document contains:
+A warning row contains:
 
 | Field | Meaning |
 |---|---|
@@ -166,7 +166,7 @@ A warning document contains:
 | `chat_id` | Group where the warning was issued. |
 | `timestamp` | Warning creation time. |
 
-A warning counter document contains:
+A warning counter row contains:
 
 | Field | Meaning |
 |---|---|
@@ -175,24 +175,24 @@ A warning counter document contains:
 | `count` | Current warning count for this user/group pair. |
 | `updated_at` | Last counter update time. |
 
-Indexes are ensured for:
+The indexes are:
 
-- `warns`: `user_id + chat_id + timestamp desc`, `user_id + timestamp desc` (per-user history), `user_id + chat_id + timestamp asc` (oldest-first `get_warns` sort), `timestamp` (warn expiry sweep)
-- `warn_counts`: unique `user_id + chat_id`, `updated_at` (counter expiry sweep), `user_id + count + updated_at desc` (`user_warn_groups` / `federation_warn_count` filter plus sort)
+- `warns`: `user_id + chat_id + timestamp desc` (per-group history; the oldest-first view reads it backwards), `user_id + timestamp desc` (per-user history), `timestamp` (warn expiry sweep), `chat_id` (the group-migration repoint)
+- `warn_counts`: primary key `user_id + chat_id`, `updated_at` (counter expiry sweep), `user_id + count + updated_at desc` (`user_warn_groups` / `federation_warn_count` filter plus sort), `chat_id` (the group-migration repoint)
 
 ## Atomic counter behavior
 
-`warns_db.add_warn(...)` inserts a warning document and increments the matching `warn_counts` record atomically with `find_one_and_update(..., upsert=True)`.
+`warns_db.add_warn(...)` writes the warning row and increments the matching `warn_counts` row in one transaction, using an insert that folds the increment into the stored row on conflict. Two moderators warning the same user in the same group at the same moment therefore both count.
 
-If the counter update fails after the warning insert, the inserted warning is deleted and the exception is re-raised. This avoids creating a warning history row without a matching counter update.
+If the counter update fails, the transaction rolls back and the exception is re-raised. This avoids creating a warning history row without a matching counter update.
 
-`warns_db.warn_count(...)` reads `warn_counts`. If a counter document is missing but historical warnings exist, it backfills the counter from the warning history.
+`warns_db.warn_count(...)` reads `warn_counts`. If a counter row is missing but historical warnings exist, it backfills the counter from the warning history.
 
-`warns_db.clear_warns(...)` deletes all warning documents for the user/chat pair and deletes the counter document. A warns-delete failure raises instead of returning 0, so callers never misreport an outage as "no warnings to clear"; counter-delete failures are repaired (the pair is recounted, or the delete is retried) and stay non-fatal.
+`warns_db.clear_warns(...)` deletes all warning rows for the user/chat pair and deletes the counter row. A warns-delete failure raises instead of returning 0, so callers never misreport an outage as "no warnings to clear"; counter-delete failures are repaired (the pair is recounted, or the delete is retried) and stay non-fatal.
 
 Executor database reads fail closed with a retry notice instead of ending the conversation silently: a failed warn insert, count read, warn list, reset clear, or federation aggregate replies `I couldn't reach the database right now.` (the warn itself stays recorded when the insert already landed, and the threshold re-check is left to a retry).
 
-`warns_db.remove_last_warn(...)` deletes the newest warning by timestamp and `_id`, then decrements the counter. A warns-delete failure raises instead of returning `False`, so `/tcunwarn` replies with the database-retry notice instead of misreporting an outage as "no warnings". If the counter update cannot be applied, it recalculates and stores the count from remaining history.
+`warns_db.remove_last_warn(...)` deletes the newest warning by timestamp and row id, then decrements the counter. A warns-delete failure raises instead of returning `False`, so `/tcunwarn` replies with the database-retry notice instead of misreporting an outage as "no warnings". If the counter update cannot be applied, it recalculates and stores the count from remaining history. The recalculation holds the counter row while it counts, so a warning that arrives at the same moment keeps its increment instead of being overwritten.
 
 ## Warning auto-ban behavior
 

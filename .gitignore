@@ -3,6 +3,8 @@
 *.env
 .env
 config.env
+config.env.local
+config.env.development
 config.env.backup
 !config.env.example
 

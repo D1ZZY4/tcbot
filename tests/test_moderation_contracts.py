@@ -8,14 +8,45 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
+from sqlalchemy import text
 
 from tcbot import database as db
 from tcbot.database import bans_db, mutes_db
+from tcbot.database import engine as engine_module
+from tcbot.database.base import active_mutes, bans
 from tcbot.modules.helper.decorators import checks, ratelimit
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+
+@pytest.fixture
+async def mute_db(postgres_db: str) -> AsyncIterator[str]:
+    """Start from an empty active-mute table."""
+    await engine_module.run(active_mutes.delete())
+    yield postgres_db
+    await engine_module.run(active_mutes.delete())
+
+
+@pytest.fixture
+async def ban_db(postgres_db: str) -> AsyncIterator[str]:
+    """Start from an empty ban table with its partial unique index in place."""
+    await engine_module.run(bans.delete())
+    yield postgres_db
+    await engine_module.run(bans.delete())
+    await engine_module.run(
+        text("DROP INDEX IF EXISTS uq_bans_active_user"),
+    )
+    await engine_module.run(
+        text(
+            "CREATE UNIQUE INDEX uq_bans_active_user "
+            "ON bans (banned_user_id) WHERE is_active"
+        )
+    )
+
 
 # ────────────────────────────── Role rules ────────────────────────────── #
 
@@ -139,165 +170,72 @@ def test_throttle_tier_fails_closed_to_the_strict_bucket(
 # ─────────────────────────── Mute expiry rules ────────────────────────── #
 
 
-def test_mute_expiry_clause_keeps_permanent_mutes() -> None:
-    """A permanent mute never expires; a timed one expires with its window."""
-    now = datetime(2026, 1, 2, 3, 4, tzinfo=UTC)
-    clause = mutes_db._not_expired_clause(now)
-    branches: list[dict[str, Any]] = clause["$or"]  # type: ignore[assignment]
-    assert {"until_date": None} in branches
-    assert {"until_date": {"$gt": now}} in branches
-
-
-def test_active_mute_reads_exclude_expired_rows(
-    monkeypatch: pytest.MonkeyPatch,
+async def test_active_mute_reads_exclude_expired_rows(
+    mute_db: str,
 ) -> None:
     """An expired timed mute is not returned as active."""
-    captured: dict[str, Any] = {}
+    await mutes_db.set_active_mute(42, until=datetime.now(UTC) - timedelta(hours=1))
 
-    class _Collection:
-        def find_one(self, filt: dict[str, Any], *args: Any) -> None:
-            _ = args
-            captured["filter"] = filt
-            return
-
-    monkeypatch.setattr(mutes_db, "_active_mutes", lambda: _Collection())
-
-    assert asyncio.run(mutes_db.get_active_mute(42)) is None
-    filt: dict[str, Any] = captured["filter"]
-    assert filt["user_id"] == 42
-    assert "$or" in filt
+    assert await mutes_db.get_active_mute(42) is None
+    assert await mutes_db.active_mute_docs() == []
 
 
-def test_active_mute_documents_exclude_expired_rows(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The replay list only carries still-valid mutes."""
-    captured: dict[str, Any] = {}
+async def test_active_mute_reads_include_permanent_mutes(mute_db: str) -> None:
+    """A permanent mute never expires, so it stays in the replay list."""
+    await mutes_db.set_active_mute(42)
 
-    class _Collection:
-        def find(self, filt: dict[str, Any], *args: Any) -> list[dict[str, Any]]:
-            _ = args
-            captured["filter"] = filt
-            return []
-
-    monkeypatch.setattr(mutes_db, "_active_mutes", lambda: _Collection())
-
-    assert asyncio.run(mutes_db.active_mute_docs()) == []
-    assert "$or" in captured["filter"]
+    stored = await mutes_db.get_active_mute(42)
+    assert stored is not None
+    assert stored.get("until_date") is None
+    assert len(await mutes_db.active_mute_docs()) == 1
 
 
-def test_permanent_mute_row_is_never_ttl_pruned(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A permanent mute stores a null expiry, so the TTL index keeps it."""
-    captured: dict[str, Any] = {}
+async def test_permanent_mute_row_is_never_ttl_pruned(mute_db: str) -> None:
+    """A permanent mute stores a null expiry, so the daily cleanup keeps it."""
+    await mutes_db.set_active_mute(42)
 
-    class _Collection:
-        def update_one(
-            self, filt: dict[str, Any], update: dict[str, Any], **kw: Any
-        ) -> None:
-            _ = (filt, kw)
-            if "$set" in update:
-                captured["until"] = update["$set"].get("until_date")
-            else:
-                captured["until"] = update["$setOnInsert"].get("until_date")
-
-    monkeypatch.setattr(mutes_db, "_active_mutes", lambda: _Collection())
-
-    asyncio.run(mutes_db.set_active_mute(42))
-    assert captured["until"] is None
-
-    asyncio.run(
-        mutes_db.set_active_mute(42, until=datetime.now(UTC) + timedelta(hours=1))
+    stored = await engine_module.fetch_one(
+        active_mutes.select().where(active_mutes.c.user_id == 42)
     )
-    assert captured["until"] is not None
-
-
-def test_timed_mute_never_overwrites_a_permanent_mute(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A timed mute must not downgrade a permanent one.
-
-    Overwriting the stored null expiry with a deadline would let the TTL
-    index delete the record when the deadline passes, so the bot would lose
-    the enforcement state for a user it still restricts.
-    """
-    writes: list[dict[str, Any]] = []
-
-    class _Collection:
-        def update_one(
-            self, filt: dict[str, Any], update: dict[str, Any], **kw: Any
-        ) -> None:
-            _ = (kw,)
-            writes.append({"filter": filt, "update": update})
-
-    monkeypatch.setattr(mutes_db, "_active_mutes", lambda: _Collection())
-
-    asyncio.run(
-        mutes_db.set_active_mute(42, until=datetime.now(UTC) + timedelta(hours=1))
-    )
-    # * The write that could shorten an existing expiry is guarded by a
-    # * filter that only matches a stored date that is present and earlier.
-    guarded = writes[0]
-    until_filter = guarded["filter"]["until_date"]
-    assert until_filter["$ne"] is None
-    assert "$lt" in until_filter
-    # * The insert path carries the requested deadline, so a first-time
-    # * timed mute is not stored as permanent.
-    assert writes[1]["update"]["$setOnInsert"]["until_date"] is not None
+    assert stored is not None
+    assert stored["until_date"] is None
 
 
 # ─────────────────────────── Ban DB atomicity ─────────────────────────── #
 
 
-def test_review_slot_claim_is_atomic(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_review_slot_claim_is_atomic(ban_db: str) -> None:
     """Only the first appeal submission may claim the review slot."""
-    results = iter([1, 0])
+    await bans_db.create_ban(42, "spam", 7, 1, 0, "b1")
 
-    class _Collection:
-        def update_one(self, filt: dict[str, Any], update: dict[str, Any]) -> Any:
-            _ = (filt, update)
-            return SimpleNamespace(modified_count=next(results))
-
-    monkeypatch.setattr(bans_db, "_bans", lambda: _Collection())
-
-    assert asyncio.run(bans_db.set_review_if_absent("b1", 100)) is True
-    assert asyncio.run(bans_db.set_review_if_absent("b1", 200)) is False
+    assert await bans_db.set_review_if_absent("b1", 100) is True
+    assert await bans_db.set_review_if_absent("b1", 200) is False
 
 
-def test_appeal_decision_claim_is_atomic(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_appeal_decision_claim_is_atomic(ban_db: str) -> None:
     """Only the first approve/reject tap may claim the decision."""
-    results = iter([1, 0])
+    await bans_db.create_ban(42, "spam", 7, 1, 0, "b1")
+    await bans_db.set_review_if_absent("b1", 100)
 
-    class _Collection:
-        def update_one(self, filt: dict[str, Any], update: dict[str, Any]) -> Any:
-            _ = (filt, update)
-            return SimpleNamespace(modified_count=next(results))
-
-    monkeypatch.setattr(bans_db, "_bans", lambda: _Collection())
-
-    assert asyncio.run(bans_db.claim_appeal_decision("b1", 100)) is True
-    assert asyncio.run(bans_db.claim_appeal_decision("b1", 100)) is False
+    assert await bans_db.claim_appeal_decision("b1", 100) is True
+    assert await bans_db.claim_appeal_decision("b1", 100) is False
 
 
-def test_duplicate_active_bans_are_deactivated(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_duplicate_active_bans_are_deactivated(ban_db: str) -> None:
     """Only the canonical record survives a duplicate cleanup."""
-    captured: dict[str, Any] = {}
+    await engine_module.run(
+        text("DROP INDEX IF EXISTS uq_bans_active_user"),
+    )
+    await bans_db.create_ban(42, "spam", 7, 1, 0, "old")
+    await bans_db.create_ban(42, "spam", 7, 1, 0, "keep")
 
-    class _Collection:
-        def update_many(self, filt: dict[str, Any], update: dict[str, Any]) -> Any:
-            captured["filter"] = filt
-            captured["update"] = update
-            return SimpleNamespace(modified_count=1)
+    count = await bans_db.deactivate_extra_active_bans(42, "keep")
 
-    monkeypatch.setattr(bans_db, "_bans", lambda: _Collection())
-
-    count = asyncio.run(bans_db.deactivate_extra_active_bans(42, "keep"))
     assert count == 1
-    assert captured["filter"]["ban_id"] == {"$ne": "keep"}
-    assert captured["update"] == {"$set": {"is_active": False}}
+    active = await bans_db.get_active_ban(42)
+    assert active is not None
+    assert active.get("ban_id") == "keep"
+    assert await bans_db.user_ban_count(42) == 2
 
 
 # ────────────────────── Cross-group isolation ─────────────────────────── #

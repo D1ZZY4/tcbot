@@ -44,18 +44,17 @@ def test_search_by_name_rejects_nonpositive_limit() -> None:
     asyncio.run(_run())
 
 
-def test_logger_handler_copies_record(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_logger_handler_copies_record() -> None:
     captured: list[logging.LogRecord] = []
 
-    async def _fake_report(rec: logging.LogRecord) -> None:
+    def _sink(rec: logging.LogRecord) -> None:
         captured.append(rec)
 
     # * The logger lives in the utils layer and must not import the error
-    # * reporter, so the reporter registers a sink instead.
-    logger_mod.set_record_sink(_fake_report)
-    monkeypatch.setattr(logger_mod, "set_record_sink", logger_mod.set_record_sink)
-
-    async def _run() -> None:
+    # * reporter, so the reporter registers a sink instead. The sink owns
+    # * the delivery, so the logger only forwards the record.
+    logger_mod.set_record_sink(_sink)
+    try:
         handler = logger_mod.TelegramErrorHandler()
         record = logging.LogRecord(
             name="tcbot",
@@ -68,14 +67,15 @@ def test_logger_handler_copies_record(monkeypatch: pytest.MonkeyPatch) -> None:
         )
         handler.emit(record)
         record.exc_info = None
-        while not captured:
-            await asyncio.sleep(0)
-        await asyncio.gather(*list(logger_mod._tg_tasks), return_exceptions=True)
+    finally:
+        logger_mod.set_record_sink(None)
 
-    asyncio.run(_run())
     assert len(captured) == 1
+    # * The handler must hand over a copy: the stdlib bridge clears the
+    # * live record's exc_info after callHandlers, so forwarding the
+    # * original would erase the traceback before the delivery reads it.
+    assert captured[0] is not record
     assert captured[0].exc_info is not None
-    logger_mod.set_record_sink(None)
 
 
 def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -276,7 +276,7 @@ def test_circuit_partial_outage_still_trips() -> None:
 
 
 def test_pick_best_probes_concurrently(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _slow_ping(base: str) -> float:
+    def _slow_ping(base: str, cancel: Any = None) -> float:
         time.sleep(0.05)
         return 10.0
 

@@ -157,7 +157,7 @@ Key behavior:
   an unverified joiner.
 - All concurrent join updates share one global `_join_sem`
   (`_MAX_CONCURRENT_JOINS = 10`) so a batch invite-link join cannot spike
-  MongoDB pool pressure or Telegram traffic.
+  Database pool pressure or Telegram traffic.
 - `_handle_member` harvests identity and reads the active ban and mute in
   parallel. On an enforcement-read failure the welcome is skipped (fail
   closed: never greet an unverified user). A banned joiner is auto-demoted

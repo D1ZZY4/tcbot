@@ -6,7 +6,7 @@ Telegram federation moderation bot for the Transsion Core Federation community. 
 
 - Python 3.14 and `uv`
 - A Telegram bot token from BotFather
-- MongoDB (Atlas or self-hosted)
+- PostgreSQL (a local server or a managed instance)
 - Redis is optional. Without it the bot uses in-process caching.
 
 ## Quick Start
@@ -17,7 +17,7 @@ uv sync --frozen
 uv run python -m tcbot
 ```
 
-Fill in at least `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI`, `API_ID`, and `API_HASH` in `config.env` before running. Never commit that file. The full variable list is in [`config.env.example`](config.env.example) and [`docs/getting-started/setup.md`](docs/getting-started/setup.md).
+Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `API_ID`, and `API_HASH` in `config.env` before running. Never commit that file. The full variable list is in [`config.env.example`](config.env.example) and [`docs/getting-started/setup.md`](docs/getting-started/setup.md).
 
 ## What It Does
 
@@ -59,14 +59,14 @@ Only five values are required. Everything else has a working default.
 |---|---:|---|
 | `BOT_TOKEN` | Yes | Bot token from BotFather. |
 | `OWNER_ID` | Yes | Telegram user ID seeded as the initial Founder. |
-| `MONGODB_URI` | Yes | MongoDB connection string. |
+| `DATABASE_URL` | Yes | PostgreSQL connection string. The bot applies its schema migrations at startup. |
 | `API_ID` | Yes | Telegram API ID for MTProto identity lookups; boot refuses without it. |
 | `API_HASH` | Yes | Telegram API hash matching `API_ID`; boot refuses without it. |
 
 Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (enables webhook transport, otherwise the bot polls), `PORT` (health server port, default `5000`), and the `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS` log destinations, which each accept a chat ID or a `chat_id/thread_id` pair.
 
 > [!IMPORTANT]
-> Never commit real secrets. Keep `BOT_TOKEN`, `MONGODB_URI`, passwords, webhook secrets, and private chat IDs out of the repository; use the platform secret manager on hosted deployments.
+> Never commit real secrets. Keep `BOT_TOKEN`, `DATABASE_URL`, passwords, webhook secrets, and private chat IDs out of the repository; use the platform secret manager on hosted deployments.
 
 <details>
 <summary>Full variable reference (all settings in <code>config.env.example</code>)</summary>
@@ -77,7 +77,7 @@ Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (e
 |---|---|---|---|
 | `BOT_TOKEN` | Yes | - | Bot token from BotFather. |
 | `OWNER_ID` | Yes | - | Telegram user ID seeded as the initial Founder. |
-| `MONGODB_URI` | Yes | - | MongoDB connection string. |
+| `DATABASE_URL` | Yes | - | PostgreSQL connection string. |
 | `DB_NAME` | No | `tcbot` | Database name, created automatically. |
 | `COMMUNITY_NAME` | No | `Bot` | Display name used in bot messages and logs. |
 | `PREFIXES` | No | `["/", "!", "."]` | Python-style list of command prefixes. |
@@ -127,7 +127,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | `CRON_SECRET` | Bearer token for `/api/cron`; empty refuses every request (fail closed). |
 | `API_ID` | Required: Telegram API ID for MTProto identity lookups; boot refuses without it. |
 | `API_HASH` | Required: Telegram API hash matching `API_ID`; never commit the real value. |
-| `MTPROTO_SESSION` | Namespace for the shared MTProto session in MongoDB (default `tcbot_mtproto`). |
+| `MTPROTO_SESSION` | Namespace for the shared MTProto session in PostgreSQL (default `tcbot_mtproto`). |
 | `SENTRY_DSN` | Optional Sentry DSN for error monitoring; empty disables monitoring. |
 
 ### Community links
@@ -144,7 +144,7 @@ Local development uses polling when no public URL is configured:
 uv run python -m tcbot
 ```
 
-With Docker Compose (bot plus local MongoDB and Redis):
+With Docker Compose (bot plus local PostgreSQL and Redis):
 
 ```bash
 docker compose up --build
@@ -182,7 +182,7 @@ Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run 
 
 `.github/workflows/run-bot.yml` runs the bot in 5-hour windows (GitHub hard-caps a job at 6 h) with a crash watchdog, a handover dispatch about 10 minutes before the window ends, and a `*/15` cron resurrection fallback. A push to `main` touching bot code, translations, dependencies, or the runner itself queues a successor run and the live bot hands over gracefully within minutes; docs-only pushes never restart the bot.
 
-1. Repository → Settings → Secrets and variables → Actions: set `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID` (plus `WEBHOOK_URL`/`WEBHOOK_SECRET` for webhook mode, `REDIS_URL` optional, `API_ID`/`API_HASH` for MTProto).
+1. Repository → Settings → Secrets and variables → Actions: set `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID` (plus `WEBHOOK_URL`/`WEBHOOK_SECRET` for webhook mode, `REDIS_URL` optional, `API_ID`/`API_HASH` for MTProto).
 2. For gap-free chaining add `BOT_PAT`: a Personal Access Token with the `workflow` scope. Without it only the 15-minute cron restarts the bot.
 3. Actions → "TCF Bot - 24/7 Runner" → Run workflow (or wait for the schedule).
 4. Verify in the run logs (`Bot started`, `subsystems ready`); crash tails ship as credential-scrubbed artifacts kept 7 days.
@@ -195,7 +195,7 @@ Fail-fast guard: 5 deaths within 10 minutes aborts the run (usually bad config);
 
 Telegram delivers each update to `/api/webhook`; Vercel Cron drives warn expiry through `/api/cron`. No process, no polling, no scheduler.
 
-1. Vercel → Project → Settings → Environment Variables: set `BOT_TOKEN`, `MONGODB_URI`, `OWNER_ID`, `WEBHOOK_SECRET` (required, fail-closed `503` without it), `CRON_SECRET` (required, fail-closed without it).
+1. Vercel → Project → Settings → Environment Variables: set `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `WEBHOOK_SECRET` (required, fail-closed `503` without it), `CRON_SECRET` (required, fail-closed without it).
 2. Deploy with `vercel --prod` (dependencies from `pyproject.toml` + `uv.lock`, Python `3.14`, two functions with `maxDuration: 60` plus a daily `02:00 UTC` cron per `vercel.json`).
 3. Stop every other instance for this token, then register the webhook once per URL: `curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" -d "url=https://<project>.vercel.app/api/webhook" -d "secret_token=<WEBHOOK_SECRET>" -d "drop_pending_updates=true"`.
 4. Validate: `GET /api/webhook` → `200 OK`; `/checkme` in bot DM replies; `GET /api/cron` with `Authorization: Bearer <CRON_SECRET>` → `200`.
@@ -206,11 +206,11 @@ Limits: multi-step conversations are best-effort (cold starts drop instance-memo
 <details>
 <summary>Docker and Docker Compose</summary>
 
-1. `cp config.env.example .env` and set at least `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI=mongodb://mongo:27017`, `API_ID`, `API_HASH`, `REDIS_URL=redis://redis:6379/0`.
-2. `docker compose up --build` (bot plus `mongo:7` plus `redis:7-alpine`, each with health checks; the bot waits for both databases).
+1. `cp config.env.example .env` and set at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL=postgresql://tcbot:tcbot@postgres:5432/tcbot`, `API_ID`, `API_HASH`, `REDIS_URL=redis://redis:6379/0`.
+2. `docker compose up --build` (bot plus `postgres:16-alpine` plus `redis:7-alpine`, each with health checks; the bot waits for both databases).
 3. Verify: `curl localhost:${PORT:-5000}/health` returns subsystem JSON with HTTP 200.
 
-Single image without compose: `docker build -t tcf-bot .` then `docker run --env-file .env -p ${PORT:-5000}:${PORT:-5000} tcf-bot` (image command is `uv run --frozen python -m tcbot`). Point MongoDB/Redis at reachable hosts.
+Single image without compose: `docker build -t tcf-bot .` then `docker run --env-file .env -p ${PORT:-5000}:${PORT:-5000} tcf-bot` (image command is `uv run --frozen python -m tcbot`). Point PostgreSQL/Redis at reachable hosts.
 </details>
 
 <details>
@@ -219,7 +219,7 @@ Single image without compose: `docker build -t tcf-bot .` then `docker run --env
 The repository ships no `Procfile`; deploy the existing `Dockerfile` through the container registry.
 
 1. `heroku create <app> && heroku stack:set container --app <app>` (or set the stack in Dashboard → Settings).
-2. `heroku config:set BOT_TOKEN=... MONGODB_URI=... OWNER_ID=... WEBHOOK_URL=https://<app>.herokuapp.com WEBHOOK_SECRET=... --app <app>` (plus `REDIS_URL` from Heroku Data for Redis when needed; never commit secrets).
+2. `heroku config:set BOT_TOKEN=... DATABASE_URL=... OWNER_ID=... WEBHOOK_URL=https://<app>.herokuapp.com WEBHOOK_SECRET=... --app <app>` (plus `REDIS_URL` from Heroku Data for Redis when needed; never commit secrets).
 3. `heroku container:push worker --app <app> && heroku container:release worker --app <app>`.
 4. `heroku ps:scale worker=1 --app <app>` and verify with `heroku logs --tail --app <app>`.
 
@@ -230,7 +230,7 @@ Heroku assigns `PORT` automatically and the bot reads it from the environment. K
 <summary>VPS with systemd (Ubuntu/Debian)</summary>
 
 1. Install Python 3.14 and `uv`, then `git clone <repo-url> /opt/tcf-bot && cd /opt/tcf-bot && uv sync --frozen`.
-2. Create `/opt/tcf-bot/config.env` with `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI` (Atlas with the VPS IP allowlisted, or self-hosted MongoDB), plus `API_ID` and `API_HASH` for MTProto lookups, mode `0600`.
+2. Create `/opt/tcf-bot/config.env` with `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL` (a managed instance with the VPS IP allowlisted, or self-hosted PostgreSQL), plus `API_ID` and `API_HASH` for MTProto lookups, mode `0600`.
 3. Install this unit as `/etc/systemd/system/tcf-bot.service` (adjust the `uv` path from `which uv`):
 
 ```ini
@@ -260,7 +260,7 @@ WantedBy=multi-user.target
 <summary>Windows Server over RDP</summary>
 
 1. RDP in, install Python 3.14 (add to PATH) and `uv` (`irm https://astral.sh/uv/install.ps1 | iex`), then `git clone <repo-url> C:\tcf-bot` and `uv sync --frozen` inside it.
-2. Create `C:\tcf-bot\config.env` with `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI`, `API_ID`, and `API_HASH`; restrict it to the service account via file ACLs.
+2. Create `C:\tcf-bot\config.env` with `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `API_ID`, and `API_HASH`; restrict it to the service account via file ACLs.
 3. Verify once interactively: `uv run python -m tcbot` (expect `subsystems ready`, `Ctrl+C` to stop).
 4. Persist with Task Scheduler: trigger "At startup", action `uv.exe run --frozen python -m tcbot` with start-in `C:\tcf-bot`, "Run whether user is logged on or not", "If the task fails, restart every 1 minute". Prefer a dedicated service account, never an admin's personal session.
 5. Webhook mode needs public HTTPS reaching the host `PORT` (reverse proxy or tunnel) plus `WEBHOOK_URL`; otherwise the bot polls. Monitor `GET /health` and keep exactly one running instance per token.
@@ -271,16 +271,16 @@ WantedBy=multi-user.target
 The Flask keep-alive server binds to `0.0.0.0:${PORT}` (defaults to `5000` on unset, invalid, or out-of-range values).
 
 - `GET /` returns `OK` for uptime monitors.
-- `GET /health` returns subsystem status (MongoDB, Redis, scheduler, circuit breakers) as JSON, with HTTP 503 while degraded.
+- `GET /health` returns subsystem status (database, Redis, scheduler, circuit breakers) as JSON, with HTTP 503 while degraded.
 
 > [!TIP]
 > Point uptime monitors at `GET /health`: the 503 status tells load balancers and watchdogs the instance needs attention without reading the body.
 
 ## Troubleshooting
 
-- `BOT_TOKEN`, `OWNER_ID`, `MONGODB_URI`, `API_ID`, or `API_HASH` errors on startup: the bot fails fast on missing identity, database, or MTProto settings. Set them in `config.env` or the host secret manager.
-- MongoDB connection failures: check the URI, network access, Atlas IP allowlists, and credentials.
-- `GET /health` returns 503: one subsystem (MongoDB, Redis, scheduler, or a circuit breaker) is degraded; read the JSON body to see which one.
+- `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `API_ID`, or `API_HASH` errors on startup: the bot fails fast on missing identity, database, or MTProto settings. Set them in `config.env` or the host secret manager.
+- PostgreSQL connection failures: check the URL, network access, the host firewall, and the credentials.
+- `GET /health` returns 503: one subsystem (database, Redis, scheduler, or a circuit breaker) is degraded; read the JSON body to see which one.
 
 ## Development
 

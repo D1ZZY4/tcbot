@@ -64,6 +64,10 @@ class KeyedUpdateProcessor(BaseUpdateProcessor):
         """Create the processor with its per-key lock map."""
         super().__init__(max_concurrent_updates)
         self._locks: dict[tuple[int, int], _KeyLock] = {}
+        # * The global cap bounds the handlers that actually run. PTB's own
+        # * semaphore is left unused: see ``process_update`` below.
+        self._global = asyncio.Semaphore(max_concurrent_updates)
+        self._running = 0
 
     async def initialize(self) -> None:
         """Prepare the processor; nothing to allocate up front."""
@@ -72,13 +76,33 @@ class KeyedUpdateProcessor(BaseUpdateProcessor):
         """Release the per-key locks; nothing to clean up."""
         self._locks.clear()
 
+    async def process_update(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, update: object, coroutine: Awaitable[Any]
+    ) -> None:
+        """Dispatch the update, taking the conversation lock before the cap.
+
+        PTB's ``BaseUpdateProcessor.process_update`` takes a global
+        concurrency slot *before* the per-key lock. An update queued behind
+        a long-running handler of the same conversation would therefore
+        hold a global slot while it waits, so a burst on one conversation
+        could occupy every slot and starve every other chat in the
+        federation. This override keeps the per-key lock first, so the
+        global cap bounds the handlers that run rather than the ones that
+        wait.
+
+        ``BaseUpdateProcessor.process_update`` is marked ``@final``, which
+        is a typing aid rather than a runtime guarantee. The override is
+        deliberate and covered by the processor's own tests.
+        """
+        await self.do_process_update(update, coroutine)
+
     async def do_process_update(
         self, update: object, coroutine: Awaitable[Any]
     ) -> None:
         """Run the update under the lock of its conversation key."""
         key = conversation_key(update)
         if key is None:
-            await coroutine
+            await self._guarded(coroutine)
             return
         entry = self._locks.get(key)
         if entry is None:
@@ -86,13 +110,27 @@ class KeyedUpdateProcessor(BaseUpdateProcessor):
         entry.waiters += 1
         try:
             async with entry.lock:
-                await coroutine
+                await self._guarded(coroutine)
         finally:
             # * No await between the decrement and the removal, so the map
             # * never drops a lock another update is about to take.
             entry.waiters -= 1
             if entry.waiters == 0:
                 self._locks.pop(key, None)
+
+    async def _guarded(self, coroutine: Awaitable[Any]) -> None:
+        """Run one handler under the global concurrency cap."""
+        async with self._global:
+            self._running += 1
+            try:
+                await coroutine
+            finally:
+                self._running -= 1
+
+    @property
+    def current_concurrent_updates(self) -> int:
+        """How many handlers are running right now."""
+        return self._running
 
     @property
     def tracked_keys(self) -> int:

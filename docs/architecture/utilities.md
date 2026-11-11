@@ -9,8 +9,9 @@ shared helpers, see [`helpers.md`](helpers.md). For database helpers, see
 ```mermaid
 flowchart TD
     Main[tcbot/__main__.py] --> Utils[tcbot/utils/]
-    Utils --> CB[circuit_breaker.py<br/>Telegram + MongoDB circuit]
+    Utils --> CB[circuit_breaker.py<br/>Telegram + PostgreSQL circuit]
     Utils --> Dispatch[dispatch.py<br/>fan_out concurrency]
+    Utils --> Tasks[tasks.py<br/>background task lifecycle]
     Utils --> Prefixes[prefixes.py<br/>command prefix builders]
     Utils --> Logging[logger.py<br/>logger config]
     Utils --> ErrorReporter[logger error sink<br/>registered by the reporter]
@@ -40,7 +41,7 @@ Lightweight async circuit breaker that protects the bot from wasting time on rep
 | `CircuitOpenError` | Raised when a call is rejected because the circuit is OPEN. |
 | `CircuitState` | Enum: `CLOSED`, `OPEN`, `HALF_OPEN`. |
 | `telegram` | Module-level singleton for Telegram API calls. |
-| `mongodb` | Module-level singleton for MongoDB calls. |
+| `postgres` | Module-level singleton for PostgreSQL calls. |
 
 States and transitions:
 
@@ -56,7 +57,7 @@ HALF_OPEN --[probe fails transiently]--> OPEN
 
 `record_success()` and `record_failure()` are public methods for callers that manage their own try/except (for example, `dispatch.fan_out` which only counts network errors, not expected API refusals). `release_probe(reached_service=True)` marks the probe as having reached the service: a refusal or an application error proves the transport is healthy, so a HALF_OPEN circuit closes instead of admitting one caller at a time and rejecting every concurrent one.
 
-The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the `/health` endpoint under `circuit_telegram` and `circuit_mongodb`. After recovery, `CircuitBreaker.try_acquire()` admits only one `HALF_OPEN` probe; concurrent callers are rejected until that probe completes.
+The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the `/health` endpoint under `circuit_telegram` and `circuit_database`. After recovery, `CircuitBreaker.try_acquire()` admits only one `HALF_OPEN` probe; concurrent callers are rejected until that probe completes.
 
 ## `dispatch.py`
 
@@ -72,7 +73,6 @@ The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the 
 | `log_fanout_error(results, action, total, target_id)` | Emit the error-level fan-out summary and return the transient-failure count. |
 | `summarize_fanout(groups, results, action, target_id)` | Single owner for the reporting every federation executor repeats: the per-group warning line, the error-level summary, and the applied/failed arithmetic. Returns a `FanoutOutcome`. |
 | `throw_if_cancelled(results)` | Re-raise the first `asyncio.CancelledError` in `gather(return_exceptions=True)` results; other exceptions pass through untouched. Single owner for the cancellation check repeated at every gather site so shutdown is never coerced into data. |
-| `drain_tasks(tasks, label, timeout=5.0)` | Await a set of fire-and-forget tasks at shutdown, then cancel the leftovers. Never raises. |
 
 `FanoutOutcome` carries `total` (the groups the action targeted), `applied`
 (the groups that accepted it), `failed` (the difference), and `transient`
@@ -132,12 +132,12 @@ Logging setup is installed from `tcbot.__main__.main()`.
 |---|---|
 | `BotLogFormatter` | Colored console formatter with time, date, module, line, request context, level, and message. Every record renders colored, including loguru and third-party records. |
 | `TelegramErrorHandler` | Logging handler that forwards error-level records to the registered sink. |
-| `set_record_sink(sink)` | Register the coroutine that ships a log record to the error channel. The error reporter registers itself at startup; the logger never imports it, because the reporter lives above the utils layer and a direct import would close a cycle. |
+| `set_record_sink(sink)` | Register the callable that ships a log record to the error channel. The sink is invoked synchronously and schedules the delivery itself. The error reporter registers itself at startup; the logger never imports it, because the reporter lives above the utils layer and a direct import would close a cycle. |
 | `setup(level=logging.INFO)` | Installs console and Telegram error handlers on the root logger and quiets noisy libraries. |
 | `get_logger(name)` | Return the loguru-backed logger for a module. Records bridge through the same stdlib handlers, so coloring, shipping, and level discipline match plain loggers. |
 | `bind_request_context(...)` / `clear_request_context()` | Bind `update_id`/`user_id`/`chat_id` rendered on every subsequent line until cleared. `log_execution` binds on handler entry and clears in a `finally` block, so concurrent updates never leak context (contextvars are task-local). |
 
-Third-party loggers such as `httpx`, `telegram`, and `pymongo` are capped to reduce noise. Every module logger, including the import-time ones in `tcbot/__init__.py` and `tcbot/modules/__init__.py`, goes through the same loguru-backed shim and bridges to stdlib.
+Third-party loggers such as `httpx`, `telegram`, and `sqlalchemy` are capped to reduce noise. Every module logger, including the import-time ones in `tcbot/__init__.py` and `tcbot/modules/__init__.py`, goes through the same loguru-backed shim and bridges to stdlib.
 
 ## `error_reporter.py`
 
@@ -153,6 +153,7 @@ layer must not depend on it.
 | `send_to_log_errors(text)` | Sends a prepared message to the error destination. |
 | `report_exc(exc, context=None)` | Reports an exception. |
 | `report_record(record)` | Reports a logging record. |
+| `drain_pending()` | Await the in-flight error deliveries at shutdown (bounded). |
 
 The reporter classifies expected Telegram errors, trims long tracebacks, escapes MarkdownV2, and avoids raising if the destination is not configured.
 
@@ -275,6 +276,20 @@ Single owner for the outbound Telegram transport tuning used by every runtime en
 
 Both `tcbot/__main__.py` (webhook and polling) and `tcbot/serverless.py` (Vercel) import these instead of redefining them, so timeout and pool behavior stays identical across transports.
 
+## `tasks.py`
+
+Single owner of the lifecycle of fire-and-forget background tasks.
+
+| Export | Purpose |
+|---|---|
+| `TaskTracker(label)` | Owns a set of background tasks and releases them at shutdown. |
+| `TaskTracker.spawn(coro)` | Schedule a coroutine and track it until it finishes. Returns `False` when no event loop is running; the coroutine is closed so it never leaks. |
+| `TaskTracker.drain(timeout=5.0)` | Await the tracked tasks, then cancel the leftovers. Never raises. |
+| `TaskTracker.pending` | How many tracked tasks have not finished yet. |
+| `DEFAULT_DRAIN_TIMEOUT_S` | The default drain budget in seconds. |
+
+Every subsystem that schedules background work owns one tracker: the member cache, the startup warm-up, the asyncio error reports, the identity refresh, the admin harvest, the group-title refresh, and the error-report deliveries. The tracker keeps a strong reference to each task so the garbage collector cannot drop a running coroutine, retrieves a failed task's exception so asyncio does not report it twice, and releases the whole set from one place at shutdown.
+
 ## `update_processor.py`
 
 Single owner of the update ordering the application runs with.
@@ -285,6 +300,8 @@ Single owner of the update ordering the application runs with.
 | `conversation_key(update)` | The `(chat_id, user_id)` key of the pair, or `None` when the update belongs to no conversation. |
 
 python-telegram-bot documents that its `ConversationHandler` "heavily relies on incoming updates being processed one by one", yet the stock concurrent setting starts every update at once, so two taps on the same button can interleave inside a conversation and lose a state transition. The keyed processor serialises exactly the granularity the registered conversations use (`per_chat=True, per_user=True`), so different moderators still act in parallel while one conversation stays ordered. The lock map drops a key once its last update finished.
+
+The processor takes the conversation lock before the global concurrency slot. PTB's own `process_update` takes the slot first, so an update queued behind a long-running handler of the same conversation would hold a global slot while it waits, and a burst large enough to fill the cap would starve every other chat in the federation. Taking the lock first keeps the cap bound to the handlers that actually run.
 
 ## `secrets.py`
 
@@ -305,3 +322,4 @@ Both the Flask receiver (`tcbot/alive.py`) and the Vercel endpoints (`api/webhoo
 - Use `fan_out()` rather than hand-written unbounded `asyncio.gather()` loops for Telegram API operations across groups.
 - Use `gather_bounded()` rather than unbounded `asyncio.gather()` for pure database bursts across groups.
 - Use prefix helpers for all command filters so custom prefixes remain consistent.
+- Own background work in a `TaskTracker` instead of a module-level task set, so the shutdown has one drain path and one place that keeps the task references alive.

@@ -320,7 +320,23 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     # * Same identity refusal the command path applies: the callback reaches
     # * the same promotion, so it must not grant rank to the anonymous-admin
     # * placeholder or a Telegram service account.
-    ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    try:
+        ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    except Exception:
+        # * An unresolvable role must refuse the promotion, never promote
+        # * on an unknown target.
+        log.exception("identity.classify failed during promote callback")
+        await cb_error_edit(
+            q,
+            t(
+                "admins.error.role_lookup_failed",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            log_label="on_promote_role_btn classify-failed",
+            parse_mode=None,
+        )
+        return
     refusal = identity.refuse_message("promote", ident, await locale_for_update(update))
     if refusal is not None:
         await cb_error_edit(
@@ -558,7 +574,23 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     # * Same identity refusal the command path applies: the callback reaches
     # * the same demotion, so it must not strip the role of the anonymous
     # * admin placeholder, a Telegram service account, or the tapper.
-    ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    try:
+        ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    except Exception:
+        # * An unresolvable role must refuse the demotion, never act on an
+        # * unknown target.
+        log.exception("identity.classify failed during demote callback")
+        await cb_error_edit(
+            q,
+            t(
+                "admins.error.role_lookup_failed",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            log_label="on_demote_confirm classify-failed",
+            parse_mode=None,
+        )
+        return
     refusal = identity.refuse_message("demote", ident, await locale_for_update(update))
     if refusal is not None:
         await cb_error_edit(

@@ -16,7 +16,7 @@ manager (the lock icon in the sidebar).
 Required secrets:
 
 - `BOT_TOKEN`: Telegram bot token from BotFather.
-- `MONGODB_URI`: MongoDB connection string.
+- `DATABASE_URL`: PostgreSQL connection string.
 - `OWNER_ID`: Telegram user ID for the initial federation founder.
 - `API_ID`: Telegram API ID for MTProto identity lookups; boot refuses without it.
 - `API_HASH`: Telegram API hash matching `API_ID`; boot refuses without it.
@@ -102,7 +102,7 @@ The `uv.lock` file ensures reproducible installs on Replit. Do not commit
 ## Deployment Checklist
 
 - [ ] `BOT_TOKEN` set in Replit Secrets.
-- [ ] `MONGODB_URI` set in Replit Secrets.
+- [ ] `DATABASE_URL` set in Replit Secrets.
 - [ ] `OWNER_ID` set in Replit Secrets.
 - [ ] `API_ID` set in Replit Secrets.
 - [ ] `API_HASH` set in Replit Secrets.
@@ -133,11 +133,12 @@ Ensure the Flask server is listening on `0.0.0.0:${PORT}` and that the Replit
 proxy is forwarding to the correct port. The `/health` endpoint should return
 JSON with subsystem status.
 
-### MongoDB connection errors
+### PostgreSQL connection errors
 
-Verify `MONGODB_URI` is correct and that the MongoDB instance is accessible
-from the Replit environment. For local MongoDB, use a service with a public
-connection string or a MongoDB Atlas cluster.
+Verify `DATABASE_URL` is correct and that the PostgreSQL instance is
+reachable from the Replit environment. Use a managed instance with a public
+connection string, and allow the Replit outbound addresses in the provider's
+network allowlist.
 
 ---
 
@@ -149,5 +150,5 @@ connection string or a MongoDB Atlas cluster.
 | Transport | Polling (no public URL) | Webhook (with `WEBHOOK_URL`) |
 | Dependencies | `uv sync --frozen` | `uv sync --frozen` |
 | Run command | `uv run python -m tcbot` | `uv run python -m tcbot` |
-| MongoDB | Local or Atlas | Atlas or external |
+| PostgreSQL | Local or managed | Managed or external |
 | Redis | Optional local | Optional external |

@@ -223,7 +223,7 @@ async def _is_exempt(uid: int) -> bool:
     """Return True when ``uid`` is the current Founder (exempt from rate limits).
 
     Served from the cached owner ID (300 s TTL, invalidated on transfer),
-    so hot paths pay zero MongoDB round trips on cache hits. A sync compare
+    so hot paths pay zero database round trips on cache hits. A sync compare
     against the configured initial owner is deliberately NOT used as a fast
     path: after an ownership transfer the initial owner is no longer Founder,
     and a stale compare would exempt them from throttling forever. The
@@ -248,7 +248,7 @@ async def _throttle_tier(uid: int) -> str:
     Tester rank and above (roomier flood ceiling), ``"regular"`` for
     everyone else. ``get_effective_role`` resolves the owner to
     ``"founder"`` itself, so this single read covers all three tiers with
-    zero MongoDB round trips on cache hits. Fail-closed: any lookup
+    zero database round trips on cache hits. Fail-closed: any lookup
     failure lands on ``"regular"`` (the strictest bucket), so an outage
     never loosens throttling. Cancellation propagates.
     """

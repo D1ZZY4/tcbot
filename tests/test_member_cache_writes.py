@@ -6,73 +6,81 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from tcbot import database as db
+from tcbot.database import engine as engine_module
 from tcbot.database import users_cache
+from tcbot.database.base import member_cache
 from tcbot.database.cache import CACHE_MISS, user_mention_cache
 
-
-class _FakeCollection:
-    """Minimal collection double that counts write_one calls."""
-
-    def __init__(self) -> None:
-        self.write_calls: list[dict[str, Any]] = []
-
-    def update_one(self, query: dict[str, Any], update: dict[str, Any], **kwargs: Any):
-        self.write_calls.append({"query": query, "update": update})
-
-    def find_one(self, *args: Any, **kwargs: Any) -> None:
-        return None
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 @pytest.fixture
-def _fake_members(monkeypatch: pytest.MonkeyPatch) -> _FakeCollection:
-    """Install a counting collection double and clear the mention cache."""
-    collection = _FakeCollection()
-    monkeypatch.setattr(users_cache, "_members", lambda: collection)
+async def member_db(postgres_db: str) -> AsyncIterator[str]:
+    """Start from an empty member-cache table and a cold mention cache."""
+    await engine_module.run(member_cache.delete())
     user_mention_cache.clear()
-    return collection
+    yield postgres_db
+    await engine_module.run(member_cache.delete())
+    user_mention_cache.clear()
 
 
-def test_repeated_messages_write_once(_fake_members: _FakeCollection) -> None:
+def _count_writes(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Count the profile writes the helper performs."""
+    writes: list[int] = []
+    real_run = users_cache.run
+
+    async def _run(stmt: Any) -> int:
+        writes.append(1)
+        return await real_run(stmt)
+
+    monkeypatch.setattr(users_cache, "run", _run)
+    return writes
+
+
+async def test_repeated_messages_write_once(
+    member_db: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A member who keeps chatting under one name must not be rewritten.
 
-    The member-cache handler runs for every update. Before the mention cache
-    was populated on write, every message cost one MongoDB update and one
-    queued Redis delete for a profile that never changed.
+    The member-cache handler runs for every update. Without the mention
+    cache being populated on write, every message would cost one database
+    write and one queued Redis delete for a profile that never changed.
     """
+    writes = _count_writes(monkeypatch)
 
-    async def _scenario() -> list[bool]:
-        return [
-            await db.users_cache.harvest_user_identity(7, "alice", "Alice", "Smith")
-            for _ in range(20)
-        ]
-
-    results = asyncio.run(_scenario())
+    results = [
+        await db.users_cache.harvest_user_identity(7, "alice", "Alice", "Smith")
+        for _ in range(20)
+    ]
 
     assert results[0] is True
     assert not any(results[1:]), "an unchanged profile must not be rewritten"
-    assert len(_fake_members.write_calls) == 1
+    assert len(writes) == 1
 
 
-def test_a_changed_name_is_written_again(_fake_members: _FakeCollection) -> None:
+async def test_a_changed_name_is_written_again(
+    member_db: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A real identity change still reaches the database."""
+    writes = _count_writes(monkeypatch)
 
-    async def _scenario() -> None:
-        await db.users_cache.harvest_user_identity(7, "alice", "Alice", "Smith")
-        await db.users_cache.harvest_user_identity(7, "alice", "Alicia", "Smith")
+    await db.users_cache.harvest_user_identity(7, "alice", "Alice", "Smith")
+    await db.users_cache.harvest_user_identity(7, "alice", "Alicia", "Smith")
 
-    asyncio.run(_scenario())
+    assert len(writes) == 2
+    stored = await db.users_cache.get_user(7)
+    assert stored is not None
+    assert stored.get("first_name") == "Alicia"
 
-    assert len(_fake_members.write_calls) == 2
 
-
-def test_a_partial_write_invalidates_rather_than_lying(
-    _fake_members: _FakeCollection,
+async def test_a_partial_write_invalidates_rather_than_lying(
+    member_db: str,
 ) -> None:
     """A write that preserves the stored username must not cache a guess.
 
@@ -80,6 +88,6 @@ def test_a_partial_write_invalidates_rather_than_lying(
     value". Caching the incoming triple would claim a username the database
     never received.
     """
-    asyncio.run(db.users_cache.upsert_user(7, None, "Alice"))
+    await db.users_cache.upsert_user(7, None, "Alice")
 
     assert user_mention_cache.get(7) is CACHE_MISS

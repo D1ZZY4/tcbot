@@ -2,32 +2,43 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Bans collection helpers - manages all ban-related database operations."""
+"""Bans table helpers - manages all ban-related database operations."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from pymongo import ReturnDocument
-from pymongo.errors import DuplicateKeyError
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from tcbot.database.base import bans
 from tcbot.database.documents import BanDoc
-from tcbot.database.mongos import col, db_call, make_short_id
+from tcbot.database.engine import (
+    constraint_name,
+    db_call,
+    fetch_all,
+    fetch_count,
+    fetch_one,
+    run,
+    run_returning,
+)
+from tcbot.database.types import make_short_id
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from pymongo.collection import Collection
-
 log = get_logger(__name__)
 
-# ────────────────────────── Collection ─────────────────────────── #
+# ──────────────────────────── Table ─────────────────────────────── #
+# * The surrogate primary key stays out of the returned documents: the
+# * helpers expose the federation fields, not the storage identity.
+_BAN_COLUMNS = [c for c in bans.c if c.name != "id"]
 
-
-def _bans() -> Collection:
-    return col("bans")
+# * Names of the two unique constraints that can reject an insert.
+_CONSTRAINT_BAN_ID: str = "uq_bans_ban_id"
+_CONSTRAINT_ACTIVE_USER: str = "uq_bans_active_user"
 
 
 def make_ban_id() -> str:
@@ -50,7 +61,7 @@ async def create_ban(
     auto_id = ban_id is None
     if auto_id:
         ban_id = make_ban_id()
-    doc = {
+    values = {
         "ban_id": ban_id,
         "banned_user_id": target_id,
         "reason": reason,
@@ -69,37 +80,52 @@ async def create_ban(
         "review_timestamp": None,
     }
     try:
-        await db_call(lambda: _bans().insert_one(doc))
-    except DuplicateKeyError as insert_error:
-        if auto_id:
-            # * 10-char random ID collision (vanishingly rare but possible
-            # * under concurrent bans): retry once with a fresh ID instead
-            # * of failing the moderation action.
-            doc["ban_id"] = make_ban_id()
-            try:
-                await db_call(lambda: _bans().insert_one(doc))
-            except DuplicateKeyError:
-                pass
-            else:
-                return cast("BanDoc", doc)
-        # * The unique partial index allows only one active ban per user,
-        # * so a concurrent ban for the same target loses the race here.
-        # * The existing record is the canonical one: the caller keeps it
-        # * and the moderation continues.
-        existing = await get_active_ban(target_id)
-        if existing is None:
-            raise insert_error
-        if not auto_id and str(existing.get("ban_id", "")) == str(ban_id):
-            # * The explicit id itself is taken, so the caller must not be
-            # * handed a record it cannot reference.
-            raise insert_error
-        log.warning(
-            "Concurrent ban for user %d lost the race; reusing ban %s",
-            target_id,
-            existing.get("ban_id", ""),
+        rows = await db_call(
+            lambda: run_returning(
+                pg_insert(bans).values(**values).returning(*_BAN_COLUMNS)
+            )
         )
-        return cast("BanDoc", existing)
-    return cast("BanDoc", doc)
+    except Exception as insert_error:
+        violated = constraint_name(insert_error)
+        if violated == _CONSTRAINT_BAN_ID and auto_id:
+            # * The generated id collided with an existing one. The id is
+            # * random, so this is vanishingly rare, but it must not fail
+            # * the moderation action: the caller never supplied the id,
+            # * so it can be swapped for a fresh one and the insert retried.
+            ban_id = make_ban_id()
+            values["ban_id"] = ban_id
+            rows = await db_call(
+                lambda: run_returning(
+                    pg_insert(bans).values(**values).returning(*_BAN_COLUMNS)
+                )
+            )
+        elif violated != _CONSTRAINT_ACTIVE_USER:
+            # * Only the one-active-ban-per-user constraint may lose a
+            # * race. Any other integrity error is a real defect and
+            # * must not be swallowed here.
+            raise
+        else:
+            # * The unique partial index allows only one active ban per user,
+            # * so a concurrent ban for the same target loses the race here.
+            # * The existing record is the canonical one: the caller keeps it
+            # * and the moderation continues.
+            existing = await get_active_ban(target_id)
+            if existing is None:
+                raise insert_error
+            if not auto_id and str(existing.get("ban_id", "")) == str(ban_id):
+                # * The explicit id itself is taken, so the caller must not be
+                # * handed a record it cannot reference.
+                raise insert_error
+            log.warning(
+                "Concurrent ban for user %d lost the race; reusing ban %s",
+                target_id,
+                existing.get("ban_id", ""),
+            )
+            return cast("BanDoc", existing)
+    # * The stored row is the answer: the database filled the defaults
+    # * and the server-side timestamp, so the caller sees exactly what a
+    # * later read would return.
+    return cast("BanDoc", rows[0])
 
 
 async def update_ban(
@@ -115,34 +141,35 @@ async def update_ban(
     duration_str: str | None = None,
 ) -> BanDoc | None:
     """Update an existing ban record with new information."""
-    return await db_call(
-        lambda: _bans().find_one_and_update(
-            {"ban_id": ban_id},
-            {
-                "$set": {
-                    "reason": reason,
-                    "admin_user_id": admin_id,
-                    "proof_message_id": new_proof_id,
-                    "log_message_id": new_log_id,
-                    "previous_proof_message_id": old_proof_id,
-                    "previous_log_message_id": old_log_id,
-                    "updated_timestamp": utc_now(),
-                    "until_date": until_date,
-                    "duration_str": duration_str,
-                },
-                "$inc": {"update_count": 1},
-            },
-            return_document=ReturnDocument.AFTER,
+    rows = await db_call(
+        lambda: run_returning(
+            bans.update()
+            .where(bans.c.ban_id == ban_id)
+            .values(
+                reason=reason,
+                admin_user_id=admin_id,
+                proof_message_id=new_proof_id,
+                log_message_id=new_log_id,
+                previous_proof_message_id=old_proof_id,
+                previous_log_message_id=old_log_id,
+                updated_timestamp=utc_now(),
+                until_date=until_date,
+                duration_str=duration_str,
+                update_count=bans.c.update_count + 1,
+            )
+            .returning(*_BAN_COLUMNS)
         )
     )
+    return cast("BanDoc", rows[0]) if rows else None
 
 
 async def set_log_message_id(ban_id: str, log_msg_id: int) -> None:
     """Update only the log message ID for an existing ban."""
     await db_call(
-        lambda: _bans().update_one(
-            {"ban_id": ban_id},
-            {"$set": {"log_message_id": log_msg_id}},
+        lambda: run(
+            bans.update()
+            .where(bans.c.ban_id == ban_id)
+            .values(log_message_id=log_msg_id)
         )
     )
 
@@ -154,13 +181,13 @@ async def deactivate_all_active_bans(user_id: int) -> int:
     cleared regardless of how many were created (guarding against duplicate
     active bans that may exist from earlier race conditions or re-ban paths).
     """
-    r = await db_call(
-        lambda: _bans().update_many(
-            {"banned_user_id": user_id, "is_active": True},
-            {"$set": {"is_active": False}},
+    return await db_call(
+        lambda: run(
+            bans.update()
+            .where(bans.c.banned_user_id == user_id, bans.c.is_active.is_(True))
+            .values(is_active=False)
         )
     )
-    return r.modified_count
 
 
 async def deactivate_extra_active_bans(user_id: int, keep_ban_id: str) -> int:
@@ -170,35 +197,35 @@ async def deactivate_extra_active_bans(user_id: int, keep_ban_id: str) -> int:
     to suppress any stale duplicate active bans while preserving the canonical
     record that is being reused. Returns the number of extras deactivated.
     """
-    r = await db_call(
-        lambda: _bans().update_many(
-            {
-                "banned_user_id": user_id,
-                "is_active": True,
-                "ban_id": {"$ne": keep_ban_id},
-            },
-            {"$set": {"is_active": False}},
+    return await db_call(
+        lambda: run(
+            bans.update()
+            .where(
+                bans.c.banned_user_id == user_id,
+                bans.c.is_active.is_(True),
+                bans.c.ban_id != keep_ban_id,
+            )
+            .values(is_active=False)
         )
     )
-    return r.modified_count
 
 
 async def set_review_if_absent(ban_id: str, msg_id: int) -> bool:
     """Atomically claim the pending-review slot; return True when claimed.
 
-    The filter matches only when no review is stored (``None`` also matches
-    a missing field in MongoDB), so two concurrent appeal submissions for
-    the same ban cannot both claim the slot: the loser sees
-    ``modified_count == 0`` and must discard its orphan review card instead
-    of overwriting the winner. Uses the unique ``ban_id`` index.
+    The filter matches only when no review is stored, so two concurrent
+    appeal submissions for the same ban cannot both claim the slot: the
+    loser sees an affected-row count of zero and must discard its orphan
+    review card instead of overwriting the winner.
     """
-    r = await db_call(
-        lambda: _bans().update_one(
-            {"ban_id": ban_id, "review_message_id": None},
-            {"$set": {"review_message_id": msg_id, "review_timestamp": utc_now()}},
+    affected = await db_call(
+        lambda: run(
+            bans.update()
+            .where(bans.c.ban_id == ban_id, bans.c.review_message_id.is_(None))
+            .values(review_message_id=msg_id, review_timestamp=utc_now())
         )
     )
-    return r.modified_count > 0
+    return affected > 0
 
 
 async def clear_review(ban_id: str) -> None:
@@ -208,9 +235,10 @@ async def clear_review(ban_id: str) -> None:
     locked out from submitting a second appeal.
     """
     await db_call(
-        lambda: _bans().update_one(
-            {"ban_id": ban_id},
-            {"$set": {"review_message_id": None, "review_timestamp": None}},
+        lambda: run(
+            bans.update()
+            .where(bans.c.ban_id == ban_id)
+            .values(review_message_id=None, review_timestamp=None)
         )
     )
 
@@ -220,21 +248,22 @@ async def claim_appeal_decision(ban_id: str, review_msg_id: int) -> bool:
 
     The filter matches only the exact review card the tapper saw while the
     ban is still active. Two concurrent Approve/Reject taps both pass the
-    read checks, but only the first update matches: the loser sees
-    ``modified_count == 0`` and must abort instead of double-executing
+    read checks, but only the first update matches: the loser sees an
+    affected-row count of zero and must abort instead of double-executing
     (duplicate unbans, contradictory approve+reject, duplicate logs).
     """
-    r = await db_call(
-        lambda: _bans().update_one(
-            {
-                "ban_id": ban_id,
-                "is_active": True,
-                "review_message_id": review_msg_id,
-            },
-            {"$set": {"review_message_id": None, "review_timestamp": None}},
+    affected = await db_call(
+        lambda: run(
+            bans.update()
+            .where(
+                bans.c.ban_id == ban_id,
+                bans.c.is_active.is_(True),
+                bans.c.review_message_id == review_msg_id,
+            )
+            .values(review_message_id=None, review_timestamp=None)
         )
     )
-    return r.modified_count > 0
+    return affected > 0
 
 
 async def set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None:
@@ -244,15 +273,14 @@ async def set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None:
     message is later deleted or the log channel is unavailable.
     """
     await db_call(
-        lambda: _bans().update_one(
-            {"ban_id": ban_id},
-            {
-                "$set": {
-                    "rejected_by_id": admin_id,
-                    "rejected_by_name": admin_name,
-                    "rejected_at": utc_now(),
-                }
-            },
+        lambda: run(
+            bans.update()
+            .where(bans.c.ban_id == ban_id)
+            .values(
+                rejected_by_id=admin_id,
+                rejected_by_name=admin_name,
+                rejected_at=utc_now(),
+            )
         )
     )
 
@@ -265,15 +293,14 @@ async def set_appeal_log_msg(
 ) -> None:
     """Attach appeal-related metadata to a ban record."""
     await db_call(
-        lambda: _bans().update_one(
-            {"ban_id": ban_id},
-            {
-                "$set": {
-                    "appeal_log_msg_id": msg_id,
-                    "appeal_submitted_at": submitted_at or utc_now(),
-                    "appeal_link": appeal_link,
-                }
-            },
+        lambda: run(
+            bans.update()
+            .where(bans.c.ban_id == ban_id)
+            .values(
+                appeal_log_msg_id=msg_id,
+                appeal_submitted_at=submitted_at or utc_now(),
+                appeal_link=appeal_link,
+            )
         )
     )
 
@@ -283,22 +310,35 @@ async def set_appeal_log_msg(
 
 async def get_active_ban(user_id: int) -> BanDoc | None:
     """Get the currently active ban for a specific user."""
-    return await db_call(
-        lambda: _bans().find_one(
-            {"banned_user_id": user_id, "is_active": True},
-            sort=[("timestamp", -1), ("ban_id", -1)],
-        )
+    return cast(
+        "BanDoc | None",
+        await db_call(
+            lambda: fetch_one(
+                select(*_BAN_COLUMNS)
+                .where(bans.c.banned_user_id == user_id, bans.c.is_active.is_(True))
+                .order_by(bans.c.timestamp.desc(), bans.c.ban_id.desc())
+            )
+        ),
     )
 
 
 async def get_ban(ban_id: str) -> BanDoc | None:
     """Get any ban record by its unique ban_id."""
-    return await db_call(lambda: _bans().find_one({"ban_id": ban_id}))
+    return cast(
+        "BanDoc | None",
+        await db_call(
+            lambda: fetch_one(select(*_BAN_COLUMNS).where(bans.c.ban_id == ban_id))
+        ),
+    )
 
 
 async def active_ban_count() -> int:
     """Count the total number of currently active bans."""
-    return await db_call(lambda: _bans().count_documents({"is_active": True}))
+    return await db_call(
+        lambda: fetch_count(
+            select(func.count()).select_from(bans).where(bans.c.is_active.is_(True))
+        )
+    )
 
 
 async def active_bans_page(skip: int, limit: int) -> list[BanDoc]:
@@ -310,36 +350,37 @@ async def active_bans_page(skip: int, limit: int) -> list[BanDoc]:
     # * Clamp once so cursor limit and fetch length can never disagree;
     # * callers always pass positive values, this only pins the edge.
     page_size = max(1, limit)
-    return await db_call(
-        lambda: list(
-            _bans()
-            .find(
-                {"is_active": True},
-                {"_id": 0},
-                sort=[("timestamp", -1), ("ban_id", -1)],
+    return cast(
+        "list[BanDoc]",
+        await db_call(
+            lambda: fetch_all(
+                select(*_BAN_COLUMNS)
+                .where(bans.c.is_active.is_(True))
+                .order_by(bans.c.timestamp.desc(), bans.c.ban_id.desc())
+                .offset(max(0, skip))
+                .limit(page_size)
             )
-            .skip(max(0, skip))
-            .limit(page_size)
-        )
+        ),
     )
 
 
 async def active_bans_for_users(user_ids: list[int]) -> list[BanDoc]:
-    """Return active bans for the given users (server-side ``$in``).
+    """Return active bans for the given users (server-side ``IN``).
 
     Backs name-search results without loading the whole active-ban list.
     Uses the ``(banned_user_id, is_active, ...)`` index.
     """
     if not user_ids:
         return []
-    return await db_call(
-        lambda: list(
-            _bans().find(
-                {"banned_user_id": {"$in": user_ids}, "is_active": True},
-                {"_id": 0},
-                sort=[("timestamp", -1), ("ban_id", -1)],
+    return cast(
+        "list[BanDoc]",
+        await db_call(
+            lambda: fetch_all(
+                select(*_BAN_COLUMNS)
+                .where(bans.c.banned_user_id.in_(user_ids), bans.c.is_active.is_(True))
+                .order_by(bans.c.timestamp.desc(), bans.c.ban_id.desc())
             )
-        )
+        ),
     )
 
 
@@ -348,37 +389,37 @@ async def user_appealable_bans(
 ) -> list[BanDoc]:
     """Return the user's bans that ever had an appeal submitted, newest first.
 
-    Server-side version of the ``appeal_log_msg_id is not None`` filter;
-    same predicate as :func:`user_appeal_count`, served by the sparse
+    Server-side version of the "appeal was submitted" filter; same
+    predicate as :func:`user_appeal_count`, served by the partial
     ``(banned_user_id, appeal_log_msg_id)`` index. ``limit=None`` returns
-    the full list (backwards compatible).
+    the full list.
     """
-    cursor = (
-        _bans()
-        .find(
-            {
-                "banned_user_id": user_id,
-                "appeal_log_msg_id": {"$ne": None, "$exists": True},
-            },
-            {"_id": 0},
-            sort=[("timestamp", -1), ("ban_id", -1)],
+    stmt = (
+        select(*_BAN_COLUMNS)
+        .where(
+            bans.c.banned_user_id == user_id,
+            bans.c.appeal_log_msg_id.isnot(None),
         )
-        .skip(max(0, skip))
+        .order_by(bans.c.timestamp.desc(), bans.c.ban_id.desc())
+        .offset(max(0, skip))
     )
     if limit is not None:
-        cursor = cursor.limit(max(1, limit))
-    return await db_call(lambda: list(cursor))
+        stmt = stmt.limit(max(1, limit))
+    return cast("list[BanDoc]", await db_call(lambda: fetch_all(stmt)))
 
 
 async def active_ban_user_ids() -> list[int]:
     """Return only the user IDs of all active bans (projection-only, fastest path).
 
-    Uses ``distinct`` so the full ban documents never travel, and duplicate
+    Uses ``DISTINCT`` so the full ban documents never travel, and duplicate
     active rows for one user collapse to a single ID for the fan-out.
     """
-    return await db_call(
-        lambda: _bans().distinct("banned_user_id", {"is_active": True})
+    rows = await db_call(
+        lambda: fetch_all(
+            select(bans.c.banned_user_id).where(bans.c.is_active.is_(True)).distinct()
+        )
     )
+    return [int(row["banned_user_id"]) for row in rows]
 
 
 async def user_bans(
@@ -388,32 +429,37 @@ async def user_bans(
 
     ``limit=None`` returns the full list (backwards compatible).
     """
-    cursor = (
-        _bans()
-        .find(
-            {"banned_user_id": user_id},
-            {"_id": 0},
-            sort=[("timestamp", -1), ("ban_id", -1)],
-        )
-        .skip(max(0, skip))
+    stmt = (
+        select(*_BAN_COLUMNS)
+        .where(bans.c.banned_user_id == user_id)
+        .order_by(bans.c.timestamp.desc(), bans.c.ban_id.desc())
+        .offset(max(0, skip))
     )
     if limit is not None:
-        cursor = cursor.limit(max(1, limit))
-    return await db_call(lambda: list(cursor))
+        stmt = stmt.limit(max(1, limit))
+    return cast("list[BanDoc]", await db_call(lambda: fetch_all(stmt)))
 
 
 async def user_ban_count(user_id: int) -> int:
     """Count every ban ever issued against the user."""
-    return await db_call(lambda: _bans().count_documents({"banned_user_id": user_id}))
+    return await db_call(
+        lambda: fetch_count(
+            select(func.count())
+            .select_from(bans)
+            .where(bans.c.banned_user_id == user_id)
+        )
+    )
 
 
 async def user_appeal_count(user_id: int) -> int:
     """Count bans on this user that ever had an appeal submitted."""
     return await db_call(
-        lambda: _bans().count_documents(
-            {
-                "banned_user_id": user_id,
-                "appeal_log_msg_id": {"$ne": None, "$exists": True},
-            }
+        lambda: fetch_count(
+            select(func.count())
+            .select_from(bans)
+            .where(
+                bans.c.banned_user_id == user_id,
+                bans.c.appeal_log_msg_id.isnot(None),
+            )
         )
     )

@@ -11,14 +11,23 @@ import logging
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+from sqlalchemy.exc import OperationalError
+
 from tcbot import database as db
 from tcbot.modules.helper.identity import (
     Identity,
+    classify,
     profile_note,
     refuse_message,
     staff_notice,
     verify_not_bot,
 )
+
+
+def _database_outage() -> OperationalError:
+    """Return the error a refused PostgreSQL connection produces."""
+    return OperationalError("SELECT 1", {}, Exception("connection refused"))
 
 
 def _ident(kind: str) -> Identity:
@@ -111,3 +120,46 @@ def test_verify_not_bot_is_indeterminate_when_both_lookups_miss(
     monkeypatch.setattr(db.mtproto, "is_bot_user", _fake_is_bot_user)
     result = asyncio.run(verify_not_bot(_group_update(), 42, _ProbeFailBot()))  # type: ignore[arg-type]
     assert result is None
+
+
+def test_classify_raises_when_the_role_cannot_be_resolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unresolved role must not degrade into "no role".
+
+    The refusal table is keyed on the identity kind, so a target that
+    resolved to ``"user"`` because of a database outage would silently
+    lose the protection that keeps a Founder from being moderated.
+    """
+
+    async def _boom(_user_id: int) -> str:
+        raise _database_outage()
+
+    async def _name(_user_id: int) -> tuple[str, str | None]:
+        return ("Founder", None)
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
+    monkeypatch.setattr(db.users_cache, "get_user_mention_data", _name)
+
+    bot = SimpleNamespace(id=999)
+    with pytest.raises(OperationalError):
+        asyncio.run(classify(bot, 1, 2))  # type: ignore[arg-type]
+
+
+def test_classify_still_resolves_when_only_the_name_lookup_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The display name is not an authorization input, so it may degrade."""
+
+    async def _role(_user_id: int) -> str:
+        return "founder"
+
+    async def _boom(_user_id: int) -> tuple[str, str | None]:
+        raise _database_outage()
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.users_cache, "get_user_mention_data", _boom)
+
+    bot = SimpleNamespace(id=999)
+    ident = asyncio.run(classify(bot, 1, 2))  # type: ignore[arg-type]
+    assert ident.kind == "founder"

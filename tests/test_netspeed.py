@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from tcbot.modules import netspeed
@@ -39,8 +41,14 @@ def _patch_fetch(
     """Fake the HTTP layer so _run_speedtest never touches the network."""
 
     def _fake_fetch(
-        url: str, *, data: bytes | None = None
+        url: str,
+        *,
+        data: bytes | None = None,
+        timeout: float | None = None,
+        cancel: threading.Event | None = None,
     ) -> tuple[bytes, dict[str, str]]:
+        _ = timeout
+        _ = cancel
         if "speedtest-config.php" in url:
             return _CONFIG_XML, {}
         if "speedtest-servers-static.php" in url:
@@ -106,8 +114,16 @@ def test_distance_orders_closest_first() -> None:
 
 
 def test_fetch_config_ignores_bad_ids(monkeypatch: pytest.MonkeyPatch) -> None:
-    def _fake(url: str, *, data: bytes | None = None) -> tuple[bytes, dict[str, str]]:
+    def _fake(
+        url: str,
+        *,
+        data: bytes | None = None,
+        timeout: float | None = None,
+        cancel: threading.Event | None = None,
+    ) -> tuple[bytes, dict[str, str]]:
         _ = data
+        _ = timeout
+        _ = cancel
         return (
             b'<?xml version="1.0"?><settings>'
             b'<client ip="1.2.3.4" lat="0" lon="0" />'
@@ -123,3 +139,58 @@ def test_fetch_config_ignores_bad_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     assert client["ip"] == "1.2.3.4"
     assert ignore == {7, 8}
     assert threads == 2
+
+
+def test_the_run_keeps_the_host_link_cheap() -> None:
+    """The measurement must not saturate the host the bot runs on.
+
+    The bot and the speed test share one CPU and one network link, so a
+    large saturating transfer starves the event loop of CPU and delays
+    every Telegram API call. The payload has to stay small.
+    """
+    download_bytes = sum(netspeed._DOWNLOAD_SIZES) * 1024 * netspeed._DOWNLOAD_THREADS
+    upload_bytes = sum(netspeed._UPLOAD_SIZES) * netspeed._UPLOAD_THREADS
+    total_mb = (download_bytes + upload_bytes) / (1024 * 1024)
+    assert total_mb <= 3.0, f"speed test moves {total_mb:.1f} MB on the bot host"
+    # * Each direction must stay on a small connection count so the link
+    # * keeps room for the bot's own traffic.
+    assert netspeed._DOWNLOAD_THREADS <= 2
+    assert netspeed._UPLOAD_THREADS <= 2
+
+
+def test_a_second_run_is_refused_instead_of_queued() -> None:
+    """Only one run may own the host at a time."""
+    assert netspeed._run_lock.acquire(blocking=False)
+    try:
+        assert not netspeed._run_lock.acquire(blocking=False)
+    finally:
+        netspeed._run_lock.release()
+
+
+def test_a_cancelled_run_stops_at_the_next_request() -> None:
+    """The cancel flag must release the host instead of running to the end."""
+    cancel = threading.Event()
+    cancel.set()
+
+    def _fake(
+        url: str,
+        *,
+        data: bytes | None = None,
+        timeout: float | None = None,
+        cancel: threading.Event | None = None,
+    ) -> tuple[bytes, dict[str, str]]:
+        raise AssertionError(f"request issued after cancel: {url}")
+
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(netspeed, "_get_bytes", _fake)
+    try:
+        with pytest.raises(netspeed._SpeedtestCancelled):
+            netspeed._run_speedtest(cancel)
+    finally:
+        monkey.undo()
+
+
+def test_the_run_does_not_use_the_event_loop_default_executor() -> None:
+    """The dedicated worker keeps the shared default executor free."""
+    assert netspeed._speedtest_executor() is netspeed._speedtest_executor()
+    assert netspeed._speedtest_executor() is not None

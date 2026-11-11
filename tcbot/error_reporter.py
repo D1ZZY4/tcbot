@@ -15,13 +15,14 @@ import traceback
 from typing import TYPE_CHECKING
 
 import telegram.error as _te
-from pymongo.errors import ConnectionFailure
 
 from tcbot import cfg
+from tcbot.database import engine as db_engine
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.formatter import bold, code, esc, pre
 from tcbot.utils.logger import get_logger
+from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.time_and_date import monotonic, utc_now
 
 if TYPE_CHECKING:
@@ -50,7 +51,7 @@ def _benign(exc: BaseException | None) -> bool:
         return False
     if isinstance(exc, asyncio.CancelledError):
         return True
-    if isinstance(exc, (ConnectionFailure, CircuitOpenError)):
+    if db_engine.is_connection_error(exc) or isinstance(exc, CircuitOpenError):
         return True
     msg = str(exc).lower()
     return any(p in msg for p in _BENIGN_PATTERNS)
@@ -84,11 +85,11 @@ def _owner_only(exc: BaseException | None) -> bool:
 
 _ACTION_HINTS: tuple[tuple[str, str], ...] = (
     (
-        "MongoDB Circuit Open",
-        "MongoDB is unreachable; the circuit is open and calls fail fast "
-        "until recovery. Check Atlas reachability, then retry.",
+        "PostgreSQL Circuit Open",
+        "PostgreSQL is unreachable; the circuit is open and calls fail fast "
+        "until recovery. Check the database reachability and credentials, then retry.",
     ),
-    ("[DB]", "Check MongoDB reachability and credentials, then retry the action."),
+    ("[DB]", "Check PostgreSQL reachability and credentials, then retry the action."),
     ("Rate Limit", "Telegram asked to slow down; no action needed unless it persists."),
     ("Timed Out", "Transient Telegram hiccup; retry the action."),
     ("Polling Conflict", "Two bot instances are polling; stop the duplicate."),
@@ -103,7 +104,7 @@ _ACTION_HINTS: tuple[tuple[str, str], ...] = (
     (
         "MTProto Auth",
         "MTProto auth key is dead; stop every instance, delete the session "
-        "docs from mtproto_state, then boot one.",
+        "rows from mtproto_state, then boot one.",
     ),
 )
 
@@ -137,12 +138,12 @@ def _classify(exc: BaseException | None) -> str:
     if isinstance(exc, _te.TelegramError):
         return "[!] Telegram API Error"
     mod = type(exc).__module__ or ""
-    if "mongo" in mod:
+    if db_engine.is_database_error(exc):
         return "[DB] Database Error"
     if isinstance(exc, CircuitOpenError):
         return (
-            "[~] MongoDB Circuit Open"
-            if "mongodb" in str(exc).lower()
+            "[~] PostgreSQL Circuit Open"
+            if "postgres" in str(exc).lower()
             else "[~] Circuit Open"
         )
     if "circuit_breaker" in mod:
@@ -159,6 +160,10 @@ def _classify(exc: BaseException | None) -> str:
         return "[~] MTProto Auth Key Invalidated"
     return "[!] Code Bug"
 
+
+# * Owner of the in-flight error deliveries. The logger handler calls the
+# * sink synchronously, so the reporter schedules and tracks the delivery.
+_report_tasks = TaskTracker("error report shipping")
 
 # * Set once during post-init via attach(); owner_id refreshable via set_owner().
 _bot: Bot | None = None
@@ -187,7 +192,7 @@ def attach(bot: Bot, chat_id: int, thread_id: int | None, *, owner_id: int = 0) 
     # * Register the shipping sink with the logger. The logger lives in the
     # * utils layer and must not import this module, so the dependency is
     # * inverted: this side registers, the logger calls.
-    logger_mod.set_record_sink(_ship_record)
+    logger_mod.set_record_sink(_schedule_record)
 
 
 async def _ship_record(record: logging.LogRecord) -> None:
@@ -198,6 +203,25 @@ async def _ship_record(record: logging.LogRecord) -> None:
     re-attach.
     """
     await report_record(record)
+
+
+def _schedule_record(record: logging.LogRecord) -> None:
+    """Schedule the delivery of one log record to the error channel.
+
+    The logger handler runs synchronously on the logging path, so the
+    delivery is scheduled here and tracked for the shutdown drain. The
+    reporter owns the delivery, so it also owns the delivery lifecycle.
+    """
+    if _bot is None:
+        # * No bot yet: the record was emitted before the reporter was
+        # * attached. There is nothing to ship it to.
+        return
+    _report_tasks.spawn(_ship_record(record))
+
+
+async def drain_pending() -> None:
+    """Await the in-flight error deliveries at shutdown (bounded)."""
+    await _report_tasks.drain()
 
 
 def set_owner(owner_id: int) -> None:
@@ -216,7 +240,7 @@ _owner_sent: dict[tuple[object, ...], tuple[float, int]] = {}
 
 
 def _owner_suppressed(fp: tuple[object, ...]) -> bool:
-    """Check hourly owner budget its hourly owner budget."""
+    """Check the hourly owner-DM budget for a fingerprint."""
     now = monotonic()
     if len(_owner_sent) >= _OWNER_MAX:
         for key in [
@@ -345,14 +369,14 @@ def _location(
 
 
 _TOKEN_RE = re.compile(r"\b\d{6,}:[A-Za-z0-9_-]{20,}\b")
-_MONGO_AUTH_RE = re.compile(r"://(?:[^:@/\s]+)?:[^@/\s]+@")
+_URL_CREDENTIALS_RE = re.compile(r"://(?:[^:@/\s]+)?:[^@/\s]+@")
 
 
 def _scrub_secrets(text: str) -> str:
     """Redact exact configured values first, then credential-shaped patterns."""
     for secret in (
         cfg.bot_token,
-        cfg.mongodb_uri,
+        cfg.database_url,
         cfg.api_hash,
         cfg.webhook_secret,
         cfg.cron_secret,
@@ -361,7 +385,7 @@ def _scrub_secrets(text: str) -> str:
         if secret and secret in text:
             text = text.replace(secret, "[REDACTED]")
     text = _TOKEN_RE.sub("[REDACTED_TOKEN]", text)
-    return _MONGO_AUTH_RE.sub("://[REDACTED]@", text)
+    return _URL_CREDENTIALS_RE.sub("://[REDACTED]@", text)
 
 
 def scrub_text(text: str) -> str:

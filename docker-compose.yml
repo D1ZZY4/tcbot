@@ -6,7 +6,7 @@ services:
     ports:
       - "${PORT:-5000}:${PORT:-5000}"
     depends_on:
-      mongo:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -19,13 +19,17 @@ services:
     networks:
       - internal
 
-  mongo:
-    image: mongo:7
+  postgres:
+    image: postgres:16-alpine
     restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tcbot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tcbot}
+      POSTGRES_DB: ${POSTGRES_DB:-tcbot}
     volumes:
-      - mongo_data:/data/db
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tcbot} -d ${POSTGRES_DB:-tcbot}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,7 +52,7 @@ services:
       - internal
 
 volumes:
-  mongo_data:
+  postgres_data:
   redis_data:
 
 networks:

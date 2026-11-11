@@ -34,11 +34,12 @@ from tcbot.modules.helper.keyboards import (
     stats_search_results_kb,
     stats_search_row,
 )
-from tcbot.utils.dispatch import drain_tasks, gather_bounded, throw_if_cancelled
+from tcbot.utils.dispatch import gather_bounded, throw_if_cancelled
 from tcbot.utils.formatter import bold, code, esc, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page, paginate
+from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.time_and_date import (
     TELEGRAM_LOOKUP_TIMEOUT,
     date_or_unknown,
@@ -60,7 +61,8 @@ SEARCH_KEY = "stats_search_active"
 RESULTS_KEY = "stats_search_results"
 MSG_KEY = "stats_search_msg_id"
 CHAT_KEY = "stats_search_chat_id"
-_refresh_tasks: set[asyncio.Task[None]] = set()
+# * Owner of the in-flight background group-title refreshes.
+title_refresh_tasks = TaskTracker("group title refresh")
 
 
 async def _refresh_group_title(bot: Bot, chat_id: int) -> None:
@@ -82,20 +84,7 @@ async def _refresh_group_title(bot: Bot, chat_id: int) -> None:
 
 def launch_group_title_refresh(bot: Bot, chat_id: int) -> None:
     """Fire-and-forget group title sync for detail views."""
-    try:
-        task = asyncio.get_running_loop().create_task(
-            _refresh_group_title(bot, chat_id)
-        )
-    except RuntimeError:
-        log.debug("group title refresh skipped: no running event loop.")
-        return
-    _refresh_tasks.add(task)
-    task.add_done_callback(_refresh_tasks.discard)
-
-
-async def drain_refresh_tasks() -> None:
-    """Await the pending group-title refreshes so none outlives the shutdown."""
-    await drain_tasks(_refresh_tasks, label="group title refresh")
+    title_refresh_tasks.spawn(_refresh_group_title(bot, chat_id))
 
 
 # ─────────────────────── Overview and roster ────────────────────── #

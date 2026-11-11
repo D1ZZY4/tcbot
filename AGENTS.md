@@ -79,11 +79,11 @@ Current stack:
 
 - Python 3.14 project target (`pyproject.toml` requires `>=3.14`)
 - `python-telegram-bot[rate-limiter]>=22.8,<23`, tracking the latest compatible release
-- APScheduler 3.11.3 with `AsyncIOScheduler` + `MongoDBJobStore` for persistent scheduled jobs
-- Synchronous PyMongo driver with connection pool configuration; sync operations run on a worker thread through `db_call`
+- APScheduler 3.11.3 with `AsyncIOScheduler` + `SQLAlchemyJobStore` for persistent scheduled jobs
+- PostgreSQL via SQLAlchemy 2.1 async with Psycopg 3; every call runs through `db_call`
 - Flask keep-alive / health-check server
 - Optional Redis L2 cache (`redis[hiredis]>=8.1,<9`) with in-memory L1 fallback
-- Tagged JSON values for Redis serialization (msgspec codec with project-local datetime/ObjectId tags, no `cbor2`)
+- Tagged JSON values for Redis serialization (msgspec codec with a project-local datetime tag, no `cbor2`)
 - `cachetools` for L1 TTLCache
 - `kurigram[fast]` for bot-token MTProto lookups beyond Bot API enumeration
 - `uv` for dependency management and lockfile-based installs
@@ -100,7 +100,7 @@ Current stack:
 │   ├── error_reporter.py     Error classification, dedup, and shipping to LOGS_ERRORS
 │   ├── alive.py              Flask keep-alive and webhook receiver
 │   ├── serverless.py         Vercel lifecycle: shared PTB app, update dispatch, cron expiry
-│   ├── database/             MongoDB helpers, one package per collection/domain
+│   ├── database/             PostgreSQL helpers, one package per table/domain
 │   │   ├── users_cache.py    Member profile cache operations
 │   │   ├── users_roles.py    Role system: owners/admins/roles
 │   │   ├── bans_db.py        Federation bans
@@ -111,14 +111,14 @@ Current stack:
 │   │   ├── queues_db.py      Promotion requests
 │   │   ├── cache/            TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
-│   │   ├── scheduler.py      APScheduler background task + MongoDBJobStore
-│   │   ├── mongos.py         MongoDB client/indexes
-│   │   ├── _migration.py     Shared chat-repoint helper for group migrations
+│   │   ├── scheduler.py      APScheduler background task + SQLAlchemyJobStore
+│   │   ├── engine.py         Async engine, session boundary, circuit-breaker guard
+│   │   ├── base.py           Table, column, constraint, and index definitions
 │   │   ├── documents.py      Typed document shapes
 │   │   ├── types.py          Domain primitive types
 │   │   ├── settings_db.py    Per-user locale preferences
 │   │   ├── mtproto.py        Bot-token MTProto client
-│   │   └── mtproto_store.py  MongoDB-backed Kurigram storage
+│   │   └── mtproto_store.py  PostgreSQL-backed Kurigram storage
 │   ├── modules/              Telegram command modules and handlers
 │   │   ├── helper/           Shared helper code and conversation workflows
 │   │   │   ├── pipelines/    ConversationHandler flows (one `*_flow.py` module each)
@@ -159,7 +159,7 @@ Current stack:
 │   │   ├── privacy.py        Privacy panel (callback-only, via start menu)
 │   │   └── start.py          /start command
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
-│       ├── circuit_breaker.py  Telegram/MongoDB circuit breaker
+│       ├── circuit_breaker.py  Telegram/PostgreSQL circuit breaker
 │       ├── dispatch.py        fan_out() bounded concurrency dispatcher
 │       ├── formatter.py       MarkdownV2 formatter (esc, code, user_ref, bold)
 │       ├── i18n.py            TOML catalog, t() and locale resolution
@@ -167,6 +167,7 @@ Current stack:
 │       ├── pagination.py      Page arithmetic (clamp_page) for paged views
 │       ├── prefixes.py        Command prefix resolution
 │       ├── secrets.py         Constant-time secret comparison for inbound credentials
+│       ├── tasks.py           Background task lifecycle owner (TaskTracker)
 │       ├── time_and_date.py    Central clock: UTC store/display + measure + durations
 │       ├── transport.py        Shared PTB HTTP timeouts and pool size
 │       └── update_processor.py Per-conversation update serialization for PTB
@@ -178,7 +179,7 @@ Current stack:
 ├── api/                       Vercel serverless endpoints (webhook, cron)
 ├── scripts/                   One-shot operator tools (proof migration runbook, hot-path benchmark)
 ├── config.env.example        Environment variable template
-├── docker-compose.yml        Local bot + MongoDB + Redis compose setup
+├── docker-compose.yml        Local bot + PostgreSQL + Redis compose setup
 ├── Dockerfile                Container image definition
 ├── vercel.json               Vercel functions, timeouts, and cron schedule
 ├── .python-version           Pinned Python for Vercel and uv (3.14)
@@ -198,7 +199,7 @@ Core ownership rules:
 - Command handlers live in `tcbot/modules/`. See [`docs/architecture/modules.md`](docs/architecture/modules.md) for module boundaries.
 - Shared handler helpers live in `tcbot/modules/helper/`. See [`docs/architecture/helpers.md`](docs/architecture/helpers.md) for helper docs.
 - Conversation flows live in `tcbot/modules/helper/pipelines/` as one `*_flow.py` module each, split into a `*_flow/` package only when a flow outgrows the file budget. See [`docs/architecture/workflows.md`](docs/architecture/workflows.md) for conversation internals.
-- MongoDB access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files, or `*_db/` packages once split under the file budget. See [`docs/architecture/database.md`](docs/architecture/database.md) for database layer notes.
+- Database access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files, or `*_db/` packages once split under the file budget. See [`docs/architecture/database.md`](docs/architecture/database.md) for database layer notes.
 - Runtime utilities live in `tcbot/utils/`. See [`docs/architecture/utilities.md`](docs/architecture/utilities.md) for utility docs.
 
 ## Development Commands
@@ -239,7 +240,7 @@ Configuration is loaded from environment variables. For local development, `pyth
 Never commit real credentials. Required secret values include:
 
 - `BOT_TOKEN`: Telegram bot token from BotFather.
-- `MONGODB_URI`: MongoDB connection string.
+- `DATABASE_URL`: PostgreSQL connection string. The bot applies its schema migrations at startup.
 - `OWNER_ID`: initial federation founder Telegram user ID (positive integer; boot refuses without it).
 - `API_ID`: Telegram API ID for MTProto identity lookups; boot refuses without it.
 - `API_HASH`: Telegram API hash matching `API_ID`; boot refuses without it.
@@ -247,8 +248,7 @@ Never commit real credentials. Required secret values include:
 Important non-secret/runtime variables include:
 
 - `OWNER_ID`: initial federation founder Telegram user ID.
-- `DB_NAME`: MongoDB database name, default `tcbot`.
-- `MTPROTO_SESSION`: namespace for the shared MTProto session in MongoDB, default `tcbot_mtproto`.
+- `MTPROTO_SESSION`: namespace for the shared MTProto session in PostgreSQL, default `tcbot_mtproto`.
 - `COMMUNITY_NAME`: display name used in bot messages and logs.
 - `PREFIXES`: command prefix list, default `['/', '!', '.']`.
 - `PORT`: Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.

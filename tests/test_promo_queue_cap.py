@@ -8,35 +8,36 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from tcbot import database as db
+from tcbot.database import engine as engine_module
 from tcbot.database import queues_db
+from tcbot.database.base import promotion_requests
 from tcbot.modules import admins
 from tcbot.utils.i18n import t
 
-
-class _FakeRequests:
-    def __init__(self) -> None:
-        self.filters: list[dict[str, str]] = []
-
-    def count_documents(self, filt: dict[str, str]) -> int:
-        self.filters.append(filt)
-        return 234
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
-def test_pending_count_delegates_to_count_documents(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    fake = _FakeRequests()
-    monkeypatch.setattr(queues_db, "_requests", lambda: fake)
+@pytest.fixture
+async def promo_db(postgres_db: str) -> AsyncIterator[str]:
+    """Start from an empty promotion-queue table."""
+    await engine_module.run(promotion_requests.delete())
+    yield postgres_db
+    await engine_module.run(promotion_requests.delete())
 
-    count = asyncio.run(queues_db.pending_count())
 
-    assert count == 234
-    assert fake.filters == [{"status": "pending"}]
+async def test_pending_count_counts_only_the_pending_rows(promo_db: str) -> None:
+    """The count helper filters on the pending status."""
+    await queues_db.enqueue(1, None, "One", 9)
+    await queues_db.enqueue(2, None, "Two", 9)
+    await queues_db.resolve(await queues_db.enqueue(3, None, "Three", 9), "rejected", 9)
+
+    assert await queues_db.pending_count() == 2
 
 
 def _rows(n: int = 200) -> list[dict[str, Any]]:

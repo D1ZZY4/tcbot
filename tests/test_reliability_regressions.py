@@ -48,20 +48,15 @@ def test_scheduler_stop_clears_state_on_task_exception(
 
 
 def test_member_cache_skips_when_at_cap(monkeypatch: pytest.MonkeyPatch) -> None:
-    created: list[asyncio.Task[None]] = []
-
     async def _noop(uid: int, *args: Any, **kwargs: Any) -> None:
         return None
 
     monkeypatch.setattr("tcbot.database.users_cache.harvest_user_identity", _noop)
-    members._member_cache_tasks.clear()
 
     # Fill to the cap with never-done tasks on a live loop.
     async def _scenario() -> None:
         for _ in range(members._MEMBER_CACHE_MAX_CONCURRENT):
-            t = asyncio.create_task(asyncio.sleep(3600))
-            members._member_cache_tasks.add(t)
-            created.append(t)
+            members._member_cache_tasks.spawn(asyncio.sleep(3600))
         user = type(
             "U",
             (),
@@ -76,10 +71,9 @@ def test_member_cache_skips_when_at_cap(monkeypatch: pytest.MonkeyPatch) -> None
         update = type("Upd", (), {"effective_user": user})()
         ctx = type("Ctx", (), {"user_data": {}})()
         await members._update_member_cache(update, ctx)  # type: ignore[arg-type]
-        assert len(members._member_cache_tasks) == members._MEMBER_CACHE_MAX_CONCURRENT
-        for t in created:
-            t.cancel()
-        await asyncio.gather(*created, return_exceptions=True)
-        members._member_cache_tasks.clear()
+        assert (
+            members._member_cache_tasks.pending == members._MEMBER_CACHE_MAX_CONCURRENT
+        )
+        await members._member_cache_tasks.drain(timeout=0.05)
 
     asyncio.run(_scenario())

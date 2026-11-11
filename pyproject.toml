@@ -13,12 +13,17 @@ dependencies = [
     "python-telegram-bot[rate-limiter]>=22.8,<23",
     "kurigram[fast]>=2.2.27,<3",
 
-    # Database
-    "pymongo>=4.19,<5",
+    # PostgreSQL: SQLAlchemy 2.1 + Psycopg 3
+    "sqlalchemy[asyncio]>=2.1.8,<2.2",
+    "psycopg[binary]>=3.3.8,<4",
+    # Schema migrations. The application applies them at startup, so
+    # Alembic must be importable in the runtime image, not only in the
+    # development environment.
+    "alembic>=1.20.1,<2",
 
     # Cache and background scheduling
     "redis[hiredis]>=8.1,<9",
-    "apscheduler[mongodb]==3.11.3",
+    "apscheduler[sqlalchemy]>=3.11.3,<4",
     "cachetools>=8.0,<9",
 
     # HTTP and networking
@@ -32,13 +37,10 @@ dependencies = [
     # Logging
     "loguru>=0.7.3,<1",
 
-    # Event loop: the bot installs the uvloop policy on Linux. Imported
-    # directly, so it is declared here rather than relied on through the
-    # kurigram[fast] extra that happens to pull it in.
+    # Event loop: directly imported by the application on Linux
     "uvloop>=0.23,<0.24; sys_platform == 'linux'",
 
-    # DNS resolver used by the resolver fallback when the sandbox has no
-    # usable /etc/resolv.conf. Imported directly by the database layer.
+    # DNS resolver: directly imported by the database resolver fallback
     "dnspython>=2.7,<3",
 ]
 
@@ -53,7 +55,6 @@ observability = [
 
 
 [dependency-groups]
-
 dev = [
     # Linting and formatting
     "ruff>=0.17.4,<1",
@@ -63,14 +64,10 @@ dev = [
 
     # Testing
     "pytest>=9.2,<10",
-    "pytest-asyncio>=1.4.1,<2",
+    "pytest-asyncio>=1.4.1.post1,<2",
     "pytest-xdist>=3.8,<4",
     "pytest-cov>=7.1,<8",
     "hypothesis>=6.170.15,<7",
-
-    # Database test double: verifies the MongoDB query shapes (aggregation
-    # pipeline, partial unique index) without a live server.
-    "mongomock>=4.3,<5",
 
     # Development workflow
     "pre-commit>=4.7,<5",
@@ -145,7 +142,7 @@ ignore = [
 
 "tcbot/modules/**/__init__.py" = [
     "F401",
-] # Package inits intentionally expose re-export surfaces
+] # Package initializers intentionally expose re-export surfaces
 
 
 [tool.pytest.ini_options]
@@ -154,6 +151,9 @@ testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "postgres: needs a reachable PostgreSQL server (TCBOT_TEST_DATABASE_URL)",
+]
 
 
 [tool.coverage.run]
@@ -166,3 +166,8 @@ source = ["tcbot"]
 
 show_missing = true
 skip_covered = true
+
+
+[tool.pylint.format]
+
+max-module-lines = 1000

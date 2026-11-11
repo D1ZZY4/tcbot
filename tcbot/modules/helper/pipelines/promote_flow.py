@@ -9,8 +9,6 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from pymongo.errors import DuplicateKeyError
-
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, messages
@@ -211,7 +209,7 @@ async def request_admin(
     )
     throw_if_cancelled((request_id, owner_id))
     # * Concurrent requests resolve through the unique pending index.
-    if isinstance(request_id, DuplicateKeyError):
+    if isinstance(request_id, db.queues_db.DuplicateKeyError):
         log.info(
             "Promotion request race for target=%d; using existing entry",
             target_id,

@@ -113,7 +113,7 @@ def test_scrub_secrets_redacts_exact_configured_values(
         "cfg",
         SimpleNamespace(
             bot_token="SENTINEL-BOT-TOKEN-xyz",
-            mongodb_uri="SENTINEL-MONGO-xyz",
+            database_url="SENTINEL-DATABASE-xyz",
             api_hash="SENTINEL-APIHASH-xyz",
             webhook_secret="SENTINEL-WEBHOOK-xyz",
             cron_secret="SENTINEL-CRON-xyz",
@@ -122,7 +122,7 @@ def test_scrub_secrets_redacts_exact_configured_values(
     )
     for value in (
         "SENTINEL-BOT-TOKEN-xyz",
-        "SENTINEL-MONGO-xyz",
+        "SENTINEL-DATABASE-xyz",
         "SENTINEL-APIHASH-xyz",
         "SENTINEL-WEBHOOK-xyz",
         "SENTINEL-CRON-xyz",
@@ -136,11 +136,11 @@ def test_scrub_secrets_redacts_exact_configured_values(
         "oops 999888:ABCDEFghij1234567890XY end"
     )
     assert "999888:ABCDEFghij1234567890XY" not in token_shaped
-    mongo_shaped = error_reporter._scrub_secrets(
-        "oops mongodb://user:hunter2@host/db end"
+    database_shaped = error_reporter._scrub_secrets(
+        "oops postgresql://user:hunter2@host/db end"
     )
-    assert "hunter2" not in mongo_shaped
-    assert "://[REDACTED]@" in mongo_shaped
+    assert "hunter2" not in database_shaped
+    assert "://[REDACTED]@" in database_shaped
 
 
 def test_env_list_accepts_csv_and_literal_list_identically(

@@ -39,14 +39,14 @@ log = get_logger(__name__)
 # * Upper bound for concurrent per-member join handling (batch invite-link
 # * joins). Each member costs one harvest write plus ban/mute reads and a
 # * Telegram enforcement call; unbounded gather() on a large batch would
-# * spike MongoDB pool pressure (pool max 20) and Telegram burst traffic.
+# * spike database pool pressure (pool max 20) and Telegram burst traffic.
 # * Matches the fan_out Telegram cap; members beyond the bound wait.
 _MAX_CONCURRENT_JOINS: int = 10
 
 # * One global bound for ALL concurrent join updates (not per-update): the
 # * update processor runs different conversations in parallel, so each
 # * new-member callback would otherwise get its own Semaphore(10), making
-# * the effective Telegram+Mongo concurrency N*10 with no ceiling.
+# * the effective Telegram+database concurrency N*10 with no ceiling.
 _join_sem = asyncio.Semaphore(_MAX_CONCURRENT_JOINS)
 
 
@@ -235,7 +235,7 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     locale = await locale_for_chat(chat)
 
     # * Process all new members concurrently but bounded; handles batch
-    # * joins via invite links without exhausting the MongoDB pool or
+    # * joins via invite links without exhausting the database pool or
     # * bursting Telegram traffic. Failures stay per-member via
     # * return_exceptions=True, as before.
     # * Shared global semaphore (module-level _join_sem); do not re-create a

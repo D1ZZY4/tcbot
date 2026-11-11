@@ -2,55 +2,41 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Enqueue duplicate handling: ID collisions retry once, pending violations do not."""
+"""Enqueue duplicate handling against a real PostgreSQL server.
+
+The queue rejects two different duplicates: the random request id and the
+one-pending-request-per-user rule. The database reports both as the same
+error type, so the code tells them apart by the violated constraint
+name. Only a real server proves that the two constraints keep their
+names and that the retry logic reacts to the right one.
+"""
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
+from typing import TYPE_CHECKING
 
 import pytest
-from pymongo.errors import DuplicateKeyError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from tcbot.database import engine as engine_module
 from tcbot.database import queues_db
-from tcbot.database.queues_db import AlreadyPendingError
+from tcbot.database.base import promotion_requests
+from tcbot.database.queues_db import AlreadyPendingError, DuplicateKeyError
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
-class _FakeRequests:
-    def __init__(self, outcomes: list[BaseException | None]) -> None:
-        self._outcomes = list(outcomes)
-        self.docs: list[dict[str, Any]] = []
-        self.calls = 0
-
-    def insert_one(self, doc: dict[str, Any]) -> None:
-        self.calls += 1
-        outcome = self._outcomes.pop(0) if self._outcomes else None
-        if outcome is not None:
-            raise outcome
-        self.docs.append(dict(doc))
-
-
-async def _identity(op: Any, **_kwargs: Any) -> Any:
-    return op()
-
-
-def _collision_error(request_id: str) -> DuplicateKeyError:
-    return DuplicateKeyError(
-        f'E11000 duplicate key error collection: tcbot.promotion_requests index: request_id_1 dup key: {{ request_id: "{request_id}" }}',
-        11000,
-        {"keyPattern": {"request_id": 1}, "keyValue": {"request_id": request_id}},
-    )
-
-
-def _pending_error(user_id: int) -> DuplicateKeyError:
-    return DuplicateKeyError(
-        f"E11000 duplicate key error collection: tcbot.promotion_requests index: target_id_1 dup key: {{ target_id: {user_id} }}",
-        11000,
-        {"keyPattern": {"target_id": 1}, "keyValue": {"target_id": user_id}},
-    )
+@pytest.fixture
+async def queue_db(postgres_db: str) -> AsyncIterator[str]:
+    """Start from an empty promotion-queue table."""
+    await engine_module.run(promotion_requests.delete())
+    yield postgres_db
+    await engine_module.run(promotion_requests.delete())
 
 
 def _stub_ids(monkeypatch: pytest.MonkeyPatch, ids: list[str]) -> list[str]:
+    """Return the request ids the queue will draw, in order."""
     calls: list[str] = []
     values = iter(ids)
 
@@ -63,49 +49,76 @@ def _stub_ids(monkeypatch: pytest.MonkeyPatch, ids: list[str]) -> list[str]:
     return calls
 
 
-def test_collision_retries_once_then_succeeds(
-    monkeypatch: pytest.MonkeyPatch,
+async def _seed(request_id: str, target_id: int, status: str = "pending") -> None:
+    """Insert one promotion request straight into the table."""
+    await engine_module.run(
+        pg_insert(promotion_requests).values(
+            request_id=request_id,
+            target_id=target_id,
+            first_name="Target",
+            promoted_by=1,
+            status=status,
+        )
+    )
+
+
+async def test_collision_retries_once_then_succeeds(
+    queue_db: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fake = _FakeRequests([_collision_error("first"), None])
-    monkeypatch.setattr(queues_db, "_requests", lambda: fake)
-    monkeypatch.setattr(queues_db, "db_call", _identity)
+    """A taken request id is redrawn once instead of failing the request."""
+    await _seed("first", 99)
     id_calls = _stub_ids(monkeypatch, ["first", "second"])
 
-    result = asyncio.run(queues_db.enqueue(7, None, "Target", 1))
+    result = await queues_db.enqueue(7, None, "Target", 1)
 
     assert result == "second"
     assert id_calls == ["first", "second"]
-    assert fake.calls == 2
-    assert [doc["request_id"] for doc in fake.docs] == ["second"]
+    stored = await queues_db.get_request_by_id("second")
+    assert stored is not None
+    assert stored.get("target_id") == 7
 
 
-def test_pending_violation_short_circuits_without_retry(
-    monkeypatch: pytest.MonkeyPatch,
+async def test_pending_violation_short_circuits_without_retry(
+    queue_db: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fake = _FakeRequests([_pending_error(7)])
-    monkeypatch.setattr(queues_db, "_requests", lambda: fake)
-    monkeypatch.setattr(queues_db, "db_call", _identity)
+    """A second pending request for the same target is refused at once."""
+    await _seed("taken", 7)
     id_calls = _stub_ids(monkeypatch, ["only"])
 
     with pytest.raises(AlreadyPendingError) as exc_info:
-        asyncio.run(queues_db.enqueue(7, None, "Target", 1))
+        await queues_db.enqueue(7, None, "Target", 1)
 
     assert isinstance(exc_info.value, DuplicateKeyError)
+    assert engine_module.constraint_name(exc_info.value) == (
+        "uq_promotion_requests_pending"
+    )
     assert id_calls == ["only"]
-    assert fake.calls == 1
-    assert fake.docs == []
 
 
-def test_second_failure_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = _FakeRequests([_collision_error("first"), _collision_error("second")])
-    monkeypatch.setattr(queues_db, "_requests", lambda: fake)
-    monkeypatch.setattr(queues_db, "db_call", _identity)
-    id_calls = _stub_ids(monkeypatch, ["first", "second"])
+async def test_second_failure_propagates(
+    queue_db: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A second id collision is reported instead of retried forever."""
+    await _seed("first", 99)
+    id_calls = _stub_ids(monkeypatch, ["first", "first"])
 
     with pytest.raises(DuplicateKeyError) as exc_info:
-        asyncio.run(queues_db.enqueue(7, None, "Target", 1))
+        await queues_db.enqueue(7, None, "Target", 1)
 
     assert not isinstance(exc_info.value, AlreadyPendingError)
-    assert id_calls == ["first", "second"]
-    assert fake.calls == 2
-    assert fake.docs == []
+    assert engine_module.constraint_name(exc_info.value) == (
+        "uq_promotion_requests_request_id"
+    )
+    assert id_calls == ["first", "first"]
+
+
+async def test_a_resolved_request_does_not_block_a_new_one(
+    queue_db: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The pending rule only covers the pending rows."""
+    await _seed("old", 7, status="rejected")
+    _stub_ids(monkeypatch, ["new"])
+
+    result = await queues_db.enqueue(7, None, "Target", 1)
+
+    assert result == "new"

@@ -15,7 +15,7 @@ import pytest
 
 from tcbot import database as db
 from tcbot.database import mtproto
-from tcbot.modules.helper.extraction.sync import _fetch_live_identity
+from tcbot.modules.helper.extraction.refresh import _fetch_live_identity
 
 
 def _with_creds(monkeypatch: pytest.MonkeyPatch, api_id: int, api_hash: str) -> None:
@@ -42,12 +42,12 @@ async def _release_ok(self: object, owner: str) -> None:
 
 
 def _stub_lease(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stub the owner lease so start()/stop() never touch MongoDB."""
+    """Stub the owner lease so start()/stop() never touch the database."""
     monkeypatch.setattr(
-        "tcbot.database.mtproto_store.MongoStorage.claim_owner", _claim_ok
+        "tcbot.database.mtproto_store.PostgresStorage.claim_owner", _claim_ok
     )
     monkeypatch.setattr(
-        "tcbot.database.mtproto_store.MongoStorage.release_owner", _release_ok
+        "tcbot.database.mtproto_store.PostgresStorage.release_owner", _release_ok
     )
 
 

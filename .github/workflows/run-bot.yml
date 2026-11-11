@@ -53,9 +53,8 @@ jobs:
 
       # Bot configuration (set these as repository secrets)
       BOT_TOKEN:               ${{ secrets.BOT_TOKEN }}
-      MONGODB_URI:             ${{ secrets.MONGODB_URI }}
+      DATABASE_URL:            ${{ secrets.DATABASE_URL }}
       OWNER_ID:                ${{ secrets.OWNER_ID }}
-      DB_NAME:                 ${{ secrets.DB_NAME }}
       COMMUNITY_NAME:          ${{ secrets.COMMUNITY_NAME }}
       PREFIXES:                ${{ secrets.PREFIXES }}
       MAIN_GROUP:              ${{ secrets.MAIN_GROUP }}
@@ -222,8 +221,8 @@ jobs:
               tail -n 40 bot.log 2>/dev/null | sed -E -e 's/[0-9]{6,}:[A-Za-z0-9_-]{20,}/[REDACTED_TOKEN]/g' -e 's#://[^:@/ \t]*:[^@/ \t]*@#://[REDACTED]@#g' || true
               restarts=$((restarts + 1))
               [ "$first_death" = "0" ] && first_death=$now
-              # * Fail-fast config (bad token/URI) would otherwise restart
-              # * ~600x per window, hammering Telegram/Mongo. Five deaths
+              # * Fail-fast config (bad token/URL) would otherwise restart
+              # * ~600x per window, hammering Telegram/PostgreSQL. Five deaths
               # * within 10 minutes aborts; the */15 cron covers recovery.
               if [ "$restarts" -ge 5 ] && [ $((now - first_death)) -lt 600 ]; then
                 echo "::error::Bot died 5 times within 10 minutes; giving up."

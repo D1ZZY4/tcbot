@@ -2,27 +2,32 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Member profile cache helpers (member_cache collection only)."""
+"""Member profile cache helpers (member_cache table only)."""
 
 from __future__ import annotations
 
-import re
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
+from sqlalchemy import func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from tcbot.database.base import member_cache
 from tcbot.database.cache import CACHE_MISS, user_mention_cache
 from tcbot.database.documents import UserDoc
-from tcbot.database.mongos import col, db_call
+from tcbot.database.engine import db_call, fetch_all, fetch_one, fetch_value, run
 from tcbot.utils.time_and_date import utc_now
 
-if TYPE_CHECKING:
-    from pymongo.collection import Collection
-
-# ──────────────────────────── Collection ─────────────────────────── #
-
-
-def _members() -> Collection:
-    return col("member_cache")
-
+# ──────────────────────────── Table ────────────────────────────── #
+# * The lowercase mirrors stay out of the returned documents: they are
+# * index helpers for the prefix search, not part of the stored profile.
+_MEMBER_COLUMNS = [
+    member_cache.c.user_id,
+    member_cache.c.username,
+    member_cache.c.first_name,
+    member_cache.c.last_name,
+    member_cache.c.commit_date,
+    member_cache.c.last_updated,
+]
 
 # * L1 mention-cache entries are [first_name, username, last_name] triples.
 # * Readers only use indexes 0 and 1; index 2 exists so change detection
@@ -50,8 +55,12 @@ async def _fetch_mention_triple(user_id: int) -> list[str | None]:
     cached mention readers cannot drift apart.
     """
     doc = await db_call(
-        lambda: _members().find_one(
-            {"user_id": user_id}, {"first_name": 1, "username": 1, "last_name": 1}
+        lambda: fetch_one(
+            select(
+                member_cache.c.first_name,
+                member_cache.c.username,
+                member_cache.c.last_name,
+            ).where(member_cache.c.user_id == user_id)
         )
     )
     if doc:
@@ -60,7 +69,7 @@ async def _fetch_mention_triple(user_id: int) -> list[str | None]:
             doc.get("username"),
             doc.get("last_name"),
         ]
-    # * Sentinel: user has no member_cache document. All-None is used
+    # * Sentinel: user has no member_cache row. All-None is used
     # * (not [str(user_id), None, None]) so the not-found case is unambiguous:
     # * a real first_name is never None, but str(user_id) could coincide
     # * with an actual numeric display name and would suppress fallback.
@@ -86,16 +95,21 @@ def is_placeholder_name(name: str | None) -> bool:
 
 async def get_user(user_id: int) -> UserDoc | None:
     """Get the full cached profile for a specific user."""
-    return await db_call(lambda: _members().find_one({"user_id": user_id}))
+    row = await db_call(
+        lambda: fetch_one(
+            select(*_MEMBER_COLUMNS).where(member_cache.c.user_id == user_id)
+        )
+    )
+    return cast("UserDoc | None", row)
 
 
 async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
     """Return (first_name, username) for mention formatting (L1->L2->DB cached).
 
-    Uses ``user_mention_cache`` (Redis-backed TwoLevelCache) to avoid MongoDB
+    Uses ``user_mention_cache`` (Redis-backed TwoLevelCache) to avoid database
     round-trips on repeated lookups.  Cache is invalidated on every ``upsert_user``.
 
-    Cache sentinel: ``[None, None, None]`` is stored when the user has no document in
+    Cache sentinel: ``[None, None, None]`` is stored when the user has no row in
     ``member_cache``.  The consumer converts ``None`` → ``str(user_id)`` so the
     returned tuple always contains a non-empty string as the first element.
     """
@@ -104,7 +118,7 @@ async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
         return await _fetch_mention_triple(user_id)
 
     data = await user_mention_cache.get_or_fetch(user_id, _fetch)
-    # * data[0] is None when the user has no member_cache document (sentinel).
+    # * data[0] is None when the user has no member_cache row (sentinel).
     name = cast("str", data[0]) if data[0] is not None else str(user_id)
     return (name, data[1])
 
@@ -116,7 +130,7 @@ async def _mention_triples(
 
     Single owner for the batch-miss path shared by :func:`get_mention_data_batch`
     and :func:`get_first_names_batch`: L1 hits served without I/O (repeat IDs
-    dropped via ``dict.fromkeys``), the remainder fetched in one ``$in``
+    dropped via ``dict.fromkeys``), the remainder fetched in one ``IN``
     query, full triples populated into L1, and absent users sentineled so
     repeat renders skip the round-trip. Miss semantics cannot drift between
     readers when only one function implements them.
@@ -131,13 +145,15 @@ async def _mention_triples(
             missing.append(uid)
     if not missing:
         return result
-    # * Batch-fetch only uncached users from MongoDB in a single round-trip.
+    # * Batch-fetch only uncached users from the database in a single query.
     docs = await db_call(
-        lambda: list(
-            _members().find(
-                {"user_id": {"$in": missing}},
-                {"user_id": 1, "first_name": 1, "username": 1, "last_name": 1},
-            )
+        lambda: fetch_all(
+            select(
+                member_cache.c.user_id,
+                member_cache.c.first_name,
+                member_cache.c.username,
+                member_cache.c.last_name,
+            ).where(member_cache.c.user_id.in_(missing))
         )
     )
     for doc in docs:
@@ -151,7 +167,7 @@ async def _mention_triples(
         user_mention_cache.put(uid, triple)
         result[uid] = triple
     # * Fill fallback for users not found in DB either and cache the sentinel so
-    # * subsequent calls skip the MongoDB round-trip on the next lookup.
+    # * subsequent calls skip the database round-trip on the next lookup.
     for uid in missing:
         if uid not in result:
             user_mention_cache.put(uid, list(_NOT_FOUND_SENTINEL))
@@ -165,7 +181,7 @@ async def get_mention_data_batch(
     """Fetch (first_name, username) for multiple users, checking cache for each ID first.
 
     Cache-aware: IDs found in L1 are returned immediately; only uncached IDs trigger
-    a batch MongoDB query.  Newly fetched data is populated into the mention cache.
+    a batch database query.  Newly fetched data is populated into the mention cache.
     """
     triples = await _mention_triples(user_ids)
     result: dict[int, tuple[str, str | None]] = {}
@@ -183,7 +199,7 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
     """Fetch first names for multiple users, checking L1 first.
 
     IDs already in the in-memory mention cache are served without I/O; only
-    uncached IDs trigger one batch MongoDB query. Users missing from the DB
+    uncached IDs trigger one batch database query. Users missing from the DB
     get the not-found sentinel cached so repeat renders skip the round-trip.
     Found rows populate the full mention triple (the projection covers
     first_name, username, and last_name, exactly like
@@ -203,9 +219,9 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
     Routes through ``user_mention_cache.get_or_fetch`` so all three layers are
     checked in order and both L1 and L2 are populated on a miss -- exactly the
     same path as ``get_user_mention_data``.  Calling this function never causes
-    a redundant MongoDB round-trip for a user already fetched by either helper.
+    a redundant database round-trip for a user already fetched by either helper.
 
-    When the user has no document in ``member_cache``, ``_fetch`` stores the
+    When the user has no row in ``member_cache``, ``_fetch`` stores the
     sentinel ``[None, None, None]`` in the cache.  The sentinel is distinguished from a
     real name so the caller's ``fallback`` is returned instead of a raw numeric ID
     string (e.g. ``"Admin"`` instead of ``"123456789"``).
@@ -222,16 +238,18 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
 
 async def total_users() -> int:
     """Get the total number of unique users in the cache."""
-    return await db_call(lambda: _members().estimated_document_count())
+    count = await db_call(
+        lambda: fetch_value(select(func.count()).select_from(member_cache))
+    )
+    return int(count or 0)
 
 
-# * Sort keys for all_users_page(). Unvalidated strings would force an
-# * unindexed COLLSCAN plus an in-memory sort. Every key maps to a field
-# * that carries an index, and to the tie-break field that keeps the page
-# * order stable across pages.
-# * The name sorts run on the lowercase mirrors, which are the fields the
-# * name search already indexes. Sorting on the raw fields instead would
-# * need a second index per field and would order the list by raw byte
+# * Sort keys for all_users_page(). Every key maps to a column that carries
+# * an index, and to the tie-break column that keeps the page order stable
+# * across pages.
+# * The name sorts run on the lowercase mirrors, which are the columns the
+# * name search already indexes. Sorting on the raw columns instead would
+# * need a second index per column and would order the list by raw byte
 # * value, so every capitalised name would sort before every lowercase one.
 _USER_SORT_FIELDS: dict[str, tuple[str, int, str]] = {
     "first_name": ("first_name_lower", 1, "user_id"),
@@ -256,63 +274,63 @@ async def all_users_page(
     # * Clamp once so cursor limit and fetch length can never disagree;
     # * callers always pass positive values, this only pins the edge.
     page_size = max(1, limit)
-    sort_spec: list[tuple[str, int]] = [(field, direction)]
+    sort_column = member_cache.c[field]
+    order_clauses = [sort_column.desc() if direction < 0 else sort_column.asc()]
     # * The tie-break keeps the order stable when two rows share the sort
     # * key, so a user cannot appear on two pages or on none.
     if tie_break != field:
-        sort_spec.append((tie_break, 1))
-    return await db_call(
-        lambda: list(
-            _members()
-            .find(
-                {},
-                {
-                    "_id": 0,
-                    "user_id": 1,
-                    "username": 1,
-                    "first_name": 1,
-                    "last_name": 1,
-                    "commit_date": 1,
-                    "last_updated": 1,
-                },
-            )
-            .sort(sort_spec)
-            .skip(max(0, skip))
+        order_clauses.append(member_cache.c[tie_break].asc())
+    rows = await db_call(
+        lambda: fetch_all(
+            select(*_MEMBER_COLUMNS)
+            .order_by(*order_clauses)
+            .offset(max(0, skip))
             .limit(page_size)
         )
     )
+    return cast("list[UserDoc]", rows)
 
 
 async def search_by_name(needle: str, limit: int = 5) -> list[UserDoc]:
-    """Return up to ``limit`` cached users whose name or username contains ``needle``.
+    """Return up to ``limit`` cached users whose name or username starts with ``needle``.
 
-    Runs a server-side prefix query against the lowercase mirror fields with
-    a result cap so only matching documents (and only the fields needed for
+    Runs a server-side prefix query against the lowercase mirror columns with
+    a result cap so only matching rows (and only the fields needed for
     target resolution) travel over the wire, regardless of cache size. This
     replaces the old pattern of loading all users into Python and scanning
     linearly.
     """
     if not needle or limit <= 0:
         return []
-    # * Clamp: negative limits act as single-batch cursors in pymongo and
+    # * Clamp: negative limits act as single-batch cursors in the driver and
     # * huge limits are unbounded scans; both would bypass the caps above.
     limit = max(1, min(limit, 100))
     # * The query runs against the lowercase mirrors with a case-sensitive
-    # * anchored prefix. MongoDB cannot use an index for a case-insensitive
-    # * regex, so the old query scanned the whole collection on every
-    # * search; a case-sensitive prefix on an indexed mirror is a range
-    # * scan instead.
-    pattern = {"$regex": f"^{re.escape(needle.lower())}"}
-    return await db_call(
-        lambda: list(
-            _members()
-            .find(
-                {"$or": [{"first_name_lower": pattern}, {"username_lower": pattern}]},
-                {"user_id": 1, "first_name": 1, "username": 1, "_id": 0},
+    # * anchored prefix. PostgreSQL cannot serve a case-insensitive match
+    # * from an index, so the mirrors make the prefix a range scan instead
+    # * of a full table scan on every search.
+    prefix = needle.lower()
+    rows = await db_call(
+        lambda: fetch_all(
+            select(
+                member_cache.c.user_id,
+                member_cache.c.first_name,
+                member_cache.c.username,
+            )
+            .where(
+                or_(
+                    member_cache.c.first_name_lower.startswith(
+                        prefix, escape="\\", autoescape=True
+                    ),
+                    member_cache.c.username_lower.startswith(
+                        prefix, escape="\\", autoescape=True
+                    ),
+                )
             )
             .limit(limit)
         )
     )
+    return cast("list[UserDoc]", rows)
 
 
 # ────────────────────────────── Writes ───────────────────────────── #
@@ -334,30 +352,43 @@ async def upsert_user(
     field.
     """
     now = utc_now()
-    update: dict[str, object] = {
+    values: dict[str, object] = {
         "user_id": user_id,
         "first_name": first_name,
         # * Lowercase mirrors of the searchable fields. The name search runs
-        # * a case-sensitive prefix query on them because MongoDB cannot use
-        # * an index for a case-insensitive regex.
+        # * a case-sensitive prefix query on them because PostgreSQL cannot
+        # * serve a case-insensitive match from an index.
+        "first_name_lower": first_name.lower(),
+        "last_updated": now,
+        # * The commit date is the insert-only timestamp: the conflict
+        # * action below never rewrites it, so a refresh keeps the moment
+        # * the profile was first cached.
+        "commit_date": now,
+    }
+    updates: dict[str, object] = {
+        "first_name": first_name,
         "first_name_lower": first_name.lower(),
         "last_updated": now,
     }
     if username is not None:
-        update["username"] = username
-        update["username_lower"] = username.lower()
+        values["username"] = username
+        values["username_lower"] = username.lower()
+        updates["username"] = username
+        updates["username_lower"] = username.lower()
     if last_name is not None:
-        update["last_name"] = last_name
+        values["last_name"] = last_name
+        updates["last_name"] = last_name
+    # * The conflict action carries only the refreshed fields, so a partial
+    # * write (username or last name left as "unknown, preserve existing")
+    # * keeps the stored column instead of clearing it.
     await db_call(
-        lambda: _members().update_one(
-            {"user_id": user_id},
-            {
-                "$set": update,
-                "$setOnInsert": {
-                    "commit_date": now,
-                },
-            },
-            upsert=True,
+        lambda: run(
+            pg_insert(member_cache)
+            .values(**values)
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_=updates,
+            )
         )
     )
     # * Populate the mention cache when the write carried every field, so
@@ -382,13 +413,13 @@ async def upsert_user_if_changed(
     Checks the mention cache first.  When the cached
     (first_name, username, last_name) triple matches the incoming data, the
     DB write is skipped entirely and False is returned.  This eliminates
-    the MongoDB round-trip for the vast majority of updates (where identity
+    the database round-trip for the vast majority of updates (where identity
     data has not changed) and makes the hot-path member-cache handler
     nearly free.  Legacy two-element cache entries count as changed.
 
     Both cache layers are consulted.  The in-memory layer is bounded and
     thrashes once the federation holds more active users than it can hold,
-    so an L1-only check would fall through to a MongoDB write for every
+    so an L1-only check would fall through to a database write for every
     message of every user outside the working set.
 
     The guard only works because :func:`upsert_user` populates the mention
@@ -412,7 +443,7 @@ async def upsert_user_if_changed(
 async def refresh_display_name(user_id: int, first_name: str) -> bool:
     """Store a freshly resolved display name when it differs from the cache.
 
-    A read-only view that resolves a name must not pay for a MongoDB
+    A read-only view that resolves a name must not pay for a database
     write and a cache eviction on every lookup: the mention cache already
     holds the name the view would store, so the write only runs when the
     name actually changed. Returns True when a write was performed.

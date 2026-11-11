@@ -1,83 +1,148 @@
 # Database Layer
 
-The database layer lives in `tcbot/database/` and is the only place that should perform MongoDB reads and writes. Command modules and workflows call helper functions instead of calling `mongos.col()` directly.
+The database layer lives in `tcbot/database/` and is the only place that
+should talk to PostgreSQL. Command modules and workflows call helper
+functions instead of building statements themselves.
 
-This document is the reference spec for the Python database layer. Every collection, index, helper signature, cache behavior, and scheduler detail below is taken from the current `tcbot/database/` Python code.
+This document is the reference spec for the Python database layer. Every
+table, index, helper signature, cache behavior, and scheduler detail below
+is taken from the current `tcbot/database/` Python code.
 
-For modules that consume these database helpers, see [`modules.md`](modules.md). For shared helpers, see [`helpers.md`](helpers.md). For conversation flows, see [`workflows.md`](workflows.md).
+For modules that consume these database helpers, see
+[`modules.md`](modules.md). For shared helpers, see
+[`helpers.md`](helpers.md). For conversation flows, see
+[`workflows.md`](workflows.md).
 
 ```mermaid
 flowchart TD
     Modules[tcbot/modules/*.py] --> DBHelpers[tcbot/database/*_db.py]
     Helpers[tcbot/modules/helper/] --> DBHelpers
     Workflows[tcbot/modules/helper/pipelines/] --> DBHelpers
-    DBHelpers --> Mongos[mongos.py<br/>connection + col]
+    DBHelpers --> Engine[engine.py<br/>async engine + session]
     DBHelpers --> Cache[cache/<br/>TwoLevelCache]
     DBHelpers --> Documents[documents.py<br/>TypedDicts]
-    Mongos --> PyMongo[PyMongo MongoClient]
-    PyMongo --> MongoDB[(MongoDB)]
-    DBHelpers --> Indexes[Index setup<br/>on startup]
-    Indexes --> MongoDB
+    DBHelpers --> Schema[base.py<br/>table definitions]
+    Engine --> SQLAlchemy[SQLAlchemy 2.1 async<br/>Psycopg 3]
+    SQLAlchemy --> Postgres[(PostgreSQL)]
+    Schema --> Migrations[migrations.py<br/>Alembic]
+    Migrations --> Postgres
     Cache --> L1[TTLCache L1<br/>in-memory]
     Cache --> L2[Redis L2<br/>optional]
     L2 --> Redis[(Redis)]
-    Scheduler[scheduler.py<br/>APScheduler 3.11.3] --> MongoDB
+    Scheduler[scheduler.py<br/>APScheduler 3.11.3] --> Postgres
     Scheduler --> DBHelpers
-    MTProto[mtproto.py<br/>bot-token client] --> MongoDB
+    MTProto[mtproto.py<br/>bot-token client] --> Postgres
 ```
 
 ## Access rules
 
-- Keep all MongoDB writes and collection access inside `tcbot/database/` helpers.
-- Command modules and workflows must not call `col()` directly or issue raw insert/update/delete operations.
-- Put new database concerns in descriptive `*_db.py` files and add matching indexes in `mongos.ensure_indexes()`.
-- Helpers are async and fully typed; they use the `TypedDict` shapes from `documents.py` and the `NewType` primitives from `types.py`.
-- Stored timestamps use `utc_now()` from `tcbot.utils.time_and_date`. Stored values are plain strings, integers, booleans, and datetimes.
+- Keep all SQL in `tcbot/database/` helpers. Command modules and workflows
+  must not build statements or import the engine directly.
+- Put new database concerns in descriptive `*_db.py` files and add the
+  matching table and index to `base.py`.
+- Helpers are async and fully typed; they use the `TypedDict` shapes from
+  `documents.py` and the `NewType` primitives from `types.py`.
+- Stored timestamps are timezone-aware and in UTC. Use `utc_now()` from
+  `tcbot.utils.time_and_date`; never call `datetime.now()` directly.
+- Every read and write runs through `engine.db_call()`, so the circuit
+  breaker and the call timeout apply uniformly.
+
+## Schema ownership
+
+| Module | Responsibility |
+|---|---|
+| `base.py` | The single source of truth for every table, column, constraint, and index. Alembic autogenerate and the runtime schema check both read it. |
+| `migrations.py` | Applies the pending Alembic revisions at startup. |
+| `engine.py` | The async engine, the session boundary, the circuit-breaker guard, and the query helpers. |
+
+The schema is versioned with Alembic. `alembic/versions/0001_initial.py`
+creates every table and index of `base.py`; `engine.connect()` applies the
+pending revisions before the engine is published, so a fresh deployment
+boots against an empty database and an existing one is upgraded in place.
+
+```bash
+# Apply the migrations by hand (the bot does this at startup).
+uv run alembic upgrade head
+
+# Generate a revision after changing base.py.
+uv run alembic revision --autogenerate -m "describe the change"
+```
+
+A schema change therefore needs three edits: the table in `base.py`, the
+matching Alembic revision, and the helper that uses it. The integration
+tests build their schema from `base.py`, so a revision that drifts from it
+is caught by `tests/test_schema_migration.py`, which migrates an empty
+schema and compares the result with the declared metadata.
+
+The migration must not reconfigure the application logging. Alembic's
+standard recipe calls `fileConfig()`, which removes every handler the bot
+installed (including the Telegram error handler) and resets the root
+level. The bot applies the migrations during startup, so the standard
+call would silence the bot and stop the error reports the moment it
+connects to the database. `alembic/env.py` therefore configures the
+Alembic logger on its own.
 
 ## Connection manager
 
-`mongos.py` owns the synchronous pymongo client lifecycle. Async helpers
-run the sync operations on a worker thread via ``db_call``; the event loop
-never blocks on MongoDB I/O.
+`engine.py` owns the async SQLAlchemy engine. Every helper runs on the
+event loop and awaits the driver; there is no worker thread and no
+blocking PyMongo-style call on the loop.
 
 | Export | Purpose |
 |---|---|
-| `connect()` | Creates the `MongoClient`, selects `cfg.db_name`, and pings MongoDB through the `mongodb` circuit breaker. A successful ping records a CLOSED success; repeated failures trip the circuit to OPEN. Must run before any other database call. |
-| `ensure_indexes()` | Creates all required indexes in parallel. Safe to call repeatedly; MongoDB ignores existing indexes. Raises the first index failure after logging every failure (fail-fast startup). |
-| `db()` | Returns the active database or raises `RuntimeError` if `connect()` has not run. |
-| `col(name)` | Returns a collection from `db()`. Use only inside database helper modules. |
+| `connect()` | Applies the pending Alembic revisions, creates the async engine and the session factory, and pings the server through the `postgres` circuit breaker. On failure the engine is disposed again, so a failed boot leaks no pool. |
+| `close()` | Disposes the engine and drops the session factory. Safe to call without a prior `connect()`. |
+| `engine()` | Returns the shared engine or raises `RuntimeError` when the database is not connected. |
 | `is_connected()` | Returns `True` once a connection has been established via `connect()`. |
-| `mongo_client_kwargs()` | Extra `MongoClient` kwargs shared by the pymongo client and the scheduler's synchronous client: pins `tlsCAFile` to the certifi Mozilla bundle unless `cfg.mongodb_uri` already carries `tlscafile`, and sets `serverSelectionTimeoutMS` (10 s) and `connectTimeoutMS` (10 s) defaults. |
-| `db_call(op, *, timeout=20.0)` | Runs a zero-argument thunk performing one sync pymongo operation on the dedicated database worker pool through the `mongodb` circuit breaker. Raises `CircuitOpenError` when the circuit is OPEN so callers fast-fail instead of waiting the 45 s socket timeout. Only transient Mongo errors count toward opening the circuit. The keyword-only `timeout` bounds how long the caller waits; the default 20 s raises `TimeoutError` (a transient failure, so it opens the circuit) and the worker thread finishes on its own. Pass `timeout=None` for operations that are legitimately long: index builds and bulk deletes. The request context is copied into the worker thread so the log context survives. |
-| `make_short_id(length=10)` | Generates a lowercase alphanumeric ID (`a-z0-9`) from `secrets.choice`, used for ban IDs and promotion request IDs. |
+| `session()` | Async context manager yielding an `AsyncSession` that commits on success and rolls back on failure. One session per operation. |
+| `read_connection()` | Async context manager yielding an autocommit connection for a read-only statement. A read needs no transaction, so it costs one round trip instead of one plus the `COMMIT` that closes it. |
+| `db_call(op, *, timeout=20.0)` | Runs one database operation through the circuit breaker and a caller-side timeout. Raises `CircuitOpenError` while the circuit is OPEN. |
+| `run_transaction(op, *, timeout=20.0)` | Runs a unit of work that spans several statements atomically on one session. |
+| `fetch_all(stmt)` / `fetch_one(stmt)` / `fetch_value(stmt)` / `fetch_count(stmt)` / `count_rows(stmt)` | Read helpers. They run on an autocommit connection, so a read is one round trip. `count_rows` wraps a selection in a counting query so the result is the row count and never the first column. |
+| `run(stmt)` / `run_returning(stmt)` | Write helpers. `run` returns the affected row count, `run_returning` the rows a `RETURNING` clause produced. |
+| `is_connection_error(exc)` / `is_transient_db_error(exc)` / `is_database_error(exc)` | Error classification used by the circuit breaker and the error handler. |
+| `constraint_name(exc)` | The name of the constraint an integrity error violated, so a caller can tell a duplicate identifier apart from a duplicate partial index. |
 
-### MongoDB client parameters
+### Connection parameters
 
-`connect()` builds the client with these explicit parameters (see `mongos.py`):
+`connect()` builds the engine with these explicit parameters:
 
 | Parameter | Value |
 |---|---|
-| `serverSelectionTimeoutMS` | `10_000` (10 s) |
-| `connectTimeoutMS` | `10_000` (10 s) |
-| `socketTimeoutMS` | `45_000` (45 s) |
-| `maxPoolSize` | `20` |
-| `minPoolSize` | `2` |
-| `maxIdleTimeMS` | `60_000` |
-| `heartbeatFrequencyMS` | `30_000` |
-| `compressors` | `["zlib"]` |
-| `retryWrites` | `True` |
-| `retryReads` | `True` |
-| `tlsCAFile` | `certifi.where()` unless the URI already specifies `tlsCAFile` (operator override wins); ignored for non-TLS schemes |
+| `pool_size` | `20` |
+| `max_overflow` | `10` |
+| `pool_timeout` | `10 s` |
+| `pool_recycle` | `1800 s` |
+| `pool_pre_ping` | `True` |
+| `connect_timeout` | `10 s` |
+| `options` | `-c timezone=UTC` |
 
-A DNS patch (`_patch_dns_if_needed`) installs an in-process fallback resolver pointing at public resolvers when `/etc/resolv.conf` is absent (Termux/Android), so `mongodb+srv://` SRV records resolve.
+The pool is sized for a federation of dozens of groups, where every handler
+may read the member cache or the role tables at the same time. The session
+zone is pinned to UTC because the application works in UTC end to end and
+the session zone decides how a timestamp without one is read back.
+
+The URL comes from `cfg.database_url` and is normalised to the
+`postgresql+psycopg://` scheme. `postgresql://` and `postgres://` are
+accepted as well.
 
 ### Circuit breaker
 
-`mongodb` (from `tcbot/utils/circuit_breaker.py`) trips OPEN after 5 consecutive transient failures and allows one HALF_OPEN probe after 60 s. A successful probe closes the circuit; a failed probe reopens it. `db_call` rejects with `CircuitOpenError` while OPEN. Only transient Mongo errors count toward opening the circuit (`ConnectionFailure` and its server-selection/failover subclasses, `ExecutionTimeout`, retryable write concerns, client-side operation timeouts reported through the `PyMongoError.timeout` property, and caller timeouts, see `mongos.is_transient_mongo_error`); application errors such as duplicate keys propagate without recording a failure, so a bad write cannot masquerade as an outage. A non-transient error releases the half-open probe without closing the circuit, so the next call probes again. A `CircuitOpenError` from a handler logs once at WARNING in `_error_handler` instead of flooding the logs-errors channel.
+`postgres` (from `tcbot/utils/circuit_breaker.py`) trips OPEN after 5
+consecutive transient failures and allows one HALF_OPEN probe after 60 s.
+A successful probe closes the circuit; a failed probe reopens it.
+`db_call` rejects with `CircuitOpenError` while OPEN.
 
-## Collections at a glance
+Only transient database errors count toward opening the circuit: a dropped
+connection, a refused socket, a driver timeout, and the caller-side
+`TimeoutError` raised by `db_call`. A constraint violation or a syntax
+error is an application bug, not an outage, so it propagates without
+recording a failure. A `CircuitOpenError` from a handler logs once at
+WARNING in `_error_handler` instead of flooding the logs-errors channel.
 
-| Helper | Collection(s) | Main responsibilities |
+## Tables at a glance
+
+| Helper | Table(s) | Main responsibilities |
 |---|---|---|
 | `users_cache.py` | `member_cache` | Member profile cache: upsert, change-detection upsert, harvest, get, batch queries, mention formatting, counts, paged listing, name search. |
 | `users_roles.py` | `tc_owners`, `tc_admins`, `tc_roles` | Owner CRUD, admin CRUD, developer/tester role CRUD, effective-role resolution. |
@@ -90,74 +155,132 @@ A DNS patch (`_patch_dns_if_needed`) installs an in-process fallback resolver po
 | `settings_db.py` | `user_settings` | Per-user locale preference rows, kept apart from `member_cache`. |
 | `cache/` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with five public singletons. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton with pool management and liveness tracking. |
-| `scheduler.py` | MongoDB (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `MongoDBJobStore`. |
+| `scheduler.py` | PostgreSQL (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `SQLAlchemyJobStore`. |
 | `mtproto.py` | Telegram MTProto | Bot-token client singleton: user-ID resolution and group member harvest. Claims a single-owner lease before connecting (90 s TTL, 30 s heartbeat); losers and parked sessions degrade to Bot-API-only. |
-| `mtproto_store.py` | `mtproto_state` | MongoDB-backed Kurigram storage engine shared by all instances, plus the atomic single-owner lease (`<ns>:lock:mtproto_owner`) with expiry takeover. |
+| `mtproto_store.py` | `mtproto_state` | PostgreSQL-backed Kurigram storage engine shared by all instances, plus the atomic single-owner lease (`<ns>:lock:mtproto_owner`) with expiry takeover. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives: `UserId`, `GroupId`, `ChatId`, `BanId`. |
 
-## Member profiles (`users_cache.py`, collection `member_cache`)
+## Member profiles (`users_cache.py`, table `member_cache`)
 
-### Document shape: `UserDoc`
+### Row shape: `UserDoc`
 
 | Field | Type | Meaning |
 |---|---|---|
-| `user_id` | `UserId` (int) | Telegram user ID (unique). |
+| `user_id` | `UserId` (int) | Telegram user ID (primary key). |
 | `username` | `str \| None` | Current username. |
 | `first_name` | `str \| None` | Current display name. |
 | `last_name` | `str \| None` | Current last name. |
-| `commit_date` | `datetime` | First-seen timestamp, set only on insert (`$setOnInsert`). |
-| `last_updated` | `datetime` | Last write time; drives the TTL auto-expiry. |
-
-All fields are optional `total=False`; a real document always carries `user_id` and is written through the helpers below.
+| `first_name_lower` | `str \| None` | Lowercase mirror of `first_name`; backs the prefix name search. |
+| `username_lower` | `str \| None` | Lowercase mirror of `username`; backs the prefix name search. |
+| `commit_date` | `datetime` | First-seen timestamp. The conflict action never rewrites it, so a refresh keeps the moment the profile was first cached. |
+| `last_updated` | `datetime` | Last write time; drives the stale-profile cleanup. |
 
 ### Mutations
 
 - `upsert_user(user_id: int, username: str | None, first_name: str, last_name: str | None = None) -> None`
-  Unconditional upsert. `None` for `username`/`last_name` means "unknown, preserve the stored value"; pass `""` to clear a field. Sets `last_updated` to now and `commit_date` only on insert. Populates the `user_mention_cache` entry when the write carried every field; a partial write (a preserved `username` or `last_name`) invalidates the entry instead, because the stored triple cannot be reconstructed from the write alone.
+  Unconditional upsert through `INSERT ... ON CONFLICT DO UPDATE`. `None` for
+  `username`/`last_name` means "unknown, preserve the stored value": the
+  conflict action carries only the refreshed columns, so the stored value
+  stays. Pass `""` to clear a field. The conflict action never rewrites
+  `commit_date`. Populates the `user_mention_cache` entry when the write
+  carried every field; a partial write (a preserved `username` or
+  `last_name`) invalidates the entry instead, because the stored triple
+  cannot be reconstructed from the write alone.
 - `upsert_user_if_changed(user_id: int, username: str | None, first_name: str, last_name: str | None = None) -> bool`
-  Change-detection write. Compares the incoming `(first_name, username, last_name)` triple against the L1 mention-cache entry and skips the MongoDB write entirely on a match. Returns `True` when a DB write occurred, `False` when skipped. Legacy two-element cache entries count as changed. This is the hot-path writer, and the guard only works because `upsert_user` populates the mention cache on a complete write.
+  Change-detection write. Compares the incoming `(first_name, username,
+  last_name)` triple against the L1 mention-cache entry and skips the
+  database write entirely on a match. Returns `True` when a write occurred,
+  `False` when skipped. Legacy two-element cache entries count as changed.
+  This is the hot-path writer, and the guard only works because
+  `upsert_user` populates the mention cache on a complete write.
 - `harvest_user_identity(user_id: int, username: str | None, first_name: str, last_name: str | None = None) -> bool`
-  Snapshot write for data taken from a live Telegram `User` object. Unlike `upsert_user_if_changed`, `None` means "absent on Telegram": fields the object omits are cleared via `""` so removals propagate. Delegates to `upsert_user_if_changed`. Never use with partial data from ban/promote/check-by-ID paths (those must keep `None`).
+  Snapshot write for data taken from a live Telegram `User` object. Unlike
+  `upsert_user_if_changed`, `None` means "absent on Telegram": fields the
+  object omits are cleared via `""` so removals propagate. Delegates to
+  `upsert_user_if_changed`. Never use with partial data from ban/promote/
+  check-by-ID paths (those must keep `None`).
 - `remember_identity(user_id: int, first_name: str | None, username: str | None, last_name: str | None) -> None`
-  Mirrors a resolved identity into L1 only, no DB I/O. Used after a Telegram-side resolve because `upsert_user` invalidates rather than populates. An empty identity stores the all-`None` not-found sentinel.
+  Mirrors a resolved identity into L1 only, no database I/O. Used after a
+  Telegram-side resolve because `upsert_user` invalidates rather than
+  populates. An empty identity stores the all-`None` not-found sentinel.
 
 ### Queries
 
 - `get_user(user_id: int) -> UserDoc | None`
-  Full cached profile (`find_one` on the unique `user_id` index).
+  Full cached profile, read by primary key.
 - `get_user_mention_data(user_id: int) -> tuple[str, str | None]`
-  `(first_name, username)` for mention formatting, routed through `user_mention_cache.get_or_fetch` (L1 to L2 to DB). A missing `member_cache` document is cached as the all-`None` sentinel; the consumer converts it to `str(user_id)`, so the returned first element is never empty.
+  `(first_name, username)` for mention formatting, routed through
+  `user_mention_cache.get_or_fetch` (L1 to L2 to database). A missing row is
+  cached as the all-`None` sentinel; the consumer converts it to
+  `str(user_id)`, so the returned first element is never empty.
 - `get_first_name(user_id: int, fallback: str = "") -> str`
-  Cached `first_name`, or the caller's `fallback` when the user has no document (sentinel). Uses the same `get_or_fetch` path as `get_user_mention_data`, so calls to these helpers never cause redundant round-trips for the same user.
+  Cached `first_name`, or the caller's `fallback` when the user has no row
+  (sentinel). Uses the same `get_or_fetch` path as `get_user_mention_data`,
+  so calls to these helpers never cause redundant round-trips for the same
+  user.
 - `get_mention_data_batch(user_ids: list[int]) -> dict[int, tuple[str, str | None]]`
-  Batch `(first_name, username)` for many users in one query. IDs already in L1 are served without I/O; only uncached IDs trigger one `$in` query. Newly fetched data is populated into the mention cache; users missing from the DB get the sentinel cached and `str(user_id)` returned.
+  Batch `(first_name, username)` for many users in one query. IDs already in
+  L1 are served without I/O; only uncached IDs trigger one `IN (...)`
+  query. Newly fetched data is populated into the mention cache; users
+  missing from the database get the sentinel cached and `str(user_id)`
+  returned.
 - `get_first_names_batch(user_ids: list[int]) -> dict[int, str]`
-  Batch first names only. IDs already in L1 are served without I/O; only uncached IDs trigger one `$in` query. Newly fetched rows populate the full mention triple through the shared batch-miss path, so repeat renders by any reader skip the round-trip. Missing users get the sentinel cached and `str(user_id)` returned.
+  Batch first names only. IDs already in L1 are served without I/O; only
+  uncached IDs trigger one `IN (...)` query. Newly fetched rows populate the
+  full mention triple through the shared batch-miss path, so repeat renders
+  by any reader skip the round-trip. Missing users get the sentinel cached
+  and `str(user_id)` returned.
 - `total_users() -> int`
-  `estimated_document_count()` over the whole collection.
+  `COUNT(*)` over the whole table.
 - `all_users_page(*, skip: int = 0, limit: int = 200, sort_by: str = "first_name") -> list[UserDoc]`
-  One server-side page. `sort_by` is validated against `_ALLOWED_USER_SORTS` (`user_id`, `username`, `first_name`, `last_name`, `commit_date`, `last_updated`), falling back to `first_name`; `last_updated` sorts descending, everything else ascending. `limit` is clamped to at least 1 and used for both cursor limit and fetch length.
+  One server-side page. `sort_by` is validated against `_USER_SORT_FIELDS`
+  (`user_id`, `username`, `first_name`, `last_updated`), falling back to
+  `first_name`; `last_updated` sorts descending, everything else ascending.
+  Every accepted key maps to an indexed field and carries a `user_id`
+  tie-break so the page order stays stable. `limit` is clamped to at least 1
+  and used for both the `LIMIT` and the `OFFSET`.
 - `search_by_name(needle: str, limit: int = 5) -> list[UserDoc]`
-  Target-resolution search. Server-side anchored prefix regex (`^<escaped needle>`) over the lowercase mirror fields `first_name_lower` and `username_lower`, capped at `limit` results. Only `user_id`, `first_name`, `username` are projected. The mirrors exist because MongoDB cannot use an index for a case-insensitive regex: the old query scanned the whole collection on every search, while a case-sensitive prefix on an indexed mirror is a range scan. `mongos._migrate_member_cache_lower_names()` fills the mirrors for the rows older releases wrote, and `upsert_user` keeps them current.
+  Target-resolution search. A server-side anchored prefix query
+  (`first_name_lower LIKE 'needle%'` or `username_lower LIKE 'needle%'`,
+  with the needle escaped) over the lowercase mirror columns, capped at
+  `limit` results (hard ceiling 100). Only `user_id`, `first_name`, and
+  `username` are projected. The mirrors exist because PostgreSQL cannot
+  serve a case-insensitive match from an index; a case-sensitive prefix on
+  an indexed mirror is a range scan. The mirror columns carry the
+  `text_pattern_ops` opclass, which is what makes the prefix scan work
+  under a non-C collation.
 - `is_placeholder_name(name: str | None) -> bool`
-  Return True when a display name is a fallback rather than a real name: empty, a bare numeric ID, or the legacy `User <id>` form. Single owner for that rule, so no surface renders a placeholder as a name.
+  Return True when a display name is a fallback rather than a real name:
+  empty, a bare numeric ID, or the legacy `User <id>` form. Single owner
+  for that rule, so no surface renders a placeholder as a name.
 
-**Performance tip:** use the batch functions whenever data for more than one user is needed in a list view or fan-out result; calling single-user functions in a loop is an N+1 anti-pattern. Both batch functions are served by the covered-query index `(user_id, first_name, username, last_name)`. For partial-name target resolution use `search_by_name`; for paginated list views use `all_users_page`.
+**Performance tip:** use the batch functions whenever data for more than one
+user is needed in a list view or fan-out result; calling single-user
+functions in a loop is an N+1 anti-pattern. For partial-name target
+resolution use `search_by_name`; for paginated list views use
+`all_users_page`.
 
-**Hot-path harvest pattern:** on every observed Telegram update `_update_member_cache` schedules `harvest_user_identity` as a fire-and-forget background task, bounded to 20 in-flight tasks (updates beyond the cap skip the harvest and refresh on the next event). When the cached identity has not changed, no MongoDB write is issued; the fast path is sub-microsecond.
+**Hot-path harvest pattern:** on every observed Telegram update
+`_update_member_cache` schedules `harvest_user_identity` as a
+fire-and-forget background task, bounded to 20 in-flight tasks (updates
+beyond the cap skip the harvest and refresh on the next event). When the
+cached identity has not changed, no database write is issued.
 
-**Error behavior:** every helper uses `db_call()`; a MongoDB outage raises `CircuitOpenError` (circuit OPEN) or the underlying pymongo exception, which `_update_member_cache` logs at DEBUG and swallows so a cache failure never breaks the update path.
+**Error behavior:** every helper uses `db_call()`; a database outage raises
+`CircuitOpenError` (circuit OPEN) or the driver exception, which
+`_update_member_cache` logs at DEBUG and swallows so a cache failure never
+breaks the update path.
 
-## Roles, owners, and admins (`users_roles.py`, collections `tc_owners`, `tc_admins`, `tc_roles`)
+## Roles, owners, and admins (`users_roles.py`, tables `tc_owners`, `tc_admins`, `tc_roles`)
 
-### Document shapes
+### Row shapes
 
 `AdminDoc` (tc_owners and tc_admins rows):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `user_id` | `UserId` | Owner or admin user ID (unique in each collection). |
+| `user_id` | `UserId` | Owner or admin user ID (primary key). |
 | `promoted_by` | `UserId` | Who promoted the admin (tc_admins only). |
 | `promoted_date` | `datetime` | Promotion time (tc_admins only). |
 
@@ -165,12 +288,13 @@ All fields are optional `total=False`; a real document always carries `user_id` 
 
 | Field | Type | Meaning |
 |---|---|---|
-| `user_id` | `UserId` | Role holder (unique). |
+| `user_id` | `UserId` | Role holder (primary key). |
 | `role` | `RoleName` | `"founder"`, `"admin"`, `"developer"`, or `"tester"` literal; only `developer`/`tester` are stored as custom roles. |
 | `assigned_by` | `UserId` | Admin who assigned the role. |
 | `assigned_at` | `datetime` | Assignment time. |
 
-`RoleRefDoc` (tc_roles): minimal document carrying only `user_id`, used for role index/roster lookups.
+`RoleRefDoc` (tc_roles): minimal row carrying only `user_id`, used for role
+index/roster lookups.
 
 ### Role hierarchy
 
@@ -195,29 +319,61 @@ Resolution order in `get_effective_role`:
 4. No role returns `None`.
 
 - `get_effective_role(user_id: int, *, fresh: bool = False) -> str | None`
-  Resolves the full effective role via `effective_role_cache.get_or_fetch` (L1 60 s, L2 90 s). The `_fetch` reads owner/admin/custom role in parallel with `return_exceptions=True`, calls `throw_if_cancelled`, and re-raises any non-cancellation exception so a degraded "founder"/"admin" result is never cached for a real database error. With `fresh=True` the caches are bypassed and the rows are read directly (the cache is refreshed with the result): enforcement gates use `fresh=True` so a demotion or transfer in another process is never hidden for the cache TTL. Executor-versus-target checks go through `decorators.resolve_and_check()`, which fails closed when either lookup fails.
+  Resolves the full effective role via `effective_role_cache.get_or_fetch`
+  (L1 60 s, L2 90 s). The `_fetch` reads owner/admin/custom role in
+  parallel with `return_exceptions=True`, calls `throw_if_cancelled`, and
+  re-raises any non-cancellation exception so a degraded "founder"/"admin"
+  result is never cached for a real database error. With `fresh=True` the
+  caches are bypassed and the rows are read directly (the cache is
+  refreshed with the result): enforcement gates use `fresh=True` so a
+  demotion or transfer in another process is never hidden for the cache
+  TTL. Executor-versus-target checks go through
+  `decorators.resolve_and_check()`, which fails closed when either lookup
+  fails.
 - `role_meta(user_id: int) -> tuple[str | None, int | None, datetime | None]`
-  `(role, assigned_by, assigned_at)` for profile views. An owner has no metadata (`None`s); an admin reads `promoted_by`/`promoted_date` from `tc_admins`; a custom role reads `assigned_by`/`assigned_at` from `tc_roles`. A missing row still returns the role with `None` metadata.
+  `(role, assigned_by, assigned_at)` for profile views. An owner has no
+  metadata (`None`s); an admin reads `promoted_by`/`promoted_date` from
+  `tc_admins`; a custom role reads `assigned_by`/`assigned_at` from
+  `tc_roles`. A missing row still returns the role with `None` metadata.
 
 ### Owner CRUD
 
 - `get_owner_id(*, fresh: bool = False) -> int | None`
-  Current owner's ID through `owner_id_cache` (L1 300 s, L2 360 s, fixed key `__owner__`). With `fresh=True` the owner row is read directly from MongoDB (cache refreshed with the result): enforcement gates use it so a transfer in another process is never hidden for the TTL.
+  Current owner's ID through `owner_id_cache` (L1 300 s, L2 360 s, fixed
+  key `__owner__`). With `fresh=True` the owner row is read directly from
+  the database (cache refreshed with the result): enforcement gates use it
+  so a transfer in another process is never hidden for the TTL.
 - `is_owner(user_id: int, *, fresh: bool = False) -> bool`
-  `get_owner_id(fresh=fresh) == user_id`; cached, no MongoDB round trip on hits. Errors propagate so decorators keep their fail-closed retry reply. Enforcement gates (promotion decisions, the founder-only users list) use `fresh=True`.
+  `get_owner_id(fresh=fresh) == user_id`; cached, no database round trip on
+  hits. Errors propagate so decorators keep their fail-closed retry reply.
+  Enforcement gates (promotion decisions, the founder-only users list) use
+  `fresh=True`.
 - `ensure_initial_owner(initial_id: int) -> None`
-  Inserts the founder when `tc_owners` is empty. On a `DuplicateKeyError` (another instance won the startup race) it invalidates the owner cache instead of failing.
+  Inserts the founder when `tc_owners` is empty. On an integrity error
+  (another instance won the startup race) it invalidates the owner cache
+  instead of failing.
 - `set_owner(user_id: int) -> None`
-  Replaces the owner with one upsert write (a crash never leaves zero owners), removes any leftover second row from an earlier split brain, verifies the single-row invariant loudly, puts the new ID in the owner cache, and calls `effective_role_cache.clear_all()` so no process keeps a stale `"founder"` role after transfer. Owner reads use a sorted query so a transient two-row state resolves deterministically.
+  Replaces the owner in one transaction: the insert and the convergence
+  delete commit together, so a crash between them cannot leave one or two
+  owner rows. The transaction takes a PostgreSQL advisory lock, so two
+  concurrent transfers serialise instead of interleaving: without the lock
+  the sequence insert A, insert B, delete != A, delete != B leaves the
+  table with **no** owner row, which would leave the whole federation
+  without a Founder until the next restart. The helper then verifies the
+  single-row invariant loudly, puts the new ID in the owner cache, and
+  calls `effective_role_cache.clear_all()` so no process keeps a stale
+  `"founder"` role after transfer. A failed transfer rolls back, fails
+  closed, and logs operator guidance. Owner reads use a sorted query so a
+  transient two-row state resolves deterministically.
 
 ### Admin CRUD
 
-- `is_admin(user_id: int) -> bool`: existence check on `tc_admins` (projection `{_id: 1}`).
+- `is_admin(user_id: int) -> bool`: existence check on `tc_admins`.
 - `is_staff(user_id: int, *, fresh: bool = False) -> bool`: `get_effective_role(user_id, fresh=fresh) in ("founder", "admin")`. Keeps the historical fail-open-to-`False` contract: lookup failures log at WARNING and return `False`; cancellation still propagates. Callers that need a retry hint on outage use `get_effective_role` directly (like the appeal-review path and decorators). Enforcement callers (disconnect, group-language write) use `fresh=True` so a demotion is never hidden for the 60 s TTL; display-only callers keep the cached path.
-- `add_admin(user_id: int, promoted_by: int) -> None`: upsert with `$setOnInsert` (`user_id`, `promoted_by`, `promoted_date`); no-op if already present. Invalidates the target's effective role cache.
+- `add_admin(user_id: int, promoted_by: int) -> None`: upsert through `ON CONFLICT DO NOTHING`; no-op if already present. Invalidates the target's effective role cache.
 - `remove_admin(user_id: int) -> bool`: delete; returns whether a row was deleted; invalidates the role cache.
-- `all_admins() -> list[AdminDoc]`: all admin rows, projection `{user_id}`.
-- `admin_count() -> int`: `estimated_document_count()`.
+- `all_admins() -> list[AdminDoc]`: all admin rows.
+- `admin_count() -> int`: `COUNT(*)`.
 
 ### Custom role CRUD
 
@@ -225,13 +381,16 @@ Resolution order in `get_effective_role`:
 - `remove_role(user_id: int) -> bool`: delete the custom role; returns whether a row was deleted; invalidates the cache.
 - `get_role(user_id: int) -> str | None`: reads `tc_roles` only (no owner/admin fallback).
 - `all_by_role(role: str) -> list[RoleRefDoc]`: all users holding a specific custom role (serves the `(role)` index).
-- `role_count(role: str) -> int`: `count_documents` on the role filter.
+- `role_count(role: str) -> int`: `COUNT(*)` on the role filter.
 
-**Security notes:** role lookup failures reject the action where authorization is enforced (`get_effective_role` propagates, `resolve_and_check` fails closed). `is_staff` is the only deliberately coerce-to-`False` path and is kept for its historical callers. Uses NewType `UserId` where the schema says so; DB values remain ints.
+**Security notes:** role lookup failures reject the action where
+authorization is enforced (`get_effective_role` propagates,
+`resolve_and_check` fails closed). `is_staff` is the only deliberately
+coerce-to-`False` path and is kept for its historical callers.
 
-## Bans (`bans_db.py`, collection `bans`)
+## Bans (`bans_db.py`, table `bans`)
 
-### Document shape: `BanDoc`
+### Row shape: `BanDoc`
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -248,7 +407,7 @@ Resolution order in `get_effective_role`:
 | `until_date` | `datetime \| None` | Reserved for future timed-ban support; currently always `None`. |
 | `duration_str` | `str \| None` | Reserved for future timed-ban support; currently always `None`. |
 | `is_active` | `bool` | Whether the federation ban is currently active. |
-| `update_count` | `int` | Number of updates applied (`$inc` per `update_ban`). |
+| `update_count` | `int` | Number of updates applied. |
 | `review_message_id` | `int \| None` | Appeal review card message ID. |
 | `review_timestamp` | `datetime \| None` | When the review slot was claimed. |
 | `appeal_log_msg_id` | `int \| None` | Appeal log message ID (presence marks "appeal ever submitted"). |
@@ -261,63 +420,94 @@ Resolution order in `get_effective_role`:
 ### Retrieval
 
 - `get_active_ban(user_id: int) -> BanDoc | None`
-  The currently active ban for a user: filter `{banned_user_id, is_active: True}`, sort `(timestamp desc, ban_id desc)`. Served by the compound index.
+  The currently active ban for a user: filter `banned_user_id = ? AND
+  is_active`, sort `(timestamp desc, ban_id desc)`. Served by the compound
+  index.
 - `get_ban(ban_id: str) -> BanDoc | None`
   Any ban record by its unique `ban_id`.
 
 ### Mutations
 
 - `create_ban(target_id: int, reason: str, admin_id: int, proof_msg_id: int, log_msg_id: int, ban_id: str | None = None, *, until_date: datetime | None = None, duration_str: str | None = None) -> BanDoc`
-  Inserts a new active ban with the canonical field set. If `ban_id` is `None`, one is generated; a `DuplicateKeyError` (10-char ID collision) retries once with a fresh ID. An explicit caller-supplied `ban_id` is never swapped silently (a collision there propagates), because callers reuse it for the appeal link and log patch.
+  Inserts a new active ban and returns the stored row, so the caller sees
+  exactly what a later read would return. If `ban_id` is `None`, one is
+  generated. A violation of the one-active-ban-per-user constraint is
+  treated as a lost race: the existing record is returned and the
+  moderation continues. A violation of the `ban_id` unique constraint on
+  a generated id is retried once with a fresh id, because the caller
+  never chose that id. The same violation on an id the caller supplied is
+  never swallowed, because the caller reuses the id for the appeal link
+  and the log patch.
 - `update_ban(ban_id: str, reason: str, admin_id: int, new_proof_id: int, new_log_id: int = 0, old_proof_id: int = 0, old_log_id: int = 0, *, until_date: datetime | None = None, duration_str: str | None = None) -> BanDoc | None`
-  `find_one_and_update` (return AFTER): updates reason, admin, proof/log IDs (moving the old ones to `previous_*`), timestamps and `until_date`/`duration_str`, and `$inc`s `update_count`.
+  One `UPDATE ... RETURNING`: updates reason, admin, proof/log IDs (moving
+  the old ones to `previous_*`), timestamps and `until_date`/`duration_str`,
+  and increments `update_count`.
 - `set_log_message_id(ban_id: str, log_msg_id: int) -> None`
   Patches only the audit log message ID (used when the ban log is edited).
 - `deactivate_all_active_bans(user_id: int) -> int`
-  Deactivates every active ban for a user in one `update_many`; returns the count deactivated. Used by unban and appeal-approval flows to clear any duplicate active records.
+  Deactivates every active ban for a user in one statement; returns the
+  count deactivated. Used by unban and appeal-approval flows to clear any
+  duplicate active records.
 - `deactivate_extra_active_bans(user_id: int, keep_ban_id: str) -> int`
-  Deactivates all active bans except the canonical `keep_ban_id` (ban-update cleanup); returns the count deactivated.
+  Deactivates all active bans except the canonical `keep_ban_id`
+  (ban-update cleanup); returns the count deactivated.
 - `set_review_if_absent(ban_id: str, msg_id: int) -> bool`
-  Atomic claim of the pending-review slot: the filter requires `review_message_id` to be `None`, so two concurrent appeal submissions cannot both win. Returns whether this submit claimed the slot; the loser discards its orphan review card.
+  Atomic claim of the pending-review slot: the statement requires
+  `review_message_id IS NULL`, so two concurrent appeal submissions cannot
+  both win. Returns whether this submit claimed the slot; the loser
+  discards its orphan review card.
 - `clear_review(ban_id: str) -> None`
   Clears the review slot so a rejected user can submit a new appeal.
 - `set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None`
-  Persists rejector identity and `rejected_at` so the audit trail survives log-channel loss.
+  Persists rejector identity and `rejected_at` so the audit trail survives
+  log-channel loss.
 - `set_appeal_log_msg(ban_id: str, msg_id: int, submitted_at: datetime | None = None, appeal_link: str = "") -> None`
   Stores appeal metadata; `submitted_at` defaults to now.
 
 ### Statistics and history
 
-- `active_ban_count() -> int`: `count_documents({is_active: True})`.
+- `active_ban_count() -> int`: `COUNT(*)` over the active rows.
 - `active_bans_page(skip: int, limit: int) -> list[BanDoc]`
-  One server-side page of active bans, newest first (`(is_active, timestamp desc, ban_id desc)` index). `limit` clamped to at least 1.
+  One server-side page of active bans, newest first (`(is_active,
+  timestamp desc, ban_id desc)` index). `limit` clamped to at least 1.
 - `active_bans_for_users(user_ids: list[int]) -> list[BanDoc]`
-  Active bans for a set of IDs via `$in`, newest first; backs name-search results. Returns `[]` for an empty input.
+  Active bans for a set of IDs through `IN (...)`, newest first; backs
+  name-search results. Returns `[]` for an empty input.
 - `active_ban_user_ids() -> list[int]`
-  Only the `banned_user_id`s of all active bans (projection-only, fastest path), newest first.
+  Only the `banned_user_id`s of all active bans (projection-only, fastest
+  path), newest first.
 - `user_appealable_bans(user_id: int, *, skip: int = 0, limit: int | None = None) -> list[BanDoc]`
-  The user's bans that ever had an appeal (`appeal_log_msg_id` present and not `None`), newest first; served by the sparse index. `limit=None` returns the full list.
+  The user's bans that ever had an appeal (`appeal_log_msg_id` present),
+  newest first; served by the partial index. `limit=None` returns the full
+  list.
 - `user_bans(user_id: int, *, skip: int = 0, limit: int | None = None) -> list[BanDoc]`
   Every ban (active and inactive) for a user, newest first.
 - `user_ban_count(user_id: int) -> int`: total bans ever issued against the user.
 - `user_appeal_count(user_id: int) -> int`: count of bans with an appeal submitted.
 
-**Error behavior:** all operations route through `db_call()`. `create_ban` absorbs one random-ID collision for auto-generated IDs only; everything else propagates so moderation callers report the real failure.
+**Error behavior:** all operations route through `db_call()`.
+`create_ban` absorbs only the one-active-ban race; every other integrity
+error propagates so moderation callers report the real failure.
 
-**Uniqueness:** a partial unique index on `(banned_user_id)` where `is_active` is true keeps one active ban per user, so two moderators reaching the warn threshold at the same moment cannot store two records that disagree about which ban is real. The index is created by `ensure_indexes()` after `_migrate_duplicate_active_bans()` converges the duplicates older releases left behind: the duplicate is deactivated (never deleted) and the canonical record is the one `get_active_ban` returns, the newest by timestamp then ban id. `create_ban` treats a unique-index collision as a lost race and reuses the winning record instead of failing the moderation action.
+**Uniqueness:** a partial unique index on `(banned_user_id)` where
+`is_active` is true keeps one active ban per user, so two moderators
+reaching the warn threshold at the same moment cannot store two records
+that disagree about which ban is real. The database enforces the
+invariant; `create_ban` treats a collision as a lost race and reuses the
+winning record instead of failing the moderation action.
 
-## Groups (`groups_db.py`, collections `federated_groups`, `pending_joins`)
+## Groups (`groups_db.py`, tables `federated_groups`, `pending_joins`)
 
-### Document shapes
+### Row shapes
 
 `GroupDoc` (federated_groups):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `chat_id` | `GroupId` | Telegram group chat ID (unique). |
+| `chat_id` | `GroupId` | Telegram group chat ID (primary key). |
 | `title` | `str` | Current group title. |
 | `added_by` | `UserId` | Who connected the group. |
-| `added_date` | `datetime` | First connect date, preserved across re-adds and title refreshes via `$setOnInsert`. |
+| `added_date` | `datetime` | First connect date, preserved across re-adds and title refreshes. |
 | `is_active` | `bool` | Connection state; disconnect marks it `False` instead of deleting. |
 | `locale` | `str \| None` | Optional group-wide render locale chosen via `/language`. |
 
@@ -325,7 +515,7 @@ Resolution order in `get_effective_role`:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `chat_id` | `ChatId` | Awaiting-approval chat ID (unique, one pending per chat). |
+| `chat_id` | `ChatId` | Awaiting-approval chat ID (primary key, one pending per chat). |
 | `title` | `str` | Group title at request time. |
 | `owner_id` | `UserId` | Group owner requesting approval. |
 | `message_id` | `int` | The approval prompt message ID. |
@@ -334,23 +524,50 @@ Resolution order in `get_effective_role`:
 ### Queries and mutations
 
 - `get_group_titles(chat_ids: list[int]) -> dict[int, str]`
-  `{chat_id: title}` for the given chats in one `$in` query; missing groups are absent from the result. Falls back to `str(chat_id)` when a title is empty.
+  `{chat_id: title}` for the given chats in one `IN (...)` query; missing
+  groups are absent from the result. Falls back to `str(chat_id)` when a
+  title is empty.
 - `refresh_group_title(chat_id: int, title: str) -> bool`
-  Atomic update: the `$ne` filter skips when the stored title already matches (one round trip on the common no-change path, no read-then-write race). Returns `True` when a change was written and the groups cache invalidated; `False` when already current or the group is unknown.
+  Atomic update: the statement skips when the stored title already matches
+  (one round trip on the common no-change path, no read-then-write race).
+  Returns `True` when a change was written and the groups cache
+  invalidated; `False` when already current or the group is unknown.
 - `is_connected(chat_id: int, *, fresh: bool = False) -> bool`
-  `connected_cache.get_or_fetch` (L1 120 s, L2 180 s): existence check on `{chat_id, is_active: True}`. With `fresh=True` the row is read directly and the cache refreshed: the origin guard uses `fresh=True` so a disconnect in another process is never hidden for the TTL.
+  `connected_cache.get_or_fetch` (L1 120 s, L2 180 s): existence check on
+  `chat_id` with `is_active`. With `fresh=True` the row is read directly
+  and the cache refreshed: the origin guard uses `fresh=True` so a
+  disconnect in another process is never hidden for the TTL.
 - `add_group(chat_id: int, title: str, added_by: int) -> None`
-  Upsert with `$setOnInsert` preserving `added_date`; sets `is_active: True`. Puts `True` in `connected_cache` and invalidates the active-groups list cache.
+  Upsert that preserves `added_date` and sets `is_active = True`. Puts
+  `True` in `connected_cache` and invalidates the active-groups list cache.
 - `deactivate_group(chat_id: int) -> bool`
-  Sets `is_active: False`; returns `False` when the row does not exist. Puts `False` in `connected_cache` and invalidates the active-groups list cache.
+  Sets `is_active = False`; returns `False` when the row does not exist.
+  Puts `False` in `connected_cache` and invalidates the active-groups list
+  cache.
 - `active_groups() -> list[GroupDoc]`
-  All active groups, `active_groups_cache.get_or_fetch` (L1 30 s, L2 45 s, single entry keyed `__all__`), projection `{_id: 0}`.
+  All active groups, `active_groups_cache.get_or_fetch` (L1 30 s, L2 45 s,
+  single entry keyed `__all__`).
 - `active_group_count() -> int`
-  `count_documents({is_active: True})`.
+  `COUNT(*)` over the active rows.
 - `migrate_group(old_chat_id: int, new_chat_id: int) -> bool`
-  Chat-migration repoint. Updates `federated_groups` and `pending_joins` in parallel (`return_exceptions=True`), logging and skipping any collection that failed while still processing the other. Returns `True` if any record moved. Invalidates caches: `connected_cache.put(old_chat_id, False)`, `connected_cache.put(new_chat_id, True)` only when the federated_groups row actually moved (a pending-only migration must not poison `is_connected`), and `active_groups_cache.invalidate(__all__)` when the group row moved. Cancellation propagates.
+  Chat-migration repoint. Updates `federated_groups` and `pending_joins`
+  in parallel (`return_exceptions=True`), logging and skipping any table
+  that failed while still processing the other. Returns `True` if any
+  record moved. When the target chat already has a row the primary key
+  rejects the repoint, so the stale old row is merged into the surviving
+  row in one transaction (the old row's group locale carries over when the
+  survivor has none) and the old row is dropped. Invalidates caches:
+  `connected_cache.put(old_chat_id, False)`, `connected_cache.put(new_chat_id,
+  ...)` only when the federated_groups row actually moved (a pending-only
+  migration must not poison `is_connected`), and
+  `active_groups_cache.invalidate(__all__)` when the group row moved. The
+  cached value mirrors the row that survived: the target row may be an
+  inactive one, and caching "connected" unconditionally would report a
+  disconnected group as connected for the whole cache TTL and pull it
+  into the federation fan-outs. Cancellation propagates.
 - `add_pending(chat_id: int, title: str, owner_id: int, message_id: int) -> None`
-  Upserts a pending join request (unique `chat_id`, one pending per chat).
+  Upserts a pending join request (primary key `chat_id`, one pending per
+  chat).
 - `get_pending(chat_id: int) -> PendingGroupDoc | None`
   Reads one pending request.
 - `remove_pending(chat_id: int) -> None`
@@ -358,24 +575,35 @@ Resolution order in `get_effective_role`:
 
 ### Group locale
 
-`federated_groups.locale` rides on the connected group's row; there is no separate preference collection, and only connected groups hold settings. Reads filter on the indexed `chat_id`.
+`federated_groups.locale` rides on the connected group's row; there is no
+separate preference table, and only connected groups hold settings. Reads
+filter on the indexed `chat_id`.
 
 - `get_group_locale(chat_id: int) -> str | None`
-  Reads the stored group locale for the shared-audience resolution path (`helper/locale.py`). Unset (`None`) is cached too. Backed by a bare `cachetools` L1 `_GROUP_LOCALE_L1` (maxsize 1024, ttl 300 s), not a Redis-backed `TwoLevelCache`.
+  Reads the stored group locale for the shared-audience resolution path
+  (`helper/locale.py`). Unset (`None`) is cached too. Backed by a bare
+  `cachetools` L1 `_GROUP_LOCALE_L1` (maxsize 1024, ttl 300 s), not a
+  Redis-backed `TwoLevelCache`.
 - `set_group_locale(chat_id: int, locale: str | None) -> bool`
-  Stores the locale verbatim, or `$unset`s it when `None`. Returns `True` when a group row matched; pops the L1 entry and invalidates the active-groups list cache (whose rows carry the locale, so a change would otherwise linger for the groups-list TTL). Validity against the translation catalog is enforced by the caller and at resolution time.
+  Stores the locale verbatim, or clears it when `None`. Returns `True` when
+  a group row matched; pops the L1 entry and invalidates the active-groups
+  list cache (whose rows carry the locale, so a change would otherwise
+  linger for the groups-list TTL). Validity against the translation
+  catalog is enforced by the caller and at resolution time.
 
-**Error behavior:** every access uses `db_call()`. `migrate_group` never aborts the whole migration because one collection failed: it logs per-collection failures, skips that side, and reports whether anything moved.
+**Error behavior:** every access uses `db_call()`. `migrate_group` never
+aborts the whole migration because one table failed: it logs per-table
+failures, skips that side, and reports whether anything moved.
 
-## Warnings (`warns_db.py`, collections `warns`, `warn_counts`)
+## Warnings (`warns_db.py`, tables `warns`, `warn_counts`)
 
-### Document shapes
+### Row shapes
 
 `WarnDoc` (warns, one row per warning event):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `_id` | `ObjectId` | MongoDB-generated ID. |
+| `id` | `int` | Surrogate primary key. |
 | `user_id` | `UserId` | Warned user. |
 | `reason` | `str` | Warning reason. |
 | `admin_id` | `UserId` | Admin who warned. |
@@ -386,47 +614,99 @@ Resolution order in `get_effective_role`:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `user_id` | `UserId` | Warned user (unique with `chat_id`). |
-| `chat_id` | `ChatId` | Group (unique with `user_id`). |
+| `user_id` | `UserId` | Warned user (primary key with `chat_id`). |
+| `chat_id` | `ChatId` | Group (primary key with `user_id`). |
 | `count` | `int` | Running warning total for the pair. |
 | `updated_at` | `datetime` | Last counter update; drives warn-expiry pruning. |
 
-The per-group threshold is `cfg.warn_limit` (env `WARN_LIMIT`, default 3, minimum 1). A second federation-wide threshold `cfg.fed_warn_limit` (env `FED_WARN_LIMIT`, default 0 = disabled) auto-bans when `federation_warn_count()` reaches the value. See [`../features/moderation/warnings.md`](../features/moderation/warnings.md).
+The per-group threshold is `cfg.warn_limit` (env `WARN_LIMIT`, default 3,
+minimum 1). A second federation-wide threshold `cfg.fed_warn_limit` (env
+`FED_WARN_LIMIT`, default 0 = disabled) auto-bans when
+`federation_warn_count()` reaches the value. See
+[`../features/moderation/warnings.md`](../features/moderation/warnings.md).
 
 ### Mutations
 
 - `add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int`
-  Inserts the warn event, then `find_one_and_update` with `$inc` on the counter (upsert). On insert the missing `count` is treated as zero, so `$inc` sets it to 1; `count: 0` is intentionally NOT part of `$setOnInsert` (it would raise `OperationFailure` code 40 `ConflictingUpdateOperators`). If the counter update fails, the warn insert is rolled back (deleted by `_id`) and the failure re-raised so a counter outage never leaves an uncounted warning. Returns the new warn count.
+  The history row and the counter land in one transaction
+  (`run_transaction`). They must agree: the counter is what the auto-ban
+  threshold reads, so a history row without its counter (or the other way
+  round) would silently delay the ban that the warning earned. The counter
+  is written with `INSERT ... ON CONFLICT DO UPDATE SET count = count + 1
+  RETURNING count`, so two concurrent warnings in the same group both
+  count. Returns the new warn count. A statement that returns no counter
+  row raises and rolls the transaction back rather than committing a
+  warning whose count is missing.
 - `clear_warns(user_id: int, chat_id: int) -> int`
-  Deletes warn history plus the counter for one group; returns the history deleted count. Raises the warns-delete failure instead of returning 0 (a 0 return means "nothing to clear"; reporting an outage as an empty state would mislead the moderator). A counter-delete failure is repaired right away (the pair is recounted from history, which lands at zero and drops the stale doc) and stays non-fatal.
+  Deletes warn history plus the counter for one group; returns the history
+  deleted count. Raises the warns-delete failure instead of returning 0 (a
+  0 return means "nothing to clear"; reporting an outage as an empty state
+  would mislead the moderator). A counter-delete failure is repaired right
+  away (the pair is recounted from history, which lands at zero and drops
+  the stale row) and stays non-fatal.
 - `clear_all_warns(user_id: int) -> int`
-  Deletes warn history plus every counter across all groups (used on federation auto-ban so a user starts with a clean slate). Raises like `clear_warns`; callers inside `gather` inspect the captured exception. A counter-delete failure retries the delete once.
+  Deletes warn history plus every counter across all groups (used on
+  federation auto-ban so a user starts with a clean slate). Raises like
+  `clear_warns`; callers inside `gather` inspect the captured exception.
+  A counter-delete failure retries the delete once.
 
 ### Queries
 
 - `warn_count(user_id: int, chat_id: int) -> int`
-  Current counter for a user in a group, via `_sync_warn_count`: reads the counter doc, or atomically backfills it from warn history when missing (`find_one_and_update` upsert so concurrent callers cannot double-backfill).
+  Current counter for a user in a group, via `_sync_warn_count`: reads the
+  counter row, or atomically backfills it from the warn history when
+  missing (`INSERT ... ON CONFLICT DO UPDATE`) so concurrent callers cannot
+  double-backfill.
 - `get_warns(user_id: int, chat_id: int, *, skip: int = 0, limit: int | None = None) -> list[WarnDoc]`
-  Full warn list for a user in a group, oldest first (timestamp ascending, served by the `(user_id, chat_id, timestamp asc)` index). `limit=None` returns everything.
+  Full warn list for a user in a group, oldest first (timestamp ascending).
+  `limit=None` returns everything.
 - `remove_last_warn(user_id: int, chat_id: int) -> bool`
-  Deletes the most recent warn document and decrements the counter in parallel. On any failure the counter is rebuilt from history (`_recount_and_store`) and the helper returns `False`; returns `True` only when a warn was actually removed. Cancellation propagates.
+  Deletes the most recent warn row and decrements the counter in parallel.
+  On any failure the counter is rebuilt from history (`_recount_and_store`)
+  and the helper returns `False`; returns `True` only when a warn was
+  actually removed. Cancellation propagates.
 - `user_total_warns(user_id: int) -> int`
   Total warn rows recorded against the user across all groups.
 - `user_warn_groups(user_id: int) -> list[tuple[int, int]]`
-  `[(chat_id, count), ...]` for every group where the user has warns, sorted by `updated_at` descending.
+  `[(chat_id, count), ...]` for every group where the user has warns,
+  sorted by `updated_at` descending.
 - `federation_warn_count(user_id: int) -> int`
-  Total active warn count across all federation chats: server-side `$group` aggregation summing `count` where `count > 0`. Returns 0 when there is nothing. Used to evaluate the `FED_WARN_LIMIT` threshold.
+  Total active warn count across all federation chats: a server-side
+  `SUM(count)` over the rows where `count > 0`. Returns 0 when there is
+  nothing. Used to evaluate the `FED_WARN_LIMIT` threshold.
 - `migrate_records(old_chat_id: int, new_chat_id: int) -> bool`
-  Chat-migration repoint. Warn history moves with one update; counter docs merge by summation (per user, added into the supergroup counter via upsert) so a supergroup that already holds warns keeps the combined total instead of losing one side to the per-pair unique index. Each old counter is consumed with an atomic take (removed before its count lands on the new pair), so a crash plus retry can only under-count, never double-count into a false auto-ban. Each stage logs and skips on failure. Returns `True` if any record moved. Called by `greeting.on_chat_migration` alongside `groups_db.migrate_group` (plus the kick/mute history repoints) so warning history and thresholds survive a basic-group to supergroup migration.
+  Chat-migration repoint. Warn history moves with one update; counter rows
+  merge by summation (per user, added into the supergroup counter through
+  an upsert) so a supergroup that already holds warns keeps the combined
+  total instead of losing one side to the per-pair primary key. Each old
+  counter is consumed with an atomic take (removed before its count lands
+  on the new pair), so a crash plus retry can only under-count, never
+  double-count into a false auto-ban. Each stage logs and skips on
+  failure. Returns `True` if any record moved. Called by
+  `greeting.on_chat_migration` alongside `groups_db.migrate_group` (plus
+  the kick/mute history repoints) so warning history and thresholds survive
+  a basic-group to supergroup migration.
 
-**Error behavior:** warn deletions raise when the history delete fails (empty-state misreporting is a correctness hazard); counter-delete failures are repaired (recount for single-group clears, bounded retry for federation-wide clears) and stay non-fatal. Counter backfill is atomic so concurrent first-reads cannot double-count.
+**Error behavior:** warn deletions raise when the history delete fails
+(empty-state misreporting is a correctness hazard); counter-delete failures
+are repaired (recount for single-group clears, bounded retry for
+federation-wide clears) and stay non-fatal. Counter backfill is atomic so
+concurrent first-reads cannot double-count.
 
-## Kicks (`kicks_db.py`, collection `kicks`)
+**Counter repairs:** a repair recounts the history and stores the absolute
+count, so it runs in one transaction that locks the counter row before it
+counts. A repair that read the history in one statement and wrote the
+absolute count in another could overwrite the increment of a warning that
+landed in between: the counter would then sit one below the history and
+the auto-ban threshold would fire one warning late.
 
-### Document shape: `KickDoc`
+## Kicks (`kicks_db.py`, table `kicks`)
+
+### Row shape: `KickDoc`
 
 | Field | Type | Meaning |
 |---|---|---|
+| `id` | `int` | Surrogate primary key. |
 | `user_id` | `UserId` | Kicked user. |
 | `chat_id` | `ChatId` | Group where the kick happened. |
 | `reason` | `str` | Kick reason. |
@@ -436,7 +716,7 @@ The per-group threshold is `cfg.warn_limit` (env `WARN_LIMIT`, default 3, minimu
 Kicks are an append-only audit trail; records are never deleted.
 
 - `log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> None`
-  Inserts one kick event via `KickDoc` (fields wrapped in the `UserId`/`ChatId` NewTypes).
+  Inserts one kick event.
 - `user_kicks(user_id: int, *, skip: int = 0, limit: int | None = None) -> list[KickDoc]`
   Every kick for a user, newest first. `limit=None` returns the full list.
 - `user_kick_count(user_id: int) -> int`
@@ -444,56 +724,72 @@ Kicks are an append-only audit trail; records are never deleted.
 
 All operations route through `db_call()`.
 
-## Mutes (`mutes_db.py`, collections `mutes`, `active_mutes`)
+## Mutes (`mutes_db.py`, tables `mutes`, `active_mutes`)
 
-### Document shapes
+### Row shapes
 
 `MuteDoc` (mutes, one row per mute event):
 
 | Field | Type | Meaning |
 |---|---|---|
+| `id` | `int` | Surrogate primary key. |
 | `user_id` | `UserId` | Muted user. |
 | `chat_id` | `ChatId` | Group where the mute happened. |
 | `reason` | `str` | Mute reason. |
 | `admin_id` | `UserId` | Admin who muted. |
 | `timestamp` | `datetime` | Mute time. |
-| `duration_secs` | `int \| None` | Present (`int`) for timed mutes, absent or `None` for permanent mutes. |
+| `duration_secs` | `int \| None` | Set for timed mutes, `NULL` for permanent mutes. |
 
 `ActiveMuteDoc` (active_mutes, one row per currently muted user):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `user_id` | `UserId` | Muted user (unique). |
-| `until_date` | `datetime \| None` | `None` for a permanent mute, a UTC expiry datetime for a timed mute. |
+| `user_id` | `UserId` | Muted user (primary key). |
+| `until_date` | `datetime \| None` | `NULL` for a permanent mute, a UTC expiry datetime for a timed mute. |
 | `timestamp` | `datetime` | When the restriction was recorded. |
 
-The live-state store powers two re-application paths: `greeting._handle_member` calls `get_active_mute` on every join event and re-restricts a still-muted user; `connected_flow.complete_join` calls `active_mute_docs()` and fans out `restrict_chat_member` for every active mute when a new group connects.
+The live-state store powers two re-application paths: `greeting._handle_member`
+calls `get_active_mute` on every join event and re-restricts a still-muted
+user; `connected_flow.complete_join` calls `active_mute_docs()` and fans
+out `restrict_chat_member` for every active mute when a new group connects.
 
 ### Mutations
 
 - `log_mute(user_id: int, chat_id: int, reason: str, admin_id: int, *, duration_secs: int | None = None) -> None`
   Appends one audit event; `duration_secs` is stored only for timed mutes.
 - `set_active_mute(user_id: int, *, until: datetime | None = None) -> None`
-  Upserts the active-mute row. `until=None` creates a permanent mute; timed mutes pass the UTC expiry matching the `until_date` sent to `restrict_chat_member`. Called by the mute executor before the restrict fan-out (fail-closed: no group is touched when the record cannot persist).
+  Upserts the active-mute row. `until=None` creates a permanent mute; timed
+  mutes pass the UTC expiry matching the `until_date` sent to
+  `restrict_chat_member`. Called by the mute executor before the restrict
+  fan-out (fail-closed: no group is touched when the record cannot
+  persist).
 - `clear_active_mute(user_id: int) -> None`
   Deletes the row on unmute.
 
 ### Queries
 
 - `get_active_mute(user_id: int) -> ActiveMuteDoc | None`
-  The user's active mute, or `None` when none exists or the timed mute has expired. Both permanent (`until_date` `None`/missing) and still-valid timed mutes match the shared `_not_expired_clause` (`until_date is None OR until_date > now`).
+  The user's active mute, or `None` when none exists or the timed mute has
+  expired. Both permanent (`until_date IS NULL`) and still-valid timed
+  mutes match the shared `_not_expired_clause` (`until_date IS NULL OR
+  until_date > now`).
 - `active_mute_docs() -> list[ActiveMuteDoc]`
-  Every currently active mute (projection `{user_id, until_date}`), used for group-connect replay. Expired timed mutes are excluded at query time (no background cleanup job for live reads).
+  Every currently active mute, used for group-connect replay. Expired
+  timed mutes are excluded at query time.
 - `user_mutes(user_id: int, *, skip: int = 0, limit: int | None = None) -> list[MuteDoc]`
-  Every mute audit record for a user, newest first. `limit=None` returns the full list.
+  Every mute audit record for a user, newest first. `limit=None` returns the
+  full list.
 - `user_mute_count(user_id: int) -> int`
   Total mute audit records for a user.
 
-Expired timed-mute rows are additionally pruned by the TTL index on `until_date`; permanent rows (`None`/missing) are never TTL-expired, matching the query-time filter.
+PostgreSQL has no TTL index, so expired timed-mute rows are pruned by the
+daily `expire_stale_records` job (see
+[`Scheduler`](#scheduler-schedulerrpy)). The query-time filter stays in
+place, so an expired row is never reported even before the sweep runs.
 
-## Promotion requests (`queues_db.py`, collection `promotion_requests`)
+## Promotion requests (`queues_db.py`, table `promotion_requests`)
 
-### Document shape: `PromotionRequestDoc`
+### Row shape: `PromotionRequestDoc`
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -510,43 +806,66 @@ Expired timed-mute rows are additionally pruned by the TTL index on `until_date`
 ### Helpers
 
 - `enqueue(user_id: int, username: str | None, first_name: str, promoted_by: int) -> str`
-  Inserts a pending request and returns its `request_id`. Retries once with a fresh ID on a `DuplicateKeyError` (mirrors `bans_db.create_ban`); a second failure propagates, which means the partial-unique pending index rejected a real duplicate and the caller reports "already pending".
+  Inserts a pending request and returns its `request_id`. Retries once with
+  a fresh ID when the random `request_id` collides (mirrors
+  `bans_db.create_ban`). A violation of the one-pending-per-user partial
+  index raises `AlreadyPendingError`; a violation of the `request_id`
+  unique constraint raises `DuplicateKeyError`. Both subclass
+  `DuplicateKeyError`, so a caller that checks for that keeps working.
 - `get_request_by_id(request_id: str) -> PromotionRequestDoc | None`
   Reads a request by its ID.
 - `get_request(user_id: int) -> PromotionRequestDoc | None`
   Reads the pending request for a user.
 - `all_pending() -> list[PromotionRequestDoc]`
-  All pending requests, oldest first, capped at 200 rows with a list-view projection.
+  All pending requests, oldest first, capped at 200 rows with a list-view
+  projection.
 - `pending_count() -> int`
-  Count of pending requests; kept byte-identical to `all_pending`'s status filter so "shown vs total" header arithmetic stays meaningful.
+  Count of pending requests; kept byte-identical to `all_pending`'s status
+  filter so "shown vs total" header arithmetic stays meaningful.
 - `resolve(request_id: str, status: str, resolved_by: int) -> bool`
-  Marks a request resolved. The `{"status": "pending"}` filter makes the claim atomic: concurrent decisions on the same request resolve exactly once and late taps get `False`.
+  Marks a request resolved. The `status = 'pending'` filter makes the claim
+  atomic: concurrent decisions on the same request resolve exactly once and
+  late taps get `False`.
 
-## Per-user settings (`settings_db.py`, collection `user_settings`)
+## Per-user settings (`settings_db.py`, table `user_settings`)
 
-### Document shape: `UserSettingsDoc`
+### Row shape: `UserSettingsDoc`
 
 | Field | Type | Meaning |
 |---|---|---|
-| `user_id` | `UserId` | User ID (unique, one preference row per user). |
+| `user_id` | `UserId` | User ID (primary key, one preference row per user). |
 | `locale` | `str \| None` | Stored locale code (verbatim; validity enforced by the caller and at resolution time). |
 
-Preference-only rows are kept out of `member_cache` on purpose, so they never inflate cached-user counts or appear in user listings.
+Preference-only rows are kept out of `member_cache` on purpose, so they
+never inflate cached-user counts or appear in user listings.
 
 ### Helpers
 
 - `get_user_locale(user_id: int) -> str | None`
-  Returns a user's stored locale for the private-chat resolution path, or `None` when unset. Unset (`None`) is cached too. Backed by a bare `cachetools` L1 `_LOCALE_L1` (maxsize 4096, ttl 300 s), not a Redis-backed `TwoLevelCache`.
+  Returns a user's stored locale for the private-chat resolution path, or
+  `None` when unset. Unset (`None`) is cached too. Backed by a bare
+  `cachetools` L1 `_LOCALE_L1` (maxsize 4096, ttl 300 s), not a
+  Redis-backed `TwoLevelCache`.
 - `set_user_locale(user_id: int, locale: str | None) -> None`
-  Upserts the `{user_id, locale}` row, or deletes the row entirely when `locale is None` so the collection holds only users with an explicit preference. Pops the L1 entry on write.
+  Upserts the `{user_id, locale}` row, or deletes the row entirely when
+  `locale is None` so the table holds only users with an explicit
+  preference. Pops the L1 entry on write.
 
 ## Caching (`cache/`, `redis_client.py`)
 
 ### Cache types
 
-`TTLCache[T]` (memory TTL, maxsize, default 512): pure in-process TTL cache with LRU eviction, backed by `cachetools.TTLCache`. Reads and writes are synchronous, `get_or_fetch` is async and serialises concurrent misses per key with an `asyncio.Lock` (one `fetch()` runs; waiters share the result). Operations: `get` (returns value or the `CACHE_MISS` sentinel), `put`, `invalidate`, `clear`, `get_or_fetch`.
+`TTLCache[T]` (memory TTL, maxsize, default 512): pure in-process TTL cache
+with LRU eviction, backed by `cachetools.TTLCache`. Reads and writes are
+synchronous, `get_or_fetch` is async and serialises concurrent misses per
+key with an `asyncio.Lock` (one `fetch()` runs; waiters share the result).
+Operations: `get` (returns value or the `CACHE_MISS` sentinel), `put`,
+`invalidate`, `clear`, `get_or_fetch`.
 
-`TwoLevelCache[T]` wraps `TTLCache[T]` and adds an optional Redis L2 layer. Public methods are drop-in compatible with `TTLCache`, except `clear_all`, which is async. When Redis is not configured (or unreachable), every cache degrades transparently to pure in-memory behavior.
+`TwoLevelCache[T]` wraps `TTLCache[T]` and adds an optional Redis L2 layer.
+Public methods are drop-in compatible with `TTLCache`, except `clear_all`,
+which is async. When Redis is not configured (or unreachable), every cache
+degrades transparently to pure in-memory behavior.
 
 Methods:
 
@@ -555,10 +874,13 @@ Methods:
 - `clear_all()`: async, clears L1 and deletes every Redis key matching `tcbot:<prefix>:v2:*` via `SCAN` + `UNLINK` in batches of 100 (never blocking `KEYS`). Each scan and unlink is bounded by the 2.0 s write timeout so a stalled sweep aborts instead of holding the FIFO mutation tail. Use when the affected key is unknown, for example after an ownership transfer. Not for hot paths.
 - `get_or_fetch(key, fetch)`: async hot path. Layer order:
   1. L1 in-memory (no I/O).
-  2. L2 Redis, bounded by a 1.0 s timeout (`_REDIS_GET_TIMEOUT_S`) so a stalled Redis falls through to the DB fetch.
-  3. DB `fetch()` coroutine; the result populates both layers (the L2 write is fire-and-forget and 2.0 s-bounded).
+  2. L2 Redis, bounded by a 1.0 s timeout (`_REDIS_GET_TIMEOUT_S`) so a stalled Redis falls through to the database fetch.
+  3. Database `fetch()` coroutine; the result populates both layers (the L2 write is fire-and-forget and 2.0 s-bounded).
 
-A per-key `asyncio.Lock` coalesces concurrent misses so only one DB fetch runs per key; the lock is dropped after the fetch and on `invalidate` so high-cardinality callers (profile lookups) never accumulate stale locks.
+A per-key `asyncio.Lock` coalesces concurrent misses so only one database
+fetch runs per key; the lock is dropped after the fetch and on `invalidate`
+so high-cardinality callers (profile lookups) never accumulate stale
+locks.
 
 ### Redis key format and prefixes
 
@@ -566,9 +888,10 @@ A per-key `asyncio.Lock` coalesces concurrent misses so only one DB fetch runs p
 - Redis TTL: `max(1, int(redis_ttl))` seconds, applied with `ex=` on writes.
 - Redis prefixes: `role`, `conn`, `groups`, `owner`, `umention`.
 - FIFO ordering is per `(prefix, event loop)`: each mutation chains after the previous one so a slower write can never complete after a newer delete or prefix-wide clear, including across separate cache objects sharing a prefix. Background task names are `tcbot.redis.<prefix>`.
-- Serialization: tagged JSON via msgspec. `_tag_scalars` tags `datetime` and `ObjectId` values with `__tcbot_type__` (msgspec would otherwise encode datetimes as bare RFC3339) so a cache hit has the same runtime types as the original MongoDB document; `_restore_tagged` restores them bottom-up and tolerates untagged legacy values, so payloads written by the retired stdlib codec read identically. Unknown scalar types fall back to strings rather than failing the write.
+- Serialization: tagged JSON via msgspec. `_tag_scalars` tags `datetime` values with `__tcbot_type__` (msgspec would otherwise encode datetimes as bare RFC3339) so a cache hit has the same runtime types as the original row; `_restore_tagged` restores them bottom-up and tolerates untagged legacy values, so payloads written by the retired stdlib codec read identically. Unknown scalar types fall back to strings rather than failing the write.
 
-Sentinel: `CACHE_MISS`, compare with `is CACHE_MISS`. Distinct from `None` because `None` is a valid cached value (for example, a user with no role).
+Sentinel: `CACHE_MISS`, compare with `is CACHE_MISS`. Distinct from `None`
+because `None` is a valid cached value (for example, a user with no role).
 
 ### Public singletons
 
@@ -580,28 +903,44 @@ Sentinel: `CACHE_MISS`, compare with `is CACHE_MISS`. Distinct from `None` becau
 | `owner_id_cache` | `TwoLevelCache[int \| None]` | 300 s | 360 s | 4 | `owner` | `__owner__` | `users_roles.get_owner_id()`; refreshed on `set_owner`/`ensure_initial_owner` |
 | `user_mention_cache` | `TwoLevelCache[list[str \| None]]` | 300 s | 600 s | 4096 | `umention` | `user_id` | `users_cache` mention readers; invalidated by `upsert_user` |
 
-L1 mention-cache entries are `[first_name, username, last_name]` triples; readers use indexes 0 and 1, index 2 exists so change detection notices last-name-only updates. The all-`None` triple is the not-found sentinel.
+L1 mention-cache entries are `[first_name, username, last_name]` triples;
+readers use indexes 0 and 1, index 2 exists so change detection notices
+last-name-only updates. The all-`None` triple is the not-found sentinel.
 
-Bare `cachetools` L1 caches (no Redis, no L2): `groups_db._GROUP_LOCALE_L1` (maxsize 1024, ttl 300 s) and `settings_db._LOCALE_L1` (maxsize 4096, ttl 300 s).
+Bare `cachetools` L1 caches (no Redis, no L2): `groups_db._GROUP_LOCALE_L1`
+(maxsize 1024, ttl 300 s) and `settings_db._LOCALE_L1` (maxsize 4096, ttl
+300 s).
 
 ### Redis client (`redis_client.py`)
 
 - `connect(url: str) -> None`
-  Creates the `redis.asyncio` client from a `ConnectionPool.from_url` and verifies connectivity with `PING`. Raises `redis.asyncio.RedisError` on failure (caller decides whether to abort or continue with in-memory only). Raises `RuntimeError` when the `hiredis` C extension is missing and `REDIS_URL` is set (verified lazily here, not at import, keeping "Redis is optional" intact). Reconnects close the previous pool first so sockets are not orphaned.
+  Creates the `redis.asyncio` client from a `ConnectionPool.from_url` and
+  verifies connectivity with `PING`. Raises `redis.asyncio.RedisError` on
+  failure (caller decides whether to abort or continue with in-memory
+  only). Raises `RuntimeError` when the `hiredis` C extension is missing
+  and `REDIS_URL` is set (verified lazily here, not at import, keeping
+  "Redis is optional" intact). Reconnects close the previous pool first so
+  sockets are not orphaned.
 - `close() -> None`
-  Closes the client (`aclose`) and explicitly disconnects the pool (`pool.aclose`), because with an explicitly passed pool the client does not own it and `aclose` alone would leak sockets.
+  Closes the client (`aclose`) and explicitly disconnects the pool
+  (`pool.aclose`), because with an explicitly passed pool the client does
+  not own it and `aclose` alone would leak sockets.
 - `client() -> redis.asyncio.Redis | None`
   Active client, or `None` when Redis is not configured.
 - `mark_op(*, ok: bool) -> None`
-  Records one Redis operation outcome (called from `cache/`); logs the transition to unhealthy exactly once.
+  Records one Redis operation outcome (called from `cache/`); logs the
+  transition to unhealthy exactly once.
 - `liveness() -> bool | None`
-  Last known Redis liveness (`None` = no operation observed yet), used by the synchronous `/health` route.
+  Last known Redis liveness (`None` = no operation observed yet), used by
+  the synchronous `/health` route.
 
-Pool parameters: `decode_responses=True`, `max_connections=20`, `socket_connect_timeout=5 s`, `socket_timeout=2 s`, `health_check_interval=30 s`.
+Pool parameters: `decode_responses=True`, `max_connections=20`,
+`socket_connect_timeout=5 s`, `socket_timeout=2 s`,
+`health_check_interval=30 s`.
 
 ### Cache error/failure behavior
 
-- A stalled or failing Redis read on `get_or_fetch` never holds the hot path longer than 1.0 s; it falls through to the DB fetch and marks the op failed.
+- A stalled or failing Redis read on `get_or_fetch` never holds the hot path longer than 1.0 s; it falls through to the database fetch and marks the op failed.
 - A serialization failure degrades the cache to L1-only instead of failing a fetch that just succeeded.
 - Redis writes/deletes are fire-and-forget, bounded to 2.0 s each, and logged at DEBUG on failure; background-task errors are surfaced via a done-callback log, never raised into callers.
 - Redis failures after the first are not re-logged per op (transition logging only), and the pool/health state is tracked via `mark_op`.
@@ -610,85 +949,162 @@ Pool parameters: `decode_responses=True`, `max_connections=20`, `socket_connect_
 
 ## Scheduler (`scheduler.py`)
 
-`start(mongodb_uri: str, db_name: str, warn_expiry_days: int, *, bot: Bot | None = None, sync_interval_hours: int = 0, sync_runner: Callable[..., Any] | None = None) -> None` spawns the `tcbot.scheduler` background asyncio task and waits (bounded by the same 10 s grace window as `stop()`) for the scheduler to become ready, so a constructor error or a hung jobstore handshake reports a startup failure instead of hanging boot. `bot` plus a positive interval registers the `tcbot.enforcement_sync` sweep; a zero interval or `None` bot removes a stale schedule. `sync_runner` is the enforcement sweep supplied by the runtime lifecycle (which already imports the command modules), passed explicitly so the database package never imports a command module; `None` disables the sweep. On readiness failure it raises `RuntimeError` (wrapped from the captured error).
+`start(database_url: str, warn_expiry_days: int, *, bot: Bot | None = None, sync_interval_hours: int = 0, sync_runner: Callable[..., Any] | None = None) -> None`
+spawns the `tcbot.scheduler` background asyncio task and waits (bounded by
+the same 10 s grace window as `stop()`) for the scheduler to become ready,
+so a constructor error or a hung job-store handshake reports a startup
+failure instead of hanging boot. `bot` plus a positive interval registers
+the `tcbot.enforcement_sync` sweep; a zero interval or `None` bot removes a
+stale schedule. `sync_runner` is the enforcement sweep supplied by the
+runtime lifecycle (which already imports the command modules), passed
+explicitly so the database package never imports a command module; `None`
+disables the sweep. On readiness failure it raises `RuntimeError` (wrapped
+from the captured error).
 
-`stop() -> None` sets the stop event and waits up to 10 s for graceful shutdown, then cancels a stuck task so shutdown never orphans a live scheduler into the next `start()`. A background-task exception is logged and still clears the module globals, and cancellation of `stop()` itself clears them before propagating. Safe to call when `start()` never ran.
+`stop() -> None` sets the stop event and waits up to 10 s for graceful
+shutdown, then cancels a stuck task so shutdown never orphans a live
+scheduler into the next `start()`. A background-task exception is logged
+and still clears the module globals, and cancellation of `stop()` itself
+clears them before propagating. Safe to call when `start()` never ran.
 
-`is_ready() -> bool` returns `True` only after the full startup sequence completed successfully (scheduler object set, ready event set, no captured error).
+`is_ready() -> bool` returns `True` only after the full startup sequence
+completed successfully (scheduler object set, ready event set, no captured
+error).
 
-Job store: `MongoDBJobStore(database=db_name, host=mongodb_uri, **_mongo_client_kwargs())` registered under the explicit alias `mongodb` inside a single `AsyncIOScheduler`. The library owns the synchronous `MongoClient`, so the same certifi TLS pinning and `serverSelectionTimeoutMS`/`connectTimeoutMS` defaults are applied, or Atlas handshakes fail on sandboxes with a stale system CA store. The job collection name is APScheduler's library default: the code does not set a `collection` parameter. UNVERIFIED: the exact default collection name is not hard-coded in this repo; it relies on the installed APScheduler 3.x default.
+Job store: `SQLAlchemyJobStore(engine=..., tablename="apscheduler_jobs")`
+registered under the explicit alias `postgres` inside a single
+`AsyncIOScheduler`. The store owns a synchronous engine with a two-
+connection pool and short timeouts (2 s connect, 5 s pool timeout), because
+it reads and writes on the event loop: a database outage must stall the
+bot for seconds, not for the main engine's timeout.
 
-Every job names the `mongodb` alias explicitly. APScheduler defaults to the `default` alias, which it auto-creates as an in-memory store, so a job registered without an alias would never reach MongoDB and would die with the process.
+The `apscheduler_jobs` table is the library's own schema, so the
+application migrations do not mirror it. It is created on the scheduler
+worker thread when the store is built, and the store subclass makes the
+library's own creation call a no-op: `scheduler.start()` runs on the event
+loop and its blocking `CREATE TABLE` would stall the loop for the whole
+connect timeout while the database is unreachable.
 
-Startup runs off the event loop. `scheduler.start()` and the schedule reconciliation execute in a worker thread because the MongoDB job store performs blocking pymongo calls (index creation, job insert/update/lookup). With the loop bound explicitly through `AsyncIOScheduler(event_loop=...)`, the scheduler can be started from that thread without losing its loop. A reachable but degraded MongoDB therefore delays the boot instead of freezing the webhook receiver.
+The remaining store calls are inherently blocking, because APScheduler 3.x
+calls them synchronously from the event loop. Their timeouts bound the
+stall to a couple of seconds while the database is down.
 
-An unchanged schedule keeps its persisted fire time. Re-adding a job through `add_job(replace_existing=True)` rewrites `next_run_time` from the current clock, which would reset the daily cadence on every restart and stop the job from ever firing on a bot that restarts more often than the interval. The stored job is therefore left untouched when its interval and arguments still match the desired configuration; only a changed configuration replaces it. This is what makes `misfire_grace_time` and `coalesce` effective after a restart.
+Every job names the `postgres` alias explicitly. APScheduler defaults to the
+`default` alias, which it auto-creates as an in-memory store, so a job
+registered without an alias would never reach the database and would die
+with the process.
+
+The store is built on a worker thread: the constructor creates a
+synchronous engine, which resolves the host of the connection string
+inside the constructor and would otherwise block the event loop. The
+scheduler itself starts on the event loop, because it arms its own timer
+with `loop.call_later`, which is not thread-safe.
+
+The schedules run on UTC. APScheduler defaults to the host's local zone,
+which is host-dependent, so the daily expiry would fire at a different
+local midnight on every machine.
+
+An unchanged schedule keeps its persisted fire time. Re-adding a job
+through `add_job(replace_existing=True)` rewrites `next_run_time` from the
+current clock, which would reset the daily cadence on every restart and
+stop the job from ever firing on a bot that restarts more often than the
+interval. The stored job is therefore left untouched when its interval and
+arguments still match the desired configuration; only a changed
+configuration replaces it. This is what makes `misfire_grace_time` and
+`coalesce` effective after a restart.
 
 Recurring jobs:
 
 | Job ID | Trigger | Purpose |
 |---|---|---|
-| `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: deletes `warn_counts` rows older than the cutoff from `updated_at` and `warns` rows from `timestamp` in parallel (both must be pruned together or the counter backfill restores stale counts). Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
+| `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: deletes `warn_counts` rows older than the cutoff from `updated_at` and `warns` rows from `timestamp` in one transaction. Both must be pruned together: pruning only the counters lets the counter backfill rebuild them from the surviving history, and pruning only the history leaves a counter that counts a warning nobody can see. Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
 | `tcbot.enforcement_sync` | `IntervalTrigger(hours=sync_interval_hours)` | Calls `_run_scheduled_sync` (the `/tcsync` core on a timer, bounded to 200 checks, log-only results, via the explicit `sync_runner` start argument, so the database package never imports a command module). Uses `misfire_grace_time=86400`, `coalesce=True`. Registered only when the interval is positive and a `bot` reference was passed; otherwise removed. See [`../features/moderation/sync.md`](../features/moderation/sync.md). |
-| `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal runs against the `mongodb` store after the scheduler started (a removal issued before `start()` only searches the pending-job list and would leave the persisted row firing) and `_cleanup_old_records()` remains as a no-op migration shim so any persisted schedule can deserialize without `AttributeError`. |
+| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes the expired timed mutes from `active_mutes` and the stale profiles from `member_cache`. PostgreSQL has no TTL index, so this job replaces the TTL behaviour the MongoDB deployment relied on. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. |
+| `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal runs against the `postgres` store after the scheduler started (a removal issued before `start()` only searches the pending-job list and would leave the persisted row firing) and `_cleanup_old_records()` remains as a no-op migration shim so any persisted schedule can deserialize without `AttributeError`. |
 
-Member-cache cleanup is handled by the MongoDB TTL index on `last_updated` (`expireAfterSeconds=7776000`, 90 days), not by a scheduler job.
+Persistent per-ban unban jobs: there are NONE in the current code. The
+scheduler registers only the periodic jobs above (plus the legacy
+removal). There is no `DateTrigger` usage and no per-ban unban/untimed job
+API in `scheduler.py`; the module docstring's mention of "timed-ban"
+support refers to reserved `BanDoc.until_date`/`duration_str` fields that
+are always `None` today.
 
-Persistent per-ban unban jobs: there are NONE in the current code. The scheduler registers only the two periodic jobs above (plus the legacy removal). There is no `DateTrigger` usage and no per-ban unban/untimed job API in `scheduler.py`; the module docstring's mention of "timed-ban" support refers to reserved `BanDoc.until_date`/`duration_str` fields that are always `None` today. No unban-job DateTrigger scheme exists to reproduce in the rewrite.
+Scheduler error behavior: a background-task crash sets `_sched_error`,
+unblocks `start()` (so it never hangs forever), and `start()` re-raises as
+`RuntimeError`. `expire_old_warns` logs per-table delete failures, and a
+partial run (one table failed) raises a job failure after the error log
+instead of reporting success, so the scheduler and the serverless cron
+endpoint surface the incomplete expiry (a cancelled expiry propagates via
+`throw_if_cancelled` rather than reporting success). Removing a stale
+schedule whose removal fails for a reason other than not present logs at
+warning level, so a disabled schedule that keeps firing is visible in the
+logs. `_run_scheduled_sync` logs the failure and returns; the next interval
+re-drives, so one bad run never wedges the schedule.
 
-Scheduler error behavior: a background-task crash sets `_sched_error`, unblocks `start()` (so it never hangs forever), and `start()` re-raises as `RuntimeError`. `expire_old_warns` logs per-collection delete failures, and a partial run (one collection failed) raises a job failure after the error log instead of reporting success, so the scheduler and the serverless cron endpoint surface the incomplete expiry (a cancelled expiry propagates via `throw_if_cancelled` rather than reporting success). Removing a stale schedule whose removal fails for a reason other than not present logs at warning level, so a disabled schedule that keeps firing is visible in the logs. `_run_scheduled_sync` logs the failure and returns; the next interval re-drives, so one bad run never wedges the schedule.
+## Indexes
 
-## Startup indexes
+The indexes live in `base.py` and are created by the Alembic migration, so
+they exist before the first handler query reaches the database.
 
-`ensure_indexes()` creates the following in parallel and raises the first failure after logging every failure, so unique-constraint risks (duplicate `ban_id`, duplicate per-user counters, one-pending-request) never serve traffic.
-
-The legacy plain `until_date_1` index on `active_mutes` is dropped first, as a sequential pre-step: Mongo auto-names both the retired plain index and the current TTL variant `until_date_1`, so a stale plain index makes the TTL recreate fail with `IndexOptionsConflict` (code 85). The drop runs only when the existing index lacks `expireAfterSeconds`; fresh or already-TTL databases skip it.
-
-| Collection | Index | Purpose |
+| Table | Index | Purpose |
 |---|---|---|
 | `bans` | `(banned_user_id, is_active, timestamp desc, ban_id desc)` | `get_active_ban()` filter + sort. |
-| `bans` | unique `(ban_id)` | Data integrity; concurrent `set_review_if_absent` claims. |
-| `bans` | `(banned_user_id, appeal_log_msg_id)` sparse | `user_appeal_count()` presence filter. |
+| `bans` | unique `(ban_id)` | Data integrity. |
+| `bans` | `(banned_user_id, appeal_log_msg_id)` partial on `appeal_log_msg_id IS NOT NULL` | `user_appeal_count()` presence filter. |
+| `bans` | unique `(banned_user_id)` partial on `is_active` | One active ban per user. The database enforces the invariant that two moderators reaching the warn threshold at the same moment cannot store two records. |
+| `bans` | `(is_active, banned_user_id)` | Covering index for the `active_ban_user_ids()` lookup over the active slice. |
 | `bans` | `(is_active, timestamp desc, ban_id desc)` | `active_ban_count()` / `active_bans_page()` filter + sort. |
 | `bans` | `(banned_user_id, timestamp desc, ban_id desc)` | `/check` full ban history for a user. |
-| `tc_owners` | unique `(user_id)` | One owner row per ID. |
-| `tc_admins` | unique `(user_id)` | One admin row per ID. |
-| `tc_roles` | unique `(user_id)` | One custom role per user. |
+| `tc_owners` | primary key `(user_id)` | One owner row per ID. |
+| `tc_admins` | primary key `(user_id)` | One admin row per ID. |
+| `tc_roles` | primary key `(user_id)` | One custom role per user. |
 | `tc_roles` | `(role)` | `all_by_role()` roster filter. |
-| `federated_groups` | `(chat_id, is_active)` | Group existence + active filter. |
-| `federated_groups` | unique `(chat_id)` | One row per chat. |
+| `federated_groups` | primary key `(chat_id)` | One row per chat. |
 | `federated_groups` | `(is_active)` | Active-group listing / count. |
-| `pending_joins` | unique `(chat_id)` | One pending request per chat. |
-| `member_cache` | unique `(user_id)` | One profile per user. |
-| `member_cache` | `(user_id, first_name, username, last_name)` | Covered-query index for batch `get_mention_data_batch` / `get_first_names_batch` `$in` projections. |
-| `member_cache` | `(username_lower)` | Name search: the case-sensitive prefix query on the lowercase mirror. |
-| `member_cache` | `(first_name_lower)` | Name search: the case-sensitive prefix query on the lowercase mirror. |
-| `member_cache` | `(last_updated)` TTL `expireAfterSeconds=7776000` | Auto-expiry of profiles older than 90 days. |
-| `user_settings` | unique `(user_id)` | One preference row per user. |
-| `warns` | `(user_id, chat_id, timestamp desc)` | Per-group newest-first history. |
+| `pending_joins` | primary key `(chat_id)` | One pending request per chat. |
+| `member_cache` | primary key `(user_id)` | One profile per user. |
+| `member_cache` | `(username_lower, user_id)` with `text_pattern_ops` | Name search: the case-sensitive prefix query on the lowercase mirror. The `user_id` tie-break also serves the paged users list sort. |
+| `member_cache` | `(first_name_lower, user_id)` with `text_pattern_ops` | Name search: the case-sensitive prefix query on the lowercase mirror. The `user_id` tie-break also serves the paged users list sort. |
+| `member_cache` | `(last_updated desc, user_id)` | `all_users_page()` sort on the recency key. |
+| `user_settings` | primary key `(user_id)` | One preference row per user. |
+| `warns` | `(user_id, chat_id, timestamp desc)` | Per-group history. PostgreSQL scans a btree backwards for the oldest-first view. |
 | `warns` | `(user_id, timestamp desc)` | `/check` history across groups. |
-| `warns` | `(user_id, chat_id, timestamp asc)` | `get_warns()` oldest-first sort. |
-| `warns` | `(timestamp)` | Warn-expiry sweep `delete_many`. |
-| `warn_counts` | unique `(user_id, chat_id)` | One counter per user/chat. |
+| `warns` | `(timestamp)` | Warn-expiry sweep. |
+| `warns` | `(chat_id)` | `migrate_records()` repoint on a group upgrade. |
+| `warn_counts` | primary key `(user_id, chat_id)` | One counter per user/chat. |
 | `warn_counts` | `(updated_at)` | Warn-expiry counter sweep. |
 | `warn_counts` | `(user_id, count, updated_at desc)` | `user_warn_groups()` / `federation_warn_count()` filter + sort. |
+| `warn_counts` | `(chat_id)` | `migrate_records()` repoint on a group upgrade. |
 | `kicks` | `(user_id, timestamp desc)`, `(chat_id)` | Per-user history and group lookups. |
 | `mutes` | `(user_id, timestamp desc)`, `(chat_id)` | Per-user history and group lookups. |
-| `active_mutes` | unique `(user_id)` | One live mute row per user (upserted by `set_active_mute`). |
-| `active_mutes` | `(user_id, until_date)` | `get_active_mute()` per-user expiry filter. |
-| `active_mutes` | `(until_date)` TTL `expireAfterSeconds=0` | Auto-deletes expired timed mutes; permanent rows never expire. Same auto-name as the retired plain index, hence the drop pre-step. Also serves the expiry-filtered fetch, so no separate single-field index is kept. |
+| `active_mutes` | primary key `(user_id)` | One live mute row per user (upserted by `set_active_mute`). |
+| `active_mutes` | `(until_date)` | `get_active_mute()` expiry filter and the stale-mute sweep. |
 | `promotion_requests` | unique `(request_id)` | One row per request ID. |
 | `promotion_requests` | `(target_id, status)` | Per-target history. |
-| `promotion_requests` | unique `(target_id)` partial on `status == "pending"` | One pending request per user (concurrent promotes collapse to one entry). |
+| `promotion_requests` | unique `(target_id)` partial on `status = 'pending'` | One pending request per user (concurrent promotes collapse to one entry). |
 | `promotion_requests` | `(status, requested_date)` | `all_pending()` filter + oldest-first sort. |
+| `mtproto_state` | `(date)` | `get_update_states()` oldest-first sort. |
+| `mtproto_state` | `(usernames)` GIN | MTProto peer lookup by username. |
+| `mtproto_state` | `(id)` with `text_pattern_ops` | The row key carries the session namespace as a prefix, so the peer and update-state lookups match on a prefix. |
+| `mtproto_state` | `(phone_number)` partial on `phone_number IS NOT NULL` | MTProto peer lookup by phone number. |
 
-If a new query depends on a new access pattern, add the matching index in `ensure_indexes()` together with the helper change.
+The `text_pattern_ops` opclass is what makes the prefix scans work under a
+non-C collation. The default `text_ops` opclass can only serve a prefix
+scan when the database collation is `C`, and the deployment database is
+not, so without it the name search degrades to a sequential scan.
+
+If a new query depends on a new access pattern, add the matching index to
+`base.py` together with the helper change and generate the matching
+Alembic revision.
 
 ## Document typing
 
-Use `documents.py` for MongoDB shapes and `types.py` for nominal ID types in new helpers. These are typing aids; stored MongoDB values remain plain strings, integers, booleans, and datetimes. All `*_db.py` modules use a TypedDict from `documents.py` when inserting records.
+Use `documents.py` for row shapes and `types.py` for nominal ID types in
+new helpers. These are typing aids; the stored values remain plain
+strings, integers, booleans, and datetimes. All `*_db.py` modules use a
+TypedDict from `documents.py` when reading or inserting records.
 
-| Collection | TypedDict |
+| Table | TypedDict |
 |---|---|
 | `bans` | `BanDoc` |
 | `kicks` | `KickDoc` |
@@ -705,17 +1121,36 @@ Use `documents.py` for MongoDB shapes and `types.py` for nominal ID types in new
 | `tc_roles` (index reference) | `RoleRefDoc` |
 | `promotion_requests` | `PromotionRequestDoc` |
 
-Literal aliases: `RoleName = Literal["founder", "admin", "developer", "tester"]`; `RequestStatus = Literal["pending", "approved", "rejected"]`.
+Literal aliases: `RoleName = Literal["founder", "admin", "developer", "tester"]`;
+`RequestStatus = Literal["pending", "approved", "rejected"]`.
 
 ## Startup wiring and shutdown
 
-`init_shared_subsystems` in `tcbot/__main__.py` (called by `_post_init` for long-lived transports and by serverless with `start_mtproto=False`) runs, in order: `connect()`, then in parallel `ensure_indexes()` (index failure is fatal), `ensure_initial_owner(cfg.initial_owner_id)` (failures non-fatal), and `redis_client.connect_if_configured()` when configured (connection failure degrades to in-memory cache only with a warning), plus `mtproto.start()` on long-lived transports (an exception aborts boot; a degraded `False` warns and continues Bot-API-only). Then `scheduler.start(cfg.mongodb_uri, cfg.db_name, cfg.warn_expiry_days, bot=app.bot, sync_interval_hours=cfg.sync_interval_hours, sync_runner=run_ban_sync)`, followed by a background `_warm_hot_caches` task that pre-loads owner ID, active groups, and the owner's effective role into L1+L2. `_post_shutdown` stops the scheduler and closes Redis in parallel. Related `cfg` fields: `db_name` (default `"tcbot"`), `redis_url`, `warn_expiry_days`, `sync_interval_hours`, `initial_owner_id`.
+`init_shared_subsystems` in `tcbot/__main__.py` (called by `_post_init` for
+long-lived transports and by serverless with `start_mtproto=False`) runs, in
+order: `connect()` (which applies the pending Alembic revisions and pings
+the server), then in parallel `ensure_initial_owner(cfg.initial_owner_id)`
+(failures non-fatal), `redis_client.connect_if_configured()` when
+configured (connection failure degrades to in-memory cache only with a
+warning), and `mtproto.start()` on long-lived transports (an exception
+aborts boot; a degraded `False` warns and continues Bot-API-only). Then
+`scheduler.start(cfg.database_url, cfg.warn_expiry_days, bot=app.bot,
+sync_interval_hours=cfg.sync_interval_hours, sync_runner=run_ban_sync)`,
+followed by a background `_warm_hot_caches` task that pre-loads owner ID,
+active groups, and the owner's effective role into L1+L2. `_post_shutdown`
+stops the scheduler, closes Redis, and disposes the database engine.
+Related `cfg` fields: `database_url`, `redis_url`, `warn_expiry_days`,
+`sync_interval_hours`, `initial_owner_id`.
 
 ## Safety rules
 
-- Do not call `col()` from command modules or workflow files.
-- Keep new collection helpers in `*_db.py` files.
-- Keep stored schema changes backward-compatible unless a migration plan exists (for example, the legacy `until_date_1` index drop and the removed `_cleanup_old_records` schedule keep old releases compatible).
+- Do not build statements in command modules or workflow files.
+- Keep new table helpers in `*_db.py` files.
+- Change a table in `base.py` and ship the matching Alembic revision; the
+  two must not drift.
+- Keep stored schema changes backward-compatible unless a migration plan
+  exists.
 - Use `utc_now()` from `tcbot.utils.time_and_date` for stored timestamps.
 - Never log secrets or connection strings.
-- Do not document or commit real MongoDB URIs, tokens, or private chat IDs; use placeholders.
+- Do not document or commit real database URLs, tokens, or private chat
+  IDs; use placeholders.

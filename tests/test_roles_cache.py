@@ -13,10 +13,11 @@ import pytest
 
 from tcbot.database import users_roles
 from tcbot.database.cache import _OWNER_KEY
+from tests.postgres_support import identity_db_call
 
 
 async def _identity(op: Any, **_kwargs: Any) -> Any:
-    return op()
+    return await identity_db_call(op)
 
 
 def _invalidate(uid: int) -> None:
@@ -101,15 +102,13 @@ def test_is_admin_hits_db_on_every_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     uid = 61003
-    hits: list[dict[str, int]] = []
+    hits: list[int] = []
 
-    class _AdminCol:
-        def find_one(self, *args: Any, **kwargs: Any) -> dict[str, int] | None:
-            filt = args[0] if args else kwargs.get("filter", {})
-            hits.append(dict(filt))
-            return {"_id": 1} if filt.get("user_id") == uid else None
+    async def _fetch_one(stmt: Any) -> dict[str, int] | None:
+        hits.append(uid)
+        return {"user_id": uid}
 
-    monkeypatch.setattr(users_roles, "col", lambda _name: _AdminCol())
+    monkeypatch.setattr(users_roles, "fetch_one", _fetch_one)
     monkeypatch.setattr(users_roles, "db_call", _identity)
 
     first = asyncio.run(users_roles.is_admin(uid))
@@ -117,7 +116,7 @@ def test_is_admin_hits_db_on_every_call(
 
     assert first is True
     assert second is True
-    assert hits == [{"user_id": uid}, {"user_id": uid}]
+    assert hits == [uid, uid]
 
 
 def test_get_effective_role_outage_raises_and_does_not_poison(
@@ -258,14 +257,13 @@ def test_get_owner_id_caches_second_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     users_roles.owner_id_cache.invalidate(_OWNER_KEY)
-    hits: list[dict[str, int]] = []
+    hits: list[int] = []
 
-    class _OwnerCol:
-        def find_one(self, *args: Any, **kwargs: Any) -> dict[str, int] | None:
-            hits.append({})
-            return {"user_id": 61008}
+    async def _fetch_one(stmt: Any) -> dict[str, int] | None:
+        hits.append(1)
+        return {"user_id": 61008}
 
-    monkeypatch.setattr(users_roles, "col", lambda _name: _OwnerCol())
+    monkeypatch.setattr(users_roles, "fetch_one", _fetch_one)
     monkeypatch.setattr(users_roles, "db_call", _identity)
     try:
         first = asyncio.run(users_roles.get_owner_id())
@@ -302,11 +300,10 @@ def test_is_owner_fresh_bypasses_cache(
     users_roles.owner_id_cache.invalidate(_OWNER_KEY)
     row = {"user_id": 61010}
 
-    class _OwnerCol:
-        def find_one(self, *args: Any, **kwargs: Any) -> dict[str, int] | None:
-            return dict(row)
+    async def _fetch_one(stmt: Any) -> dict[str, int] | None:
+        return dict(row)
 
-    monkeypatch.setattr(users_roles, "col", lambda _name: _OwnerCol())
+    monkeypatch.setattr(users_roles, "fetch_one", _fetch_one)
     monkeypatch.setattr(users_roles, "db_call", _identity)
     try:
         # * Prime the cache with the first owner row.

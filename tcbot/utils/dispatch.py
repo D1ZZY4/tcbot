@@ -206,45 +206,6 @@ def throw_if_cancelled(results: Iterable[object]) -> None:
             raise result
 
 
-async def drain_tasks(
-    tasks: set[asyncio.Task[None]],
-    *,
-    label: str,
-    timeout: float = 5.0,
-) -> None:
-    """Await background tasks, then cancel leftovers; never raises.
-
-    Bounded shutdown helper for fire-and-forget sets: waits up to
-    *timeout* seconds for in-flight work, cancels anything still running,
-    and awaits the cancellations so no task outlives loop teardown.
-    """
-    live = [t for t in list(tasks) if not t.done()]
-    if not live:
-        return
-    try:
-        await asyncio.wait_for(
-            asyncio.gather(*live, return_exceptions=True), timeout=timeout
-        )
-        return
-    except TimeoutError:
-        log.debug(
-            "%s: %d task(s) still running after %.0fs; cancelling.",
-            label,
-            len(live),
-            timeout,
-        )
-    for task in live:
-        if not task.done():
-            task.cancel()
-    try:
-        await asyncio.wait_for(
-            asyncio.gather(*[t for t in live if not t.done()], return_exceptions=True),
-            timeout=timeout,
-        )
-    except TimeoutError:
-        log.debug("%s: tasks survived cancellation; leaving them.", label)
-
-
 def is_benign_telegram_error(exc: BaseException) -> bool:
     """Return True if the exception is a known-benign Telegram API refusal.
 

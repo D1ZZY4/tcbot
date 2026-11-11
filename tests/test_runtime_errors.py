@@ -11,27 +11,47 @@ import logging
 from types import SimpleNamespace
 from typing import Any
 
-from pymongo.errors import ServerSelectionTimeoutError
 from pyrogram.session.session import AuthKeyNotFound
+from sqlalchemy.exc import OperationalError
 
 from tcbot import __main__ as runtime_errors
 from tcbot import error_reporter
 from tcbot.utils.circuit_breaker import CircuitOpenError
 
 
-class _FakeTask:
-    def add_done_callback(self, _cb: Any) -> None:
+class _FakeTracker:
+    """Stand-in for ``TaskTracker`` that records the scheduled coroutines."""
+
+    def __init__(self) -> None:
+        self.spawned: list[Any] = []
+
+    def spawn(self, coro: Any) -> bool:
+        self.spawned.append(coro)
+        return True
+
+    async def drain(self, **_kwargs: Any) -> None:
         return None
 
+    @property
+    def tasks_created(self) -> int:
+        return len(self.spawned)
 
-class _FakeLoop:
-    def __init__(self) -> None:
-        self.tasks_created: int = 0
+    def run_spawned(self) -> None:
+        """Run every scheduled coroutine to completion."""
+        while self.spawned:
+            coro = self.spawned.pop(0)
+            asyncio.run(coro)
 
-    def create_task(self, coro: Any) -> _FakeTask:
-        self.tasks_created += 1
-        coro.close()
-        return _FakeTask()
+    def clear(self) -> None:
+        """Drop the scheduled coroutines without running them."""
+        while self.spawned:
+            coro = self.spawned.pop(0)
+            coro.close()
+
+
+def _database_outage() -> OperationalError:
+    """Return the error a refused PostgreSQL connection produces."""
+    return OperationalError("SELECT 1", {}, Exception("connection refused"))
 
 
 class _FakeFuture:
@@ -51,12 +71,13 @@ class _FakeFuture:
         return self._exc
 
 
-def test_asyncio_handler_extracts_and_suppresses_mongo(
+def test_asyncio_handler_extracts_and_suppresses_database_outage(
     monkeypatch: Any,
 ) -> None:
-    """A never-retrieved ServerSelectionTimeoutError is suppressed, not shipped."""
-    loop = _FakeLoop()
-    handler = runtime_errors._make_asyncio_exc_handler(loop)  # type: ignore[arg-type]
+    """A never-retrieved database outage is suppressed, not shipped."""
+    tracker = _FakeTracker()
+    monkeypatch.setattr(runtime_errors, "_asyncio_report_tasks", tracker)
+    handler = runtime_errors._make_asyncio_exc_handler()
 
     reported: list[Any] = []
 
@@ -71,14 +92,14 @@ def test_asyncio_handler_extracts_and_suppresses_mongo(
     )
 
     handler(
-        loop,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
         {
             "exception": None,
             "message": "Task exception was never retrieved",
-            "task": _FakeFuture(ServerSelectionTimeoutError("no primary")),
+            "task": _FakeFuture(_database_outage()),
         },
     )
-    assert loop.tasks_created == 0
+    assert tracker.tasks_created == 0
     assert reported == []
 
 
@@ -86,8 +107,9 @@ def test_asyncio_handler_extracts_and_suppresses_circuit(
     monkeypatch: Any,
 ) -> None:
     """A never-retrieved CircuitOpenError is suppressed, not shipped."""
-    loop = _FakeLoop()
-    handler = runtime_errors._make_asyncio_exc_handler(loop)  # type: ignore[arg-type]
+    tracker = _FakeTracker()
+    monkeypatch.setattr(runtime_errors, "_asyncio_report_tasks", tracker)
+    handler = runtime_errors._make_asyncio_exc_handler()
 
     reported: list[Any] = []
 
@@ -96,37 +118,39 @@ def test_asyncio_handler_extracts_and_suppresses_circuit(
 
     monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
     handler(
-        loop,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
         {
             "exception": None,
             "message": "Task exception was never retrieved",
             "future": _FakeFuture(
-                CircuitOpenError("Circuit [mongodb] is OPEN; call rejected.")
+                CircuitOpenError("Circuit [postgres] is OPEN; call rejected.")
             ),
         },
     )
-    assert loop.tasks_created == 0
+    assert tracker.tasks_created == 0
     assert reported == []
 
 
 def test_asyncio_handler_direct_circuit_suppressed(monkeypatch: Any) -> None:
     """A directly-set CircuitOpenError is suppressed without a report task."""
-    loop = _FakeLoop()
-    handler = runtime_errors._make_asyncio_exc_handler(loop)  # type: ignore[arg-type]
+    tracker = _FakeTracker()
+    monkeypatch.setattr(runtime_errors, "_asyncio_report_tasks", tracker)
+    handler = runtime_errors._make_asyncio_exc_handler()
     handler(
-        loop,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
         {
-            "exception": CircuitOpenError("Circuit [mongodb] is OPEN"),
+            "exception": CircuitOpenError("Circuit [postgres] is OPEN"),
             "message": "boom",
         },
     )
-    assert loop.tasks_created == 0
+    assert tracker.tasks_created == 0
 
 
 def test_asyncio_handler_extracted_error_reports_real_type(monkeypatch: Any) -> None:
     """A non-suppressed extracted exception ships as itself, not RuntimeError(detail)."""
-    loop = _FakeLoop()
-    handler = runtime_errors._make_asyncio_exc_handler(loop)  # type: ignore[arg-type]
+    tracker = _FakeTracker()
+    monkeypatch.setattr(runtime_errors, "_asyncio_report_tasks", tracker)
+    handler = runtime_errors._make_asyncio_exc_handler()
 
     reported: list[Any] = []
 
@@ -134,18 +158,6 @@ def test_asyncio_handler_extracted_error_reports_real_type(monkeypatch: Any) -> 
         reported.append(exc)
 
     monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
-    orig_create = loop.create_task
-
-    def _create(coro: Any) -> Any:
-        # * The coroutine wraps report_exc(exc, context=detail); run it to
-        # * capture what would have shipped. report_exc is stubbed above.
-        async def _drain() -> None:
-            await coro
-
-        asyncio.run(_drain())
-        return orig_create  # type: ignore[return-value]
-
-    monkeypatch.setattr(loop, "create_task", _create)
     monkeypatch.setattr(
         "tcbot.__main__.mtproto_mod.is_auth_key_duplicated",
         lambda exc: False,
@@ -153,37 +165,41 @@ def test_asyncio_handler_extracted_error_reports_real_type(monkeypatch: Any) -> 
 
     boom = ValueError("boom")
     handler(
-        loop,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
         {
             "exception": None,
             "message": "Task exception was never retrieved",
             "task": _FakeFuture(boom),
         },
     )
-    # * The handler scheduled one report task (the fake ran it inline).
+    # * The handler scheduled one report task; running it captures what
+    # * would have shipped.
+    tracker.run_spawned()
     assert reported and reported[0] is boom
     assert not isinstance(reported[0], RuntimeError)
 
 
 def test_asyncio_handler_cancelled_future_is_benign(monkeypatch: Any) -> None:
     """A cancelled task future never reaches the report path."""
-    loop = _FakeLoop()
-    handler = runtime_errors._make_asyncio_exc_handler(loop)  # type: ignore[arg-type]
+    tracker = _FakeTracker()
+    monkeypatch.setattr(runtime_errors, "_asyncio_report_tasks", tracker)
+    handler = runtime_errors._make_asyncio_exc_handler()
     handler(
-        loop,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
         {
             "exception": None,
             "message": "Task exception was never retrieved",
             "task": _FakeFuture(None, cancelled=True),
         },
     )
-    assert loop.tasks_created == 0
+    assert tracker.tasks_created == 0
 
 
 def test_asyncio_handler_auth_key_not_found_parks_once(monkeypatch: Any) -> None:
     """A dead auth key parks MTProto and ships one card, then stays quiet."""
-    loop = _FakeLoop()
-    handler = runtime_errors._make_asyncio_exc_handler(loop)  # type: ignore[arg-type]
+    tracker = _FakeTracker()
+    monkeypatch.setattr(runtime_errors, "_asyncio_report_tasks", tracker)
+    handler = runtime_errors._make_asyncio_exc_handler()
 
     async def _fake_park() -> None:
         return None
@@ -199,7 +215,7 @@ def test_asyncio_handler_auth_key_not_found_parks_once(monkeypatch: Any) -> None
 
     exc = AuthKeyNotFound("Auth key not found in the system.")
     handler(
-        loop,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
         {
             "exception": None,
             "message": "Task exception was never retrieved",
@@ -207,26 +223,28 @@ def test_asyncio_handler_auth_key_not_found_parks_once(monkeypatch: Any) -> None
         },
     )
     # * One park task plus one loud report task for the first sighting.
-    assert loop.tasks_created == 2
+    assert tracker.tasks_created == 2
 
     monkeypatch.setattr(
         "tcbot.__main__.mtproto_mod.is_auth_dead",
         lambda: True,
     )
-    loop.tasks_created = 0
+    tracker.clear()
     handler(
-        loop,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
         {
             "exception": None,
             "message": "Task exception was never retrieved",
             "task": _FakeFuture(exc),
         },
     )
-    assert loop.tasks_created == 0
+    assert tracker.tasks_created == 0
 
 
-def test_error_handler_suppresses_mongo_outage(monkeypatch: Any, caplog: Any) -> None:
-    """The PTB handler path drops ServerSelectionTimeoutError before log.error."""
+def test_error_handler_suppresses_database_outage(
+    monkeypatch: Any, caplog: Any
+) -> None:
+    """The PTB handler path drops a database outage before log.error."""
     reported: list[Any] = []
 
     async def _fake_report(exc: BaseException, context: Any = None) -> None:
@@ -234,7 +252,7 @@ def test_error_handler_suppresses_mongo_outage(monkeypatch: Any, caplog: Any) ->
 
     monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
 
-    ctx = SimpleNamespace(error=ServerSelectionTimeoutError("no primary"))
+    ctx = SimpleNamespace(error=_database_outage())
     with caplog.at_level(logging.DEBUG, logger="tcbot.__main__"):
         asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]
     assert reported == []
@@ -274,7 +292,7 @@ def test_error_handler_suppresses_circuit_open(monkeypatch: Any, caplog: Any) ->
     monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
 
     ctx = SimpleNamespace(
-        error=CircuitOpenError("Circuit [mongodb] is OPEN; call rejected.")
+        error=CircuitOpenError("Circuit [postgres] is OPEN; call rejected.")
     )
     with caplog.at_level(logging.DEBUG, logger="tcbot.__main__"):
         asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]

@@ -7,17 +7,17 @@
 from __future__ import annotations
 
 import telegram.error as te
-from pymongo.errors import ConnectionFailure
 from pyrogram.errors import AuthKeyDuplicated
 from pyrogram.session.session import AuthKeyNotFound
+from sqlalchemy.exc import OperationalError
 
 from tcbot import error_reporter as classify
 from tcbot.utils.circuit_breaker import CircuitOpenError
 
 
-def test_mongodb_circuit_label() -> None:
-    exc = CircuitOpenError("Circuit [mongodb] is OPEN; call rejected.")
-    assert classify._classify(exc) == "[~] MongoDB Circuit Open"
+def test_database_circuit_label() -> None:
+    exc = CircuitOpenError("Circuit [postgres] is OPEN; call rejected.")
+    assert classify._classify(exc) == "[~] PostgreSQL Circuit Open"
 
 
 def test_telegram_circuit_label() -> None:
@@ -25,9 +25,9 @@ def test_telegram_circuit_label() -> None:
     assert classify._classify(exc) == "[~] Circuit Open"
 
 
-def test_mongodb_label_case_insensitive() -> None:
-    exc = CircuitOpenError("Circuit [MongoDB] is OPEN; call rejected.")
-    assert classify._classify(exc) == "[~] MongoDB Circuit Open"
+def test_database_label_case_insensitive() -> None:
+    exc = CircuitOpenError("Circuit [PostgreSQL] is OPEN; call rejected.")
+    assert classify._classify(exc) == "[~] PostgreSQL Circuit Open"
 
 
 def test_dispatch_circuit_message_labels_telegram() -> None:
@@ -36,28 +36,35 @@ def test_dispatch_circuit_message_labels_telegram() -> None:
     assert classify._classify(exc) == "[~] Circuit Open"
 
 
-def test_mongodb_hint_distinct_and_ordered() -> None:
-    mongo_hint = classify._action_hint("[~] MongoDB Circuit Open")
+def test_database_hint_distinct_and_ordered() -> None:
+    database_hint = classify._action_hint("[~] PostgreSQL Circuit Open")
     telegram_hint = classify._action_hint("[~] Circuit Open")
-    assert "Atlas" in mongo_hint
+    assert "PostgreSQL" in database_hint
     assert "Telegram" in telegram_hint
-    assert mongo_hint != telegram_hint
-    # * The MongoDB marker must sit ahead of the generic Circuit Open marker
-    # * so the longer label matches the specific hint first.
+    assert database_hint != telegram_hint
+    # * The database marker must sit ahead of the generic Circuit Open
+    # * marker so the longer label matches the specific hint first.
     markers = [marker for marker, _ in classify._ACTION_HINTS]
-    assert markers.index("MongoDB Circuit Open") < markers.index("Circuit Open")
+    assert markers.index("PostgreSQL Circuit Open") < markers.index("Circuit Open")
+
+
+def test_a_database_error_is_labelled_as_such() -> None:
+    """A database failure carries the database label, not the code-bug label."""
+    exc = OperationalError("SELECT 1", {}, Exception("connection refused"))
+    assert classify._classify(exc) == "[DB] Database Error"
 
 
 def test_benign_suppresses_connectivity_and_circuit() -> None:
-    assert classify._benign(ConnectionFailure("no primary")) is True
-    assert classify._benign(CircuitOpenError("Circuit [mongodb] is OPEN")) is True
+    outage = OperationalError("SELECT 1", {}, Exception("connection refused"))
+    assert classify._benign(outage) is True
+    assert classify._benign(CircuitOpenError("Circuit [postgres] is OPEN")) is True
     assert classify._benign(CircuitOpenError("Circuit [telegram] is OPEN")) is True
     assert classify._benign(RuntimeError("bug")) is False
 
 
 def test_owner_only_and_benign_filters_unchanged() -> None:
     assert classify._owner_only(te.Conflict("c")) is True
-    assert classify._owner_only(ConnectionFailure("x")) is False
+    assert classify._owner_only(OperationalError("s", {}, Exception("x"))) is False
     assert classify._benign(None) is False
 
 

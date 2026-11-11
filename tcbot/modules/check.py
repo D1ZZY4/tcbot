@@ -413,7 +413,7 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * heavy lifting via _resolve_user_info (which tries get_chat_member
     # * on each connected group) and we trust its lookup result.
     # * The refresh only writes when the name actually changed: an
-    # * unconditional write cost a MongoDB round trip and evicted the
+    # * unconditional write cost a database round trip and evicted the
     # * mention cache on every /check.
     if target_fname and not db.users_cache.is_placeholder_name(target_fname):
         try:

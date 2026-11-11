@@ -2,21 +2,23 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""MongoDB-backed Kurigram storage engine for the shared MTProto session."""
+"""PostgreSQL-backed Kurigram storage engine for the shared MTProto session."""
 
 from __future__ import annotations
 
 import asyncio
-import re
 import time
 from typing import TYPE_CHECKING
 
-from pymongo import ReturnDocument
-from pymongo.errors import ConnectionFailure, DuplicateKeyError, WriteConcernError
+import msgspec
 from pyrogram.storage import Storage, UpdateState
 from pyrogram.storage.sqlite_storage import SQLiteStorage, get_input_peer
+from sqlalchemy import ARRAY, Text, literal, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError
 
-from tcbot.database.mongos import col, db_call
+from tcbot.database.base import mtproto_state
+from tcbot.database.engine import db_call, fetch_all, fetch_one, run, run_returning
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.logger import get_logger
 
@@ -24,47 +26,84 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable
     from typing import Any
 
-    from pymongo.collection import Collection
-
 log = get_logger(__name__)
 
 # ────────────────────────── Write retry ────────────────────────── #
 
-# * Maximum retries for transient write concern errors (e.g. replica set
-# * failover). Each retry waits exponentially: 0.5s, 1s, 2s.
+# * Maximum retries for transient write failures (e.g. a failover or a
+# * serialization conflict). Each retry waits exponentially: 0.5s, 1s, 2s.
 _MAX_WRITE_RETRIES: int = 3
 _RETRY_BASE_DELAY: float = 0.5
 
+# * SQLSTATE 40001 (serialization failure) and 40P01 (deadlock detected)
+# * are the PostgreSQL equivalents of a retryable write concern error:
+# * the transaction never ran, so the same statement succeeds on the next
+# * attempt.
+_TRANSIENT_SQLSTATES: frozenset[str] = frozenset({"40001", "40P01"})
+
+# * A connection-level refusal is reported as SQLSTATE class 08 (the
+# * server is unreachable, the socket died, the host said no) or as
+# * 57P03 "cannot connect now": the server is up but refuses connections.
+_CONNECTIVITY_SQLSTATES: frozenset[str] = frozenset({"57P03"})
+
+
+def _sqlstate(exc: BaseException) -> str:
+    """Return the SQLSTATE of a driver error, or an empty string."""
+    orig = getattr(exc, "orig", None)
+    return str(getattr(orig, "sqlstate", "") or "")
+
+
+def _is_connectivity_failure(exc: BaseException) -> bool:
+    """Return True when the server could not be reached at all.
+
+    A refused or dropped connection has already burned the driver's own
+    connect timeout, so retrying only multiplies the outage wait.
+    """
+    if not isinstance(exc, OperationalError):
+        return False
+    state = _sqlstate(exc)
+    return state.startswith("08") or state in _CONNECTIVITY_SQLSTATES
+
 
 def _is_transient_write_error(exc: BaseException) -> bool:
-    """Return True when *exc* is a retryable MongoDB write concern error."""
-    return isinstance(exc, WriteConcernError) and "RetryableWriteError" in getattr(
-        exc, "details", {}
-    ).get("errorLabels", [])
+    """Return True when *exc* is a retryable PostgreSQL write failure.
+
+    The PostgreSQL equivalents of a retryable MongoDB write concern
+    error are a serialization failure (SQLSTATE 40001), a deadlock
+    (40P01) and a dropped connection (InterfaceError): the statement
+    never took effect, so the next attempt can simply run it again.
+    """
+    if isinstance(exc, InterfaceError):
+        # * The pool dropped the connection mid-statement; the next
+        # * attempt is served by a fresh socket.
+        return True
+    if isinstance(exc, OperationalError):
+        return _sqlstate(exc) in _TRANSIENT_SQLSTATES
+    return False
 
 
-async def _retry_write(op: Callable[[], Any]) -> Any:
-    """Execute *op* with retries on transient WriteConcernError.
+async def _retry_write(op: Callable[[], Awaitable[Any]]) -> Any:
+    """Execute *op* with retries on transient PostgreSQL write failures.
 
     Pyrogram's ``handle_updates()`` background task persists update states
-    through this store.  A transient replica-set fan-out (code 11602 /
-    ``InterruptedDueToReplStateChange``) raises ``WriteConcernError`` with
-    the ``RetryableWriteError`` label.  Because the task is fire-and-forget,
-    the exception is never retrieved and the event loop reports it as an
+    through this store.  A failover or a serialization conflict raises an
+    ``OperationalError`` (SQLSTATE 40001) or drops the connection with an
+    ``InterfaceError``.  Because the task is fire-and-forget, the
+    exception is never retrieved and the event loop reports it as an
     unhandled task exception.
 
-    Retrying transparently keeps the session alive through brief replica-set
-    elections without flooding the error channel.
+    Retrying transparently keeps the session alive through a brief
+    failover without flooding the error channel.
 
-    Connectivity failures already burned a full server-selection timeout,
-    so they are not retried: they degrade immediately. The open MongoDB
-    circuit also degrades immediately. Only the lease-claim path needs
-    DuplicateKeyError to propagate for fencing; it calls the database
-    directly instead of using this helper.
+    Connectivity failures already burned a full connect timeout, so they
+    are not retried: they degrade immediately. The open PostgreSQL circuit
+    also degrades immediately. Only the lease-claim path needs a unique
+    violation to propagate for fencing; it calls the database directly
+    instead of using this helper.
 
     *op* must be cheap to rebuild so retries re-execute the operation
     instead of reusing its result: callers pass a zero-argument thunk
-    that performs the sync write when called by :func:`db_call`.
+    that performs the async write when awaited.
     """
     last_exc: BaseException | None = None
     for attempt in range(_MAX_WRITE_RETRIES):
@@ -72,15 +111,21 @@ async def _retry_write(op: Callable[[], Any]) -> Any:
             return await db_call(op)
         except asyncio.CancelledError:
             raise
-        except DuplicateKeyError:
+        except IntegrityError:
+            # * A unique violation is fencing control flow, never a
+            # * transient failure: it must reach the caller.
             raise
         except CircuitOpenError as exc:
             log.warning("MTProto write failed (circuit open): %s", exc, exc_info=True)
             return None
-        except ConnectionFailure as exc:
-            log.warning("MTProto write failed (connectivity): %s", exc, exc_info=True)
-            return None
-        except WriteConcernError as exc:
+        except (OperationalError, InterfaceError) as exc:
+            if _is_connectivity_failure(exc):
+                # * The server could not be reached: the connect timeout
+                # * already elapsed, so retrying only delays the degrade.
+                log.warning(
+                    "MTProto write failed (connectivity): %s", exc, exc_info=True
+                )
+                return None
             if not _is_transient_write_error(exc) or attempt == _MAX_WRITE_RETRIES - 1:
                 # * Non-transient (or exhausted) failure: log and degrade
                 # * instead of propagating to Pyrogram's handle_updates task,
@@ -103,15 +148,29 @@ async def _retry_write(op: Callable[[], Any]) -> Any:
     raise last_exc  # type: ignore[misc]
 
 
+# ────────────────────────────── Keys ───────────────────────────── #
+# * The table holds one row per key, scoped by the session namespace:
+# * ``<ns>:kv:<name>`` scalars, ``<ns>:peer:<peer_id>`` peers,
+# * ``<ns>:ustate:<id>`` update states and ``<ns>:lock:mtproto_owner``
+# * the single-owner lease.
+
+
+def _like_escape(value: str) -> str:
+    """Escape *value* so it matches literally inside a SQL LIKE pattern."""
+    # * The escape character of the default LIKE operator is the
+    # * backslash, so the wildcards it protects must be escaped with it.
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 # ──────────────────────── Single-owner lease ───────────────────── #
 
 
-async def claim_owner(store: MongoStorage, owner: str, *, ttl_s: float) -> bool:
+async def claim_owner(store: PostgresStorage, owner: str, *, ttl_s: float) -> bool:
     """Atomically claim the single-owner lease for *owner*.
 
     Succeeds on a free lease, an expired lease (previous holder died
     without releasing), or a first-time insert won against a
-    concurrent claimant (the loser gets DuplicateKeyError). A live
+    concurrent claimant (the loser gets no inserted row). A live
     lease held by anyone else refuses. Only CancelledError
     propagates; every other failure returns False so callers degrade
     instead of sharing one auth key twice.
@@ -121,13 +180,21 @@ async def claim_owner(store: MongoStorage, owner: str, *, ttl_s: float) -> bool:
 
     async def _take() -> Any:
         return await db_call(
-            lambda: store._coll().find_one_and_update(
-                {
-                    "_id": lease_id,
-                    "$or": [{"owner": owner}, {"expires_at": {"$lt": now}}],
-                },
-                {"$set": {"owner": owner, "expires_at": now + ttl_s}},
-                return_document=ReturnDocument.AFTER,
+            lambda: run_returning(
+                mtproto_state.update()
+                .where(
+                    mtproto_state.c.id == lease_id,
+                    # * One statement decides the takeover: the row lock
+                    # * plus the re-check of the predicate after a
+                    # * concurrent commit makes the update atomic, so
+                    # * two claimants can never both take the lease.
+                    or_(
+                        mtproto_state.c.owner == owner,
+                        mtproto_state.c.expires_at < now,
+                    ),
+                )
+                .values(owner=owner, expires_at=now + ttl_s)
+                .returning(mtproto_state.c.id)
             )
         )
 
@@ -138,7 +205,7 @@ async def claim_owner(store: MongoStorage, owner: str, *, ttl_s: float) -> bool:
     # * connectivity and circuit errors propagate keeps outage claims at
     # * False, where fencing is safe.
     try:
-        if await _take() is not None:
+        if await _take():
             return True
     except asyncio.CancelledError:
         raise
@@ -149,41 +216,56 @@ async def claim_owner(store: MongoStorage, owner: str, *, ttl_s: float) -> bool:
     # * No row (first boot) or a live foreign lease: exactly one
     # * concurrent insert wins; the loser degrades instead of sharing
     # * the auth key.
-    async def _first() -> None:
-        await db_call(
-            lambda: store._coll().insert_one(
-                {"_id": lease_id, "owner": owner, "expires_at": now + ttl_s}
+    async def _first() -> list[dict[str, Any]]:
+        return await db_call(
+            lambda: run_returning(
+                pg_insert(mtproto_state)
+                .values(id=lease_id, owner=owner, expires_at=now + ttl_s)
+                # * The primary key makes the loser of the race skip the
+                # * insert instead of raising, so no lease is ever held
+                # * by two owners. The RETURNING clause reports the
+                # * winner: an insert that skipped the row returns
+                # * nothing.
+                .on_conflict_do_nothing(index_elements=["id"])
+                .returning(mtproto_state.c.id)
             )
         )
 
     try:
-        await _first()
-        return True
+        return bool(await _first())
     except asyncio.CancelledError:
         raise
-    except DuplicateKeyError:
+    except IntegrityError:
         return False
     except Exception:
         log.exception("MTProto lease first-claim insert failed")
         return False
 
 
-async def refresh_owner(store: MongoStorage, owner: str, *, ttl_s: float) -> bool:
+async def refresh_owner(store: PostgresStorage, owner: str, *, ttl_s: float) -> bool:
     """Renew the lease; False when someone else owns it (fencing)."""
-    res = await db_call(
-        lambda: store._coll().update_one(
-            {"_id": store._lease_id(), "owner": owner},
-            {"$set": {"expires_at": time.time() + ttl_s}},
+    lease_id = store._lease_id()
+    expires_at = time.time() + ttl_s
+    affected = await db_call(
+        lambda: run(
+            mtproto_state.update()
+            .where(mtproto_state.c.id == lease_id, mtproto_state.c.owner == owner)
+            .values(expires_at=expires_at)
         )
     )
-    return res.matched_count > 0
+    return affected > 0
 
 
-async def release_owner(store: MongoStorage, owner: str) -> None:
+async def release_owner(store: PostgresStorage, owner: str) -> None:
     """Best-effort lease release; expiry covers leftovers after a crash."""
+    lease_id = store._lease_id()
     try:
         await db_call(
-            lambda: store._coll().delete_one({"_id": store._lease_id(), "owner": owner})
+            lambda: run(
+                mtproto_state.delete().where(
+                    mtproto_state.c.id == lease_id, mtproto_state.c.owner == owner
+                )
+            )
         )
     except asyncio.CancelledError:
         raise
@@ -195,39 +277,51 @@ async def release_owner(store: MongoStorage, owner: str) -> None:
 
 
 async def update_peers(
-    store: MongoStorage, peers: Iterable[tuple[int, int, str, str | None]]
+    store: PostgresStorage, peers: Iterable[tuple[int, int, str, str | None]]
 ) -> None:
     """Upsert peers, preserving stored usernames like the usernames table does."""
     now = int(time.time())
     for peer_id, access_hash, peer_type, phone_number in peers:
         doc_id = store._peer(peer_id)
 
-        def _op(
+        async def _op(
             _did: str = doc_id,
             _ah: int = access_hash,
             _pt: str = peer_type,
             _pn: str | None = phone_number,
             _now: int = now,
         ) -> None:
-            store._coll().update_one(
-                {"_id": _did},
-                {
-                    "$set": {
-                        "access_hash": _ah,
-                        "type": _pt,
-                        "phone_number": _pn,
-                        "updated_on": _now,
-                    },
-                    "$setOnInsert": {"usernames": []},
-                },
-                upsert=True,
+            await db_call(
+                lambda: run(
+                    pg_insert(mtproto_state)
+                    .values(
+                        id=_did,
+                        access_hash=_ah,
+                        type=_pt,
+                        phone_number=_pn,
+                        updated_on=_now,
+                        # * A new peer row starts with an empty name
+                        # * list; the conflict clause leaves a stored
+                        # * list untouched.
+                        usernames=[],
+                    )
+                    .on_conflict_do_update(
+                        index_elements=["id"],
+                        set_={
+                            "access_hash": _ah,
+                            "type": _pt,
+                            "phone_number": _pn,
+                            "updated_on": _now,
+                        },
+                    )
+                )
             )
 
         await _retry_write(_op)
 
 
 async def update_usernames(
-    store: MongoStorage, usernames: Iterable[tuple[int, list[str | None]]]
+    store: PostgresStorage, usernames: Iterable[tuple[int, list[str | None]]]
 ) -> None:
     """Replace the username list of each given peer.
 
@@ -240,70 +334,111 @@ async def update_usernames(
         doc_id = store._peer(peer_id)
         filtered_names = [n for n in names if n is not None]
 
-        def _op(
+        async def _op(
             _did: str = doc_id,
             _names: list[str] = filtered_names,
             _now: int = now,
         ) -> None:
-            store._coll().update_one(
-                {"_id": _did},
-                {
-                    "$set": {
-                        "usernames": _names,
-                        "updated_on": _now,
-                    }
-                },
-                upsert=True,
+            await db_call(
+                lambda: run(
+                    pg_insert(mtproto_state)
+                    .values(id=_did, usernames=_names, updated_on=_now)
+                    .on_conflict_do_update(
+                        index_elements=["id"],
+                        # * Only the names and the timestamp change: the
+                        # * stored access hash and peer type survive a
+                        # * names-only write.
+                        set_={"usernames": _names, "updated_on": _now},
+                    )
+                )
             )
 
         await _retry_write(_op)
 
 
-async def get_peer_by_id(store: MongoStorage, peer_id: int) -> Any:
+def _peer_input(doc: dict[str, Any], peer_id: int, message: str) -> Any:
+    """Build the InputPeer from a peer row, or raise KeyError when it is unusable.
+
+    A peer row without an access hash or a type cannot address a
+    Telegram peer, so it is reported as a miss instead of handing a
+    half-built peer to the API.
+    """
+    access_hash = doc.get("access_hash")
+    peer_type = doc.get("type")
+    if access_hash is None or peer_type is None:
+        raise KeyError(message)
+    return get_input_peer(peer_id, access_hash, peer_type)
+
+
+async def get_peer_by_id(store: PostgresStorage, peer_id: int) -> Any:
     """Return the InputPeer for *peer_id*, or raise KeyError like SQLiteStorage."""
-    doc = await db_call(lambda: store._coll().find_one({"_id": store._peer(peer_id)}))
+    doc = await db_call(
+        lambda: fetch_one(
+            select(
+                mtproto_state.c.access_hash,
+                mtproto_state.c.type,
+            ).where(mtproto_state.c.id == store._peer(peer_id))
+        )
+    )
     if doc is None:
         raise KeyError(f"ID not found: {peer_id}")
-    return get_input_peer(peer_id, doc["access_hash"], doc["type"])
+    return _peer_input(doc, peer_id, f"ID not found: {peer_id}")
 
 
-async def get_peer_by_username(store: MongoStorage, username: str) -> Any:
+async def get_peer_by_username(store: PostgresStorage, username: str) -> Any:
     """Return the freshest InputPeer for *username*, or raise KeyError."""
     doc = await db_call(
-        lambda: store._coll().find_one(
-            {"_id": {"$regex": f"^{store._ns_re}:peer:"}, "usernames": username},
-            sort=[("updated_on", -1)],
+        lambda: fetch_one(
+            select(
+                mtproto_state.c.id,
+                mtproto_state.c.access_hash,
+                mtproto_state.c.type,
+                mtproto_state.c.updated_on,
+            )
+            .where(
+                mtproto_state.c.id.like(f"{store._ns_like}:peer:%"),
+                # * The containment operator is the one the GIN index
+                # * over the name array can serve; "= ANY(...)" is not.
+                mtproto_state.c.usernames.op("@>")(literal([username], ARRAY(Text))),
+            )
+            .order_by(mtproto_state.c.updated_on.desc())
+            .limit(1)
         )
     )
     if doc is None:
         raise KeyError(f"Username not found: {username}")
-    if abs(time.time() - doc.get("updated_on", 0)) > SQLiteStorage.USERNAME_TTL:
+    updated_on = doc.get("updated_on") or 0
+    if abs(time.time() - updated_on) > SQLiteStorage.USERNAME_TTL:
         raise KeyError(f"Username expired: {username}")
-    peer_id = int(str(doc["_id"]).rsplit(":", 1)[1])
-    return get_input_peer(peer_id, doc["access_hash"], doc["type"])
+    peer_id = int(str(doc["id"]).rsplit(":", 1)[1])
+    return _peer_input(doc, peer_id, f"Username not found: {username}")
 
 
-async def get_peer_by_phone_number(store: MongoStorage, phone_number: str) -> Any:
+async def get_peer_by_phone_number(store: PostgresStorage, phone_number: str) -> Any:
     """Return the InputPeer for *phone_number*, or raise KeyError."""
     doc = await db_call(
-        lambda: store._coll().find_one(
-            {
-                "_id": {"$regex": f"^{store._ns_re}:peer:"},
-                "phone_number": phone_number,
-            }
+        lambda: fetch_one(
+            select(
+                mtproto_state.c.id,
+                mtproto_state.c.access_hash,
+                mtproto_state.c.type,
+            ).where(
+                mtproto_state.c.id.like(f"{store._ns_like}:peer:%"),
+                mtproto_state.c.phone_number == phone_number,
+            )
         )
     )
     if doc is None:
         raise KeyError(f"Phone number not found: {phone_number}")
-    peer_id = int(str(doc["_id"]).rsplit(":", 1)[1])
-    return get_input_peer(peer_id, doc["access_hash"], doc["type"])
+    peer_id = int(str(doc["id"]).rsplit(":", 1)[1])
+    return _peer_input(doc, peer_id, f"Phone number not found: {phone_number}")
 
 
 # ───────────────────────────── Storage ─────────────────────────── #
 
 
-class MongoStorage(Storage):
-    """Kurigram :class:`Storage` persisted in the ``mtproto_state`` collection.
+class PostgresStorage(Storage):
+    """Kurigram :class:`Storage` persisted in the ``mtproto_state`` table.
 
     Semantics mirror Kurigram's ``SQLiteStorage`` exactly (same KeyError
     misses, same 8h username TTL, same COALESCE-style update-state merge);
@@ -313,38 +448,32 @@ class MongoStorage(Storage):
     def __init__(self, namespace: str) -> None:
         """Scope every key under *namespace* so sessions never collide."""
         self._ns = namespace
-        # * Pre-escaped once: the namespace feeds several anchored $regex
-        # * filters below, and an unescaped metacharacter there would widen
+        # * Pre-escaped once: the namespace feeds several LIKE filters
+        # * below, and an unescaped metacharacter there would widen
         # * every peer/username/state scan past this session's keys.
-        self._ns_re = re.escape(namespace)
+        self._ns_like = _like_escape(namespace)
 
     # ── key helpers ── #
-    # * Collection ``mtproto_state``, one document per key, scoped by
+    # * Table ``mtproto_state``, one row per key, scoped by
     # * namespace: ``<ns>:kv:<name>`` scalars, ``<ns>:peer:<peer_id>``
     # * peers, ``<ns>:ustate:<id>`` update states.
 
-    def _coll(self) -> Collection:
-        """Return the shared state collection."""
-        # * Resolved via the module global so patching
-        # * tcbot.database.mtproto_store.col keeps working as before.
-        return col("mtproto_state")
-
     def _kv(self, name: str) -> str:
-        """Build the document ID for scalar *name*."""
+        """Build the row ID for scalar *name*."""
         return f"{self._ns}:kv:{name}"
 
     def _peer(self, peer_id: int) -> str:
-        """Build the document ID for *peer_id*."""
+        """Build the row ID for *peer_id*."""
         return f"{self._ns}:peer:{peer_id}"
 
     def _ustate(self, state_id: int) -> str:
-        """Build the document ID for update state *state_id*."""
+        """Build the row ID for update state *state_id*."""
         return f"{self._ns}:ustate:{state_id}"
 
     # ── lifecycle ── #
 
     async def open(self) -> None:
-        """No-op: MongoDB needs no schema setup, keys are created on first write."""
+        """No-op: the schema is owned by the shared engine, rows are created on first write."""
         return
 
     async def save(self) -> None:
@@ -352,28 +481,50 @@ class MongoStorage(Storage):
         await self.date(int(time.time()))
 
     async def close(self) -> None:
-        """No-op: the sync client pool is owned by the shared mongos client."""
+        """No-op: the connection pool is owned by the shared engine."""
         return
 
     async def delete(self) -> None:
-        """Drop every document in this namespace with transient-error retry."""
+        """Drop every row in this namespace with transient-error retry."""
         await _retry_write(
-            lambda: self._coll().delete_many({"_id": {"$regex": f"^{self._ns_re}:"}})
+            lambda: run(
+                mtproto_state.delete().where(
+                    mtproto_state.c.id.like(f"{self._ns_like}:%")
+                )
+            )
         )
 
     # ── scalar accessors (same object-sentinel contract as SQLiteStorage) ── #
 
     async def _get_scalar(self, name: str) -> Any:
         """Read scalar *name*, or None when never written."""
-        doc = await db_call(lambda: self._coll().find_one({"_id": self._kv(name)}))
-        return doc["value"] if doc else None
+        row = await db_call(
+            lambda: fetch_one(
+                select(mtproto_state.c.value).where(
+                    mtproto_state.c.id == self._kv(name)
+                )
+            )
+        )
+        if row is None:
+            return None
+        raw = row.get("value")
+        if raw is None:
+            return None
+        # * The session holds opaque Python objects (the authorization
+        # * key is raw bytes), so the payload travels as msgpack.
+        return msgspec.msgpack.decode(bytes(raw))
 
     async def _set_scalar(self, name: str, value: Any) -> None:
         """Upsert scalar *name* with transient-error retry."""
         kv = self._kv(name)
+        payload = msgspec.msgpack.encode(value)
 
         await _retry_write(
-            lambda: self._coll().replace_one({"_id": kv}, {"value": value}, upsert=True)
+            lambda: run(
+                pg_insert(mtproto_state)
+                .values(id=kv, value=payload)
+                .on_conflict_do_update(index_elements=["id"], set_={"value": payload})
+            )
         )
 
     def _accessor(self, name: str, value: Any = object) -> Awaitable[Any]:
@@ -461,16 +612,26 @@ class MongoStorage(Storage):
         self, ids: int | Iterable[int] | None = None
     ) -> list[UpdateState]:
         """Return stored update states oldest-first, optionally filtered by ID."""
-        filt: dict[str, Any] = {"_id": {"$regex": f"^{self._ns_re}:ustate:"}}
+        stmt = select(
+            mtproto_state.c.id,
+            mtproto_state.c.pts,
+            mtproto_state.c.qts,
+            mtproto_state.c.date,
+            mtproto_state.c.seq,
+        ).where(mtproto_state.c.id.like(f"{self._ns_like}:ustate:%"))
         if ids is not None:
             state_ids = (ids,) if isinstance(ids, int) else tuple(ids)
             if not state_ids:
                 return []
-            filt["_id"]["$in"] = [self._ustate(i) for i in state_ids]
-        docs = await db_call(lambda: list(self._coll().find(filt).sort("date", 1)))
+            stmt = stmt.where(
+                mtproto_state.c.id.in_([self._ustate(i) for i in state_ids])
+            )
+        docs = await db_call(
+            lambda: fetch_all(stmt.order_by(mtproto_state.c.date.asc()))
+        )
         return [
             UpdateState(
-                int(str(d["_id"]).rsplit(":", 1)[1]),
+                int(str(d["id"]).rsplit(":", 1)[1]),
                 d.get("pts"),
                 d.get("qts"),
                 d.get("date"),
@@ -484,8 +645,8 @@ class MongoStorage(Storage):
     ) -> None:
         """Merge update states, leaving stored fields intact when the new ones are None.
 
-        Retries on transient ``WriteConcernError`` so Pyrogram's background
-        ``handle_updates()`` task does not crash during replica-set elections.
+        Retries on transient write failures so Pyrogram's background
+        ``handle_updates()`` task does not crash during a failover.
         """
         states = (
             [update_state] if isinstance(update_state, UpdateState) else update_state
@@ -505,13 +666,20 @@ class MongoStorage(Storage):
                 state_id = state.id
                 state_patch = dict(patch)
 
-                await _retry_write(
-                    lambda sid=state_id, patch=state_patch: self._coll().update_one(
-                        {"_id": self._ustate(sid)},
-                        {"$set": patch},
-                        upsert=True,
+                async def _op(
+                    _sid: int = state_id, _patch: dict[str, int] = state_patch
+                ) -> None:
+                    await db_call(
+                        lambda: run(
+                            pg_insert(mtproto_state)
+                            .values(id=self._ustate(_sid), **_patch)
+                            .on_conflict_do_update(
+                                index_elements=["id"], set_=dict(_patch)
+                            )
+                        )
                     )
-                )
+
+                await _retry_write(_op)
 
     async def delete_update_state(self, state_id: int | Iterable[int]) -> None:
         """Delete update states by ID with transient-error retry."""
@@ -519,7 +687,9 @@ class MongoStorage(Storage):
         ustate_ids = [self._ustate(i) for i in state_ids]
 
         await _retry_write(
-            lambda: self._coll().delete_many({"_id": {"$in": ustate_ids}})
+            lambda: run(
+                mtproto_state.delete().where(mtproto_state.c.id.in_(ustate_ids))
+            )
         )
 
     # ── single-owner lease ── #
@@ -527,10 +697,10 @@ class MongoStorage(Storage):
     # * auth key when two clients connect with it at once
     # * (406 AUTH_KEY_DUPLICATED), so fleet instances elect exactly one
     # * owner before connecting. The lease row lives in this same
-    # * collection; a crashed holder fails over after at most one TTL.
+    # * table; a crashed holder fails over after at most one TTL.
 
     def _lease_id(self) -> str:
-        """Build the document ID for the single-owner lease."""
+        """Build the row ID for the single-owner lease."""
         return f"{self._ns}:lock:mtproto_owner"
 
     async def claim_owner(self, owner: str, *, ttl_s: float) -> bool:

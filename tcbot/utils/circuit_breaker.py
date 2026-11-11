@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Async circuit breaker for external service calls (Telegram API, MongoDB)."""
+"""Async circuit breaker for external service calls (Telegram API, PostgreSQL)."""
 
 from __future__ import annotations
 
@@ -276,10 +276,10 @@ telegram: CircuitBreaker = CircuitBreaker(
     recovery_timeout=_DEFAULT_RECOVERY_TIMEOUT,
 )
 
-#: Circuit breaker for MongoDB operations.
+#: Circuit breaker for PostgreSQL operations.
 #: Trips after 5 transient failures; recovers after 60s.
-mongodb: CircuitBreaker = CircuitBreaker(
-    "mongodb",
+postgres: CircuitBreaker = CircuitBreaker(
+    "postgres",
     failure_threshold=_DEFAULT_FAILURE_THRESHOLD,
     recovery_timeout=_DEFAULT_RECOVERY_TIMEOUT,
 )

@@ -27,7 +27,6 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import cb_error_edit, send_log
 from tcbot.utils.dispatch import (
     count_transient_errors,
-    drain_tasks,
     fan_out,
     gather_bounded,
     throw_if_cancelled,
@@ -35,6 +34,7 @@ from tcbot.utils.dispatch import (
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
+from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT, monotonic
 
 if TYPE_CHECKING:
@@ -63,12 +63,8 @@ _REPLAY_BUDGET_S: float = 20.0
 # * Enforcement actions issued per round. The deadline is checked between
 # * rounds, so the round size bounds how long the budget can be overrun.
 _REPLAY_ROUND: int = 8
-_harvest_tasks: set[asyncio.Task[None]] = set()
-
-
-async def drain_harvest_tasks() -> None:
-    """Await in-flight admin-harvest tasks at shutdown."""
-    await drain_tasks(_harvest_tasks, label="admin harvest")
+# * Owner of the in-flight admin-identity harvests.
+harvest_tasks = TaskTracker("admin harvest")
 
 
 async def _harvest_admin_identities(chat_id: int, admins: list[ChatMember]) -> None:
@@ -705,14 +701,7 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
             mute_docs = mute_docs[:_REPLAY_CAP]
             replay_blind = True
         if not isinstance(admins_result, BaseException) and admins_result:
-            try:
-                task = asyncio.get_running_loop().create_task(
-                    _harvest_admin_identities(chat_id, admins_list)
-                )
-                _harvest_tasks.add(task)
-                task.add_done_callback(_harvest_tasks.discard)
-            except RuntimeError:
-                log.debug("Harvest task skipped: no running event loop.")
+            harvest_tasks.spawn(_harvest_admin_identities(chat_id, admins_list))
         applied_bans, skipped_bans = await self._replay_bans(
             bot, chat_id, ban_uids, deadline
         )

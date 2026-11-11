@@ -156,3 +156,54 @@ def test_a_failing_update_releases_its_lock() -> None:
 
     asyncio.run(_scenario())
     assert processor.tracked_keys == 0
+
+
+def test_a_burst_on_one_conversation_does_not_starve_the_others() -> None:
+    """Updates queued on one conversation must not occupy the global slots.
+
+    PTB's ``BaseUpdateProcessor.process_update`` takes a global concurrency
+    slot before the per-key lock, so every update waiting on a busy
+    conversation used to hold a slot. A burst large enough to fill the cap
+    then starved every other chat in the federation. The processor takes
+    the key lock first, so the cap bounds the handlers that run.
+    """
+    processor = KeyedUpdateProcessor(max_concurrent_updates=2)
+    release = asyncio.Event()
+    running = 0
+    peak = 0
+
+    async def _slow() -> None:
+        nonlocal running, peak
+        running += 1
+        peak = max(peak, running)
+        await release.wait()
+        running -= 1
+
+    async def _scenario() -> None:
+        busy = _FakeUpdate(100, 42)
+        other = _FakeUpdate(200, 99)
+
+        # * Two updates of the busy conversation: the first holds the key
+        # * lock, the second waits for it.
+        first = asyncio.create_task(processor.process_update(busy, _slow()))
+        await asyncio.sleep(0)
+        second = asyncio.create_task(processor.process_update(busy, _slow()))
+        await asyncio.sleep(0)
+
+        # * An unrelated conversation must still reach its handler while the
+        # * busy one is saturated.
+        ran = asyncio.Event()
+
+        async def _other_handler() -> None:
+            ran.set()
+
+        await asyncio.wait_for(
+            processor.process_update(other, _other_handler()), timeout=1
+        )
+        assert ran.is_set()
+
+        release.set()
+        await asyncio.gather(first, second)
+
+    asyncio.run(_scenario())
+    assert peak == 1

@@ -7,41 +7,37 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING
 
 import pytest
 
 from tcbot import database as db
+from tcbot.database import engine as engine_module
 from tcbot.database import users_roles
+from tcbot.database.base import tc_roles
 from tcbot.modules.helper.pipelines.stats_flow import Stats
 
-
-class _SpyCollection:
-    """Collection double recording every count_documents filter."""
-
-    def __init__(self) -> None:
-        self.filters: list[dict[str, str]] = []
-
-    def count_documents(self, filter: dict[str, str]) -> int:
-        self.filters.append(filter)
-        return 42
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
-async def _identity(op: Any, **_kwargs: Any) -> Any:
-    return op()
+@pytest.fixture
+async def role_db(postgres_db: str) -> AsyncIterator[str]:
+    """Start from an empty custom-role table."""
+    await engine_module.run(tc_roles.delete())
+    yield postgres_db
+    await engine_module.run(tc_roles.delete())
 
 
-def test_role_count_delegates_to_count_documents(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    fake = _SpyCollection()
-    monkeypatch.setattr(users_roles, "col", lambda _name: fake)
-    monkeypatch.setattr(users_roles, "db_call", _identity)
+async def test_role_count_counts_only_the_requested_role(role_db: str) -> None:
+    """The count helper filters on the role instead of counting every row."""
+    await users_roles.set_role(11, "developer", 1)
+    await users_roles.set_role(12, "developer", 1)
+    await users_roles.set_role(13, "tester", 1)
 
-    result = asyncio.run(users_roles.role_count("developer"))
-
-    assert result == 42
-    assert fake.filters == [{"role": "developer"}]
+    assert await users_roles.role_count("developer") == 2
+    assert await users_roles.role_count("tester") == 1
+    assert await users_roles.role_count("admin") == 0
 
 
 def _stub_stats_reads(monkeypatch: pytest.MonkeyPatch) -> list[str]:

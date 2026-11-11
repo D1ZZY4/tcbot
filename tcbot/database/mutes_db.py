@@ -6,38 +6,49 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import asyncio
+from typing import TYPE_CHECKING, cast
 
-from tcbot.database._migration import _repoint_chat
+from sqlalchemy import case, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from tcbot.database.base import active_mutes, mutes
 from tcbot.database.documents import ActiveMuteDoc, MuteDoc
-from tcbot.database.mongos import col, db_call
+from tcbot.database.engine import db_call, fetch_all, fetch_one, fetch_value, run
 from tcbot.database.types import ChatId, UserId
+from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from pymongo.collection import Collection
+    from sqlalchemy import ColumnElement
 
-# ─────────────────────── Collection Helpers ─────────────────────── #
-# * Internal collection access utilities for the mutes database
+log = get_logger(__name__)
+
+# ──────────────────────────── Tables ────────────────────────────── #
+# * The surrogate primary key stays out of the returned documents: the
+# * helpers expose the federation fields, not the storage identity.
+_MUTE_COLUMNS = [c for c in mutes.c if c.name != "id"]
+
+# * The live mute row is keyed by the muted user, so the whole row is
+# * the document: there is no surrogate id to hide.
+_ACTIVE_MUTE_COLUMNS = list(active_mutes.c)
+
+# ─────────────────────── Table helpers ────────────────────────── #
+# * Internal table access utilities for the mutes database
 
 
-def _mutes() -> Collection:
-    return col("mutes")
-
-
-def _active_mutes() -> Collection:
-    return col("active_mutes")
-
-
-def _not_expired_clause(now: datetime) -> dict[str, object]:
-    """Match permanent (``None``/missing ``until_date``) or still-valid timed mutes.
+def _not_expired_clause(now: datetime) -> ColumnElement[bool]:
+    """Match permanent (``NULL`` ``until_date``) or still-valid timed mutes.
 
     Single owner for the expiry predicate so the query-time filter cannot
-    drift from the TTL index semantics (permanent rows never expire).
+    drift from the permanent-mute semantics (permanent rows never expire).
     """
-    return {"$or": [{"until_date": None}, {"until_date": {"$gt": now}}]}
+    return or_(
+        active_mutes.c.until_date.is_(None),
+        active_mutes.c.until_date > now,
+    )
 
 
 # ──────────────────────────── Mutations ─────────────────────────── #
@@ -68,11 +79,22 @@ async def log_mute(
     }
     if duration_secs is not None:
         doc["duration_secs"] = duration_secs
-    await db_call(lambda: _mutes().insert_one(doc))
+    await db_call(
+        lambda: run(
+            mutes.insert().values(
+                user_id=doc["user_id"],
+                chat_id=doc["chat_id"],
+                reason=doc["reason"],
+                admin_id=doc["admin_id"],
+                timestamp=doc["timestamp"],
+                duration_secs=doc.get("duration_secs"),
+            )
+        )
+    )
 
 
 # ──────────────────────── Active mute store ─────────────────────── #
-# * One document per muted user in `active_mutes`.
+# * One row per muted user in `active_mutes`.
 # * set_active_mute is called by _execute_mute before the restrict fan-out
 # * (fail-closed: no group is touched when the record cannot persist).
 # * clear_active_mute is called by execute_unmute.
@@ -89,71 +111,69 @@ async def set_active_mute(user_id: int, *, until: datetime | None = None) -> Non
 
     The stored expiry only ever moves further into the future. A permanent
     mute is never downgraded to a timed one: overwriting a stored
-    ``until_date`` of ``None`` with a deadline would let the TTL index
-    delete the record when that deadline passes, and the bot would lose the
-    enforcement state for a user it still restricts. For the same reason a
-    timed mute never shortens an expiry that already reaches further.
+    ``until_date`` of ``None`` with a deadline would let the row expire
+    and the bot would lose the enforcement state for a user it still
+    restricts. For the same reason a timed mute never shortens an expiry
+    that already reaches further.
     """
     now = utc_now()
     if until is None:
         # * A permanent mute always wins: it outranks every deadline.
         await db_call(
-            lambda: _active_mutes().update_one(
-                {"user_id": UserId(user_id)},
-                {
-                    "$set": {
-                        "user_id": UserId(user_id),
-                        "until_date": None,
-                        "timestamp": now,
-                    }
-                },
-                upsert=True,
+            lambda: run(
+                pg_insert(active_mutes)
+                .values(user_id=UserId(user_id), until_date=None, timestamp=now)
+                .on_conflict_do_update(
+                    index_elements=["user_id"],
+                    set_={"until_date": None, "timestamp": now},
+                )
             )
         )
         return
-    # * Extend an existing timed expiry, never shorten one and never
-    # * downgrade a permanent mute: the filter matches only a stored date
-    # * that is present and strictly earlier than the new deadline.
+    # * One atomic upsert: the statement reads the stored row and writes
+    # * the new deadline in the same round trip, so two concurrent mutes
+    # * cannot both miss the row and then collapse onto one insert. The
+    # * conflict clause keeps a permanent mute permanent and otherwise
+    # * keeps the later of the two deadlines.
     await db_call(
-        lambda: _active_mutes().update_one(
-            {"user_id": UserId(user_id), "until_date": {"$ne": None, "$lt": until}},
-            {"$set": {"until_date": until, "timestamp": now}},
-        )
-    )
-    # * Create the record when it does not exist yet. $setOnInsert only
-    # * fires on insert, so an existing record keeps the value the step
-    # * above decided on.
-    await db_call(
-        lambda: _active_mutes().update_one(
-            {"user_id": UserId(user_id)},
-            {
-                "$setOnInsert": {
-                    "user_id": UserId(user_id),
-                    "until_date": until,
+        lambda: run(
+            pg_insert(active_mutes)
+            .values(user_id=UserId(user_id), until_date=until, timestamp=now)
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_={
+                    "until_date": case(
+                        (active_mutes.c.until_date.is_(None), None),
+                        else_=func.greatest(active_mutes.c.until_date, until),
+                    ),
                     "timestamp": now,
-                }
-            },
-            upsert=True,
+                },
+            )
         )
     )
 
 
 async def clear_active_mute(user_id: int) -> None:
     """Remove the active mute entry when a user is unmuted."""
-    await db_call(lambda: _active_mutes().delete_one({"user_id": UserId(user_id)}))
+    await db_call(
+        lambda: run(
+            active_mutes.delete().where(active_mutes.c.user_id == UserId(user_id))
+        )
+    )
 
 
 async def get_active_mute(user_id: int) -> ActiveMuteDoc | None:
     """Return the active mute for a user, or None if none exists or has expired."""
     now = utc_now()
-    return await db_call(
-        lambda: _active_mutes().find_one(
-            {
-                "user_id": UserId(user_id),
-                **_not_expired_clause(now),
-            }
+    row = await db_call(
+        lambda: fetch_one(
+            select(*_ACTIVE_MUTE_COLUMNS).where(
+                active_mutes.c.user_id == UserId(user_id),
+                _not_expired_clause(now),
+            )
         )
     )
+    return cast("ActiveMuteDoc | None", row)
 
 
 async def active_mute_docs() -> list[ActiveMuteDoc]:
@@ -162,14 +182,10 @@ async def active_mute_docs() -> list[ActiveMuteDoc]:
     Expired timed mutes (``until_date <= now``) are excluded at query time.
     """
     now = utc_now()
-    return await db_call(
-        lambda: list(
-            _active_mutes().find(
-                _not_expired_clause(now),
-                {"user_id": 1, "until_date": 1, "_id": 0},
-            )
-        )
+    rows = await db_call(
+        lambda: fetch_all(select(*_ACTIVE_MUTE_COLUMNS).where(_not_expired_clause(now)))
     )
+    return cast("list[ActiveMuteDoc]", rows)
 
 
 # ─────────────────────── Per-user history ───────────────────────── #
@@ -182,25 +198,28 @@ async def user_mutes(
 
     ``limit=None`` returns the full list (backwards compatible).
     """
-    cursor = (
-        _mutes()
-        .find(
-            {"user_id": user_id},
-            {"_id": 0},
-            # * Tie-break on _id so the order is stable when two
-            # * events share a timestamp, matching the warn history.
-            sort=[("timestamp", -1), ("_id", -1)],
-        )
-        .skip(max(0, skip))
+    stmt = (
+        select(*_MUTE_COLUMNS)
+        .where(mutes.c.user_id == user_id)
+        # * Tie-break on the surrogate id so the order is stable when two
+        # * events share a timestamp, matching the warn history.
+        .order_by(mutes.c.timestamp.desc(), mutes.c.id.desc())
+        .offset(max(0, skip))
     )
     if limit is not None:
-        cursor = cursor.limit(max(1, limit))
-    return await db_call(lambda: list(cursor))
+        stmt = stmt.limit(max(1, limit))
+    rows = await db_call(lambda: fetch_all(stmt))
+    return cast("list[MuteDoc]", rows)
 
 
 async def user_mute_count(user_id: int) -> int:
     """Count every mute ever logged against the user."""
-    return await db_call(lambda: _mutes().count_documents({"user_id": user_id}))
+    total = await db_call(
+        lambda: fetch_value(
+            select(func.count()).select_from(mutes).where(mutes.c.user_id == user_id)
+        )
+    )
+    return int(total or 0)
 
 
 async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
@@ -210,9 +229,19 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
     does not split across the legacy chat. Mute rows carry no unique
     per-pair state, so a plain repoint is safe. Cancellation propagates.
     """
-    return await _repoint_chat(
-        _mutes(),
-        old_chat_id,
-        new_chat_id,
-        log_msg="mutes_db.migrate_records (%d -> %d) failed",
-    )
+    try:
+        affected = await db_call(
+            lambda: run(
+                mutes.update()
+                .where(mutes.c.chat_id == old_chat_id)
+                .values(chat_id=new_chat_id)
+            )
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "mutes_db.migrate_records (%d -> %d) failed", old_chat_id, new_chat_id
+        )
+        return False
+    return affected > 0

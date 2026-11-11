@@ -4,10 +4,11 @@
 
 """Hot-path micro-benchmark for the bot's bounded-concurrency primitives.
 
-Measures the pieces every request pays for: the database call transport,
-the two-level cache on hit and miss, and the bounded multi-group fan-out.
-The benchmark runs entirely in-process, so it needs no MongoDB, Redis, or
-Telegram connection and produces a comparable baseline on every machine.
+Measures the pieces every request pays for: the database-call transport
+boundary, the two-level cache on hit and miss, and the bounded
+multi-group fan-out. The benchmark runs entirely in-process, so it needs
+no PostgreSQL, Redis, or Telegram connection and produces a comparable
+baseline on every machine.
 
 Run it with:
 
@@ -25,7 +26,7 @@ import statistics
 import time
 
 from tcbot import cfg
-from tcbot.database import mongos
+from tcbot.database import engine as engine_mod
 from tcbot.database import redis_client as redis_client_mod
 from tcbot.database.cache import twolevel as cache_twolevel
 from tcbot.database.cache.twolevel import TwoLevelCache
@@ -46,7 +47,6 @@ def _disable_redis() -> None:
     """
     local = dataclasses.replace(cfg, redis_url=None)
     cache_twolevel.cfg = local
-    mongos.cfg = local
     redis_client_mod.cfg = local
 
 
@@ -59,13 +59,13 @@ def _measure(label: str, samples: list[float]) -> None:
 
 
 async def _bench_db_call() -> None:
-    """Measure one database-call round trip through the worker pool."""
+    """Measure the database-call boundary: circuit breaker plus timeout."""
     samples: list[float] = []
     for _ in range(_ITERATIONS):
         start = time.perf_counter()
-        await mongos.db_call(lambda: None)
+        await engine_mod.db_call(_noop)
         samples.append(time.perf_counter() - start)
-    _measure("db_call (no-op worker)", samples)
+    _measure("db_call (circuit + timeout)", samples)
 
 
 async def _bench_cache_hit() -> None:
@@ -129,6 +129,11 @@ async def _never_called() -> str:
 async def _fetch_value() -> str:
     """Fetch callback for the cache-miss scenario."""
     return "value"
+
+
+async def _noop() -> None:
+    """Trivial awaited operation for the transport scenario."""
+    return
 
 
 async def _no_op() -> None:

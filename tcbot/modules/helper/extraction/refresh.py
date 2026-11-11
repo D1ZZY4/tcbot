@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 
 from tcbot import database as db
 from tcbot.modules.helper.extraction.resolve import _GET_CHAT_TIMEOUT
-from tcbot.utils.dispatch import drain_tasks
 from tcbot.utils.logger import get_logger
+from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.time_and_date import to_utc, utc_now
 
 if TYPE_CHECKING:
@@ -37,9 +37,8 @@ _RESOLVE_SWEEP_CONCURRENCY = 10
 # * below this; it only bites for silent users (banned, lurkers).
 _SYNC_MAX_AGE_S = 7 * 24 * 3600
 
-# * Strong references to in-flight background-refresh tasks; prevents GC
-# * before the coroutine completes (same pattern as harvest task sets).
-_refresh_tasks: set[asyncio.Task[None]] = set()
+# * Owner of the in-flight background identity refreshes.
+identity_refresh_tasks = TaskTracker("identity refresh")
 
 
 async def _fetch_live_identity(
@@ -253,15 +252,4 @@ def launch_identity_refresh(bot: Bot, target_id: int) -> None:
     holding the document should gate with :func:`identity_needs_refresh`
     so fresh profiles cost nothing.
     """
-    try:
-        task = asyncio.get_running_loop().create_task(_refresh_identity(bot, target_id))
-    except RuntimeError:
-        log.debug("identity refresh skipped: no running event loop.")
-        return
-    _refresh_tasks.add(task)
-    task.add_done_callback(_refresh_tasks.discard)
-
-
-async def drain_refresh_tasks() -> None:
-    """Await the pending identity refreshes so none outlives the shutdown."""
-    await drain_tasks(_refresh_tasks, label="identity refresh")
+    identity_refresh_tasks.spawn(_refresh_identity(bot, target_id))

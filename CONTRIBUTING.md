@@ -85,7 +85,7 @@ Requirements:
 
 - Python 3.14
 - `uv`
-- MongoDB for runtime work (Atlas or self-hosted)
+- PostgreSQL for runtime work (a local server or a managed instance)
 - Redis only when testing the optional L2 cache
 
 Fork the repository, then clone your fork:
@@ -125,7 +125,7 @@ uv run python -m tcbot
    | Command handlers | `tcbot/modules/` |
    | Conversation flows (`*_flow.py`) | `tcbot/modules/helper/pipelines/` |
    | Shared handler helpers | `tcbot/modules/helper/` |
-   | MongoDB access (always via helpers, never raw) | `tcbot/database/` |
+   | Database access (always via helpers, never raw SQL) | `tcbot/database/` |
    | Runtime utilities | `tcbot/utils/` |
 
 4. Reuse the existing workflow, role, formatting, and dispatch helpers

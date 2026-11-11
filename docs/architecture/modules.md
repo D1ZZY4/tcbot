@@ -152,6 +152,6 @@ Use role helpers from `users_roles` and `decorators.resolve_and_check`; avoid ma
 - Name async command handlers `cmd_*` and event handlers `on_*`.
 - Define command filters near the bottom.
 - Export `__handlers__` at the bottom.
-- Use database helper modules instead of raw MongoDB collection access.
+- Use database helper modules instead of raw SQL access.
 - Put new conversation logic in `tcbot/modules/helper/pipelines/*_flow.py` modules (one module per flow, split into a `*_flow/` package only when a flow outgrows the file budget).
 - Render user-facing messages through `tcbot.utils.i18n.t()` with a resolved locale so they are MarkdownV2-safe automatically; use `plain=True` for callback alerts and other contexts Telegram never parses.

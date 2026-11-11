@@ -13,12 +13,30 @@ jobs:
   test:
     name: Pytest suite
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     env:
       BOT_TOKEN: "000000:dummy-token-for-lint000000000000000"
-      MONGODB_URI: "mongodb://localhost:27017"
+      DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
       OWNER_ID: "1"
+      # * The database-backed tests run against this server. Without it
+      # * they skip, so the suite still passes without a database.
+      TCBOT_TEST_DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tcbot
+          POSTGRES_PASSWORD: tcbot
+          POSTGRES_DB: tcbot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tcbot -d tcbot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v7
@@ -43,4 +61,4 @@ jobs:
         with:
           name: coverage-report
           path: htmlcov/
-          if-no-files-found: ignore
+        if-no-files-found: ignore
