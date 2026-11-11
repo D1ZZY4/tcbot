@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from datetime import timedelta
+from datetime import UTC, timedelta
 from typing import TYPE_CHECKING, Any
 
 from apscheduler.job import Job
@@ -27,6 +27,7 @@ from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import tzinfo
 
     from telegram import Bot
 
@@ -229,6 +230,28 @@ _CLEANUP_SCHEDULE_ID: str = "tcbot.db_cleanup_weekly"
 # * dies with the process.
 _JOBSTORE_ALIAS: str = "mongodb"
 
+# * The schedules run on UTC. APScheduler defaults to the host's local zone,
+# * which is both unpicklable when the zone came from a file stream (the
+# * MongoDB job store pickles the trigger, so the bot would refuse to boot)
+# * and host-dependent, so the daily expiry would fire at a different local
+# * midnight on every machine.
+_SCHEDULER_TIMEZONE: tzinfo = UTC
+
+
+def _build_job_store(mongodb_uri: str, db_name: str) -> MongoDBJobStore:
+    """Build the persistent MongoDB job store.
+
+    Runs on a worker thread: the constructor creates a synchronous
+    ``MongoClient``, which resolves the SRV host of an Atlas URI inside the
+    constructor and would otherwise block the event loop.
+    """
+    return MongoDBJobStore(
+        database=db_name,
+        host=mongodb_uri,
+        **_mongo_client_kwargs(),
+        **_mongo_jobstore_kwargs(),
+    )
+
 
 async def _scheduler_background(
     mongodb_uri: str,
@@ -248,11 +271,12 @@ async def _scheduler_background(
     # * whose system CA store is stale, while PyMongo connects fine. Extra
     # * kwargs flow straight into pymongo.MongoClient (supported by
     # * APScheduler 3.x).
-    store = MongoDBJobStore(
-        database=db_name,
-        host=mongodb_uri,
-        **_mongo_client_kwargs(),
-        **_mongo_jobstore_kwargs(),
+    # * The constructor also performs the blocking SRV DNS lookup, so it
+    # * runs on a worker thread instead of stalling the event loop.
+    store = await asyncio.to_thread(
+        _build_job_store,
+        mongodb_uri,
+        db_name,
     )
     # * The loop is bound explicitly so the scheduler can be started from a
     # * worker thread: APScheduler would otherwise call get_running_loop()
@@ -260,6 +284,7 @@ async def _scheduler_background(
     scheduler = AsyncIOScheduler(
         event_loop=asyncio.get_running_loop(),
         jobstores={_JOBSTORE_ALIAS: store},
+        timezone=_SCHEDULER_TIMEZONE,
     )
     _scheduler = scheduler
     started = False
@@ -336,12 +361,17 @@ def _schedule_matches(
 ) -> bool:
     """Return True when the stored job already runs the desired schedule.
 
-    Only the interval and the arguments are compared: an ``IntervalTrigger``
-    derives its ``start_date`` from the current clock, so two triggers built
-    a second apart are never equal even when they describe the same cadence.
+    Only the interval, the timezone, and the arguments are compared: an
+    ``IntervalTrigger`` derives its ``start_date`` from the current clock, so
+    two triggers built a second apart are never equal even when they describe
+    the same cadence. The timezone is part of the comparison so a job
+    persisted against the host-local zone is replaced once the schedules run
+    on UTC.
     """
     stored_trigger = job.trigger
     if not isinstance(stored_trigger, IntervalTrigger):
+        return False
+    if stored_trigger.timezone != trigger.timezone:
         return False
     return stored_trigger.interval == trigger.interval and tuple(job.args) == args
 
@@ -425,7 +455,7 @@ def _reconcile_schedules(
             store,
             job_id=_WARN_EXPIRY_SCHEDULE_ID,
             func=expire_old_warns,
-            trigger=IntervalTrigger(hours=24),
+            trigger=IntervalTrigger(hours=24, timezone=_SCHEDULER_TIMEZONE),
             args=(warn_expiry_days,),
             misfire_grace_time=86400,
         )
@@ -444,7 +474,9 @@ def _reconcile_schedules(
             store,
             job_id=_SYNC_SCHEDULE_ID,
             func=_run_scheduled_sync,
-            trigger=IntervalTrigger(hours=sync_interval_hours),
+            trigger=IntervalTrigger(
+                hours=sync_interval_hours, timezone=_SCHEDULER_TIMEZONE
+            ),
             args=(),
             misfire_grace_time=86400,
         )

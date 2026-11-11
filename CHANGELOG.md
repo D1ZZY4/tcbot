@@ -109,6 +109,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The paged users list is served by the indexes** (`tcbot/database/mongos.py`, `tcbot/database/users_cache.py`): the name mirrors now carry a compound index with the user id tie-break the page order needs, so the list no longer sorts in memory over the whole member cache. Behavior changes: the user list is ordered by the lowercase name mirrors, so a capitalised name no longer sorts before every lowercase one.
 
+- **The schedules run on UTC** (`tcbot/database/scheduler.py`): the schedules inherited the host's local zone, which is unpicklable when the zone came from a file stream and host-dependent besides, so the daily expiry fired at a different local midnight on every machine. The schedules and the stored triggers now run on UTC. Behavior changes: none; the daily expiry fires at the same wall-clock time everywhere.
+
 - **One owner for the role sets** (`tcbot/database/users_roles.py`): `STAFF_ROLES` and `FOUNDER_ADMIN_ROLES` replace eleven inline role-set literals across the moderation paths, so a new tier cannot land in the rank table and be missed by every set check. Behavior changes: none.
 
 - **One owner for the explicit-target rule** (`tcbot/modules/helper/extraction/resolve.py`, `tcbot/modules/admins.py`): the promotion entry now uses the shared target-shape helper instead of an open-coded copy that treated a bare `@` as a target. Behavior changes: `/tcpromote @ developer` no longer consumes the `@` token as the target.
