@@ -13,6 +13,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Conversation-scoped moderation payloads** (`tcbot/modules/helper/scope.py`, `tests/test_flow_scope.py`): `flow_scope` owns the payload of one chat and user pair, so a moderator running an action in two groups at once keeps two independent flows. The scope key matches the one python-telegram-bot builds for a per-chat, per-user conversation.
 
+- **One conversation at a time, the rest of the federation concurrent** (`tcbot/utils/update_processor.py`, `tests/test_update_processor.py`): python-telegram-bot documents that its conversation handler relies on updates being processed one by one, but the stock concurrent setting started every update at once, so two taps on the same button could interleave and lose a state transition. Updates of one chat and user pair now run in order while different conversations still run in parallel.
+
 - **Callback refusal notices have one owner** (`tcbot/modules/helper/messages/safe_edits.py`, `tests/test_cb_error_contract.py`): `cb_error_edit` drops the keyboard so a refused button cannot be pressed again, logs the failure at debug level because a refusal is a normal outcome, and pins the render mode to the way the notice text was produced.
 
 - **Authorization and expiry contracts are pinned** (`tests/test_moderation_contracts.py`, `tests/test_role_assignment_rules.py`): the role-rank table, the rate-limit exemption and throttle tiers, the mute expiry clauses, the atomic appeal and ban claims, the primary-group merge, the promotion rules, and the ownership transfer are covered as executable contracts. Behavior changes: none.

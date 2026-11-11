@@ -52,6 +52,7 @@ from tcbot.utils.transport import (
     HTTP_READ_TIMEOUT,
     HTTP_WRITE_TIMEOUT,
 )
+from tcbot.utils.update_processor import KeyedUpdateProcessor
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -360,7 +361,10 @@ def base_builder() -> ApplicationBuilder:
         ApplicationBuilder()
         .token(cfg.bot_token)
         .defaults(Defaults(link_preview_options=_LINK_PREVIEW_DISABLED))
-        .concurrent_updates(True)  # noqa: FBT003
+        # * ConversationHandler needs one-by-one update processing. A keyed
+        # * processor serialises the updates of one (chat, user) pair and
+        # * leaves the rest of the federation concurrent.
+        .concurrent_updates(KeyedUpdateProcessor())
         .connection_pool_size(API_POOL_SIZE)
         .read_timeout(HTTP_READ_TIMEOUT)
         .write_timeout(HTTP_WRITE_TIMEOUT)

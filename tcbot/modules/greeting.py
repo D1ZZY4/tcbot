@@ -43,10 +43,10 @@ log = get_logger(__name__)
 # * Matches the fan_out Telegram cap; members beyond the bound wait.
 _MAX_CONCURRENT_JOINS: int = 10
 
-# * One global bound for ALL concurrent join updates (not per-update): with
-# * concurrent_updates(True) each new-member callback would otherwise get its
-# * own Semaphore(10), making the effective Telegram+Mongo concurrency N*10
-# * with no ceiling.
+# * One global bound for ALL concurrent join updates (not per-update): the
+# * update processor runs different conversations in parallel, so each
+# * new-member callback would otherwise get its own Semaphore(10), making
+# * the effective Telegram+Mongo concurrency N*10 with no ceiling.
 _join_sem = asyncio.Semaphore(_MAX_CONCURRENT_JOINS)
 
 

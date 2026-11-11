@@ -275,6 +275,17 @@ Single owner for the outbound Telegram transport tuning used by every runtime en
 
 Both `tcbot/__main__.py` (webhook and polling) and `tcbot/serverless.py` (Vercel) import these instead of redefining them, so timeout and pool behavior stays identical across transports.
 
+## `update_processor.py`
+
+Single owner of the update ordering the application runs with.
+
+| Export | Purpose |
+|---|---|
+| `KeyedUpdateProcessor(max_concurrent_updates=64)` | Processes the updates of one (chat, user) pair one by one and leaves different pairs concurrent. |
+| `conversation_key(update)` | The `(chat_id, user_id)` key of the pair, or `None` when the update belongs to no conversation. |
+
+python-telegram-bot documents that its `ConversationHandler` "heavily relies on incoming updates being processed one by one", yet the stock concurrent setting starts every update at once, so two taps on the same button can interleave inside a conversation and lose a state transition. The keyed processor serialises exactly the granularity the registered conversations use (`per_chat=True, per_user=True`), so different moderators still act in parallel while one conversation stays ordered. The lock map drops a key once its last update finished.
+
 ## `secrets.py`
 
 Single owner for the constant-time comparison of inbound credentials (Telegram webhook secret, cron bearer token).

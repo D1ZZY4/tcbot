@@ -109,7 +109,8 @@ tcbot/
     ├── prefixes.py         Prefix parsing and command filters
     ├── secrets.py          Constant-time secret comparison for inbound credentials
     ├── time_and_date.py    Central clock: UTC store/display + measure + durations + date_or_unknown()
-    └── transport.py        Shared PTB HTTP timeouts and pool size for all entry points
+    ├── transport.py        Shared PTB HTTP timeouts and pool size for all entry points
+    └── update_processor.py Per-conversation update serialization for PTB
 ```
 
 ## Ownership boundaries
