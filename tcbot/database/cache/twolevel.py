@@ -23,7 +23,7 @@ from tcbot.database.cache.memory import CACHE_MISS, TTLCache
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Sequence
 
 log = get_logger(__name__)
 
@@ -32,6 +32,10 @@ log = get_logger(__name__)
 # * serving revoked privileges until the Redis TTL (90-360 s). Display-name
 # * hints (umention) may drop; the next update refreshes them.
 _REVOCATION_PREFIXES: frozenset[str] = frozenset({"role", "conn", "groups", "owner"})
+
+# * Keys per Redis MGET in the batch read. The command grows with the
+# * key count, so a large batch is split into bounded chunks.
+_MGET_CHUNK_SIZE: int = 500
 
 
 class TwoLevelCache[T]:
@@ -42,7 +46,7 @@ class TwoLevelCache[T]:
     sites.
     """
 
-    __slots__ = ("_locks", "_mem", "_redis_prefix", "_redis_ttl")
+    __slots__ = ("_is_revocation", "_locks", "_mem", "_redis_prefix", "_redis_ttl")
 
     def __init__(
         self,
@@ -55,6 +59,10 @@ class TwoLevelCache[T]:
         self._mem: TTLCache[T] = TTLCache(ttl=memory_ttl, maxsize=maxsize)
         self._redis_ttl: int = max(1, int(redis_ttl))
         self._redis_prefix: str = redis_prefix
+        # * The revocation decision is taken once, so a caller that
+        # * renames the prefix cannot turn a revocation write into a
+        # * droppable one.
+        self._is_revocation: bool = redis_prefix in _REVOCATION_PREFIXES
         # * Per-key lock serialises concurrent fetches for one key across
         # * L1 + L2 + DB. Dropped per fetch (and in invalidate) to bound
         # * growth; clear() leaves in-flight locks alone.
@@ -87,9 +95,7 @@ class TwoLevelCache[T]:
         # * also signals the in-flight fetch for this key that its result
         # * predates the invalidation (see get_or_fetch).
         self._locks.pop(key, None)
-        self._redis_del_background(
-            key, droppable=self._redis_prefix not in _REVOCATION_PREFIXES
-        )
+        self._redis_del_background(key, droppable=not self._is_revocation)
 
     def clear(self) -> None:
         """Clear the in-memory layer (does not flush Redis keys)."""
@@ -213,6 +219,69 @@ class TwoLevelCache[T]:
         self._mem.put(key, loaded)
         return loaded
 
+    async def peek_many(self, keys: Sequence[Any]) -> dict[Any, T]:
+        """Return the cached values for *keys* from L1 or L2.
+
+        One L1 pass plus at most one Redis round trip for the keys L1
+        missed. A per-key :meth:`peek` would cost one round trip per
+        key, which is exactly what the batch readers exist to avoid.
+
+        The values may be stale for the same reason :meth:`peek` values
+        may be stale: an invalidation queues the Redis delete, so a read
+        that races it can still observe the old entry.
+
+        A Redis outage is a miss, not an error: the keys it could not
+        answer are simply absent from the result.
+        """
+        found: dict[Any, T] = {}
+        missing: list[Any] = []
+        for key in keys:
+            val = self._mem.get(key)
+            if val is CACHE_MISS:
+                missing.append(key)
+            else:
+                found[key] = cast("T", val)
+        if not missing:
+            return found
+        rc = await self._client()
+        if rc is None:
+            return found
+        # * The keys are read in bounded chunks, so a large batch cannot
+        # * build one oversized command.
+        for start in range(0, len(missing), _MGET_CHUNK_SIZE):
+            chunk = missing[start : start + _MGET_CHUNK_SIZE]
+            try:
+                raws = await asyncio.wait_for(
+                    rc.mget(*[self._rkey(key) for key in chunk]),
+                    timeout=redis_io._REDIS_GET_TIMEOUT_S,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                _redis_mod.mark_op(ok=False)
+                log.debug(
+                    "Redis mget failed for prefix %s: %s",
+                    self._redis_prefix,
+                    exc,
+                )
+                return found
+            _redis_mod.mark_op(ok=True)
+            for key, raw in zip(chunk, raws, strict=False):
+                if raw is None:
+                    continue
+                try:
+                    loaded: T = _decode_redis_value(raw)
+                except Exception as exc:
+                    log.debug(
+                        "Redis payload decode failed for %s: %s",
+                        self._rkey(key),
+                        exc,
+                    )
+                    continue
+                self._mem.put(key, loaded)
+                found[key] = loaded
+        return found
+
     async def get_or_fetch(
         self,
         key: Any,
@@ -314,7 +383,7 @@ class TwoLevelCache[T]:
                         redis_io.enqueue_redis_mutation(
                             self._redis_prefix,
                             lambda: self._redis_set(rkey, payload),
-                            droppable=self._redis_prefix not in _REVOCATION_PREFIXES,
+                            droppable=not self._is_revocation,
                         )
 
                 return cast("T", val)
@@ -364,7 +433,7 @@ class TwoLevelCache[T]:
         redis_io.enqueue_redis_mutation(
             self._redis_prefix,
             lambda: self._redis_set(rkey, payload),
-            droppable=self._redis_prefix not in _REVOCATION_PREFIXES,
+            droppable=not self._is_revocation,
         )
 
     def _redis_del_background(self, key: Any, *, droppable: bool = True) -> None:

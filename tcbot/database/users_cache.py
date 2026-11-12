@@ -129,18 +129,24 @@ async def _mention_triples(
     """Return {uid: [first_name|None-sentinel, username, last_name]} for every ID.
 
     Single owner for the batch-miss path shared by :func:`get_mention_data_batch`
-    and :func:`get_first_names_batch`: L1 hits served without I/O (repeat IDs
-    dropped via ``dict.fromkeys``), the remainder fetched in one ``IN``
-    query, full triples populated into L1, and absent users sentineled so
-    repeat renders skip the round-trip. Miss semantics cannot drift between
-    readers when only one function implements them.
+    and :func:`get_first_names_batch`: the cached values are served without I/O
+    (repeat IDs dropped via ``dict.fromkeys``), the remainder fetched in one
+    ``IN`` query, full triples populated into the cache, and absent users
+    sentineled so repeat renders skip the round-trip. Miss semantics cannot
+    drift between readers when only one function implements them.
     """
     result: dict[int, list[str | None]] = {}
     missing: list[int] = []
-    for uid in dict.fromkeys(user_ids):
-        cached = user_mention_cache.get(uid)
-        if cached is not CACHE_MISS:
-            result[uid] = cast("list[str | None]", cached)
+    unique_ids = list(dict.fromkeys(user_ids))
+    # * The batch readers consult both cache layers. The L1 pass is
+    # * free, and the L2 pass costs one Redis round trip for the keys
+    # * L1 missed, so a warm Redis serves the batch without a database
+    # * query even right after a restart.
+    cached = await user_mention_cache.peek_many(unique_ids)
+    for uid in unique_ids:
+        value = cached.get(uid, CACHE_MISS)
+        if value is not CACHE_MISS:
+            result[uid] = cast("list[str | None]", value)
         else:
             missing.append(uid)
     if not missing:
