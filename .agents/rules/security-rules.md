@@ -38,14 +38,14 @@ commands live in [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
 
 ## Secrets and Credentials
 
-- Never hardcode bot tokens, MongoDB URIs, API keys, passwords, webhook
+- Never hardcode bot tokens, database URIs, API keys, passwords, webhook
   secrets, deployment chat IDs, or other credentials.
 - Do not log or document secrets, tokens, credentials, raw private input, or
   private chat identifiers.
 - Do not print or log secrets from handlers, jobs, or database helpers.
 - Keep runtime secrets in environment variables or the platform secret manager.
 - Never edit or commit `config.env` during normal work.
-- Do not commit tokens, MongoDB URIs, API keys, passwords, or private chat IDs
+- Do not commit tokens, database URIs, API keys, passwords, or private chat IDs
   that should remain secret.
 
 ## Compatibility

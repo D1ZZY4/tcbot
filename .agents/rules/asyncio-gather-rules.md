@@ -134,7 +134,7 @@ async def worker() -> None:
 ## Background Jobs
 
 Scheduled work runs on APScheduler 3.11.3 `AsyncIOScheduler` with
-`MongoDBJobStore` via `tcbot/database/scheduler.py`. This project does not
+`SQLAlchemyJobStore` via `tcbot/database/scheduler.py`. This project does not
 use the PTB `[job-queue]` extra.
 
 Rules:
@@ -148,19 +148,21 @@ Rules:
 ## Database Access from Async Code
 
 Database helpers are async, typed, and domain-focused. Handlers call database
-helper modules. Helpers run synchronous PyMongo operations on a worker thread
-through `mongos.db_call()`, so the event loop never blocks on MongoDB I/O.
-A cancelled operation may still land once its thread finishes; the atomic
-read patterns already tolerate that.
+helper modules. Helpers run SQLAlchemy statements against the async engine
+through `engine.db_call()`, so the event loop never blocks on database I/O.
+Every call goes through the circuit breaker and the call timeout, so a dead
+database fails fast for every caller instead of each helper inventing its own
+budget.
 
 Rules:
 
-- Module boundaries and collection ownership follow `code-style.md`; the rules
+- Module boundaries and table ownership follow `code-style.md`; the rules
   below cover async behavior only.
-- Avoid returning PyMongo cursors to handlers; convert to plain lists inside
+- Avoid returning cursor results to handlers; convert to plain lists inside
   helpers when practical.
-- Use projection when large documents do not need every field.
-- Add indexes in `mongos.ensure_indexes()` when adding indexed queries.
+- Use projection when large rows do not need every column.
+- Add the index in `tcbot/database/base.py` and ship an Alembic revision
+  when adding an index-sensitive query.
 - Pre-resolve per-item lookups for paginated views before formatting.
 - Use `gather_bounded()` for pure database bursts; reserve `fan_out()` for
   Telegram operations that must respect the Telegram circuit breaker.
@@ -174,8 +176,9 @@ Avoid these in async handlers and database helpers:
   depends on one, or justify a new dependency.
 - Long CPU loops, image processing, compression, or parsing large files on
   the event loop.
-- Synchronous PyMongo calls outside `db_call()`; database helpers must run
-  sync operations on a worker thread through `db_call()`.
+- Synchronous database calls outside `db_call()`. The schema migration is the
+  one exception: it runs in a worker thread at startup, before the engine
+  serves any request.
 - Raw subprocess calls from handlers.
 - Blocking work on Flask keep-alive routes.
 

@@ -55,7 +55,7 @@ Good documentation should:
 
 - describe current behavior, not planned behavior unless clearly marked,
 - link to related docs using relative paths,
-- avoid real tokens, MongoDB URIs, private credentials, or sensitive chat
+- avoid real tokens, database URIs, private credentials, or sensitive chat
   IDs,
 - use code blocks for commands, env examples, and file-layout examples,
 - keep user-facing setup steps separate from agent-only rules,
@@ -69,7 +69,8 @@ As of 2026-11-10, TCF Bot uses:
 - Python 3.14 project target
 - `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]`
   extra), tracking the latest compatible release
-- Synchronous PyMongo with MongoDB (sync operations run on a worker thread through `db_call`)
+- PostgreSQL with SQLAlchemy 2.1 async (every read and write runs through
+  `engine.db_call`, which applies the circuit breaker and the call timeout)
 - Flask keep-alive server
 - `uv` and `uv.lock`
 - Ruff

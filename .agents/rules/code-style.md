@@ -248,11 +248,11 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 
 ## Database and Cache Access
 
-- Keep all MongoDB writes and collection access in `tcbot/database/` helpers.
-- Feature and command modules must not call `col()` directly or perform raw insert, update, or delete operations.
+- Keep all database writes and table access in `tcbot/database/` helpers.
+- Feature and command modules must not build SQLAlchemy statements directly or perform raw insert, update, or delete operations.
 - Place new database concerns in descriptive `*_db.py` modules.
 - When a database module exceeds the file budget, split it into a same-named `*_db/` package following the module-splitting rules.
-- Add indexes for new collections and index-sensitive queries in `mongos.ensure_indexes()`.
+- Add indexes for new tables and index-sensitive queries in `tcbot/database/base.py`, and ship an Alembic revision with them.
 - Keep database helpers asynchronous and fully typed.
 - Invalidate relevant caches after cache-sensitive writes.
 - Use `documents.py` for document shapes and `Literal` aliases.
@@ -350,7 +350,7 @@ Concurrency, `asyncio.gather()`, fan-out, timeouts, and cancellation follow [`as
 The following patterns are forbidden:
 
 - Creating `*_conv.py` files.
-- Writing to MongoDB from command or feature modules.
+- Writing to the database from command or feature modules.
 - Adding keyboard builders outside `tcbot/modules/helper/keyboards/`.
 - Using HTML parse mode.
 - Duplicating reason or proof workflow state handlers.
@@ -364,7 +364,7 @@ The following patterns are forbidden:
 - Hardcoding localized user-facing wording in Python instead of the `i18n/` catalog, except for sanctioned audit logs, staff operational messages, and infrastructure error reports.
 - Passing rendered strings as plain non-`Safe` placeholders.
 - Placing placeholders inside mini-markup spans.
-- Hardcoding bot tokens, MongoDB URIs, passwords, API keys, webhook secrets, deployment chat IDs, or other credentials.
+- Hardcoding bot tokens, database URIs, passwords, API keys, webhook secrets, deployment chat IDs, or other credentials.
 
 Security-sensitive restrictions and authorization requirements are governed by [`security-rules.md`](security-rules.md).
 
