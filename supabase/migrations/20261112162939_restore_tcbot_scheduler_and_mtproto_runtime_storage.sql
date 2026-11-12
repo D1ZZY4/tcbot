@@ -30,3 +30,17 @@ CREATE INDEX ix_mtproto_state_id_pattern
 CREATE INDEX ix_mtproto_state_phone_number
     ON public.mtproto_state (phone_number)
     WHERE phone_number IS NOT NULL;
+
+-- Do not rely on a pre-existing Supabase DDL event trigger to secure these
+-- sensitive backend-owned tables. Their own migration must enforce the ACL.
+ALTER TABLE public.apscheduler_jobs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL PRIVILEGES ON TABLE public.apscheduler_jobs
+FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON TABLE public.apscheduler_jobs TO service_role;
+
+ALTER TABLE public.mtproto_state ENABLE ROW LEVEL SECURITY;
+REVOKE ALL PRIVILEGES ON TABLE public.mtproto_state
+FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON TABLE public.mtproto_state TO service_role;
