@@ -233,6 +233,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if admin is None:
         await q.answer()
         return
+    locale = await locale_for_update(update)
     args = callback_args_optional(q, 3)
     if args is None:
         await q.answer()
@@ -253,11 +254,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if await identity.is_proven_bot(update, target_id, ctx.bot):
         await cb_error_edit(
             q,
-            t(
-                "admins.error.bot_target",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.bot_target", locale, plain=True),
             log_label="on_promote_role_btn bot-target",
             parse_mode=None,
         )
@@ -266,7 +263,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if role not in db.users_roles.STAFF_ROLES:
         await cb_error_edit(
             q,
-            replies.err_unknown_role(await locale_for_update(update), plain=True),
+            replies.err_unknown_role(locale, plain=True),
             log_label="admins promote unknown-role",
             parse_mode=None,
         )
@@ -307,11 +304,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         )
         await cb_error_edit(
             q,
-            t(
-                "admins.error.role_lookup_failed",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.role_lookup_failed", locale, plain=True),
             log_label="on_promote_role_btn role-lookup-failed",
             parse_mode=None,
         )
@@ -328,16 +321,12 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         log.exception("identity.classify failed during promote callback")
         await cb_error_edit(
             q,
-            t(
-                "admins.error.role_lookup_failed",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.role_lookup_failed", locale, plain=True),
             log_label="on_promote_role_btn classify-failed",
             parse_mode=None,
         )
         return
-    refusal = identity.refuse_message("promote", ident, await locale_for_update(update))
+    refusal = identity.refuse_message("promote", ident, locale)
     if refusal is not None:
         await cb_error_edit(
             q,
@@ -355,7 +344,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         target_fname,
         current_role,
         role,
-        await locale_for_update(update),
+        locale,
     )
     await safe_edit_cb(
         q,
@@ -518,6 +507,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     except ValueError:
         await q.answer()
         return
+    locale = await locale_for_update(update)
     if await action_owner_mismatch(q, update, min_parts=2):
         return
     executor_role = await check_callback_staff(admin.id, q, update)
@@ -538,11 +528,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         )
         await cb_error_edit(
             q,
-            t(
-                "admins.error.role_lookup_failed",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.role_lookup_failed", locale, plain=True),
             log_label="on_demote_confirm role-lookup-failed",
             parse_mode=None,
         )
@@ -555,11 +541,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if not target_role or target_role == "founder":
         await cb_error_edit(
             q,
-            t(
-                "admins.error.no_longer_removable",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.no_longer_removable", locale, plain=True),
             log_label="on_demote_confirm no-longer-removable",
             parse_mode=None,
         )
@@ -568,11 +550,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if not can_demote_admin(executor_role, target_role):
         await cb_error_edit(
             q,
-            t(
-                "admins.error.founder_demote_only",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.founder_demote_only", locale, plain=True),
             log_label="on_demote_confirm founder-only",
             parse_mode=None,
         )
@@ -589,16 +567,12 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         log.exception("identity.classify failed during demote callback")
         await cb_error_edit(
             q,
-            t(
-                "admins.error.role_lookup_failed",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.role_lookup_failed", locale, plain=True),
             log_label="on_demote_confirm classify-failed",
             parse_mode=None,
         )
         return
-    refusal = identity.refuse_message("demote", ident, await locale_for_update(update))
+    refusal = identity.refuse_message("demote", ident, locale)
     if refusal is not None:
         await cb_error_edit(
             q,
@@ -625,11 +599,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if not removed:
         await cb_error_edit(
             q,
-            t(
-                "admins.error.role_clear_failed",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.role_clear_failed", locale, plain=True),
             log_label="on_demote_confirm role-clear-failed",
             parse_mode=None,
         )
@@ -640,7 +610,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         q,
         t(
             "admins.demote.done",
-            await locale_for_update(update),
+            locale,
             user=Safe(user_ref(target_id, target_fname, target_uname)),
             role=role_label,
         ),

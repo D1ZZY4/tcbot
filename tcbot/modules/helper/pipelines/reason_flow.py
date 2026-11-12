@@ -385,17 +385,17 @@ class _ReasonStepMixin(_FlowBase):
             return ConversationHandler.END
         scope = flow_scope(ctx, update)
         text = msg.text.strip()
+        locale = await locale_for_update(update)
         if is_reason_too_long(text):
             await safe_reply(
                 msg,
-                reason_too_long_text(len(text), await locale_for_update(update)),
+                reason_too_long_text(len(text), locale),
                 log_label=f"{self.action} reason-too-long",
                 parse_mode=None,
             )
             return WAITING_REASON
         scope[self._reason_key] = text
         extra_info = scope.get(self._extra_info_key, "")
-        locale = await locale_for_update(update)
         prompt_txt = self.proof.step_prompt(
             self._get_target(scope, locale), self.action, text, extra_info, locale
         )

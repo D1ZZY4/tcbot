@@ -114,27 +114,24 @@ async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         await q.answer()
         return
 
+    locale = await locale_for_update(update)
+
     try:
         idx = int(q.data[len("privacy_section_") :])
     except ValueError:
         # * Slicing never raises IndexError; only non-numeric tails land here.
         await q.answer(
-            t(
-                "privacy.error.invalid_section",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("privacy.error.invalid_section", locale, plain=True),
             show_alert=True,
         )
         return
     if idx < 0 or idx >= len(_SECTION_KEYS):
         await q.answer(
-            t("privacy.error.not_found", await locale_for_update(update), plain=True),
+            t("privacy.error.not_found", locale, plain=True),
             show_alert=True,
         )
         return
 
-    locale = await locale_for_update(update)
     label, content = _section_body(idx, locale)
     body = f"{bold(label)}\n\n{content}"
     await answer_and_edit(

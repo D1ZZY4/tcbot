@@ -255,10 +255,9 @@ class ApproveMixin:
         )
         appeal_link = ban.get("appeal_link") or ""
         appeal_submitted_at = ban.get("appeal_submitted_at")
-        target_locale, staff_locale = await asyncio.gather(
-            locale_for_user(target_id),
-            locale_for_update(update),
-        )
+        # * The staff locale is the one resolved at the top of the handler;
+        # * only the target's own locale needs a second lookup.
+        target_locale = await locale_for_user(target_id)
         dm_r, card_r, log_r, unban_log_r = await asyncio.gather(
             bot.send_message(
                 target_id,
@@ -273,7 +272,7 @@ class ApproveMixin:
             q.edit_message_text(
                 t(
                     "appeals.decision.approve_card",
-                    staff_locale,
+                    locale,
                     admin=Safe(user_ref(admin.id, admin.first_name)),
                 ),
                 parse_mode="MarkdownV2",

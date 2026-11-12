@@ -59,25 +59,29 @@ async def execute_promo_decision(
         await q.answer()
         return
     # * request_id is known from q.data, so the record fetch fires
-    # * speculatively alongside the ownership check and q.answer().
-    is_owner, req_result, answer_r = await asyncio.gather(
+    # * speculatively alongside the ownership check and q.answer(). The
+    # * locale resolves in the same batch: every message below renders in
+    # * it, and one resolution per handler keeps the catalog lookup off
+    # * the critical path.
+    locale, is_owner, req_result, answer_r = await asyncio.gather(
+        locale_for_update(update),
         db.users_roles.is_owner(admin.id, fresh=True),
         db.queues_db.get_request_by_id(request_id),
         q.answer(),
         return_exceptions=True,
     )
-    throw_if_cancelled((is_owner, req_result, answer_r))
+    throw_if_cancelled((locale, is_owner, req_result, answer_r))
+    if isinstance(locale, BaseException):
+        # * Locale resolution never raises; the branch only narrows the type
+        # * for the gather that reports every failure as an exception.
+        locale = None
     if isinstance(answer_r, BaseException):
         log.debug("on_promo_decision answer failed: %s", answer_r)
     if isinstance(is_owner, BaseException):
         log.warning("on_promo_decision owner check failed: %s", is_owner)
         await cb_error_edit(
             q,
-            t(
-                "admins.error.role_lookup_failed",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.role_lookup_failed", locale, plain=True),
             log_label="on_promo_decision lookup-fail",
             parse_mode=None,
         )
@@ -85,7 +89,7 @@ async def execute_promo_decision(
     if not is_owner:
         await cb_error_edit(
             q,
-            replies.perm_founder_only(await locale_for_update(update), plain=True),
+            replies.perm_founder_only(locale, plain=True),
             parse_mode=None,
             log_label="on_promo_decision perm-denied",
         )
@@ -94,11 +98,7 @@ async def execute_promo_decision(
         log.error("get_request_by_id failed for %s: %s", request_id, req_result)
         await safe_edit_cb(
             q,
-            t(
-                "admins.error.request_not_found",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.request_not_found", locale, plain=True),
             parse_mode=None,
             log_level="debug",
             log_label="on_promo_decision db-error",
@@ -108,11 +108,7 @@ async def execute_promo_decision(
     if not req_result:
         await safe_edit_cb(
             q,
-            t(
-                "admins.error.request_not_found",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.request_not_found", locale, plain=True),
             parse_mode=None,
             log_level="debug",
             log_label="on_promo_decision not-found",
@@ -126,11 +122,7 @@ async def execute_promo_decision(
     if req.get("status") != "pending":
         await cb_error_edit(
             q,
-            t(
-                "admins.error.request_not_found",
-                await locale_for_update(update),
-                plain=True,
-            ),
+            t("admins.error.request_not_found", locale, plain=True),
             log_label="on_promo_decision resolved",
             parse_mode=None,
         )
@@ -144,7 +136,7 @@ async def execute_promo_decision(
         # * Founder's tap must not override the ban.
         ban_refusal = await banned_target_refusal(
             target_id,
-            await locale_for_update(update),
+            locale,
             log_label="promo_approve ban-guard",
         )
         if ban_refusal is not None:
@@ -167,11 +159,7 @@ async def execute_promo_decision(
             log.exception("resolve(approved) failed for request %s", request_id)
             await cb_error_edit(
                 q,
-                t(
-                    "admins.decision.approve_fail",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
+                t("admins.decision.approve_fail", locale, plain=True),
                 log_label="promo_approve db-fail",
                 parse_mode=None,
             )
@@ -179,11 +167,7 @@ async def execute_promo_decision(
         if db_resolve_r is False:
             await cb_error_edit(
                 q,
-                t(
-                    "admins.error.request_not_found",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
+                t("admins.error.request_not_found", locale, plain=True),
                 log_label="promo_approve already-resolved",
                 parse_mode=None,
             )
@@ -198,11 +182,7 @@ async def execute_promo_decision(
             )
             await cb_error_edit(
                 q,
-                t(
-                    "admins.decision.approve_fail",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
+                t("admins.decision.approve_fail", locale, plain=True),
                 log_label="promo_approve db-fail",
                 parse_mode=None,
             )
@@ -234,10 +214,9 @@ async def execute_promo_decision(
             # * Plain .text: the edit sends MarkdownV2, so the display text
             # * is re-escaped here. Empty on MaybeInaccessibleMessage.
             existing_text = esc(getattr(q.message, "text", "") or "")
-        locale, target_locale = await asyncio.gather(
-            locale_for_update(update),
-            locale_for_user(target_id),
-        )
+        # * The target reads their own locale: a direct message to one
+        # * user resolves the recipient's preference, not the card's.
+        target_locale = await locale_for_user(target_id)
         notify_results = await asyncio.gather(
             q.edit_message_text(
                 existing_text
@@ -280,11 +259,7 @@ async def execute_promo_decision(
         if not resolved:
             await cb_error_edit(
                 q,
-                t(
-                    "admins.decision.reject_fail",
-                    await locale_for_update(update),
-                    plain=True,
-                ),
+                t("admins.decision.reject_fail", locale, plain=True),
                 log_label="promo_reject db-fail",
                 parse_mode=None,
             )
@@ -299,10 +274,7 @@ async def execute_promo_decision(
         existing_text = ""
         if q.message is not None:
             existing_text = esc(getattr(q.message, "text", "") or "")
-        locale, target_locale = await asyncio.gather(
-            locale_for_update(update),
-            locale_for_user(target_id),
-        )
+        target_locale = await locale_for_user(target_id)
         reject_results = await asyncio.gather(
             q.edit_message_text(
                 existing_text
