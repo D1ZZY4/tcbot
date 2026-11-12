@@ -10,6 +10,7 @@
 [dm]
 manual = "Your {role} role in {community} has been removed by {name}."
 auto = "Your {role} role in {community} has been removed - you were {verb} from the federation."
+warn = "Your {role} role in {community} has been removed - you reached the warning limit, so you were demoted instead of banned."
 
 [abort]
 body = "{user} holds a federation role ({target_role}) and the demote step failed, so the {action} cannot proceed safely. Demote them manually with /tcdemote and retry the {action}."

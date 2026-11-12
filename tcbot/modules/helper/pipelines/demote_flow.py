@@ -55,6 +55,8 @@ class Demote:
     * ``execute(trigger="ban")`` / ``"kick"`` / ``"mute"`` runs the
       demote-before-enforcement path used by the ban, kick, and mute flows
       before the actual action.
+    * ``execute(trigger="warn")`` runs the warn-threshold exemption, which
+      demotes a staff holder instead of banning them.
 
     The two enforcement gates around it differ on purpose:
     :func:`demote_before_enforcement` proceeds after a failure, and
@@ -129,6 +131,16 @@ class Demote:
                 role=Safe(bold(role_label)),
                 community=cfg.community_name,
                 name=executor_fname,
+            )
+        elif trigger == "warn":
+            # * The warn threshold demotes a staff holder instead of
+            # * banning them, so the wording must not claim a ban that
+            # * never happened.
+            user_msg = t(
+                "demote.dm.warn",
+                target_locale,
+                role=Safe(bold(role_label)),
+                community=cfg.community_name,
             )
         else:
             if trigger == "ban":

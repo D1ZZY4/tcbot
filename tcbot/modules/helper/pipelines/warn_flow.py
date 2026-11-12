@@ -207,7 +207,9 @@ async def execute_warn(
                     target_role,
                     admin_id,
                     admin_fname,
-                    trigger="ban",
+                    # * The staff exemption demotes instead of banning, so
+                    # * the DM must not claim a federation ban.
+                    trigger="warn",
                 )
             except Exception:
                 demoted = False

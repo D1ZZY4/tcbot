@@ -9,6 +9,7 @@
 [dm]
 manual = "Peran {role} kamu di {community} telah dicabut oleh {name}."
 auto = "Peran {role} kamu di {community} telah dicabut. Status federasi: {verb}."
+warn = "Peran {role} kamu di {community} telah dicabut - kamu mencapai batas peringatan, jadi kamu didemosi dan tidak diblokir."
 
 [abort]
 body = "{user} memegang peran federasi ({target_role}) dan tahap demote gagal, sehingga {action} tidak bisa lanjut dengan aman. Demosi manual dengan /tcdemote lalu ulangi {action}."
