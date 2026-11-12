@@ -101,6 +101,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The migration keeps the options the connection already carries** (`alembic/env.py`): the session timezone is pinned to UTC, and the pin now merges with the options the URL and the environment already carry instead of replacing them. A migration that runs inside a dedicated schema therefore keeps that schema. Behavior changes: none.
 
+- **The demote gate reads the shared rank table** (`tcbot/modules/helper/decorators/checks.py`): the gate compared a hardcoded tier name, so a tier added to the shared table could slip past it. The comparison now runs through the rank table, and the Founder stays a named tier because the rule is about that one role. Behavior changes: none; every current role combination answers the same way.
+
 - **The batch mention readers consult the second cache layer** (`tcbot/database/cache/twolevel.py`, `tcbot/database/users_cache.py`): the single-user readers went through both cache layers while the batch readers only checked the in-memory one, so a warm Redis was ignored after every restart and each list view went back to the database. The batch readers now fetch the keys the in-memory layer missed from Redis in one round trip, in bounded chunks. Behavior changes: none.
 
 - **The migration engine pins the UTC session zone** (`alembic/env.py`): the application engines and the scheduler run in UTC, but the migration engine used the server default, so a revision that backfills a timestamp would write it in another zone. The session zone now matches the application, and the options the environment already carries (a scoped `search_path`) are preserved. Behavior changes: none.

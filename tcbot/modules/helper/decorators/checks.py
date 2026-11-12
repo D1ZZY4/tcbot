@@ -98,9 +98,10 @@ async def resolve_and_check(
     The executor's role is read from the cache and the target's role is
     read fresh. Every caller sits behind an authorization decorator that
     already resolved the executor's rank with a fresh read moments
-    earlier, and that fresh read refreshes the cache, so the cached value
-    is the one the decorator validated. The target keeps the fresh read
-    because a demotion there must never be hidden behind a TTL.
+    earlier, and every tier refreshes the effective-role cache with that
+    value, so the cached value is the one the decorator validated. The
+    target keeps the fresh read because a demotion there must never be
+    hidden behind a TTL.
 
     On success, returns ``(executor_role, target_role)``.
     """
@@ -529,8 +530,17 @@ def can_demote_admin(executor_role: str | None, target_role: str | None) -> bool
 
     Only an Admin target is restricted: demoting one needs the Founder.
     Every other target follows the normal rank rule handled by the caller.
+
+    The target tier is compared through the shared rank table, so a tier
+    that joins it takes part in the comparison instead of slipping past a
+    hardcoded name. The Founder stays a named tier, because the rule is
+    about that one role and not about a rank number.
     """
-    return not (target_role == "admin" and executor_role != "founder")
+    if target_role is None:
+        return True
+    if db.users_roles.role_rank(target_role) < db.users_roles.role_rank("admin"):
+        return True
+    return executor_role == "founder"
 
 
 async def banned_target_refusal(
