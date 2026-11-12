@@ -202,7 +202,7 @@ async def set_owner(user_id: int) -> None:
         await sess.execute(delete(tc_owners).where(tc_owners.c.user_id != user_id))
 
     try:
-        await db_call(lambda: run_transaction(_work))
+        await run_transaction(_work)
     except asyncio.CancelledError:
         raise
     except Exception:

@@ -272,6 +272,10 @@ async def run_transaction[T](
     counter that decides the auto-ban threshold. A compensating delete
     after the fact cannot restore that guarantee: a crash between the
     two writes would leave the pair inconsistent.
+
+    The unit already runs through the circuit breaker and the timeout,
+    so callers must not wrap it in another ``db_call``: the nested call
+    would record one failure twice and trip the circuit early.
     """
 
     async def _run() -> T:

@@ -86,3 +86,82 @@ def test_a_transient_failure_reopens_a_half_open_circuit() -> None:
 
     assert cb._state is CircuitState.OPEN
     assert cb.try_acquire() is False
+
+
+def test_a_nested_call_counts_one_failure_once() -> None:
+    """A failure that passes through two breakers is one failure.
+
+    A helper that already runs through the breaker must not be wrapped in
+    a second one: the exception is the same object on both levels, so
+    counting it twice would trip the circuit after fewer real failures
+    than the threshold promises.
+    """
+    cb = CircuitBreaker("x", failure_threshold=5, recovery_timeout=60.0)
+    error = TimeoutError("down")
+
+    def _transient(exc: Exception) -> bool:
+        return True
+
+    async def _inner() -> None:
+        raise error
+
+    async def _outer() -> None:
+        await cb.call(_inner(), count_failure=_transient)
+
+    with pytest.raises(TimeoutError):
+        asyncio.run(cb.call(_outer(), count_failure=_transient))
+
+    assert cb._failure_count == 1
+
+
+def test_two_separate_failures_still_count_twice() -> None:
+    """Two distinct failures must not collapse into one count."""
+    cb = CircuitBreaker("x", failure_threshold=5, recovery_timeout=60.0)
+
+    def _transient(exc: Exception) -> bool:
+        return True
+
+    async def _boom() -> None:
+        raise TimeoutError("down")
+
+    async def _main() -> None:
+        for _ in range(2):
+            with pytest.raises(TimeoutError):
+                await cb.call(_boom(), count_failure=_transient)
+
+    asyncio.run(_main())
+    assert cb._failure_count == 2
+
+
+def test_a_concurrent_success_does_not_clear_the_dedup_marker() -> None:
+    """A success between the two levels must not make the failure count twice.
+
+    The failure travels out of the inner breaker, through a rollback that
+    costs a round trip, and only then reaches the outer breaker. A
+    successful call that lands in that window used to clear the marker,
+    so the same failure was counted on both levels.
+    """
+    cb = CircuitBreaker("x", failure_threshold=5, recovery_timeout=60.0)
+    error = TimeoutError("down")
+
+    def _transient(exc: Exception) -> bool:
+        return True
+
+    async def _inner() -> None:
+        raise error
+
+    async def _outer() -> None:
+        try:
+            await cb.call(_inner(), count_failure=_transient)
+        except TimeoutError:
+            # * The concurrent success lands while the failure unwinds.
+            await cb.call(_ok(), count_failure=_transient)
+            raise
+
+    async def _ok() -> str:
+        return "ok"
+
+    with pytest.raises(TimeoutError):
+        asyncio.run(cb.call(_outer(), count_failure=_transient))
+
+    assert cb._failure_count == 1

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import itertools
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -19,6 +20,17 @@ log = get_logger(__name__)
 
 _DEFAULT_FAILURE_THRESHOLD: int = 5
 _DEFAULT_RECOVERY_TIMEOUT: float = 60.0
+
+# * The attribute that marks an exception as already counted. The marker
+# * lives on the exception rather than on the breaker, because a
+# * concurrent success on the same breaker would otherwise clear it and
+# * the same failure would be counted twice. Built-in exception types do
+# * not accept weak references, so a marker object would not work here.
+_COUNTED_MARK: str = "_tcbot_counted_failures"
+
+# * Stable per-breaker ids, so the marker on an exception can name the
+# * breakers that already counted it.
+_BREAKER_MARKER_IDS = itertools.count(1)
 
 
 class CircuitState(Enum):
@@ -52,6 +64,7 @@ class CircuitBreaker:
         "_failure_count",
         "_failure_threshold",
         "_half_open_probe_in_flight",
+        "_marker_id",
         "_name",
         "_opened_at",
         "_recovery_timeout",
@@ -75,6 +88,7 @@ class CircuitBreaker:
         self._half_open_probe_in_flight: bool = False
         self._opened_at: float = 0.0
         self._success_streak: int = 0
+        self._marker_id: int = next(_BREAKER_MARKER_IDS)
 
     # ── public API ── #
 
@@ -128,6 +142,12 @@ class CircuitBreaker:
         transient-failure meaning. When omitted, every exception counts,
         which preserves the historical behaviour for other callers.
 
+        The same exception object is counted once. A helper that already
+        runs through this breaker must not be wrapped in a second one: the
+        exception travels through both levels unchanged, and counting it
+        twice would trip the circuit after fewer real failures than the
+        threshold promises.
+
         """
         if not self.try_acquire():
             close = getattr(coro, "close", None)
@@ -141,7 +161,7 @@ class CircuitBreaker:
             if count_failure is not None and not count_failure(exc):
                 self._record_reached_service()
             else:
-                self._record_failure()
+                self._record_failure(exc)
             raise exc from None
         except BaseException:
             # * Cancellation must not leave a HALF_OPEN probe permanently reserved.
@@ -202,6 +222,27 @@ class CircuitBreaker:
 
     # ── private helpers ── #
 
+    def _already_counted(self, exc: BaseException) -> bool:
+        """Return True when this breaker already counted *exc*.
+
+        The marker rides on the exception, so a concurrent success on
+        this breaker cannot clear it before the same failure is counted
+        a second time on the way out.
+        """
+        marks = getattr(exc, _COUNTED_MARK, None)
+        if marks is None:
+            marks = set()
+            try:
+                setattr(exc, _COUNTED_MARK, marks)
+            except AttributeError:
+                # * An exception that cannot carry attributes cannot carry
+                # * the marker either, so it is counted on every level.
+                return False
+        if self._marker_id in marks:
+            return True
+        marks.add(self._marker_id)
+        return False
+
     def _record_success(self) -> None:
         # * Ordinary successes in CLOSED must not reset the counter
         # * immediately. fan_out runs up to 10 slots concurrently: one
@@ -240,7 +281,14 @@ class CircuitBreaker:
             self._success_streak = 0
         self._release_probe()
 
-    def _record_failure(self) -> None:
+    def _record_failure(self, exc: BaseException | None = None) -> None:
+        if exc is not None and self._already_counted(exc):
+            # * The same exception object travelled through a nested
+            # * breaker, so it is one failure and not two. Counting it
+            # * twice would trip the circuit after fewer real failures
+            # * than the threshold promises.
+            self._release_probe()
+            return
         self._failure_count += 1
         self._success_streak = 0
         if self._state is CircuitState.HALF_OPEN:

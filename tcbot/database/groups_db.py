@@ -438,7 +438,7 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
             new_chat_id,
         )
         try:
-            await db_call(lambda: _merge_group_row(old_chat_id, new_chat_id))
+            await _merge_group_row(old_chat_id, new_chat_id)
         except asyncio.CancelledError:
             raise
         except Exception:
