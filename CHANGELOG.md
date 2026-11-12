@@ -11,6 +11,13 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Reject incompatible database schemas before migration** (`tcbot/database/migrations.py`, `alembic/env.py`): online startup and CLI migrations stop before executing revisions when the target contains the normalized Transsion Core schema or unversioned legacy application relations. This prevents an incompatible database from being mistaken for a fresh legacy deployment.
 
+- **Preserve scheduler and MTProto state in the normalized Development schema** (`supabase/migrations/20261112162939_restore_tcbot_scheduler_and_mtproto_runtime_storage.sql`): the persistent APScheduler job table and PostgreSQL-backed MTProto session table now exist with backend-only RLS grants and the indexes required by the current runtime data shapes. The bot is not yet compatible with the normalized schema; these tables restore missing infrastructure only.
+
+- **Seed the legacy TCBot authorization contract into normalized RBAC** (`supabase/migrations/20261112160950_seed_legacy_tcbot_permission_contract.sql`): the Founder, Admin, Developer, and Tester levels map to Owner, Admin, Developer, and Moderator, with granular permission definitions and role grants. This catalog is not enforced by the current bot runtime yet.
+
+- **Keep one active federation owner** (`supabase/migrations/20261112161255_enforce_single_active_owner_per_federation.sql`): the database rejects a second active owner assignment in the same federation.
+
+
 - **The cache is verified against a real Redis server** (`tests/test_cache_redis_integration.py`, `.github/workflows/test-pytest.yml`, `pyproject.toml`): the cache tests used doubles, so they could not prove that the client speaks the wire format the cache expects. The suite now runs the same paths against a Redis server, and the continuous integration job starts one. The tests skip when no server is configured. Behavior changes: none.
 
 - **The schema migration is checked against the declared schema** (`tests/test_schema_migration.py`, `alembic/env.py`, `alembic/versions/0001_initial.py`): the integration tests build their tables from the declared metadata, so a migration that drifted from it would pass the whole suite and break the boot of a real deployment. A migrated empty schema is now compared with the declared metadata, so a missing revision is reported before it ships. Behavior changes: none.
