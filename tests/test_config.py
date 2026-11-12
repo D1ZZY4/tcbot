@@ -22,6 +22,8 @@ def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
     }
     base.update(env)
     for key in (
+        "DATABASE_SCHEMA_MODE",
+        "FEDERATION_SLUG",
         "MAIN_GROUP",
         "LOGS",
         "LOGS_ERRORS",
@@ -198,3 +200,37 @@ def test_unknown_log_level_falls_back_to_info(
     """An unusable LOG_LEVEL never silences the bot entirely."""
     loaded = _load(monkeypatch, LOG_LEVEL="LOUD")
     assert loaded.log_level == 20
+
+
+
+def test_database_schema_mode_defaults_to_legacy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Existing deployments keep their Alembic-managed legacy schema by default."""
+    loaded = _load(monkeypatch)
+    assert loaded.database_schema_mode == "legacy"
+    assert loaded.federation_slug == "tcf"
+
+
+def test_normalized_schema_mode_uses_the_configured_federation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The normalized runtime is explicit and scopes queries by federation slug."""
+    loaded = _load(
+        monkeypatch,
+        DATABASE_SCHEMA_MODE="normalized",
+        FEDERATION_SLUG="transsion-core",
+    )
+    assert loaded.database_schema_mode == "normalized"
+    assert loaded.federation_slug == "transsion-core"
+
+
+def test_unknown_database_schema_mode_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A typo must not silently choose a migration path."""
+    with pytest.raises(
+        RuntimeError,
+        match="DATABASE_SCHEMA_MODE must be either 'legacy' or 'normalized'",
+    ):
+        _load(monkeypatch, DATABASE_SCHEMA_MODE="normalised")
