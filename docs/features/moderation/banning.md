@@ -163,7 +163,7 @@ Reason: <reason>
 Applied to <success>/<total> groups.
 ```
 
-Failures are counted but do not roll back the database ban record. When the group-list fetch itself fails, the summary gains the `banning.applied.scope_warn` warning suffix asking staff to check logs and re-ban manually with `/tcban`.
+Failures are counted but do not roll back the database ban record. When the group-list fetch itself fails, the summary gains the `banning.applied.scope_warn` warning suffix asking staff to check logs and re-ban manually with `/tcban`. The scope is the connected groups plus the federation primary group plus the group the ban was issued from, so a failed fetch still enforces the ban where the moderator asked for it. A ban issued from the bot PM has no group origin, so it joins no group beyond the primary one.
 
 ## Role hierarchy and target protection
 

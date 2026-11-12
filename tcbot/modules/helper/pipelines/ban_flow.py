@@ -53,13 +53,13 @@ from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.time_and_date import monotonic, to_utc, utc_now
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
     from datetime import datetime
 
     from telegram import Bot, InlineKeyboardMarkup
     from telegram.ext.filters import BaseFilter
 
-    from tcbot.database.documents import BanDoc
+    from tcbot.database.documents import BanDoc, GroupDoc
 
 log = get_logger(__name__)
 
@@ -347,6 +347,21 @@ async def _execute_ban_record(
     return log_msg_id, True, canonical_ban_id
 
 
+def _enforcement_scope(
+    groups: Sequence[GroupDoc], origin_chat_id: int
+) -> list[dict[str, Any]]:
+    """Return the chats a ban is applied in.
+
+    The scope is the connected groups plus the federation primary group.
+    The origin group joins it: when the connected-group list cannot be
+    read, the ban must still land where the moderator issued it. A ban
+    issued from the bot PM has no group origin, so it never joins and the
+    scope stays the primary group alone.
+    """
+    origin = origin_chat_id if origin_chat_id < 0 else 0
+    return db.groups_db.with_primary_groups(groups, (cfg.main_group,), origin)
+
+
 async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> None:
     target_id: int = meta.get("ban_target_id") or 0
     target_fname: str = meta.get("ban_target_fname", str(target_id))
@@ -545,7 +560,11 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         executor_id=admin_id,
         executor_fname=admin_fname,
     )
-    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
+    # * The origin group joins the scope: a failed connected-group fetch
+    # * must not leave the ban unenforced where the moderator issued it.
+    # * A ban issued from the bot PM has no group origin, so it never joins
+    # * and the scope stays the primary group alone.
+    groups = _enforcement_scope(groups, prompt_chat_id)
     results = await fan_out(
         [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
     )
