@@ -251,6 +251,9 @@ async def claim_appeal_decision(ban_id: str, review_msg_id: int) -> bool:
     read checks, but only the first update matches: the loser sees an
     affected-row count of zero and must abort instead of double-executing
     (duplicate unbans, contradictory approve+reject, duplicate logs).
+
+    The claim consumes the review slot. A claim that ends without a
+    decision must hand the slot back with :func:`restore_review`.
     """
     affected = await db_call(
         lambda: run(
@@ -261,6 +264,36 @@ async def claim_appeal_decision(ban_id: str, review_msg_id: int) -> bool:
                 bans.c.review_message_id == review_msg_id,
             )
             .values(review_message_id=None, review_timestamp=None)
+        )
+    )
+    return affected > 0
+
+
+async def restore_review(
+    ban_id: str,
+    review_msg_id: int,
+    review_timestamp: datetime | None = None,
+) -> bool:
+    """Hand a claimed review slot back; return True when it was restored.
+
+    A staff member who cannot decide (a rank refusal, a database outage)
+    must not leave the review card dead. The restore only fills an empty
+    slot on a ban that is still active and not yet rejected, so it cannot
+    resurrect a review that another reviewer already decided.
+    """
+    affected = await db_call(
+        lambda: run(
+            bans.update()
+            .where(
+                bans.c.ban_id == ban_id,
+                bans.c.is_active.is_(True),
+                bans.c.review_message_id.is_(None),
+                bans.c.rejected_at.is_(None),
+            )
+            .values(
+                review_message_id=review_msg_id,
+                review_timestamp=review_timestamp or utc_now(),
+            )
         )
     )
     return affected > 0

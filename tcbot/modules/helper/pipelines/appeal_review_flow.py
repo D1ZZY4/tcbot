@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -39,6 +40,11 @@ log = get_logger(__name__)
 
 LOCK_HOURS: int = 12
 _LOCK_WINDOW = timedelta(hours=LOCK_HOURS)
+
+# * Ceiling for handing a consumed review slot back. The restore runs on
+# * the failure path and while the handler is being cancelled, so it
+# * must not hold the shutdown drain for a long write.
+_RESTORE_TIMEOUT_S: float = 5.0
 
 
 def reviewer_locked_out(
@@ -92,6 +98,38 @@ async def _answer_review(
         log.debug("Appeal review answer failed for %s: %s", key, exc)
 
 
+async def _restore_review_slot(
+    ban_id: str, review_msg_id: int, review_timestamp: datetime | None
+) -> None:
+    """Hand a consumed review slot back after a decision was not reached.
+
+    The decision claim consumes the slot so only one reviewer acts on it.
+    A claim that ends without a decision (a rank refusal, a database
+    outage) must give the slot back, or the review card dies with the
+    appeal undecided and the banned user can appeal again at once.
+
+    The restore never masks the failure that caused it, so its own errors
+    are logged and swallowed. It is bounded, because it also runs while
+    the handler is being cancelled and a long write would hold the
+    shutdown drain.
+    """
+    try:
+        restored = await asyncio.wait_for(
+            db.bans_db.restore_review(ban_id, review_msg_id, review_timestamp),
+            timeout=_RESTORE_TIMEOUT_S,
+        )
+    except asyncio.CancelledError:
+        raise
+    except TimeoutError:
+        log.warning("Review slot restore for ban %s timed out", ban_id)
+        return
+    except Exception:
+        log.exception("restore_review failed for ban %s", ban_id)
+        return
+    if restored:
+        log.info("Review slot for ban %s restored; no decision was taken.", ban_id)
+
+
 # ───────────────────────────── Approve ──────────────────────────── #
 
 
@@ -112,7 +150,12 @@ class ApproveMixin:
         lt: int | None,
         update: Update,
         approver_role: str | None,
-    ) -> None:
+    ) -> bool:
+        """Approve the appeal; return True when the ban was actually lifted.
+
+        Every early return means no decision was reached, so the caller
+        hands the review slot back instead of leaving a dead card.
+        """
         locale = await locale_for_update(update)
         # * The target name is resolved alongside the role so the demote audit
         # * log records the real name instead of the raw ID.
@@ -132,7 +175,7 @@ class ApproveMixin:
                 role_result,
             )
             await _answer_review(q, locale, "appeals.review.db_retry")
-            return
+            return False
         target_role = role_result
         # ! CRITICAL: The approver must outrank the target. Approving
         # ! strips the target's federation role (the ban lift requires it)
@@ -157,13 +200,13 @@ class ApproveMixin:
                 "common.refuse.outranked",
                 role=db.users_roles.role_label(target_role),
             )
-            return
+            return False
         try:
             groups = await db.groups_db.active_groups()
         except Exception:
             log.exception("approve_appeal: groups fetch failed for user=%d", target_id)
             await _answer_review(q, locale, "common.err.groups_load_failed")
-            return
+            return False
         if target_role in db.users_roles.STAFF_ROLES:
             # * Fail closed: the shared gate blocks the approval when the
             # * demote raised, or when it cleared no row while the role still
@@ -179,7 +222,7 @@ class ApproveMixin:
             )
             if not gate.may_proceed:
                 await _answer_review(q, locale, "appeals.review.demote_blocked")
-                return
+                return False
         deactivate_result = await db.bans_db.deactivate_all_active_bans(target_id)
         if isinstance(deactivate_result, asyncio.CancelledError):
             raise deactivate_result
@@ -190,7 +233,7 @@ class ApproveMixin:
                 deactivate_result,
             )
             await _answer_review(q, locale, "appeals.review.db_retry")
-            return
+            return False
         try:
             await db.bans_db.clear_review(ban_id)
         except Exception:
@@ -283,6 +326,7 @@ class ApproveMixin:
                 ban_id,
                 unban_log_r,
             )
+        return True
 
 
 # ───────────────────────────── Reject ───────────────────────────── #
@@ -302,7 +346,13 @@ class RejectMixin:
         lc: int,
         lt: int | None,
         update: Update,
-    ) -> None:
+    ) -> bool:
+        """Reject the appeal; return True when the rejection was recorded.
+
+        The rejection marker is the decision, so a failure to write it
+        means no decision was reached and the caller hands the review
+        slot back.
+        """
         set_r, name_r = await asyncio.gather(
             db.bans_db.set_rejected_by(ban_id, admin.id, admin.first_name),
             db.users_cache.get_first_name(target_id, str(target_id)),
@@ -313,7 +363,7 @@ class RejectMixin:
         if isinstance(set_r, BaseException):
             log.exception("reject_appeal set_rejected_by failed for ban %s", ban_id)
             await _answer_review(q, staff_locale, "appeals.review.db_retry")
-            return
+            return False
         target_fname: str = (
             name_r if isinstance(name_r, str) and name_r else str(target_id)
         )
@@ -370,6 +420,7 @@ class RejectMixin:
                 ban.get("appeal_submitted_at"),
             ),
         )
+        return True
 
 
 # ──────────────────────── Decision routing ──────────────────────── #
@@ -522,10 +573,9 @@ class AppealReviewMixin(AppealVerdictsMixin):
         # * Atomic decision claim: two concurrent taps both pass the read
         # * checks above, but only one wins this update. The loser aborts
         # * instead of double-unbanning or approve+reject racing.
+        review_msg_id = int(ban.get("review_message_id") or 0)
         try:
-            claimed = await db.bans_db.claim_appeal_decision(
-                ban_id, int(ban.get("review_message_id") or 0)
-            )
+            claimed = await db.bans_db.claim_appeal_decision(ban_id, review_msg_id)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -548,20 +598,42 @@ class AppealReviewMixin(AppealVerdictsMixin):
                 log.debug("Appeal claim-loser answer failed: %s", exc)
             return
         lc, lt = cfg.logs
-        if action == "approve":
-            await self._approve_appeal(
-                ctx.bot,
-                q,
-                ban,
-                ban_id,
-                target_id,
-                admin,
-                lc,
-                lt,
-                update,
-                approver_role=role_result,
-            )
-        elif action == "reject":
-            await self._reject_appeal(
-                ctx.bot, q, ban, ban_id, target_id, admin, lc, lt, update
-            )
+        # * The claim consumed the review slot. A path that ends without a
+        # * decision must hand the slot back, or the card dies with the
+        # * appeal undecided and the banned user can appeal again at once.
+        # *
+        # * The restore must never replace the failure that made it
+        # * necessary, so it runs outside a finally block and swallows a
+        # * cancellation of its own.
+        decided = False
+        try:
+            if action == "approve":
+                decided = await self._approve_appeal(
+                    ctx.bot,
+                    q,
+                    ban,
+                    ban_id,
+                    target_id,
+                    admin,
+                    lc,
+                    lt,
+                    update,
+                    approver_role=role_result,
+                )
+            else:
+                decided = await self._reject_appeal(
+                    ctx.bot, q, ban, ban_id, target_id, admin, lc, lt, update
+                )
+        except asyncio.CancelledError:
+            # * A cancelled decision reaches no verdict either, so the
+            # * slot goes back before the cancellation continues.
+            with contextlib.suppress(asyncio.CancelledError):
+                await _restore_review_slot(ban_id, review_msg_id, review_ts)
+            raise
+        except Exception:
+            log.exception("Appeal decision failed for ban %s", ban_id)
+            with contextlib.suppress(asyncio.CancelledError):
+                await _restore_review_slot(ban_id, review_msg_id, review_ts)
+            raise
+        if not decided:
+            await _restore_review_slot(ban_id, review_msg_id, review_ts)

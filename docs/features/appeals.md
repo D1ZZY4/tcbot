@@ -160,6 +160,8 @@ The update helpers involved are:
 - `bans_db.set_review_if_absent(ban_id, review_msg_id)` (atomic claim; returns whether this submit won the review slot)
 - `bans_db.set_appeal_log_msg(ban_id, appeal_log_msg_id, appeal_link=...)`
 - `bans_db.deactivate_all_active_bans(user_id)` on approval (clears all active records atomically)
+- `bans_db.claim_appeal_decision(ban_id, review_msg_id)` (atomic decision claim; consumes the review slot)
+- `bans_db.restore_review(ban_id, review_msg_id, review_timestamp)` (hands the slot back when a tap reached no decision)
 - `users_cache.upsert_user(...)` after submission
 
 If the review post fails, `review_message_id` is not stored. If the appeal-log post fails, `appeal_log_msg_id` is not stored. The implementation logs those failures and continues where possible.
@@ -194,6 +196,13 @@ The original banning admin gets a 12-hour priority window after the appeal revie
 - If `review_timestamp` is missing, or `admin_user_id` is missing or zero (legacy record), the lock does not apply.
 
 The callback handler always answers the callback query before continuing once it has parsed a valid decision action.
+
+The decision claim consumes the review slot, so only one reviewer acts on
+it. A tap that reaches no decision (a rank refusal, a database outage, a
+blocked demote) hands the slot back with `bans_db.restore_review`, so the
+review card stays actionable instead of dying with the appeal undecided.
+The restored slot keeps the original review timestamp, so the 12-hour
+priority window continues where it left off.
 
 ## Approval behavior
 
