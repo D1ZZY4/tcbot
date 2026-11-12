@@ -13,6 +13,8 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
+from tcbot import cfg
+from tcbot.database import normalized_roles
 from tcbot.database.base import tc_admins, tc_owners, tc_roles
 from tcbot.database.cache import (
     _OWNER_KEY,
@@ -104,6 +106,9 @@ def cache_effective_role(user_id: int, role: str | None) -> None:
     the rank comparison later in the same request reads the value the tier
     validated instead of a stale cache entry.
     """
+    if cfg.database_schema_mode == "normalized":
+        normalized_roles.cache_effective_role(user_id, role)
+        return
     effective_role_cache.put(user_id, role)
 
 
@@ -115,6 +120,8 @@ async def _count(stmt: Executable) -> int:
 
 async def _owner_count() -> int:
     """Return how many owner rows the table currently holds."""
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles._owner_count()
     return await _count(select(func.count()).select_from(tc_owners))
 
 
@@ -129,6 +136,8 @@ async def get_owner_id(*, fresh: bool = False) -> int | None:
     use ``fresh=True`` so a transfer in another process is never hidden for
     up to the 300 s owner TTL; display reads keep the cached fast path.
     """
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles.get_owner_id(fresh=fresh)
 
     async def _fetch() -> int | None:
         # * The lowest owner row wins, exactly like the old sorted read.
@@ -164,6 +173,9 @@ async def is_owner(user_id: int, *, fresh: bool = False) -> bool:
 
 async def ensure_initial_owner(initial_id: int) -> None:
     """Create the first owner entry if the owners table is empty."""
+    if cfg.database_schema_mode == "normalized":
+        await normalized_roles.ensure_initial_owner(initial_id)
+        return
     if await _owner_count() > 0:
         return
     try:
@@ -181,6 +193,9 @@ async def ensure_initial_owner(initial_id: int) -> None:
 
 async def set_owner(user_id: int) -> None:
     """Replace the current owner with user_id; clears the role cache."""
+    if cfg.database_schema_mode == "normalized":
+        await normalized_roles.set_owner(user_id)
+        return
 
     # * The transfer runs in one transaction: the insert and the
     # * convergence delete commit together, so a crash between them cannot
@@ -244,6 +259,8 @@ async def set_owner(user_id: int) -> None:
 
 async def is_admin(user_id: int) -> bool:
     """Return True if user_id is a registered admin."""
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles.is_admin(user_id)
     row = await db_call(
         lambda: fetch_one(
             select(tc_admins.c.user_id).where(tc_admins.c.user_id == user_id)
@@ -254,6 +271,9 @@ async def is_admin(user_id: int) -> bool:
 
 async def add_admin(user_id: int, promoted_by: int) -> None:
     """Add a new admin via upsert; no-op if already present."""
+    if cfg.database_schema_mode == "normalized":
+        await normalized_roles.add_admin(user_id, promoted_by)
+        return
     # * The conflict action is DO NOTHING: a repeated promotion leaves the
     # * stored promoter and promotion date untouched, matching the old
     # * insert-only upsert.
@@ -273,6 +293,8 @@ async def add_admin(user_id: int, promoted_by: int) -> None:
 
 async def remove_admin(user_id: int) -> bool:
     """Remove an admin; return True if the entry was deleted."""
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles.remove_admin(user_id)
     deleted = await db_call(
         lambda: run(delete(tc_admins).where(tc_admins.c.user_id == user_id))
     )
@@ -282,12 +304,16 @@ async def remove_admin(user_id: int) -> bool:
 
 async def all_admins() -> list[AdminDoc]:
     """Return all admin documents."""
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles.all_admins()
     rows = await db_call(lambda: fetch_all(select(tc_admins.c.user_id)))
     return cast("list[AdminDoc]", rows)
 
 
 async def admin_count() -> int:
     """Return the total count of registered admins."""
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles.admin_count()
     return await _count(select(func.count()).select_from(tc_admins))
 
 
@@ -301,6 +327,9 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
     # ! would grant real privilege to a tc_roles row.
     if role not in VALID_ROLES:
         raise ValueError(f"Refusing to store invalid custom role: {role!r}")
+    if cfg.database_schema_mode == "normalized":
+        await normalized_roles.set_role(user_id, role, assigned_by)
+        return
     row: RoleDoc = {
         "user_id": UserId(user_id),
         "role": role,
@@ -333,6 +362,8 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
 
 async def remove_role(user_id: int) -> bool:
     """Remove a user's custom role from the database."""
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles.remove_role(user_id)
     deleted = await db_call(
         lambda: run(delete(tc_roles).where(tc_roles.c.user_id == user_id))
     )
@@ -342,6 +373,8 @@ async def remove_role(user_id: int) -> bool:
 
 async def get_role(user_id: int) -> str | None:
     """Get a user's custom role from the database only."""
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles.get_role(user_id)
     row = await db_call(
         lambda: fetch_one(select(tc_roles.c.role).where(tc_roles.c.user_id == user_id))
     )
@@ -350,6 +383,8 @@ async def get_role(user_id: int) -> str | None:
 
 async def all_by_role(role: str) -> list[RoleRefDoc]:
     """Get all users with a specific custom role."""
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles.all_by_role(role)
     rows = await db_call(
         lambda: fetch_all(select(tc_roles.c.user_id).where(tc_roles.c.role == role))
     )
@@ -358,6 +393,8 @@ async def all_by_role(role: str) -> list[RoleRefDoc]:
 
 async def role_count(role: str) -> int:
     """Count role members (count-only views; avoids fetching documents)."""
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles.role_count(role)
     return await _count(
         select(func.count()).select_from(tc_roles).where(tc_roles.c.role == role)
     )
@@ -400,6 +437,8 @@ async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None
     decisions) use ``fresh=True`` so a demotion in another process is never
     hidden for up to the 60 s role TTL; display reads keep the cached path.
     """
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles.get_effective_role(user_id, fresh=fresh)
 
     async def _resolve() -> str | None:
         # * Propagate DB errors so get_or_fetch does not cache a degraded role result.
@@ -465,6 +504,8 @@ async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None
 
 async def role_meta(user_id: int) -> tuple[str | None, int | None, datetime | None]:
     """Return ``(role, assigned_by, assigned_at)``; owner has no metadata."""
+    if cfg.database_schema_mode == "normalized":
+        return await normalized_roles.role_meta(user_id)
     role = await get_effective_role(user_id)
     if role is None:
         return None, None, None
