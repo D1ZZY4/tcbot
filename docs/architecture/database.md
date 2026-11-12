@@ -83,13 +83,18 @@ These definitions are data in the Development database; the current TCBot
 runtime does not yet enforce the normalized permission catalog.
 
 The normalized project has its own Supabase migration ledger. The repository's
-`supabase/migrations/` directory currently archives only the incremental
+`supabase/migrations/` directory currently archives the incremental
 migrations added during cutover preparation; the earlier migration sources
-have not all been recovered. The remote ledger is therefore not yet
-reproducible from this repository, and these files must not be treated as a
-complete bootstrap history. Restore and review the full migration history
-before recreating an empty normalized project or deploying the schema to
-Production.
+have not all been recovered. A catalog-derived candidate baseline is archived
+at `supabase/bootstrap/normalized_schema.sql`. It was executed with
+assertions in an isolated schema inside the Development database, including
+the RLS event-trigger behavior, and rolled back. That confirms the captured
+SQL can construct the current schema shape under the existing project's
+roles and extensions. It does not replace a clean Supabase-project restore
+test or reconstruct the missing historical migration ledger. Review platform
+prerequisites and reconcile the migration history before using the baseline
+in an empty staging project. Do not use it against Production, a populated
+database, or the active Development schema.
 
 `mtproto_state` stores serialized MTProto credentials, peer data, and update
 state. Its access must remain restricted to the trusted backend. Do not grant
