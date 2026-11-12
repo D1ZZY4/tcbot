@@ -61,6 +61,20 @@ def test_schema() -> str:
     return f"{TEST_SCHEMA}_{worker}"
 
 
+def worker_schema(prefix: str) -> str:
+    """Return a per-worker schema name derived from *prefix*.
+
+    A module that owns a dedicated schema instead of the shared one
+    still has to keep the workers apart: two tests of the same module
+    can run on different workers, and they would otherwise create the
+    same schema at the same time.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "").strip()
+    if not worker:
+        return prefix
+    return f"{prefix}_{worker}"
+
+
 def require_test_database() -> str:
     """Return the test database URL, skipping the test when it is unset."""
     url = configured_database_url()

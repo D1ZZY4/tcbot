@@ -27,6 +27,7 @@ from tests.postgres_support import (
     configured_database_url,
     create_empty_schema,
     drop_schema,
+    worker_schema,
 )
 
 if TYPE_CHECKING:
@@ -34,12 +35,22 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.postgres]
 
-_MIGRATION_SCHEMA: str = "tcbot_logging_check"
+# * The schema name carries the worker id, because the tests of this
+# * module can run on different workers and would otherwise create the
+# * same schema at once.
+_MIGRATION_SCHEMA: str = worker_schema("tcbot_logging_check")
 
 
 @pytest.fixture
 def migrated_schema() -> Iterator[str]:
-    """Apply the migrations to an empty schema, then drop the schema."""
+    """Apply the migrations to an empty schema, then drop the schema.
+
+    The schema scope stays in place for the whole test, not only for the
+    first migration run: the Alembic environment builds its own engine
+    from the URL, so a later call without the scope would apply the
+    revisions to the database's default schema and write the bot schema
+    into it.
+    """
     url = configured_database_url()
     if url is None:
         pytest.skip(
@@ -53,15 +64,12 @@ def migrated_schema() -> Iterator[str]:
     os.environ["PGOPTIONS"] = f"-c search_path={_MIGRATION_SCHEMA}"
     try:
         migrations.upgrade_head(url)
+        yield _MIGRATION_SCHEMA
     finally:
         if previous_options is None:
             os.environ.pop("PGOPTIONS", None)
         else:
             os.environ["PGOPTIONS"] = previous_options
-
-    try:
-        yield _MIGRATION_SCHEMA
-    finally:
         drop_schema(url, _MIGRATION_SCHEMA)
 
 

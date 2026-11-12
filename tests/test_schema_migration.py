@@ -35,6 +35,7 @@ from tests.postgres_support import (
     create_empty_schema,
     drop_schema,
     sync_database_url,
+    worker_schema,
 )
 
 if TYPE_CHECKING:
@@ -44,8 +45,10 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.postgres]
 
 # * The migration check owns its own schema: it must start empty, and it
-# * must not share objects with the metadata-built test schema.
-_MIGRATION_SCHEMA: str = "tcbot_migration_check"
+# * must not share objects with the metadata-built test schema. The name
+# * carries the worker id, because two tests of this module can run on
+# * different workers and would otherwise create the same schema at once.
+_MIGRATION_SCHEMA: str = worker_schema("tcbot_migration_check")
 
 # * The repository root holds alembic.ini and the alembic/ script directory.
 _ROOT: Path = Path(__file__).resolve().parents[1]
