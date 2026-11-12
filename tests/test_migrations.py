@@ -6,15 +6,21 @@
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 from alembic.config import Config
 
+from scripts import generate_initial_migration as generator
 from tcbot.database import migrations
 
-# * A percent-encoded password is ordinary in a PostgreSQL URL: the
+# * The percent-encoded password is ordinary in a PostgreSQL URL: the
 # * password is sent URL-encoded, so a "@" or a "/" in it shows up as
 # * "%40" or "%2F".
 _PERCENT_URL: str = "postgresql+psycopg://tcbot:p%40ss%2Fword@127.0.0.1:5432/tcbot"
+
+# * The bootstrap generator writes the first revision only.
+_GENERATOR = pathlib.Path("scripts/generate_initial_migration.py")
 
 
 def _config() -> Config:
@@ -66,3 +72,28 @@ def test_the_migration_reaches_the_database_with_a_percent_url(
     migrations.upgrade_head(_PERCENT_URL)
 
     assert captured == [_PERCENT_URL]
+
+
+def test_the_bootstrap_generator_refuses_to_overwrite_the_first_revision(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    """The applied revision must never be rewritten.
+
+    The first revision is the database's history. Replacing it would
+    leave a deployed database on the old schema while the repository
+    claims the change shipped, and Alembic would apply nothing because
+    the revision id is already recorded as applied.
+    """
+    versions = tmp_path / "alembic" / "versions"
+    versions.mkdir(parents=True)
+    (versions / "0001_initial.py").write_text("# existing revision\n", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit) as excinfo:
+        generator.main()
+
+    assert "alembic revision --autogenerate" in str(excinfo.value)
+    assert (versions / "0001_initial.py").read_text(encoding="utf-8") == (
+        "# existing revision\n"
+    )

@@ -1,9 +1,21 @@
 """Generate the initial Alembic migration from the SQLAlchemy metadata.
 
 The migration is generated from the same table definitions the runtime
-uses, so the two can never drift. Run it after changing ``base.py``:
+uses, so the two can never drift. It is a bootstrap tool for the first
+revision of a new project:
 
     uv run python scripts/generate_initial_migration.py
+
+Once the first revision exists, a schema change needs a new revision.
+Generate it with Alembic itself, which diffs the declared metadata
+against the migrated database:
+
+    uv run alembic revision --autogenerate -m "describe the change"
+
+The script refuses to overwrite an existing first revision: the applied
+revision is the database's history, and rewriting it would leave a
+deployed database on the old schema while the repository claims the
+change shipped.
 """
 
 from __future__ import annotations
@@ -194,8 +206,19 @@ def render() -> str:
 
 
 def main() -> None:
-    """Write the migration file."""
+    """Write the initial migration file.
+
+    The tool bootstraps the first revision only. An existing file is
+    never overwritten, because the applied revision is the database's
+    history: replacing it would leave a deployed database on the old
+    schema while the repository claims the change shipped.
+    """
     target = pathlib.Path("alembic/versions/0001_initial.py")
+    if target.exists():
+        raise SystemExit(
+            f"{target} already exists. Generate a new revision instead:\n"
+            '  uv run alembic revision --autogenerate -m "describe the change"'
+        )
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(render(), encoding="utf-8")
     print(f"wrote {target}")
