@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from typing import TYPE_CHECKING
 
@@ -23,6 +24,9 @@ os.environ.setdefault("OWNER_ID", "1")
 
 import pytest
 
+from tcbot import cfg
+from tcbot.database import redis_client as redis_client_mod
+from tcbot.database.cache import singletons, twolevel
 from tcbot.utils.logger import setup as setup_logging
 from tests.postgres_support import (
     build_test_schema,
@@ -46,6 +50,46 @@ def _production_logging() -> None:
     print-to-stdout facility and tests asserting on log output fail.
     """
     setup_logging()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _worker_cache_namespace() -> None:
+    """Give every xdist worker its own Redis namespace for the shared caches.
+
+    The shared caches use fixed keys, and the owner cache uses one global
+    key. Two workers would therefore read each other's entries when
+    Redis is configured, and the tests that pin the cached and the fresh
+    read would fail depending on the worker order.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "").strip()
+    if not worker:
+        return
+    for cache in (
+        singletons.effective_role_cache,
+        singletons.connected_cache,
+        singletons.active_groups_cache,
+        singletons.owner_id_cache,
+        singletons.user_mention_cache,
+    ):
+        cache._redis_prefix = f"{cache._redis_prefix}-{worker}"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _shared_caches_stay_in_memory() -> Iterator[None]:
+    """Keep the shared caches on their in-memory layer for the whole suite.
+
+    The Redis half of a cache is eventually consistent: an invalidation
+    clears the in-memory entry at once and queues the Redis delete. The
+    tests run each case on its own event loop, and a queued delete dies
+    with the loop it was queued on, so the stale entry would stay in
+    Redis and the next test would read it. The module that exercises
+    Redis on purpose restores the configuration.
+    """
+    memory_only = dataclasses.replace(cfg, redis_url="")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(twolevel, "cfg", memory_only)
+        patch.setattr(redis_client_mod, "cfg", memory_only)
+        yield
 
 
 @pytest.fixture(scope="session")

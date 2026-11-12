@@ -7,15 +7,31 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from typing import Any
 
 import pytest
 
+from tcbot import cfg
+from tcbot.database.cache import twolevel
 from tcbot.database.cache.twolevel import TwoLevelCache
 
 
+@pytest.fixture(autouse=True)
+def _memory_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the cache on its in-memory layer for the whole module.
+
+    The tests drive a fetch and a write against each other, so a value
+    that Redis already holds would answer the fetch before the test can
+    release it. The module is about the in-memory layer, so the second
+    layer is switched off explicitly instead of relying on the session
+    having no Redis configured.
+    """
+    monkeypatch.setattr(twolevel, "cfg", dataclasses.replace(cfg, redis_url=""))
+
+
 def _cache() -> TwoLevelCache[str]:
-    """Return an L1-only cache (no Redis configured in the test session)."""
+    """Return an L1-only cache."""
     return TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix="test")
 
 

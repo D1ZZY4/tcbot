@@ -40,6 +40,12 @@ Three workflows with identical triggers (push to `main`, `feat/**`,
   (validated at import time, never connecting), so fork PRs without
   repository secrets still pass.
 
+**Service containers:** the test job starts a PostgreSQL and a Redis
+server. The database-backed and cache-backed tests read the server URL
+from `TCBOT_TEST_DATABASE_URL` and `REDIS_URL` and skip when the
+variable is unset, so the suite still passes without the services, but
+the job provides both so the real code paths run on every change.
+
 **Why this exists:**
 The three workflows provide a repeatable CI result for formatting, lint,
 types, imports, and behavioral checks. Whether they block merging depends
