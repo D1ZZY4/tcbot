@@ -713,7 +713,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.ensure_published_rule_acknowledgement()
@@ -740,7 +740,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.expire_due_moderation_actions()
@@ -761,7 +761,7 @@ BEGIN
   GET DIAGNOSTICS v_expired_count = ROW_COUNT;
   RETURN v_expired_count;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.expire_due_role_assignments()
@@ -781,7 +781,7 @@ BEGIN
   GET DIAGNOSTICS v_expired_count = ROW_COUNT;
   RETURN v_expired_count;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_join_request_lifecycle()
@@ -834,7 +834,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_moderation_action_update()
@@ -893,7 +893,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_moderation_appeal_lifecycle()
@@ -946,7 +946,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_moderation_case_insert()
@@ -964,7 +964,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_moderation_case_update()
@@ -1019,7 +1019,7 @@ AS $function$
 
       RETURN NEW;
     END;
-    $function$
+    $function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_moderation_evidence_item()
@@ -1052,7 +1052,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_moderation_message_history()
@@ -1079,7 +1079,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_promotion_request_lifecycle()
@@ -1133,7 +1133,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_role_assignment_update()
@@ -1181,7 +1181,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_rule_acknowledgement_history()
@@ -1192,7 +1192,7 @@ AS $function$
 BEGIN
   RAISE EXCEPTION 'Rule acknowledgements are immutable historical records; % is not allowed', TG_OP;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_rule_item_draft_only()
@@ -1230,7 +1230,7 @@ BEGIN
 
     RETURN OLD;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_rule_set_identity()
@@ -1253,7 +1253,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_rule_set_version_changes()
@@ -1337,7 +1337,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_system_role_definition()
@@ -1359,7 +1359,7 @@ AS $function$
 
       RETURN NEW;
     END;
-    $function$
+    $function$;
 
 
 CREATE OR REPLACE FUNCTION public.guard_telegram_chat_type_change()
@@ -1379,7 +1379,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.prepare_moderation_action()
@@ -1452,7 +1452,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.prepare_role_assignment()
@@ -1480,7 +1480,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.prevent_historical_record_delete()
@@ -1491,7 +1491,7 @@ AS $function$
     BEGIN
       RAISE EXCEPTION 'Historical record in % is append-only; use its lifecycle state instead of deleting it', TG_TABLE_NAME;
     END;
-    $function$
+    $function$;
 
 
 CREATE OR REPLACE FUNCTION public.rls_auto_enable()
@@ -1597,7 +1597,7 @@ BEGIN
     END IF;
   END LOOP;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.set_updated_at()
@@ -1609,7 +1609,7 @@ BEGIN
     NEW.updated_at := NOW();
     RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.validate_federation_group_chat_type()
@@ -1630,7 +1630,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.validate_moderation_case_rule_scope()
@@ -1699,7 +1699,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$function$
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.validate_moderation_evidence_upload()
@@ -1826,7 +1826,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$;
 
 
 -- View definitions
