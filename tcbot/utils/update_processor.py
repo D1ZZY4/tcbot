@@ -128,11 +128,6 @@ class KeyedUpdateProcessor(BaseUpdateProcessor):
                 self._running -= 1
 
     @property
-    def current_concurrent_updates(self) -> int:
-        """How many handlers are running right now."""
-        return self._running
-
-    @property
     def tracked_keys(self) -> int:
         """Return how many conversation keys currently hold a lock."""
         return len(self._locks)

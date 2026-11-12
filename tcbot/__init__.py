@@ -359,7 +359,6 @@ def __getattr__(name: str) -> Configs:
 
 __all__ = [
     "Configs",
-    "_env_list",
     "cfg",
     "parse_chat_id",
     "parse_list",

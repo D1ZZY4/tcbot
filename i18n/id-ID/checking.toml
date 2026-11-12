@@ -70,7 +70,6 @@ kicks = "Kick ({n})"
 mutes = "Mute ({n})"
 
 [bans]
-title = "*Ban*"
 empty = "*Ban*\n\nTidak ada catatan ban untuk {user}."
 header = "*Ban*: {n} total, halaman {page}/{pages}"
 active = "*Aktif*"
@@ -80,7 +79,6 @@ not_found = "Ban {ban} tidak ditemukan."
 db_fail = "Ban {ban} gagal dimuat. Database tidak terjangkau, coba lagi sebentar."
 
 [appeals_list]
-title = "*Banding*"
 empty = "*Banding*\n\nTidak ada catatan banding untuk {user}."
 header = "*Banding*: {n} total, halaman {page}/{pages}"
 approved = "*Disetujui* (unban)"

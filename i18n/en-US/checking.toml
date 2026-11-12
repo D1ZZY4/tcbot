@@ -70,7 +70,6 @@ kicks = "Kicks ({n})"
 mutes = "Mutes ({n})"
 
 [bans]
-title = "*Bans*"
 empty = "*Bans*\n\nNo ban records for {user}."
 header = "*Bans*: {n} total, page {page}/{pages}"
 active = "*Active*"
@@ -80,7 +79,6 @@ not_found = "Ban {ban} not found."
 db_fail = "Ban {ban} could not be loaded. The database is unreachable, try again in a bit."
 
 [appeals_list]
-title = "*Appeals*"
 empty = "*Appeals*\n\nNo appeal records for {user}."
 header = "*Appeals*: {n} total, page {page}/{pages}"
 approved = "*Approved* (unbanned)"

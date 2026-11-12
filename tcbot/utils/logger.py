@@ -296,8 +296,13 @@ class _LoguruShim:
         self._emit("critical", msg, args, exc_info=exc_info)
 
     def exception(self, msg: str, *args: Any, exc_info: Any = None) -> None:
-        text = _format_percent(msg, args)
-        logger.bind(module=self._name).opt(depth=2, exception=True).error(text)
+        """Log at error level with the handled exception attached.
+
+        ``exc_info`` follows the stdlib contract: it defaults to ``True``
+        (attach the exception currently being handled) and ``False``
+        suppresses the traceback.
+        """
+        self._emit("error", msg, args, exc_info=True if exc_info is None else exc_info)
 
 
 def get_logger(name: str) -> _LoguruShim:
