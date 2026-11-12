@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -79,12 +79,32 @@ async def create_ban(
         "review_message_id": None,
         "review_timestamp": None,
     }
-    try:
-        rows = await db_call(
+
+    async def _reuse_existing(error: Exception) -> BanDoc:
+        """Return the canonical active ban when this insert lost the race."""
+        existing = await get_active_ban(target_id)
+        if existing is None:
+            raise error
+        if not auto_id and str(existing.get("ban_id", "")) == str(ban_id):
+            # * The explicit id itself is taken, so the caller must not be
+            # * handed a record it cannot reference.
+            raise error
+        log.warning(
+            "Concurrent ban for user %d lost the race; reusing ban %s",
+            target_id,
+            existing.get("ban_id", ""),
+        )
+        return cast("BanDoc", existing)
+
+    async def _insert() -> list[dict[str, Any]]:
+        return await db_call(
             lambda: run_returning(
                 pg_insert(bans).values(**values).returning(*_BAN_COLUMNS)
             )
         )
+
+    try:
+        rows = await _insert()
     except Exception as insert_error:
         violated = constraint_name(insert_error)
         if violated == _CONSTRAINT_BAN_ID and auto_id:
@@ -94,11 +114,16 @@ async def create_ban(
             # * so it can be swapped for a fresh one and the insert retried.
             ban_id = make_ban_id()
             values["ban_id"] = ban_id
-            rows = await db_call(
-                lambda: run_returning(
-                    pg_insert(bans).values(**values).returning(*_BAN_COLUMNS)
-                )
-            )
+            try:
+                rows = await _insert()
+            except Exception as retry_error:
+                # * The retry can lose a different race: a concurrent ban
+                # * for the same target. That case has its own handling, so
+                # * the raw integrity error must not surface as a write
+                # * failure.
+                if constraint_name(retry_error) != _CONSTRAINT_ACTIVE_USER:
+                    raise
+                return await _reuse_existing(retry_error)
         elif violated != _CONSTRAINT_ACTIVE_USER:
             # * Only the one-active-ban-per-user constraint may lose a
             # * race. Any other integrity error is a real defect and
@@ -109,19 +134,7 @@ async def create_ban(
             # * so a concurrent ban for the same target loses the race here.
             # * The existing record is the canonical one: the caller keeps it
             # * and the moderation continues.
-            existing = await get_active_ban(target_id)
-            if existing is None:
-                raise insert_error
-            if not auto_id and str(existing.get("ban_id", "")) == str(ban_id):
-                # * The explicit id itself is taken, so the caller must not be
-                # * handed a record it cannot reference.
-                raise insert_error
-            log.warning(
-                "Concurrent ban for user %d lost the race; reusing ban %s",
-                target_id,
-                existing.get("ban_id", ""),
-            )
-            return cast("BanDoc", existing)
+            return await _reuse_existing(insert_error)
     # * The stored row is the answer: the database filled the defaults
     # * and the server-side timestamp, so the caller sees exactly what a
     # * later read would return.
