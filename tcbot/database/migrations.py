@@ -9,10 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect
 
+from alembic import command
 from tcbot.database.base import metadata
 
 if TYPE_CHECKING:
