@@ -97,6 +97,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **The MTProto session writes go out in batches** (`tcbot/database/mtproto_store.py`, `tests/test_mtproto_store.py`): the storage engine wrote one transaction per peer and per update state, so a session with hundreds of peers cost hundreds of sequential transactions. The peer list, the name list and the update states now travel in one multi-row upsert per bounded chunk, and the whole batch shares one retry budget. Writing five hundred peers drops from five hundred transactions and about 2.3 s to one transaction and about 0.12 s. Behavior changes: none; the stored rows and the merge rules are unchanged.
+
 - **The batch mention readers consult the second cache layer** (`tcbot/database/cache/twolevel.py`, `tcbot/database/users_cache.py`): the single-user readers went through both cache layers while the batch readers only checked the in-memory one, so a warm Redis was ignored after every restart and each list view went back to the database. The batch readers now fetch the keys the in-memory layer missed from Redis in one round trip, in bounded chunks. Behavior changes: none.
 
 - **The event loop no longer uses the deprecated policy API** (`tcbot/__main__.py`, `tcbot/serverless.py`): the bot installed the uvloop event loop policy, which Python 3.14 deprecates and 3.16 removes, so every start printed a removal warning and the accelerated loop would have stopped being installed. The transports now take a loop factory instead: the webhook transport passes it to the runner, the polling transport installs the loop as the current one, and the serverless instance loop uses it too. Behavior changes: none; the accelerated loop is still used on Linux.

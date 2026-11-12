@@ -7,12 +7,15 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
 import msgspec
 import pytest
 from pyrogram.storage import UpdateState
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError
 
 from tcbot.database import engine as engine_module
@@ -79,6 +82,20 @@ def store() -> PostgresStorage:
 
 def _run(coro: Any) -> Any:
     return asyncio.run(coro)
+
+
+def _row_params(stmt: Any, index: int = 0) -> dict[str, Any]:
+    """Return the bound parameters of one row of a multi-row insert.
+
+    A multi-row insert names its parameters after the row they belong
+    to, so the plain column names carry a row suffix.
+    """
+    suffix = f"_m{index}"
+    return {
+        key[: -len(suffix)]: value
+        for key, value in stmt_params(stmt).items()
+        if key.endswith(suffix)
+    }
 
 
 # ────────────────────────────── Keys ────────────────────────────── #
@@ -148,7 +165,7 @@ def test_update_peers_upserts_the_peer_row(
     """The peer row carries the access hash, the type and the phone number."""
     _run(store.update_peers([(42, 99, "user", "+15550000")]))
 
-    params = stmt_params(recorder.statements[0])
+    params = _row_params(recorder.statements[0])
     assert params["id"] == "test:peer:42"
     assert params["access_hash"] == 99
     assert params["type"] == "user"
@@ -157,13 +174,34 @@ def test_update_peers_upserts_the_peer_row(
     assert "ON CONFLICT (id) DO UPDATE" in sql
 
 
+def test_the_peer_list_is_written_with_one_statement(
+    store: PostgresStorage, recorder: _Recorder
+) -> None:
+    """The whole peer list travels in one statement, not one per peer."""
+    _run(store.update_peers([(42, 99, "user", None), (43, 100, "chat", None)]))
+
+    assert len(recorder.statements) == 1
+    assert _row_params(recorder.statements[0])["id"] == "test:peer:42"
+    assert _row_params(recorder.statements[0], 1)["id"] == "test:peer:43"
+
+
+def test_a_repeated_peer_lands_once(
+    store: PostgresStorage, recorder: _Recorder
+) -> None:
+    """A repeated peer cannot touch the same row twice in one statement."""
+    _run(store.update_peers([(42, 99, "user", None), (42, 100, "user", None)]))
+
+    assert len(recorder.statements) == 1
+    assert _row_params(recorder.statements[0])["access_hash"] == 100
+
+
 def test_update_usernames_replaces_the_name_list(
     store: PostgresStorage, recorder: _Recorder
 ) -> None:
     """A names-only write keeps the stored access hash and peer type."""
     _run(store.update_usernames([(42, ["ghost", None])]))
 
-    params = stmt_params(recorder.statements[0])
+    params = _row_params(recorder.statements[0])
     assert params["id"] == "test:peer:42"
     assert list(params["usernames"]) == ["ghost"]
     sql = compile_sql(recorder.statements[0])
@@ -284,12 +322,40 @@ def test_an_update_state_only_writes_the_known_fields(
     """A field the caller did not know keeps its stored value."""
     _run(store.set_update_state(UpdateState(0, 10, None, 5, 1)))
 
-    params = stmt_params(recorder.statements[0])
+    params = _row_params(recorder.statements[0])
     assert params["id"] == "test:ustate:0"
     assert params["pts"] == 10
     assert params["date"] == 5
     assert params["seq"] == 1
-    assert "qts" not in params
+    assert params["qts"] is None
+    sql = compile_sql(recorder.statements[0])
+    # * The merge keeps the stored value of a field the state did not
+    # * know, the same COALESCE merge the SQLite storage performs.
+    assert "coalesce(excluded.qts, mtproto_state.qts)" in sql
+
+
+def test_the_update_state_list_is_written_with_one_statement(
+    store: PostgresStorage, recorder: _Recorder
+) -> None:
+    """The whole state list travels in one statement, not one per state."""
+    _run(
+        store.set_update_state(
+            [UpdateState(0, 10, None, 5, 1), UpdateState(1, 20, 30, None, None)]
+        )
+    )
+
+    assert len(recorder.statements) == 1
+    assert _row_params(recorder.statements[0])["id"] == "test:ustate:0"
+    assert _row_params(recorder.statements[0], 1)["id"] == "test:ustate:1"
+
+
+def test_a_state_that_knows_no_field_is_not_written(
+    store: PostgresStorage, recorder: _Recorder
+) -> None:
+    """A state without a known field never reaches the database."""
+    _run(store.set_update_state([UpdateState(0, None, None, None, None)]))
+
+    assert recorder.statements == []
 
 
 def test_the_update_states_are_read_oldest_first(
@@ -577,3 +643,233 @@ async def test_the_namespaces_do_not_leak(postgres_store: PostgresStorage) -> No
     await postgres_store.delete()
     assert await postgres_store.user_id() is None
     assert await other.user_id() == 8
+
+
+# ────────────────────── Batched writes on a server ───────────────── #
+
+
+class _TransactionCounter:
+    """Counts the transactions the engine opens."""
+
+    def __init__(self) -> None:
+        self.opened: int = 0
+
+    def reset(self) -> None:
+        """Forget the transactions counted so far."""
+        self.opened = 0
+
+
+@pytest.fixture
+def transaction_counter(monkeypatch: pytest.MonkeyPatch) -> _TransactionCounter:
+    """Count the transactions the engine opens while a test runs.
+
+    The engine opens one session, and so one transaction, per write
+    statement. Counting the sessions therefore counts the transactions.
+    """
+    counter = _TransactionCounter()
+    real_session = engine_module.session
+
+    @contextlib.asynccontextmanager
+    async def _counting_session() -> AsyncIterator[Any]:
+        counter.opened += 1
+        async with real_session() as sess:
+            yield sess
+
+    monkeypatch.setattr(engine_module, "session", _counting_session)
+    return counter
+
+
+async def _per_row_update_peers(
+    store: PostgresStorage, peers: list[tuple[int, int, str, str | None]]
+) -> None:
+    """Write the peers one row at a time, the way the store used to."""
+    now = int(time.time())
+    for peer_id, access_hash, peer_type, phone_number in peers:
+        await engine_module.run(
+            pg_insert(mtproto_state)
+            .values(
+                id=store._peer(peer_id),
+                access_hash=access_hash,
+                type=peer_type,
+                phone_number=phone_number,
+                updated_on=now,
+                usernames=[],
+            )
+            .on_conflict_do_update(
+                index_elements=["id"],
+                set_={
+                    "access_hash": access_hash,
+                    "type": peer_type,
+                    "phone_number": phone_number,
+                    "updated_on": now,
+                },
+            )
+        )
+
+
+async def _per_row_set_update_state(
+    store: PostgresStorage, states: list[UpdateState]
+) -> None:
+    """Write the update states one row at a time, the way the store used to."""
+    for state in states:
+        patch = {
+            key: value
+            for key, value in (
+                ("pts", state.pts),
+                ("qts", state.qts),
+                ("date", state.date),
+                ("seq", state.seq),
+            )
+            if value is not None
+        }
+        if patch:
+            await engine_module.run(
+                pg_insert(mtproto_state)
+                .values(id=store._ustate(state.id), **patch)
+                .on_conflict_do_update(index_elements=["id"], set_=dict(patch))
+            )
+
+
+async def _stored_rows(pattern: str) -> list[dict[str, Any]]:
+    """Return the stored rows of one key pattern, ordered by row ID."""
+    return await engine_module.fetch_all(
+        select(
+            mtproto_state.c.id,
+            mtproto_state.c.access_hash,
+            mtproto_state.c.type,
+            mtproto_state.c.usernames,
+            mtproto_state.c.phone_number,
+            mtproto_state.c.updated_on,
+            mtproto_state.c.pts,
+            mtproto_state.c.qts,
+            mtproto_state.c.date,
+            mtproto_state.c.seq,
+        )
+        .where(mtproto_state.c.id.like(pattern))
+        .order_by(mtproto_state.c.id)
+    )
+
+
+async def test_the_batched_peer_write_stores_what_the_per_row_write_stored(
+    postgres_store: PostgresStorage,
+) -> None:
+    """The batched peer write lands the values the per-row write landed."""
+    peers = [
+        (42, 99, "user", "+15550000"),
+        (43, 100, "chat", None),
+        (44, 101, "user", "+15550001"),
+    ]
+    # * The second write changes every column of a peer, so it exercises
+    # * the conflict clause and not only the insert.
+    changed = [
+        (42, 199, "chat", "+15559999"),
+        (43, 200, "user", "+15550002"),
+        (44, 201, "bot", None),
+    ]
+
+    await _per_row_update_peers(postgres_store, peers)
+    await _per_row_update_peers(postgres_store, changed)
+    expected = await _stored_rows("test:peer:%")
+    await engine_module.run(mtproto_state.delete())
+
+    await postgres_store.update_peers(peers)
+    await postgres_store.update_peers(changed)
+    actual = await _stored_rows("test:peer:%")
+
+    # * The write timestamp is read from the clock, so it is the one
+    # * column the two runs cannot share.
+    assert [
+        {key: value for key, value in row.items() if key != "updated_on"}
+        for row in actual
+    ] == [
+        {key: value for key, value in row.items() if key != "updated_on"}
+        for row in expected
+    ]
+    assert all(abs(int(row["updated_on"]) - int(time.time())) < 60 for row in actual)
+
+
+async def test_the_batched_peer_write_costs_one_transaction(
+    postgres_store: PostgresStorage, transaction_counter: _TransactionCounter
+) -> None:
+    """A peer list of any size costs one transaction, not one per peer."""
+    peers = [(index, index, "user", None) for index in range(1, 26)]
+
+    transaction_counter.reset()
+    await postgres_store.update_peers(peers)
+
+    assert transaction_counter.opened == 1
+    assert len(await _stored_rows("test:peer:%")) == 25
+
+
+async def test_a_long_peer_list_is_written_in_bounded_chunks(
+    postgres_store: PostgresStorage, transaction_counter: _TransactionCounter
+) -> None:
+    """The chunk bound keeps the rows of one statement finite."""
+    peers = [
+        (index, index, "user", None)
+        for index in range(1, mtproto_store._MAX_BATCH_ROWS + 2)
+    ]
+
+    transaction_counter.reset()
+    await postgres_store.update_peers(peers)
+
+    assert transaction_counter.opened == 2
+    assert len(await _stored_rows("test:peer:%")) == len(peers)
+
+
+async def test_the_batched_update_state_write_stores_what_the_per_row_write_stored(
+    postgres_store: PostgresStorage,
+) -> None:
+    """The batched merge lands the values the per-row merge landed."""
+    stored = [
+        {"id": "test:ustate:0", "pts": 99, "qts": 88, "date": 77, "seq": 66},
+        {"id": "test:ustate:5", "pts": 1, "qts": 2, "date": 3, "seq": 4},
+    ]
+    states = [
+        UpdateState(0, 10, None, 5, 1),
+        UpdateState(1, 20, 30, None, None),
+        UpdateState(0, None, 40, None, None),
+        # * A state that knows one field of a stored row: the fields it
+        # * does not know must survive the merge.
+        UpdateState(5, 10, None, None, None),
+        UpdateState(2, None, None, None, None),
+    ]
+
+    await engine_module.run(pg_insert(mtproto_state).values(stored))
+    await _per_row_set_update_state(postgres_store, states)
+    expected = await _stored_rows("test:ustate:%")
+
+    await engine_module.run(mtproto_state.delete())
+    await engine_module.run(pg_insert(mtproto_state).values(stored))
+    await postgres_store.set_update_state(states)
+    actual = await _stored_rows("test:ustate:%")
+
+    assert actual == expected
+    # * The state that knew no field never created a row.
+    assert not any(row["id"] == "test:ustate:2" for row in actual)
+
+
+async def test_the_batched_update_state_write_costs_one_transaction(
+    postgres_store: PostgresStorage, transaction_counter: _TransactionCounter
+) -> None:
+    """A state list of any size costs one transaction, not one per state."""
+    states = [UpdateState(index, index, index, index, index) for index in range(5)]
+
+    transaction_counter.reset()
+    await postgres_store.set_update_state(states)
+
+    assert transaction_counter.opened == 1
+    assert len(await _stored_rows("test:ustate:%")) == 5
+
+
+async def test_the_batched_name_write_costs_one_transaction(
+    postgres_store: PostgresStorage, transaction_counter: _TransactionCounter
+) -> None:
+    """A name list of any size costs one transaction, not one per peer."""
+    names = [(index, [f"peer{index}", None]) for index in range(1, 11)]
+
+    transaction_counter.reset()
+    await postgres_store.update_usernames(names)
+
+    assert transaction_counter.opened == 1
+    assert len(await _stored_rows("test:peer:%")) == 10

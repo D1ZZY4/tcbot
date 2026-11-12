@@ -13,9 +13,10 @@ from typing import TYPE_CHECKING
 import msgspec
 from pyrogram.storage import Storage, UpdateState
 from pyrogram.storage.sqlite_storage import SQLiteStorage, get_input_peer
-from sqlalchemy import ARRAY, Text, literal, or_, select
+from sqlalchemy import ARRAY, Text, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError
+from sqlalchemy.sql import Executable
 
 from tcbot.database.base import mtproto_state
 from tcbot.database.engine import db_call, fetch_all, fetch_one, run, run_returning
@@ -23,7 +24,7 @@ from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterable
+    from collections.abc import Awaitable, Callable, Iterable, Iterator
     from typing import Any
 
 log = get_logger(__name__)
@@ -82,7 +83,9 @@ def _is_transient_write_error(exc: BaseException) -> bool:
     return False
 
 
-async def _retry_write(op: Callable[[], Awaitable[Any]]) -> Any:
+async def _retry_write(
+    op: Callable[[], Awaitable[Any]], *, timeout: float | None = None
+) -> Any:
     """Execute *op* with retries on transient PostgreSQL write failures.
 
     Pyrogram's ``handle_updates()`` background task persists update states
@@ -104,11 +107,22 @@ async def _retry_write(op: Callable[[], Awaitable[Any]]) -> Any:
     *op* must be cheap to rebuild so retries re-execute the operation
     instead of reusing its result: callers pass a zero-argument thunk
     that performs the async write when awaited.
+
+    *timeout* replaces the engine budget for an operation that owns more
+    than one statement. A batched write runs its chunks one after the
+    other inside a single call, so the budget of a single statement would
+    cut a long batch short. None keeps the engine default.
     """
+
+    async def _attempt() -> Any:
+        if timeout is None:
+            return await db_call(op)
+        return await db_call(op, timeout=timeout)
+
     last_exc: BaseException | None = None
     for attempt in range(_MAX_WRITE_RETRIES):
         try:
-            return await db_call(op)
+            return await _attempt()
         except asyncio.CancelledError:
             raise
         except IntegrityError:
@@ -273,7 +287,158 @@ async def release_owner(store: PostgresStorage, owner: str) -> None:
         log.debug("MTProto lease release failed (expiry covers it): %s", exc)
 
 
+# ──────────────────────────── Batched writes ────────────────────── #
+# * Kurigram hands the store the whole peer list of a session in one
+# * call, and the same for the update states. Writing that list row by
+# * row cost one transaction per row, so a busy session paid thousands
+# * of round trips for a single save. The helpers below turn a list
+# * into one statement per bounded chunk instead.
+
+# * A chunk bounds the rows one statement carries, so a session with a
+# * huge peer list cannot build an unbounded multi-row INSERT. The size
+# * stays well under the PostgreSQL bind-parameter ceiling and keeps the
+# * number of chunks of a realistic session in the low single digits.
+_MAX_BATCH_ROWS: int = 500
+
+# * A batched write owns one budget for all of its chunks, and the
+# * chunks run one after the other inside the same call. The engine
+# * budget of a single statement would cut a long batch short, so the
+# * batch gets a budget that covers the whole list.
+_BATCH_TIMEOUT_S: float = 60.0
+
+# * The update state fields a merge can carry. Every state writes the
+# * same set, so one statement covers a whole list of them.
+_STATE_FIELDS: tuple[str, ...] = ("pts", "qts", "date", "seq")
+
+
+def _chunks(rows: list[dict[str, Any]], size: int) -> Iterator[list[dict[str, Any]]]:
+    """Split *rows* into consecutive chunks of at most *size* rows."""
+    for start in range(0, len(rows), size):
+        yield rows[start : start + size]
+
+
+def _dedupe_by_id(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep the last row per row ID.
+
+    One statement cannot touch the same row twice, so a repeated ID
+    would abort the whole statement with a cardinality violation. The
+    per-row writes applied the rows in order, so the last row of an ID
+    is the one that survived.
+    """
+    latest: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        latest[row["id"]] = row
+    return list(latest.values())
+
+
+async def _run_statement(stmt: Executable) -> None:
+    """Execute one write statement.
+
+    The statement runs inside the caller's transaction boundary, so it
+    must not open a second one: a nested boundary would record one
+    failure twice against the shared circuit breaker.
+    """
+    await run(stmt)
+
+
+async def _write_rows(
+    rows: list[dict[str, Any]],
+    build: Callable[[list[dict[str, Any]]], Executable],
+) -> None:
+    """Write *rows* through *build*, one statement per bounded chunk.
+
+    The chunks run one after the other inside a single guarded call, so
+    the whole batch shares one breaker slot and one budget.
+    """
+    for chunk in _chunks(rows, _MAX_BATCH_ROWS):
+        await _run_statement(build(chunk))
+
+
+def _update_state_rows(
+    store: PostgresStorage, states: Iterable[UpdateState]
+) -> list[dict[str, Any]]:
+    """Build the update-state rows, one per state ID.
+
+    A repeated state ID keeps the last known value of every field, which
+    is what the per-row writes produced: each of them touched only the
+    fields it knew, so the last write of a field won and the fields it
+    did not know survived. A state that knows no field at all is
+    dropped, because the per-row writes never created a row for it.
+    """
+    merged: dict[str, dict[str, Any]] = {}
+    blank: dict[str, Any] = dict.fromkeys(_STATE_FIELDS)
+    for state in states:
+        state_id = store._ustate(state.id)
+        row = merged.get(state_id)
+        if row is None:
+            row = {"id": state_id, **blank}
+            merged[state_id] = row
+        for field in _STATE_FIELDS:
+            value = getattr(state, field)
+            if value is not None:
+                row[field] = value
+    return [
+        row
+        for row in merged.values()
+        if any(row[field] is not None for field in _STATE_FIELDS)
+    ]
+
+
+def _update_state_upsert(rows: list[dict[str, Any]]) -> Executable:
+    """Build the update-state upsert statement for *rows*."""
+    stmt = pg_insert(mtproto_state).values(rows)
+    return stmt.on_conflict_do_update(
+        index_elements=["id"],
+        # * A field the new state does not know keeps its stored value:
+        # * the same COALESCE merge the SQLite storage performs, and the
+        # * same result the per-row writes produced.
+        set_={
+            field: func.coalesce(stmt.excluded[field], mtproto_state.c[field])
+            for field in _STATE_FIELDS
+        },
+    )
+
+
 # ────────────────────────────── Peers ──────────────────────────── #
+
+
+def _peer_rows(
+    store: PostgresStorage,
+    peers: Iterable[tuple[int, int, str, str | None]],
+    now: int,
+) -> list[dict[str, Any]]:
+    """Build the peer rows, one per peer."""
+    rows = [
+        {
+            "id": store._peer(peer_id),
+            "access_hash": access_hash,
+            "type": peer_type,
+            "phone_number": phone_number,
+            "updated_on": now,
+            # * A new peer row starts with an empty name list; the
+            # * conflict clause leaves a stored list untouched.
+            "usernames": [],
+        }
+        for peer_id, access_hash, peer_type, phone_number in peers
+    ]
+    return _dedupe_by_id(rows)
+
+
+def _peer_upsert(rows: list[dict[str, Any]]) -> Executable:
+    """Build the peer upsert statement for *rows*."""
+    stmt = pg_insert(mtproto_state).values(rows)
+    return stmt.on_conflict_do_update(
+        index_elements=["id"],
+        set_={
+            # * The excluded row carries the values of the peer that
+            # * caused the conflict, so every row of the batch updates
+            # * its own row exactly as a per-row write did.
+            "access_hash": stmt.excluded.access_hash,
+            "type": stmt.excluded.type,
+            "phone_number": stmt.excluded.phone_number,
+            "updated_on": stmt.excluded.updated_on,
+        },
+    )
 
 
 async def update_peers(
@@ -281,43 +446,43 @@ async def update_peers(
 ) -> None:
     """Upsert peers, preserving stored usernames like the usernames table does."""
     now = int(time.time())
-    for peer_id, access_hash, peer_type, phone_number in peers:
-        doc_id = store._peer(peer_id)
+    rows = _peer_rows(store, peers, now)
+    if not rows:
+        return
+    await _retry_write(
+        lambda: _write_rows(rows, _peer_upsert), timeout=_BATCH_TIMEOUT_S
+    )
 
-        async def _op(
-            _did: str = doc_id,
-            _ah: int = access_hash,
-            _pt: str = peer_type,
-            _pn: str | None = phone_number,
-            _now: int = now,
-        ) -> None:
-            await db_call(
-                lambda: run(
-                    pg_insert(mtproto_state)
-                    .values(
-                        id=_did,
-                        access_hash=_ah,
-                        type=_pt,
-                        phone_number=_pn,
-                        updated_on=_now,
-                        # * A new peer row starts with an empty name
-                        # * list; the conflict clause leaves a stored
-                        # * list untouched.
-                        usernames=[],
-                    )
-                    .on_conflict_do_update(
-                        index_elements=["id"],
-                        set_={
-                            "access_hash": _ah,
-                            "type": _pt,
-                            "phone_number": _pn,
-                            "updated_on": _now,
-                        },
-                    )
-                )
-            )
 
-        await _retry_write(_op)
+def _username_rows(
+    store: PostgresStorage,
+    usernames: Iterable[tuple[int, list[str | None]]],
+    now: int,
+) -> list[dict[str, Any]]:
+    """Build the name-list rows, one per peer."""
+    rows = [
+        {
+            "id": store._peer(peer_id),
+            "usernames": [name for name in names if name is not None],
+            "updated_on": now,
+        }
+        for peer_id, names in usernames
+    ]
+    return _dedupe_by_id(rows)
+
+
+def _username_upsert(rows: list[dict[str, Any]]) -> Executable:
+    """Build the name-list upsert statement for *rows*."""
+    stmt = pg_insert(mtproto_state).values(rows)
+    return stmt.on_conflict_do_update(
+        index_elements=["id"],
+        # * Only the names and the timestamp change: the stored access
+        # * hash and peer type survive a names-only write.
+        set_={
+            "usernames": stmt.excluded.usernames,
+            "updated_on": stmt.excluded.updated_on,
+        },
+    )
 
 
 async def update_usernames(
@@ -330,30 +495,12 @@ async def update_usernames(
     leave the previous write time behind.
     """
     now = int(time.time())
-    for peer_id, names in usernames:
-        doc_id = store._peer(peer_id)
-        filtered_names = [n for n in names if n is not None]
-
-        async def _op(
-            _did: str = doc_id,
-            _names: list[str] = filtered_names,
-            _now: int = now,
-        ) -> None:
-            await db_call(
-                lambda: run(
-                    pg_insert(mtproto_state)
-                    .values(id=_did, usernames=_names, updated_on=_now)
-                    .on_conflict_do_update(
-                        index_elements=["id"],
-                        # * Only the names and the timestamp change: the
-                        # * stored access hash and peer type survive a
-                        # * names-only write.
-                        set_={"usernames": _names, "updated_on": _now},
-                    )
-                )
-            )
-
-        await _retry_write(_op)
+    rows = _username_rows(store, usernames, now)
+    if not rows:
+        return
+    await _retry_write(
+        lambda: _write_rows(rows, _username_upsert), timeout=_BATCH_TIMEOUT_S
+    )
 
 
 def _peer_input(doc: dict[str, Any], peer_id: int, message: str) -> Any:
@@ -651,35 +798,12 @@ class PostgresStorage(Storage):
         states = (
             [update_state] if isinstance(update_state, UpdateState) else update_state
         )
-        for state in states:
-            patch = {
-                k: v
-                for k, v in (
-                    ("pts", state.pts),
-                    ("qts", state.qts),
-                    ("date", state.date),
-                    ("seq", state.seq),
-                )
-                if v is not None
-            }
-            if patch:
-                state_id = state.id
-                state_patch = dict(patch)
-
-                async def _op(
-                    _sid: int = state_id, _patch: dict[str, int] = state_patch
-                ) -> None:
-                    await db_call(
-                        lambda: run(
-                            pg_insert(mtproto_state)
-                            .values(id=self._ustate(_sid), **_patch)
-                            .on_conflict_do_update(
-                                index_elements=["id"], set_=dict(_patch)
-                            )
-                        )
-                    )
-
-                await _retry_write(_op)
+        rows = _update_state_rows(self, states)
+        if not rows:
+            return
+        await _retry_write(
+            lambda: _write_rows(rows, _update_state_upsert), timeout=_BATCH_TIMEOUT_S
+        )
 
     async def delete_update_state(self, state_id: int | Iterable[int]) -> None:
         """Delete update states by ID with transient-error retry."""
