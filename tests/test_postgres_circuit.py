@@ -16,8 +16,9 @@ from sqlalchemy.exc import (
     OperationalError,
     ProgrammingError,
 )
+from sqlalchemy.exc import TimeoutError as SAPoolTimeout
 
-from tcbot.database.engine import is_transient_db_error
+from tcbot.database.engine import is_pool_timeout, is_transient_db_error
 from tcbot.utils.circuit_breaker import CircuitBreaker, CircuitOpenError, CircuitState
 
 # * The circuit singleton is named after the service it guards.
@@ -80,6 +81,41 @@ def test_classifier_rejects_application_errors() -> None:
     assert is_transient_db_error(ValueError("bug")) is False
     assert is_transient_db_error(RuntimeError("bug")) is False
     assert is_transient_db_error(DBAPIError("stmt", {}, Exception("plain"))) is False
+
+
+def test_classifier_labels_a_saturated_pool_transient() -> None:
+    """A pool timeout is a load condition, not a broken database.
+
+    SQLAlchemy raises its own ``TimeoutError`` for an exhausted pool, and
+    it inherits from ``SQLAlchemyError`` alone, so the builtin
+    ``TimeoutError`` check misses it. Treating it as an application bug
+    would close a half-open circuit and flood the operator channel with
+    reports that need no action.
+    """
+    pool_timeout = SAPoolTimeout("QueuePool limit of size 20 overflow 10 reached")
+
+    assert is_pool_timeout(pool_timeout) is True
+    assert is_transient_db_error(pool_timeout) is True
+    assert is_transient_db_error(TimeoutError("asyncio timeout")) is True
+
+
+def test_a_saturated_pool_counts_toward_the_circuit() -> None:
+    """The saturated pool must count as a failure, not as a reached service.
+
+    Counting it as a reached service would close a half-open circuit and
+    admit a fresh flood of callers into the pool that just timed out.
+    """
+    cb = CircuitBreaker(_CIRCUIT_NAME, failure_threshold=1, recovery_timeout=60.0)
+
+    async def _main() -> None:
+        with pytest.raises(SAPoolTimeout):
+            await cb.call(
+                _boom(SAPoolTimeout("QueuePool limit reached")),
+                count_failure=is_transient_db_error,
+            )
+
+    asyncio.run(_main())
+    assert cb.peek_state() is CircuitState.OPEN
 
 
 async def _boom(exc: Exception) -> None:

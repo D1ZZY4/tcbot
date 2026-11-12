@@ -140,6 +140,9 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     ):
         log.warning("Handler aborted: %s", exc)
         return
+    if db_engine.is_pool_timeout(exc):
+        log.warning("Database pool saturated (not reported): %s", exc)
+        return
     if isinstance(exc, (te.NetworkError, te.TimedOut, te.RetryAfter)):
         log.warning("Transient Telegram error (not reported): %s", exc)
         return
@@ -235,6 +238,9 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
             db_engine.is_connection_error(exc) or isinstance(exc, CircuitOpenError)
         ):
             log.debug("[asyncio] transient (not reported): %s", exc)
+            return
+        if exc is not None and db_engine.is_pool_timeout(exc):
+            log.debug("[asyncio] pool saturated (not reported): %s", exc)
             return
         if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
             log.debug("[asyncio] transient (not reported): %s", exc)

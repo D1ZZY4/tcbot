@@ -17,6 +17,7 @@ from sqlalchemy.exc import (
     OperationalError,
     SQLAlchemyError,
 )
+from sqlalchemy.exc import TimeoutError as SAPoolTimeout
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -85,6 +86,17 @@ def is_connection_error(exc: BaseException) -> bool:
     return False
 
 
+def is_pool_timeout(exc: BaseException) -> bool:
+    """Return True when the connection pool ran out before the timeout.
+
+    The pool ran out, not the database: the server is reachable but every
+    connection was busy. SQLAlchemy raises its own ``TimeoutError`` for
+    this, which inherits from ``SQLAlchemyError`` alone, so the builtin
+    ``TimeoutError`` check misses it.
+    """
+    return isinstance(exc, SAPoolTimeout)
+
+
 def is_transient_db_error(exc: BaseException) -> bool:
     """Return True when the failure is worth retrying or counting.
 
@@ -97,6 +109,11 @@ def is_transient_db_error(exc: BaseException) -> bool:
     # * A raw connection error raised inside a database operation is a
     # * link failure even when the driver did not wrap it.
     if isinstance(exc, ConnectionError):
+        return True
+    # * A saturated pool is a transient condition, not an application
+    # * bug. Counting it keeps the half-open probe from reopening the
+    # * pool to a fresh flood of callers.
+    if is_pool_timeout(exc):
         return True
     # * Callers wrap database calls in asyncio.timeout for slow-path
     # * bounds; a timeout there is a hang, not an application error.
@@ -160,9 +177,9 @@ async def read_connection() -> AsyncIterator[AsyncConnection]:
     """Yield a connection for a read-only statement.
 
     A read needs no transaction, so the connection runs in autocommit and
-    the statement costs one round trip instead of one plus the COMMIT that
-    closes the transaction. Measured against the deployment schema, a
-    single-row lookup drops from 0.77 ms to 0.47 ms.
+    the statement does not pay the ``COMMIT`` that would close a
+    transaction. The pool validates a connection before handing it out,
+    so the checkout costs one round trip of its own.
 
     The isolation level is reverted when the connection returns to the
     pool, so a write that follows still runs in a normal transaction.

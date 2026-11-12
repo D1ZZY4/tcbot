@@ -53,6 +53,12 @@ def _benign(exc: BaseException | None) -> bool:
         return True
     if db_engine.is_connection_error(exc) or isinstance(exc, CircuitOpenError):
         return True
+    # * A saturated pool is a load condition, not a defect. The circuit
+    # * breaker reacts to it, and the handler logs it as a warning, so
+    # * shipping a report per timeout would only bury the incidents that
+    # * need an operator.
+    if db_engine.is_pool_timeout(exc):
+        return True
     msg = str(exc).lower()
     return any(p in msg for p in _BENIGN_PATTERNS)
 
