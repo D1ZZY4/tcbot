@@ -13,6 +13,7 @@ from pathlib import Path
 
 from dotenv import find_dotenv, load_dotenv
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 
 from alembic import context
 
@@ -91,12 +92,42 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _connection_options(url: str) -> str:
+    """Return the libpq options for the migration connection.
+
+    The timezone pin matches the application engines, so a revision that
+    writes a timestamp stores it in the zone the runtime reads it back
+    in. The options the connection already carries are kept: the
+    migration check runs inside a dedicated schema through ``PGOPTIONS``
+    or through an ``options`` parameter in the URL, and the connection
+    parameter replaces both of them when it is set.
+    """
+    parts: list[str] = []
+    url_options = make_url(url).query.get("options")
+    if url_options:
+        # * A repeated query parameter arrives as a tuple; libpq takes the
+        # * options as one space-separated string.
+        if isinstance(url_options, tuple):
+            parts.extend(url_options)
+        else:
+            parts.append(url_options)
+    env_options = os.environ.get("PGOPTIONS", "").strip()
+    if env_options:
+        parts.append(env_options)
+    parts.append("-c timezone=UTC")
+    return " ".join(parts)
+
+
 def run_migrations_online() -> None:
     """Run the migrations against a live database."""
     # * A synchronous engine is enough here: psycopg 3 drives the same
     # * server through its blocking API, and Alembic runs off the event
     # * loop anyway.
-    connectable = create_engine(url, pool_pre_ping=True)
+    connectable = create_engine(
+        url,
+        pool_pre_ping=True,
+        connect_args={"options": _connection_options(url)},
+    )
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
