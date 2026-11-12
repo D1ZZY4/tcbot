@@ -61,6 +61,19 @@ to it; `engine.connect()` applies the pending revisions before the engine
 is published, so a fresh deployment boots against an empty database and an
 existing one is upgraded in place.
 
+Before every online upgrade, the migration environment inspects the target
+schema. It refuses to run when it finds relations from the normalized
+Transsion Core data model, because that model has a separate migration history
+and is not compatible with this release's legacy tables. It also refuses to
+baseline existing legacy application relations when the Alembic version table
+is missing. These checks run before Alembic creates its version table or
+executes a revision, so an incompatible target is left unchanged.
+
+The normalized Development database is not a drop-in replacement for the
+legacy database used by this bot release. Connecting this release to that
+database is unsupported until the application data layer, migration history,
+and cutover procedure have been migrated and tested together.
+
 ```bash
 # Apply the migrations by hand (the bot does this at startup).
 uv run alembic upgrade head
