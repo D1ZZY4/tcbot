@@ -45,6 +45,7 @@ _NORMALIZED_SCHEMA_MARKERS: frozenset[str] = frozenset(
         "moderation_evidence_uploads",
         "moderation_messages",
         "permission_definitions",
+        "promotion_requests",
         "role_assignments",
         "role_definitions",
         "role_permissions",
@@ -220,9 +221,19 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
             + ", ".join(missing_roles)
         )
 
+    table_names_sql = ",\n".join(
+        f"'{name}'" for name in sorted(_NORMALIZED_REQUIRED_TABLES)
+    )
+    view_names_sql = ",\n".join(
+        f"'{name}'" for name in sorted(_NORMALIZED_REQUIRED_VIEWS)
+    )
+    relation_names_sql = ",\n".join(
+        f"'{name}'"
+        for name in sorted(_NORMALIZED_REQUIRED_TABLES | _NORMALIZED_REQUIRED_VIEWS)
+    )
     security = connection.execute(
         text(
-            """
+            f"""
             SELECT
                 (
                     SELECT count(*)
@@ -230,7 +241,7 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
                     JOIN pg_namespace AS n ON n.oid = c.relnamespace
                     WHERE n.nspname = 'public'
                       AND c.relkind = 'r'
-                      AND c.relname IN ('audit_events', 'chat_members', 'chat_settings', 'federation_groups', 'federation_settings', 'federations', 'join_requests', 'moderation_actions', 'moderation_appeals', 'moderation_case_rules', 'moderation_cases', 'moderation_evidence_items', 'moderation_evidence_uploads', 'moderation_messages', 'permission_definitions', 'role_assignments', 'role_definitions', 'role_permissions', 'rule_acknowledgements', 'rule_items', 'rule_set_versions', 'rule_sets', 'telegram_chats', 'telegram_users', 'user_settings', 'apscheduler_jobs', 'mtproto_state')
+                      AND c.relname IN ({table_names_sql})
                       AND NOT c.relrowsecurity
                 ) AS rls_disabled,
                 (
@@ -239,7 +250,7 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
                     JOIN pg_namespace AS n ON n.oid = c.relnamespace
                     WHERE n.nspname = 'public'
                       AND c.relkind IN ('r', 'v')
-                      AND c.relname IN ('audit_events', 'chat_members', 'chat_settings', 'federation_groups', 'federation_settings', 'federations', 'join_requests', 'moderation_actions', 'moderation_appeals', 'moderation_case_rules', 'moderation_cases', 'moderation_evidence_items', 'moderation_evidence_uploads', 'moderation_messages', 'permission_definitions', 'role_assignments', 'role_definitions', 'role_permissions', 'rule_acknowledgements', 'rule_items', 'rule_set_versions', 'rule_sets', 'telegram_chats', 'telegram_users', 'user_settings', 'apscheduler_jobs', 'mtproto_state', 'active_bans', 'active_mutes', 'warn_counts')
+                      AND c.relname IN ({relation_names_sql})
                       AND (
                           has_table_privilege('anon', c.oid, 'SELECT')
                           OR has_table_privilege('anon', c.oid, 'INSERT')
@@ -257,7 +268,7 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
                     JOIN pg_namespace AS n ON n.oid = c.relnamespace
                     WHERE n.nspname = 'public'
                       AND c.relkind = 'r'
-                      AND c.relname IN ('audit_events', 'chat_members', 'chat_settings', 'federation_groups', 'federation_settings', 'federations', 'join_requests', 'moderation_actions', 'moderation_appeals', 'moderation_case_rules', 'moderation_cases', 'moderation_evidence_items', 'moderation_evidence_uploads', 'moderation_messages', 'permission_definitions', 'role_assignments', 'role_definitions', 'role_permissions', 'rule_acknowledgements', 'rule_items', 'rule_set_versions', 'rule_sets', 'telegram_chats', 'telegram_users', 'user_settings', 'apscheduler_jobs', 'mtproto_state')
+                      AND c.relname IN ({table_names_sql})
                       AND (
                           (
                               c.relname NOT IN (
@@ -294,7 +305,7 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
                     JOIN pg_namespace AS n ON n.oid = c.relnamespace
                     WHERE n.nspname = 'public'
                       AND c.relkind = 'v'
-                      AND c.relname IN ('active_bans', 'active_mutes', 'warn_counts')
+                      AND c.relname IN ({view_names_sql})
                       AND NOT has_table_privilege('service_role', c.oid, 'SELECT')
                 ) AS missing_view_grants,
                 (
@@ -303,7 +314,7 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
                     JOIN pg_namespace AS n ON n.oid = c.relnamespace
                     WHERE n.nspname = 'public'
                       AND c.relkind = 'v'
-                      AND c.relname IN ('active_bans', 'active_mutes', 'warn_counts')
+                      AND c.relname IN ({view_names_sql})
                       AND NOT ('security_invoker=true' = ANY(
                           COALESCE(c.reloptions, ARRAY[]::text[])
                       ))
