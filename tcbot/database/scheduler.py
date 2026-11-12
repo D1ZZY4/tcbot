@@ -21,9 +21,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import create_engine, delete
 
 from tcbot.database.base import active_mutes, member_cache, warn_counts, warns
-from tcbot.database.engine import db_call as _db_call
-from tcbot.database.engine import run as _run
-from tcbot.database.engine import run_transaction
+from tcbot.database.engine import db_call, run, run_transaction
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
@@ -188,8 +186,8 @@ async def expire_stale_records() -> None:
     try:
         async with asyncio.timeout(_EXPIRE_OP_TIMEOUT_S):
             mutes_res, profiles_res = await asyncio.gather(
-                _db_call(
-                    lambda: _run(
+                db_call(
+                    lambda: run(
                         delete(active_mutes).where(
                             active_mutes.c.until_date.isnot(None),
                             active_mutes.c.until_date < now,
@@ -199,8 +197,8 @@ async def expire_stale_records() -> None:
                     # * the run-level timeout bounds them instead.
                     timeout=None,
                 ),
-                _db_call(
-                    lambda: _run(
+                db_call(
+                    lambda: run(
                         delete(member_cache).where(
                             member_cache.c.last_updated < profile_cutoff
                         )
@@ -234,15 +232,14 @@ async def expire_stale_records() -> None:
 
 
 async def _cleanup_old_records() -> None:
-    """No-op migration shim for the retired weekly member_cache cleanup job.
+    """No-op shim for the retired weekly member_cache cleanup job.
 
     member_cache cleanup is now handled by the daily :func:`expire_stale_records`
-    job, because PostgreSQL has no TTL index.  The APScheduler schedule is
-    removed on startup in ``_reconcile_schedules``; this function exists solely
-    so that any schedule record persisted from a previous bot version can be
-    deserialised and called without raising an ``AttributeError``.  It is safe
-    to remove once all running instances have been restarted and the job store
-    no longer contains the ``tcbot.db_cleanup_weekly`` schedule entry.
+    job, because PostgreSQL has no TTL index.  The legacy schedule is removed
+    on startup in ``_reconcile_schedules``; this function stays importable so
+    that the job store can still deserialize a record that points at it.
+    Without the symbol, loading such a record raises ``AttributeError`` and
+    the whole reconciliation fails, leaving the new schedule unregistered.
     """
     log.info(
         "DB cleanup job called but is now a no-op; "
@@ -296,9 +293,12 @@ _WARN_EXPIRY_SCHEDULE_ID: str = "tcbot.warn_expiry_daily"
 # * Stable ID for the optional enforcement-sync sweep (/tcsync core on a
 # * timer). Same replace_existing idempotency as the warn-expiry schedule.
 _SYNC_SCHEDULE_ID: str = "tcbot.enforcement_sync"
-# * Legacy ID kept so _reconcile_schedules can remove the old schedule
-# * from any job store that was created before the cleanup job replaced it.
-_CLEANUP_SCHEDULE_ID: str = "tcbot.db_cleanup_weekly"
+# * ID of the live stale-record cleanup job.
+_CLEANUP_SCHEDULE_ID: str = "tcbot.stale_cleanup_daily"
+# * ID of the retired weekly member_cache cleanup job. The schedule is
+# * removed on every startup so it cannot fire; the id stays here so the
+# * removal keeps working on a job store written by an older version.
+_LEGACY_CLEANUP_SCHEDULE_ID: str = "tcbot.db_cleanup_weekly"
 
 # * Alias of the persistent job store. Every job must name it explicitly:
 # * APScheduler defaults to the ``default`` alias, which is auto-created as an
@@ -593,6 +593,9 @@ def _reconcile_schedules(
         misfire_grace_time=86400,
     )
     log.info("Scheduled stale record cleanup: every 24h.")
+    # * The retired weekly cleanup job must not fire: it pointed at a
+    # * member_cache sweep the daily job replaced.
+    _remove_job(scheduler, _LEGACY_CLEANUP_SCHEDULE_ID, "Legacy DB cleanup")
 
     if sync_interval_hours > 0 and _sync_bot is not None:
         _ensure_job(
