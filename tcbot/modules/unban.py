@@ -118,6 +118,12 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     throw_if_cancelled((ident, pre_ban, role_result))
     if isinstance(ident, BaseException):
         log.exception("identity.classify failed in cmd_unban: %s", ident)
+        await safe_reply(
+            msg,
+            replies.err_role_verify(locale, plain=True),
+            log_label="unban classify-fail",
+            parse_mode=None,
+        )
         return
     if isinstance(pre_ban, BaseException):
         log.error(
@@ -128,6 +134,12 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         pre_ban = None
     if isinstance(role_result, BaseException):
         log.exception("resolve_and_check failed in cmd_unban: %s", role_result)
+        await safe_reply(
+            msg,
+            replies.err_role_verify(locale, plain=True),
+            log_label="unban rank-check-fail",
+            parse_mode=None,
+        )
         return
     if role_result == (None, None):
         # * resolve_and_check already replied and rejected (insufficient rank
