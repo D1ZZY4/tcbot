@@ -191,13 +191,30 @@ any other connection error.
 Reads do not open a transaction. `fetch_all`, `fetch_one`, `fetch_value`,
 `fetch_count`, and `count_rows` run on an autocommit connection, so a read
 is one round trip instead of one plus the `COMMIT` that would close the
-transaction. Measured against the deployment schema, a single-row lookup
-drops from 0.77 ms to 0.47 ms. The isolation level is reverted when the
-connection returns to the pool, so a write that follows still runs in a
-normal transaction.
+transaction. The isolation level is reverted when the connection returns
+to the pool, so a write that follows still runs in a normal transaction.
 
-Operations that are legitimately long pass `timeout=None`: the warn-expiry
-bulk deletes and the warn-history and counter deletes.
+The pool validates a connection before handing it out (`pool_pre_ping`), so
+a read costs two round trips: the validation and the statement. The
+autocommit saving removes the `COMMIT` round trip and the pre-ping adds
+one back, so the net gain over a transactional read is the difference
+between the two, not the whole transaction overhead. Measured against the
+deployment schema over a network link, a single-row lookup costs about
+0.86 ms without the pre-ping and about 1.08 ms with it, against 1.08 ms
+for the transactional form.
+
+Operations that are legitimately long carry their own budget. The
+warn-history and counter deletes pass `timeout=None`, because a
+federation-wide clear removes every warning row of one user across every
+group. The daily warn-expiry sweep runs its two bulk deletes in one
+transaction with a 60 s budget, because a bulk delete over a large
+history can run long and the sweep reports the deadline it used.
+
+A warning is written without a scan of the history. The counter row
+normally exists and the upsert increments it, so the history count is
+only needed when the row is missing. The statement makes the database
+evaluate just the branch it needs, so the common path never counts the
+history and the slow path only runs on a counter that was lost.
 
 ## Redis reconnect
 
@@ -213,6 +230,14 @@ display-name hints) are dropped past 200 queued mutations, and even a
 revocation operation is dropped past 1000, with an error-level warning: a
 dropped revocation leaves the revoked state visible until the key TTL, while
 an unbounded queue exhausts the process memory.
+
+The Redis client belongs to the event loop that created it: its sockets are
+bound to that loop. A client that is handed to another running loop would
+wait for an answer that can never arrive, so the cache treats it as absent
+and the reconnect path replaces it. The long-lived transports run one loop
+for the whole process, and the serverless path keeps one shared loop across
+warm invocations, so the client stays valid there. The guard exists for the
+case where the loop is replaced under a live client.
 
 ## Measuring a suspected bottleneck
 

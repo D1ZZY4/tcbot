@@ -56,9 +56,10 @@ flowchart TD
 | `engine.py` | The async engine, the session boundary, the circuit-breaker guard, and the query helpers. |
 
 The schema is versioned with Alembic. `alembic/versions/0001_initial.py`
-creates every table and index of `base.py`; `engine.connect()` applies the
-pending revisions before the engine is published, so a fresh deployment
-boots against an empty database and an existing one is upgraded in place.
+creates every table and index of `base.py`, and every later revision adds
+to it; `engine.connect()` applies the pending revisions before the engine
+is published, so a fresh deployment boots against an empty database and an
+existing one is upgraded in place.
 
 ```bash
 # Apply the migrations by hand (the bot does this at startup).
@@ -73,6 +74,12 @@ matching Alembic revision, and the helper that uses it. The integration
 tests build their schema from `base.py`, so a revision that drifts from it
 is caught by `tests/test_schema_migration.py`, which migrates an empty
 schema and compares the result with the declared metadata.
+
+`scripts/generate_initial_migration.py` is the bootstrap tool for the
+first revision of a new project. It refuses to overwrite an existing
+first revision: the applied revision is the database's history, and
+rewriting it would leave a deployed database on the old schema while the
+repository claims the change shipped.
 
 The migration must not reconfigure the application logging. Alembic's
 standard recipe calls `fileConfig()`, which removes every handler the bot
@@ -95,12 +102,12 @@ blocking PyMongo-style call on the loop.
 | `engine()` | Returns the shared engine or raises `RuntimeError` when the database is not connected. |
 | `is_connected()` | Returns `True` once a connection has been established via `connect()`. |
 | `session()` | Async context manager yielding an `AsyncSession` that commits on success and rolls back on failure. One session per operation. |
-| `read_connection()` | Async context manager yielding an autocommit connection for a read-only statement. A read needs no transaction, so it costs one round trip instead of one plus the `COMMIT` that closes it. |
+| `read_connection()` | Async context manager yielding an autocommit connection for a read-only statement. A read needs no transaction, so it costs one round trip instead of one plus the `COMMIT` that closes it. The pre-ping on checkout adds a second round trip, which the autocommit saving offsets. |
 | `db_call(op, *, timeout=20.0)` | Runs one database operation through the circuit breaker and a caller-side timeout. Raises `CircuitOpenError` while the circuit is OPEN. |
-| `run_transaction(op, *, timeout=20.0)` | Runs a unit of work that spans several statements atomically on one session. |
+| `run_transaction(op, *, timeout=20.0)` | Runs a unit of work that spans several statements atomically on one session. It already runs through `db_call`, so a caller must not wrap it in another one. |
 | `fetch_all(stmt)` / `fetch_one(stmt)` / `fetch_value(stmt)` / `fetch_count(stmt)` / `count_rows(stmt)` | Read helpers. They run on an autocommit connection, so a read is one round trip. `count_rows` wraps a selection in a counting query so the result is the row count and never the first column. |
 | `run(stmt)` / `run_returning(stmt)` | Write helpers. `run` returns the affected row count, `run_returning` the rows a `RETURNING` clause produced. |
-| `is_connection_error(exc)` / `is_transient_db_error(exc)` / `is_database_error(exc)` | Error classification used by the circuit breaker and the error handler. |
+| `is_connection_error(exc)` / `is_transient_db_error(exc)` / `is_database_error(exc)` / `is_pool_timeout(exc)` | Error classification used by the circuit breaker and the error handler. `is_pool_timeout` recognises SQLAlchemy's own pool-timeout error, which does not inherit from the builtin `TimeoutError`. |
 | `constraint_name(exc)` | The name of the constraint an integrity error violated, so a caller can tell a duplicate identifier apart from a duplicate partial index. |
 
 ### Connection parameters
@@ -134,11 +141,23 @@ A successful probe closes the circuit; a failed probe reopens it.
 `db_call` rejects with `CircuitOpenError` while OPEN.
 
 Only transient database errors count toward opening the circuit: a dropped
-connection, a refused socket, a driver timeout, and the caller-side
-`TimeoutError` raised by `db_call`. A constraint violation or a syntax
-error is an application bug, not an outage, so it propagates without
-recording a failure. A `CircuitOpenError` from a handler logs once at
-WARNING in `_error_handler` instead of flooding the logs-errors channel.
+connection, a refused socket, a driver timeout, an exhausted connection
+pool, and the caller-side `TimeoutError` raised by `db_call`. A constraint
+violation or a syntax error is an application bug, not an outage, so it
+propagates without recording a failure. A `CircuitOpenError` from a
+handler logs once at WARNING in `_error_handler` instead of flooding the
+logs-errors channel.
+
+A failure that passes through two breakers counts once. `run_transaction`
+already runs through `db_call`, so a caller must not wrap it in a second
+one: the exception is the same object on both levels, and counting it
+twice would trip the circuit after fewer real failures than the threshold
+promises.
+
+A pool timeout is a load condition, not a broken database. It counts
+toward the circuit (so a half-open probe reopens instead of flooding a
+saturated pool) and it is reported as a transient condition rather than a
+database error.
 
 ## Tables at a glance
 
@@ -157,7 +176,7 @@ WARNING in `_error_handler` instead of flooding the logs-errors channel.
 | `redis_client.py` | Redis (optional) | Async Redis client singleton with pool management and liveness tracking. |
 | `scheduler.py` | PostgreSQL (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `SQLAlchemyJobStore`. |
 | `mtproto.py` | Telegram MTProto | Bot-token client singleton: user-ID resolution and group member harvest. Claims a single-owner lease before connecting (90 s TTL, 30 s heartbeat); losers and parked sessions degrade to Bot-API-only. |
-| `mtproto_store.py` | `mtproto_state` | PostgreSQL-backed Kurigram storage engine shared by all instances, plus the atomic single-owner lease (`<ns>:lock:mtproto_owner`) with expiry takeover. |
+| `mtproto_store.py` | `mtproto_state` | PostgreSQL-backed Kurigram storage engine shared by all instances, plus the atomic single-owner lease (`<ns>:lock:mtproto_owner`) with expiry takeover. The peer, name-list and update-state writes go out as one multi-row upsert per bounded chunk, so a session with hundreds of peers costs a handful of transactions instead of one per peer. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives: `UserId`, `GroupId`, `ChatId`, `BanId`. |
 
@@ -220,17 +239,19 @@ WARNING in `_error_handler` instead of flooding the logs-errors channel.
   so calls to these helpers never cause redundant round-trips for the same
   user.
 - `get_mention_data_batch(user_ids: list[int]) -> dict[int, tuple[str, str | None]]`
-  Batch `(first_name, username)` for many users in one query. IDs already in
-  L1 are served without I/O; only uncached IDs trigger one `IN (...)`
-  query. Newly fetched data is populated into the mention cache; users
-  missing from the database get the sentinel cached and `str(user_id)`
-  returned.
+  Batch `(first_name, username)` for many users in one query. The batch
+  readers consult both cache layers: the in-memory layer answers first,
+  and the keys it missed are fetched from Redis in one round trip, so a
+  warm Redis serves the batch without a database query even right after a
+  restart. Only the remaining IDs trigger one `IN (...)` query. Newly
+  fetched data is populated into the mention cache; users missing from
+  the database get the sentinel cached and `str(user_id)` returned.
 - `get_first_names_batch(user_ids: list[int]) -> dict[int, str]`
-  Batch first names only. IDs already in L1 are served without I/O; only
-  uncached IDs trigger one `IN (...)` query. Newly fetched rows populate the
-  full mention triple through the shared batch-miss path, so repeat renders
-  by any reader skip the round-trip. Missing users get the sentinel cached
-  and `str(user_id)` returned.
+  Batch first names only. The cache path is the same as
+  `get_mention_data_batch`. Newly fetched rows populate the full mention
+  triple through the shared batch-miss path, so repeat renders by any
+  reader skip the round-trip. Missing users get the sentinel cached and
+  `str(user_id)` returned.
 - `total_users() -> int`
   `COUNT(*)` over the whole table.
 - `all_users_page(*, skip: int = 0, limit: int = 200, sort_by: str = "first_name") -> list[UserDoc]`
@@ -238,8 +259,13 @@ WARNING in `_error_handler` instead of flooding the logs-errors channel.
   (`user_id`, `username`, `first_name`, `last_updated`), falling back to
   `first_name`; `last_updated` sorts descending, everything else ascending.
   Every accepted key maps to an indexed field and carries a `user_id`
-  tie-break so the page order stays stable. `limit` is clamped to at least 1
-  and used for both the `LIMIT` and the `OFFSET`.
+  tie-break so the page order stays stable. The name sorts use the
+  default-opclass `(first_name_lower, user_id)` and
+  `(username_lower, user_id)` indexes: the `text_pattern_ops` indexes
+  serve the prefix search but cannot serve an `ORDER BY`, so without the
+  extra indexes the planner sorts the whole table on every page turn.
+  `limit` is clamped to at least 1 and used for both the `LIMIT` and the
+  `OFFSET`.
 - `search_by_name(needle: str, limit: int = 5) -> list[UserDoc]`
   Target-resolution search. A server-side anchored prefix query
   (`first_name_lower LIKE 'needle%'` or `username_lower LIKE 'needle%'`,
@@ -634,21 +660,24 @@ minimum 1). A second federation-wide threshold `cfg.fed_warn_limit` (env
   round) would silently delay the ban that the warning earned. The counter
   is written with `INSERT ... ON CONFLICT DO UPDATE SET count = count + 1
   RETURNING count`, so two concurrent warnings in the same group both
-  count. Returns the new warn count. A statement that returns no counter
-  row raises and rolls the transaction back rather than committing a
-  warning whose count is missing.
+  count. When the counter row is missing, the insert takes its value from
+  the warning history instead of starting at one: a counter that ignored
+  the rows already in the history would under-count and delay the
+  threshold. Returns the new warn count. A statement that returns no
+  counter row raises and rolls the transaction back rather than committing
+  a warning whose count is missing.
 - `clear_warns(user_id: int, chat_id: int) -> int`
   Deletes warn history plus the counter for one group; returns the history
-  deleted count. Raises the warns-delete failure instead of returning 0 (a
+  deleted count. Both deletes share one transaction. They write the same
+  fact from two sides, so a failure between them would leave a counter
+  without its history, and a surviving counter keeps a count for warnings
+  that were cleared. Raises the delete failure instead of returning 0 (a
   0 return means "nothing to clear"; reporting an outage as an empty state
-  would mislead the moderator). A counter-delete failure is repaired right
-  away (the pair is recounted from history, which lands at zero and drops
-  the stale row) and stays non-fatal.
+  would mislead the moderator).
 - `clear_all_warns(user_id: int) -> int`
   Deletes warn history plus every counter across all groups (used on
   federation auto-ban so a user starts with a clean slate). Raises like
   `clear_warns`; callers inside `gather` inspect the captured exception.
-  A counter-delete failure retries the delete once.
 
 ### Queries
 
@@ -661,10 +690,12 @@ minimum 1). A second federation-wide threshold `cfg.fed_warn_limit` (env
   Full warn list for a user in a group, oldest first (timestamp ascending).
   `limit=None` returns everything.
 - `remove_last_warn(user_id: int, chat_id: int) -> bool`
-  Deletes the most recent warn row and decrements the counter in parallel.
-  On any failure the counter is rebuilt from history (`_recount_and_store`)
-  and the helper returns `False`; returns `True` only when a warn was
-  actually removed. Cancellation propagates.
+  Deletes the most recent warn row and decrements the counter in one
+  transaction. The decrement only runs when the delete removed a row, so
+  two callers that read the same warning do not both decrement. A failed
+  delete raises and leaves the counter untouched; a missing counter row is
+  rebuilt from history (`_recount_and_store`). Returns `True` only when a
+  warn was actually removed. Cancellation propagates.
 - `user_total_warns(user_id: int) -> int`
   Total warn rows recorded against the user across all groups.
 - `user_warn_groups(user_id: int) -> list[tuple[int, int]]`
@@ -927,6 +958,11 @@ Bare `cachetools` L1 caches (no Redis, no L2): `groups_db._GROUP_LOCALE_L1`
   not own it and `aclose` alone would leak sockets.
 - `client() -> redis.asyncio.Redis | None`
   Active client, or `None` when Redis is not configured.
+- `client_is_usable() -> bool`
+  True when the client can serve the running loop. The client holds
+  sockets bound to the loop that created it, so a client that outlived
+  its loop would wait for an answer that can never arrive. The cache
+  treats such a client as absent, and `ensure_connected()` replaces it.
 - `mark_op(*, ok: bool) -> None`
   Records one Redis operation outcome (called from `cache/`); logs the
   transition to unhealthy exactly once.
@@ -946,6 +982,7 @@ Pool parameters: `decode_responses=True`, `max_connections=20`,
 - Redis failures after the first are not re-logged per op (transition logging only), and the pool/health state is tracked via `mark_op`.
 - Single-key deletes and writes for revocation prefixes (`role`, `conn`, `groups`, `owner`) are never dropped by the 200-deep mutation-queue bound: a dropped role revocation would leave other processes serving the revoked privilege until the key TTL (90-360 s). Display-name hints (`umention`) remain droppable; the next update refreshes them.
 - A cancelled predecessor does not drop its successors: each FIFO mutation shields its predecessor and only aborts on its own cancellation, so one cancelled task cannot cascade-cancel the tail.
+- A client that belongs to another event loop is reported as absent by the cache, so a read falls back to the database instead of waiting on a socket that can never answer.
 
 ## Scheduler (`scheduler.py`)
 
@@ -1017,7 +1054,7 @@ Recurring jobs:
 
 | Job ID | Trigger | Purpose |
 |---|---|---|
-| `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: deletes `warn_counts` rows older than the cutoff from `updated_at` and `warns` rows from `timestamp` in one transaction. Both must be pruned together: pruning only the counters lets the counter backfill rebuild them from the surviving history, and pruning only the history leaves a counter that counts a warning nobody can see. Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
+| `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: deletes `warn_counts` rows older than the cutoff from `updated_at` and `warns` rows from `timestamp` in one transaction. Both must be pruned together: pruning only the counters lets the counter backfill rebuild them from the surviving history, and pruning only the history leaves a counter that counts a warning nobody can see. The transaction carries a 60 s budget of its own, because a bulk delete over a large history can run long. Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
 | `tcbot.enforcement_sync` | `IntervalTrigger(hours=sync_interval_hours)` | Calls `_run_scheduled_sync` (the `/tcsync` core on a timer, bounded to 200 checks, log-only results, via the explicit `sync_runner` start argument, so the database package never imports a command module). Uses `misfire_grace_time=86400`, `coalesce=True`. Registered only when the interval is positive and a `bot` reference was passed; otherwise removed. See [`../features/moderation/sync.md`](../features/moderation/sync.md). |
 | `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes the expired timed mutes from `active_mutes` and the stale profiles from `member_cache`. PostgreSQL has no TTL index, so this job replaces the TTL behaviour the MongoDB deployment relied on. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. |
 | `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal runs against the `postgres` store after the scheduler started (a removal issued before `start()` only searches the pending-job list and would leave the persisted row firing) and `_cleanup_old_records()` remains as a no-op migration shim so any persisted schedule can deserialize without `AttributeError`. |
@@ -1063,8 +1100,10 @@ they exist before the first handler query reaches the database.
 | `federated_groups` | `(is_active)` | Active-group listing / count. |
 | `pending_joins` | primary key `(chat_id)` | One pending request per chat. |
 | `member_cache` | primary key `(user_id)` | One profile per user. |
-| `member_cache` | `(username_lower, user_id)` with `text_pattern_ops` | Name search: the case-sensitive prefix query on the lowercase mirror. The `user_id` tie-break also serves the paged users list sort. |
-| `member_cache` | `(first_name_lower, user_id)` with `text_pattern_ops` | Name search: the case-sensitive prefix query on the lowercase mirror. The `user_id` tie-break also serves the paged users list sort. |
+| `member_cache` | `(username_lower, user_id)` with `text_pattern_ops` | Name search: the case-sensitive prefix query on the lowercase mirror. |
+| `member_cache` | `(first_name_lower, user_id)` with `text_pattern_ops` | Name search: the case-sensitive prefix query on the lowercase mirror. |
+| `member_cache` | `(username_lower, user_id)` default opclass | The paged users list sort on `username_lower`. A pattern opclass only provides the pattern comparison operators, so it cannot serve an `ORDER BY`. |
+| `member_cache` | `(first_name_lower, user_id)` default opclass | The paged users list sort on `first_name_lower`, the default sort. |
 | `member_cache` | `(last_updated desc, user_id)` | `all_users_page()` sort on the recency key. |
 | `user_settings` | primary key `(user_id)` | One preference row per user. |
 | `warns` | `(user_id, chat_id, timestamp desc)` | Per-group history. PostgreSQL scans a btree backwards for the oldest-first view. |

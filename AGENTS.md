@@ -114,6 +114,7 @@ Current stack:
 │   │   ├── scheduler.py      APScheduler background task + SQLAlchemyJobStore
 │   │   ├── engine.py         Async engine, session boundary, circuit-breaker guard
 │   │   ├── base.py           Table, column, constraint, and index definitions
+│   │   ├── migrations.py     Alembic wiring: applies the pending revisions at startup
 │   │   ├── documents.py      Typed document shapes
 │   │   ├── types.py          Domain primitive types
 │   │   ├── settings_db.py    Per-user locale preferences
