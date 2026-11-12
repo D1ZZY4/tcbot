@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect
+
 from tcbot.database.base import metadata
 
 if TYPE_CHECKING:
