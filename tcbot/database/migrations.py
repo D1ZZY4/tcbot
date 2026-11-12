@@ -204,9 +204,14 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
     role_rows = connection.execute(
         text(
             "SELECT role_key FROM public.role_definitions "
-            "WHERE role_key = ANY(:roles)"
+            "WHERE role_key IN (:owner, :admin, :developer, :moderator)"
         ),
-        {"roles": sorted(_NORMALIZED_REQUIRED_ROLES)},
+        {
+            "owner": "owner",
+            "admin": "admin",
+            "developer": "developer",
+            "moderator": "moderator",
+        },
     ).scalars().all()
     missing_roles = sorted(_NORMALIZED_REQUIRED_ROLES - set(role_rows))
     if missing_roles:
@@ -219,13 +224,32 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
         text(
             """
             SELECT
-                count(*) FILTER (WHERE NOT c.relrowsecurity) AS rls_disabled,
+                count(*) FILTER (
+                    WHERE c.relkind = 'r' AND NOT c.relrowsecurity
+                ) AS rls_disabled,
                 count(*) FILTER (
                     WHERE has_table_privilege('anon', c.oid, 'SELECT')
                        OR has_table_privilege('anon', c.oid, 'INSERT')
+                       OR has_table_privilege('anon', c.oid, 'UPDATE')
+                       OR has_table_privilege('anon', c.oid, 'DELETE')
                        OR has_table_privilege('authenticated', c.oid, 'SELECT')
                        OR has_table_privilege('authenticated', c.oid, 'INSERT')
+                       OR has_table_privilege('authenticated', c.oid, 'UPDATE')
+                       OR has_table_privilege('authenticated', c.oid, 'DELETE')
                 ) AS client_grants,
+                count(*) FILTER (
+                    WHERE c.relkind = 'r'
+                      AND (
+                          NOT has_table_privilege('service_role', c.oid, 'SELECT')
+                          OR NOT has_table_privilege('service_role', c.oid, 'INSERT')
+                          OR NOT has_table_privilege('service_role', c.oid, 'UPDATE')
+                          OR NOT has_table_privilege('service_role', c.oid, 'DELETE')
+                      )
+                ) AS missing_backend_grants,
+                count(*) FILTER (
+                    WHERE c.relkind = 'v'
+                      AND NOT has_table_privilege('service_role', c.oid, 'SELECT')
+                ) AS missing_view_grants,
                 count(*) FILTER (
                     WHERE c.relkind = 'v'
                       AND NOT ('security_invoker=true' = ANY(
@@ -241,16 +265,34 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
         ),
         {"tables": sorted(_NORMALIZED_REQUIRED_TABLES | _NORMALIZED_REQUIRED_VIEWS)},
     ).mappings().one()
+
+    event_trigger = connection.execute(
+        text(
+            "SELECT evtenabled FROM pg_event_trigger "
+            "WHERE evtname = 'ensure_rls' LIMIT 1"
+        )
+    ).scalar_one_or_none()
+    if event_trigger != "O":
+        raise RuntimeError(
+            "Normalized database is missing the enabled ensure_rls event trigger."
+        )
+
     if (
         security["rls_disabled"] != 0
         or security["client_grants"] != 0
         or security["insecure_views"] != 0
+        or security["missing_backend_grants"] != 0
+        or security["missing_view_grants"] != 0
+        or security["insecure_sequences"] != 0
     ):
         raise RuntimeError(
             "Normalized database security validation failed: "
             f"RLS-disabled={security['rls_disabled']}, "
             f"client-grants={security['client_grants']}, "
-            f"insecure-views={security['insecure_views']}."
+            f"insecure-views={security['insecure_views']}, "
+            f"missing-backend-grants={security['missing_backend_grants']}, "
+            f"missing-view-grants={security['missing_view_grants']}, "
+            f"insecure-sequences={security['insecure_sequences']}."
         )
 
 
