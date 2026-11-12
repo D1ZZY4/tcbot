@@ -224,21 +224,40 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
         text(
             """
             SELECT
-                count(*) FILTER (
-                    WHERE c.relkind = 'r' AND NOT c.relrowsecurity
+                (
+                    SELECT count(*)
+                    FROM pg_class AS c
+                    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public'
+                      AND c.relkind = 'r'
+                      AND c.relname IN ('audit_events', 'chat_members', 'chat_settings', 'federation_groups', 'federation_settings', 'federations', 'join_requests', 'moderation_actions', 'moderation_appeals', 'moderation_case_rules', 'moderation_cases', 'moderation_evidence_items', 'moderation_evidence_uploads', 'moderation_messages', 'permission_definitions', 'role_assignments', 'role_definitions', 'role_permissions', 'rule_acknowledgements', 'rule_items', 'rule_set_versions', 'rule_sets', 'telegram_chats', 'telegram_users', 'user_settings', 'apscheduler_jobs', 'mtproto_state')
+                      AND NOT c.relrowsecurity
                 ) AS rls_disabled,
-                count(*) FILTER (
-                    WHERE has_table_privilege('anon', c.oid, 'SELECT')
-                       OR has_table_privilege('anon', c.oid, 'INSERT')
-                       OR has_table_privilege('anon', c.oid, 'UPDATE')
-                       OR has_table_privilege('anon', c.oid, 'DELETE')
-                       OR has_table_privilege('authenticated', c.oid, 'SELECT')
-                       OR has_table_privilege('authenticated', c.oid, 'INSERT')
-                       OR has_table_privilege('authenticated', c.oid, 'UPDATE')
-                       OR has_table_privilege('authenticated', c.oid, 'DELETE')
+                (
+                    SELECT count(*)
+                    FROM pg_class AS c
+                    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public'
+                      AND c.relkind IN ('r', 'v')
+                      AND c.relname IN ('audit_events', 'chat_members', 'chat_settings', 'federation_groups', 'federation_settings', 'federations', 'join_requests', 'moderation_actions', 'moderation_appeals', 'moderation_case_rules', 'moderation_cases', 'moderation_evidence_items', 'moderation_evidence_uploads', 'moderation_messages', 'permission_definitions', 'role_assignments', 'role_definitions', 'role_permissions', 'rule_acknowledgements', 'rule_items', 'rule_set_versions', 'rule_sets', 'telegram_chats', 'telegram_users', 'user_settings', 'apscheduler_jobs', 'mtproto_state', 'active_bans', 'active_mutes', 'warn_counts')
+                      AND (
+                          has_table_privilege('anon', c.oid, 'SELECT')
+                          OR has_table_privilege('anon', c.oid, 'INSERT')
+                          OR has_table_privilege('anon', c.oid, 'UPDATE')
+                          OR has_table_privilege('anon', c.oid, 'DELETE')
+                          OR has_table_privilege('authenticated', c.oid, 'SELECT')
+                          OR has_table_privilege('authenticated', c.oid, 'INSERT')
+                          OR has_table_privilege('authenticated', c.oid, 'UPDATE')
+                          OR has_table_privilege('authenticated', c.oid, 'DELETE')
+                      )
                 ) AS client_grants,
-                count(*) FILTER (
-                    WHERE c.relkind = 'r'
+                (
+                    SELECT count(*)
+                    FROM pg_class AS c
+                    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public'
+                      AND c.relkind = 'r'
+                      AND c.relname IN ('audit_events', 'chat_members', 'chat_settings', 'federation_groups', 'federation_settings', 'federations', 'join_requests', 'moderation_actions', 'moderation_appeals', 'moderation_case_rules', 'moderation_cases', 'moderation_evidence_items', 'moderation_evidence_uploads', 'moderation_messages', 'permission_definitions', 'role_assignments', 'role_definitions', 'role_permissions', 'rule_acknowledgements', 'rule_items', 'rule_set_versions', 'rule_sets', 'telegram_chats', 'telegram_users', 'user_settings', 'apscheduler_jobs', 'mtproto_state')
                       AND (
                           NOT has_table_privilege('service_role', c.oid, 'SELECT')
                           OR NOT has_table_privilege('service_role', c.oid, 'INSERT')
@@ -246,24 +265,54 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
                           OR NOT has_table_privilege('service_role', c.oid, 'DELETE')
                       )
                 ) AS missing_backend_grants,
-                count(*) FILTER (
-                    WHERE c.relkind = 'v'
+                (
+                    SELECT count(*)
+                    FROM pg_class AS c
+                    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public'
+                      AND c.relkind = 'v'
+                      AND c.relname IN ('active_bans', 'active_mutes', 'warn_counts')
                       AND NOT has_table_privilege('service_role', c.oid, 'SELECT')
                 ) AS missing_view_grants,
-                count(*) FILTER (
-                    WHERE c.relkind = 'v'
+                (
+                    SELECT count(*)
+                    FROM pg_class AS c
+                    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public'
+                      AND c.relkind = 'v'
+                      AND c.relname IN ('active_bans', 'active_mutes', 'warn_counts')
                       AND NOT ('security_invoker=true' = ANY(
                           COALESCE(c.reloptions, ARRAY[]::text[])
                       ))
-                ) AS insecure_views
-            FROM pg_class AS c
-            JOIN pg_namespace AS n ON n.oid = c.relnamespace
-            WHERE n.nspname = 'public'
-              AND c.relname = ANY(:tables)
-              AND c.relkind IN ('r', 'v')
+                ) AS insecure_views,
+                (
+                    SELECT count(*)
+                    FROM pg_class AS c
+                    JOIN pg_namespace AS n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public'
+                      AND c.relkind = 'S'
+                      AND (
+                          has_sequence_privilege('anon', c.oid, 'USAGE')
+                          OR has_sequence_privilege('anon', c.oid, 'SELECT')
+                          OR has_sequence_privilege('authenticated', c.oid, 'USAGE')
+                          OR has_sequence_privilege('authenticated', c.oid, 'SELECT')
+                          OR NOT has_sequence_privilege('service_role', c.oid, 'USAGE')
+                          OR NOT has_sequence_privilege('service_role', c.oid, 'SELECT')
+                      )
+                ) AS insecure_sequences,
+                (
+                    SELECT count(*)
+                    FROM pg_proc AS p
+                    JOIN pg_namespace AS n ON n.oid = p.pronamespace
+                    WHERE n.nspname = 'public'
+                      AND p.prokind IN ('f', 'p')
+                      AND (
+                          has_function_privilege('anon', p.oid, 'EXECUTE')
+                          OR has_function_privilege('authenticated', p.oid, 'EXECUTE')
+                      )
+                ) AS exposed_functions
             """
-        ),
-        {"tables": sorted(_NORMALIZED_REQUIRED_TABLES | _NORMALIZED_REQUIRED_VIEWS)},
+        )
     ).mappings().one()
 
     event_trigger = connection.execute(
@@ -284,6 +333,7 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
         or security["missing_backend_grants"] != 0
         or security["missing_view_grants"] != 0
         or security["insecure_sequences"] != 0
+        or security["exposed_functions"] != 0
     ):
         raise RuntimeError(
             "Normalized database security validation failed: "
@@ -292,7 +342,8 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
             f"insecure-views={security['insecure_views']}, "
             f"missing-backend-grants={security['missing_backend_grants']}, "
             f"missing-view-grants={security['missing_view_grants']}, "
-            f"insecure-sequences={security['insecure_sequences']}."
+            f"insecure-sequences={security['insecure_sequences']}, "
+            f"exposed-functions={security['exposed_functions']}."
         )
 
 
