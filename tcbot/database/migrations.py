@@ -259,10 +259,33 @@ def validate_normalized_schema(connection: Connection, federation_slug: str) -> 
                       AND c.relkind = 'r'
                       AND c.relname IN ('audit_events', 'chat_members', 'chat_settings', 'federation_groups', 'federation_settings', 'federations', 'join_requests', 'moderation_actions', 'moderation_appeals', 'moderation_case_rules', 'moderation_cases', 'moderation_evidence_items', 'moderation_evidence_uploads', 'moderation_messages', 'permission_definitions', 'role_assignments', 'role_definitions', 'role_permissions', 'rule_acknowledgements', 'rule_items', 'rule_set_versions', 'rule_sets', 'telegram_chats', 'telegram_users', 'user_settings', 'apscheduler_jobs', 'mtproto_state')
                       AND (
-                          NOT has_table_privilege('service_role', c.oid, 'SELECT')
-                          OR NOT has_table_privilege('service_role', c.oid, 'INSERT')
-                          OR NOT has_table_privilege('service_role', c.oid, 'UPDATE')
-                          OR NOT has_table_privilege('service_role', c.oid, 'DELETE')
+                          (
+                              c.relname NOT IN (
+                                  'moderation_evidence_items',
+                                  'moderation_evidence_uploads'
+                              )
+                              AND (
+                                  NOT has_table_privilege('service_role', c.oid, 'SELECT')
+                                  OR NOT has_table_privilege('service_role', c.oid, 'INSERT')
+                                  OR NOT has_table_privilege('service_role', c.oid, 'UPDATE')
+                                  OR NOT has_table_privilege('service_role', c.oid, 'DELETE')
+                              )
+                          )
+                          OR (
+                              c.relname = 'moderation_evidence_items'
+                              AND (
+                                  NOT has_table_privilege('service_role', c.oid, 'SELECT')
+                                  OR NOT has_table_privilege('service_role', c.oid, 'INSERT')
+                              )
+                          )
+                          OR (
+                              c.relname = 'moderation_evidence_uploads'
+                              AND (
+                                  NOT has_table_privilege('service_role', c.oid, 'SELECT')
+                                  OR NOT has_table_privilege('service_role', c.oid, 'INSERT')
+                                  OR NOT has_table_privilege('service_role', c.oid, 'UPDATE')
+                              )
+                          )
                       )
                 ) AS missing_backend_grants,
                 (
