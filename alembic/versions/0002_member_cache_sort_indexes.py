@@ -30,18 +30,26 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Create the two default-opclass sort indexes."""
+    """Create the two default-opclass sort indexes.
+
+    The creation is conditional: a database bootstrapped from the declared
+    metadata already carries the indexes, and a schema stamped at the base
+    revision by the migration bootstrap would otherwise fail on the
+    duplicate name.
+    """
     op.create_index(
         "ix_member_cache_first_name_lower_sort",
         "member_cache",
         ["first_name_lower", "user_id"],
         unique=False,
+        if_not_exists=True,
     )
     op.create_index(
         "ix_member_cache_username_lower_sort",
         "member_cache",
         ["username_lower", "user_id"],
         unique=False,
+        if_not_exists=True,
     )
 
 

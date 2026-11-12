@@ -11,6 +11,7 @@ import os
 import sys
 from pathlib import Path
 
+from alembic.script import ScriptDirectory
 from dotenv import find_dotenv, load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
@@ -22,7 +23,10 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from tcbot.database.base import metadata  # noqa: E402
-from tcbot.database.migrations import set_database_url  # noqa: E402
+from tcbot.database.migrations import (  # noqa: E402
+    set_database_url,
+    stamp_bootstrap_schema,
+)
 
 config = context.config
 
@@ -133,6 +137,9 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+        )
+        stamp_bootstrap_schema(
+            context.get_context(), connection, ScriptDirectory.from_config(config)
         )
         with context.begin_transaction():
             context.run_migrations()
