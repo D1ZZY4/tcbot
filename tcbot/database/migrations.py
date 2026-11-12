@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Alembic wiring: apply the pending schema migrations at startup."""
+"""Alembic wiring and schema-compatibility checks for TCF Bot."""
 
 from __future__ import annotations
 
@@ -10,16 +10,71 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from alembic.config import Config
+from sqlalchemy import inspect
+from tcbot.database.base import metadata
 
 from alembic import command
 
 if TYPE_CHECKING:
     from alembic.config import Config as AlembicConfig
+    from sqlalchemy.engine import Connection
 
 # * The repository root holds ``alembic.ini`` and the ``alembic/`` script
 # * directory. The package lives two levels below it.
 _ROOT = Path(__file__).resolve().parents[2]
 _ALEMBIC_INI = _ROOT / "alembic.ini"
+
+# * These relations belong to the normalized Transsion Core schema, not the
+# * legacy schema this application currently declares in base.py. A marker is
+# * enough to refuse an accidental cross-generation migration before Alembic
+# * can create, alter, or collide with application objects.
+_NORMALIZED_SCHEMA_MARKERS: frozenset[str] = frozenset(
+    {
+        "federations",
+        "moderation_actions",
+        "moderation_cases",
+        "moderation_evidence_uploads",
+        "role_assignments",
+        "rule_sets",
+    }
+)
+_LEGACY_APPLICATION_RELATIONS: frozenset[str] = frozenset(metadata.tables)
+
+
+def validate_schema_relations(relations: set[str]) -> None:
+    """Reject a database that is not managed by this legacy Alembic history.
+
+    The normalized Transsion Core schema is a separate data model and has a
+    separate migration history. This bot release must never baseline or
+    upgrade that schema using its legacy Alembic revisions.
+    """
+    normalized = sorted(_NORMALIZED_SCHEMA_MARKERS.intersection(relations))
+    if normalized:
+        names = ", ".join(normalized)
+        raise RuntimeError(
+            "Refusing to run the legacy TCBot Alembic migrations against a "
+            "normalized Transsion Core schema. Detected schema markers: "
+            f"{names}. This application release still expects the legacy "
+            "schema declared in tcbot.database.base. No migration was run."
+        )
+
+    unversioned = sorted(_LEGACY_APPLICATION_RELATIONS.intersection(relations))
+    if unversioned and "alembic_version" not in relations:
+        names = ", ".join(unversioned)
+        raise RuntimeError(
+            "Refusing to baseline an unversioned database containing existing "
+            f"TCBot application relations: {names}. Restore the matching "
+            "Alembic history or use the explicit schema cutover procedure. "
+            "No migration was run."
+        )
+
+
+def validate_database_schema(connection: Connection) -> None:
+    """Validate the current schema before any online Alembic migration."""
+    inspector = inspect(connection)
+    relations = set(inspector.get_table_names())
+    relations.update(inspector.get_view_names())
+    validate_schema_relations(relations)
 
 
 def set_database_url(config: AlembicConfig, database_url: str) -> None:
@@ -38,7 +93,7 @@ def set_database_url(config: AlembicConfig, database_url: str) -> None:
 
 
 def upgrade_head(database_url: str) -> None:
-    """Apply every pending migration.
+    """Apply every pending migration after checking schema compatibility.
 
     The URL is passed in rather than read from the environment: the
     application loads its configuration from ``config.env`` as well, so
