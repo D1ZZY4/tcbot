@@ -10,7 +10,7 @@ import asyncio
 from itertools import batched
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, case, exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import warn_counts, warns
@@ -182,54 +182,6 @@ async def _recount_and_store(user_id: int, chat_id: int) -> None:
     await run_transaction(_work)
 
 
-async def _repair_counter_delete(
-    user_id: int,
-    chat_ids: Sequence[int] | None,
-    *,
-    counts_many: bool,
-    scope: str,
-) -> None:
-    """Best-effort repair after a counter-delete failure in _clear_warn_docs.
-
-    A surviving counter keeps stale counts that later warns increment
-    from, so the clear must not end with only a log line. Single-pair
-    clears recount the pair (history is already gone, so the recount
-    lands at zero and drops the stale row); multi-pair clears retry the
-    delete. The delete retry runs a bounded number of attempts with a
-    short backoff; a persistent outage stays error-logged but non-fatal
-    like the original delete failure so a clear never reports failure
-    for a repair problem. Cancellation propagates.
-    """
-    if counts_many:
-        for attempt in range(3):
-            try:
-                await db_call(
-                    lambda: run(
-                        warn_counts.delete().where(
-                            _scope_filter(warn_counts, user_id, chat_ids)
-                        )
-                    ),
-                    timeout=None,
-                )
-                return
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                if attempt == 2:
-                    log.exception("%s counter repair failed", scope)
-                else:
-                    await asyncio.sleep(0.5 * (attempt + 1))
-        return
-    if not chat_ids:
-        return
-    try:
-        await _recount_and_store(user_id, int(chat_ids[0]))
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        log.exception("%s counter repair failed", scope)
-
-
 async def warn_count(user_id: int, chat_id: int) -> int:
     """Get the current number of warnings for a user in a specific chat."""
     return await _sync_warn_count(user_id, chat_id)
@@ -247,6 +199,11 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
     silently delay the ban that the warning earned. A crash between two
     separate statements cannot be repaired afterwards, so the two
     writes share a transaction instead.
+
+    The counter row normally exists and the upsert increments it. When
+    it is missing, the insert takes its value from the warning history
+    instead of starting at one: a counter that ignored the rows already
+    in the history would under-count and delay the auto-ban threshold.
     """
     now = utc_now()
 
@@ -260,9 +217,39 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
                 timestamp=now,
             )
         )
+        # * The counter row normally exists and the conflict clause
+        # * increments it, so the insert value is never used. When the row
+        # * is missing, the insert has to take the count from the history
+        # * instead of starting at one: a counter that ignored the rows
+        # * already in the history would under-count and delay the
+        # * auto-ban threshold.
+        # *
+        # * The history count grows with the user's history in that group,
+        # * so it must not run on the common path. The CASE makes the
+        # * database evaluate only the branch it needs, and the branch
+        # * that counts is skipped entirely when the counter row is there.
+        history_count = (
+            select(func.count())
+            .select_from(warns)
+            .where(warns.c.user_id == user_id, warns.c.chat_id == chat_id)
+            .scalar_subquery()
+        )
+        counter_exists = exists(
+            select(1)
+            .select_from(warn_counts)
+            .where(
+                warn_counts.c.user_id == user_id,
+                warn_counts.c.chat_id == chat_id,
+            )
+        )
         result = await sess.execute(
             pg_insert(warn_counts)
-            .values(user_id=user_id, chat_id=chat_id, count=1, updated_at=now)
+            .values(
+                user_id=user_id,
+                chat_id=chat_id,
+                count=case((counter_exists, 1), else_=history_count),
+                updated_at=now,
+            )
             .on_conflict_do_update(
                 index_elements=["user_id", "chat_id"],
                 set_={"count": warn_counts.c.count + 1, "updated_at": now},
@@ -285,16 +272,14 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
 async def clear_warns(user_id: int, chat_id: int) -> int:
     """Remove ALL warnings for a user in a specific chat.
 
-    Raises the warns-delete failure instead of returning 0: a 0 return
-    means "nothing to clear", and reporting an outage as an empty state
-    would mislead the moderator. Counter-delete failures stay
-    error-logged but non-fatal (the stale counter is flagged for repair
-    while the requested clear itself succeeded).
+    Raises the delete failure instead of returning 0: a 0 return means
+    "nothing to clear", and reporting an outage as an empty state would
+    mislead the moderator. The history and the counter clear together, so
+    the count the auto-ban threshold reads never outlives its history.
     """
     return await _clear_warn_docs(
         user_id,
         [chat_id],
-        counts_many=False,
         scope=f"clear_warns user={user_id} chat={chat_id}",
     )
 
@@ -306,14 +291,13 @@ async def clear_all_warns(user_id: int) -> int:
     slate in every group after a potential unban, preventing immediate re-ban
     from stale per-group counts accumulated before the federation ban.
 
-    Raises the warns-delete failure like :func:`clear_warns` (a 0 return
+    Raises the delete failure like :func:`clear_warns` (a 0 return
     means "nothing cleared"); callers running inside ``gather`` inspect the
     captured exception instead.
     """
     return await _clear_warn_docs(
         user_id,
         None,
-        counts_many=True,
         scope=f"clear_all_warns user={user_id}",
     )
 
@@ -327,7 +311,7 @@ async def clear_warns_for_chats(user_id: int, chat_ids: Sequence[int]) -> int:
     Clearing everything would leave the failed groups with no warning and no
     ban.
 
-    Raises the warns-delete failure like :func:`clear_warns`.
+    Raises the delete failure like :func:`clear_warns`.
     """
     chats = [c for c in dict.fromkeys(chat_ids) if c]
     if not chats:
@@ -335,7 +319,6 @@ async def clear_warns_for_chats(user_id: int, chat_ids: Sequence[int]) -> int:
     return await _clear_warn_docs(
         user_id,
         chats,
-        counts_many=True,
         scope=f"clear_warns_for_chats user={user_id} chats={len(chats)}",
     )
 
@@ -344,46 +327,49 @@ async def _clear_warn_docs(
     user_id: int,
     chat_ids: Sequence[int] | None,
     *,
-    counts_many: bool,
     scope: str,
 ) -> int:
     """Delete warn history plus counter rows; shared by every clear path.
 
-    Returns the history deleted count. Raises the history-delete failure
-    (a 0 return means "nothing to clear"); counter-delete failures are
-    error-logged for operator repair while the clear itself succeeded.
-    Cancellation propagates instead of reporting success.
+    Both deletes share one transaction. They write the same fact from two
+    sides: the history rows are the record and the counter row is the
+    running total the auto-ban threshold reads. Separate commits would let
+    a failure between them leave a counter without its history, and a
+    surviving counter keeps a count for warnings that were cleared, which
+    fires the auto-ban threshold on a user who has none.
+
+    Returns the history deleted count. Raises the delete failure instead
+    of returning 0: a 0 return means "nothing to clear", and reporting an
+    outage as an empty state would mislead the moderator. Cancellation
+    propagates instead of reporting success.
     """
-    # * The two deletes write to different tables and neither reads the
-    # * other, so they run concurrently instead of costing four round
-    # * trips on a federation-wide clear.
-    warn_del, cnt_del = await asyncio.gather(
-        db_call(
-            lambda: run(warns.delete().where(_scope_filter(warns, user_id, chat_ids))),
-            timeout=None,
-        ),
-        db_call(
-            lambda: run(
-                warn_counts.delete().where(
-                    _scope_filter(warn_counts, user_id, chat_ids)
-                )
-            ),
-            timeout=None,
-        ),
-        return_exceptions=True,
-    )
-    if isinstance(cnt_del, asyncio.CancelledError):
-        raise cnt_del
-    if isinstance(cnt_del, BaseException):
-        # * Error-level: a surviving counter keeps stale counts that later
-        # * warns increment from, so repair it instead of only logging.
-        log.error("%s counter delete failed: %s", scope, cnt_del)
-        await _repair_counter_delete(
-            user_id, chat_ids, counts_many=counts_many, scope=scope
+
+    async def _work(sess: AsyncSession) -> tuple[int, int]:
+        warn_result = await sess.execute(
+            warns.delete().where(_scope_filter(warns, user_id, chat_ids))
         )
-    if isinstance(warn_del, BaseException):
-        log.error("%s warns delete failed: %s", scope, warn_del)
-        raise warn_del
+        count_result = await sess.execute(
+            warn_counts.delete().where(_scope_filter(warn_counts, user_id, chat_ids))
+        )
+        # * A write returns a cursor result, which carries the affected row
+        # * count. The generic result type does not expose it.
+        return (
+            cast("CursorResult", warn_result).rowcount,
+            cast("CursorResult", count_result).rowcount,
+        )
+
+    try:
+        # * A federation-wide clear removes every warning row of the user
+        # * across every group, so the delete can run long. The engine
+        # * budget of a single statement would cut it short and leave the
+        # * stale counts behind, which is the state the clear exists to
+        # * prevent.
+        warn_del, _cnt_del = await run_transaction(_work, timeout=None)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("%s failed", scope)
+        raise
     return int(warn_del)
 
 
@@ -422,7 +408,16 @@ async def get_warns(
 
 
 async def remove_last_warn(user_id: int, chat_id: int) -> bool:
-    """Delete the most recent warn document. Returns True if one was removed."""
+    """Delete the most recent warn document. Returns True if one was removed.
+
+    The history delete and the counter decrement share one transaction.
+    The counter is what the auto-ban threshold reads, so a decrement
+    that outlives its delete (or a delete that outlives its decrement)
+    leaves the count below the history and delays the ban the warning
+    earned. The decrement also only runs when the delete actually
+    removed a row: two callers that read the same newest warning must
+    not both decrement the counter.
+    """
     row = await db_call(
         lambda: fetch_one(
             select(warns.c.id)
@@ -435,46 +430,41 @@ async def remove_last_warn(user_id: int, chat_id: int) -> bool:
         return False
     warn_id = int(row["id"])
 
-    # * The delete and the counter decrement write to different tables and
-    # * neither reads the other, so they run concurrently.
-    del_res, counter = await asyncio.gather(
-        db_call(lambda: run(warns.delete().where(warns.c.id == warn_id))),
-        db_call(
-            lambda: run_returning(
-                warn_counts.update()
-                .where(
-                    warn_counts.c.user_id == user_id,
-                    warn_counts.c.chat_id == chat_id,
-                    warn_counts.c.count > 0,
-                )
-                .values(count=warn_counts.c.count - 1, updated_at=utc_now())
-                .returning(warn_counts.c.count)
+    async def _work(sess: AsyncSession) -> tuple[bool, bool]:
+        deleted = await sess.execute(warns.delete().where(warns.c.id == warn_id))
+        if cast("CursorResult", deleted).rowcount == 0:
+            # * Another caller removed the same row first. It owns the
+            # * decrement, so this transaction must not touch the counter.
+            return False, False
+        counted = await sess.execute(
+            warn_counts.update()
+            .where(
+                warn_counts.c.user_id == user_id,
+                warn_counts.c.chat_id == chat_id,
+                warn_counts.c.count > 0,
             )
-        ),
-        return_exceptions=True,
-    )
+            .values(count=warn_counts.c.count - 1, updated_at=utc_now())
+        )
+        return True, cast("CursorResult", counted).rowcount > 0
 
-    if isinstance(del_res, asyncio.CancelledError):
-        raise del_res
-    if isinstance(del_res, BaseException):
+    try:
+        deleted, counted = await run_transaction(_work)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
         # * Fail closed like clear_warns: callers map False to "no
         # * warnings", so an outage must raise instead of reporting an
-        # * empty state for a user that may still hold warns.
-        log.error(
-            "remove_last_warn delete failed for user=%d chat=%d: %s",
-            user_id,
-            chat_id,
-            del_res,
-        )
+        # * empty state for a user that may still hold warns. The
+        # * transaction rolled back, so history and counter still agree.
+        log.exception("remove_last_warn failed for user=%d chat=%d", user_id, chat_id)
         await _recount_and_store(user_id, chat_id)
-        raise del_res
-    if del_res == 0:
+        raise
+    if not deleted:
+        # * The warning was already gone; the counter may still carry it.
         await _recount_and_store(user_id, chat_id)
         return False
-
-    if isinstance(counter, asyncio.CancelledError):
-        raise counter
-    if isinstance(counter, BaseException) or not counter:
+    if not counted:
+        # * No counter row to decrement, so the count is unknown.
         await _recount_and_store(user_id, chat_id)
     return True
 
