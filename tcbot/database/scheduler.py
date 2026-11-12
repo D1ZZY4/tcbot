@@ -132,13 +132,13 @@ async def expire_old_warns(warn_expiry_days: int) -> None:
         )
 
     try:
-        async with asyncio.timeout(_EXPIRE_OP_TIMEOUT_S):
-            # * Bulk deletes over the whole history may run long; the
-            # * run-level timeout bounds them instead.
-            counts_del, warns_del = await _db_call(
-                lambda: run_transaction(_work),
-                timeout=None,
-            )
+        # * The budget belongs to the transaction itself: the run-level
+        # * timeout would otherwise fire first and report a shorter
+        # * deadline than the one the operator is told about.
+        counts_del, warns_del = await run_transaction(
+            _work,
+            timeout=_EXPIRE_OP_TIMEOUT_S,
+        )
     except TimeoutError:
         log.exception(
             "Warn expiry timed out after %ds; no expiry completed.",
