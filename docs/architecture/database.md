@@ -74,6 +74,28 @@ legacy database used by this bot release. Connecting this release to that
 database is unsupported until the application data layer, migration history,
 and cutover procedure have been migrated and tested together.
 
+The Development schema currently has 26 domain tables, three views, and two
+runtime-support tables: `apscheduler_jobs` and `mtproto_state`. The RBAC
+compatibility catalog currently maps the legacy Founder, Admin, Developer,
+and Tester tiers to `owner`, `admin`, `developer`, and `moderator`
+respectively. It contains 20 permission definitions and 51 role grants.
+These definitions are data in the Development database; the current TCBot
+runtime does not yet enforce the normalized permission catalog.
+
+The normalized project has its own Supabase migration ledger. The repository's
+`supabase/migrations/` directory currently archives only the incremental
+migrations added during cutover preparation; the earlier migration sources
+have not all been recovered. The remote ledger is therefore not yet
+reproducible from this repository, and these files must not be treated as a
+complete bootstrap history. Restore and review the full migration history
+before recreating an empty normalized project or deploying the schema to
+Production.
+
+`mtproto_state` stores serialized MTProto credentials, peer data, and update
+state. Its access must remain restricted to the trusted backend. Do not grant
+table access to `anon` or `authenticated`, and protect the database
+connection string as a secret.
+
 ```bash
 # Apply the migrations by hand (the bot does this at startup).
 uv run alembic upgrade head
@@ -1028,12 +1050,16 @@ connection pool and short timeouts (2 s connect, 5 s pool timeout), because
 it reads and writes on the event loop: a database outage must stall the
 bot for seconds, not for the main engine's timeout.
 
-The `apscheduler_jobs` table is the library's own schema, so the
-application migrations do not mirror it. It is created on the scheduler
-worker thread when the store is built, and the store subclass makes the
-library's own creation call a no-op: `scheduler.start()` runs on the event
-loop and its blocking `CREATE TABLE` would stall the loop for the whole
-connect timeout while the database is unreachable.
+The `apscheduler_jobs` table is APScheduler's own schema. In the
+legacy Alembic deployment it is created on the scheduler worker thread when
+the store is built, and the store subclass makes the library's own creation
+call a no-op: `scheduler.start()` runs on the event loop and its blocking
+`CREATE TABLE` would stall the loop for the whole connect timeout while the
+database is unreachable.
+
+The normalized Development schema pre-provisions the same table so its RLS
+and backend-only grants are established before the scheduler connects. The
+legacy Alembic history still does not create this table.
 
 The remaining store calls are inherently blocking, because APScheduler 3.x
 calls them synchronously from the event loop. Their timeouts bound the
