@@ -287,6 +287,10 @@ async def can_manage_group(
 # * ban/kick/mute tables: those entries demote the target via
 # * Demote.execute before enforcing, so refusing here would make the
 # * documented demote unreachable.
+# * ``other_bot`` is absent from the same three rows because a bot can hold
+# * no federation role to demote and Telegram lets a moderator ban or mute
+# * one like any other member. The warn table keeps the bot refusal,
+# * because a bot accumulating federation warnings is meaningless.
 
 
 # * Which (action, kind) pairs refuse, mirroring the old per-action tables.
@@ -328,7 +332,9 @@ _REFUSE_KEYS: dict[str, frozenset[IdentityKind]] = {
     "demote": frozenset(
         {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
     ),
-    "transfer": frozenset({"self", "this_bot", "telegram", "other_bot", "anon_admin"}),
+    "transfer": frozenset(
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+    ),
     "unwarn": frozenset(
         {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
     ),

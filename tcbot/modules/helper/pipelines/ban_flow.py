@@ -364,7 +364,9 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     # * promoted in that window must not be banned by a moderator who no
     # * longer outranks them. The check runs first so a refused ban
     # * leaves no record, no proof, and no partial fan-out behind.
-    verdict, target_label = await decorators.enforcement_verdict(admin_id, target_id)
+    verdict, target_label = await decorators.enforcement_verdict(
+        admin_id, target_id, min_role="developer"
+    )
     if verdict is not decorators.EnforcementVerdict.ALLOWED:
         log.warning(
             "Ban refused for target=%d: executor=%d (%s)",
@@ -377,11 +379,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                 bot,
                 prompt_chat_id,
                 prompt_msg_id,
-                (
-                    replies.refuse_outranked(target_label or "", locale, plain=True)
-                    if verdict is decorators.EnforcementVerdict.OUTRANKED
-                    else replies.refuse_role_lookup(locale, plain=True)
-                ),
+                decorators.enforcement_refusal_text(verdict, target_label, locale),
                 log_level="debug",
                 log_label="Ban rank-refusal prompt",
                 catch_all=True,

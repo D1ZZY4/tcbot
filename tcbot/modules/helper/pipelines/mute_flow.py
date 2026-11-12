@@ -85,7 +85,9 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     # * window must not be actioned by a moderator who no longer outranks
     # * them. The check runs before the active-mute record so a refused
     # * mute leaves no state behind.
-    verdict, target_label = await decorators.enforcement_verdict(admin_id, target_id)
+    verdict, target_label = await decorators.enforcement_verdict(
+        admin_id, target_id, min_role="tester"
+    )
     if verdict is not decorators.EnforcementVerdict.ALLOWED:
         log.warning(
             "Mute refused for target=%d: executor=%d (%s)",
@@ -97,11 +99,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             bot,
             prompt_chat,
             prompt_id,
-            (
-                replies.refuse_outranked(target_label or "", locale, plain=True)
-                if verdict is decorators.EnforcementVerdict.OUTRANKED
-                else replies.refuse_role_lookup(locale, plain=True)
-            ),
+            decorators.enforcement_refusal_text(verdict, target_label, locale),
             log_level="debug",
             log_label="_execute_mute rank-refusal",
             catch_all=True,

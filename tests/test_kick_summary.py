@@ -78,13 +78,15 @@ class _FakeCtx:
 def _kick_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub demote re-check and kick audit write so no database is touched."""
 
-    async def _no_role(user_id: int, *, fresh: bool = False) -> None:
-        return None
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        # * The executor is a Tester; the target holds no role, so the
+        # * enforcement-time rank check passes.
+        return "tester" if user_id == 11 else None
 
     async def _logged(*args: Any, **kwargs: Any) -> None:
         return None
 
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _no_role)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
 
 

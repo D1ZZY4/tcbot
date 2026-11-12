@@ -104,8 +104,10 @@ def test_threshold_ban_stores_warn_proof_on_ban_record(
     async def _upload(*args: Any, **kwargs: Any) -> ProofUpload:
         return ProofUpload(message_id=77, link="https://t.me/c/1/77")
 
-    async def _role_lookup(user_id: int, *, fresh: bool = False) -> None:
-        return None
+    async def _role_lookup(user_id: int, *, fresh: bool = False) -> str | None:
+        # * The executor is a Tester; the target holds no role, so the
+        # * enforcement-time rank check passes.
+        return "tester" if user_id == 1 else None
 
     async def _groups() -> list[dict[str, Any]]:
         return [{"chat_id": 5, "title": "Group"}]

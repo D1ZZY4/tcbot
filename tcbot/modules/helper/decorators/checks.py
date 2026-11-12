@@ -38,11 +38,12 @@ class EnforcementVerdict(Enum):
 
     ALLOWED = "allowed"
     OUTRANKED = "outranked"
+    RANK_INSUFFICIENT = "rank_insufficient"
     LOOKUP_FAILED = "lookup_failed"
 
 
 async def enforcement_verdict(
-    executor_id: int, target_id: int
+    executor_id: int, target_id: int, *, min_role: str = "tester"
 ) -> tuple[EnforcementVerdict, str | None]:
     """Re-check the executor against the target at enforcement time.
 
@@ -55,6 +56,11 @@ async def enforcement_verdict(
 
     The check fails closed: a role lookup that fails refuses the
     enforcement, exactly like the entry check does.
+
+    ``min_role`` is the lowest rank the executor must still hold. The
+    tier and the outrank rule are checked here rather than in the caller,
+    so a flow that forgets its own tier check cannot enforce with a
+    demoted moderator.
 
     Returns the verdict and, when the target outranks the executor, the
     target's role label for the refusal message.
@@ -76,11 +82,29 @@ async def enforcement_verdict(
             target_id,
         )
         return EnforcementVerdict.LOOKUP_FAILED, None
+    if db.users_roles.role_rank(executor_role) < db.users_roles.role_rank(min_role):
+        return EnforcementVerdict.RANK_INSUFFICIENT, None
     if target_role and db.users_roles.role_rank(
         executor_role
     ) <= db.users_roles.role_rank(target_role):
         return EnforcementVerdict.OUTRANKED, db.users_roles.role_label(target_role)
     return EnforcementVerdict.ALLOWED, None
+
+
+def enforcement_refusal_text(
+    verdict: EnforcementVerdict, target_label: str | None, locale: str | None
+) -> str:
+    """Render the refusal line for a refused enforcement verdict.
+
+    Single owner for the verdict-to-prose mapping so the ban, kick, mute,
+    and warn executors cannot drift apart on which verdict produces which
+    notice.
+    """
+    if verdict is EnforcementVerdict.OUTRANKED:
+        return replies.refuse_outranked(target_label or "", locale, plain=True)
+    if verdict is EnforcementVerdict.RANK_INSUFFICIENT:
+        return replies.refuse_rank_insufficient(locale, plain=True)
+    return replies.refuse_role_lookup(locale, plain=True)
 
 
 async def resolve_and_check(
@@ -438,13 +462,17 @@ async def classify_and_load_role(
 
 
 async def check_callback_staff(
-    admin_id: int, q: CallbackQuery, update: Update
+    admin_id: int, q: CallbackQuery, update: Update, *, min_role: str = "admin"
 ) -> str | None:
-    """Re-check Founder/Admin rank alongside ``q.answer()`` in parallel.
+    """Re-check the staff rank alongside ``q.answer()`` in parallel.
 
     Answers the spinner immediately regardless of DB latency. Returns the
     staff role, or ``None`` after editing the perm-expired notice.
     Cancellation from either branch propagates instead of rendering.
+
+    ``min_role`` names the lowest rank that passes. The rank table is the
+    single source of truth for the comparison, so a tier that joins it
+    takes part in the gate instead of slipping past a hardcoded name.
     """
     role_r, answer_r = await asyncio.gather(
         db.users_roles.get_effective_role(admin_id, fresh=True),
@@ -454,10 +482,9 @@ async def check_callback_staff(
     throw_if_cancelled((role_r, answer_r))
     if isinstance(answer_r, BaseException):
         log.debug("callback answer failed: %s", answer_r)
-    if (
-        isinstance(role_r, BaseException)
-        or role_r not in db.users_roles.FOUNDER_ADMIN_ROLES
-    ):
+    if isinstance(role_r, BaseException) or db.users_roles.role_rank(
+        role_r
+    ) < db.users_roles.role_rank(min_role):
         await cb_error_edit(
             q,
             replies.err_perm_expired(await locale_for_update(update), plain=True),
@@ -478,6 +505,11 @@ async def prompt_owner_mismatch(
     act on the prompt. ``min_parts`` is the legacy segment count for the
     callback prefix and ``key`` selects the cancel or action alert copy.
     The prompt stays live on mismatch so the opener can still finish it.
+
+    A legacy payload names no owner, so the check cannot prove who opened
+    the prompt. It therefore lets the tapper through and leaves the
+    authorization to the caller's own rank check, which every prompt
+    handler runs. The legacy branch must never be the last gate.
     """
     data = getattr(q, "data", "") or ""
     parts = str(data).split(":")
@@ -507,7 +539,8 @@ async def cancel_owner_mismatch(q: Any, update: Update) -> bool:
     """Return True when the tapper may not cancel this prompt.
 
     Cancel callbacks carry ``{target}:{executor}`` (3 parts); legacy
-    two-part taps have no executor segment and keep the old behaviour.
+    two-part taps have no executor segment and keep the old behaviour,
+    where the caller's own rank check is the only gate.
     """
     return await prompt_owner_mismatch(
         q, update, min_parts=2, key="admins.error.not_prompt_owner"

@@ -377,26 +377,33 @@ async def on_promote_role_cancel(
     New prompts carry the opener as ``promo_role_cancel:{target}:{executor}``
     so only that staffer can collapse the picker; a different tapper gets an
     alert and the prompt stays live. Legacy two-part callbacks from
-    in-flight keyboards keep the old behaviour (anyone may cancel).
+    in-flight keyboards name no owner, so the staff-rank check is the only
+    gate there: a non-staffer can never collapse the prompt.
     """
     q = update.callback_query
     if q is None:
         return
     if await cancel_owner_mismatch(q, update):
         return
-    results = await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            t(
-                "admins.error.promote_cancelled",
-                await locale_for_update(update),
-                plain=True,
-            ),
-            reply_markup=None,
+    admin = update.effective_user
+    if admin is None:
+        await q.answer()
+        return
+    if await check_callback_staff(admin.id, q, update) is None:
+        return
+    await safe_edit_cb(
+        q,
+        t(
+            "admins.error.promote_cancelled",
+            await locale_for_update(update),
+            plain=True,
         ),
-        return_exceptions=True,
+        reply_markup=None,
+        parse_mode=None,
+        log_level="debug",
+        log_label="on_promote_role_cancel",
+        catch_all=True,
     )
-    throw_if_cancelled(results)
 
 
 # ────────────────────────── Demote command ─────────────────────────── #
@@ -652,22 +659,29 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     New prompts carry the opener as ``demote_cancel:{target}:{executor}``
     so only that staffer can collapse the confirmation; a different tapper
     gets an alert and the prompt stays live. Legacy two-part callbacks from
-    in-flight keyboards keep the old behaviour (anyone may cancel).
+    in-flight keyboards name no owner, so the staff-rank check is the only
+    gate there: a non-staffer can never collapse the prompt.
     """
     q = update.callback_query
     if q is None:
         return
     if await cancel_owner_mismatch(q, update):
         return
-    results = await asyncio.gather(
-        q.answer(),
-        q.edit_message_text(
-            t("admins.error.cancelled", await locale_for_update(update), plain=True),
-            reply_markup=None,
-        ),
-        return_exceptions=True,
+    admin = update.effective_user
+    if admin is None:
+        await q.answer()
+        return
+    if await check_callback_staff(admin.id, q, update) is None:
+        return
+    await safe_edit_cb(
+        q,
+        t("admins.error.cancelled", await locale_for_update(update), plain=True),
+        reply_markup=None,
+        parse_mode=None,
+        log_level="debug",
+        log_label="on_demote_cancel",
+        catch_all=True,
     )
-    throw_if_cancelled(results)
 
 
 # ────────────────────── Transfer command ────────────────────── #

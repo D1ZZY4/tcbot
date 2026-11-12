@@ -72,7 +72,9 @@ async def execute_kick(
     # * window must not be actioned by a moderator who no longer outranks
     # * them. The check runs before the audit row and the proof upload so
     # * a refused kick leaves no record and no orphan proof behind.
-    verdict, target_label = await decorators.enforcement_verdict(admin_id, target_id)
+    verdict, target_label = await decorators.enforcement_verdict(
+        admin_id, target_id, min_role="tester"
+    )
     if verdict is not decorators.EnforcementVerdict.ALLOWED:
         log.warning(
             "Kick refused for target=%d: executor=%d (%s)",
@@ -82,11 +84,7 @@ async def execute_kick(
         )
         await safe_reply(
             msg,
-            (
-                replies.refuse_outranked(target_label or "", locale, plain=True)
-                if verdict is decorators.EnforcementVerdict.OUTRANKED
-                else replies.refuse_role_lookup(locale, plain=True)
-            ),
+            decorators.enforcement_refusal_text(verdict, target_label, locale),
             log_label="execute_kick rank-refusal",
             parse_mode=None,
         )

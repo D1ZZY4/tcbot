@@ -59,7 +59,9 @@ def _wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Wire the warn flow so the threshold hits a staff holder."""
     record: dict[str, Any] = {"triggers": [], "replies": []}
 
-    async def _verdict(executor_id: int, target_id: int) -> tuple[Any, Any]:
+    async def _verdict(
+        executor_id: int, target_id: int, *, min_role: str = "tester"
+    ) -> tuple[Any, Any]:
         return decorators.EnforcementVerdict.ALLOWED, None
 
     async def _add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int:

@@ -72,6 +72,7 @@ this_bot = "Menggoda, tetapi aku tidak menjalankan tempat ini atas namaku sendir
 telegram = "Telegram tidak mau kunciku, maaf."
 other_bot = "Bot lain tidak bisa memegang kunci, khusus manusia."
 anon_admin = "Tidak bisa mentransfer kepemilikan ke admin anonim."
+founder = "{line} sudah menjalankan tempat ini - kuncinya tetap di sana."
 
 [refuse.unwarn]
 self = "Menghapus peringatan sendiri? Boleh juga, tanya mod."

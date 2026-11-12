@@ -72,12 +72,14 @@ def _mute_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _no_groups() -> list[dict[str, Any]]:
         return []
 
-    async def _no_role(user_id: int, *, fresh: bool = False) -> None:
-        return None
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        # * The executor is a Tester; the target holds no role, so the
+        # * enforcement-time rank check passes.
+        return "tester" if user_id == 1 else None
 
     monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
     monkeypatch.setattr(db.groups_db, "active_groups", _no_groups)
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _no_role)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
 
 
 def _run(bot: _FakeBot) -> None:

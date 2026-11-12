@@ -72,6 +72,7 @@ this_bot = "Tempting, but I'm not running the place under my own name."
 telegram = "Telegram doesn't want my keys, sorry."
 other_bot = "Other bots can't hold the keys - humans only."
 anon_admin = "Cannot transfer ownership to the anonymous admin."
+founder = "{line} already runs the place - the keys stay where they are."
 
 [refuse.unwarn]
 self = "Erasing your own warnings? Nice try, ask a mod."

@@ -82,7 +82,9 @@ async def execute_warn(
     # * promoted in that window must not be warned by a moderator who no
     # * longer outranks them. The check runs first so a refused warning
     # * leaves no record, no counter, no demotion, and no orphan proof.
-    verdict, target_label = await decorators.enforcement_verdict(admin_id, target_id)
+    verdict, target_label = await decorators.enforcement_verdict(
+        admin_id, target_id, min_role="tester"
+    )
     if verdict is not decorators.EnforcementVerdict.ALLOWED:
         log.warning(
             "Warn refused for target=%d: executor=%d (%s)",
@@ -92,11 +94,7 @@ async def execute_warn(
         )
         await safe_reply(
             msg,
-            (
-                replies.refuse_outranked(target_label or "", locale, plain=True)
-                if verdict is decorators.EnforcementVerdict.OUTRANKED
-                else replies.refuse_role_lookup(locale, plain=True)
-            ),
+            decorators.enforcement_refusal_text(verdict, target_label, locale),
             log_label="execute_warn rank-refusal",
             parse_mode=None,
         )
