@@ -19,6 +19,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Archive a candidate normalized-schema bootstrap snapshot** (`supabase/bootstrap/normalized_schema.sql`): the current tables, constraints, indexes, functions, triggers, views, comments, RLS settings, backend grants, and federation/RBAC seed data are captured in one SQL baseline. The baseline is validated in a rolled-back isolated-schema transaction in Development; a clean Supabase-project restore remains a separate staging requirement.
 
+- **Make scheduler and MTProto table access explicit** (`supabase/migrations/20261112170000_harden_runtime_support_table_acl.sql`): both runtime-support tables enable RLS, revoke relation privileges from client roles, and grant required DML access only to the trusted backend role. Their security no longer depends solely on a pre-existing DDL event trigger.
+
 
 - **The cache is verified against a real Redis server** (`tests/test_cache_redis_integration.py`, `.github/workflows/test-pytest.yml`, `pyproject.toml`): the cache tests used doubles, so they could not prove that the client speaks the wire format the cache expects. The suite now runs the same paths against a Redis server, and the continuous integration job starts one. The tests skip when no server is configured. Behavior changes: none.
 
