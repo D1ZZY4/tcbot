@@ -14,6 +14,7 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules.helper.decorators import (
+    auth,
     checks,
     require_federation_origin,
     resolve_and_check,
@@ -468,3 +469,39 @@ def test_resolve_staff_target_refuses_a_disconnected_origin(
         )
     )
     assert resolved is None
+
+
+def test_the_owner_tier_refreshes_the_effective_role_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The Founder tier must leave the effective-role cache in step.
+
+    The rank comparison that follows a tier check reads the executor's
+    role from the cache. The owner tier resolved its role straight from
+    the database, so without refreshing the cache the comparison would
+    use the role the previous Founder still had, and an ownership
+    transfer would refuse its own target.
+    """
+    cached: dict[int, str | None] = {}
+
+    async def _owner_id(*, fresh: bool = False) -> int:
+        return 1
+
+    def _cache_role(user_id: int, role: str | None) -> None:
+        cached[user_id] = role
+
+    async def _handler(update: Any, ctx: Any) -> None:
+        return None
+
+    monkeypatch.setattr(db.users_roles, "get_owner_id", _owner_id)
+    monkeypatch.setattr(db.users_roles, "cache_effective_role", _cache_role)
+
+    update = SimpleNamespace(
+        effective_user=SimpleNamespace(id=1, first_name="Founder", is_bot=False),
+        effective_message=None,
+    )
+
+    guarded = auth.owner_only(_handler)
+    asyncio.run(guarded(update, SimpleNamespace()))
+
+    assert cached == {1: "founder"}

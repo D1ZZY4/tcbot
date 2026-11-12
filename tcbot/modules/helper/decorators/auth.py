@@ -73,6 +73,14 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
                         authorized = (
                             await db.users_roles.get_owner_id(fresh=True)
                         ) == uid
+                        if authorized:
+                            # * The owner tier resolves the role from the
+                            # * database, so it refreshes the effective-role
+                            # * cache too. Without it the rank comparison in
+                            # * the same request would read the role the
+                            # * previous Founder still had, and an ownership
+                            # * transfer would refuse its own target.
+                            db.users_roles.cache_effective_role(uid, "founder")
                     else:
                         # * Fresh read: a demotion in another process must
                         # * not stay hidden for the 60 s role TTL.

@@ -97,6 +97,16 @@ def role_label(role: str | None) -> str:
     return ROLE_LABEL.get(role, role.capitalize())
 
 
+def cache_effective_role(user_id: int, role: str | None) -> None:
+    """Store an already-resolved effective role in the cache.
+
+    A tier that resolved the role straight from the database uses this so
+    the rank comparison later in the same request reads the value the tier
+    validated instead of a stale cache entry.
+    """
+    effective_role_cache.put(user_id, role)
+
+
 async def _count(stmt: Executable) -> int:
     """Return the row count of one COUNT query as a plain integer."""
     value = await db_call(lambda: fetch_value(stmt))
