@@ -306,10 +306,18 @@ async def connect() -> None:
     """Apply the schema migrations, create the engine, and verify the link."""
     global _engine, _session_factory
     url = _database_url()
-    # * The migrations run before the engine is published, so the schema is
-    # * current before the first handler query reaches the database. A
-    # * fresh deployment therefore boots against an empty database.
-    await asyncio.to_thread(migrations.upgrade_head, url)
+    if cfg.database_schema_mode == "legacy":
+        # * Existing deployments retain their Alembic-managed schema.
+        await asyncio.to_thread(migrations.upgrade_head, url)
+    else:
+        # * The normalized schema is owned by Supabase migrations. Startup is
+        # * read-only here: validate the full schema and security contract but
+        # * never run the legacy Alembic chain or mutate database objects.
+        await asyncio.to_thread(
+            migrations.validate_normalized_schema_url,
+            url,
+            cfg.federation_slug,
+        )
     _engine = create_async_engine(
         url,
         pool_size=_POOL_SIZE,
