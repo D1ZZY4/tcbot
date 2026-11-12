@@ -95,6 +95,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Speedtest probes servers concurrently** (`tcbot/modules/netspeed.py`): best-server latency probes now run in parallel instead of one server after another. Behavior changes: server selection is faster on far routes; results keep the same fields.
 
+- **The default keep-alive port is published on Replit** (`.replit`, `replit.md`): the port list now carries the application default port 5000 next to the 8080 mapping the webhook uses, so the keep-alive server has a published path on the port it listens on when `PORT` is left at the default. The webhook still requires `PORT=8080`. Behavior changes: the keep-alive and health endpoints are reachable on port 5000; webhook delivery is unchanged.
+
 ### Changed
 
 - **The Back button, the ban card, and the paged drill-downs have one owner** (`tcbot/modules/helper/keyboards/common.py`, `tcbot/modules/helper/ban_info.py`, `tcbot/modules/helper/pipelines/check_flow.py`, `tcbot/modules/helper/scope.py`): nine keyboards built their own Back button, the check card rendered a ban summary beside the shared ban detail, and the two drill-down lists repeated the same paging prologue. The shared helpers now own the button, the ban proof link and date, the paging arithmetic, and the scope cleanup. Behavior changes: none; the rendered text and the button layout are unchanged.

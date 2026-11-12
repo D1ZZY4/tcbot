@@ -26,8 +26,9 @@ Optional secrets:
 - `REDIS_URL`: Redis connection URL for L2 cache.
 - `WEBHOOK_SECRET`: Secret token for Telegram webhook validation.
 - `PORT`: Flask keep-alive port. Must be `8080` on Replit to match the
-  `[[ports]]` mapping in `.replit` (public traffic only reaches local port
-  8080; any other value makes the webhook unreachable and the bot silent).
+  `[[ports]]` mapping in `.replit` (public webhook traffic reaches local
+  port 8080; any other value makes the webhook unreachable and the bot
+  silent). The same file also publishes the default keep-alive port 5000.
 
 Replit Secrets are injected as environment variables at runtime. They are
 never committed to the repository and do not require a `.env` file.
@@ -61,7 +62,7 @@ binds fine locally but Telegram webhook deliveries die at the proxy with
 HTTP 502 and the bot never replies.
 
 If `PORT` is unset, invalid, or outside `1..65535`, the application defaults
-to `5000`.
+to `5000`, and the `5000` mapping in `.replit` publishes that default.
 
 ### Webhook Transport
 
