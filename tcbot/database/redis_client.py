@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import redis.asyncio as aioredis
 
 from tcbot import cfg
@@ -38,6 +40,12 @@ log = get_logger(__name__)
 
 _client: aioredis.Redis | None = None
 _pool: aioredis.ConnectionPool | None = None
+
+# * The event loop the client was created on. A redis client holds
+# * sockets that belong to that loop, so a client handed to another
+# * running loop would wait for an answer that can never arrive.
+_client_loop: asyncio.AbstractEventLoop | None = None
+_pool_loop: asyncio.AbstractEventLoop | None = None
 
 # * Last-known Redis health, fed by cache ops via mark_op(). None until the
 # * first op lands (the handle exists but no op has run yet). Used by the
@@ -77,6 +85,7 @@ async def connect(url: str) -> None:
     * bot can start without Redis (or without hiredis) when REDIS_URL is
     * unset. This keeps the "Redis is optional" contract intact.
     """
+    global _client_loop, _pool_loop
     if not _hiredis_available:
         raise RuntimeError(
             "hiredis C extension is required when REDIS_URL is set. "
@@ -108,6 +117,11 @@ async def connect(url: str) -> None:
         raise
     _client = c
     _pool = pool
+    # * The client now belongs to this loop. A later call on another loop
+    # * has to treat it as absent.
+    _client_loop = asyncio.get_running_loop()
+    global _pool_loop
+    _pool_loop = _client_loop
     log.info("Redis connected (hiredis %s).", _HIREDIS_VERSION)
 
 
@@ -143,7 +157,14 @@ async def ensure_connected() -> aioredis.Redis | None:
     """
     global _client, _reconnect_attempted_at
     if _client is not None:
-        return _client
+        if client_is_usable():
+            return _client
+        # * The client belongs to a loop that is gone. Its sockets are
+        # * dead, so it is closed and replaced instead of being handed
+        # * out: every operation on it would wait for an answer that
+        # * cannot arrive.
+        log.info("Redis client belongs to a closed event loop; reconnecting.")
+        await close()
     url = cfg.redis_url
     if not url:
         return None
@@ -161,22 +182,30 @@ async def ensure_connected() -> aioredis.Redis | None:
 
 async def close() -> None:
     """Close the Redis client and release all pooled connections."""
-    global _client, _pool
+    global _client, _client_loop, _pool, _pool_loop
     if _client is not None:
         try:
-            await _client.aclose()
+            if _loop_is_usable(_client_loop):
+                await _client.aclose()
+            # * A client that belongs to another loop cannot be closed
+            # * from here: closing it would wait for a socket that can
+            # * never answer. Its sockets die with that loop anyway, so
+            # * the references are dropped and the client is replaced.
         except Exception as exc:
             # * Debug-level: close() runs on the shutdown path where the
             # * pool disconnect below matters more than a client error.
             log.debug("Redis client aclose failed: %s", exc)
         finally:
             _client = None
+            _client_loop = None
     # * Explicit pool disconnect: with an explicitly passed pool the
     # * client does not own it, so this is what actually releases sockets.
     pool, _pool = _pool, None
+    pool_loop, _pool_loop = _pool_loop, None
     if pool is not None:
         try:
-            await pool.aclose()
+            if _loop_is_usable(pool_loop):
+                await pool.aclose()
         except Exception as exc:
             log.debug("Redis pool disconnect failed: %s", exc)
         log.info("Redis disconnected.")
@@ -185,6 +214,37 @@ async def close() -> None:
 def client() -> aioredis.Redis | None:
     """Return the active Redis client, or ``None`` when Redis is not configured."""
     return _client
+
+
+def client_is_usable() -> bool:
+    """Return True when the cached client can serve the running loop.
+
+    The client holds sockets bound to the loop that created it. A closed
+    loop, or a different running loop, means every operation on it would
+    wait for an answer that can never arrive, so the cache treats the
+    client as absent and reconnects.
+    """
+    if _client is None:
+        return False
+    return _loop_is_usable(_client_loop)
+
+
+def _loop_is_usable(loop: asyncio.AbstractEventLoop | None) -> bool:
+    """Return True when *loop* is the loop the caller runs on.
+
+    The client and its pool hold sockets bound to the loop that created
+    them. A closed loop, or a different running loop, means every
+    operation on them would wait for an answer that can never arrive.
+    """
+    if loop is None or loop.is_closed():
+        return False
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        # * No running loop: the caller is synchronous, so it cannot use
+        # * an async client anyway.
+        return False
+    return running is loop
 
 
 def mark_op(*, ok: bool) -> None:

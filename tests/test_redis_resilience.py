@@ -120,6 +120,10 @@ def test_cache_resolves_the_client_through_the_reconnect_path(
     async def _connect(url: str) -> None:
         _ = url
         redis_client_mod._client = fake
+        # * A real connect records the loop the client belongs to, so the
+        # * double has to as well.
+        redis_client_mod._client_loop = asyncio.get_running_loop()
+        redis_client_mod._pool_loop = redis_client_mod._client_loop
 
     monkeypatch.setattr(redis_client_mod, "connect", _connect)
 

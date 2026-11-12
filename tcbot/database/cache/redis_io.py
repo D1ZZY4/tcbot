@@ -51,8 +51,16 @@ _REDIS_WRITE_TIMEOUT_S: float = 2.0
 
 
 def redis_client() -> Any:
-    """Return the active Redis client instance, or None when Redis is not configured."""
-    return _redis_mod.client()
+    """Return the Redis client, or None when it cannot serve this loop.
+
+    A client whose sockets belong to another event loop would wait for
+    an answer that can never arrive, so it is reported as absent and the
+    cache falls back to its in-memory layer.
+    """
+    client = _redis_mod.client()
+    if client is None or not _redis_mod.client_is_usable():
+        return None
+    return client
 
 
 async def acquire_redis_client() -> Any:
