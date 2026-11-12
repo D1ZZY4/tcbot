@@ -11,7 +11,7 @@ import os
 import re
 import secrets
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from dotenv import find_dotenv, load_dotenv
 
@@ -206,6 +206,16 @@ def _chat_id_from_env(key: str) -> int:
         return 0
 
 
+def _database_schema_mode_from_env() -> Literal["legacy", "normalized"]:
+    """Return the explicit database schema mode or fail on unknown values."""
+    raw = os.getenv("DATABASE_SCHEMA_MODE", "legacy").strip().lower()
+    if raw in {"legacy", "normalized"}:
+        return raw
+    raise RuntimeError(
+        "DATABASE_SCHEMA_MODE must be either 'legacy' or 'normalized'."
+    )
+
+
 def _env_or(key: str, default: str) -> str:
     """Read an env var, falling back to *default* when it is blank."""
     return os.getenv(key, "").strip() or default
@@ -226,6 +236,8 @@ class Configs:
     bot_token: str
     initial_owner_id: int
     database_url: str
+    database_schema_mode: Literal["legacy", "normalized"]
+    federation_slug: str
     community_name: str
     prefixes: tuple[str, ...]
     port: int
@@ -293,6 +305,8 @@ class Configs:
             bot_token=token,
             initial_owner_id=_owner_id_from_env(),
             database_url=database_url,
+            database_schema_mode=_database_schema_mode_from_env(),
+            federation_slug=_env_or("FEDERATION_SLUG", "tcf"),
             community_name=os.getenv("COMMUNITY_NAME", "Bot").strip() or "Bot",
             prefixes=prefixes,
             port=parse_port(os.getenv("PORT", str(_DEFAULT_PORT)).strip()),
