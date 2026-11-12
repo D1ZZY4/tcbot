@@ -7,7 +7,13 @@
 -- whose current migration history has not been reconciled. This is a schema
 -- bootstrap snapshot, not a legacy-data migration or an Alembic revision.
 -- It deliberately does not copy Telegram user data, group membership,
--- moderation history, evidence, MTProto credentials, or scheduler jobs.
+-- moderation history, evidence, MTProto credentials, or scheduler job data.
+-- Empty runtime-support tables for APScheduler and MTProto are included.
+--
+-- The ensure_rls event trigger secures future public tables and functions.
+-- Future views are not covered by its event tags: create them with
+-- WITH (security_invoker = true), revoke client privileges, and grant only
+-- the access required by the trusted backend.
 --
 -- The current repository still lacks the source for earlier Supabase
 -- migrations. This file is an archive of the current schema shape, not proof
@@ -1837,7 +1843,7 @@ SELECT id AS ban_action_id,
     duration_seconds,
     metadata
    FROM moderation_actions a
-  WHERE action_type = 'ban'::text AND status = 'active'::text AND (expires_at IS NULL OR expires_at > now());;
+  WHERE action_type = 'ban'::text AND status = 'active'::text AND (expires_at IS NULL OR expires_at > now());
 
 CREATE VIEW public.active_mutes WITH (security_invoker = true) AS
 SELECT id AS mute_id,
@@ -1849,7 +1855,7 @@ SELECT id AS mute_id,
     created_at AS "timestamp",
     expires_at AS until_date
    FROM moderation_actions a
-  WHERE action_type = 'mute'::text AND status = 'active'::text AND (expires_at IS NULL OR expires_at > now());;
+  WHERE action_type = 'mute'::text AND status = 'active'::text AND (expires_at IS NULL OR expires_at > now());
 
 CREATE VIEW public.warn_counts WITH (security_invoker = true) AS
 SELECT federation_id,
@@ -1859,7 +1865,7 @@ SELECT federation_id,
     max(created_at) AS updated_at
    FROM moderation_actions a
   WHERE action_type = 'warn'::text AND status <> 'revoked'::text AND (expires_at IS NULL OR expires_at > now())
-  GROUP BY federation_id, chat_id, target_user_id;;
+  GROUP BY federation_id, chat_id, target_user_id;
 
 -- Table triggers
 CREATE TRIGGER trg_audit_events_immutable BEFORE DELETE OR UPDATE ON audit_events FOR EACH ROW EXECUTE FUNCTION prevent_historical_record_delete();
@@ -1967,8 +1973,13 @@ BEGIN
   END LOOP;
 END;
 $bootstrap$;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public
+FROM PUBLIC, anon, authenticated, service_role;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO service_role;
-GRANT USAGE ON SCHEMA public TO service_role;
+
+-- Schema USAGE does not expose tables or functions by itself. Relation and
+-- function privileges remain restricted to the trusted backend.
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 
 -- Function execution privileges
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC, anon, authenticated, service_role;
