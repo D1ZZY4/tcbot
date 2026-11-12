@@ -11,7 +11,8 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[1]
 _MIGRATIONS = _ROOT / "supabase" / "migrations"
 _RUNTIME_CREATE_MIGRATION = (
-    _MIGRATIONS / "20261112162939_restore_tcbot_scheduler_and_mtproto_runtime_storage.sql"
+    _MIGRATIONS
+    / "20261112162939_restore_tcbot_scheduler_and_mtproto_runtime_storage.sql"
 )
 _RUNTIME_ACL_MIGRATION = (
     _MIGRATIONS / "20261112170000_harden_runtime_support_table_acl.sql"
