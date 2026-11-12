@@ -11,8 +11,11 @@ from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
+    DateTime,
     MetaData,
+    SmallInteger,
     Table,
     Text,
     and_,
@@ -23,6 +26,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.sql.elements import ColumnElement
 
 from tcbot import cfg
 from tcbot.database.cache.singletons import (
@@ -56,7 +60,7 @@ _METADATA = MetaData()
 federations = Table(
     "federations",
     _METADATA,
-    Column("id", BigInteger),
+    Column("id", BigInteger, primary_key=True),
     Column("slug", Text),
     Column("status", Text),
     schema="public",
@@ -64,29 +68,29 @@ federations = Table(
 telegram_users = Table(
     "telegram_users",
     _METADATA,
-    Column("user_id", BigInteger),
-    Column("is_bot"),
+    Column("user_id", BigInteger, primary_key=True),
+    Column("is_bot", Boolean),
     schema="public",
 )
 role_definitions = Table(
     "role_definitions",
     _METADATA,
-    Column("role_key", Text),
-    Column("priority"),
+    Column("role_key", Text, primary_key=True),
+    Column("priority", SmallInteger),
     schema="public",
 )
 role_assignments = Table(
     "role_assignments",
     _METADATA,
-    Column("id", BigInteger),
+    Column("id", BigInteger, primary_key=True),
     Column("federation_id", BigInteger),
     Column("user_id", BigInteger),
     Column("role_key", Text),
     Column("assigned_by_user_id", BigInteger),
-    Column("assigned_at"),
+    Column("assigned_at", DateTime(timezone=True)),
     Column("status", Text),
-    Column("expires_at"),
-    Column("revoked_at"),
+    Column("expires_at", DateTime(timezone=True)),
+    Column("revoked_at", DateTime(timezone=True)),
     Column("revoked_by_user_id", BigInteger),
     schema="public",
 )
@@ -110,7 +114,7 @@ def _role_cache_key(user_id: int) -> str:
     return f"{_ROLE_CACHE_PREFIX}:{user_id}"
 
 
-def _active_assignment_clause() -> object:
+def _active_assignment_clause() -> ColumnElement[bool]:
     """Build the predicate for an active assignment whose expiry has not passed."""
     return and_(
         role_assignments.c.status == "active",
@@ -207,6 +211,11 @@ async def _read_owner_id() -> int | None:
     return int(row["user_id"]) if row else None
 
 
+def cache_effective_role(user_id: int, role: str | None) -> None:
+    """Cache an already-validated role under the normalized federation key."""
+    effective_role_cache.put(_role_cache_key(user_id), role)
+
+
 async def get_owner_id(*, fresh: bool = False) -> int | None:
     """Return the cached owner ID, bypassing both cache layers for enforcement."""
     if fresh:
@@ -251,6 +260,16 @@ async def ensure_initial_owner(initial_id: int) -> None:
 
     async def _work(sess: AsyncSession) -> None:
         await _ensure_telegram_user(sess, initial_id)
+        await sess.execute(
+            update(role_assignments)
+            .where(
+                role_assignments.c.federation_id == federation_id,
+                role_assignments.c.role_key == "owner",
+                role_assignments.c.status == "active",
+                role_assignments.c.expires_at <= func.now(),
+            )
+            .values(status="expired")
+        )
         await sess.execute(
             pg_insert(role_assignments)
             .values(
