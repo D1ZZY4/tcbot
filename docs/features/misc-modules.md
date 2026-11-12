@@ -107,8 +107,8 @@ the message. Rate limit: 15 callbacks per 30 s. No database impact.
 
 `_builder_help(locale)` collects `(name, overview, sections)` from every
 module's `get_help(locale)`; non-help modules are skipped. Content is rebuilt
-per request in the caller's locale (module-level `HELP_CONTENT` only caches
-the default locale snapshot). Topics are sorted by display name; both the
+per request in the caller's locale, so every module renders its own copy in
+the viewer's language. Topics are sorted by display name; both the
 module slug and the display name resolve `/help <module>` lookup. Rate
 limits: commands 8 per 30 s, callbacks 15 per 30 s. No database impact.
 

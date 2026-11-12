@@ -47,12 +47,12 @@ Exports:
 
 | Export | Purpose |
 |---|---|
-| `parse_inline_reason(args, has_explicit_target)` | Returns reason text after the target token when needed. Ban, kick, mute, and warn entries all use this parser with the consumed flag from `extraction.extract_mod_target(update, args, bot)`, so reply-target reasons keep leading ID-like tokens, except a restated numeric ID of the replied-to user (passed as `reply_target_id` on the reply path only), which is dropped as a duplicate. A verified typed ID naming someone else overrides the reply and is consumed as the target. |
+| `parse_inline_reason(args, *, has_explicit_target, reply_target_id=None)` | Returns reason text after the target token when needed. Ban, kick, mute, and warn entries all use this parser with the consumed flag from `extraction.extract_mod_target(update, args, bot)`, so reply-target reasons keep leading ID-like tokens, except a restated numeric ID of the replied-to user (passed as `reply_target_id` on the reply path only), which is dropped as a duplicate. A verified typed ID naming someone else overrides the reply and is consumed as the target. |
 | `MAX_REASON_LEN` | Maximum character length accepted for a moderation reason (1000). Typed input exceeding this stays in `WAITING_REASON` with a retry notice; overlong inline reasons fail fast at the entry with the same text via `is_reason_too_long()` and `reason_too_long_text()`. |
 | `is_reason_too_long(text)` | Shared length predicate used by the typed-reason handler and all four inline-reason entries. |
 | `reason_too_long_text(actual_len)` | Single source of truth for the overlong-reason reply text. |
 | `BuildReason(...)` | Configures reason-step prompts and buttons. |
-| `build_modaction_conv(reason, proof, entry_fn, executor, entry_filter, escape_filter=None)` | Builds the shared kick/mute/warn conversation. |
+| `build_modaction_conv(reason, proof, entry_fn, executor, entry_filter, escape_filter=None, *, min_role)` | Builds the shared kick/mute/warn conversation. `min_role` is the tier the executor re-checks at enforcement time. |
 
 The shared factory stores action-specific values in the conversation scope, then calls the supplied executor adapter. When a moderator submits proof media, `_on_proof` stores the actual `Message` objects (`{action}_proof_msgs`) in that scope. Executors pop `{action}_proof_msgs` and upload them to the proof channel via `upload_proof()`; the resulting URL is shown as an inline keyboard button via `keyboards.action_proof_kb()`.
 
@@ -147,7 +147,7 @@ Duration tokens are parsed before entering the conversation.
 | `mo` | months (30 days) | `3mo` |
 | `ye` | years (365 days) | `1ye` |
 
-Mute applies restrictions across all connected groups with `fan_out()`. The mute is also persisted to the `active_mutes` collection so it can be re-applied automatically when:
+Mute applies restrictions across all connected groups with `fan_out()`. The mute is also persisted to the `active_mutes` table so it can be re-applied automatically when:
 
 - A muted user joins any connected group (`greeting._handle_member` fetches `get_active_mute` in parallel with `get_active_ban` and calls `restrict_chat_member` if an active mute is found).
 - A new group connects to the federation (`connected_flow.complete_join` fetches `active_mute_docs()` and fans out `restrict_chat_member` for every active mute, mirroring the existing ban replay).
@@ -182,7 +182,7 @@ flowchart TD
 | Limit | `cfg.warn_limit` (env var `WARN_LIMIT`, default 3, minimum 1) |
 | Executors | `execute_warn(update, ctx, target_id, target_name, reason_text, proof_msgs=None)`, `execute_unwarn`, `execute_warnlist`, `execute_resetwarns` |
 
-Warns are tracked per `(user_id, chat_id)`. At `cfg.warn_limit` (per-group) or `cfg.fed_warn_limit` (federation-wide), the flow issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups, creates a ban document in the `bans` collection, and then clears warnings across all groups with `clear_all_warns` (only after at least one group ban succeeds). If `proof_msgs` is provided, the proof upload starts before the warn write and runs concurrently with `warns_db.add_warn`, so the warn never waits for the proof-channel round trip; the resulting link is attached as an inline keyboard button to all outgoing messages (auto-ban log, replies, non-auto-ban log). A warn-write failure cancels the in-flight upload and replies with a retry notice.
+Warns are tracked per `(user_id, chat_id)`. At `cfg.warn_limit` (per-group) or `cfg.fed_warn_limit` (federation-wide), the flow issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups, creates a ban row in the `bans` table, and then clears warnings across all groups with `clear_all_warns` (only after at least one group ban succeeds). If `proof_msgs` is provided, the proof upload starts before the warn write and runs concurrently with `warns_db.add_warn`, so the warn never waits for the proof-channel round trip; the resulting link is attached as an inline keyboard button to all outgoing messages (auto-ban log, replies, non-auto-ban log). A warn-write failure cancels the in-flight upload and replies with a retry notice.
 
 ## Unban: `unban_flow.py`
 

@@ -66,7 +66,7 @@ Only `developer` and `tester` are valid custom roles in `tc_roles`. Founder and 
 
 The helper `role_rank(role)` converts an effective role into its numeric rank. Executor-versus-target checks go through `decorators.resolve_and_check()`, which allows the action only when the executor rank is strictly greater than the target rank. If either role lookup fails, the check fails closed with a retry reply rather than treating the failed lookup as a user with no role; cancellation always propagates.
 
-The rule is applied at two moments. The entry command compares the roles when the moderator starts the flow, and `decorators.enforcement_verdict()` compares them again when the action is enforced, because the reason and proof steps stay open for a minute. A target promoted in that window would otherwise be actioned by a moderator who no longer outranks them, so the ban, kick, mute, and warn executors re-read both roles fresh and refuse the action. The refusal happens before anything is recorded, so it leaves no audit row, no ban record, no warning counter, and no orphan proof behind. A role lookup that fails refuses the action as well.
+The rule is applied at two moments. The entry command compares the roles when the moderator starts the flow, and `decorators.enforcement_verdict()` compares them again when the action is enforced, because the reason and proof steps stay open for a minute. A target promoted in that window would otherwise be actioned by a moderator who no longer outranks them, so the ban, kick, mute, and warn executors re-read both roles fresh and refuse the action. The enforcement verdict also carries the tier the action needs, so a moderator demoted below that tier during the same window is refused there. The refusal happens before anything is recorded, so it leaves no audit row, no ban record, no warning counter, and no orphan proof behind. A role lookup that fails refuses the action as well.
 
 Common moderation thresholds:
 
@@ -85,7 +85,7 @@ Common moderation thresholds:
 | `/tcpromotelist` | Founder or Admin via `staff_only` |
 | Promotion approve/reject buttons | Founder only |
 
-## Persistent collections
+## Persistent tables
 
 | Collection | Purpose | Key fields |
 |---|---|---|
@@ -298,7 +298,7 @@ Only the current Founder can transfer ownership.
 Flow:
 
 1. The target is resolved by reply, user ID, or username.
-2. Identity refusal rejects self-transfer, the bot, Telegram, other bots, and anonymous-admin targets.
+2. Identity refusal rejects self-transfer, the bot, Telegram, other bots, anonymous-admin, and Founder targets.
 3. `resolve_and_check(..., min_role="developer")` refuses transferring to a staff target of equal or higher rank, the current Founder included.
 4. Any non-Founder role the target already holds is cleared first via `Demote.remove_role` (Admin from `tc_admins`, Developer/Tester from `tc_roles`), so the post-transfer state holds exactly one Founder with no residual Admin/Developer/Tester record.
 5. `users_roles.set_owner(target_id)` lands the new owner row in one upsert write first, so a mid-flight failure never leaves the federation ownerless; a converging cleanup removes any leftover second row.
@@ -366,7 +366,7 @@ Key role-system behaviors to keep in mind:
 10. Founder rejection resolves the request without adding Admin.
 11. `/tcdemote` blocks self-demotion and Founder demotion.
 12. Admin cannot demote Admin.
-13. Confirm demotion removes the correct collection record (`tc_admins` for Admin, `tc_roles` for Developer/Tester).
+13. Confirm demotion removes the correct table row (`tc_admins` for Admin, `tc_roles` for Developer/Tester).
 14. Transfer ownership makes the old Founder an Admin and replaces the owner record.
 15. Ban/kick/mute auto-demotes lower-ranked staff targets and logs the role removal.
 16. Equal-rank and higher-rank targets are protected from ban/kick/mute/warn actions.

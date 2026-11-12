@@ -1,6 +1,6 @@
 # Groups
 
-This document describes the current connected-group list behavior implemented by `tcbot/modules/groups.py` (the `/tcgroups` command and the inline toggle callbacks) and `tcbot/database/groups_db.py` (the shared connected-groups collection and cache).
+This document describes the current connected-group list behavior implemented by `tcbot/modules/groups.py` (the `/tcgroups` command and the inline toggle callbacks) and `tcbot/database/groups_db.py` (the shared connected-groups table and cache).
 
 For the connect flow, see [`connecting.md`](connecting.md). For the disconnect
 flow, see [`disconnecting.md`](disconnecting.md). For shared helpers, see
@@ -113,7 +113,7 @@ The command itself does not require any bot permissions; it only reads from the 
 
 `active_groups` filters on `is_active: True`. The call goes through `active_groups_cache.get_or_fetch(_ALL_GROUPS_KEY, _fetch)` so the cache layer short-circuits repeated reads within the TTL.
 
-The cache is invalidated whenever `add_group`, `deactivate_group`, or `migrate_group` mutates the collection, so the listing picks up new connects, disconnects, and supergroup migrations without manual intervention.
+The cache is invalidated whenever `add_group`, `deactivate_group`, or `migrate_group` mutates the table, so the listing picks up new connects, disconnects, and supergroup migrations without manual intervention.
 
 ## Edge cases
 

@@ -171,13 +171,13 @@ The `decorators/` module centralizes both auth-guard decorators and the shared e
 |---|---|
 | `resolve_and_check(msg, executor_id, target_id, min_role=...)` | Resolves executor and target roles, checks minimum executor rank, checks executor outranks target, and replies on failure. Role lookup errors fail closed and do not become a no-role result. |
 | `resolve_mod_target(update, ctx, *, action, min_role, allow_private, log_prefix, bot_check=False)` | Shared entry sequence for the ban/kick/mute/warn commands: resolves locale, checks the federation origin, extracts the target, and runs identity plus rank checks, replying and returning `None` on any failure. Returns a `ModTarget` (`msg`, `admin`, `locale`, `target_id`, `target_name`, `has_explicit_target`, `args`, `ident`); callers keep only duty-specific parsing (reason, duration) and conversation setup. `bot_check=True` (warn) runs a verified bot check before classifying. |
-| `resolve_staff_target(update, ctx, *, action, min_role, log_prefix, bot_check=True)` | Shared entry sequence for the commands that act once and finish (unwarn, resetwarns, unmute): checks the federation origin, resolves the target, classifies it, and refuses the protected identities. Returns a `StaffTarget` (`target_id`, `target_name`, `ident`) or `None` after replying. |
+| `resolve_staff_target(update, ctx, *, action, min_role, log_prefix, bot_check=True)` | Shared entry sequence for the commands that act once and finish (unwarn, resetwarns, unmute): checks the federation origin, resolves the target, classifies it, and refuses the protected identities. Returns a `StaffTarget` (`target_id`, `target_name`, `ident`, `locale`) or `None` after replying. |
 | `resolve_executor_target(msg, admin_id, update, args, bot, *, action, locale=None)` | Shared executor-role plus target fetch for the promote/demote commands: parallel reads, fail closed with a retry reply on outage. Returns `(executor_role, target_id, target_fname)` or `None`. |
 | `classify_and_check(bot, admin_id, target_id, target_name, msg, *, action, min_role, target_is_bot=None)` | Shared identity classification plus executor-vs-target rank validation for the kick/mute/warn entries: parallel reads, fail closed with the refusal reply already sent. Returns `(ident, target_role)` or `None`. |
 | `recheck_executor_rank(msg, executor_id, *, min_role)` | Re-verifies the executor still meets `min_role` at enforcement time (Done/Skip/Continue taps): a mid-window demotion blocks enforcement fail closed. Returns `True` when the tap may proceed, `False` after replying on failure. |
-| `enforcement_verdict(executor_id, target_id)` | Re-checks the executor against the target at enforcement time: both roles are read fresh and the executor must still outrank the target, exactly like `resolve_and_check` does at entry. Returns `(EnforcementVerdict, role_label)` where the verdict is `ALLOWED`, `OUTRANKED`, or `LOOKUP_FAILED`; a lookup failure fails closed. |
+| `enforcement_verdict(executor_id, target_id, *, min_role)` | Re-checks the executor at enforcement time: both roles are read fresh, the executor must still hold `min_role`, and the executor must still outrank the target, exactly like `resolve_and_check` does at entry. Returns `(EnforcementVerdict, role_label)` where the verdict is `ALLOWED`, `OUTRANKED`, `RANK_INSUFFICIENT`, or `LOOKUP_FAILED`; a lookup failure and a lost tier fail closed. |
 | `classify_and_load_role(bot, admin_id, target_id, target_fname, msg, *, action, locale=None)` | Shared identity classification plus live target-role fetch for the promote/demote commands: parallel reads, fail closed. Returns `(ident, current_role)` or `None`. |
-| `check_callback_staff(admin_id, q, update)` | Re-checks Founder/Admin rank in parallel with `q.answer()`; returns the role or `None` after editing the perm-expired notice. |
+| `check_callback_staff(admin_id, q, update, *, min_role="admin")` | Re-checks the staff rank in parallel with `q.answer()`; returns the role or `None` after editing the perm-expired notice. The rank table decides the threshold, so a tier that joins it takes part in the gate. |
 | `prompt_owner_mismatch(q, update, *, min_parts, key)` | Alert-denies a prompt tap from anyone but the recorded opener (new callbacks carry `{...}:{executor}`; legacy taps without the segment keep working). `cancel_owner_mismatch` and `action_owner_mismatch` are the cancel/action wrappers. |
 | `can_demote_admin(executor_role, target_role)` | Demote rank rule: only Admin targets need the Founder. |
 | `banned_target_refusal(target_id, locale, *, log_label)` | Returns a refusal line when the target holds an active ban, `None` when it does not. Used by the promotion paths so a banned user cannot gain federation rank. Fails closed: a failed ban lookup refuses the action. |
@@ -185,7 +185,7 @@ The `decorators/` module centralizes both auth-guard decorators and the shared e
 
 Ban, kick, and mute pair this with the enforcement-time demote from `pipelines/demote_flow.py`, which removes the target's role right before the moderation action is applied.
 
-The entry check and the enforcement check are two moments, so the rule is applied twice. The reason and proof steps of a moderation flow stay open for a minute, and a target promoted in that window would otherwise be actioned by a moderator who no longer outranks them. The ban, kick, mute, and warn executors therefore call `enforcement_verdict` before they record anything, so a refused action leaves no audit row, no ban record, no warning counter, and no orphan proof behind.
+The entry check and the enforcement check are two moments, so the rule is applied twice. The reason and proof steps of a moderation flow stay open for a minute, and a target promoted in that window would otherwise be actioned by a moderator who no longer outranks them. The ban, kick, mute, and warn executors therefore call `enforcement_verdict` before they record anything, so a refused action leaves no audit row, no ban record, no warning counter, and no orphan proof behind. The verdict carries the tier the action needs, so a moderator demoted during the reason or proof window is refused there as well.
 
 ## `messages/replies.py`
 
@@ -236,7 +236,12 @@ Command modules import from `replies.py` instead of inlining these strings.
 
 ## `ban_info.py`
 
-`build_ban_detail(ban, target_fname=None, locale=None)` returns `(formatted_text, proof_link_or_none)` MarkdownV2 ban details and an optional proof link. It is shared by checking and stats flows to avoid duplicate ban rendering.
+| Function | Purpose |
+|---|---|
+| `build_ban_detail(ban, target_fname=None, locale=None)` | Returns `(formatted_text, proof_link_or_none)` MarkdownV2 ban details and an optional proof link. Shared by the checking and stats flows. |
+| `build_ban_summary(ban, user_id, user_fname, admin_fname=None, locale=None)` | Returns the compact `/checkme` ban card and its proof link. The display names arrive resolved; only the usernames are read here. |
+| `ban_proof_link(ban)` | The proof message link of a ban record, or `None`. Single owner for the proof channel and thread. |
+| `ban_date_text(ban, locale=None)` | The ban timestamp for display, or the unknown-date notice. |
 
 ## `messages/links.py`
 
@@ -256,7 +261,7 @@ Owner of the per-conversation payload scope used by every moderation flow.
 |---|---|
 | `conversation_key(update)` | The `(chat_id, user_id)` key python-telegram-bot builds for a conversation registered `per_chat=True, per_user=True`. `None` when the update carries no chat or no user. |
 | `flow_scope(ctx, update)` | The payload dict owned by that conversation. Created on first use and stored under one key of `ctx.user_data`, so it disappears with that user's data. |
-| `clear_flow_scope(ctx, update)` | Drops the payload of that conversation and removes the scope entry when it was the last one. |
+| `clear_flow_scope(ctx, update, *, keys=None)` | Drops the payload of that conversation. `keys` limits the removal to the named payload keys; without it the whole payload goes. The scope entry, and the scope map itself, are removed once they hold nothing, so `ctx.user_data` keeps one entry per chat a user still has an open action in. |
 
 python-telegram-bot keys `ctx.user_data` by user id alone, so one dict is shared by every chat a user is in. The moderation conversations are registered `per_chat=True, per_user=True`, so a payload kept directly in `ctx.user_data` belongs to two conversations at once: a moderator who starts a second action in another group overwrites the target, the reason, and the prompt of the first one, and the first group then enforces against the second target. Flows therefore read and write their payload through `flow_scope(ctx, update)`, never through `ctx.user_data` directly.
 

@@ -48,7 +48,7 @@ A second entry point is the main group (`MAIN_GROUP`). There, a banned user send
 
 When the appeal link is opened, the bot validates the ban record before starting the conversation:
 
-1. The `ban_id` must exist in the `bans` collection.
+1. The `ban_id` must exist in the `bans` table.
 2. The ban must still be active (`is_active: True`).
 3. The Telegram user opening the link must match `banned_user_id` on the ban record.
 4. The ban must not already have a stored `review_message_id` that is still fresh. If it does and was set within the last 72 hours, the user is told their appeal is still under review. If the `review_timestamp` is older than 72 hours (or missing), the stale review is cleared automatically and the user may submit a new appeal.
@@ -139,7 +139,7 @@ Cancel clears the in-memory conversation keys and edits the instruction message 
 
 ## Database impact
 
-Appeals reuse the existing `bans` collection. No separate appeal collection is used.
+Appeals reuse the existing `bans` table. No separate appeal table is used.
 
 The following fields are read or updated on ban documents:
 

@@ -66,7 +66,6 @@ Never commit real values.
 | `WEBHOOK_SECRET` | **Yes** | Explicit secret for update validation. The endpoint fails closed (`503`) without it: the auto-generated startup token changes per cold start and can never match Telegram's copy. |
 | `CRON_SECRET` | **Yes** | Bearer token for `/api/cron`. The endpoint fails closed (`503`) without it. |
 | `WEBHOOK_URL` | Build-time reference | Set to `https://<project>.vercel.app` so `set_webhook` (step 3) points at the deployment. Not read by the functions themselves. |
-| `DB_NAME` | No | Default `tcbot`. |
 | `REDIS_URL` | No | Recommended: without Redis, rate limiting and role caches are per-instance in-memory. Upstash Redis works. |
 | `WARN_EXPIRY_DAYS` | No | `0` disables expiry; set `> 0` to let the daily cron prune warns. |
 | `LOG_LEVEL` | No | Default `INFO`. |

@@ -93,7 +93,7 @@ Alembic logger on its own.
 
 `engine.py` owns the async SQLAlchemy engine. Every helper runs on the
 event loop and awaits the driver; there is no worker thread and no
-blocking PyMongo-style call on the loop.
+blocking call on the loop.
 
 | Export | Purpose |
 |---|---|
@@ -1056,8 +1056,8 @@ Recurring jobs:
 |---|---|---|
 | `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: deletes `warn_counts` rows older than the cutoff from `updated_at` and `warns` rows from `timestamp` in one transaction. Both must be pruned together: pruning only the counters lets the counter backfill rebuild them from the surviving history, and pruning only the history leaves a counter that counts a warning nobody can see. The transaction carries a 60 s budget of its own, because a bulk delete over a large history can run long. Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
 | `tcbot.enforcement_sync` | `IntervalTrigger(hours=sync_interval_hours)` | Calls `_run_scheduled_sync` (the `/tcsync` core on a timer, bounded to 200 checks, log-only results, via the explicit `sync_runner` start argument, so the database package never imports a command module). Uses `misfire_grace_time=86400`, `coalesce=True`. Registered only when the interval is positive and a `bot` reference was passed; otherwise removed. See [`../features/moderation/sync.md`](../features/moderation/sync.md). |
-| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes the expired timed mutes from `active_mutes` and the stale profiles from `member_cache`. PostgreSQL has no TTL index, so this job replaces the TTL behaviour the MongoDB deployment relied on. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. |
-| `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal runs against the `postgres` store after the scheduler started (a removal issued before `start()` only searches the pending-job list and would leave the persisted row firing) and `_cleanup_old_records()` remains as a no-op migration shim so any persisted schedule can deserialize without `AttributeError`. |
+| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes the expired timed mutes from `active_mutes` and the stale profiles from `member_cache`. PostgreSQL has no TTL index, so this job replaces the TTL pruning the previous deployment relied on. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. |
+| `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal runs against the `postgres` store after the scheduler started (a removal issued before `start()` only searches the pending-job list and would leave the persisted row firing). `_cleanup_old_records()` stays importable as a no-op shim so a persisted record that still points at it can deserialize without `AttributeError`. |
 
 Persistent per-ban unban jobs: there are NONE in the current code. The
 scheduler registers only the periodic jobs above (plus the legacy

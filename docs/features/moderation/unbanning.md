@@ -103,7 +103,7 @@ Unban uses three `bans_db` helpers:
 | Helper | Purpose |
 |---|---|
 | `get_active_ban(user_id)` | Returns the newest active ban document (sorted by `timestamp`, then `ban_id` descending). Used by the manual command path and revalidated by the appeal flow. |
-| `deactivate_all_active_bans(user_id)` | Deactivates every active ban for the user in one `update_many` write. Returns the number of bans deactivated. Used by the manual command and mirrored by the appeal-approval inline sequence so duplicate active records (from earlier race conditions) are cleared in one operation. |
+| `deactivate_all_active_bans(user_id)` | Deactivates every active ban for the user in one `UPDATE` statement. Returns the number of bans deactivated. Used by the manual command and mirrored by the appeal-approval inline sequence so duplicate active records (from earlier race conditions) are cleared in one operation. |
 | `make_ban_id()` | Not used here; only listed because the helper file is shared. |
 
 Unban has no scheduler interaction: neither `bans_db` nor `unban_flow` touches `scheduler/`, and the scheduler registers only the warn-expiry and optional enforcement-sync schedules. Bans are not time-limited, so no per-ban `unban.<ban_id>` job exists.

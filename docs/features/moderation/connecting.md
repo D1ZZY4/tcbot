@@ -127,7 +127,7 @@ These are defined as `_REQUIRED_PERMS` in `connected_flow.py`. The same tuple is
 
 ## Database impact
 
-The connection flow touches two collections:
+The connection flow touches two tables:
 
 `federated_groups` (via `groups_db`):
 

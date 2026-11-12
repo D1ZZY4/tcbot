@@ -29,7 +29,7 @@ flowchart TD
 
 ## Purpose
 
-A kick removes a user from the current group only, not from the federation. The implementation ban-then-unbans the user in the current chat so they can rejoin via invite link; federation-wide enforcement is reserved for `/tcban`. The kick flow accepts an optional inline reason, supports optional proof, posts a kick log, and writes an audit row to the `kicks` collection. Targets that hold a federation role are auto-demoted when the kick is enforced, which preserves the role-vs-state invariant.
+A kick removes a user from the current group only, not from the federation. The implementation ban-then-unbans the user in the current chat so they can rejoin via invite link; federation-wide enforcement is reserved for `/tcban`. The kick flow accepts an optional inline reason, supports optional proof, posts a kick log, and writes an audit row to the `kicks` table. Targets that hold a federation role are auto-demoted when the kick is enforced, which preserves the role-vs-state invariant.
 
 ## Commands and aliases
 
@@ -132,7 +132,7 @@ If `ban_chat_member` itself raises (the chat-level exception, not the paralleliz
 
 ## Database impact
 
-Kick audit records are stored in the `kicks` collection. Each record contains:
+Kick audit records are stored in the `kicks` table. Each record contains:
 
 | Field | Meaning |
 |---|---|

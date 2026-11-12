@@ -25,7 +25,7 @@ flowchart TD
 
 ## Purpose
 
-A federation ban marks a user as banned in the persistent `bans` collection and applies the Telegram ban across all active connected groups. The ban workflow requires a moderator reason and proof media, records proof/log message IDs, and exposes an appeal deep link for the banned user.
+A federation ban marks a user as banned in the persistent `bans` table and applies the Telegram ban across all active connected groups. The ban workflow requires a moderator reason and proof media, records proof/log message IDs, and exposes an appeal deep link for the banned user.
 
 ## Commands and aliases
 
@@ -153,7 +153,7 @@ The update flow (after `Continue`):
 
 ## Connected-group enforcement
 
-Federation enforcement uses `groups_db.active_groups()` (connected groups from the `federated_groups` collection) and then appends the primary groups (`cfg.main_group`) when they are not already in the list. It calls `ban_chat_member` for each group through `fan_out(...)`. `fan_out` caps concurrency and returns exceptions instead of raising them.
+Federation enforcement uses `groups_db.active_groups()` (connected groups from the `federated_groups` table) and then appends the primary groups (`cfg.main_group`) when they are not already in the list. It calls `ban_chat_member` for each group through `fan_out(...)`. `fan_out` caps concurrency and returns exceptions instead of raising them.
 
 The user-facing summary reports how many groups succeeded:
 
@@ -196,7 +196,7 @@ The step is best-effort: the ban record is already written at that point, so a r
 
 ## Ban database schema impact
 
-Ban records are stored in the `bans` collection. New records include:
+Ban records are stored in the `bans` table. New records include:
 
 | Field | Meaning |
 |---|---|

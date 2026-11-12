@@ -217,8 +217,8 @@ Configure these in GitHub repository settings → Secrets:
 Without `BOT_PAT`, the Run Bot workflow cannot dispatch its own next run; it falls back to the every-15-minute cron resurrection schedule.
 
 The Run Bot workflow forwards the full federation env surface as repository
-secrets, so every runtime variable must be set there for the runner: `DB_NAME`,
-`COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`,
+secrets, so every runtime variable must be set there for the runner:
+`DATABASE_URL`, `OWNER_ID`, `COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`,
 `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `REDIS_URL`,
 `WARN_EXPIRY_DAYS`,
 `WARN_LIMIT`, `FED_WARN_LIMIT`, `API_ID`, `API_HASH`,

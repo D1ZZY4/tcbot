@@ -106,7 +106,7 @@ Callback data: `demote_confirm:<target_id>:<executor_id>` and `demote_cancel:<ta
 6. On a successful removal, edits the confirmation message to `Done. <mention> - <code id> has been removed from <Role>.` and clears the keyboard.
 7. If `Demote.execute` returns False (nothing was removed; the record was cleared by another path), edits to `Couldn't remove the role - it may have already been cleared.`
 
-`on_demote_cancel` answers the callback and edits the message to say no changes were made. New prompts carry the opener, so only that staffer can cancel; a different tapper gets a not-owner alert and the prompt stays live.
+`on_demote_cancel` answers the callback and edits the message to say no changes were made. New prompts carry the opener, so only that staffer can cancel; a different tapper gets a not-owner alert and the prompt stays live. The handler re-reads the tapper's role, so a non-staffer can never collapse the prompt, not even through a legacy payload that names no owner.
 
 ## Demote flow (ban / kick / mute)
 
@@ -183,7 +183,7 @@ Both helpers invalidate the affected user's entry in `effective_role_cache` so t
 - `/tcdemote` blocks self-demotion and Founder demotion.
 - Admin cannot demote Admin; Founder is required.
 - Confirmation callback re-checks executor permission at click time.
-- Confirm removes the correct collection record (`tc_admins` for Admin, `tc_roles` for Developer/Tester).
+- Confirm removes the correct table row (`tc_admins` for Admin, `tc_roles` for Developer/Tester).
 - Ban / kick / mute on a role-holding target removes the role before the destructive action.
 - The demote DM mentions the trigger verb (banned/kicked/muted); the federation log does not.
 - A pre-existing role record that is missing causes `Demote.execute` to return False without raising.

@@ -1,6 +1,6 @@
 # Muting
 
-This document describes the current federation mute and unmute behavior implemented by `tcbot/modules/mute.py` (the `/tcmute` and `/tcunmute` entry points), `tcbot/modules/helper/pipelines/mute_flow.py` (the `_execute_mute` and `execute_unmute` executors), `tcbot/utils/time_and_date.py` (the duration helpers), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation), and `tcbot/database/mutes_db.py` (the persistent `mutes` and `active_mutes` collections).
+This document describes the current federation mute and unmute behavior implemented by `tcbot/modules/mute.py` (the `/tcmute` and `/tcunmute` entry points), `tcbot/modules/helper/pipelines/mute_flow.py` (the `_execute_mute` and `execute_unmute` executors), `tcbot/utils/time_and_date.py` (the duration helpers), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation), and `tcbot/database/mutes_db.py` (the persistent `mutes` and `active_mutes` tables).
 
 For the ban flow, see [`banning.md`](banning.md). For the kick flow, see
 [`kicking.md`](kicking.md). For role auto-demotion on mute, see
@@ -36,7 +36,7 @@ flowchart TD
 
 ## Purpose
 
-A federation mute restricts a user from sending messages, media, stickers, and polls across all active connected groups at once, plus the primary groups (`cfg.main_group`). Mutes may be timed (with a duration token) or permanent (`until_date=None`). The mute flow accepts an optional inline reason and optional proof, posts a federation mute log, writes an audit row to the `mutes` collection, and persists an active-mute record in `active_mutes` so unmute and group-connect replay can find it. Targets that hold a federation role are auto-demoted when the mute is enforced.
+A federation mute restricts a user from sending messages, media, stickers, and polls across all active connected groups at once, plus the primary groups (`cfg.main_group`). Mutes may be timed (with a duration token) or permanent (`until_date=None`). The mute flow accepts an optional inline reason and optional proof, posts a federation mute log, writes an audit row to the `mutes` table, and persists an active-mute record in `active_mutes` so unmute and group-connect replay can find it. Targets that hold a federation role are auto-demoted when the mute is enforced.
 
 `/tcunmute` clears the active-mute record and restores full send permissions across the same set of groups.
 
@@ -194,7 +194,7 @@ The reply reads `<user> has been unmuted - restored in <ok>/<total> groups.`
 
 ## Database impact
 
-The `mutes` collection stores audit rows; `active_mutes` stores the live restriction record.
+The `mutes` table stores audit rows; `active_mutes` stores the live restriction record.
 
 `mutes` document fields:
 

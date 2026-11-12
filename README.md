@@ -78,7 +78,6 @@ Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (e
 | `BOT_TOKEN` | Yes | - | Bot token from BotFather. |
 | `OWNER_ID` | Yes | - | Telegram user ID seeded as the initial Founder. |
 | `DATABASE_URL` | Yes | - | PostgreSQL connection string. |
-| `DB_NAME` | No | `tcbot` | Database name, created automatically. |
 | `COMMUNITY_NAME` | No | `Bot` | Display name used in bot messages and logs. |
 | `PREFIXES` | No | `["/", "!", "."]` | Python-style list of command prefixes. |
 | `PORT` | No | `5000` | Flask health-server port (`1`-`65535`); `auto` or invalid values fall back to `5000`. |
@@ -300,7 +299,7 @@ git diff --check
 - [Setup guide](docs/getting-started/setup.md): local, Docker, and hosted setup with the full environment reference.
 - [Architecture map](docs/architecture/repository-map.md): startup flow, package ownership, and service boundaries.
 - [Module breakdown](docs/architecture/modules.md): command ownership and handler registration.
-- [Database layer](docs/architecture/database.md): collections, helpers, and indexes.
+- [Database layer](docs/architecture/database.md): tables, helpers, and indexes.
 - [Workflow overview](docs/features/workflow-overview.md): user-visible moderation, appeal, and role flows.
 - [Project guide](AGENTS.md): contributor and maintainer rules.
 

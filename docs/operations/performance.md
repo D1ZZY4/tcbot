@@ -292,7 +292,7 @@ Before merging a performance-sensitive change, verify:
 
 ## Related documentation
 
-- [`../architecture/database.md`](../architecture/database.md): collections,
+- [`../architecture/database.md`](../architecture/database.md): tables,
   indexes, caches, and scheduler storage.
 - [`../architecture/helpers.md`](../architecture/helpers.md): batch helpers,
   target resolution, and rate limiting.

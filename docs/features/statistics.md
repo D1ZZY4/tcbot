@@ -23,9 +23,10 @@ flowchart TD
 ## Purpose
 
 `/tcstats` is the federation's read-only overview. A single inline keyboard
-opens drill-down panes (Staff Roster, Connected Chats, User Bans for everyone,
-plus Users for the Owner/Founder only) plus a search panel for active bans.
-Every pane returns to the same overview through a `« Back` button.
+opens drill-down panes. The Staff Roster, the Connected Chats, and the User
+Bans panes enumerate federation-wide records, so they are TC Staff only; the
+Users pane enumerates every cached user id, so it is Owner/Founder only. The
+overview counters stay public.
 
 Aliases:
 
@@ -38,9 +39,12 @@ Aliases:
 |---|---|---|---|
 | `/tcstats` | `/tcs` | Anyone | Bot PM, the main group, or a supported federation group context |
 
-Only the `Users` pane is Owner/Founder only; the overview, staff roster,
-connected chats, and active-ban panes are public by design (a community
-directory, not an operator dashboard).
+The drill-down panes are staff-only: the Roster, the Connected Chats, and the
+User Bans buttons render for TC Staff only, and the `stats_admins`,
+`stats_chats`, `stats_chat_item`, `stats_bans`, `stats_ban_item`,
+`stats_bans_search`, and `stats_search_*` callbacks re-read the tapper's role
+and refuse anyone else. A lookup outage closes the gate instead of opening
+it. The Users panes keep their own, stricter Owner/Founder gate.
 
 ## Top-level overview
 
@@ -64,12 +68,14 @@ Inline keyboard:
 [ Users ]                     <- Owner/Founder only (row 3)
 ```
 
-The `Users` button is rendered only when `viewer_id` belongs to the Owner or
-holds the Founder role (`is_owner` plus `get_effective_role`, both cached, in
-the same parallel batch; a failed lookup hides the button). The
-`stats_users` / `stats_user_item` callbacks enforce the same gate with a
-`Founder only.` alert, so a stale or crafted tap without the button still
-cannot open the list. Lookup outages fail closed with a retry alert.
+The drill-down buttons render only when `viewer_id` holds a federation role
+(founder, admin, developer, or tester). The `Users` button is rendered only
+when `viewer_id` belongs to the Owner or holds the Founder role (`is_owner`
+plus `get_effective_role`, both cached, in the same parallel batch; a failed
+lookup hides the button). The `stats_users` / `stats_user_item` callbacks
+enforce the same gate with a `Founder only.` alert, so a stale or crafted tap
+without the button still cannot open the list. Lookup outages fail closed with
+a retry alert.
 
 Independent counters and the Founder mention are fetched concurrently with
 `asyncio.gather`; the Telegram response still depends on database and network
@@ -208,13 +214,13 @@ the search and message deletion concurrently.
 - A user with no cached profile renders as their numeric user ID (e.g. `123456789`) in every list when no cached name is available. This is the `str(uid)` return from `_best_name()` in `extraction/`, not the earlier `"User <id>"` pattern.
 - An empty roster ("- No staff assigned") never crashes pagination because the user/chat/ban lists have their own empty-state branch.
 - Re-tapping the same drill-down does not raise; `safe_edit_cb` swallows the `Message is not modified` `BadRequest`.
-- The search input handler is private-chat only and gated by `SEARCH_KEY`; it never absorbs unrelated group messages.
+- The search input handler is private-chat only, gated by `SEARCH_KEY`, and gated by the staff check; it never absorbs unrelated group messages.
 - `Stats.clear_search(ctx)` is called whenever the user navigates away from the bans panel so stale results never leak into a new search.
 
 ## Behavior reference
 
 - `/tcstats` and `/tcs` both reach `cmd_stats` regardless of prefix (`/`, `!`, `.`).
-- The `Users` button and both Users callbacks are Owner/Founder only; all other panes stay public.
+- The `Users` button and both Users callbacks are Owner/Founder only; the roster, chat, and ban panes are TC Staff only; the overview counters stay public.
 - `Staff Roster` page shows the Founder mention exactly once, then each role section, even when a role list is empty.
 - `Users` pagination clamps to the last page when the requested page exceeds `total_pages`.
 - `Connected Chats` detail card shows the cached title, chat ID, connecting admin, and connection date; it is produced by `Stats.chat_detail` (the previous `stats_chats_flow.py` no longer exists).

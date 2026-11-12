@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import itertools
 import logging
 from types import SimpleNamespace
@@ -179,6 +180,10 @@ def test_sync_sweep_sorts_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _bans() -> list[int]:
         return [3, 1, 2]
 
+    # * The enforcement scope leads with the federation primary group, so pin
+    # * it here: the asserted order must not depend on the deployment's
+    # * MAIN_GROUP.
+    monkeypatch.setattr(sy, "cfg", dataclasses.replace(cfg, main_group=-500))
     monkeypatch.setattr(sy.db.groups_db, "active_groups", _groups)
     monkeypatch.setattr(sy.db.bans_db, "active_ban_user_ids", _bans)
     # * The sweep cursor is process state: reset it so the pair order this
@@ -209,9 +214,11 @@ def test_sync_sweep_sorts_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     counts = _run(sy.run_ban_sync(cast("Any", SimpleNamespace())))
 
     assert seen["uids"] == [1, 2, 3]
-    assert seen["cids"] == [10, 20, 30]
+    # * The primary group leads, then the connected groups in ID order.
+    assert seen["cids"] == [-500, 10, 20, 30]
     assert seen["pairs"] == sorted(seen["pairs"])
-    assert counts.checked == 9
+    # * Three users across four groups, the primary group included.
+    assert counts.checked == 12
 
 
 def test_cron_do_post_answers_405() -> None:

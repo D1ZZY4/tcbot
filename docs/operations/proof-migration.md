@@ -8,7 +8,7 @@ Telegram directly.
 
 ## What gets migrated
 
-- Every ban proof and previous proof stored in the `bans` collection
+- Every ban proof and previous proof stored in the `bans` table
   (`proof_message_id`, `previous_proof_message_id`).
 - Album proofs (media groups) are copied whole; Telegram keeps the album
   grouping when the messages are copied.
@@ -34,7 +34,7 @@ message id, so they follow the migration automatically.
 - The bot can edit its own messages in the logs chat (it sent the ban log
   messages, so it can rewrite their buttons).
 - The environment provides `BOT_TOKEN`, `DATABASE_URL`, `API_ID`, `API_HASH`,
-  and optionally `DB_NAME` (default `tcbot`). The script reads the process
+  The script reads the process
   environment directly (no `config.env` dotenv), so export the variables
   before running rather than relying on the file.
 
