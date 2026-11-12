@@ -9,11 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect
 from tcbot.database.base import metadata
-
-from alembic import command
 
 if TYPE_CHECKING:
     from alembic.config import Config as AlembicConfig
@@ -30,12 +29,30 @@ _ALEMBIC_INI = _ROOT / "alembic.ini"
 # * can create, alter, or collide with application objects.
 _NORMALIZED_SCHEMA_MARKERS: frozenset[str] = frozenset(
     {
+        "audit_events",
+        "chat_members",
+        "chat_settings",
+        "federation_groups",
+        "federation_settings",
         "federations",
+        "join_requests",
         "moderation_actions",
+        "moderation_appeals",
+        "moderation_case_rules",
         "moderation_cases",
+        "moderation_evidence_items",
         "moderation_evidence_uploads",
+        "moderation_messages",
+        "permission_definitions",
         "role_assignments",
+        "role_definitions",
+        "role_permissions",
+        "rule_acknowledgements",
+        "rule_items",
+        "rule_set_versions",
         "rule_sets",
+        "telegram_chats",
+        "telegram_users",
     }
 )
 _LEGACY_APPLICATION_RELATIONS: frozenset[str] = frozenset(metadata.tables)
