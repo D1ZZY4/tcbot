@@ -247,6 +247,20 @@ Index(
     member_cache.c.user_id,
     postgresql_ops={"first_name_lower": "text_pattern_ops"},
 )
+# * A pattern opclass only provides the pattern comparison operators, so
+# * the index above cannot serve an ORDER BY on the same column. The
+# * paged user list sorts on it, and without a default-opclass index the
+# * planner sorts the whole table on every page turn.
+Index(
+    "ix_member_cache_username_lower_sort",
+    member_cache.c.username_lower,
+    member_cache.c.user_id,
+)
+Index(
+    "ix_member_cache_first_name_lower_sort",
+    member_cache.c.first_name_lower,
+    member_cache.c.user_id,
+)
 Index(
     "ix_member_cache_last_updated",
     member_cache.c.last_updated.desc(),

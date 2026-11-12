@@ -82,11 +82,21 @@ The index definitions live in `tcbot/database/base.py` and are created by
 the Alembic migration. Current examples:
 
 ```text
-member_cache: (username_lower, user_id) and (first_name_lower, user_id), both with text_pattern_ops
+member_cache: (username_lower, user_id) and (first_name_lower, user_id) with text_pattern_ops, for the name search
+member_cache: (username_lower, user_id) and (first_name_lower, user_id) with the default opclass, for the paged sort
 bans: (banned_user_id, is_active, timestamp desc, ban_id desc) compound for get_active_ban filter+sort
 warns: (user_id, chat_id, timestamp desc)
 warn_counts: primary key (user_id, chat_id)
 ```
+
+One column often needs two indexes. `text_pattern_ops` provides the
+pattern comparison operators, which is what makes a `LIKE 'prefix%'` scan
+work under a non-C collation, but it provides no ordering operators, so
+the index cannot serve an `ORDER BY` on the same column. The paged users
+list sorts on the lowercase mirrors, so it needs the default-opclass
+indexes as well. Without them the planner sorts the whole member cache on
+every page turn: on 50,000 rows the page query drops from about 9.7 ms
+to about 1.5 ms, and the statement itself from 8.97 ms to 0.09 ms.
 
 When adding a query with a new filter or sort order:
 
