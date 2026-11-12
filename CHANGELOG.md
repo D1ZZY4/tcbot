@@ -9,6 +9,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Added
 
+- **Reject incompatible database schemas before migration** (`tcbot/database/migrations.py`, `alembic/env.py`): online startup and CLI migrations stop before executing revisions when the target contains the normalized Transsion Core schema or unversioned legacy application relations. This prevents an incompatible database from being mistaken for a fresh legacy deployment.
+
 - **The cache is verified against a real Redis server** (`tests/test_cache_redis_integration.py`, `.github/workflows/test-pytest.yml`, `pyproject.toml`): the cache tests used doubles, so they could not prove that the client speaks the wire format the cache expects. The suite now runs the same paths against a Redis server, and the continuous integration job starts one. The tests skip when no server is configured. Behavior changes: none.
 
 - **The schema migration is checked against the declared schema** (`tests/test_schema_migration.py`, `alembic/env.py`, `alembic/versions/0001_initial.py`): the integration tests build their tables from the declared metadata, so a migration that drifted from it would pass the whole suite and break the boot of a real deployment. A migrated empty schema is now compared with the declared metadata, so a missing revision is reported before it ships. Behavior changes: none.
