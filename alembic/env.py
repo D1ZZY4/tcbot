@@ -22,7 +22,10 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from tcbot.database.base import metadata  # noqa: E402
-from tcbot.database.migrations import set_database_url  # noqa: E402
+from tcbot.database.migrations import (  # noqa: E402
+    set_database_url,
+    validate_database_schema,
+)
 
 config = context.config
 
@@ -34,8 +37,8 @@ def _configure_migration_logging() -> None:
     the bot installed (including the Telegram error handler) and resets the
     root level. The bot applies the migrations during startup, so the
     standard call would silence the bot and stop the error reports the
-    moment the database connects. The Alembic logger therefore owns its
-    own handler and never propagates into the root logger.
+    moment it connects. The Alembic logger therefore owns its own handler
+    and never propagates into the root logger.
     """
     migration_logger = logging.getLogger("alembic")
     migration_logger.handlers.clear()
@@ -96,11 +99,11 @@ def _connection_options(url: str) -> str:
     """Return the libpq options for the migration connection.
 
     The timezone pin matches the application engines, so a revision that
-    writes a timestamp stores it in the zone the runtime reads it back
-    in. The options the connection already carries are kept: the
-    migration check runs inside a dedicated schema through ``PGOPTIONS``
-    or through an ``options`` parameter in the URL, and the connection
-    parameter replaces both of them when it is set.
+    writes a timestamp stores it in the zone the runtime reads it back in.
+    The options the connection already carries are kept: the migration
+    check runs inside a dedicated schema through ``PGOPTIONS`` or through an
+    ``options`` parameter in the URL, and the connection parameter
+    replaces both of them when it is set.
     """
     parts: list[str] = []
     url_options = make_url(url).query.get("options")
@@ -119,24 +122,27 @@ def _connection_options(url: str) -> str:
 
 
 def run_migrations_online() -> None:
-    """Run the migrations against a live database."""
-    # * A synchronous engine is enough here: psycopg 3 drives the same
-    # * server through its blocking API, and Alembic runs off the event
-    # * loop anyway.
+    """Run migrations only after validating the target schema."""
     connectable = create_engine(
         url,
         pool_pre_ping=True,
         connect_args={"options": _connection_options(url)},
     )
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True,
-        )
-        with context.begin_transaction():
-            context.run_migrations()
-    connectable.dispose()
+    try:
+        with connectable.connect() as connection:
+            # * This check runs before Alembic creates its version table or
+            # * executes any revision. A database from the normalized schema
+            # * generation must never be mistaken for an empty legacy DB.
+            validate_database_schema(connection)
+            context.configure(
+                connection=connection,
+                target_metadata=target_metadata,
+                compare_type=True,
+            )
+            with context.begin_transaction():
+                context.run_migrations()
+    finally:
+        connectable.dispose()
 
 
 if context.is_offline_mode():
