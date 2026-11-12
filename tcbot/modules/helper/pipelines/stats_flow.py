@@ -165,10 +165,19 @@ class OverviewViews:
         if isinstance(user_count, BaseException):
             user_count = 0
         show_users = False
+        show_staff = False
         if viewer_reads:
             owner_check, role_check = viewer_reads
             throw_if_cancelled((owner_check, role_check))
+            if isinstance(role_check, BaseException):
+                role_check = None
             show_users = (owner_check is True) or (role_check == "founder")
+            # * The drill-down panes list federation-wide records, so they
+            # * render for TC Staff only. The callbacks re-check the rank
+            # * fresh, so the button is a convenience and not the gate.
+            show_staff = show_users or db.users_roles.role_rank(
+                role_check
+            ) >= db.users_roles.role_rank("tester")
         if owner_id:
             owner_id_int = cast("int", owner_id)
             try:
@@ -198,7 +207,9 @@ class OverviewViews:
         )
         if degraded:
             text += f"\n\n{t('stats.main.degraded', locale)}"
-        return text, stats_main_kb(show_users=show_users, locale=locale)
+        return text, stats_main_kb(
+            show_users=show_users, show_staff=show_staff, locale=locale
+        )
 
     @classmethod
     async def staff_roster(

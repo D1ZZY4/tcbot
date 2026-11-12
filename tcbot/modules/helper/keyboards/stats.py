@@ -19,35 +19,43 @@ def stats_back_row(locale: str | None = None) -> list[InlineKeyboardButton]:
 
 
 def stats_main_kb(
-    *, show_users: bool = False, locale: str | None = None
+    *,
+    show_users: bool = False,
+    show_staff: bool = False,
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Top-level /tcstats menu: Staff / Bans / Chats drill-downs.
 
-    The Users list exposes every cached user ID, so its button shows for
-    the Owner/Founder only; the stats_users callbacks enforce the same
-    gate, so a stale or crafted tap still cannot open the list.
+    The drill-down panes enumerate federation-wide records, so their
+    buttons render for TC Staff only; the ``stats_*`` callbacks enforce
+    the same gate, so a stale or crafted tap still cannot open them. The
+    Users list exposes every cached user ID and stays Owner/Founder only.
     """
-    rows = [
-        [
-            InlineKeyboardButton(
-                t("stats.button.roster", locale, plain=True),
-                callback_data="stats_admins",
-                style=KeyboardButtonStyle.PRIMARY,
-            ),
-            InlineKeyboardButton(
-                t("stats.button.bans", locale, plain=True),
-                callback_data="stats_bans:0",
-                style=KeyboardButtonStyle.PRIMARY,
-            ),
-        ],
-        [
-            InlineKeyboardButton(
-                t("stats.button.chats", locale, plain=True),
-                callback_data="stats_chats:0",
-                style=KeyboardButtonStyle.PRIMARY,
-            ),
-        ],
-    ]
+    rows: list[list[InlineKeyboardButton]] = []
+    if show_staff:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    t("stats.button.roster", locale, plain=True),
+                    callback_data="stats_admins",
+                    style=KeyboardButtonStyle.PRIMARY,
+                ),
+                InlineKeyboardButton(
+                    t("stats.button.bans", locale, plain=True),
+                    callback_data="stats_bans:0",
+                    style=KeyboardButtonStyle.PRIMARY,
+                ),
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    t("stats.button.chats", locale, plain=True),
+                    callback_data="stats_chats:0",
+                    style=KeyboardButtonStyle.PRIMARY,
+                ),
+            ]
+        )
     if show_users:
         rows.append(
             [

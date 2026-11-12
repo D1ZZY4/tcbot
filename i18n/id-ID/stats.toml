@@ -32,6 +32,7 @@ group_not_found = "Grup tidak ditemukan di halaman ini."
 ban_not_found = "Catatan ban tidak ditemukan di halaman ini."
 result_unavailable = "Hasil sudah tidak tersedia."
 access_retry = "Tidak bisa memverifikasi aksesmu sekarang. Coba lagi sebentar."
+staff_only = "Panel ini khusus untuk TC Staff."
 db_fail = "Tidak bisa memuat data. Database tidak terjangkau, coba lagi sebentar."
 
 # Runtime strings for stats views (stats_flow.py). All render MarkdownV2

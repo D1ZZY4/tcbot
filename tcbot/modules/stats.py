@@ -40,7 +40,7 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
 if TYPE_CHECKING:
-    from telegram import CallbackQuery, Update
+    from telegram import CallbackQuery, Message, Update
 
 log = get_logger(__name__)
 
@@ -80,24 +80,35 @@ __help__: replies.HelpEntry = get_help()
 # ────────────────────────── Command entry ────────────────────────── #
 
 
-async def _require_founder_list(
-    q: CallbackQuery, user_id: int | None, update: Update
-) -> bool:
-    """Return True when the tapper may open the Users list; alert-denies otherwise.
+async def _alert(q: CallbackQuery, text: str) -> None:
+    """Answer the callback query with an alert, ignoring a failed answer."""
+    try:
+        await q.answer(text, show_alert=True)
+    except Exception as exc:
+        log.debug("stats pane deny-answer failed: %s", exc)
 
-    Owner-or-Founder only: the list carries every cached user ID. Both checks
-    are cached reads served in parallel, so the spinner clears in one round
-    trip. Lookup outages fail closed with a retry alert; cancellation
-    propagates via the bare gather below.
+
+async def _pane_access(
+    q: CallbackQuery,
+    user_id: int | None,
+    locale: str,
+    *,
+    min_role: str,
+    denial: str,
+) -> bool:
+    """Return True when the tapper may open a gated stats pane.
+
+    ``min_role`` names the lowest rank that passes; the rank table is the
+    single source of truth for the comparison. The owner id always passes,
+    because the owner row and the founder role can diverge briefly around
+    a transfer and the owner must keep operator access.
+
+    Both checks are cached reads served in parallel, so the spinner clears
+    in one round trip. Lookup outages fail closed with a retry alert;
+    cancellation propagates via the bare gather below.
     """
-    locale = await locale_for_update(update)
     if user_id is None:
-        try:
-            await q.answer(
-                replies.perm_founder_only(locale, plain=True), show_alert=True
-            )
-        except Exception as exc:
-            log.debug("stats users deny-answer failed: %s", exc)
+        await _alert(q, denial)
         return False
     try:
         owner_r, role_r = await asyncio.gather(
@@ -105,23 +116,94 @@ async def _require_founder_list(
             db.users_roles.get_effective_role(user_id, fresh=True),
         )
     except Exception as exc:
-        log.warning("stats users access check failed for %d: %s", user_id, exc)
-        try:
-            await q.answer(
-                t("stats.error.access_retry", locale, plain=True), show_alert=True
-            )
-        except Exception as answer_exc:
-            log.debug("stats users retry-answer failed: %s", answer_exc)
+        log.warning("stats pane access check failed for %d: %s", user_id, exc)
+        await _alert(q, t("stats.error.access_retry", locale, plain=True))
         return False
-    if owner_r is not True and role_r != "founder":
-        try:
-            await q.answer(
-                replies.perm_founder_only(locale, plain=True), show_alert=True
-            )
-        except Exception as exc:
-            log.debug("stats users deny-answer failed: %s", exc)
+    allowed = owner_r is True or db.users_roles.role_rank(
+        role_r
+    ) >= db.users_roles.role_rank(min_role)
+    if not allowed:
+        await _alert(q, denial)
         return False
     return True
+
+
+async def _require_founder_list(
+    q: CallbackQuery, user_id: int | None, update: Update
+) -> str | None:
+    """Return the render locale when the tapper may open the Users list.
+
+    Owner-or-Founder only: the list carries every cached user ID. A denied
+    tapper gets the Founder-only alert and ``None``. Lookup outages fail
+    closed with a retry alert; cancellation propagates.
+    """
+    locale = await locale_for_update(update)
+    allowed = await _pane_access(
+        q,
+        user_id,
+        locale,
+        min_role="founder",
+        denial=replies.perm_founder_only(locale, plain=True),
+    )
+    return locale if allowed else None
+
+
+async def _require_staff_pane(q: CallbackQuery, update: Update) -> str | None:
+    """Return the render locale when the tapper may open a staff pane.
+
+    The staff roster, the connected-group list, and the federation ban
+    list enumerate federation-wide records, so they stay behind the staff
+    gate. The overview counts stay public. A denied tapper gets the
+    staff-only alert and ``None``.
+    """
+    tapper = update.effective_user
+    locale = await locale_for_update(update)
+    allowed = await _pane_access(
+        q,
+        tapper.id if tapper is not None else None,
+        locale,
+        min_role="tester",
+        denial=t("stats.error.staff_only", locale, plain=True),
+    )
+    return locale if allowed else None
+
+
+async def _require_staff_input(msg: Message, update: Update) -> str | None:
+    """Return the render locale when the sender may run the ban search.
+
+    The free-text search reads the federation ban list, so it carries the
+    same gate as the ban pane it belongs to. The notice is a plain reply
+    because the input path has no callback query to alert on.
+    """
+    tapper = update.effective_user
+    locale = await locale_for_update(update)
+    if tapper is None:
+        return None
+    try:
+        owner_r, role_r = await asyncio.gather(
+            db.users_roles.is_owner(tapper.id, fresh=True),
+            db.users_roles.get_effective_role(tapper.id, fresh=True),
+        )
+    except Exception as exc:
+        log.warning("stats search access check failed for %d: %s", tapper.id, exc)
+        await safe_reply(
+            msg,
+            t("stats.error.access_retry", locale, plain=True),
+            log_label="stats search access-fail",
+            parse_mode=None,
+        )
+        return None
+    if owner_r is not True and db.users_roles.role_rank(
+        role_r
+    ) < db.users_roles.role_rank("tester"):
+        await safe_reply(
+            msg,
+            t("stats.error.staff_only", locale, plain=True),
+            log_label="stats search staff-only",
+            parse_mode=None,
+        )
+        return None
+    return locale
 
 
 @decorators.ratelimiter(decorators.THROTTLE_READ)
@@ -169,7 +251,10 @@ async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     q = update.callback_query
     if q is None:
         return
-    text, kb = Stats.open_search(ctx, q, await locale_for_update(update))
+    locale = await _require_staff_pane(q, update)
+    if locale is None:
+        return
+    text, kb = Stats.open_search(ctx, q, locale)
     await answer_and_edit(q, text, reply_markup=kb)
 
 
@@ -181,6 +266,10 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         return
     msg = update.effective_message
     if msg is None:
+        return
+    locale = await _require_staff_input(msg, update)
+    if locale is None:
+        ctx.user_data.pop(SEARCH_KEY, None)
         return
     ctx.user_data.pop(SEARCH_KEY, None)
     # * The panel card may live in another chat; only the stored panel chat
@@ -205,9 +294,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 
     chat_id = ctx.user_data.get(CHAT_KEY)
     msg_id = ctx.user_data.get(MSG_KEY)
-    text, kb = await Stats.search_results(
-        query, results, await locale_for_update(update)
-    )
+    text, kb = await Stats.search_results(query, results, locale)
     if chat_id is not None and msg_id is not None:
         await safe_edit_message(
             ctx.bot,
@@ -233,6 +320,9 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     q = update.callback_query
     if q is None:
         return
+    locale = await _require_staff_pane(q, update)
+    if locale is None:
+        return
     args = callback_args_optional(q, 2)
     if args is None:
         await q.answer()
@@ -244,9 +334,7 @@ async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         return
     stable = args[1] if len(args) > 1 else None
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
-    await ack_and_render(
-        q, Stats.search_detail(results, idx, await locale_for_update(update), stable)
-    )
+    await ack_and_render(q, Stats.search_detail(results, idx, locale, stable))
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
@@ -256,9 +344,12 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     q = update.callback_query
     if q is None:
         return
+    locale = await _require_staff_pane(q, update)
+    if locale is None:
+        return
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
     if not results:
-        text, kb = Stats.open_search(ctx, q, await locale_for_update(update))
+        text, kb = Stats.open_search(ctx, q, locale)
         await answer_and_edit(q, text, reply_markup=kb)
     else:
         previous_query = (
@@ -266,9 +357,7 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         )
         await ack_and_render(
             q,
-            Stats.search_results(
-                previous_query, results, await locale_for_update(update)
-            ),
+            Stats.search_results(previous_query, results, locale),
         )
 
 
@@ -281,8 +370,11 @@ async def on_stats_search_cancel(
     q = update.callback_query
     if q is None:
         return
+    locale = await _require_staff_pane(q, update)
+    if locale is None:
+        return
     Stats.clear_search(ctx)
-    await ack_and_render(q, Stats.bans_list(0, await locale_for_update(update)))
+    await ack_and_render(q, Stats.bans_list(0, locale))
 
 
 # ────────────────────────── Drill-down callbacks ───────────────────── #
@@ -312,9 +404,10 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     q = update.callback_query
     if q is None:
         return
-    await ack_and_render(
-        q, Stats.staff_roster(await locale_for_update(update), bot=ctx.bot)
-    )
+    locale = await _require_staff_pane(q, update)
+    if locale is None:
+        return
+    await ack_and_render(q, Stats.staff_roster(locale, bot=ctx.bot))
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
@@ -330,11 +423,12 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         return
     page = numbers[0]
     tapper = update.effective_user
-    if not await _require_founder_list(
+    locale = await _require_founder_list(
         q, tapper.id if tapper is not None else None, update
-    ):
+    )
+    if locale is None:
         return
-    await ack_and_render(q, Stats.users_list(page, await locale_for_update(update)))
+    await ack_and_render(q, Stats.users_list(page, locale))
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
@@ -350,13 +444,14 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         return
     page, idx, stable = parsed
     tapper = update.effective_user
-    if not await _require_founder_list(
+    locale = await _require_founder_list(
         q, tapper.id if tapper is not None else None, update
-    ):
+    )
+    if locale is None:
         return
     await ack_and_render(
         q,
-        Stats.user_detail(ctx.bot, page, idx, stable, await locale_for_update(update)),
+        Stats.user_detail(ctx.bot, page, idx, stable, locale),
     )
 
 
@@ -367,12 +462,15 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     q = update.callback_query
     if q is None:
         return
+    locale = await _require_staff_pane(q, update)
+    if locale is None:
+        return
     numbers = callback_numbers(q, 2)
     if numbers is None:
         await q.answer()
         return
     page = numbers[0]
-    await ack_and_render(q, Stats.chats_list(page, await locale_for_update(update)))
+    await ack_and_render(q, Stats.chats_list(page, locale))
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
@@ -382,6 +480,9 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     q = update.callback_query
     if q is None:
         return
+    locale = await _require_staff_pane(q, update)
+    if locale is None:
+        return
     parsed = _parse_item_callback(q)
     if parsed is None:
         await q.answer()
@@ -389,7 +490,7 @@ async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     page, idx, stable = parsed
     await ack_and_render(
         q,
-        Stats.chat_detail(ctx.bot, page, idx, stable, await locale_for_update(update)),
+        Stats.chat_detail(ctx.bot, page, idx, stable, locale),
     )
 
 
@@ -400,13 +501,16 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     if q is None:
         return
+    locale = await _require_staff_pane(q, update)
+    if locale is None:
+        return
     numbers = callback_numbers(q, 2)
     if numbers is None:
         await q.answer()
         return
     page = numbers[0]
     Stats.clear_search(ctx)
-    await ack_and_render(q, Stats.bans_list(page, await locale_for_update(update)))
+    await ack_and_render(q, Stats.bans_list(page, locale))
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
@@ -416,14 +520,15 @@ async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     q = update.callback_query
     if q is None:
         return
+    locale = await _require_staff_pane(q, update)
+    if locale is None:
+        return
     parsed = _parse_item_callback(q)
     if parsed is None:
         await q.answer()
         return
     page, idx, stable = parsed
-    await ack_and_render(
-        q, Stats.ban_detail(page, idx, stable, await locale_for_update(update))
-    )
+    await ack_and_render(q, Stats.ban_detail(page, idx, stable, locale))
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
