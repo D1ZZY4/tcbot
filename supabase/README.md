@@ -36,10 +36,14 @@ prerequisites.
 
 The older migration sources are still missing, so the remote migration
 ledger is not yet reproducible revision-for-revision from
-`supabase/migrations/`. Treat the snapshot as a candidate baseline for a
-separate empty staging project only after reviewing its platform
-prerequisites and reconciling the migration ledger. Do not run it against
-Production, a populated database, or the active Development project.
+`supabase/migrations/`. The runtime support tables also have a dedicated
+ACL hardening migration that explicitly enables RLS, revokes client access,
+and grants the required DML operations only to `service_role`; do not rely
+on a pre-existing event trigger to supply those privileges. Treat the
+snapshot as a candidate baseline for a separate empty staging project only
+after reviewing its platform prerequisites and reconciling the migration
+ledger. Do not run it against Production, a populated database, or the
+active Development project.
 
 Never mark a database migration as reproducible solely because its name
 appears in the remote migration ledger.
