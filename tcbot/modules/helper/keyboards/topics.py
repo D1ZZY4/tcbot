@@ -9,7 +9,12 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.keyboards.common import _build_topic_rows
+from tcbot.modules.helper.keyboards.common import (
+    _build_topic_rows,
+    back_markup,
+    back_row,
+    with_back_row,
+)
 from tcbot.utils.i18n import t
 
 
@@ -18,14 +23,7 @@ def help_topics_menu_kb(
 ) -> InlineKeyboardMarkup:
     """Help index from the start menu: topics plus Back to start."""
     rows = _build_topic_rows(topics, style=KeyboardButtonStyle.PRIMARY)
-    rows.append(
-        [
-            InlineKeyboardButton(
-                t("button.back", locale, plain=True), callback_data="back_to_start"
-            )
-        ]
-    )
-    return InlineKeyboardMarkup(rows)
+    return InlineKeyboardMarkup(with_back_row(rows, "back_to_start", locale))
 
 
 def help_topics_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
@@ -37,28 +35,12 @@ def help_topics_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
 
 def back_to_help_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Back to the menu-path help index (help_menu)."""
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    t("button.back", locale, plain=True), callback_data="help_menu"
-                ),
-            ]
-        ]
-    )
+    return back_markup("help_menu", locale)
 
 
 def back_to_help_cmd_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Back to the command-path help index (helpc_main)."""
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    t("button.back", locale, plain=True), callback_data="helpc_main"
-                ),
-            ]
-        ]
-    )
+    return back_markup("helpc_main", locale)
 
 
 def module_help_kb(
@@ -68,30 +50,14 @@ def module_help_kb(
 ) -> InlineKeyboardMarkup:
     """Per-module help view: paired sub-section buttons plus Back last."""
     rows = _build_topic_rows(section_buttons, style=KeyboardButtonStyle.PRIMARY)
-    rows.append(
-        [
-            InlineKeyboardButton(
-                t("button.back", locale, plain=True), callback_data=back_callback
-            )
-        ]
-    )
-    return InlineKeyboardMarkup(rows)
+    return InlineKeyboardMarkup(with_back_row(rows, back_callback, locale))
 
 
 def back_to_module_kb(
     module_callback: str, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Single Back button returning to the module help view."""
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    t("button.back", locale, plain=True),
-                    callback_data=module_callback,
-                )
-            ]
-        ]
-    )
+    return back_markup(module_callback, locale)
 
 
 def privacy_kb(locale: str | None = None) -> InlineKeyboardMarkup:
@@ -105,12 +71,7 @@ def privacy_kb(locale: str | None = None) -> InlineKeyboardMarkup:
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             ],
-            [
-                InlineKeyboardButton(
-                    t("button.back", locale, plain=True),
-                    callback_data="back_to_start",
-                )
-            ],
+            back_row("back_to_start", locale),
         ]
     )
 
@@ -123,25 +84,9 @@ def privacy_policy_sections_kb(
         (label, f"privacy_section_{idx}") for idx, label in enumerate(section_labels)
     ]
     rows = _build_topic_rows(pairs, style=KeyboardButtonStyle.PRIMARY)
-    rows.append(
-        [
-            InlineKeyboardButton(
-                t("button.back", locale, plain=True), callback_data="privacy_menu"
-            )
-        ]
-    )
-    return InlineKeyboardMarkup(rows)
+    return InlineKeyboardMarkup(with_back_row(rows, "privacy_menu", locale))
 
 
 def back_to_privacy_policy_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Back to the privacy policy section index."""
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    t("button.back", locale, plain=True),
-                    callback_data="privacy_policy_menu",
-                )
-            ]
-        ]
-    )
+    return back_markup("privacy_policy_menu", locale)

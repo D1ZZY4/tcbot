@@ -10,7 +10,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
 from tcbot import cfg
-from tcbot.modules.helper.keyboards.common import _https_url
+from tcbot.modules.helper.keyboards.common import _https_url, back_markup
 from tcbot.utils.i18n import t
 
 
@@ -82,16 +82,7 @@ def group_start_kb(
 
 def back_to_start_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     """Single Back button returning to the start menu."""
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    t("button.back", locale, plain=True),
-                    callback_data="back_to_start",
-                ),
-            ]
-        ]
-    )
+    return back_markup("back_to_start", locale)
 
 
 def additional_menu_kb(locale: str | None = None) -> InlineKeyboardMarkup:

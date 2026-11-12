@@ -21,6 +21,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from telegram import Update
     from telegram.ext import ContextTypes
 
@@ -73,11 +75,19 @@ def flow_scope(ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> dict[str, Any]
     return scope
 
 
-def clear_flow_scope(ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> None:
+def clear_flow_scope(
+    ctx: ContextTypes.DEFAULT_TYPE,
+    update: Update,
+    *,
+    keys: Collection[str] | None = None,
+) -> None:
     """Drop the payload of the conversation driving ``update``.
 
-    Removing the whole scope entry keeps ``ctx.user_data`` from growing
-    with one empty dict per chat a user ever moderated in.
+    ``keys`` limits the removal to the named payload keys; without it the
+    whole payload of the conversation goes. The scope entry itself is
+    dropped once it holds nothing, so ``ctx.user_data`` keeps one entry
+    per chat a user still has an open action in, instead of one per chat
+    the user ever moderated in.
     """
     user_data = ctx.user_data
     if user_data is None:
@@ -86,7 +96,18 @@ def clear_flow_scope(ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> None:
     if key is None:
         return
     scopes = user_data.get(_SCOPES_KEY)
-    if isinstance(scopes, dict):
+    if not isinstance(scopes, dict):
+        return
+    scope = scopes.get(key)
+    if not isinstance(scope, dict):
         scopes.pop(key, None)
-        if not scopes:
-            user_data.pop(_SCOPES_KEY, None)
+    else:
+        if keys is None:
+            scope.clear()
+        else:
+            for name in keys:
+                scope.pop(name, None)
+        if not scope:
+            scopes.pop(key, None)
+    if not scopes:
+        user_data.pop(_SCOPES_KEY, None)

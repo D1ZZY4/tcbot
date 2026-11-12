@@ -9,6 +9,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
+from tcbot.modules.helper.keyboards.common import back_row
 from tcbot.modules.helper.messages import appeal_deep_link
 from tcbot.utils.i18n import t
 
@@ -21,24 +22,14 @@ def check_back_row(
     target_id: int, locale: str | None = None
 ) -> list[InlineKeyboardButton]:
     """Single Back button row returning to the /check profile."""
-    return [
-        InlineKeyboardButton(
-            t("button.back", locale, plain=True),
-            callback_data=f"check_main:{target_id}",
-        )
-    ]
+    return back_row(f"check_main:{target_id}", locale)
 
 
 def check_warns_back_row(
     target_id: int, locale: str | None = None
 ) -> list[InlineKeyboardButton]:
     """Single Back button row returning to the warns-by-group list."""
-    return [
-        InlineKeyboardButton(
-            t("button.back", locale, plain=True),
-            callback_data=f"check_warns:{target_id}",
-        )
-    ]
+    return back_row(f"check_warns:{target_id}", locale)
 
 
 def check_back_markup(

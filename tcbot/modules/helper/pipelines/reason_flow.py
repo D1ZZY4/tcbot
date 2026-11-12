@@ -28,7 +28,7 @@ from tcbot.modules.helper.pipelines.proof_flow import (
     PROOF_MEDIA_FILTER,
     BuildProof,
 )
-from tcbot.modules.helper.scope import flow_scope
+from tcbot.modules.helper.scope import clear_flow_scope, flow_scope
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, esc, user_ref
 from tcbot.utils.i18n import Safe, t
@@ -167,11 +167,15 @@ class _FlowBase:
             return user_ref(tid, raw)
         return esc(raw)
 
-    def _clear_scope(self, scope: dict[str, Any]) -> None:
-        """Remove all action keys from the conversation scope."""
+    def _clear_scope(self, ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> None:
+        """Remove all action keys from the conversation scope.
+
+        Only this action's keys go: another flow may hold its own payload
+        in the same conversation scope.
+        """
+        scope = flow_scope(ctx, update)
         prefix = f"{self.action}_"
-        for key in [k for k in scope if k.startswith(prefix)]:
-            scope.pop(key, None)
+        clear_flow_scope(ctx, update, keys=[k for k in scope if k.startswith(prefix)])
 
     async def _recheck_tapper(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -196,14 +200,14 @@ class _FlowBase:
                 await q.answer()
             except Exception as exc:
                 log.debug("%s recheck q.answer failed: %s", self.action, exc)
-        self._clear_scope(flow_scope(ctx, update))
+        self._clear_scope(ctx, update)
         return False
 
     async def _on_cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         q = update.callback_query
         if q is None:
             return ConversationHandler.END
-        self._clear_scope(flow_scope(ctx, update))
+        self._clear_scope(ctx, update)
         locale = await locale_for_update(update)
         results = await asyncio.gather(
             q.answer(),
@@ -222,7 +226,7 @@ class _FlowBase:
         return ConversationHandler.END
 
     async def _on_end_conv(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        self._clear_scope(flow_scope(ctx, update))
+        self._clear_scope(ctx, update)
         if update.effective_message:
             locale = await locale_for_update(update)
             await safe_reply(
@@ -303,9 +307,9 @@ class _ProofStepMixin(_FlowBase):
         try:
             await self.executor(update, ctx)
         except BaseException:
-            self._clear_scope(scope)
+            self._clear_scope(ctx, update)
             raise
-        self._clear_scope(scope)
+        self._clear_scope(ctx, update)
         return ConversationHandler.END
 
     async def _on_skip_proof(
@@ -337,9 +341,9 @@ class _ProofStepMixin(_FlowBase):
         if isinstance(qa_result, BaseException):
             log.debug("%s skip-proof q.answer failed: %s", self.action, qa_result)
         if isinstance(exec_result, BaseException):
-            self._clear_scope(scope)
+            self._clear_scope(ctx, update)
             raise exec_result
-        self._clear_scope(scope)
+        self._clear_scope(ctx, update)
         return ConversationHandler.END
 
     async def _on_proof_unexpected(
@@ -421,7 +425,7 @@ class _ReasonStepMixin(_FlowBase):
             except Exception as exc:
                 log.debug("%s reason-text fallback reply failed: %s", self.action, exc)
         if not prompt_sent:
-            self._clear_scope(scope)
+            self._clear_scope(ctx, update)
             return ConversationHandler.END
         return WAITING_PROOF
 
@@ -458,7 +462,7 @@ class _ReasonStepMixin(_FlowBase):
             log.debug(
                 "%s prompt edit failed (skip-reason step): %s", self.action, results[1]
             )
-            self._clear_scope(scope)
+            self._clear_scope(ctx, update)
             return ConversationHandler.END
         return WAITING_PROOF
 

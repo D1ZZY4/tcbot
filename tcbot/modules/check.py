@@ -14,25 +14,23 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, keyboards
-from tcbot.modules.helper.ban_info import build_ban_detail
+from tcbot.modules.helper.ban_info import build_ban_detail, build_ban_summary
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ack_and_render,
     callback_args,
     callback_numbers,
     cb_error_edit,
-    message_link,
     replies,
     safe_edit_cb,
     safe_reply,
 )
 from tcbot.modules.helper.pipelines.check_flow import Check
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import code, user_ref
+from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
-from tcbot.utils.time_and_date import fmt_dt
 
 if TYPE_CHECKING:
     from telegram import CallbackQuery, Update
@@ -115,63 +113,6 @@ async def _load_ban_for_callback(
     return ban
 
 
-async def _ban_summary(
-    ban: BanDoc,
-    user_id: int,
-    user_fname: str,
-    admin_fname: str | None = None,
-    locale: str | None = None,
-) -> tuple[str, str | None]:
-    """Build the /checkme summary text and proof link."""
-    aid = ban.get("admin_user_id", 0)
-
-    # Fetch mention data for both users in parallel
-    _user_r, _admin_r = await asyncio.gather(
-        db.users_cache.get_user_mention_data(user_id),
-        db.users_cache.get_user_mention_data(aid),
-        return_exceptions=True,
-    )
-    # * Shutdown cancellation propagates; only real outages degrade below.
-    throw_if_cancelled((_user_r, _admin_r))
-    if isinstance(_user_r, BaseException):
-        user_uname = None
-    else:
-        _, user_uname = _user_r
-    if isinstance(_admin_r, BaseException):
-        admin_fname_cached, admin_uname = None, None
-    else:
-        admin_fname_cached, admin_uname = _admin_r
-
-    if admin_fname is None:
-        admin_fname = admin_fname_cached or str(aid)
-
-    proof_chat, proof_thread = cfg.proofs
-    proof_msg_id = ban.get("proof_message_id")
-    proof_link = (
-        message_link(proof_chat, proof_msg_id, proof_thread)
-        if proof_msg_id is not None
-        else None
-    )
-
-    ts = ban.get("timestamp")
-    date_str = (
-        fmt_dt(ts) if ts else t("checking.ban_info.unknown_date", locale, plain=True)
-    )
-
-    text = t(
-        "checking.checkme.banned",
-        locale,
-        community=cfg.community_name,
-        user=Safe(user_ref(user_id, user_fname, user_uname)),
-        id=Safe(code(str(user_id))),
-        reason=ban.get("reason", None)
-        or t("checking.events.no_reason", locale, plain=True),
-        admin=Safe(user_ref(aid, admin_fname, admin_uname)),
-        date=Safe(date_str),
-    )
-    return text, proof_link
-
-
 @decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
 async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -231,7 +172,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * needs the appeal link, and the staff-flavoured early-returns below
     # * would otherwise tell them "you're fine" while they are banned.
     if ban is not None:
-        text, proof_link = await _ban_summary(ban, user.id, fname, None, locale)
+        text, proof_link = await build_ban_summary(ban, user.id, fname, None, locale)
         await safe_reply(
             msg,
             text,
@@ -368,7 +309,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         fname = str(uid)
     if isinstance(admin_fname, BaseException):
         admin_fname = admin_fallback
-    text, proof_link = await _ban_summary(ban, uid, fname, admin_fname, locale)
+    text, proof_link = await build_ban_summary(ban, uid, fname, admin_fname, locale)
     await safe_edit_cb(
         q,
         text,

@@ -6,9 +6,10 @@
 
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
+from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -29,6 +30,37 @@ def _https_url(url: str, label: str) -> str | None:
     if url:
         log.warning("Ignoring non-http(s) community URL for %s: %s", label, url)
     return None
+
+
+def back_row(
+    callback_data: str, locale: str | None = None
+) -> list[InlineKeyboardButton]:
+    """Single Back button row pointing at ``callback_data``.
+
+    Single owner for the Back button: every view that returns somewhere
+    renders the label from the shared button catalog, so the wording and
+    the callback stay consistent across the keyboards.
+    """
+    return [
+        InlineKeyboardButton(
+            t("button.back", locale, plain=True), callback_data=callback_data
+        )
+    ]
+
+
+def back_markup(callback_data: str, locale: str | None = None) -> InlineKeyboardMarkup:
+    """Single Back button returning to ``callback_data``."""
+    return InlineKeyboardMarkup([back_row(callback_data, locale)])
+
+
+def with_back_row(
+    rows: list[list[InlineKeyboardButton]],
+    callback_data: str,
+    locale: str | None = None,
+) -> list[list[InlineKeyboardButton]]:
+    """Append the Back row to ``rows`` and return the new row list."""
+    rows.append(back_row(callback_data, locale))
+    return rows
 
 
 def _build_topic_rows(

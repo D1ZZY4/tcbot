@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from telegram import Bot, InlineKeyboardMarkup
 
@@ -332,21 +332,34 @@ class CheckBansMixin:
         )
 
 
-async def _ban_list_render(
+class _PagedRecords(NamedTuple):
+    """One page of per-user records with the paging state that produced it."""
+
+    records: list[Any]
+    total: int
+    total_pages: int
+    page: int
+    display_name: str
+    count_failed: bool
+    fetch_failed: bool
+
+
+async def _paged_records(
     target_id: int,
     page: int,
-    locale: str | None,
     *,
     db_call: Callable[..., Awaitable[list[Any]]],
     count_call: Callable[[int], Awaitable[int]],
-    key_prefix: str,
-    nav_prefix: str,
-    active_key: str,
-    inactive_key: str,
-    ts: Callable[..., str],
-    show_reason: bool = False,
-) -> tuple[str, InlineKeyboardMarkup]:
-    """Shared paginated ban/appeal list renderer."""
+    log_label: str,
+) -> _PagedRecords:
+    """Fetch one page of per-user records together with its total count.
+
+    Single owner for the paging prologue every drill-down list shares: the
+    count and the display name resolve in parallel, the page fetch follows
+    because it needs the page number the count produces, and a failed count
+    falls back to the fetched row count so a partial outage still renders
+    the rows that could be read.
+    """
     total, display_name = await asyncio.gather(
         count_call(target_id),
         _name(target_id),
@@ -362,17 +375,53 @@ async def _ban_list_render(
         count_failed = False
     total_pages, page = clamp_page(total, page, _PAGE_SIZE)
     try:
-        chunk = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
-        chunk_failed = False
+        records = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
+        fetch_failed = False
     except Exception:
-        log.exception("check_flow %s list fetch failed for %d", key_prefix, target_id)
-        chunk = []
-        chunk_failed = True
+        log.exception("check_flow %s list fetch failed for %d", log_label, target_id)
+        records = []
+        fetch_failed = True
     if count_failed:
-        total = len(chunk)
+        total = len(records)
         total_pages, _ = clamp_page(total, page, _PAGE_SIZE)
+    return _PagedRecords(
+        records=records,
+        total=total,
+        total_pages=total_pages,
+        page=page,
+        display_name=display_name,
+        count_failed=count_failed,
+        fetch_failed=fetch_failed,
+    )
+
+
+async def _ban_list_render(
+    target_id: int,
+    page: int,
+    locale: str | None,
+    *,
+    db_call: Callable[..., Awaitable[list[Any]]],
+    count_call: Callable[[int], Awaitable[int]],
+    key_prefix: str,
+    nav_prefix: str,
+    active_key: str,
+    inactive_key: str,
+    ts: Callable[..., str],
+    show_reason: bool = False,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Shared paginated ban/appeal list renderer."""
+    paged = await _paged_records(
+        target_id,
+        page,
+        db_call=db_call,
+        count_call=count_call,
+        log_label=key_prefix,
+    )
+    total, total_pages, page = paged.total, paged.total_pages, paged.page
+    display_name, count_failed = paged.display_name, paged.count_failed
+    chunk = paged.records
     if not chunk:
-        if count_failed or chunk_failed:
+        if count_failed or paged.fetch_failed:
             text = t("checking.warns.db_fail", locale)
             return text, check_back_markup(target_id, locale)
         text = t(
@@ -420,7 +469,7 @@ async def _ban_list_render(
             )
         )
     return _maybe_caveat(
-        "\n".join(lines), locale, failed=count_failed or chunk_failed
+        "\n".join(lines), locale, failed=count_failed or paged.fetch_failed
     ), paged_drill_kb(
         items,
         page=page,
@@ -624,32 +673,18 @@ async def _per_chat_event_list(
     locale: str | None = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Shared renderer for kicks/mutes lists."""
-    total, display_name = await asyncio.gather(
-        count_call(target_id),
-        _name(target_id),
-        return_exceptions=True,
+    paged = await _paged_records(
+        target_id,
+        page,
+        db_call=db_call,
+        count_call=count_call,
+        log_label=cb_prefix,
     )
-    throw_if_cancelled((total, display_name))
-    if isinstance(display_name, BaseException):
-        display_name = str(target_id)
-    if isinstance(total, BaseException) or not isinstance(total, int):
-        total = 0
-        count_failed = True
-    else:
-        count_failed = False
-    total_pages, page = clamp_page(total, page, _PAGE_SIZE)
-    try:
-        records = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
-        records_failed = False
-    except Exception:
-        log.exception("check_flow %s list fetch failed for %d", cb_prefix, target_id)
-        records = []
-        records_failed = True
-    if count_failed:
-        total = len(records)
-        total_pages, _ = clamp_page(total, page, _PAGE_SIZE)
+    total, total_pages, page = paged.total, paged.total_pages, paged.page
+    display_name, count_failed = paged.display_name, paged.count_failed
+    records = paged.records
     if not records:
-        if count_failed or records_failed:
+        if count_failed or paged.fetch_failed:
             text = t("checking.warns.db_fail", locale)
             return text, check_back_markup(target_id, locale)
         text = t(

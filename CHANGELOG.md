@@ -97,6 +97,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **The Back button, the ban card, and the paged drill-downs have one owner** (`tcbot/modules/helper/keyboards/common.py`, `tcbot/modules/helper/ban_info.py`, `tcbot/modules/helper/pipelines/check_flow.py`, `tcbot/modules/helper/scope.py`): nine keyboards built their own Back button, the check card rendered a ban summary beside the shared ban detail, and the two drill-down lists repeated the same paging prologue. The shared helpers now own the button, the ban proof link and date, the paging arithmetic, and the scope cleanup. Behavior changes: none; the rendered text and the button layout are unchanged.
+
 - **The MTProto session writes go out in batches** (`tcbot/database/mtproto_store.py`, `tests/test_mtproto_store.py`): the storage engine wrote one transaction per peer and per update state, so a session with hundreds of peers cost hundreds of sequential transactions. The peer list, the name list and the update states now travel in one multi-row upsert per bounded chunk, and the whole batch shares one retry budget. Writing five hundred peers drops from five hundred transactions and about 2.3 s to one transaction and about 0.12 s. Behavior changes: none; the stored rows and the merge rules are unchanged.
 
 - **The migration keeps the options the connection already carries** (`alembic/env.py`): the session timezone is pinned to UTC, and the pin now merges with the options the URL and the environment already carry instead of replacing them. A migration that runs inside a dedicated schema therefore keeps that schema. Behavior changes: none.
