@@ -92,7 +92,7 @@ The Developer minimum is intentional: unbanning a higher-ranked target would sil
 8. Builds an `unban_log` via `messages.unban_log`.
 9. Runs two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
    - `bot.send_message(cfg.logs, log_text, parse_mode="MarkdownV2", message_thread_id=lt)`.
-   - `msg.reply_text("<user> has been unbanned - removed from <ok>/<total> groups.")`, plus a `WARNING: still banned in: <titles>` suffix naming up to 5 missed groups when the fan-out had transient failures (a re-run of `/tcunban` would report "no active ban" since the record is gone; only a targeted re-drive or `/tcsync` run reaches those chats).
+   - `msg.reply_text("<user> has been unbanned - removed from <ok>/<total> groups.")`, plus a `WARNING: still banned in: <titles>` suffix naming up to 5 missed groups when the fan-out had transient failures (a re-run of `/tcunban` would report "no active ban" since the record is gone; only a targeted re-drive reaches those chats).
 
 The reply does not include an appeal-resolution message; the appeal-approve path handles that separately.
 
@@ -106,7 +106,7 @@ Unban uses three `bans_db` helpers:
 | `deactivate_all_active_bans(user_id)` | Deactivates every active ban for the user in one `UPDATE` statement. Returns the number of bans deactivated. Used by the manual command and mirrored by the appeal-approval inline sequence so duplicate active records (from earlier race conditions) are cleared in one operation. |
 | `make_ban_id()` | Not used here; only listed because the helper file is shared. |
 
-Unban has no scheduler interaction: neither `bans_db` nor `unban_flow` touches `scheduler/`, and the scheduler registers only the warn-expiry and optional enforcement-sync schedules. Bans are not time-limited, so no per-ban `unban.<ban_id>` job exists.
+Unban has no scheduler interaction: neither `bans_db` nor `unban_flow` touches `scheduler/`, and the scheduler registers only the warn-expiry and stale-cleanup schedules. Bans are not time-limited, so no per-ban `unban.<ban_id>` job exists.
 
 ## Logs
 

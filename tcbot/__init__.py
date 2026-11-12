@@ -240,7 +240,6 @@ class Configs:
     modules_no_load: tuple[str, ...]
     redis_url: str | None
     warn_expiry_days: int
-    sync_interval_hours: int
     fed_warn_limit: int
     warn_limit: int
     webhook_url: str
@@ -307,7 +306,6 @@ class Configs:
             modules_no_load=tuple(_env_list("MODULES_NO_LOAD")),
             redis_url=os.getenv("REDIS_URL", "").strip() or None,
             warn_expiry_days=_int_from_env("WARN_EXPIRY_DAYS", 0, minimum=0),
-            sync_interval_hours=_int_from_env("SYNC_INTERVAL_HOURS", 0, minimum=0),
             fed_warn_limit=_int_from_env("FED_WARN_LIMIT", 0, minimum=0),
             warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),
             webhook_url=_auto_webhook_url(),

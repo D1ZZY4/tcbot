@@ -223,7 +223,7 @@ secrets, so every runtime variable must be set there for the runner:
 `WARN_EXPIRY_DAYS`,
 `WARN_LIMIT`, `FED_WARN_LIMIT`, `API_ID`, `API_HASH`,
 `ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, `MODULES_NO_LOAD`, `SENTRY_DSN`,
-`MTPROTO_SESSION`, `SYNC_INTERVAL_HOURS`, the `COMMUNITY_*_URL` links,
+`MTPROTO_SESSION`, the `COMMUNITY_*_URL` links,
 alongside `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `WEBHOOK_URL`, and
 `WEBHOOK_SECRET`. Only `CRON_SECRET` is **not** forwarded by the runner: the
 cron endpoint is Vercel-only, and the long-lived transport schedules

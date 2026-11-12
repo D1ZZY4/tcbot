@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Promotion and sync authorization: banned targets and executor rank gates."""
+"""Promotion authorization: banned targets and executor rank gates."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules import sync
 from tcbot.modules.helper.decorators import checks
 from tcbot.modules.helper.pipelines import promote_flow
 
@@ -167,105 +166,6 @@ def test_promote_request_refuses_a_banned_target(
 
 
 # ───────────────────────────── Sync rank gate ─────────────────────────── #
-
-
-def test_bare_sync_sweep_keeps_admin_roles_from_a_developer(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A Developer must not strip an Admin role through the bare sweep."""
-    stripped: list[tuple[int, str]] = []
-
-    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
-        _ = (user_id, fresh)
-        return "admin"
-
-    async def _remove_role(user_id: int, role: str) -> bool:
-        stripped.append((user_id, role))
-        return True
-
-    async def _groups() -> list[dict[str, Any]]:
-        return [{"chat_id": -1001, "title": "G"}]
-
-    async def _ban_uids() -> list[int]:
-        return [42]
-
-    async def _mute_docs() -> list[dict[str, Any]]:
-        return []
-
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(sync.Demote, "remove_role", _remove_role)
-    monkeypatch.setattr(db.groups_db, "active_groups", _groups)
-    monkeypatch.setattr(db.bans_db, "active_ban_user_ids", _ban_uids)
-    monkeypatch.setattr(db.mutes_db, "active_mute_docs", _mute_docs)
-
-    asyncio.run(sync.run_ban_sync(_bot(), executor_role="developer"))
-    assert stripped == []
-
-
-def test_bare_sync_sweep_strips_admin_roles_for_the_founder(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The Founder may still strip an Admin role through the sweep."""
-    stripped: list[tuple[int, str]] = []
-
-    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
-        _ = (user_id, fresh)
-        return "admin"
-
-    async def _remove_role(user_id: int, role: str) -> bool:
-        stripped.append((user_id, role))
-        return True
-
-    async def _groups() -> list[dict[str, Any]]:
-        return [{"chat_id": -1001, "title": "G"}]
-
-    async def _ban_uids() -> list[int]:
-        return [42]
-
-    async def _mute_docs() -> list[dict[str, Any]]:
-        return []
-
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(sync.Demote, "remove_role", _remove_role)
-    monkeypatch.setattr(db.groups_db, "active_groups", _groups)
-    monkeypatch.setattr(db.bans_db, "active_ban_user_ids", _ban_uids)
-    monkeypatch.setattr(db.mutes_db, "active_mute_docs", _mute_docs)
-
-    asyncio.run(sync.run_ban_sync(_bot(), executor_role="founder"))
-    assert stripped == [(42, "admin")]
-
-
-def test_system_sync_sweep_still_strips_admin_roles(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The scheduled job keeps system-sweep semantics."""
-    stripped: list[tuple[int, str]] = []
-
-    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
-        _ = (user_id, fresh)
-        return "admin"
-
-    async def _remove_role(user_id: int, role: str) -> bool:
-        stripped.append((user_id, role))
-        return True
-
-    async def _groups() -> list[dict[str, Any]]:
-        return [{"chat_id": -1001, "title": "G"}]
-
-    async def _ban_uids() -> list[int]:
-        return [42]
-
-    async def _mute_docs() -> list[dict[str, Any]]:
-        return []
-
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(sync.Demote, "remove_role", _remove_role)
-    monkeypatch.setattr(db.groups_db, "active_groups", _groups)
-    monkeypatch.setattr(db.bans_db, "active_ban_user_ids", _ban_uids)
-    monkeypatch.setattr(db.mutes_db, "active_mute_docs", _mute_docs)
-
-    asyncio.run(sync.run_ban_sync(_bot()))
-    assert stripped == [(42, "admin")]
 
 
 # ──────────────────────────────── Helpers ─────────────────────────────── #

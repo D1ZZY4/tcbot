@@ -32,7 +32,6 @@ if TYPE_CHECKING:
 
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
-    from telegram import Bot
 
 log = get_logger(__name__)
 
@@ -44,12 +43,6 @@ _sched_task: asyncio.Task[None] | None = None
 _sched_ready: asyncio.Event | None = None
 _sched_stop: asyncio.Event | None = None
 _sched_error: BaseException | None = None
-_sync_bot: Bot | None = None
-# * Enforcement runner supplied by the runtime lifecycle (which already imports
-# * the command modules). Keeping the callable here avoids the
-# * database -> modules import cycle: this module never imports a command
-# * module; the lifecycle injects the runner at startup.
-_sync_runner: Callable[..., Any] | None = None
 
 # * Maximum seconds to wait for the scheduler background task to exit cleanly
 # * before declaring it stuck.  10 s matches the PTB shutdown grace window.
@@ -77,9 +70,6 @@ def _scheduler_pool() -> concurrent.futures.ThreadPoolExecutor:
 # * Ceiling for one warn-expiry delete batch: a hung database must fail the
 # * run loudly instead of wedging the scheduler worker forever.
 _EXPIRE_OP_TIMEOUT_S: float = 60.0
-# * Ceiling for one scheduled enforcement sweep: a hung sync must end and
-# * let the next interval re-drive instead of wedging the job.
-_SYNC_RUN_TIMEOUT_S: float = 300.0
 # * How long a cached profile is kept before the daily cleanup drops it.
 # * It replaces the TTL pruning the MongoDB deployment did on its own.
 _MEMBER_CACHE_EXPIRE_DAYS: int = 90
@@ -247,42 +237,6 @@ async def _cleanup_old_records() -> None:
     )
 
 
-async def _run_scheduled_sync() -> None:
-    """Run one bounded enforcement sweep (the ``/tcsync`` core on a timer).
-
-    Module-level so APScheduler can serialise its import path into the job store.
-    Results go to the log only: there is no operator message to edit here.
-    A missing bot (or any failure) logs and returns; the next interval
-    re-drives, so one bad run never wedges the schedule.
-    """
-    bot = _sync_bot
-    runner = _sync_runner
-    if bot is None or runner is None:
-        log.debug("Scheduled sync skipped: no bot reference.")
-        return
-    try:
-        async with asyncio.timeout(_SYNC_RUN_TIMEOUT_S):
-            counts = await runner(bot)
-    except TimeoutError:
-        log.exception(
-            "Scheduled enforcement sync timed out after %ds; next interval re-drives.",
-            _SYNC_RUN_TIMEOUT_S,
-        )
-        return
-    except Exception:
-        log.exception("Scheduled enforcement sync failed.")
-        return
-    log.info(
-        "Scheduled enforcement sync: checked=%d enforced=%d remuted=%d skipped=%d failed=%d truncated=%s.",
-        counts.checked,
-        counts.enforced_bans,
-        counts.enforced_mutes,
-        counts.skipped,
-        counts.failed,
-        counts.truncated,
-    )
-
-
 # ──────────────────────────── Schedules ──────────────────────────── #
 
 # ──────────────── Recurring job schedule IDs ──────────────────── #
@@ -290,15 +244,16 @@ async def _run_scheduled_sync() -> None:
 # * (replace_existing=True updates the trigger without creating duplicates)
 
 _WARN_EXPIRY_SCHEDULE_ID: str = "tcbot.warn_expiry_daily"
-# * Stable ID for the optional enforcement-sync sweep (/tcsync core on a
-# * timer). Same replace_existing idempotency as the warn-expiry schedule.
-_SYNC_SCHEDULE_ID: str = "tcbot.enforcement_sync"
 # * ID of the live stale-record cleanup job.
 _CLEANUP_SCHEDULE_ID: str = "tcbot.stale_cleanup_daily"
 # * ID of the retired weekly member_cache cleanup job. The schedule is
 # * removed on every startup so it cannot fire; the id stays here so the
 # * removal keeps working on a job store written by an older version.
 _LEGACY_CLEANUP_SCHEDULE_ID: str = "tcbot.db_cleanup_weekly"
+# * ID of the retired enforcement-sweep job. The sweep it drove was
+# * removed with the /tcsync command, so the schedule is removed on every
+# * startup as well.
+_LEGACY_SYNC_SCHEDULE_ID: str = "tcbot.enforcement_sync"
 
 # * Alias of the persistent job store. Every job must name it explicitly:
 # * APScheduler defaults to the ``default`` alias, which is auto-created as an
@@ -375,7 +330,6 @@ def _build_job_store(database_url: str) -> SQLAlchemyJobStore:
 async def _scheduler_background(
     database_url: str,
     warn_expiry_days: int,
-    sync_interval_hours: int = 0,
 ) -> None:
     """Long-running background task that owns the AsyncIOScheduler lifecycle.
 
@@ -424,7 +378,6 @@ async def _scheduler_background(
                 scheduler,
                 store,
                 warn_expiry_days,
-                sync_interval_hours=sync_interval_hours,
             ),
         )
         if _sched_ready is None:
@@ -562,8 +515,6 @@ def _reconcile_schedules(
     scheduler: AsyncIOScheduler,
     store: SQLAlchemyJobStore,
     warn_expiry_days: int,
-    *,
-    sync_interval_hours: int = 0,
 ) -> None:
     """Align the persisted schedules with the current configuration."""
     if warn_expiry_days > 0:
@@ -597,23 +548,9 @@ def _reconcile_schedules(
     # * member_cache sweep the daily job replaced.
     _remove_job(scheduler, _LEGACY_CLEANUP_SCHEDULE_ID, "Legacy DB cleanup")
 
-    if sync_interval_hours > 0 and _sync_bot is not None:
-        _ensure_job(
-            scheduler,
-            store,
-            job_id=_SYNC_SCHEDULE_ID,
-            func=_run_scheduled_sync,
-            trigger=IntervalTrigger(
-                hours=sync_interval_hours, timezone=_SCHEDULER_TIMEZONE
-            ),
-            args=(),
-            misfire_grace_time=86400,
-        )
-        log.info("Scheduled enforcement sync: every %dh.", sync_interval_hours)
-    else:
-        # * Sync sweep disabled (or no bot reference): remove a stale schedule
-        # * left by a previous enabled run so nothing fires without a bot.
-        _remove_job(scheduler, _SYNC_SCHEDULE_ID, "Enforcement sync")
+    # * The retired enforcement-sweep job must not fire either: the sweep
+    # * it drove no longer exists.
+    _remove_job(scheduler, _LEGACY_SYNC_SCHEDULE_ID, "Enforcement sync")
 
 
 # ──────────────────────────── Lifecycle ──────────────────────────── #
@@ -622,10 +559,6 @@ def _reconcile_schedules(
 async def start(
     database_url: str,
     warn_expiry_days: int,
-    *,
-    bot: Bot | None = None,
-    sync_interval_hours: int = 0,
-    sync_runner: Callable[..., Any] | None = None,
 ) -> None:
     """Initialise and start the APScheduler background scheduler.
 
@@ -638,16 +571,9 @@ async def start(
     Args:
         database_url: PostgreSQL connection string (same as ``DATABASE_URL``).
         warn_expiry_days: Days after which warn_counts are expired (0 = disabled).
-        bot: Live bot for the optional enforcement-sync sweep (same as
-            ``SYNC_INTERVAL_HOURS``); ``None`` disables the sweep.
-        sync_interval_hours: Hours between enforcement sweeps (0 = disabled).
-        sync_runner: Enforcement sweep supplied by the runtime lifecycle,
-            which already imports the command modules. Passing it here
-            keeps the database package free of a modules import while
-            making the dependency explicit; ``None`` disables the sweep.
 
     """
-    global _sched_ready, _sched_stop, _sched_error, _sync_bot, _sync_runner, _sched_task
+    global _sched_ready, _sched_stop, _sched_error, _sched_task
     # * A live task means start() already ran: a second start would orphan
     # * the first scheduler and duplicate every job. Refuse loudly.
     if _sched_task is not None and not _sched_task.done():
@@ -655,10 +581,8 @@ async def start(
     _sched_ready = asyncio.Event()
     _sched_stop = asyncio.Event()
     _sched_error = None
-    _sync_bot = bot
-    _sync_runner = sync_runner
     _sched_task = asyncio.create_task(
-        _scheduler_background(database_url, warn_expiry_days, sync_interval_hours),
+        _scheduler_background(database_url, warn_expiry_days),
         name="tcbot.scheduler",
     )
     try:
@@ -716,7 +640,7 @@ async def stop() -> None:
     Sets the stop event so the background task can exit cleanly.
     Safe to call even if :func:`start` was never called.
     """
-    global _sched_task, _sched_ready, _sched_stop, _sched_error, _sync_bot, _sync_runner
+    global _sched_task, _sched_ready, _sched_stop, _sched_error
     if _sched_stop is not None:
         _sched_stop.set()
     if _sched_task is not None:
@@ -733,8 +657,6 @@ async def stop() -> None:
             _sched_ready = None
             _sched_stop = None
             _sched_error = None
-            _sync_bot = None
-            _sync_runner = None
             raise
         except TimeoutError:
             log.warning(
@@ -762,8 +684,6 @@ async def stop() -> None:
     _sched_ready = None
     _sched_stop = None
     _sched_error = None
-    _sync_bot = None
-    _sync_runner = None
     log.info("APScheduler stopped.")
 
 

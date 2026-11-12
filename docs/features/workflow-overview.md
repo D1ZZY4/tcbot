@@ -130,7 +130,6 @@ Disconnected groups are marked inactive rather than deleted, preserving historic
 - `/check` (`/c`) lets anyone inspect a user's full federation profile (identity, role, bans, warnings, kicks, mutes, appeals).
 - `/tcgroups` (`/tcg`) lists connected groups with a details toggle.
 - `/tcstats` (`/tcs`) shows summary cards, active bans, connected chats, and search/detail views.
-- `/tcsync` (`/tcsynchronize`) reconciles group membership against active bans and mutes, bounded at 200 checks per run.
 
 ## Maintenance and broadcast flows
 

@@ -181,8 +181,8 @@ async def execute_kick(
         throw_if_cancelled((unban_result, log_send_result))
         if isinstance(unban_result, BaseException):
             # * One bounded retry: a transient refusal otherwise strands
-            # * the user banned with only a kick log (/tcsync heals by ban
-            # * state, which a kick never records).
+            # * the user banned with only a kick log (the ban record
+            # * repairs it, which a kick never records).
             log.debug(
                 "unban_chat_member retrying once for target=%d: %s",
                 target_id,

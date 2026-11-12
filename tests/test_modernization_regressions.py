@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Regression tests for audit-confirmed fixes: proof, duration, sync, unmute."""
+"""Regression tests for audit-confirmed fixes: proof, duration, unmute."""
 
 from __future__ import annotations
 
@@ -17,10 +17,9 @@ import pytest
 
 from tcbot import database as db
 from tcbot.database import users_cache
-from tcbot.modules import netspeed, sync
+from tcbot.modules import netspeed
 from tcbot.modules.helper.decorators import checks
 from tcbot.modules.helper.pipelines import mute_flow, proof_flow, stats_flow
-from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitBreaker, CircuitState
 from tcbot.utils.time_and_date import parse_duration
@@ -108,35 +107,6 @@ def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:
     result = asyncio.run(proof_flow.upload_proof(bot, msgs, "cap", 1, None))  # type: ignore[arg-type]
     assert result == 1
     assert calls == [10, 1]
-
-
-def test_sync_demote_skips_admin_for_non_founder(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def _role(uid: int, *, fresh: bool = False) -> str:
-        return "admin"
-
-    removed: list[tuple[int, str]] = []
-
-    async def _remove(uid: int, role: str) -> bool:
-        removed.append((uid, role))
-        return True
-
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(Demote, "remove_role", staticmethod(_remove))
-    monkeypatch.setattr(sync, "gather_bounded", _gather_bounded)
-
-    async def _run() -> None:
-        await sync._demote_staff_holdings([7], "developer")
-
-    asyncio.run(_run())
-    assert removed == []
-
-    async def _run_founder() -> None:
-        await sync._demote_staff_holdings([7], "founder")
-
-    asyncio.run(_run_founder())
-    assert removed == [(7, "admin")]
 
 
 def test_unmute_partial_keeps_active_record(monkeypatch: pytest.MonkeyPatch) -> None:

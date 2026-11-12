@@ -35,14 +35,12 @@ def test_scheduler_stop_clears_state_on_task_exception(
         sched_mod._sched_ready = asyncio.Event()
         sched_mod._sched_ready.set()
         sched_mod._sched_error = None
-        sched_mod._sync_bot = None
         sched_mod._sched_task = asyncio.create_task(_boom())
         await sched_mod.stop()
         assert sched_mod._sched_task is None
         assert sched_mod._sched_ready is None
         assert sched_mod._sched_stop is None
         assert sched_mod._sched_error is None
-        assert sched_mod._sync_bot is None
 
     asyncio.run(_run())
 

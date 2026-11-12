@@ -187,8 +187,8 @@ async def execute_unban(
     )
 
     # * Name missed groups in the reply so the operator can act: the DB
-    # * record is already gone, so only a targeted re-drive (or a later
-    # * /tcsync run) reaches these chats; plain counts hide them.
+    # * record is already gone, so only a targeted re-drive reaches these
+    # * chats; plain counts hide them.
     if failed:
         sample = ", ".join(
             grp.get("title") or str(grp.get("chat_id", 0))

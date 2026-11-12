@@ -7,18 +7,16 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import itertools
 import logging
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
 import pytest
 
 import api.cron as cron_mod
 from tcbot import _env_list, cfg, error_reporter, parse_chat_id
 from tcbot.database import mtproto
-from tcbot.modules import sync as sy
 
 
 def _run(coro: Any) -> Any:
@@ -167,58 +165,6 @@ def test_cfg_prefixes_is_immutable() -> None:
     with pytest.raises(AttributeError):
         first.append("__mutant__")  # type: ignore[attr-defined]
     assert "__mutant__" not in cfg.prefixes
-
-
-def test_sync_sweep_sorts_ids(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _groups() -> list[dict[str, Any]]:
-        return [
-            {"chat_id": 30, "title": "C"},
-            {"chat_id": 10, "title": "A"},
-            {"chat_id": 20, "title": "B"},
-        ]
-
-    async def _bans() -> list[int]:
-        return [3, 1, 2]
-
-    # * The enforcement scope leads with the federation primary group, so pin
-    # * it here: the asserted order must not depend on the deployment's
-    # * MAIN_GROUP.
-    monkeypatch.setattr(sy, "cfg", dataclasses.replace(cfg, main_group=-500))
-    monkeypatch.setattr(sy.db.groups_db, "active_groups", _groups)
-    monkeypatch.setattr(sy.db.bans_db, "active_ban_user_ids", _bans)
-    # * The sweep cursor is process state: reset it so the pair order this
-    # * test asserts does not depend on an earlier sweep.
-    monkeypatch.setattr(sy, "_ban_sweep_offset", 0)
-    monkeypatch.setattr(sy, "_mute_sweep_offset", 0)
-    seen: dict[str, Any] = {}
-    orig_take = sy.take_pairs
-
-    def _spy(
-        user_ids: list[int],
-        chat_ids: list[int],
-        max_checks: int,
-        **kwargs: Any,
-    ) -> tuple[list[tuple[int, int]], bool, int]:
-        seen["uids"] = list(user_ids)
-        seen["cids"] = list(chat_ids)
-        pairs, truncated, covered = orig_take(user_ids, chat_ids, max_checks, **kwargs)
-        seen["pairs"] = list(pairs)
-        return pairs, truncated, covered
-
-    monkeypatch.setattr(sy, "take_pairs", _spy)
-
-    async def _ok(_bot: Any, _chat_id: int, _user_id: int) -> str:
-        return "ok"
-
-    monkeypatch.setattr(sy, "_sync_ban_pair", _ok)
-    counts = _run(sy.run_ban_sync(cast("Any", SimpleNamespace())))
-
-    assert seen["uids"] == [1, 2, 3]
-    # * The primary group leads, then the connected groups in ID order.
-    assert seen["cids"] == [-500, 10, 20, 30]
-    assert seen["pairs"] == sorted(seen["pairs"])
-    # * Three users across four groups, the primary group included.
-    assert counts.checked == 12
 
 
 def test_cron_do_post_answers_405() -> None:

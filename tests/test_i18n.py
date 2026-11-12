@@ -38,7 +38,6 @@ from tcbot.modules import (
     mute,
     netspeed,
     stats,
-    sync,
     unban,
     warns,
 )
@@ -141,7 +140,6 @@ _DYNAMIC_KEY_PREFIXES = (
     "proof.action.",
     "reason.",
     "stats.",
-    "syncing.",
     "unbanning.",
     "warnings.",
 )
@@ -878,7 +876,6 @@ def test_get_help_matches_default_import() -> None:
         "mute",
         "netspeed",
         "stats",
-        "sync",
         "unban",
         "warns",
     ):
@@ -1121,15 +1118,6 @@ def test_stats_help_golden() -> None:
     assert sections["What it does"] == t("stats.help.what.body")
     assert sections["Drill-downs"] == t("stats.help.drills.body")
     assert sections["Examples"] == t("stats.help.examples.body")
-
-
-def test_syncing_help_golden() -> None:
-    assert sync.__help__["overview"] == t("syncing.help.overview")
-    sections = _module_sections(sync)
-    assert sections["Commands & Aliases"] == t("syncing.help.commands.body")
-    assert sections["/tcsync"] == t("syncing.help.sync.body")
-    assert sections["/tcsync <target>"] == t("syncing.help.sync_target.body")
-    assert sections["Examples"] == t("syncing.help.examples.body")
 
 
 def test_maintenance_help_golden() -> None:

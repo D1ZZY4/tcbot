@@ -38,7 +38,7 @@ A federation ban marks a user as banned in the persistent `bans` table and appli
 
 Commands use the project's configured prefixes; slash commands are examples.
 
-Federation origin: `/tcban`, `/tcunban`, and `/tcsync` may start from bot DM or any connected or primary group. A disconnected group is refused, and a connection-state outage blocks the action with a retry notice instead of proceeding.
+Federation origin: `/tcban` and `/tcunban` may start from bot DM or any connected or primary group. A disconnected group is refused, and a connection-state outage blocks the action with a retry notice instead of proceeding.
 
 ## `/tcban` flow
 
@@ -192,7 +192,7 @@ The helper removes the role record, posts the federation demote log, and notifie
 - A role auto-demotion log is sent to the federation logs channel.
 - The target is notified by DM when possible.
 
-The step is best-effort: the ban record is already written at that point, so a role lookup or demote failure is logged loudly and the ban is enforced anyway. The target keeps their rank only until a later repair pass (`/tcsync` or join-time enforcement) removes it.
+The step is best-effort: the ban record is already written at that point, so a role lookup or demote failure is logged loudly and the ban is enforced anyway. The target keeps their rank only until a later join-time enforcement pass removes it.
 
 ## Ban database schema impact
 

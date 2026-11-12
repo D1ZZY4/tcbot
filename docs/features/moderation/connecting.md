@@ -110,7 +110,7 @@ After the gather, `complete_join`:
 1. Schedules a fire-and-forget admin-identity harvest task that calls `db.users_cache.harvest_user_identity` for every admin so name lookups are available without extra DB or Telegram round-trips later.
 2. Fans `bot.ban_chat_member(chat_id, uid)` across every active ban user ID with `fan_out(...)` so a freshly connected group immediately enforces every existing federation ban.
 3. Fans `bot.restrict_chat_member(chat_id, uid, permissions=can_send_messages=False, until_date=...)` across every active mute doc with `fan_out(...)`.
-4. When the ban or mute fetch fails, the replay still runs on an empty list and logs a `BLIND` error naming the group, so the next `/tcsync` (or re-add) closes the gap instead of the info line reading as healthy.
+4. When the ban or mute fetch fails, the replay still runs on an empty list and logs a `BLIND` error naming the group, so a re-add closes the gap instead of the info line reading as healthy.
 5. Posts `messages.group_connected_log(chat_id, chat_title, owner_id, owner_fname, chat_username)` to `cfg.logs`.
 
 The function returns normally only after `add_group` has succeeded. If the `add_group` write fails, the exception propagates and neither the federation log nor the success reply is issued.
@@ -174,7 +174,7 @@ Key behaviors to keep in mind:
 3. The bot must hold `can_delete_messages`, `can_restrict_members`, and `can_invite_users` before `complete_join` fires.
 4. The four precondition checks (member, is_connected, pending, bot perms) run in parallel.
 5. `complete_join` is awaited before the success reply so DB failures cannot produce a false "connected" confirmation.
-6. `complete_join` replays every active ban via `fan_out(bot.ban_chat_member)` and every active mute via `fan_out(bot.restrict_chat_member)`. The replay is bounded by a time budget: Telegram admits 20 requests a minute per group, so a long enforcement list would otherwise keep the connect handler running for a quarter of an hour. The replay stops at the budget, logs the number of bans and mutes that were not applied, and reports the connect as a blind replay so the owner runs `/tcsync` to finish it.
+6. `complete_join` replays every active ban via `fan_out(bot.ban_chat_member)` and every active mute via `fan_out(bot.restrict_chat_member)`. The replay is bounded by a time budget: Telegram admits 20 requests a minute per group, so a long enforcement list would otherwise keep the connect handler running for a quarter of an hour. The replay stops at the budget, logs the number of bans and mutes that were not applied, and reports the connect as a blind replay so the owner re-adds the bot to finish it.
 7. `complete_join` posts a `group_connected_log` to `cfg.logs` regardless of how many bans/mutes were successfully applied.
 8. Adding the bot to a group auto-sends a `Connect` / `Cancel` prompt and writes a `pending_joins` entry.
 9. Anonymous-admin adds do not produce a prompt.

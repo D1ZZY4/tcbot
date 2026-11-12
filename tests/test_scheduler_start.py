@@ -64,22 +64,3 @@ def test_start_success_path_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
 
     asyncio.run(sched_mod.start(_TEST_URL, 0))
     asyncio.run(sched_mod.stop())
-
-
-def test_start_stores_explicit_sync_runner(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def _ready(*args: Any, **kwargs: Any) -> None:
-        if sched_mod._sched_ready is not None:
-            sched_mod._sched_ready.set()
-
-    async def _runner(_bot: Any) -> None:
-        return None
-
-    monkeypatch.setattr(sched_mod, "_STOP_TIMEOUT_S", 0.1)
-    monkeypatch.setattr(sched_mod, "_scheduler_background", _ready)
-
-    asyncio.run(sched_mod.start(_TEST_URL, 0, sync_runner=_runner))
-    assert sched_mod._sync_runner is _runner
-    asyncio.run(sched_mod.stop())
-    assert sched_mod._sync_runner is None

@@ -335,9 +335,9 @@ async def execute_unmute(
         )
         return
     if failed > 0:
-        # * Partial success: keep the DB record so /tcsync can re-drive
-        # * the remaining muted chats. Clearing here would strand the
-        # * user muted with no repair path (sync never unrestricts).
+        # * Partial success: keep the DB record so a later re-drive can
+        # * reach the remaining muted chats. Clearing here would strand
+        # * the user muted with no repair path.
         await safe_reply(
             msg,
             t(

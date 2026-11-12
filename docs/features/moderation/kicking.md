@@ -108,7 +108,7 @@ If the target holds a federation role, the role is removed when the kick is enfo
 
 The demote runs at enforcement time because the reason and proof steps are still cancelable. A demote at the entry would strip the target's role, post the federation demote log, and DM the target that they were kicked even when the moderator cancelled the flow and no kick ever happened.
 
-`demote_before_enforcement` removes the role record (`tc_admins` for Admin, `tc_roles` for Developer/Tester), posts the federation demote log, and DMs the target. The step is best-effort: a role lookup or demote failure is logged loudly and the kick proceeds, because the kick audit row has already been written. The target keeps their rank only until a later repair pass (`/tcsync` or join-time enforcement) removes it.
+`demote_before_enforcement` removes the role record (`tc_admins` for Admin, `tc_roles` for Developer/Tester), posts the federation demote log, and DMs the target. The step is best-effort: a role lookup or demote failure is logged loudly and the kick proceeds, because the kick audit row has already been written. The target keeps their rank only until a later join-time enforcement pass removes it.
 
 ## `execute_kick` behavior
 
@@ -166,7 +166,7 @@ The reply and federation log use `keyboards.action_proof_kb(target_id, proof_lin
 - A DB `log_kick` failure aborts the kick with a retry reply before any group is touched, so an enforced kick is never missing from `/check` history.
 - Federation log send failure does not stop the kick reply.
 - If the post-ban `unban_chat_member` fails, the user is effectively banned in this chat. The reply now appends a `WARNING:` line explaining this and recommending a manual chat-member unban (previously the failure was a silent false success).
-- A demote failure is logged loudly and the kick still proceeds; the target's rank is repaired by a later `/tcsync` or join-time enforcement pass.
+- A demote failure is logged loudly and the kick still proceeds; the target's rank is repaired by a later join-time enforcement pass.
 - The reason and proof conversation is per-chat and per-user, so simultaneous kick flows are isolated.
 - The kick command is **group-only**: the entry rejects a private chat with the localized `replies.err_group_only(locale)` notice (English default: `Use this command in a group.`) before any role or target I/O, and `execute_kick` acts on the current chat (`ban_chat_member` then `unban_chat_member` in `effective_chat.id`). Rank gating is Tester or above via `basic_mod_only`; the decorator itself performs no group-membership check beyond the entry's private-chat guard.
 - The `/tckick` executor is not gated on `mod_only`; any Tester or higher can issue it.

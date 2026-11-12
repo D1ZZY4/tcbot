@@ -154,7 +154,6 @@ Current stack:
 │   │   ├── additional.py     Additional menu
 │   │   ├── help.py           Help command
 │   │   ├── stats.py          Statistics
-│   │   ├── sync.py           Enforcement reconciliation (/tcsync)
 │   │   ├── maintenance.py    Maintenance commands
 │   │   ├── netspeed.py       Network speed test
 │   │   ├── privacy.py        Privacy panel (callback-only, via start menu)
@@ -265,7 +264,6 @@ Important non-secret/runtime variables include:
 - `REDIS_URL`: optional Redis connection URL for L2 cache.
 - `WARN_LIMIT`: per-group warn threshold that triggers auto-ban; default `3`.
 - `WARN_EXPIRY_DAYS`: days after which warn records expire; default `0` (disabled).
-- `SYNC_INTERVAL_HOURS`: hours between scheduled enforcement-sync sweeps; default `0` (disabled, manual `/tcsync` only).
 - `FED_WARN_LIMIT`: federation-wide warn threshold that triggers auto-ban; default `0` (disabled).
 - `COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_APPEAL_URL`, `COMMUNITY_TRAVEL_URL`: optional community links shown in the additional menu (built-in defaults apply when empty).
 

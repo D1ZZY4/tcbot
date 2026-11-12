@@ -304,7 +304,7 @@ async def on_join_request_approved(
             ban,
         )
         # * Fail closed: suppress welcome and mute enforcement until ban
-        # * state is proven clean; /tcsync heals on next sweep.
+        # * state is proven clean; the join-time enforcement re-checks it.
         return
     if ban:
         # * The request-time decline in on_join_request can be beaten by a

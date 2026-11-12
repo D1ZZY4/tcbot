@@ -146,7 +146,7 @@ If the target holds a federation role, the role is removed when the mute is enfo
 
 The demote runs at enforcement time because the reason and proof steps are still cancelable. A demote at the entry would strip the target's role, post the federation demote log, and DM the target that they were muted even when the moderator cancelled the flow and no mute ever happened.
 
-`demote_before_enforcement` removes the role record, posts the federation demote log, and DMs the target. The step is best-effort: a role lookup or demote failure is logged loudly and the mute proceeds, because the mute record is already stored. The target keeps their rank only until a later repair pass (`/tcsync` or join-time enforcement) removes it.
+`demote_before_enforcement` removes the role record, posts the federation demote log, and DMs the target. The step is best-effort: a role lookup or demote failure is logged loudly and the mute proceeds, because the mute record is already stored. The target keeps their rank only until a later join-time enforcement pass removes it.
 
 ## `execute_mute` behavior
 
@@ -237,7 +237,7 @@ The reply and federation log use `keyboards.action_proof_kb(target_id, proof_lin
 ## Edge cases
 
 - A duration token that fails the regex is silently dropped and treated as part of the reason text.
-- A demote failure is logged loudly and the mute still proceeds; the target's rank is repaired by a later `/tcsync` or join-time enforcement pass.
+- A demote failure is logged loudly and the mute still proceeds; the target's rank is repaired by a later join-time enforcement pass.
 - `execute_unmute` with no active mute record replies `<user> has no active federation mute.` and does not fan `restrict_chat_member` across the groups.
 - A failed active-mute read fails closed with a retry notice instead of being treated as "no active mute".
 - A failed group-list fetch inside `execute_unmute` aborts with the same retry notice before any group is touched, so the active record stays and a retry works; the unmute never ends silently.

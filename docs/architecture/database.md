@@ -986,17 +986,12 @@ Pool parameters: `decode_responses=True`, `max_connections=20`,
 
 ## Scheduler (`scheduler.py`)
 
-`start(database_url: str, warn_expiry_days: int, *, bot: Bot | None = None, sync_interval_hours: int = 0, sync_runner: Callable[..., Any] | None = None) -> None`
+`start(database_url: str, warn_expiry_days: int) -> None`
 spawns the `tcbot.scheduler` background asyncio task and waits (bounded by
 the same 10 s grace window as `stop()`) for the scheduler to become ready,
 so a constructor error or a hung job-store handshake reports a startup
-failure instead of hanging boot. `bot` plus a positive interval registers
-the `tcbot.enforcement_sync` sweep; a zero interval or `None` bot removes a
-stale schedule. `sync_runner` is the enforcement sweep supplied by the
-runtime lifecycle (which already imports the command modules), passed
-explicitly so the database package never imports a command module; `None`
-disables the sweep. On readiness failure it raises `RuntimeError` (wrapped
-from the captured error).
+failure instead of hanging boot. On readiness failure it raises
+`RuntimeError` (wrapped from the captured error).
 
 `stop() -> None` sets the stop event and waits up to 10 s for graceful
 shutdown, then cancels a stuck task so shutdown never orphans a live
@@ -1055,9 +1050,10 @@ Recurring jobs:
 | Job ID | Trigger | Purpose |
 |---|---|---|
 | `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: deletes `warn_counts` rows older than the cutoff from `updated_at` and `warns` rows from `timestamp` in one transaction. Both must be pruned together: pruning only the counters lets the counter backfill rebuild them from the surviving history, and pruning only the history leaves a counter that counts a warning nobody can see. The transaction carries a 60 s budget of its own, because a bulk delete over a large history can run long. Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
-| `tcbot.enforcement_sync` | `IntervalTrigger(hours=sync_interval_hours)` | Calls `_run_scheduled_sync` (the `/tcsync` core on a timer, bounded to 200 checks, log-only results, via the explicit `sync_runner` start argument, so the database package never imports a command module). Uses `misfire_grace_time=86400`, `coalesce=True`. Registered only when the interval is positive and a `bot` reference was passed; otherwise removed. See [`../features/moderation/sync.md`](../features/moderation/sync.md). |
 | `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes the expired timed mutes from `active_mutes` and the stale profiles from `member_cache`. PostgreSQL has no TTL index, so this job replaces the TTL pruning the previous deployment relied on. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. |
 | `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal runs against the `postgres` store after the scheduler started (a removal issued before `start()` only searches the pending-job list and would leave the persisted row firing). `_cleanup_old_records()` stays importable as a no-op shim so a persisted record that still points at it can deserialize without `AttributeError`. |
+
+| `tcbot.enforcement_sync` (retired) | removed on every startup | The enforcement sweep that the `/tcsync` command drove. The command and the sweep were removed, so the schedule is removed on every startup and can no longer fire. |
 
 Persistent per-ban unban jobs: there are NONE in the current code. The
 scheduler registers only the periodic jobs above (plus the legacy
@@ -1075,8 +1071,7 @@ endpoint surface the incomplete expiry (a cancelled expiry propagates via
 `throw_if_cancelled` rather than reporting success). Removing a stale
 schedule whose removal fails for a reason other than not present logs at
 warning level, so a disabled schedule that keeps firing is visible in the
-logs. `_run_scheduled_sync` logs the failure and returns; the next interval
-re-drives, so one bad run never wedges the schedule.
+logs.
 
 ## Indexes
 
@@ -1173,13 +1168,12 @@ the server), then in parallel `ensure_initial_owner(cfg.initial_owner_id)`
 configured (connection failure degrades to in-memory cache only with a
 warning), and `mtproto.start()` on long-lived transports (an exception
 aborts boot; a degraded `False` warns and continues Bot-API-only). Then
-`scheduler.start(cfg.database_url, cfg.warn_expiry_days, bot=app.bot,
-sync_interval_hours=cfg.sync_interval_hours, sync_runner=run_ban_sync)`,
+`scheduler.start(cfg.database_url, cfg.warn_expiry_days)`,
 followed by a background `_warm_hot_caches` task that pre-loads owner ID,
 active groups, and the owner's effective role into L1+L2. `_post_shutdown`
 stops the scheduler, closes Redis, and disposes the database engine.
 Related `cfg` fields: `database_url`, `redis_url`, `warn_expiry_days`,
-`sync_interval_hours`, `initial_owner_id`.
+`initial_owner_id`.
 
 ## Safety rules
 

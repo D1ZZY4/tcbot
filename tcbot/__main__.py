@@ -40,7 +40,6 @@ from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.modules.helper.extraction import refresh as identity_refresh
 from tcbot.modules.helper.pipelines import connected_flow, stats_flow
 from tcbot.modules.helper.pipelines.ban_flow import drain_proof_sessions
-from tcbot.modules.sync import run_ban_sync
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import _ensure_loaded
@@ -342,9 +341,6 @@ async def _post_init(app: Application) -> None:
     await sched_mod.start(
         cfg.database_url,
         cfg.warn_expiry_days,
-        bot=app.bot,
-        sync_interval_hours=cfg.sync_interval_hours,
-        sync_runner=run_ban_sync,
     )
     _startup_tasks.spawn(_warm_hot_caches())
     asyncio.get_running_loop().set_exception_handler(_make_asyncio_exc_handler())
