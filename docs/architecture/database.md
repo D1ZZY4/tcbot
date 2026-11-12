@@ -101,6 +101,13 @@ state. Its access must remain restricted to the trusted backend. Do not grant
 table access to `anon` or `authenticated`, and protect the database
 connection string as a secret.
 
+The scheduler job table contains pickled job state. Both it and
+`mtproto_state` have an explicit migration that enables RLS, revokes all
+relation privileges from `PUBLIC`, `anon`, `authenticated`, and
+`service_role`, then grants only the DML operations the trusted backend
+requires to `service_role`. This hardening is in the table migration history
+itself, rather than relying solely on the `ensure_rls` event trigger.
+
 ```bash
 # Apply the migrations by hand (the bot does this at startup).
 uv run alembic upgrade head
