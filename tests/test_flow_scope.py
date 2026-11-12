@@ -114,6 +114,41 @@ def test_clearing_one_scope_leaves_the_other_alone() -> None:
     assert flow_scope(ctx, group_b)["ban_target_id"] == 222  # type: ignore[arg-type]
 
 
+def test_an_emptied_scope_entry_is_dropped() -> None:
+    """A finished conversation must not leave an empty dict behind.
+
+    The scope map holds one entry per chat a user moderated in, so an
+    entry that survives its conversation keeps growing the user data of
+    every moderator for the lifetime of the process.
+    """
+    ctx = _FakeCtx()
+    group = _FakeUpdate(chat_id=100, user_id=42)
+
+    scope = flow_scope(ctx, group)  # type: ignore[arg-type]
+    scope["ban_target_id"] = 111
+
+    clear_flow_scope(ctx, group, keys=["ban_target_id"])  # type: ignore[arg-type]
+
+    # * The map itself is gone once no conversation holds a payload.
+    assert ctx.user_data.get("tc_flow_scopes") is None
+
+
+def test_a_partial_clear_keeps_the_other_payload() -> None:
+    """Clearing one action leaves the payload of another action in place."""
+    ctx = _FakeCtx()
+    group = _FakeUpdate(chat_id=100, user_id=42)
+
+    scope = flow_scope(ctx, group)  # type: ignore[arg-type]
+    scope["ban_target_id"] = 111
+    scope["warn_target_id"] = 222
+
+    clear_flow_scope(ctx, group, keys=["ban_target_id"])  # type: ignore[arg-type]
+
+    kept = flow_scope(ctx, group)  # type: ignore[arg-type]
+    assert "ban_target_id" not in kept
+    assert kept["warn_target_id"] == 222
+
+
 def test_the_conversation_key_matches_the_registered_conversations() -> None:
     """The scope key must be the one PTB uses for per_chat + per_user."""
     update = _FakeUpdate(chat_id=100, user_id=42)
