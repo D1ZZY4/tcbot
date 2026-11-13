@@ -183,10 +183,11 @@ starved by a slow query. The pool is sized explicitly in
 pool timeout, and a 30-minute recycle so a proxy never hands out a dropped
 connection.
 
-Every call is also bounded. `db_call(op, timeout=...)` defaults to 20 s and
-raises `TimeoutError` when the operation does not answer in time. A timeout
-counts as a transient failure and therefore opens the PostgreSQL circuit like
-any other connection error.
+Every call is also bounded by default. `db_call(op, timeout=...)` defaults to
+20 s and raises `TimeoutError` when the operation does not answer in time. A
+timeout counts as a transient failure and therefore opens the PostgreSQL
+circuit like any other connection error. The operations listed below are the
+only ones that opt out, and each one states why.
 
 Reads do not open a transaction. `fetch_all`, `fetch_one`, `fetch_value`,
 `fetch_count`, and `count_rows` run on an autocommit connection, so a read
