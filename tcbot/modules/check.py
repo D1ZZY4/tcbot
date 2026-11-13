@@ -47,29 +47,19 @@ __module_name__ = "Check"
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Build this module's help entry in the given locale."""
-    overview = t("checking.help.overview", locale)
-    sections: list[tuple[str, str]] = [
-        (
-            replies.sec_commands(locale),
-            t("checking.help.commands.body", locale),
-        ),
-        replies.who_section(replies.context_anyone(locale), locale),
-        replies.where_section(replies.context_bot_or_group(locale), locale),
-        (
-            "/checkme",
-            t("checking.help.checkme.body", locale),
-        ),
-        (
-            "/check",
-            t("checking.help.check.body", locale),
-        ),
-        replies.target_section(locale),
-        (
-            replies.sec_examples(locale),
-            t("checking.help.examples.body", locale),
-        ),
-    ]
-    return {"name": __module_name__, "overview": overview, "sections": sections}
+    return replies.module_help(
+        locale,
+        name=__module_name__,
+        overview=t("checking.help.overview", locale),
+        commands=t("checking.help.commands.body", locale),
+        who=replies.context_anyone(locale),
+        where=replies.context_bot_or_group(locale),
+        details=[
+            ("/checkme", t("checking.help.checkme.body", locale)),
+            ("/check", t("checking.help.check.body", locale)),
+        ],
+        examples=t("checking.help.examples.body", locale),
+    )
 
 
 __help__: replies.HelpEntry = get_help()

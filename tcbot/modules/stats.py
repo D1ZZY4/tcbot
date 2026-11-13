@@ -51,28 +51,23 @@ __module_name__ = "Stats"
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Build this module's help entry in the given locale."""
-    overview = t("stats.help.overview", locale)
-    sections: list[tuple[str, str]] = [
-        (
-            replies.sec_commands(locale),
-            t("stats.help.commands.body", locale),
-        ),
-        replies.who_section(replies.context_anyone(locale), locale),
-        replies.where_section(replies.context_bot_or_group(locale), locale),
-        (
-            replies.sec_what(locale),
-            t("stats.help.what.body", locale),
-        ),
-        (
-            t("stats.help.drills.title", locale, plain=True),
-            t("stats.help.drills.body", locale),
-        ),
-        (
-            replies.sec_examples(locale),
-            t("stats.help.examples.body", locale),
-        ),
-    ]
-    return {"name": __module_name__, "overview": overview, "sections": sections}
+    return replies.module_help(
+        locale,
+        name=__module_name__,
+        overview=t("stats.help.overview", locale),
+        commands=t("stats.help.commands.body", locale),
+        who=replies.context_anyone(locale),
+        where=replies.context_bot_or_group(locale),
+        what=t("stats.help.what.body", locale),
+        target=False,
+        details=[
+            (
+                t("stats.help.drills.title", locale, plain=True),
+                t("stats.help.drills.body", locale),
+            )
+        ],
+        examples=t("stats.help.examples.body", locale),
+    )
 
 
 __help__: replies.HelpEntry = get_help()

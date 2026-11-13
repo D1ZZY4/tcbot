@@ -44,35 +44,27 @@ __module_name__ = "Connect"
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Build this module's help entry in the given locale."""
-    overview = t("connecting.help.overview", locale, community=cfg.community_name)
-    sections: list[tuple[str, str]] = [
-        (
-            replies.sec_commands(locale),
-            t("connecting.help.commands.body", locale),
-        ),
-        replies.who_section(t("connecting.help.who.body", locale), locale),
-        replies.where_section(
-            t("connecting.help.where.body", locale, community=cfg.community_name),
-            locale,
-        ),
-        (
-            replies.sec_what(locale),
-            t("connecting.help.what.body", locale, community=cfg.community_name),
-        ),
-        (
-            t("connecting.help.permissions.title", locale, plain=True),
-            t("connecting.help.permissions.body", locale),
-        ),
-        (
-            t("connecting.help.notes.title", locale, plain=True),
-            t("connecting.help.notes.body", locale),
-        ),
-        (
-            replies.sec_examples(locale),
-            t("connecting.help.examples.body", locale),
-        ),
-    ]
-    return {"name": __module_name__, "overview": overview, "sections": sections}
+    return replies.module_help(
+        locale,
+        name=__module_name__,
+        overview=t("connecting.help.overview", locale, community=cfg.community_name),
+        commands=t("connecting.help.commands.body", locale),
+        who=t("connecting.help.who.body", locale),
+        where=t("connecting.help.where.body", locale, community=cfg.community_name),
+        what=t("connecting.help.what.body", locale, community=cfg.community_name),
+        target=False,
+        details=[
+            (
+                t("connecting.help.permissions.title", locale, plain=True),
+                t("connecting.help.permissions.body", locale),
+            ),
+            (
+                t("connecting.help.notes.title", locale, plain=True),
+                t("connecting.help.notes.body", locale),
+            ),
+        ],
+        examples=t("connecting.help.examples.body", locale),
+    )
 
 
 __help__: replies.HelpEntry = get_help()

@@ -48,29 +48,17 @@ __module_name__ = "Kick"
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Build this module's help entry in the given locale."""
-    overview = t("kicking.help.overview", locale)
-    sections: list[tuple[str, str]] = [
-        (
-            replies.sec_commands(locale),
-            t("kicking.help.commands.body", locale),
-        ),
-        replies.who_section(replies.perm_tester_above(locale, plain=False), locale),
-        replies.where_section(replies.where_connected_group(locale), locale),
-        (
-            replies.sec_what(locale),
-            t("kicking.help.what.body", locale),
-        ),
-        (
-            replies.sec_flow(locale),
-            t("kicking.help.flow.body", locale),
-        ),
-        replies.target_section(locale),
-        (
-            replies.sec_examples(locale),
-            t("kicking.help.examples.body", locale),
-        ),
-    ]
-    return {"name": __module_name__, "overview": overview, "sections": sections}
+    return replies.module_help(
+        locale,
+        name=__module_name__,
+        overview=t("kicking.help.overview", locale),
+        commands=t("kicking.help.commands.body", locale),
+        who=replies.perm_tester_above(locale, plain=False),
+        where=replies.where_connected_group(locale),
+        what=t("kicking.help.what.body", locale),
+        flow=t("kicking.help.flow.body", locale),
+        examples=t("kicking.help.examples.body", locale),
+    )
 
 
 __help__: replies.HelpEntry = get_help()

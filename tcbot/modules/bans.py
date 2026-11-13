@@ -52,29 +52,17 @@ __module_name__ = "Ban"
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Build this module's help entry in the given locale."""
-    overview = t("banning.help.overview", locale)
-    sections: list[tuple[str, str]] = [
-        (
-            replies.sec_commands(locale),
-            t("banning.help.commands.body", locale),
-        ),
-        replies.who_section(replies.perm_dev_above(locale, plain=False), locale),
-        replies.where_section(replies.context_bot_or_group(locale), locale),
-        (
-            replies.sec_what(locale),
-            t("banning.help.what.body", locale),
-        ),
-        (
-            replies.sec_flow(locale),
-            t("banning.help.flow.body", locale),
-        ),
-        replies.target_section(locale),
-        (
-            replies.sec_examples(locale),
-            t("banning.help.examples.body", locale),
-        ),
-    ]
-    return {"name": __module_name__, "overview": overview, "sections": sections}
+    return replies.module_help(
+        locale,
+        name=__module_name__,
+        overview=t("banning.help.overview", locale),
+        commands=t("banning.help.commands.body", locale),
+        who=replies.perm_dev_above(locale, plain=False),
+        where=replies.context_bot_or_group(locale),
+        what=t("banning.help.what.body", locale),
+        flow=t("banning.help.flow.body", locale),
+        examples=t("banning.help.examples.body", locale),
+    )
 
 
 __help__: replies.HelpEntry = get_help()

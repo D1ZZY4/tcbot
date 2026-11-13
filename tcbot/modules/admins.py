@@ -48,44 +48,28 @@ __module_name__ = "Admin"
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Build this module's help entry in the given locale."""
-    overview = t("admins.help.overview", locale)
-    sections: list[tuple[str, str]] = [
-        (
-            replies.sec_commands(locale),
-            t("admins.help.commands.body", locale),
-        ),
-        replies.who_section(
-            t(
-                "admins.help.who.body",
-                locale,
-                perm=Safe(replies.perm_founder_only(locale, plain=False)),
-            ),
+    return replies.module_help(
+        locale,
+        name=__module_name__,
+        overview=t("admins.help.overview", locale),
+        commands=t("admins.help.commands.body", locale),
+        who=t(
+            "admins.help.who.body",
             locale,
+            perm=Safe(replies.perm_founder_only(locale, plain=False)),
         ),
-        replies.where_section(replies.context_bot_or_group(locale), locale),
-        (
-            t("admins.help.roles.title", locale, plain=True),
-            t("admins.help.roles.body", locale),
-        ),
-        replies.target_section(locale),
-        (
-            "/tcpromote",
-            t("admins.help.promote.body", locale),
-        ),
-        (
-            "/tcdemote",
-            t("admins.help.demote.body", locale),
-        ),
-        (
-            "/transferowner",
-            t("admins.help.transferowner.body", locale),
-        ),
-        (
-            replies.sec_examples(locale),
-            t("admins.help.examples.body", locale),
-        ),
-    ]
-    return {"name": __module_name__, "overview": overview, "sections": sections}
+        where=replies.context_bot_or_group(locale),
+        details=[
+            (
+                t("admins.help.roles.title", locale, plain=True),
+                t("admins.help.roles.body", locale),
+            ),
+            ("/tcpromote", t("admins.help.promote.body", locale)),
+            ("/tcdemote", t("admins.help.demote.body", locale)),
+            ("/transferowner", t("admins.help.transferowner.body", locale)),
+        ],
+        examples=t("admins.help.examples.body", locale),
+    )
 
 
 __help__: replies.HelpEntry = get_help()

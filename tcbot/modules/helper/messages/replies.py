@@ -294,3 +294,48 @@ def where_section(ctx: str, locale: str | None = None) -> tuple[str, str]:
 def target_section(locale: str | None = None) -> tuple[str, str]:
     """Build a standard 'Target syntax' section entry."""
     return (sec_target(locale), target_syntax(locale))
+
+
+# ─────────────────────── Module help assembly ─────────────────────── #
+
+
+def module_help(
+    locale: str | None,
+    *,
+    name: str,
+    overview: str,
+    commands: str,
+    who: str,
+    where: str,
+    what: str | None = None,
+    flow: str | None = None,
+    details: Sequence[tuple[str, str]] = (),
+    target: bool = True,
+    examples: str | None = None,
+) -> HelpEntry:
+    """Assemble the help entry of one command module.
+
+    Single owner of the section order: the commands, the audience, the
+    place, the explanation, the flow, the module's own detail sections,
+    the target syntax, and the examples. Two modules that mean the same
+    thing therefore render the same shape, and a section cannot drift
+    into a different place when a module adds one.
+
+    ``details`` carries the module-specific sections: the per-command
+    bodies and any topic the module explains in its own words.
+    """
+    sections: list[tuple[str, str]] = [
+        (sec_commands(locale), commands),
+        who_section(who, locale),
+        where_section(where, locale),
+    ]
+    if what is not None:
+        sections.append((sec_what(locale), what))
+    if flow is not None:
+        sections.append((sec_flow(locale), flow))
+    sections.extend(details)
+    if target:
+        sections.append(target_section(locale))
+    if examples is not None:
+        sections.append((sec_examples(locale), examples))
+    return {"name": name, "overview": overview, "sections": sections}

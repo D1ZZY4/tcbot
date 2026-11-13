@@ -38,24 +38,17 @@ __module_name__ = "Disconnect"
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Build this module's help entry in the given locale."""
-    overview = t("disconnecting.help.overview", locale, community=cfg.community_name)
-    sections: list[tuple[str, str]] = [
-        (
-            replies.sec_commands(locale),
-            t("disconnecting.help.commands.body", locale),
-        ),
-        replies.who_section(t("disconnecting.help.who.body", locale), locale),
-        replies.where_section(t("disconnecting.help.where.body", locale), locale),
-        (
-            replies.sec_what(locale),
-            t("disconnecting.help.what.body", locale, community=cfg.community_name),
-        ),
-        (
-            replies.sec_examples(locale),
-            t("disconnecting.help.examples.body", locale),
-        ),
-    ]
-    return {"name": __module_name__, "overview": overview, "sections": sections}
+    return replies.module_help(
+        locale,
+        name=__module_name__,
+        overview=t("disconnecting.help.overview", locale, community=cfg.community_name),
+        commands=t("disconnecting.help.commands.body", locale),
+        who=t("disconnecting.help.who.body", locale),
+        where=t("disconnecting.help.where.body", locale),
+        what=t("disconnecting.help.what.body", locale, community=cfg.community_name),
+        target=False,
+        examples=t("disconnecting.help.examples.body", locale),
+    )
 
 
 __help__: replies.HelpEntry = get_help()

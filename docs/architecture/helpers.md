@@ -218,6 +218,7 @@ Each help-bearing module declares exactly one `__help__: replies.HelpEntry = {..
 | `who_section(perm, locale=None)` | `tuple[str, str]` | Builds a `(sec_who(locale), perm)` section entry. |
 | `where_section(ctx, locale=None)` | `tuple[str, str]` | Builds a `(sec_where(locale), ctx)` section entry. |
 | `target_section(locale=None)` | `tuple[str, str]` | Builds a `(sec_target(locale), target_syntax(locale))` section entry. |
+| `module_help(locale, *, name, overview, commands, who, where, what=None, flow=None, details=(), target=True, examples=None)` | `HelpEntry` | Single owner of the help section order: commands, audience, place, explanation, flow, the module's own detail sections, the target syntax, and the examples. Two modules that mean the same thing therefore render the same shape. |
 
 All command modules that expose user-facing commands use these helpers rather than raw inline tuple literals.
 

@@ -40,32 +40,23 @@ __module_name__ = "Maintenance"
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Build this module's help entry in the given locale."""
-    overview = t("maintenance.help.overview", locale)
-    sections: list[tuple[str, str]] = [
-        (
-            replies.sec_commands(locale),
-            t("maintenance.help.commands.body", locale),
-        ),
-        replies.who_section(
+    return replies.module_help(
+        locale,
+        name=__module_name__,
+        overview=t("maintenance.help.overview", locale),
+        commands=t("maintenance.help.commands.body", locale),
+        who=(
             f"{bold('/leaveall')}: {replies.perm_founder_only(locale, plain=False)}\n"
-            f"{bold('/cleanup')}: {replies.perm_staff_only(locale, plain=False)}",
-            locale,
+            f"{bold('/cleanup')}: {replies.perm_staff_only(locale, plain=False)}"
         ),
-        replies.where_section(replies.context_bot_or_group(locale), locale),
-        (
-            "/leaveall",
-            t("maintenance.help.leaveall.body", locale),
-        ),
-        (
-            "/cleanup",
-            t("maintenance.help.cleanup.body", locale),
-        ),
-        (
-            replies.sec_examples(locale),
-            t("maintenance.help.examples.body", locale),
-        ),
-    ]
-    return {"name": __module_name__, "overview": overview, "sections": sections}
+        where=replies.context_bot_or_group(locale),
+        details=[
+            ("/leaveall", t("maintenance.help.leaveall.body", locale)),
+            ("/cleanup", t("maintenance.help.cleanup.body", locale)),
+        ],
+        target=False,
+        examples=t("maintenance.help.examples.body", locale),
+    )
 
 
 __help__: replies.HelpEntry = get_help()

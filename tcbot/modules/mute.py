@@ -59,33 +59,23 @@ __module_name__ = "Mute"
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Build this module's help entry in the given locale."""
-    overview = t("muting.help.overview", locale)
-    sections: list[tuple[str, str]] = [
-        (
-            replies.sec_commands(locale),
-            t("muting.help.commands.body", locale),
-        ),
-        replies.who_section(replies.perm_tester_above(locale, plain=False), locale),
-        replies.where_section(replies.where_connected_group(locale), locale),
-        (
-            replies.sec_what(locale),
-            t("muting.help.what.body", locale),
-        ),
-        (
-            replies.sec_flow(locale),
-            t("muting.help.flow.body", locale),
-        ),
-        (
-            t("muting.help.time.title", locale, plain=True),
-            t("muting.help.time.body", locale),
-        ),
-        replies.target_section(locale),
-        (
-            replies.sec_examples(locale),
-            t("muting.help.examples.body", locale),
-        ),
-    ]
-    return {"name": __module_name__, "overview": overview, "sections": sections}
+    return replies.module_help(
+        locale,
+        name=__module_name__,
+        overview=t("muting.help.overview", locale),
+        commands=t("muting.help.commands.body", locale),
+        who=replies.perm_tester_above(locale, plain=False),
+        where=replies.where_connected_group(locale),
+        what=t("muting.help.what.body", locale),
+        flow=t("muting.help.flow.body", locale),
+        details=[
+            (
+                t("muting.help.time.title", locale, plain=True),
+                t("muting.help.time.body", locale),
+            )
+        ],
+        examples=t("muting.help.examples.body", locale),
+    )
 
 
 __help__: replies.HelpEntry = get_help()

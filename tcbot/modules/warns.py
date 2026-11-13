@@ -64,29 +64,17 @@ def _warn_limit_label(locale: str | None = None) -> Safe:
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Build this module's help entry in the given locale."""
-    overview = t("warnings.help.overview", locale, limit=_warn_limit_label(locale))
-    sections: list[tuple[str, str]] = [
-        (
-            replies.sec_commands(locale),
-            t("warnings.help.commands.body", locale),
-        ),
-        replies.who_section(t("warnings.help.who.body", locale), locale),
-        replies.where_section(replies.where_connected_group(locale), locale),
-        (
-            replies.sec_what(locale),
-            t("warnings.help.what.body", locale, limit=_warn_limit_label(locale)),
-        ),
-        (
-            replies.sec_flow(locale),
-            t("warnings.help.flow.body", locale),
-        ),
-        replies.target_section(locale),
-        (
-            replies.sec_examples(locale),
-            t("warnings.help.examples.body", locale),
-        ),
-    ]
-    return {"name": __module_name__, "overview": overview, "sections": sections}
+    return replies.module_help(
+        locale,
+        name=__module_name__,
+        overview=t("warnings.help.overview", locale, limit=_warn_limit_label(locale)),
+        commands=t("warnings.help.commands.body", locale),
+        who=t("warnings.help.who.body", locale),
+        where=replies.where_connected_group(locale),
+        what=t("warnings.help.what.body", locale, limit=_warn_limit_label(locale)),
+        flow=t("warnings.help.flow.body", locale),
+        examples=t("warnings.help.examples.body", locale),
+    )
 
 
 __help__: replies.HelpEntry = get_help()
