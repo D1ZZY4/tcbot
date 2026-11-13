@@ -375,6 +375,29 @@ def refuse_message(
     return t(f"identity.refuse.{action}.{ident.kind}", locale, line=Safe(_line(ident)))
 
 
+def refuse_role(
+    action: str,
+    role: str,
+    target_id: int,
+    fname: str,
+    locale: str | None = None,
+) -> str | None:
+    """Return the refusal notice for a target that holds the federation *role*.
+
+    The identity classification and the role read are two separate fresh
+    reads, so they can disagree when the target is promoted between them.
+    Rendering the notice from the role itself keeps the caller free of a
+    synthesised identity, and the refusal still fails safe.
+    """
+    if role not in _REFUSE_KEYS.get(action, frozenset()):
+        return None
+    return t(
+        f"identity.refuse.{action}.{role}",
+        locale,
+        line=Safe(user_ref(target_id, fname)),
+    )
+
+
 # ─────────── Recognition notes (read-only views) ──────────────── #
 # * Single owner for "who is this?" copy on read-only surfaces such as
 # * /check: moderation entries use refuse_message/staff_notice instead, so

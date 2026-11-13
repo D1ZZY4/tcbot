@@ -164,15 +164,17 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * so re-read; a failed re-read keeps the refusal rather than
         # * demoting a staff member with no proven ban.
         # * Reconstruct a refusal when classify degraded (refusal is None) so
-        # * the "nothing to undo" reply below stays a real message.
+        # * the "nothing to undo" reply below stays a real message. The
+        # * classification and the role read are two separate fresh reads,
+        # * so they can disagree when the target is promoted between them.
         if refusal is None and target_role in staff_roles:
-            synth = identity.Identity(
-                kind=target_role,  # type: ignore[arg-type]
-                target_id=target_id,
-                fname=target_fname or str(target_id),
-                username=None,
+            refusal = identity.refuse_role(
+                "unban",
+                target_role,
+                target_id,
+                target_fname or str(target_id),
+                locale,
             )
-            refusal = identity.refuse_message("unban", synth, locale)
         ban_record = pre_ban
         if ban_record is None:
             try:
