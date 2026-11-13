@@ -112,8 +112,8 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | Variable | Default | Description |
 |---|---|---|
 | `ALBUM_DEBOUNCE_SECONDS` | `4` | Proof silence window before the ban executor runs (or tap Done to run at once). |
-| `MODULES_LOAD` | empty (all) | Whitelist of modules to load exclusively. |
-| `MODULES_NO_LOAD` | empty | Blacklist of modules to skip. |
+| `MODULES_LOAD` | empty (all) | Allowlist of modules to load exclusively. |
+| `MODULES_NO_LOAD` | empty | Denylist of modules to skip. |
 
 ### Transport
 
