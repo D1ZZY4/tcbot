@@ -276,7 +276,7 @@ Confirmation callback data:
 | `Confirm` | `demote_confirm:<target_id>:<executor_id>` (legacy without executor still works) |
 | `Cancel` | `demote_cancel:<target_id>:<executor_id>` (legacy without executor still works) |
 
-The confirmation callback requires the prompt opener and re-checks executor permission and target role before writing. A different staffer tapping gets an alert and the prompt stays live. If the target is Admin, it calls `users_roles.remove_admin(target_id)`. Otherwise, it calls `users_roles.remove_role(target_id)`.
+The confirmation callback requires the prompt opener and re-checks executor permission and target role before writing. A different staffer tapping gets an alert and the prompt stays live. It clears the role row from **both** `tc_admins` and `tc_roles`: a stale row in the other collection would otherwise resurrect the privilege on the next demote.
 
 On success:
 
@@ -316,8 +316,7 @@ After transfer, the previous Founder becomes Admin and the new target becomes Fo
 
 Behavior:
 
-- Admin target: remove from `tc_admins`.
-- Developer/Tester target: remove from `tc_roles`.
+- The target's row is removed from `tc_admins` and from `tc_roles`, so no stale row survives in the other collection.
 - Send the same `demoted` log to `cfg.logs` as manual demotion (the log never notes the trigger).
 - DM the target that their role was removed because they were banned, kicked, or muted.
 
@@ -366,7 +365,7 @@ Key role-system behaviors to keep in mind:
 10. Founder rejection resolves the request without adding Admin.
 11. `/tcdemote` blocks self-demotion and Founder demotion.
 12. Admin cannot demote Admin.
-13. Confirm demotion removes the correct table row (`tc_admins` for Admin, `tc_roles` for Developer/Tester).
+13. Confirm demotion removes the role row from both `tc_admins` and `tc_roles`.
 14. Transfer ownership makes the old Founder an Admin and replaces the owner record.
 15. Ban/kick/mute auto-demotes lower-ranked staff targets and logs the role removal.
 16. Equal-rank and higher-rank targets are protected from ban/kick/mute/warn actions.

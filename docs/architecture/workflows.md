@@ -258,7 +258,7 @@ Demotion is not a conversation. `Demote.execute(...)` in `pipelines/demote_flow.
 | `Demote.execute(..., trigger="kick")` | `"kick"` | Auto-demote before a current-group kick: same silent role-removal path as `"ban"`. |
 | `Demote.execute(..., trigger="mute")` | `"mute"` | Auto-demote before a federation-wide mute: same silent role-removal path as `"ban"` and `"kick"`. |
 
-`Demote.remove_role(target_id, target_role)` is the shared DB write used by all four paths. It delegates to `users_roles` and returns `True` if a role was actually removed.
+`Demote.remove_role(target_id, target_role)` is the shared DB write used by all four paths. It delegates to `users_roles` and returns `True` if a role was actually removed. It clears the row from **both** `tc_admins` and `tc_roles`: a stale row in the other collection would otherwise resurrect the privilege on the next demote, because the effective role prefers the Admin row and hides the stale row until `remove_admin` reveals it.
 
 The demote runs at enforcement time, next to the Telegram call it protects, never at the entry. The reason and proof steps of the ban, kick, and mute flows are cancelable, so an entry-time demote would strip the target's role, log it, and tell the target they were banned while the moderator could still cancel the action.
 

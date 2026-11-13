@@ -69,7 +69,7 @@ await Demote.execute(bot,
 
 | Member | Purpose |
 |---|---|
-| `Demote.remove_role(target_id, target_role)` | Deletes the matching record from `tc_admins` (when `target_role == "admin"`) or `tc_roles` (Developer/Tester). Returns True if a record was actually removed. |
+| `Demote.remove_role(target_id, target_role)` | Deletes the role record from **both** `tc_admins` and `tc_roles`. Clearing both is deliberate: a stale row in the other collection would otherwise resurrect the privilege on the next demote, because the effective role prefers the Admin row and hides the stale row until `remove_admin` reveals it. Returns True if any record was removed. |
 | `Demote.execute(...)` | Removes the role, posts the federation log, and DMs the target. Returns True when a role row was actually removed, False when the role was already gone. A database failure propagates to the caller, which decides whether to proceed. Supports both manual and demote-before-enforcement callers via the `trigger` keyword. |
 | `demote_before_enforcement(...)` | Best-effort pre-fan-out re-demote: reads the live role and removes it. A lookup or demote failure logs loudly and enforcement still runs. Used by the ban, kick, mute, and join executors to close the proof-collection TOCTOU window. |
 | `demote_before_unban(...)` | Fail-closed pre-unban gate. Returns `UnbanGate.PROCEED` only when the role is gone; `DEMOTE_FAILED` and `ROLE_SURVIVED` block the unban. Used by `/tcunban` and the appeal-approve path. |
