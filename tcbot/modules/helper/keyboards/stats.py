@@ -9,13 +9,8 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.keyboards.common import back_markup, back_row
+from tcbot.modules.helper.keyboards.common import back_markup
 from tcbot.utils.i18n import t
-
-
-def stats_back_row(locale: str | None = None) -> list[InlineKeyboardButton]:
-    """Single Back button row returning to the stats main menu."""
-    return back_row("stats_main", locale)
 
 
 def stats_main_kb(

@@ -139,7 +139,7 @@ Main groups:
 | Menus/help | `main_menu_kb`, `group_start_kb`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb`, `module_help_kb`, `back_to_module_kb`, `additional_menu_kb` |
 | Privacy | `privacy_kb`, `privacy_policy_sections_kb`, `back_to_privacy_policy_kb` |
 | Groups | `groups_menu_kb`, `tcgroups_kb` |
-| Stats | `stats_main_kb`, `stats_back_kb`, `stats_back_row`, `stats_list_kb`, `stats_search_panel_kb`, `stats_search_results_kb`, `stats_search_row` |
+| Stats | `stats_main_kb`, `stats_back_kb`, `stats_list_kb`, `stats_search_panel_kb`, `stats_search_results_kb`, `stats_search_row` |
 | Check | `check_back_row`, `check_warns_back_row`, `check_back_markup`, `check_paged_markup`, `check_warn_groups_kb`, `check_profile_kb` |
 | Paging | `nav_row` - the `[« Prev]` / `[Next »]` row for paged views |
 | Flow steps | `reason_step_kb`, `proof_step_kb`, `connect_join_kb` - owned here; `BuildReason.keyboard()`, `BuildProof.keyboard()`, and `BuildConnection.join_keyboard()` stay as thin delegating steps so existing call sites keep working. The flow modules call these builders directly; there is no second wrapper layer. |

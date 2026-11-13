@@ -836,6 +836,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Removed
 
+- **The unused stats back-row factory is gone** (`tcbot/modules/helper/keyboards/stats.py`): it had no callers and the back button it built is covered by the stats back markup. Behavior changes: none.
+
 - **The redundant warning index is gone** (`tcbot/database/mongos.py`): the warning history kept an ascending twin of its descending index. One index serves both sort directions, so the twin only added a write to every warning and a second copy of the rows in memory. Databases that still carry it drop it at startup.
 
 - **The duplicate anonymous-admin check is gone** (`tcbot/modules/helper/identity.py`, `tcbot/modules/helper/decorators/auth.py`, `tcbot/modules/connect.py`, `tcbot/modules/disconnecting.py`, `tcbot/modules/admins.py`): the identity helper that was meant to own the GroupAnonymousBot check was never called, and four modules inlined the same comparison instead. The helper is now the one owner. Behavior changes: none; the same placeholder is refused on the same paths.

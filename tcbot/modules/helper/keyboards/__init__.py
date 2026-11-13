@@ -53,7 +53,6 @@ from tcbot.modules.helper.keyboards.menus import (
 from tcbot.modules.helper.keyboards.nav import nav_row
 from tcbot.modules.helper.keyboards.stats import (
     stats_back_kb,
-    stats_back_row,
     stats_main_kb,
 )
 from tcbot.modules.helper.keyboards.topics import (
@@ -108,7 +107,6 @@ __all__ = [
     "proof_step_kb",
     "reason_step_kb",
     "stats_back_kb",
-    "stats_back_row",
     "stats_list_kb",
     "stats_main_kb",
     "stats_search_panel_kb",
