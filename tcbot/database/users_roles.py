@@ -618,13 +618,7 @@ async def has_permission(user_id: int, permission_key: str) -> bool:
     unknown, so a failure never grants privilege.
     """
     row = await db_call(
-        lambda: fetch_value(
-            select(
-                text("actor_has_permission(:user_id, :permission_key)")
-                .bindparams(user_id=user_id, permission_key=permission_key)
-                .label("allowed")
-            )
-        )
+        lambda: fetch_value(select(func.actor_has_permission(user_id, permission_key)))
     )
     return bool(row)
 
@@ -672,31 +666,6 @@ async def role_catalog() -> list[dict[str, object]]:
             ).order_by(role_definitions.c.priority.desc())
         )
     )
-
-
-async def grant_permission(role_key: str, permission_key: str) -> bool:
-    """Give one permission to one role."""
-    await db_call(
-        lambda: run(
-            pg_insert(role_permissions)
-            .values(role_key=role_key, permission_key=permission_key)
-            .on_conflict_do_nothing(index_elements=["role_key", "permission_key"])
-        )
-    )
-    return True
-
-
-async def revoke_permission(role_key: str, permission_key: str) -> bool:
-    """Take one permission away from one role."""
-    removed = await db_call(
-        lambda: run(
-            role_permissions.delete().where(
-                role_permissions.c.role_key == role_key,
-                role_permissions.c.permission_key == permission_key,
-            )
-        )
-    )
-    return removed > 0
 
 
 # * The document shape of an active role assignment.
