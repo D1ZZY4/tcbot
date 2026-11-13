@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+import msgspec
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -44,15 +45,25 @@ from ._shared import (
     META_REVIEW_MESSAGE,
     META_REVIEW_TIMESTAMP,
     META_UPDATE_COUNT,
+    _drop_review_keys,
+    _merge_metadata,
+    _slot_holds,
+    _slot_is_free,
 )
 
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.elements import ColumnElement
 
 log = get_logger(__name__)
+
+
+def _json_patch(payload: dict[str, Any]) -> str:
+    """Return the JSONB patch that carries *payload* into the metadata."""
+    return msgspec.json.encode(payload).decode()
 
 
 def make_ban_id() -> str:
@@ -428,6 +439,9 @@ async def set_log_message_id(ban_id: str, log_msg_id: int) -> None:
     """Attach the federation log message to a ban."""
     action = await action_by_ref(ban_id)
     if action is None:
+        # * The decision is gone or was renamed. The message reference is
+        # * lost, so the mismatch has to be visible.
+        log.warning("Federation log message has no ban record for ban_id=%s", ban_id)
         return
     await db_call(
         lambda: run(
@@ -487,23 +501,27 @@ async def deactivate_extra_active_bans(user_id: int, keep_ban_id: str) -> int:
 async def set_review_if_absent(ban_id: str, msg_id: int) -> bool:
     """Atomically claim the pending-review slot; return True when claimed.
 
-    The slot lives in the metadata of the decision: the update matches
-    only when no review is stored, so two concurrent appeal submissions
-    for the same ban cannot both claim the slot.
+    The slot lives in the metadata of the decision. The condition is part
+    of the UPDATE, so the database decides the winner: two concurrent
+    appeal submissions for the same ban cannot both claim the slot,
+    because the second one matches no row and reports no affected row.
+    A read-then-write would let the second writer overwrite the first.
     """
-    action = await action_by_ref(ban_id)
-    if action is None:
-        return False
-    metadata = dict(action.get("metadata") or {})
-    if metadata.get(META_REVIEW_MESSAGE):
-        return False
-    metadata[META_REVIEW_MESSAGE] = msg_id
-    metadata[META_REVIEW_TIMESTAMP] = utc_now().isoformat()
+    patch = _json_patch(
+        {
+            META_REVIEW_MESSAGE: msg_id,
+            META_REVIEW_TIMESTAMP: utc_now().isoformat(),
+        }
+    )
     affected = await db_call(
         lambda: run(
             moderation_actions.update()
-            .where(moderation_actions.c.id == int(action["id"]))
-            .values(metadata=metadata)
+            .where(
+                moderation_actions.c.external_ref == ban_id,
+                moderation_actions.c.action_type == "ban",
+                _slot_is_free(),
+            )
+            .values(metadata=_merge_metadata(patch))
         )
     )
     return affected > 0
@@ -515,17 +533,14 @@ async def clear_review(ban_id: str) -> None:
     Called after an appeal is rejected so the banned user is not permanently
     locked out from submitting a second appeal.
     """
-    action = await action_by_ref(ban_id)
-    if action is None:
-        return
-    metadata = dict(action.get("metadata") or {})
-    metadata.pop(META_REVIEW_MESSAGE, None)
-    metadata.pop(META_REVIEW_TIMESTAMP, None)
     await db_call(
         lambda: run(
             moderation_actions.update()
-            .where(moderation_actions.c.id == int(action["id"]))
-            .values(metadata=metadata)
+            .where(
+                moderation_actions.c.external_ref == ban_id,
+                moderation_actions.c.action_type == "ban",
+            )
+            .values(metadata=_drop_review_keys())
         )
     )
 
@@ -533,27 +548,20 @@ async def clear_review(ban_id: str) -> None:
 async def claim_appeal_decision(ban_id: str, review_msg_id: int) -> bool:
     """Atomically claim one appeal decision; return True when claimed.
 
-    The claim consumes the review slot. A claim that ends without a
+    The claim consumes the review slot, so it matches only the row that
+    still holds that exact review message. A claim that ends without a
     decision must hand the slot back with :func:`restore_review`.
     """
-    action = await action_by_ref(ban_id)
-    if action is None:
-        return False
-    metadata = dict(action.get("metadata") or {})
-    if metadata.get(META_REVIEW_MESSAGE) != review_msg_id:
-        return False
-    if str(action.get("status")) != "active":
-        return False
-    metadata.pop(META_REVIEW_MESSAGE, None)
-    metadata.pop(META_REVIEW_TIMESTAMP, None)
     affected = await db_call(
         lambda: run(
             moderation_actions.update()
             .where(
-                moderation_actions.c.id == int(action["id"]),
+                moderation_actions.c.external_ref == ban_id,
+                moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
+                _slot_holds(review_msg_id),
             )
-            .values(metadata=metadata)
+            .values(metadata=_drop_review_keys())
         )
     )
     return affected > 0
@@ -575,6 +583,40 @@ def _rejected_appeal_exists() -> ColumnElement[bool]:
     )
 
 
+def _open_appeal_exists(action_id: int, appellant_user_id: int) -> ColumnElement[bool]:
+    """Return the condition that the decision carries an open appeal.
+
+    An open appeal occupies the decision: the review card of that appeal
+    is the one the staff have to decide, so a second submission for the
+    same appellant must not file a second open appeal.
+    """
+    return (
+        select(moderation_appeals.c.id)
+        .where(
+            moderation_appeals.c.action_id == action_id,
+            moderation_appeals.c.appellant_user_id == appellant_user_id,
+            moderation_appeals.c.status == "pending",
+        )
+        .exists()
+    )
+
+
+def _decided_appeal_exists() -> ColumnElement[bool]:
+    """Return the condition that the decision carries a decided appeal.
+
+    A decided appeal is a closed question: its review card must not come
+    back, or a second reviewer could decide it again.
+    """
+    return (
+        select(moderation_appeals.c.id)
+        .where(
+            moderation_appeals.c.action_id == moderation_actions.c.id,
+            moderation_appeals.c.status.in_(("accepted", "rejected", "withdrawn")),
+        )
+        .exists()
+    )
+
+
 async def restore_review(
     ban_id: str,
     review_msg_id: int,
@@ -587,31 +629,178 @@ async def restore_review(
     slot on a ban that is still active and not yet rejected, so it cannot
     resurrect a review that another reviewer already decided.
     """
-    action = await action_by_ref(ban_id)
-    if action is None:
-        return False
-    metadata = dict(action.get("metadata") or {})
-    if metadata.get(META_REVIEW_MESSAGE):
-        return False
-    if str(action.get("status")) != "active":
-        return False
-    metadata[META_REVIEW_MESSAGE] = review_msg_id
-    metadata[META_REVIEW_TIMESTAMP] = (review_timestamp or utc_now()).isoformat()
+    patch = _json_patch(
+        {
+            META_REVIEW_MESSAGE: review_msg_id,
+            META_REVIEW_TIMESTAMP: (review_timestamp or utc_now()).isoformat(),
+        }
+    )
     affected = await db_call(
         lambda: run(
             moderation_actions.update()
             .where(
-                moderation_actions.c.id == int(action["id"]),
+                moderation_actions.c.external_ref == ban_id,
+                moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
-                # * A rejected appeal is a decision: its review card must
+                _slot_is_free(),
+                # * A decided appeal is a decision: its review card must
                 # * not come back, or a second reviewer could decide it
                 # * again.
-                ~_rejected_appeal_exists(),
+                ~_decided_appeal_exists(),
             )
-            .values(metadata=metadata)
+            .values(metadata=_merge_metadata(patch))
         )
     )
     return affected > 0
+
+
+async def submit_appeal(
+    ban_id: str,
+    appellant_user_id: int,
+    appeal_text: str,
+    review_message_id: int,
+) -> bool:
+    """Record an appeal and claim its review slot in one transaction.
+
+    The appeal and the claim have to land together. The claim is the
+    gate that lets only one appeal be in flight for a decision, and the
+    appeal row is what the reviewer decides on, so a claim without a row
+    would leave a review card that no decision can close, and a row
+    without a claim would leave a pending appeal that blocks every later
+    appeal for the same decision.
+
+    The return value is the result of the claim: ``True`` when this call
+    owns the review slot, ``False`` when another submission won it or
+    when the decision already carries an open appeal. A losing call
+    writes nothing at all.
+    """
+    patch = _json_patch(
+        {
+            META_REVIEW_MESSAGE: review_message_id,
+            META_REVIEW_TIMESTAMP: utc_now().isoformat(),
+        }
+    )
+
+    async def _work(sess: AsyncSession) -> bool:
+        action_id = await sess.scalar(
+            select(moderation_actions.c.id)
+            .where(
+                moderation_actions.c.external_ref == ban_id,
+                moderation_actions.c.action_type == "ban",
+            )
+            .limit(1)
+        )
+        if action_id is None:
+            return False
+        # * The claim carries the conditions, so the database decides the
+        # * winner: the update matches only a decision whose slot is free
+        # * and that carries no open appeal. Two concurrent submissions
+        # * therefore cannot both write a row, and the loser leaves the
+        # * decision untouched.
+        # * The claim runs on the session of this transaction. A separate
+        # * session would commit the claim on its own, so a failure of the
+        # * insert below would leave the slot claimed by an appeal row
+        # * that does not exist.
+        claim = await sess.execute(
+            moderation_actions.update()
+            .where(
+                moderation_actions.c.id == action_id,
+                moderation_actions.c.status == "active",
+                _slot_is_free(),
+                ~_open_appeal_exists(action_id, appellant_user_id),
+            )
+            .values(metadata=_merge_metadata(patch))
+        )
+        if not cast("CursorResult", claim).rowcount:
+            return False
+        # * The composite foreign key and the trigger of the table hold
+        # * the identity rules: the appellant has to be the banned user,
+        # * and the decision has to be an active ban.
+        await sess.execute(
+            pg_insert(moderation_appeals).values(
+                action_id=action_id,
+                appellant_user_id=appellant_user_id,
+                appeal_text=appeal_text,
+                status="pending",
+                submitted_at=utc_now(),
+            )
+        )
+        return True
+
+    return await run_transaction(_work)
+
+
+async def accept_appeal(ban_id: str, reviewer_id: int, note: str = "") -> bool:
+    """Accept the pending appeal of a decision; return True when it was pending.
+
+    The rejection counterpart is :func:`set_rejected_by`. Both close the
+    appeal, so the history says who decided and when, and the partial
+    index that limits one open appeal per decision releases the decision
+    for a later appeal.
+    """
+    affected = await db_call(
+        lambda: run(
+            moderation_appeals.update()
+            .where(
+                moderation_appeals.c.action_id
+                == select(moderation_actions.c.id)
+                .where(moderation_actions.c.external_ref == ban_id)
+                .scalar_subquery(),
+                moderation_appeals.c.status == "pending",
+            )
+            .values(
+                status="accepted",
+                resolved_at=utc_now(),
+                reviewed_by_user_id=reviewer_id,
+                decision_note=note,
+            )
+        )
+    )
+    if affected == 0:
+        log.warning("Appeal acceptance found no pending appeal for ban_id=%s", ban_id)
+    return affected > 0
+
+
+async def release_stale_review(ban_id: str) -> bool:
+    """Withdraw the open appeal of a decision and free its review slot.
+
+    A review card that nobody answered for a long time is stale. The
+    user is then allowed to appeal again, but the open appeal of the
+    stale card still occupies the slot of the decision, so it has to be
+    withdrawn first. Both writes land in one transaction: a withdrawn
+    appeal without a free slot would leave the decision unappealable.
+    """
+    withdrawn = False
+
+    async def _work(sess: AsyncSession) -> None:
+        nonlocal withdrawn
+        # * Both writes run on the session of this transaction: a separate
+        # * session would commit the withdrawal on its own, so a failure
+        # * of the slot release would leave the appeal closed and the
+        # * slot still claimed.
+        result = await sess.execute(
+            moderation_appeals.update()
+            .where(
+                moderation_appeals.c.action_id
+                == select(moderation_actions.c.id)
+                .where(moderation_actions.c.external_ref == ban_id)
+                .scalar_subquery(),
+                moderation_appeals.c.status == "pending",
+            )
+            .values(status="withdrawn", resolved_at=utc_now())
+        )
+        withdrawn = cast("CursorResult", result).rowcount > 0
+        await sess.execute(
+            moderation_actions.update()
+            .where(
+                moderation_actions.c.external_ref == ban_id,
+                moderation_actions.c.action_type == "ban",
+            )
+            .values(metadata=_drop_review_keys())
+        )
+
+    await run_transaction(_work)
+    return withdrawn
 
 
 async def set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None:
@@ -620,14 +809,14 @@ async def set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None:
     Called on appeal reject so the audit trail is preserved even if the log
     message is later deleted or the log channel is unavailable.
     """
-    action = await action_by_ref(ban_id)
-    if action is None:
-        return
-    await db_call(
+    affected = await db_call(
         lambda: run(
             moderation_appeals.update()
             .where(
-                moderation_appeals.c.action_id == int(action["id"]),
+                moderation_appeals.c.action_id
+                == select(moderation_actions.c.id)
+                .where(moderation_actions.c.external_ref == ban_id)
+                .scalar_subquery(),
                 moderation_appeals.c.status == "pending",
             )
             .values(
@@ -638,6 +827,11 @@ async def set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None:
             )
         )
     )
+    if affected == 0:
+        # * The appeal was already decided or the decision was never
+        # * filed. The reviewer believes the rejection was persisted, so
+        # * the mismatch has to be visible.
+        log.warning("Appeal rejection found no pending appeal for ban_id=%s", ban_id)
 
 
 async def set_appeal_log_msg(
@@ -647,28 +841,38 @@ async def set_appeal_log_msg(
     appeal_link: str = "",
 ) -> None:
     """Attach appeal-related metadata to a ban record."""
-    action = await action_by_ref(ban_id)
-    if action is None:
-        return
-    metadata = dict(action.get("metadata") or {})
-    if appeal_link:
-        metadata[META_APPEAL_LINK] = appeal_link
-    await db_call(
-        lambda: run(
-            moderation_actions.update()
-            .where(moderation_actions.c.id == int(action["id"]))
-            .values(metadata=metadata)
+    patch = _json_patch({META_APPEAL_LINK: appeal_link}) if appeal_link else ""
+
+    async def _work(sess: AsyncSession) -> None:
+        action = await sess.scalar(
+            select(moderation_actions.c.id)
+            .where(
+                moderation_actions.c.external_ref == ban_id,
+                moderation_actions.c.action_type == "ban",
+            )
+            .limit(1)
         )
-    )
-    await db_call(
-        lambda: run(
+        if action is None:
+            log.warning("Appeal log message has no ban record for ban_id=%s", ban_id)
+            return
+        # * The metadata and the message reference land in one
+        # * transaction: a crash between the two writes would leave the
+        # * decision pointing at a message the history does not hold.
+        if patch:
+            await sess.execute(
+                moderation_actions.update()
+                .where(moderation_actions.c.id == action)
+                .values(metadata=_merge_metadata(patch))
+            )
+        await sess.execute(
             pg_insert(moderation_messages)
             .values(
-                action_id=int(action["id"]),
+                action_id=action,
                 chat_id=cfg.logs[0],
                 message_id=msg_id,
                 message_kind="appeal_log",
             )
             .on_conflict_do_nothing()
         )
-    )
+
+    await run_transaction(_work)

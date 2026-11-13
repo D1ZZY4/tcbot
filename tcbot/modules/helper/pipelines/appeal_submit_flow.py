@@ -55,7 +55,15 @@ _STALE_REVIEW_WINDOW = timedelta(hours=_STALE_REVIEW_HOURS)
 _REJECTION_COOLDOWN_HOURS: int = 24
 _REJECTION_COOLDOWN = timedelta(hours=_REJECTION_COOLDOWN_HOURS)
 _SECONDS_PER_HOUR: int = 3600
-_ID_RE = re.compile(r"^/start\s+appeal_([a-z0-9]{10})$")
+# * The public reference of a decision accepts ten to thirty-two
+# * lowercase alphanumerics, which is the range the column constraint
+# * enforces. The link has to accept the whole range: a decision that
+# * was imported from the legacy table carries a longer reference, and a
+# * link that does not parse leaves the banned user without a way to
+# * appeal.
+_REF_PATTERN: str = r"[a-z0-9]{10,32}"
+_ID_RE = re.compile(rf"^/start\s+appeal_({_REF_PATTERN})$")
+_MENTIONED_REF_RE = re.compile(rf"\b({_REF_PATTERN})\b")
 _APPEAL_STATE_KEYS: tuple[str, ...] = (
     "appeal_ban_id",
     "appeal_log_msg_id",
@@ -156,7 +164,7 @@ async def handle_group_appeal(
             parse_mode=None,
         )
         return
-    mentioned = re.search(r"\b([a-z0-9]{10})\b", text)
+    mentioned = _MENTIONED_REF_RE.search(text)
     if mentioned and mentioned.group(1) != bid:
         await safe_reply(
             msg,
@@ -237,10 +245,30 @@ class SubmitMessageMixin:
             )
             _clear_appeal_state(scope)
             return ConversationHandler.END
+        user = update.effective_user
+        if user is None:
+            _clear_appeal_state(scope)
+            return ConversationHandler.END
+        # * The decision has to belong to the sender. The deep link checks
+        # * it once, but the conversation state is what carries the
+        # * decision from the entry to this step, so the check is repeated
+        # * where the appeal is actually filed.
+        if fresh_ban.get("banned_user_id") != user.id:
+            await safe_reply(
+                msg,
+                t("appeals.submit.wrong_account", locale, plain=True),
+                log_label="Appeal _on_message wrong-account",
+                parse_mode=None,
+            )
+            _clear_appeal_state(scope)
+            return ConversationHandler.END
         if fresh_ban.get("review_message_id"):
             if _is_stale_review(fresh_ban.get("review_timestamp")):
                 try:
-                    await db.bans_db.clear_review(ban_id)
+                    # * The stale card is released together with the
+                    # * appeal it belongs to, so the open appeal does
+                    # * not keep the decision occupied.
+                    await db.bans_db.release_stale_review(ban_id)
                 except Exception:
                     _who = update.effective_user
                     log.exception(
@@ -300,11 +328,9 @@ class SubmitMessageMixin:
                 parse_mode=None,
             )
             return WAITING_APPEAL
-        user = update.effective_user
-        if user is None:
-            _clear_appeal_state(scope)
-            return ConversationHandler.END
-        return await post_appeal(update, ctx, msg, user, user.id, str(ban_id), locale)
+        return await post_appeal(
+            update, ctx, msg, user, user.id, str(ban_id), locale, text
+        )
 
 
 # ───────────────────────── Review posting ───────────────────────── #
@@ -318,6 +344,7 @@ async def post_appeal(
     uid: int,
     ban_id: str,
     locale: str | None,
+    appeal_text: str,
 ) -> int:
     """Forward a validated appeal and post its dual review cards."""
     if ctx.user_data is None:
@@ -375,11 +402,16 @@ async def post_appeal(
         log.error("Appeal log failed: %s", sent_log)
     claimed = False
     if review_msg_id:
-        # * Atomic claim: concurrent submits can never both win this slot.
+        # * Atomic claim and appeal record: the two writes land in one
+        # * transaction, so a decision never has a review card without an
+        # * appeal to decide, and a pending appeal never outlives the
+        # * slot that gates it. Concurrent submits cannot both win.
         try:
-            claimed = await db.bans_db.set_review_if_absent(ban_id, review_msg_id)
+            claimed = await db.bans_db.submit_appeal(
+                ban_id, uid, appeal_text, review_msg_id
+            )
         except Exception:
-            log.exception("Appeal claim-review failed for ban_id=%s", ban_id)
+            log.exception("Appeal submit failed for ban_id=%s", ban_id)
             claimed = False
         if not claimed:
             log.warning(
@@ -545,7 +577,10 @@ class AppealSubmitMixin(SubmitMessageMixin):
             stale = _is_stale_review(ban.get("review_timestamp"))
             if stale:
                 try:
-                    await db.bans_db.clear_review(ban_id)
+                    # * The stale card is released together with the
+                    # * appeal it belongs to, so the open appeal does
+                    # * not keep the decision occupied.
+                    await db.bans_db.release_stale_review(ban_id)
                 except Exception:
                     log.exception(
                         "Appeal _start: failed to clear stale review for ban_id=%s user=%d",

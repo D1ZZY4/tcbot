@@ -232,6 +232,27 @@ class ApproveMixin:
             )
             await _answer_review(q, locale, "appeals.review.db_retry")
             return False
+        # * The decision is lifted, so the appeal that asked for it is
+        # * accepted. The record closes here because the appeal is the
+        # * history of the decision: without it the appeal stays open,
+        # * the open-appeal guard keeps blocking a later appeal for the
+        # * same decision, and nobody can see who lifted the ban.
+        # *
+        # * The ban is already lifted at this point, so a failure of the
+        # * bookkeeping must not undo the lift. It is logged loudly
+        # * instead, because a silent gap in the audit trail is worse
+        # * than a visible one.
+        try:
+            accepted = await db.bans_db.accept_appeal(
+                ban_id, admin.id, admin.first_name
+            )
+        except Exception:
+            log.exception("approve_appeal: accept_appeal failed for ban %s", ban_id)
+        else:
+            if not accepted:
+                log.warning(
+                    "approve_appeal: no pending appeal found for ban %s", ban_id
+                )
         try:
             await db.bans_db.clear_review(ban_id)
         except Exception:
