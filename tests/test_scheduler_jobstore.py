@@ -79,11 +79,11 @@ def _reset_scheduler() -> None:
     asyncio.run(sched_mod.stop())
 
 
-def _run_scheduler(expiry_days: int) -> None:
+def _run_scheduler() -> None:
     """Start and stop the scheduler once with a job-store double installed."""
 
     async def _run() -> None:
-        await sched_mod.start(_TEST_URL, expiry_days)
+        await sched_mod.start(_TEST_URL)
         await sched_mod.stop()
 
     asyncio.run(_run())
@@ -91,12 +91,12 @@ def _run_scheduler(expiry_days: int) -> None:
 
 def test_schedules_land_in_the_persistent_job_store(store: _FakeJobStore) -> None:
     """Jobs must not fall back to APScheduler's in-memory default store."""
-    _run_scheduler(7)
+    _run_scheduler()
 
     assert store.started is True
-    assert sched_mod._WARN_EXPIRY_SCHEDULE_ID in store.jobs
-    job = store.jobs[sched_mod._WARN_EXPIRY_SCHEDULE_ID]
-    assert job.args == (7,)
+    assert sched_mod._EXPIRY_SCHEDULE_ID in store.jobs
+    job = store.jobs[sched_mod._EXPIRY_SCHEDULE_ID]
+    assert job.args == ()
     assert job.coalesce is True
     assert job.misfire_grace_time == 86400
 
@@ -105,38 +105,21 @@ def test_unchanged_schedule_keeps_its_persisted_fire_time(
     store: _FakeJobStore,
 ) -> None:
     """A restart must not reset the daily cadence of an unchanged schedule."""
-    _run_scheduler(7)
-    persisted_next_run = store.jobs[sched_mod._WARN_EXPIRY_SCHEDULE_ID].next_run_time
+    _run_scheduler()
+    persisted_next_run = store.jobs[sched_mod._EXPIRY_SCHEDULE_ID].next_run_time
 
-    _run_scheduler(7)
+    _run_scheduler()
 
-    assert (
-        store.jobs[sched_mod._WARN_EXPIRY_SCHEDULE_ID].next_run_time
-        == persisted_next_run
-    )
+    assert store.jobs[sched_mod._EXPIRY_SCHEDULE_ID].next_run_time == persisted_next_run
 
 
-def test_changed_configuration_replaces_the_stored_schedule(
+def test_the_retired_warn_expiry_schedule_is_not_registered(
     store: _FakeJobStore,
 ) -> None:
-    """A changed expiry window must replace the stored schedule."""
-    _run_scheduler(7)
-    assert store.jobs[sched_mod._WARN_EXPIRY_SCHEDULE_ID].args == (7,)
+    """The old warn-expiry job must not fire next to the expiry sweep."""
+    _run_scheduler()
 
-    _run_scheduler(30)
-
-    assert store.jobs[sched_mod._WARN_EXPIRY_SCHEDULE_ID].args == (30,)
-
-
-def test_disabled_schedules_are_removed_from_the_store(store: _FakeJobStore) -> None:
-    """Turning a schedule off must delete the persisted job."""
-    _run_scheduler(7)
-    assert sched_mod._WARN_EXPIRY_SCHEDULE_ID in store.jobs
-
-    _run_scheduler(0)
-
-    assert sched_mod._WARN_EXPIRY_SCHEDULE_ID not in store.jobs
-    assert sched_mod._WARN_EXPIRY_SCHEDULE_ID in store.removed
+    assert sched_mod._LEGACY_WARN_EXPIRY_SCHEDULE_ID not in store.jobs
 
 
 def test_a_corrupt_stored_schedule_is_replaced(store: _FakeJobStore) -> None:
@@ -148,7 +131,7 @@ def test_a_corrupt_stored_schedule_is_replaced(store: _FakeJobStore) -> None:
     """
     store.jobs[sched_mod._CLEANUP_SCHEDULE_ID] = object()
 
-    _run_scheduler(0)
+    _run_scheduler()
 
     replaced = store.jobs[sched_mod._CLEANUP_SCHEDULE_ID]
     assert replaced is not object()
@@ -167,7 +150,7 @@ def test_startup_failure_is_reported_on_the_module_global(
     monkeypatch.setattr(sched_mod, "_build_job_store", _boom)
 
     with pytest.raises(RuntimeError, match="APScheduler failed to start"):
-        _run_scheduler(0)
+        _run_scheduler()
 
 
 def test_startup_failure_does_not_leave_a_live_task(
@@ -182,6 +165,6 @@ def test_startup_failure_does_not_leave_a_live_task(
     monkeypatch.setattr(sched_mod, "_build_job_store", _boom)
 
     with pytest.raises(RuntimeError):
-        _run_scheduler(0)
+        _run_scheduler()
     assert sched_mod._sched_task is None
     assert sched_mod.is_ready() is False

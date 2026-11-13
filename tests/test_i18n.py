@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 from tcbot import cfg
 from tcbot.database import engine as engine_module
 from tcbot.database import groups_db, settings_db, users_roles
-from tcbot.database.base import federated_groups, user_settings
+from tcbot.database.base import user_settings
 from tcbot.modules import (
     admins,
     appeals,
@@ -60,6 +60,7 @@ from tcbot.utils.i18n import (
     t,
 )
 from tcbot.utils.prefixes import _PrefixedCommandFilter
+from tests.postgres_support import reset_community, seed_users
 
 ROOT = Path(__file__).resolve().parent.parent / "i18n"
 
@@ -406,13 +407,12 @@ def test_legacy_id_alias_resolves_to_indonesian() -> None:
 @pytest.fixture
 async def locale_db(postgres_db: str) -> AsyncIterator[str]:
     """Start from empty user-settings and group tables."""
-    await engine_module.run(user_settings.delete())
-    await engine_module.run(federated_groups.delete())
+    await reset_community()
+    await seed_users(1, 2)
     settings_db._LOCALE_L1.clear()
     groups_db._GROUP_LOCALE_L1.clear()
     yield postgres_db
-    await engine_module.run(user_settings.delete())
-    await engine_module.run(federated_groups.delete())
+    await reset_community()
     settings_db._LOCALE_L1.clear()
     groups_db._GROUP_LOCALE_L1.clear()
 

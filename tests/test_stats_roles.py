@@ -12,10 +12,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from tcbot import database as db
-from tcbot.database import engine as engine_module
 from tcbot.database import users_roles
-from tcbot.database.base import tc_roles
 from tcbot.modules.helper.pipelines.stats_flow import Stats
+from tests.postgres_support import reset_community, seed_users
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -23,10 +22,11 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 async def role_db(postgres_db: str) -> AsyncIterator[str]:
-    """Start from an empty custom-role table."""
-    await engine_module.run(tc_roles.delete())
+    """Start from an empty role assignment table."""
+    await reset_community()
+    await seed_users(1, 11, 12, 13)
     yield postgres_db
-    await engine_module.run(tc_roles.delete())
+    await reset_community()
 
 
 async def test_role_count_counts_only_the_requested_role(role_db: str) -> None:

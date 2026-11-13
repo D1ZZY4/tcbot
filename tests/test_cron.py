@@ -13,7 +13,6 @@ from typing import Any
 import pytest
 
 import api.cron as cron_mod
-import tcbot.serverless as serverless_mod
 
 # * Sentinel value; real CRON_SECRET values differ per environment, so every
 # * test pins its own copy instead of trusting config.env.
@@ -71,37 +70,40 @@ def test_cron_get_401_when_bearer_missing_or_wrong(
     assert captured == {"status": 401, "body": "Unauthorized"}
 
 
-def test_cron_get_delegates_to_run_warn_expiry(
+def test_cron_get_delegates_to_the_expiry_sweep(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(cron_mod, "cfg", SimpleNamespace(cron_secret=_CRON_SECRET))
 
     async def _fake_expiry() -> tuple[int, str]:
-        return 200, "warn expiry ran (older than 30d pruned)"
+        return 200, "expiry sweep ran"
 
-    monkeypatch.setattr(cron_mod, "run_warn_expiry", _fake_expiry)
+    monkeypatch.setattr(cron_mod, "run_expiry_sweep", _fake_expiry)
     monkeypatch.setattr(cron_mod, "run", _drive)
     captured: dict[str, Any] = {}
     handler = _make_handler(authorization=f"Bearer {_CRON_SECRET}", reply_sink=captured)
     handler.do_GET()
     assert captured == {
         "status": 200,
-        "body": "warn expiry ran (older than 30d pruned)",
+        "body": "expiry sweep ran",
     }
 
 
-def test_cron_get_200_when_warn_expiry_disabled(
+def test_cron_get_500_when_the_sweep_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A failed sweep must not answer like a finished one."""
     monkeypatch.setattr(cron_mod, "cfg", SimpleNamespace(cron_secret=_CRON_SECRET))
-    # * The real run_warn_expiry only reads serverless.cfg.warn_expiry_days and
-    # * returns before any database access when expiry is disabled.
-    monkeypatch.setattr(serverless_mod, "cfg", SimpleNamespace(warn_expiry_days=0))
+
+    async def _fake_expiry() -> tuple[int, str]:
+        return 500, "expiry sweep failed"
+
+    monkeypatch.setattr(cron_mod, "run_expiry_sweep", _fake_expiry)
     monkeypatch.setattr(cron_mod, "run", _drive)
     captured: dict[str, Any] = {}
     handler = _make_handler(authorization=f"Bearer {_CRON_SECRET}", reply_sink=captured)
     handler.do_GET()
     assert captured == {
-        "status": 200,
-        "body": "warn expiry disabled (WARN_EXPIRY_DAYS=0)",
+        "status": 500,
+        "body": "expiry sweep failed",
     }

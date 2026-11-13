@@ -18,7 +18,15 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from tcbot.database import engine as engine_module
-from tcbot.database.base import metadata
+from tcbot.database.base import (
+    SCHEMA_TABLES,
+    connected_chats,
+    metadata,
+    telegram_chats,
+    telegram_users,
+)
+from tcbot.database.schema import apply_schema, seed_statements
+from tcbot.database.schema import drop_schema as drop_schema_objects
 from tcbot.utils.circuit_breaker import postgres as postgres_circuit
 
 if TYPE_CHECKING:
@@ -137,13 +145,20 @@ def _schema_connect_args(schema: str | None) -> dict[str, str]:
 
 
 def build_test_schema(url: str, schema: str | None = None) -> None:
-    """Create the test schema and every table of the declared schema in it.
+    """Create the test schema and every object of the declared schema in it.
 
     The declared metadata is the source of truth for the table shapes and
-    the index opclasses, so the integration tests run against exactly what
-    the application asks the database for.
+    the index opclasses, and ``tcbot.database.schema`` is the source of
+    truth for the views, the functions, the triggers, the access policies,
+    and the reference data. The integration tests therefore run against
+    exactly what the application asks the database for.
+
+    The schema is dropped first: a run that failed while it was being
+    built leaves the objects of the failed run behind, and the next run
+    would apply the schema on top of them.
     """
     scope = schema if schema is not None else test_schema()
+    drop_schema(url, scope)
     create_empty_schema(url, scope)
     scoped = create_engine(
         sync_database_url(url),
@@ -152,6 +167,8 @@ def build_test_schema(url: str, schema: str | None = None) -> None:
     )
     try:
         metadata.create_all(scoped)
+        with scoped.begin() as conn:
+            apply_schema(conn)
     finally:
         scoped.dispose()
 
@@ -189,6 +206,10 @@ def drop_test_schema(url: str, schema: str | None = None) -> None:
         connect_args=_schema_connect_args(scope),
     )
     try:
+        # * The views read the tables, so they have to go first: a table
+        # * cannot be dropped while a view still depends on it.
+        with scoped.begin() as conn:
+            drop_schema_objects(conn)
         metadata.drop_all(scoped)
     finally:
         scoped.dispose()
@@ -225,6 +246,130 @@ async def use_test_engine(url: str, schema: str | None = None) -> AsyncIterator[
 def reset_postgres_circuit() -> None:
     """Close the shared PostgreSQL circuit so one test cannot affect another."""
     postgres_circuit.reset()
+
+
+# * The root tables of the community. Truncating them with a cascade
+# * empties every table that depends on them, so a test starts from a
+# * community without users, groups, or decisions.
+TRUNCATE_TABLES: tuple[str, ...] = (
+    "telegram_users",
+    "telegram_chats",
+    "connected_chats",
+    "join_requests",
+    "role_assignments",
+    "promotion_requests",
+    "moderation_cases",
+    "moderation_actions",
+    "audit_events",
+)
+
+
+async def reset_community() -> None:
+    """Empty the community tables so the next test starts from zero.
+
+    The append-only guard rejects a delete of the history tables, and it
+    rejects a truncation as well. The guards are switched off for the
+    reset and switched on again afterwards: a test needs a community
+    without history, and the guard has to keep guarding once the test
+    is over.
+
+    The cascade reaches the reference tables as well, because the job
+    registry names the staff member that changed it. The reference data
+    is seeded again afterwards, so a test always finds the role
+    catalog, the permission catalog, and the job registry in place.
+    """
+    await engine_module.run_script(_toggle_guards("DISABLE"))
+    try:
+        await engine_module.run_script(f"TRUNCATE {', '.join(TRUNCATE_TABLES)} CASCADE")
+    finally:
+        await engine_module.run_script(_toggle_guards("ENABLE"))
+    await reseed_reference_data()
+
+
+def _toggle_guards(action: str) -> str:
+    """Return the script that switches the row triggers of every table.
+
+    The script runs as one statement, because the database does not
+    accept a list of tables in a single ``ALTER TABLE`` for this
+    action, and a test that waits for one round trip per table spends
+    minutes on the network.
+    """
+    tables = ", ".join(f"'{table}'" for table in SCHEMA_TABLES)
+    return (
+        "DO $do$\n"
+        "DECLARE\n"
+        "    table_name text;\n"
+        "BEGIN\n"
+        f"    FOREACH table_name IN ARRAY ARRAY[{tables}] LOOP\n"
+        "        EXECUTE format(\n"
+        f"            'ALTER TABLE %I.%I {action} TRIGGER USER',\n"
+        "            current_schema(), table_name\n"
+        "        );\n"
+        "    END LOOP;\n"
+        "END;\n"
+        "$do$;\n"
+    )
+
+
+async def reseed_reference_data() -> None:
+    """Restore the seeded reference data of the community.
+
+    The seed statements are idempotent, so they can run again after a
+    reset without changing what they wrote. They are sent as plain SQL:
+    the reference data carries the percent signs of its idempotency
+    keys, and a parameter parser would read them as placeholders.
+    """
+    schema = await engine_module.fetch_value(text("SELECT current_schema()"))
+    scope = str(schema or "")
+    engine = create_engine(
+        sync_database_url(configured_database_url() or ""),
+        pool_pre_ping=True,
+        connect_args=_schema_connect_args(scope),
+    )
+    try:
+        with engine.begin() as conn:
+            cursor = conn.connection.cursor()
+            try:
+                for statement in seed_statements(scope):
+                    cursor.execute(statement)
+            finally:
+                cursor.close()
+    finally:
+        engine.dispose()
+
+
+async def seed_users(*user_ids: int) -> None:
+    """Insert the Telegram identity rows the community tables reference."""
+    unique = list(dict.fromkeys(user_ids))
+    if not unique:
+        return
+    await engine_module.run(
+        telegram_users.insert().values([{"user_id": uid} for uid in unique]),
+    )
+
+
+async def seed_chats(*chat_ids: int, connected: bool = True) -> None:
+    """Insert the chat identity rows and connect the groups.
+
+    A connected group also gets its configuration row: the trigger that
+    prepares the settings of a new group does the same in production.
+    """
+    unique = list(dict.fromkeys(chat_ids))
+    if not unique:
+        return
+    await engine_module.run(
+        telegram_chats.insert().values(
+            [
+                {"chat_id": cid, "chat_type": "supergroup", "title": f"Group {cid}"}
+                for cid in unique
+            ]
+        ),
+    )
+    if not connected:
+        return
+    await engine_module.run(
+        connected_chats.insert().values([{"chat_id": cid} for cid in unique]),
+    )
 
 
 async def identity_db_call(op: Callable[[], Awaitable[Any]], **_kwargs: Any) -> Any:

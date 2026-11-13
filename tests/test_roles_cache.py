@@ -29,26 +29,14 @@ def test_get_effective_role_caches_second_read(
 ) -> None:
     uid = 61001
     _invalidate(uid)
-    calls = {"owner": 0, "admin": 0, "role": 0}
+    hits: list[int] = []
 
-    async def _owner(user_id: int) -> bool:
-        calls["owner"] += 1
-        assert user_id == uid
-        return False
+    async def _fetch_one(stmt: Any) -> dict[str, str] | None:
+        hits.append(uid)
+        return {"role_key": "admin"}
 
-    async def _admin(user_id: int) -> bool:
-        calls["admin"] += 1
-        assert user_id == uid
-        return True
-
-    async def _role(user_id: int) -> str | None:
-        calls["role"] += 1
-        assert user_id == uid
-        return None
-
-    monkeypatch.setattr(users_roles, "is_owner", _owner)
-    monkeypatch.setattr(users_roles, "is_admin", _admin)
-    monkeypatch.setattr(users_roles, "get_role", _role)
+    monkeypatch.setattr(users_roles, "fetch_one", _fetch_one)
+    monkeypatch.setattr(users_roles, "db_call", _identity)
     try:
         first = asyncio.run(users_roles.get_effective_role(uid))
         second = asyncio.run(users_roles.get_effective_role(uid))
@@ -57,7 +45,7 @@ def test_get_effective_role_caches_second_read(
 
     assert first == "admin"
     assert second == "admin"
-    assert calls == {"owner": 1, "admin": 1, "role": 1}
+    assert hits == [uid]
 
 
 def test_is_staff_reuses_effective_role_cache(
@@ -65,26 +53,14 @@ def test_is_staff_reuses_effective_role_cache(
 ) -> None:
     uid = 61002
     _invalidate(uid)
-    calls = {"owner": 0, "admin": 0, "role": 0}
+    hits: list[int] = []
 
-    async def _owner(user_id: int) -> bool:
-        calls["owner"] += 1
-        assert user_id == uid
-        return False
+    async def _fetch_one(stmt: Any) -> dict[str, str] | None:
+        hits.append(uid)
+        return {"role_key": "admin"}
 
-    async def _admin(user_id: int) -> bool:
-        calls["admin"] += 1
-        assert user_id == uid
-        return True
-
-    async def _role(user_id: int) -> str | None:
-        calls["role"] += 1
-        assert user_id == uid
-        return None
-
-    monkeypatch.setattr(users_roles, "is_owner", _owner)
-    monkeypatch.setattr(users_roles, "is_admin", _admin)
-    monkeypatch.setattr(users_roles, "get_role", _role)
+    monkeypatch.setattr(users_roles, "fetch_one", _fetch_one)
+    monkeypatch.setattr(users_roles, "db_call", _identity)
     try:
         primed = asyncio.run(users_roles.get_effective_role(uid))
         staff_first = asyncio.run(users_roles.is_staff(uid))
@@ -95,7 +71,7 @@ def test_is_staff_reuses_effective_role_cache(
     assert primed == "admin"
     assert staff_first is True
     assert staff_second is True
-    assert calls == {"owner": 1, "admin": 1, "role": 1}
+    assert hits == [uid]
 
 
 def test_is_admin_hits_db_on_every_call(
@@ -125,35 +101,19 @@ def test_get_effective_role_outage_raises_and_does_not_poison(
     uid = 61004
     _invalidate(uid)
 
-    async def _owner(user_id: int) -> bool:
-        assert user_id == uid
-        return False
+    async def _boom(stmt: Any) -> dict[str, str] | None:
+        raise RuntimeError("role store down")
 
-    async def _boom_admin(user_id: int) -> bool:
-        assert user_id == uid
-        raise RuntimeError("admin collection down")
-
-    async def _role(user_id: int) -> str | None:
-        assert user_id == uid
-        return None
-
-    monkeypatch.setattr(users_roles, "is_owner", _owner)
-    monkeypatch.setattr(users_roles, "is_admin", _boom_admin)
-    monkeypatch.setattr(users_roles, "get_role", _role)
+    monkeypatch.setattr(users_roles, "fetch_one", _boom)
+    monkeypatch.setattr(users_roles, "db_call", _identity)
     try:
-        with pytest.raises(RuntimeError, match="admin collection down"):
+        with pytest.raises(RuntimeError, match="role store down"):
             asyncio.run(users_roles.get_effective_role(uid))
 
-        async def _recovered_admin(user_id: int) -> bool:
-            assert user_id == uid
-            return False
+        async def _recovered(stmt: Any) -> dict[str, str] | None:
+            return {"role_key": "moderator"}
 
-        async def _recovered_role(user_id: int) -> str | None:
-            assert user_id == uid
-            return "tester"
-
-        monkeypatch.setattr(users_roles, "is_admin", _recovered_admin)
-        monkeypatch.setattr(users_roles, "get_role", _recovered_role)
+        monkeypatch.setattr(users_roles, "fetch_one", _recovered)
         recovered = asyncio.run(users_roles.get_effective_role(uid))
     finally:
         _invalidate(uid)
@@ -187,70 +147,49 @@ def test_is_staff_fail_closed_on_outage_and_reraises_cancelled(
         _invalidate(uid)
 
 
-def test_founder_only_diverges_from_admin_membership(
+def test_the_owner_assignment_resolves_to_the_founder_role(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The community stores the owner, the application calls it founder.
+
+    The storage key and the application vocabulary are different on
+    purpose: the application never sees a storage key, so a rename of the
+    catalog cannot leak into the handlers.
+    """
     uid = 61006
     _invalidate(uid)
 
-    async def _owner(user_id: int) -> bool:
-        assert user_id == uid
-        return True
+    async def _fetch_one(stmt: Any) -> dict[str, str] | None:
+        return {"role_key": "owner"}
 
-    async def _not_admin(user_id: int) -> bool:
-        assert user_id == uid
-        return False
-
-    async def _no_role(user_id: int) -> str | None:
-        assert user_id == uid
-        return None
-
-    monkeypatch.setattr(users_roles, "is_owner", _owner)
-    monkeypatch.setattr(users_roles, "is_admin", _not_admin)
-    monkeypatch.setattr(users_roles, "get_role", _no_role)
+    monkeypatch.setattr(users_roles, "fetch_one", _fetch_one)
+    monkeypatch.setattr(users_roles, "db_call", _identity)
     try:
         effective = asyncio.run(users_roles.get_effective_role(uid))
     finally:
         _invalidate(uid)
 
-    # * Founder without an admin row resolves to founder, so a naive
-    # * cached is_admin built as role in (founder, admin) would flip False to True.
     assert effective == "founder"
-    assert asyncio.run(_not_admin(uid)) is False
-    assert effective in ("founder", "admin")
 
 
-def test_founder_plus_admin_shadows_admin_role(
+def test_an_unknown_stored_role_resolves_to_no_role(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A hand-edited row must not grant real privilege."""
     uid = 61007
     _invalidate(uid)
 
-    async def _owner(user_id: int) -> bool:
-        assert user_id == uid
-        return True
+    async def _fetch_one(stmt: Any) -> dict[str, str] | None:
+        return {"role_key": "superuser"}
 
-    async def _admin(user_id: int) -> bool:
-        assert user_id == uid
-        return True
-
-    async def _no_role(user_id: int) -> str | None:
-        assert user_id == uid
-        return None
-
-    monkeypatch.setattr(users_roles, "is_owner", _owner)
-    monkeypatch.setattr(users_roles, "is_admin", _admin)
-    monkeypatch.setattr(users_roles, "get_role", _no_role)
+    monkeypatch.setattr(users_roles, "fetch_one", _fetch_one)
+    monkeypatch.setattr(users_roles, "db_call", _identity)
     try:
         effective = asyncio.run(users_roles.get_effective_role(uid))
     finally:
         _invalidate(uid)
 
-    # * Owner plus admin resolves to founder, so a naive cached is_admin
-    # * built as role == admin would flip True to False.
-    assert effective == "founder"
-    assert asyncio.run(_admin(uid)) is True
-    assert (effective == "admin") is False
+    assert effective is None
 
 
 def test_get_owner_id_caches_second_read(
@@ -323,7 +262,7 @@ def test_a_demotion_during_a_fresh_read_is_not_undone(
 ) -> None:
     """A demotion that lands during a fresh read must stay revoked.
 
-    The fresh read resolves the role in three separate reads, so a
+    The fresh read resolves the role from the assignments table, so a
     demotion can land between the read and the publish. Publishing the
     stale role would keep the revoked privilege alive for the whole
     cache TTL on every cached read path.
@@ -333,21 +272,13 @@ def test_a_demotion_during_a_fresh_read_is_not_undone(
     started = asyncio.Event()
     release = asyncio.Event()
 
-    async def _fetch_one(stmt: Any) -> dict[str, int] | None:
-        return None
-
-    async def _admin(user_id: int) -> bool:
+    async def _fetch_one(stmt: Any) -> dict[str, str] | None:
         started.set()
         await release.wait()
-        return True
-
-    async def _role(user_id: int) -> str | None:
-        return None
+        return {"role_key": "admin"}
 
     monkeypatch.setattr(users_roles, "fetch_one", _fetch_one)
     monkeypatch.setattr(users_roles, "db_call", _identity)
-    monkeypatch.setattr(users_roles, "is_admin", _admin)
-    monkeypatch.setattr(users_roles, "get_role", _role)
 
     async def _scenario() -> None:
         task = asyncio.create_task(users_roles.get_effective_role(uid, fresh=True))

@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Mute two-write commit: an audit failure rolls back the enforcement record."""
+"""Mute commit: a failed decision write leaves no state and no group touched."""
 
 from __future__ import annotations
 
@@ -100,24 +100,28 @@ def _expected_db_fail() -> str:
     )
 
 
-def test_active_write_fails_after_audit_not_written(
+def test_the_decision_write_failure_leaves_every_group_untouched(
     _mute_no_io: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    log_calls: list[tuple[Any, ...]] = []
+    """A failed decision write must not restrict a single group.
 
-    async def _set_active(*args: Any, **kwargs: Any) -> None:
-        raise RuntimeError("active write down")
+    The decision and the case that holds it are one transaction, so a
+    failure leaves no mute behind. The groups are only restricted after
+    the decision landed, so they stay untouched as well.
+    """
 
-    async def _log(*args: Any, **kwargs: Any) -> None:
-        log_calls.append((args, kwargs))
+    async def _groups() -> list[dict[str, Any]]:
+        return [{"chat_id": 101, "title": "Group A"}]
 
-    monkeypatch.setattr(db.mutes_db, "set_active_mute", _set_active)
-    monkeypatch.setattr(db.mutes_db, "log_mute", _log)
+    async def _record(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("decision write down")
+
+    monkeypatch.setattr(db.groups_db, "active_groups", _groups)
+    monkeypatch.setattr(db.mutes_db, "record_mute", _record)
 
     bot = _FakeBot()
     _run(bot)
 
-    assert log_calls == []
     assert bot.restricts == []
     assert len(bot.edits) == 1
     assert bot.edits[0]["kwargs"]["chat_id"] == 22
@@ -125,105 +129,39 @@ def test_active_write_fails_after_audit_not_written(
     assert bot.edits[0]["args"][0] == _expected_db_fail()
 
 
-def test_audit_fail_undoes_active_record(
+def test_a_cancelled_decision_propagates_without_touching_a_group(
     _mute_no_io: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    deleted: list[int] = []
+    """A cancelled decision propagates and leaves no group restricted."""
 
-    async def _set_active(*args: Any, **kwargs: Any) -> None:
-        return None
+    async def _record(*args: Any, **kwargs: Any) -> None:
+        raise asyncio.CancelledError()
 
-    async def _log(*args: Any, **kwargs: Any) -> None:
-        raise RuntimeError("audit write down")
+    monkeypatch.setattr(db.mutes_db, "record_mute", _record)
 
-    async def _clear_active(user_id: int) -> None:
-        deleted.append(user_id)
+    bot = _FakeBot()
+    with pytest.raises(asyncio.CancelledError):
+        _run(bot)
 
-    monkeypatch.setattr(db.mutes_db, "set_active_mute", _set_active)
-    monkeypatch.setattr(db.mutes_db, "log_mute", _log)
-    monkeypatch.setattr(db.mutes_db, "clear_active_mute", _clear_active)
+    assert bot.restricts == []
+    assert bot.edits == []
+
+
+def test_the_decision_write_failure_is_not_reported_as_success(
+    _mute_no_io: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The moderator has to see that the mute did not land."""
+
+    async def _record(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("decision write down")
+
+    monkeypatch.setattr(db.mutes_db, "record_mute", _record)
 
     bot = _FakeBot()
     _run(bot)
 
-    assert deleted == [33]
-    assert bot.restricts == []
     assert len(bot.edits) == 1
-    assert bot.edits[0]["kwargs"]["chat_id"] == 22
-
-
-def test_audit_fail_undo_failure_logged_not_raised(
-    _mute_no_io: None, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    async def _set_active(*args: Any, **kwargs: Any) -> None:
-        return None
-
-    async def _log(*args: Any, **kwargs: Any) -> None:
-        raise RuntimeError("audit write down")
-
-    async def _clear_active(user_id: int) -> None:
-        raise RuntimeError("undo down")
-
-    monkeypatch.setattr(db.mutes_db, "set_active_mute", _set_active)
-    monkeypatch.setattr(db.mutes_db, "log_mute", _log)
-    monkeypatch.setattr(db.mutes_db, "clear_active_mute", _clear_active)
-
-    bot = _FakeBot()
-    _run(bot)  # must not raise
-
-    assert bot.restricts == []
-    assert len(bot.edits) == 1
-    assert bot.edits[0]["kwargs"]["chat_id"] == 22
-
-
-def test_cancel_during_active_write_propagates(
-    _mute_no_io: None, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    log_calls: list[tuple[Any, ...]] = []
-
-    async def _set_active(*args: Any, **kwargs: Any) -> None:
-        raise asyncio.CancelledError()
-
-    async def _log(*args: Any, **kwargs: Any) -> None:
-        log_calls.append((args, kwargs))
-
-    monkeypatch.setattr(db.mutes_db, "set_active_mute", _set_active)
-    monkeypatch.setattr(db.mutes_db, "log_mute", _log)
-
-    bot = _FakeBot()
-    with pytest.raises(asyncio.CancelledError):
-        _run(bot)
-
-    assert log_calls == []
-    assert bot.restricts == []
-    assert bot.edits == []
-
-
-def test_cancel_during_audit_write_propagates_without_undo(
-    _mute_no_io: None, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    cleared: list[int] = []
-
-    async def _set_active(*args: Any, **kwargs: Any) -> None:
-        return None
-
-    async def _log(*args: Any, **kwargs: Any) -> None:
-        raise asyncio.CancelledError()
-
-    async def _clear_active(user_id: int) -> None:
-        cleared.append(user_id)
-
-    monkeypatch.setattr(db.mutes_db, "set_active_mute", _set_active)
-    monkeypatch.setattr(db.mutes_db, "log_mute", _log)
-    monkeypatch.setattr(db.mutes_db, "clear_active_mute", _clear_active)
-
-    bot = _FakeBot()
-    with pytest.raises(asyncio.CancelledError):
-        _run(bot)
-
-    assert cleared == []
-    assert bot.restricts == []
-    assert bot.edits == []
+    assert bot.edits[0]["args"][0] == _expected_db_fail()
 
 
 # ─────────────────── Unmute total-failure keeps record ─────────────────── #

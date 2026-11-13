@@ -16,15 +16,26 @@ from typing import Any
 import pytest
 
 from tcbot.database import engine as engine_module
-from tcbot.database import event_history, groups_db, kicks_db, mutes_db, warns_db
-from tcbot.database.base import federated_groups
-from tcbot.utils.time_and_date import utc_now
-from tests.postgres_support import identity_db_call, literal_sql
+from tcbot.database import groups_db, mutes_db
+from tcbot.database.base import chat_settings, connected_chats
+from tests.postgres_support import (
+    identity_db_call,
+    literal_sql,
+    reset_community,
+    seed_chats,
+    seed_users,
+)
 
-# * The helpers that repoint a single table.
+# * The helper that repoints a single decision type, with the statement it
+# * is expected to send. A warning and a kick have no helper of their own:
+# * the group repoint moves every decision in one transaction.
 _REPOINT_CASES: tuple[tuple[Any, str], ...] = (
-    (kicks_db, "kicks"),
-    (mutes_db, "mutes"),
+    (
+        mutes_db,
+        "UPDATE moderation_actions SET origin_chat_id=20 "
+        "WHERE moderation_actions.action_type = 'mute' "
+        "AND moderation_actions.origin_chat_id = 10",
+    ),
 )
 
 
@@ -72,6 +83,14 @@ class _Recorder:
             raise error
         return self.rows
 
+    async def fetch_one(self, stmt: Any) -> dict[str, Any] | None:
+        """Record a single-row read and return the first queued row."""
+        self.statements.append(stmt)
+        error = self._next_error()
+        if error is not None:
+            raise error
+        return self.rows[0] if self.rows else None
+
     async def execute(self, stmt: Any) -> _Result:
         """Record a statement issued inside a transaction."""
         self.statements.append(stmt)
@@ -85,38 +104,19 @@ class _Recorder:
         return await op(self)
 
 
-class _FakeDiagnostic:
-    """The PostgreSQL error diagnostic that names the violated constraint."""
-
-    def __init__(self, name: str) -> None:
-        self.constraint_name = name
-
-
-class _FakeDriverError(Exception):
-    """Driver error double carrying the violated constraint name."""
-
-    def __init__(self, name: str) -> None:
-        super().__init__(f'duplicate key value violates unique constraint "{name}"')
-        self.diag = _FakeDiagnostic(name)
-
-
 def _patch(monkeypatch: pytest.MonkeyPatch, module: Any, rec: _Recorder) -> None:
     """Point one module at the recorder instead of the database."""
     monkeypatch.setattr(module, "db_call", identity_db_call)
     monkeypatch.setattr(module, "run", rec.run, raising=False)
     monkeypatch.setattr(module, "run_returning", rec.run_returning, raising=False)
     monkeypatch.setattr(module, "fetch_all", rec.fetch_all, raising=False)
-    monkeypatch.setattr(module, "fetch_one", rec.fetch_all, raising=False)
+    monkeypatch.setattr(module, "fetch_one", rec.fetch_one, raising=False)
     monkeypatch.setattr(module, "run_transaction", rec.run_transaction, raising=False)
-    # * The kick and the mute repoint share one helper, so the recorder
-    # * has to stand in for that helper too.
-    monkeypatch.setattr(event_history, "db_call", identity_db_call)
-    monkeypatch.setattr(event_history, "run", rec.run, raising=False)
 
 
-@pytest.mark.parametrize(("module", "table"), _REPOINT_CASES)
+@pytest.mark.parametrize(("module", "expected"), _REPOINT_CASES)
 def test_the_repoint_moves_every_row_of_the_old_chat(
-    monkeypatch: pytest.MonkeyPatch, module: Any, table: str
+    monkeypatch: pytest.MonkeyPatch, module: Any, expected: str
 ) -> None:
     """The update targets the old chat id and writes the new one."""
     rec = _Recorder()
@@ -126,13 +126,12 @@ def test_the_repoint_moves_every_row_of_the_old_chat(
     result = asyncio.run(module.migrate_records(10, 20))
 
     assert result is True
-    sql = literal_sql(rec.statements[0])
-    assert sql == f"UPDATE {table} SET chat_id=20 WHERE {table}.chat_id = 10"
+    assert literal_sql(rec.statements[0]) == expected
 
 
-@pytest.mark.parametrize(("module", "table"), _REPOINT_CASES)
+@pytest.mark.parametrize(("module", "expected"), _REPOINT_CASES)
 def test_the_repoint_reports_no_match(
-    monkeypatch: pytest.MonkeyPatch, module: Any, table: str
+    monkeypatch: pytest.MonkeyPatch, module: Any, expected: str
 ) -> None:
     """A chat without history is not a migration."""
     rec = _Recorder()
@@ -142,28 +141,34 @@ def test_the_repoint_reports_no_match(
     result = asyncio.run(module.migrate_records(10, 20))
 
     assert result is False
-    _ = table
+    _ = expected
 
 
-@pytest.mark.parametrize(("module", "table"), _REPOINT_CASES)
-def test_the_repoint_swallows_a_generic_failure(
-    monkeypatch: pytest.MonkeyPatch, module: Any, table: str
+@pytest.mark.parametrize(("module", "expected"), _REPOINT_CASES)
+def test_the_repoint_propagates_a_generic_failure(
+    monkeypatch: pytest.MonkeyPatch, module: Any, expected: str
 ) -> None:
-    """A database failure ends the migration without raising."""
+    """A database failure must not look like a finished migration.
+
+    The caller collects the exception and logs it, so a failure stays
+    visible instead of being reported as "nothing to move".
+    """
     rec = _Recorder()
     rec.error = RuntimeError("db blip")
     _patch(monkeypatch, module, rec)
 
-    result = asyncio.run(module.migrate_records(10, 20))
+    async def _run_coro() -> None:
+        with pytest.raises(RuntimeError, match="db blip"):
+            await module.migrate_records(10, 20)
 
-    assert result is False
+    asyncio.run(_run_coro())
     assert len(rec.statements) == 1
-    _ = table
+    _ = expected
 
 
-@pytest.mark.parametrize(("module", "table"), _REPOINT_CASES)
+@pytest.mark.parametrize(("module", "expected"), _REPOINT_CASES)
 def test_the_repoint_propagates_cancellation(
-    monkeypatch: pytest.MonkeyPatch, module: Any, table: str
+    monkeypatch: pytest.MonkeyPatch, module: Any, expected: str
 ) -> None:
     """A cancelled migration never reports success."""
     rec = _Recorder()
@@ -176,93 +181,7 @@ def test_the_repoint_propagates_cancellation(
 
     asyncio.run(_run_coro())
     assert len(rec.statements) == 1
-    _ = table
-
-
-# ─────────────────────────── Warn counters ───────────────────────── #
-
-
-def test_the_warn_repoint_moves_the_history_and_the_counters(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The warn history and the counter rows follow the chat."""
-    rec = _Recorder()
-    rec.affected = 2
-    rec.rows = [{"user_id": 42, "count": 3}]
-    _patch(monkeypatch, warns_db, rec)
-
-    result = asyncio.run(warns_db.migrate_records(10, 20))
-
-    assert result is True
-    history_sql = literal_sql(rec.statements[0])
-    assert history_sql == "UPDATE warns SET chat_id=20 WHERE warns.chat_id = 10"
-    merge_statements = [literal_sql(stmt) for stmt in rec.statements]
-    assert any("DELETE FROM warn_counts" in sql for sql in merge_statements)
-    assert any("INSERT INTO warn_counts" in sql for sql in merge_statements)
-
-
-def test_the_warn_repoint_merges_the_counter_counts(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The counter of the old chat is added to the counter of the new one."""
-    rec = _Recorder()
-    rec.affected = 1
-    rec.rows = [{"user_id": 42, "count": 3}]
-    _patch(monkeypatch, warns_db, rec)
-
-    asyncio.run(warns_db.migrate_records(10, 20))
-
-    merge = [
-        literal_sql(stmt)
-        for stmt in rec.statements
-        if "INSERT INTO warn_counts" in literal_sql(stmt)
-    ]
-    assert len(merge) == 1
-    assert "warn_counts.count + 3" in merge[0]
-
-
-def test_the_warn_repoint_reports_no_match(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A chat without warns is not a migration."""
-    rec = _Recorder()
-    rec.affected = 0
-    rec.rows = []
-    _patch(monkeypatch, warns_db, rec)
-
-    result = asyncio.run(warns_db.migrate_records(10, 20))
-
-    assert result is False
-
-
-def test_the_warn_repoint_swallows_a_generic_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A database failure ends the migration without raising."""
-    rec = _Recorder()
-    rec.error = RuntimeError("db blip")
-    _patch(monkeypatch, warns_db, rec)
-
-    result = asyncio.run(warns_db.migrate_records(10, 20))
-
-    assert result is False
-    assert len(rec.statements) == 1
-
-
-def test_the_warn_repoint_propagates_cancellation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A cancelled migration never reports success."""
-    rec = _Recorder()
-    rec.error = asyncio.CancelledError()
-    _patch(monkeypatch, warns_db, rec)
-
-    async def _run_coro() -> None:
-        with pytest.raises(asyncio.CancelledError):
-            await warns_db.migrate_records(10, 20)
-
-    asyncio.run(_run_coro())
-    assert len(rec.statements) == 1
+    _ = expected
 
 
 # ───────────────────────────── Groups ────────────────────────────── #
@@ -271,24 +190,19 @@ def test_the_warn_repoint_propagates_cancellation(
 def test_the_group_repoint_moves_the_group_and_the_pending_join(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Both group tables follow the new chat id."""
+    """The whole group history follows the new chat id in one call."""
     rec = _Recorder()
-    rec.affected = 1
+    rec.rows = [{"was_active": True}]
     _patch(monkeypatch, groups_db, rec)
 
     result = asyncio.run(groups_db.migrate_group(10, 20))
 
     assert result is True
-    group_sql = literal_sql(rec.statements[0])
-    assert (
-        group_sql
-        == "UPDATE federated_groups SET chat_id=20 WHERE federated_groups.chat_id = 10"
-    )
-    pending_sql = literal_sql(rec.statements[1])
-    assert (
-        pending_sql
-        == "UPDATE pending_joins SET chat_id=20 WHERE pending_joins.chat_id = 10"
-    )
+    # * The repoint is one database transaction: the identity, the
+    # * configuration, the membership, the open request, and the
+    # * decisions of the group all move through the same function.
+    repoint_sql = literal_sql(rec.statements[0])
+    assert repoint_sql == "SELECT repoint_chat_records(10, 20)"
 
 
 def test_the_group_repoint_reports_no_match(
@@ -296,7 +210,7 @@ def test_the_group_repoint_reports_no_match(
 ) -> None:
     """A chat that is not connected is not a migration."""
     rec = _Recorder()
-    rec.affected = 0
+    rec.rows = []
     _patch(monkeypatch, groups_db, rec)
 
     result = asyncio.run(groups_db.migrate_group(10, 20))
@@ -304,19 +218,23 @@ def test_the_group_repoint_reports_no_match(
     assert result is False
 
 
-def test_the_group_repoint_swallows_a_generic_failure(
+def test_the_group_repoint_propagates_a_generic_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A database failure ends the migration without raising."""
+    """A database failure must not look like a migration that found nothing.
+
+    The caller collects the exception and logs it, so a failure stays
+    visible instead of being reported as "not in the community".
+    """
     rec = _Recorder()
     rec.error = RuntimeError("db blip")
     _patch(monkeypatch, groups_db, rec)
 
-    result = asyncio.run(groups_db.migrate_group(10, 20))
+    async def _run_coro() -> None:
+        with pytest.raises(RuntimeError, match="db blip"):
+            await groups_db.migrate_group(10, 20)
 
-    assert result is False
-    # * The failing table ends the migration: the group row is the first
-    # * one and its failure stops the pending join update.
+    asyncio.run(_run_coro())
     assert len(rec.statements) == 1
 
 
@@ -342,40 +260,32 @@ async def test_the_group_repoint_merges_away_a_stale_row(
 ) -> None:
     """A target chat that already has a row converges instead of failing.
 
-    The chat id is the primary key of the group table, so the repoint
+    The chat id is the primary key of the group registry, so the repoint
     cannot create a second row for the new chat. The stale old row is
     merged into the surviving row and the migration still succeeds.
     """
-    await engine_module.run(federated_groups.delete())
+    await reset_community()
+    await seed_users(1, 2)
+    await seed_chats(10, 20)
+    # * The old group chose a language; the new one has none.
     await engine_module.run(
-        federated_groups.insert().values(
-            chat_id=10,
-            title="Old group",
-            added_by=1,
-            added_date=utc_now(),
-            is_active=True,
-            locale="id-ID",
-        )
-    )
-    await engine_module.run(
-        federated_groups.insert().values(
-            chat_id=20,
-            title="New group",
-            added_by=2,
-            added_date=utc_now(),
-            is_active=True,
-            locale=None,
-        )
+        chat_settings.update()
+        .where(chat_settings.c.chat_id == 10)
+        .values(locale="id-ID")
     )
 
     result = await groups_db.migrate_group(10, 20)
 
     assert result is True
-    rows = await engine_module.fetch_all(federated_groups.select())
+    rows = await engine_module.fetch_all(connected_chats.select())
     assert [int(row["chat_id"]) for row in rows] == [20]
     # * The group keeps the language it chose before the migration.
-    assert rows[0]["locale"] == "id-ID"
-    await engine_module.run(federated_groups.delete())
+    settings = await engine_module.fetch_one(
+        chat_settings.select().where(chat_settings.c.chat_id == 20)
+    )
+    assert settings is not None
+    assert settings["locale"] == "id-ID"
+    await reset_community()
 
 
 @pytest.mark.postgres
@@ -389,26 +299,13 @@ async def test_the_group_repoint_caches_the_surviving_connection_state(
     unconditionally would report a disconnected group as connected for the
     whole cache TTL and pull it into the federation fan-outs.
     """
-    await engine_module.run(federated_groups.delete())
+    await reset_community()
+    await seed_users(1, 2)
+    await seed_chats(10, 20)
     await engine_module.run(
-        federated_groups.insert().values(
-            chat_id=10,
-            title="Old group",
-            added_by=1,
-            added_date=utc_now(),
-            is_active=True,
-            locale=None,
-        )
-    )
-    await engine_module.run(
-        federated_groups.insert().values(
-            chat_id=20,
-            title="New group",
-            added_by=2,
-            added_date=utc_now(),
-            is_active=False,
-            locale=None,
-        )
+        connected_chats.update()
+        .where(connected_chats.c.chat_id == 20)
+        .values(is_active=False)
     )
     groups_db.connected_cache.invalidate(20)
 
@@ -416,4 +313,4 @@ async def test_the_group_repoint_caches_the_surviving_connection_state(
 
     assert await groups_db.is_connected(20) is False
     assert await groups_db.is_connected(20, fresh=True) is False
-    await engine_module.run(federated_groups.delete())
+    await reset_community()

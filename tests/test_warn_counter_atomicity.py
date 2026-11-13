@@ -5,9 +5,9 @@
 """Warn counter and history must agree, verified against a real PostgreSQL server.
 
 The counter is what the auto-ban threshold reads, so it has to track the
-warning history exactly. The history row and the counter share one
-transaction, the decrement only runs when its delete removed a row, and
-a clear removes both sides together.
+warning history exactly. The counter is a view over the decisions, so it
+cannot fall behind them: a revoked warning leaves the count on its own and
+the history keeps the record.
 """
 
 from __future__ import annotations
@@ -18,9 +18,11 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from tcbot import cfg
 from tcbot.database import engine as engine_module
 from tcbot.database import warns_db
-from tcbot.database.base import warn_counts, warns
+from tcbot.database.base import moderation_actions
+from tests.postgres_support import reset_community, seed_chats, seed_users
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -30,35 +32,40 @@ pytestmark = [pytest.mark.postgres]
 
 @pytest.fixture
 async def warn_db(postgres_db: str) -> AsyncIterator[str]:
-    """Start from empty warning and counter tables."""
-    await engine_module.run(warns.delete())
-    await engine_module.run(warn_counts.delete())
+    """Start from an empty community."""
+    await reset_community()
+    await seed_users(1, 42)
+    await seed_chats(5, cfg.proofs[0])
     yield postgres_db
-    await engine_module.run(warns.delete())
-    await engine_module.run(warn_counts.delete())
+    await reset_community()
 
 
-async def _history_count(user_id: int, chat_id: int) -> int:
-    """Return the number of stored warning rows for one user and chat."""
+async def _decision_count(user_id: int, chat_id: int) -> int:
+    """Return the number of stored warning decisions for one user and chat."""
     return await engine_module.count_rows(
-        warns.select().where(
-            warns.c.user_id == user_id,
-            warns.c.chat_id == chat_id,
+        moderation_actions.select().where(
+            moderation_actions.c.target_user_id == user_id,
+            moderation_actions.c.action_type == "warn",
+            moderation_actions.c.chat_id == chat_id,
+        )
+    )
+
+
+async def _live_count(user_id: int, chat_id: int) -> int:
+    """Return the number of warning decisions that are still in force."""
+    return await engine_module.count_rows(
+        moderation_actions.select().where(
+            moderation_actions.c.target_user_id == user_id,
+            moderation_actions.c.action_type == "warn",
+            moderation_actions.c.chat_id == chat_id,
+            moderation_actions.c.status == "completed",
         )
     )
 
 
 async def _counter(user_id: int, chat_id: int) -> int:
-    """Return the stored counter row for one user and chat."""
-    row = await engine_module.fetch_one(
-        warn_counts.select().where(
-            warn_counts.c.user_id == user_id,
-            warn_counts.c.chat_id == chat_id,
-        )
-    )
-    if row is None:
-        return 0
-    return int(row["count"] or 0)
+    """Return the counted warnings of one user in one chat."""
+    return await warns_db.warn_count(user_id, chat_id)
 
 
 def _break_table_write(
@@ -75,33 +82,31 @@ def _break_table_write(
     monkeypatch.setattr(AsyncSession, "execute", _failing_execute)
 
 
-async def test_a_missing_counter_adopts_the_history_count(warn_db: str) -> None:
+async def test_the_counter_follows_the_history(warn_db: str) -> None:
     """A warning must count the rows the history already holds.
 
-    The counter row can be missing while the history is not, for example
-    after a clear that failed between its two deletes. A counter that
-    started at one would then sit below the history, and the auto-ban
-    threshold would fire a warning late.
+    The counter is a view over the decisions, so it cannot sit below the
+    history: the auto-ban threshold always reads the number of warnings
+    that are really in force.
     """
     await warns_db.add_warn(42, "spam", 1, 5)
     await warns_db.add_warn(42, "spam", 1, 5)
-    await engine_module.run(warn_counts.delete())
 
     count = await warns_db.add_warn(42, "spam", 1, 5)
 
     assert count == 3
-    assert await _history_count(42, 5) == 3
+    assert await _decision_count(42, 5) == 3
     assert await _counter(42, 5) == 3
 
 
 async def test_concurrent_removals_keep_the_counter_and_the_history_aligned(
     warn_db: str,
 ) -> None:
-    """Parallel removals must not decrement the counter twice.
+    """Parallel removals must not revoke a warning twice.
 
     Two callers that read the same newest warning both try to remove it.
-    Only one delete removes a row, so only one decrement may run, or the
-    counter ends up below the history and the threshold fires late.
+    Only one update moves the row out of the counted state, so the count
+    and the history stay in step.
     """
     for _ in range(4):
         await warns_db.add_warn(42, "spam", 1, 5)
@@ -110,20 +115,21 @@ async def test_concurrent_removals_keep_the_counter_and_the_history_aligned(
         *(warns_db.remove_last_warn(42, 5) for _ in range(4)),
     )
 
-    history = await _history_count(42, 5)
     counter = await _counter(42, 5)
-    assert history == counter, f"history={history} counter={counter}"
+    live = await _live_count(42, 5)
+    assert counter == live, f"counter={counter} live={live}"
+    assert counter < 4, "a removal must take one warning out of the count"
 
 
 async def test_a_removal_decrements_the_counter_once(warn_db: str) -> None:
-    """One removal takes one warning off the history and the counter."""
+    """One removal takes one warning off the count and keeps the record."""
     for _ in range(3):
         await warns_db.add_warn(42, "spam", 1, 5)
 
     assert await warns_db.remove_last_warn(42, 5) is True
 
-    assert await _history_count(42, 5) == 2
     assert await _counter(42, 5) == 2
+    assert await _decision_count(42, 5) == 3
 
 
 async def test_a_removal_of_a_missing_warning_changes_nothing(warn_db: str) -> None:
@@ -133,66 +139,68 @@ async def test_a_removal_of_a_missing_warning_changes_nothing(warn_db: str) -> N
     assert await warns_db.remove_last_warn(42, 5) is True
     assert await warns_db.remove_last_warn(42, 5) is False
 
-    assert await _history_count(42, 5) == 0
     assert await _counter(42, 5) == 0
+    assert await _decision_count(42, 5) == 1
 
 
 async def test_a_failed_removal_leaves_the_counter_untouched(
     warn_db: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A failed delete must not decrement the counter on its own.
+    """A failed write must not move the warning out of the count.
 
-    The delete and the decrement share one transaction, so a failing
-    delete rolls the decrement back with it.
+    The decision and the count are one row, so a failing write leaves the
+    counted state exactly as it was.
     """
     await warns_db.add_warn(42, "spam", 1, 5)
-    _break_table_write(monkeypatch, warns, "the warns table is unavailable")
+    _break_table_write(
+        monkeypatch, moderation_actions, "the decisions table is unavailable"
+    )
 
-    with pytest.raises(RuntimeError, match="warns table is unavailable"):
+    with pytest.raises(RuntimeError, match="decisions table is unavailable"):
         await warns_db.remove_last_warn(42, 5)
 
-    assert await _history_count(42, 5) == 1
     assert await _counter(42, 5) == 1
 
 
-async def test_a_clear_removes_the_history_and_the_counter(warn_db: str) -> None:
-    """A clear takes both sides of the pair away."""
+async def test_a_clear_revokes_the_warnings_and_keeps_the_history(
+    warn_db: str,
+) -> None:
+    """A clear takes the warnings out of the count and keeps the record."""
     await warns_db.add_warn(42, "spam", 1, 5)
     await warns_db.add_warn(42, "spam", 1, 5)
 
     assert await warns_db.clear_warns(42, 5) == 2
 
-    assert await _history_count(42, 5) == 0
     assert await _counter(42, 5) == 0
+    assert await _decision_count(42, 5) == 2
 
 
-async def test_a_failed_clear_keeps_the_history(
+async def test_a_failed_clear_keeps_the_warnings(
     warn_db: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A failed counter delete must not leave the history cleared.
+    """A failed clear must not leave the warnings out of the count.
 
-    The two deletes share one transaction, so a failure rolls the history
-    delete back with it. A surviving counter would otherwise keep a count
-    for warnings that are gone and fire the threshold on a clean user.
+    The clear is one transaction, so a failure rolls the revocation back
+    with it. A count that lost its warnings while the decisions survived
+    would fire the threshold on a user nobody warned.
     """
     await warns_db.add_warn(42, "spam", 1, 5)
-    _break_table_write(monkeypatch, warn_counts, "the counter table is unavailable")
+    _break_table_write(
+        monkeypatch, moderation_actions, "the decisions table is unavailable"
+    )
 
-    with pytest.raises(RuntimeError, match="counter table is unavailable"):
+    with pytest.raises(RuntimeError, match="decisions table is unavailable"):
         await warns_db.clear_warns(42, 5)
 
-    assert await _history_count(42, 5) == 1
     assert await _counter(42, 5) == 1
 
 
-async def test_a_removal_beside_a_repair_keeps_the_two_in_step(warn_db: str) -> None:
-    """A removal and a repair that run together must not deadlock.
+async def test_parallel_removals_do_not_deadlock(warn_db: str) -> None:
+    """Parallel removals must not lock each other out.
 
-    The removal locks the warning row and then the counter row. The
-    repair locks the counter row and then reads the history, so the two
-    orders look inverted. The repair only reads, and a read takes no row
-    lock, so there is no cycle. A change that made the repair lock the
-    history rows would introduce one, so the property is pinned here.
+    The removal moves one decision out of the counted state, so two
+    removals that read the same row race for it. The update is
+    conditional, so one of them finds nothing left to move.
     """
     for _ in range(3):
         await warns_db.add_warn(42, "spam", 1, 5)
@@ -200,7 +208,7 @@ async def test_a_removal_beside_a_repair_keeps_the_two_in_step(warn_db: str) -> 
     results = await asyncio.wait_for(
         asyncio.gather(
             warns_db.remove_last_warn(42, 5),
-            warns_db._recount_and_store(42, 5),
+            warns_db.remove_last_warn(42, 5),
             warns_db.remove_last_warn(42, 5),
             return_exceptions=True,
         ),
@@ -210,6 +218,6 @@ async def test_a_removal_beside_a_repair_keeps_the_two_in_step(warn_db: str) -> 
     failures = [r for r in results if isinstance(r, BaseException)]
     assert not failures, failures
 
-    history = await _history_count(42, 5)
     counter = await _counter(42, 5)
-    assert history == counter, f"history={history} counter={counter}"
+    live = await _live_count(42, 5)
+    assert counter == live, f"counter={counter} live={live}"

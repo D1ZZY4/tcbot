@@ -11,10 +11,9 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from tcbot import database as db
-from tcbot.database import engine as engine_module
 from tcbot.database import users_cache
-from tcbot.database.base import member_cache
 from tcbot.database.cache import CACHE_MISS, user_mention_cache
+from tests.postgres_support import reset_community
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -22,11 +21,11 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 async def member_db(postgres_db: str) -> AsyncIterator[str]:
-    """Start from an empty member-cache table and a cold mention cache."""
-    await engine_module.run(member_cache.delete())
+    """Start from an empty user table and a cold mention cache."""
+    await reset_community()
     user_mention_cache.clear()
     yield postgres_db
-    await engine_module.run(member_cache.delete())
+    await reset_community()
     user_mention_cache.clear()
 
 

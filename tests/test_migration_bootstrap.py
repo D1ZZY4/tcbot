@@ -82,7 +82,7 @@ def test_a_stamped_database_is_left_alone(monkeypatch: pytest.MonkeyPatch) -> No
 def test_a_partial_schema_is_not_stamped(monkeypatch: pytest.MonkeyPatch) -> None:
     """A half-built schema must fail in the migration, not be stamped."""
     declared = _declared()
-    _patch_inspector(monkeypatch, declared - {"bans"})
+    _patch_inspector(monkeypatch, declared - {"moderation_actions"})
     context = _FakeMigrationContext(heads=())
 
     migrations.stamp_bootstrap_schema(context, object(), _FakeScripts())  # type: ignore[arg-type]

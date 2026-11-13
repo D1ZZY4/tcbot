@@ -147,18 +147,16 @@ def test_ban_detail_escapes_moderator_reason() -> None:
 
 
 def test_invalid_stored_role_grants_nothing(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    async def _not_owner(uid: int) -> bool:
-        return False
+    """A hand-edited role row must not resolve to a real role."""
 
-    async def _not_admin(uid: int) -> bool:
-        return False
+    async def _bad_role(stmt: object) -> dict[str, str] | None:
+        return {"role_key": "superuser"}
 
-    async def _bad_role(uid: int) -> str | None:
-        return "admin"
+    async def _identity(op: object) -> object:
+        return await op()  # type: ignore[operator]
 
-    monkeypatch.setattr(users_roles, "is_owner", _not_owner)
-    monkeypatch.setattr(users_roles, "is_admin", _not_admin)
-    monkeypatch.setattr(users_roles, "get_role", _bad_role)
+    monkeypatch.setattr(users_roles, "fetch_one", _bad_role)
+    monkeypatch.setattr(users_roles, "db_call", _identity)
 
     uid = 42424241
     db.users_roles.effective_role_cache.invalidate(uid)

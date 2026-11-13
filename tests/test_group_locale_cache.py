@@ -10,10 +10,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from tcbot.database import engine as engine_module
 from tcbot.database import groups_db as _locale_mod
-from tcbot.database.base import federated_groups
 from tcbot.database.cache import _ALL_GROUPS_KEY
+from tests.postgres_support import reset_community, seed_users
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -21,10 +20,11 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 async def group_db(postgres_db: str) -> AsyncIterator[str]:
-    """Start from an empty group table."""
-    await engine_module.run(federated_groups.delete())
+    """Start from an empty group registry."""
+    await reset_community()
+    await seed_users(1)
     yield postgres_db
-    await engine_module.run(federated_groups.delete())
+    await reset_community()
     _locale_mod._GROUP_LOCALE_L1.clear()
 
 

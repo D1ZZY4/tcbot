@@ -4,9 +4,9 @@
 
 """The ban insert must survive both uniqueness races, verified against PostgreSQL.
 
-Two constraints can reject a ban insert: the unique identifier and the
-one-active-ban-per-user rule. The identifier collision is retried with a
-fresh identifier, and that retry can lose the other race. The retry must
+Two constraints can reject a ban insert: the unique public reference and
+the one-active-ban-per-user rule. The reference collision is retried with
+a fresh reference, and that retry can lose the other race. The retry must
 take the same path as the first attempt instead of surfacing as a raw
 write failure.
 """
@@ -16,12 +16,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from sqlalchemy import text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from tcbot import cfg
 from tcbot.database import bans_db
 from tcbot.database import engine as engine_module
-from tcbot.database.base import bans
+from tcbot.database.bans_db import _writes
+from tcbot.database.base import moderation_actions, moderation_cases
+from tests.postgres_support import reset_community, seed_chats, seed_users
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -31,34 +32,41 @@ pytestmark = [pytest.mark.postgres]
 
 @pytest.fixture
 async def ban_db(postgres_db: str) -> AsyncIterator[str]:
-    """Start from an empty ban table with the partial unique index in place."""
-    await engine_module.run(bans.delete())
-    await _restore_active_index()
+    """Start from an empty community."""
+    await reset_community()
+    await seed_users(7, 42, 99)
+    await seed_chats(cfg.proofs[0])
     yield postgres_db
-    await engine_module.run(bans.delete())
-    await _restore_active_index()
-
-
-async def _restore_active_index() -> None:
-    """Recreate the partial unique index over the (empty) ban table."""
-    await engine_module.run(text("DROP INDEX IF EXISTS uq_bans_active_user"))
-    await engine_module.run(
-        text(
-            "CREATE UNIQUE INDEX uq_bans_active_user "
-            "ON bans (banned_user_id) WHERE is_active"
-        )
-    )
+    await reset_community()
 
 
 async def _insert_ban(user_id: int, ban_id: str) -> None:
-    """Insert one active ban record straight into the table."""
+    """Insert one active ban decision straight into the table."""
+    case = (
+        await engine_module.run_returning(
+            moderation_cases.insert()
+            .values(
+                subject_user_id=user_id,
+                title="Raw ban",
+                status="open",
+                source="manual",
+                opened_by_user_id=7,
+                requires_evidence=False,
+            )
+            .returning(moderation_cases.c.id)
+        )
+    )[0]
     await engine_module.run(
-        pg_insert(bans).values(
-            ban_id=ban_id,
-            banned_user_id=user_id,
+        moderation_actions.insert().values(
+            action_type="ban",
+            scope_type="community",
+            target_user_id=user_id,
+            actor_user_id=7,
             reason="spam",
-            admin_user_id=7,
-            is_active=True,
+            status="active",
+            external_ref=ban_id,
+            case_id=case["id"],
+            action_origin="automated",
         )
     )
 
@@ -68,7 +76,7 @@ def _fixed_ids(*ids: str) -> Any:
     remaining = list(ids)
 
     def _make() -> str:
-        return remaining.pop(0) if remaining else "fallback-id"
+        return remaining.pop(0) if remaining else "fallbackid01"
 
     return _make
 
@@ -84,7 +92,7 @@ async def test_the_identifier_retry_keeps_the_canonical_ban(
     """
     await _insert_ban(42, "canonical01")
     await _insert_ban(99, "collide001")
-    monkeypatch.setattr(bans_db, "make_ban_id", _fixed_ids("collide001", "fresh0001"))
+    monkeypatch.setattr(_writes, "make_ban_id", _fixed_ids("collide001", "fresh00001"))
 
     record = await bans_db.create_ban(42, "spam", 7, 11, 12)
 
@@ -97,9 +105,9 @@ async def test_the_identifier_retry_stores_the_new_ban(
 ) -> None:
     """A retry that wins both races must store the new record."""
     await _insert_ban(99, "collide001")
-    monkeypatch.setattr(bans_db, "make_ban_id", _fixed_ids("collide001", "fresh0001"))
+    monkeypatch.setattr(_writes, "make_ban_id", _fixed_ids("collide001", "fresh00001"))
 
     record = await bans_db.create_ban(42, "spam", 7, 11, 12)
 
-    assert record.get("ban_id") == "fresh0001"
+    assert record.get("ban_id") == "fresh00001"
     assert record.get("banned_user_id") == 42

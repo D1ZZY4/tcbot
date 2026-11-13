@@ -35,7 +35,7 @@ def test_start_raises_runtime_error_when_background_dies_before_try(
     monkeypatch.setattr(sched_mod, "_scheduler_background", _boom)
 
     with pytest.raises(RuntimeError, match="APScheduler failed to start"):
-        asyncio.run(sched_mod.start(_TEST_URL, 0))
+        asyncio.run(sched_mod.start(_TEST_URL))
 
 
 def test_start_raises_runtime_error_on_timeout(
@@ -49,7 +49,7 @@ def test_start_raises_runtime_error_on_timeout(
 
     with pytest.raises(RuntimeError, match="APScheduler failed to start"):
         # * Outer bound so a regression (unbounded ready wait) fails, not hangs.
-        asyncio.run(asyncio.wait_for(sched_mod.start(_TEST_URL, 0), 1.0))
+        asyncio.run(asyncio.wait_for(sched_mod.start(_TEST_URL), 1.0))
     # * Timeout unwind reaps the stuck task so no stop() is needed.
     assert sched_mod._sched_task is None
 
@@ -62,5 +62,5 @@ def test_start_success_path_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sched_mod, "_STOP_TIMEOUT_S", 0.1)
     monkeypatch.setattr(sched_mod, "_scheduler_background", _ready)
 
-    asyncio.run(sched_mod.start(_TEST_URL, 0))
+    asyncio.run(sched_mod.start(_TEST_URL))
     asyncio.run(sched_mod.stop())

@@ -11,14 +11,16 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.database import bans_db, mutes_db
 from tcbot.database import engine as engine_module
-from tcbot.database.base import active_mutes, bans
+from tcbot.database.base import moderation_actions, moderation_cases
 from tcbot.modules.helper import guards
 from tcbot.modules.helper.decorators import ratelimit
+from tests.postgres_support import reset_community, seed_chats, seed_users
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -26,27 +28,22 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 async def mute_db(postgres_db: str) -> AsyncIterator[str]:
-    """Start from an empty active-mute table."""
-    await engine_module.run(active_mutes.delete())
+    """Start from an empty community."""
+    await reset_community()
+    await seed_users(7, 42)
+    await seed_chats(-1001, cfg.proofs[0])
     yield postgres_db
-    await engine_module.run(active_mutes.delete())
+    await reset_community()
 
 
 @pytest.fixture
 async def ban_db(postgres_db: str) -> AsyncIterator[str]:
-    """Start from an empty ban table with its partial unique index in place."""
-    await engine_module.run(bans.delete())
+    """Start from an empty community with the partial unique index in place."""
+    await reset_community()
+    await seed_users(7, 42)
+    await seed_chats(-1001, cfg.proofs[0])
     yield postgres_db
-    await engine_module.run(bans.delete())
-    await engine_module.run(
-        text("DROP INDEX IF EXISTS uq_bans_active_user"),
-    )
-    await engine_module.run(
-        text(
-            "CREATE UNIQUE INDEX uq_bans_active_user "
-            "ON bans (banned_user_id) WHERE is_active"
-        )
-    )
+    await reset_community()
 
 
 # ────────────────────────────── Role rules ────────────────────────────── #
@@ -174,8 +171,8 @@ def test_throttle_tier_fails_closed_to_the_strict_bucket(
 async def test_active_mute_reads_exclude_expired_rows(
     mute_db: str,
 ) -> None:
-    """An expired timed mute is not returned as active."""
-    await mutes_db.set_active_mute(42, until=datetime.now(UTC) - timedelta(hours=1))
+    """A timed mute whose deadline passed is not returned as active."""
+    await _store_expired_mute(42)
 
     assert await mutes_db.get_active_mute(42) is None
     assert await mutes_db.active_mute_docs() == []
@@ -183,7 +180,7 @@ async def test_active_mute_reads_exclude_expired_rows(
 
 async def test_active_mute_reads_include_permanent_mutes(mute_db: str) -> None:
     """A permanent mute never expires, so it stays in the replay list."""
-    await mutes_db.set_active_mute(42)
+    await mutes_db.record_mute(42, -1001, "spam", 7)
 
     stored = await mutes_db.get_active_mute(42)
     assert stored is not None
@@ -193,13 +190,55 @@ async def test_active_mute_reads_include_permanent_mutes(mute_db: str) -> None:
 
 async def test_permanent_mute_row_is_never_ttl_pruned(mute_db: str) -> None:
     """A permanent mute stores a null expiry, so the daily cleanup keeps it."""
-    await mutes_db.set_active_mute(42)
+    await mutes_db.record_mute(42, -1001, "spam", 7)
 
     stored = await engine_module.fetch_one(
-        active_mutes.select().where(active_mutes.c.user_id == 42)
+        moderation_actions.select().where(
+            moderation_actions.c.target_user_id == 42,
+            moderation_actions.c.action_type == "mute",
+            moderation_actions.c.status == "active",
+        )
     )
     assert stored is not None
-    assert stored["until_date"] is None
+    assert stored["expires_at"] is None
+
+
+async def _store_expired_mute(user_id: int) -> None:
+    """Store a mute decision whose deadline has already passed.
+
+    The schema refuses a decision that is expired when it is written, so
+    the row carries a creation time in the past as well. It reproduces the
+    state a decision reaches when its deadline passes.
+    """
+    await engine_module.run(
+        pg_insert(moderation_cases).values(
+            subject_user_id=user_id,
+            title="Expired mute",
+            status="open",
+            source="manual",
+            opened_by_user_id=7,
+            requires_evidence=False,
+        )
+    )
+    case = await engine_module.fetch_one(
+        moderation_cases.select().where(moderation_cases.c.title == "Expired mute")
+    )
+    assert case is not None
+    await engine_module.run(
+        pg_insert(moderation_actions).values(
+            action_type="mute",
+            scope_type="community",
+            target_user_id=user_id,
+            actor_user_id=7,
+            reason="spam",
+            created_at=datetime.now(UTC) - timedelta(hours=2),
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
+            status="active",
+            case_id=case["id"],
+            action_origin="manual",
+            external_ref="expiredmute1",
+        )
+    )
 
 
 # ─────────────────────────── Ban DB atomicity ─────────────────────────── #
@@ -207,36 +246,32 @@ async def test_permanent_mute_row_is_never_ttl_pruned(mute_db: str) -> None:
 
 async def test_review_slot_claim_is_atomic(ban_db: str) -> None:
     """Only the first appeal submission may claim the review slot."""
-    await bans_db.create_ban(42, "spam", 7, 1, 0, "b1")
+    await bans_db.create_ban(42, "spam", 7, 1, 0, "banreview01")
 
-    assert await bans_db.set_review_if_absent("b1", 100) is True
-    assert await bans_db.set_review_if_absent("b1", 200) is False
+    assert await bans_db.set_review_if_absent("banreview01", 100) is True
+    assert await bans_db.set_review_if_absent("banreview01", 200) is False
 
 
 async def test_appeal_decision_claim_is_atomic(ban_db: str) -> None:
     """Only the first approve/reject tap may claim the decision."""
-    await bans_db.create_ban(42, "spam", 7, 1, 0, "b1")
-    await bans_db.set_review_if_absent("b1", 100)
+    await bans_db.create_ban(42, "spam", 7, 1, 0, "banreview01")
+    await bans_db.set_review_if_absent("banreview01", 100)
 
-    assert await bans_db.claim_appeal_decision("b1", 100) is True
-    assert await bans_db.claim_appeal_decision("b1", 100) is False
+    assert await bans_db.claim_appeal_decision("banreview01", 100) is True
+    assert await bans_db.claim_appeal_decision("banreview01", 100) is False
 
 
-async def test_duplicate_active_bans_are_deactivated(ban_db: str) -> None:
-    """Only the canonical record survives a duplicate cleanup."""
-    await engine_module.run(
-        text("DROP INDEX IF EXISTS uq_bans_active_user"),
-    )
-    await bans_db.create_ban(42, "spam", 7, 1, 0, "old")
-    await bans_db.create_ban(42, "spam", 7, 1, 0, "keep")
+async def test_the_database_refuses_a_duplicate_active_ban(ban_db: str) -> None:
+    """One active ban per user: the loser of the race reuses the winner.
 
-    count = await bans_db.deactivate_extra_active_bans(42, "keep")
+    The partial unique index rejects the second decision, so the helper
+    hands the canonical record back instead of writing a duplicate.
+    """
+    await bans_db.create_ban(42, "spam", 7, 1, 0, "banskeep001")
+    reused = await bans_db.create_ban(42, "spam", 7, 1, 0, "bansother01")
 
-    assert count == 1
-    active = await bans_db.get_active_ban(42)
-    assert active is not None
-    assert active.get("ban_id") == "keep"
-    assert await bans_db.user_ban_count(42) == 2
+    assert str(reused.get("ban_id")) == "banskeep001"
+    assert await bans_db.user_ban_count(42) == 1
 
 
 # ────────────────────── Cross-group isolation ─────────────────────────── #

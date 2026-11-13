@@ -129,7 +129,7 @@ def test_the_migration_creates_every_declared_table(
         with engine.connect() as connection:
             rows = connection.exec_driver_sql(
                 "SELECT table_name FROM information_schema.tables "
-                "WHERE table_schema = %s",
+                "WHERE table_schema = %s AND table_type = 'BASE TABLE'",
                 (migration_schema,),
             )
             present = {row[0] for row in rows}

@@ -22,13 +22,19 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot import database as db
 from tcbot.database import engine as engine_module
-from tcbot.database.base import bans
+from tcbot.database.base import moderation_actions, moderation_appeals, moderation_cases
 from tcbot.modules.helper.pipelines import appeal_review_flow
+from tests.postgres_support import reset_community, seed_chats, seed_users
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from sqlalchemy.ext.asyncio import AsyncSession
+
+# * The public reference of the decision under test. The column accepts
+# * ten to thirty-two lowercase alphanumerics, so the reference has to
+# * be at least ten characters long.
+_BAN_REF: str = "banreview01"
 
 
 class _FakeQuery:
@@ -76,7 +82,7 @@ def _ban(target_role: str = "admin") -> dict[str, Any]:
     review window does not lock them out.
     """
     return {
-        "ban_id": "abc",
+        "ban_id": _BAN_REF,
         "is_active": True,
         "review_message_id": 1,
         "review_timestamp": datetime.now(UTC),
@@ -165,11 +171,11 @@ def test_a_refused_tap_gives_the_review_slot_back(
     """
     record = _wire(monkeypatch)
 
-    query = _FakeQuery("appeal_approve_abc")
+    query = _FakeQuery(f"appeal_approve_{_BAN_REF}")
     _run_decision(query)
 
     assert record["deactivated"] == []
-    assert record["restored"] == [("abc", 1)]
+    assert record["restored"] == [(_BAN_REF, 1)]
 
 
 def test_a_lost_claim_does_not_restore_the_slot(
@@ -178,7 +184,7 @@ def test_a_lost_claim_does_not_restore_the_slot(
     """The reviewer who lost the race must not put the slot back."""
     record = _wire(monkeypatch, claimed=False)
 
-    query = _FakeQuery("appeal_approve_abc")
+    query = _FakeQuery(f"appeal_approve_{_BAN_REF}")
     _run_decision(query)
 
     assert record["restored"] == []
@@ -191,32 +197,92 @@ def test_a_lost_claim_does_not_restore_the_slot(
 
 @pytest.fixture
 async def ban_db(postgres_db: str) -> AsyncIterator[str]:
-    """Start from an empty ban table."""
-    await engine_module.run(bans.delete())
+    """Start from an empty community."""
+    await reset_community()
+    await seed_users(1, 9)
+    await seed_chats(-1001)
     yield postgres_db
-    await engine_module.run(bans.delete())
+    await reset_community()
 
 
 async def _store_ban(
     sess: AsyncSession,
     *,
-    ban_id: str = "abc",
+    ban_id: str = _BAN_REF,
     active: bool = True,
     rejected: bool = False,
     review_message_id: int | None = None,
 ) -> None:
-    """Store one ban row with the review state under test."""
-    await sess.execute(
-        pg_insert(bans).values(
-            ban_id=ban_id,
-            banned_user_id=9,
-            reason="spam",
-            admin_user_id=1,
-            is_active=active,
-            review_message_id=review_message_id,
-            rejected_at=datetime.now(UTC) if rejected else None,
+    """Store one decision with the review state under test."""
+    case = (
+        (
+            await sess.execute(
+                pg_insert(moderation_cases)
+                .values(
+                    subject_user_id=9,
+                    title="Appeal under review",
+                    status="open",
+                    source="manual",
+                    opened_by_user_id=1,
+                    requires_evidence=False,
+                )
+                .returning(moderation_cases.c.id)
+            )
         )
+        .mappings()
+        .first()
     )
+    assert case is not None
+    metadata: dict[str, Any] = {}
+    if review_message_id is not None:
+        metadata["review_message_id"] = review_message_id
+    action = (
+        (
+            await sess.execute(
+                pg_insert(moderation_actions)
+                .values(
+                    action_type="ban",
+                    scope_type="community",
+                    target_user_id=9,
+                    actor_user_id=1,
+                    reason="spam",
+                    status="active" if active else "revoked",
+                    external_ref=ban_id,
+                    case_id=case["id"],
+                    metadata=metadata,
+                    # * The automated origin needs no archived proof, so
+                    # * the test can file the decision without one.
+                    action_origin="automated",
+                )
+                .returning(moderation_actions.c.id)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    assert action is not None
+    if rejected:
+        await sess.execute(
+            pg_insert(moderation_appeals).values(
+                action_id=action["id"],
+                appellant_user_id=9,
+                appeal_text="please reconsider",
+                status="rejected",
+                resolved_at=datetime.now(UTC),
+                reviewed_by_user_id=1,
+                decision_note="Admin",
+            )
+        )
+
+
+async def _review_message_id(ban_id: str = _BAN_REF) -> Any:
+    """Return the review message id stored with the decision."""
+    row = await engine_module.fetch_one(
+        moderation_actions.select().where(moderation_actions.c.external_ref == ban_id)
+    )
+    assert row is not None
+    metadata = row["metadata"] or {}
+    return metadata.get("review_message_id")
 
 
 async def test_the_restore_fills_an_empty_slot(ban_db: str) -> None:
@@ -227,12 +293,10 @@ async def test_the_restore_fills_an_empty_slot(ban_db: str) -> None:
 
     await engine_module.run_transaction(_work)
 
-    restored = await db.bans_db.restore_review("abc", 77, datetime.now(UTC))
+    restored = await db.bans_db.restore_review(_BAN_REF, 77, datetime.now(UTC))
 
-    row = await engine_module.fetch_one(bans.select().where(bans.c.ban_id == "abc"))
     assert restored is True
-    assert row is not None
-    assert row["review_message_id"] == 77
+    assert await _review_message_id() == 77
 
 
 async def test_the_restore_skips_a_decided_ban(ban_db: str) -> None:
@@ -247,12 +311,10 @@ async def test_the_restore_skips_a_decided_ban(ban_db: str) -> None:
 
     await engine_module.run_transaction(_work)
 
-    restored = await db.bans_db.restore_review("abc", 77, datetime.now(UTC))
+    restored = await db.bans_db.restore_review(_BAN_REF, 77, datetime.now(UTC))
 
-    row = await engine_module.fetch_one(bans.select().where(bans.c.ban_id == "abc"))
     assert restored is False
-    assert row is not None
-    assert row["review_message_id"] is None
+    assert await _review_message_id() is None
 
 
 async def test_the_restore_skips_a_rejected_ban(ban_db: str) -> None:
@@ -263,12 +325,10 @@ async def test_the_restore_skips_a_rejected_ban(ban_db: str) -> None:
 
     await engine_module.run_transaction(_work)
 
-    restored = await db.bans_db.restore_review("abc", 77, datetime.now(UTC))
+    restored = await db.bans_db.restore_review(_BAN_REF, 77, datetime.now(UTC))
 
-    row = await engine_module.fetch_one(bans.select().where(bans.c.ban_id == "abc"))
     assert restored is False
-    assert row is not None
-    assert row["review_message_id"] is None
+    assert await _review_message_id() is None
 
 
 async def test_the_restore_never_overwrites_a_filled_slot(ban_db: str) -> None:
@@ -279,9 +339,7 @@ async def test_the_restore_never_overwrites_a_filled_slot(ban_db: str) -> None:
 
     await engine_module.run_transaction(_work)
 
-    restored = await db.bans_db.restore_review("abc", 77, datetime.now(UTC))
+    restored = await db.bans_db.restore_review(_BAN_REF, 77, datetime.now(UTC))
 
-    row = await engine_module.fetch_one(bans.select().where(bans.c.ban_id == "abc"))
     assert restored is False
-    assert row is not None
-    assert row["review_message_id"] == 99
+    assert await _review_message_id() == 99

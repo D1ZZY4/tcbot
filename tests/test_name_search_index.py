@@ -5,9 +5,9 @@
 """The member name search must stay indexable.
 
 PostgreSQL cannot serve a case-insensitive match from an index, so the
-search runs against the lowercase mirror columns with a case-sensitive
-prefix query. The mirrors are written by the profile write, and the
-indexes carry the pattern opclass that makes the prefix a range scan.
+search runs a case-sensitive prefix query on the lowercase form of the
+searchable columns. The expression indexes carry the pattern opclass that
+makes the prefix a range scan.
 """
 
 from __future__ import annotations
@@ -16,15 +16,16 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import func, text
 
 from tcbot.database import engine as engine_module
 from tcbot.database import users_cache
-from tcbot.database.base import member_cache
+from tcbot.database.base import telegram_users
 from tests.postgres_support import (
     compile_sql,
     identity_db_call,
     literal_sql,
+    reset_community,
     stmt_params,
 )
 
@@ -33,8 +34,8 @@ if TYPE_CHECKING:
 
 # * The two indexes that serve the prefix search.
 _NAME_INDEXES: tuple[str, ...] = (
-    "ix_member_cache_first_name_lower",
-    "ix_member_cache_username_lower",
+    "ix_telegram_users_first_name_lower",
+    "ix_telegram_users_username_lower",
 )
 
 
@@ -67,23 +68,23 @@ def recorder(monkeypatch: pytest.MonkeyPatch) -> _Recorder:
 @pytest.fixture
 async def postgres_members(postgres_db: str) -> AsyncIterator[None]:
     """Point the member cache at the test database with an empty table."""
-    await engine_module.run(member_cache.delete())
+    await reset_community()
     yield
-    await engine_module.run(member_cache.delete())
+    await reset_community()
 
 
 # ─────────────────────────── Query shape ─────────────────────────── #
 
 
-def test_the_search_uses_the_lowercase_mirrors(recorder: _Recorder) -> None:
+def test_the_search_uses_the_lowercase_expressions(recorder: _Recorder) -> None:
     """The query must not use a case-insensitive match on the raw fields."""
     asyncio.run(users_cache.search_by_name("ali"))
 
     sql = compile_sql(recorder.statements[0])
-    assert "member_cache.first_name_lower LIKE" in sql
-    assert "member_cache.username_lower LIKE" in sql
-    assert "member_cache.first_name LIKE" not in sql
-    assert "member_cache.username LIKE" not in sql
+    assert "lower(telegram_users.first_name) LIKE" in sql
+    assert "lower(telegram_users.username) LIKE" in sql
+    assert "telegram_users.first_name LIKE" not in sql
+    assert "telegram_users.username LIKE" not in sql
 
 
 def test_the_search_is_a_prefix_match(recorder: _Recorder) -> None:
@@ -94,8 +95,8 @@ def test_the_search_is_a_prefix_match(recorder: _Recorder) -> None:
     assert "|| '%' ESCAPE" in sql
     assert "'%' ||" not in sql
     params = stmt_params(recorder.statements[0])
-    assert params["first_name_lower_1"] == "ali"
-    assert params["username_lower_1"] == "ali"
+    assert params["lower_1"] == "ali"
+    assert params["lower_2"] == "ali"
 
 
 def test_the_search_lowercases_the_needle(recorder: _Recorder) -> None:
@@ -103,8 +104,8 @@ def test_the_search_lowercases_the_needle(recorder: _Recorder) -> None:
     asyncio.run(users_cache.search_by_name("BOB"))
 
     params = stmt_params(recorder.statements[0])
-    assert params["first_name_lower_1"] == "bob"
-    assert params["username_lower_1"] == "bob"
+    assert params["lower_1"] == "bob"
+    assert params["lower_2"] == "bob"
 
 
 def test_the_search_treats_the_wildcards_literally(recorder: _Recorder) -> None:
@@ -112,7 +113,7 @@ def test_the_search_treats_the_wildcards_literally(recorder: _Recorder) -> None:
     asyncio.run(users_cache.search_by_name("a%b"))
 
     params = stmt_params(recorder.statements[0])
-    assert params["first_name_lower_1"] == "a\\%b"
+    assert params["lower_1"] == "a\\%b"
 
 
 def test_the_search_is_capped(recorder: _Recorder) -> None:
@@ -126,27 +127,26 @@ def test_the_search_is_capped(recorder: _Recorder) -> None:
 # ──────────────────────────── Writes ─────────────────────────────── #
 
 
-def test_the_write_populates_the_mirrors(recorder: _Recorder) -> None:
-    """A profile write must carry the mirrors the search reads."""
+def test_the_write_stores_the_searchable_names(recorder: _Recorder) -> None:
+    """A profile write must carry the names the search reads."""
     asyncio.run(users_cache.upsert_user(9, "Carol", "Carol", "Smith"))
 
     params = stmt_params(recorder.statements[0])
     assert params["user_id"] == 9
-    assert params["first_name_lower"] == "carol"
-    assert params["username_lower"] == "carol"
+    assert params["first_name"] == "Carol"
+    assert params["username"] == "Carol"
 
 
-def test_a_partial_write_leaves_the_username_mirror_alone(
+def test_a_partial_write_leaves_the_username_alone(
     recorder: _Recorder,
 ) -> None:
-    """``username=None`` means "preserve", so the mirror must survive too."""
+    """``username=None`` means "preserve", so the stored username must survive."""
     asyncio.run(users_cache.upsert_user(9, "Carol", "Carol"))
     asyncio.run(users_cache.upsert_user(9, None, "Caroline"))
 
     params = stmt_params(recorder.statements[1])
-    assert params["first_name_lower"] == "caroline"
+    assert params["first_name"] == "Caroline"
     assert "username" not in params
-    assert "username_lower" not in params
     sql = compile_sql(recorder.statements[1])
     assert "username" not in sql.split("ON CONFLICT")[1]
 
@@ -157,7 +157,7 @@ def test_a_partial_write_leaves_the_username_mirror_alone(
 def test_the_declared_indexes_use_the_pattern_opclass() -> None:
     """The prefix scan needs the pattern opclass under a real collation."""
     for name in _NAME_INDEXES:
-        index = next(i for i in member_cache.indexes if i.name == name)
+        index = next(i for i in telegram_users.indexes if i.name == name)
         ops = index.dialect_options["postgresql"]["ops"]
         assert "text_pattern_ops" in ops.values()
 
@@ -165,10 +165,10 @@ def test_the_declared_indexes_use_the_pattern_opclass() -> None:
 # ─────────────────────── Against a real server ───────────────────── #
 
 
-async def test_the_search_matches_the_username_mirror(
+async def test_the_search_matches_the_username_expression(
     postgres_members: None,
 ) -> None:
-    """A username prefix is found through its own mirror."""
+    """A username prefix is found through the lowercase expression."""
     await users_cache.upsert_user(8, "Bobby", "Bob")
 
     found = await users_cache.search_by_name("BOB")
@@ -176,10 +176,10 @@ async def test_the_search_matches_the_username_mirror(
     assert [doc.get("user_id") for doc in found] == [8]
 
 
-async def test_the_search_matches_the_first_name_mirror(
+async def test_the_search_matches_the_first_name_expression(
     postgres_members: None,
 ) -> None:
-    """A first name prefix is found through its own mirror."""
+    """A first name prefix is found through the lowercase expression."""
     await users_cache.upsert_user(7, "Alice_1", "Alice")
 
     found = await users_cache.search_by_name("ali")
@@ -205,32 +205,19 @@ async def test_the_search_is_served_by_the_index(postgres_members: None) -> None
             "user_id": index,
             "username": f"user{index}",
             "first_name": f"name{index}",
-            "first_name_lower": f"name{index}",
-            "username_lower": f"user{index}",
         }
         for index in range(1, 5001)
     ]
     await engine_module.run(
-        member_cache.insert().values(
-            [
-                {
-                    "user_id": row["user_id"],
-                    "username": row["username"],
-                    "first_name": row["first_name"],
-                    "first_name_lower": row["first_name_lower"],
-                    "username_lower": row["username_lower"],
-                }
-                for row in rows
-            ]
-        ),
+        telegram_users.insert().values(rows),
     )
-    await engine_module.run(text("ANALYZE member_cache"))
+    await engine_module.run(text("ANALYZE telegram_users"))
 
     plan = await engine_module.fetch_all(
         text(
             "EXPLAIN (COSTS OFF) SELECT user_id, first_name, username "
-            "FROM member_cache WHERE first_name_lower LIKE 'name4999%' "
-            "OR username_lower LIKE 'name4999%' LIMIT 5"
+            "FROM telegram_users WHERE lower(first_name) LIKE 'name4999%' "
+            "OR lower(username) LIKE 'name4999%' LIMIT 5"
         )
     )
     plan_text = "\n".join(str(row["QUERY PLAN"]) for row in plan)
@@ -247,7 +234,7 @@ async def test_the_live_index_carries_the_pattern_opclass(
     rows = await engine_module.fetch_all(
         text(
             "SELECT indexname, indexdef FROM pg_indexes "
-            "WHERE schemaname = current_schema() AND tablename = 'member_cache'"
+            "WHERE schemaname = current_schema() AND tablename = 'telegram_users'"
         )
     )
     definitions = {str(row["indexname"]): str(row["indexdef"]) for row in rows}
@@ -260,7 +247,7 @@ async def test_the_live_index_carries_the_pattern_opclass(
 async def test_the_partial_write_keeps_the_stored_username(
     postgres_members: None,
 ) -> None:
-    """A partial write leaves the stored username and its mirror alone."""
+    """A partial write leaves the stored username alone."""
     await users_cache.upsert_user(9, "Carol", "Carol")
     await users_cache.upsert_user(9, None, "Caroline")
 
@@ -274,8 +261,10 @@ async def test_the_partial_write_keeps_the_stored_username(
 
 def test_the_literal_sql_keeps_the_prefix_pattern() -> None:
     """The rendered statement shows the prefix pattern, not a substring one."""
-    stmt = member_cache.select().where(
-        member_cache.c.first_name_lower.startswith("ali", escape="\\", autoescape=True)
+    stmt = telegram_users.select().where(
+        func.lower(telegram_users.c.first_name).startswith(
+            "ali", escape="\\", autoescape=True
+        )
     )
     sql = literal_sql(stmt)
 

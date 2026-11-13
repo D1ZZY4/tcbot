@@ -12,37 +12,55 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from sqlalchemy.sql.expression import Delete
+from sqlalchemy.sql.expression import Update
 
 from tcbot.database import engine as engine_module
 from tcbot.database import users_roles
-from tcbot.database.base import tc_owners
+from tcbot.database.base import role_assignments
 from tcbot.database.cache import _OWNER_KEY
+from tests.postgres_support import reset_community, seed_users
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+# * The users the transfers in this module hand the ownership to.
+_OWNER_IDS: tuple[int, ...] = (
+    61001,
+    61002,
+    61003,
+    61004,
+    61010,
+    61011,
+    61100,
+    61200,
+    61300,
+)
+
 
 @pytest.fixture
 async def owner_db(postgres_db: str) -> AsyncIterator[str]:
-    """Start from an empty owner table."""
-    await engine_module.run(tc_owners.delete())
+    """Start from an empty role assignment table."""
+    await reset_community()
+    await seed_users(*_OWNER_IDS)
     yield postgres_db
-    await engine_module.run(tc_owners.delete())
+    await reset_community()
 
 
-class _FailingDeleteSession:
-    """Session proxy that rejects the cleanup delete."""
+class _FailingCleanupSession:
+    """Session proxy that rejects the cleanup update."""
 
     def __init__(self, sess: AsyncSession) -> None:
         self._sess = sess
 
     async def execute(self, stmt: Any, *args: Any, **kwargs: Any) -> Any:
-        """Fail the cleanup delete, pass everything else through."""
-        if isinstance(stmt, Delete):
-            raise RuntimeError("tc_owners delete failed")
+        """Fail the cleanup update, pass everything else through."""
+        if (
+            isinstance(stmt, Update)
+            and getattr(stmt, "table", None) is role_assignments
+        ):
+            raise RuntimeError("role assignment cleanup failed")
         return await self._sess.execute(stmt, *args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
@@ -50,21 +68,26 @@ class _FailingDeleteSession:
         return getattr(self._sess, name)
 
 
-def _install_failing_delete(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make the cleanup delete fail inside the transfer transaction."""
+def _install_failing_cleanup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the cleanup update fail inside the transfer transaction."""
     real_session = engine_module.session
 
     @contextlib.asynccontextmanager
-    async def _session() -> AsyncIterator[_FailingDeleteSession]:
+    async def _session() -> AsyncIterator[_FailingCleanupSession]:
         async with real_session() as sess:
-            yield _FailingDeleteSession(sess)
+            yield _FailingCleanupSession(sess)
 
     monkeypatch.setattr(engine_module, "session", _session)
 
 
 async def _owner_ids() -> list[int]:
-    """Return every owner row, ordered."""
-    rows = await engine_module.fetch_all(tc_owners.select())
+    """Return every active owner id, ordered."""
+    rows = await engine_module.fetch_all(
+        role_assignments.select().where(
+            role_assignments.c.role_key == "owner",
+            role_assignments.c.status == "active",
+        )
+    )
     return [int(row["user_id"]) for row in rows]
 
 
@@ -83,15 +106,15 @@ async def test_a_failed_transfer_keeps_the_previous_owner(
 ) -> None:
     """A rolled-back transfer must not leave the table without an owner.
 
-    The insert and the cleanup delete share one transaction, so a failure
+    The revocation and the assignment share one transaction, so a failure
     between them cannot leave zero owner rows. Zero owners would leave the
-    whole federation without a Founder until the next restart.
+    whole community without an owner until the next restart.
     """
     await users_roles.set_owner(61003)
     users_roles.owner_id_cache.invalidate(_OWNER_KEY)
-    _install_failing_delete(monkeypatch)
+    _install_failing_cleanup(monkeypatch)
 
-    with pytest.raises(RuntimeError, match="tc_owners delete failed"):
+    with pytest.raises(RuntimeError, match="role assignment cleanup failed"):
         await users_roles.set_owner(61004)
 
     assert await _owner_ids() == [61003]
@@ -104,14 +127,14 @@ async def test_set_owner_persistent_delete_failure_reraises_with_guidance(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A failed transfer fails closed and points the operator at the table."""
-    _install_failing_delete(monkeypatch)
+    _install_failing_cleanup(monkeypatch)
     with (
         caplog.at_level(logging.ERROR, logger="tcbot.database.users_roles"),
-        pytest.raises(RuntimeError, match="tc_owners delete failed"),
+        pytest.raises(RuntimeError, match="role assignment cleanup failed"),
     ):
         await users_roles.set_owner(61010)
 
-    assert "tc_owners" in caplog.text
+    assert "role_assignments" in caplog.text
     assert "rolled back" in caplog.text
 
 
@@ -139,8 +162,8 @@ async def test_concurrent_transfers_leave_exactly_one_owner(owner_db: str) -> No
     """Two transfers racing must not cancel each other out.
 
     The transfer takes an advisory lock, so the losers wait instead of
-    interleaving their insert and delete. Without the lock the sequence
-    insert A, insert B, delete != A, delete != B leaves no owner row.
+    interleaving their assignment and revocation. Without the lock the
+    sequence assign A, assign B, revoke A, revoke B leaves no owner row.
     """
     await asyncio.gather(
         users_roles.set_owner(61100),
