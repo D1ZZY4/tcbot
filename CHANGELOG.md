@@ -464,6 +464,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **A demotion that lands during a fresh role read is no longer undone in the cache** (`tcbot/database/cache/twolevel.py`, `tcbot/database/users_roles.py`, `tests/test_roles_cache.py`): the fresh read published its result into the role cache unconditionally, so a demotion that landed between the read and the publish was overwritten by the stale role for the whole cache TTL. The cache now publishes a fresh read only when the key was not invalidated while the read was in flight. Behavior changes: none; a revoked role stays revoked on every read path.
+
 - **A cancelled role lookup no longer reads as a refusal** (`tcbot/modules/helper/guards.py`): the enforcement verdict turned a cancelled read into a refusal verdict, so a shutdown looked like a rejected action. The cancellation now propagates. Behavior changes: none.
 
 - **The callback admin paths refuse the anonymous-admin placeholder** (`tcbot/modules/helper/guards.py`, `tcbot/modules/admins.py`): the shared callback gate now refuses the placeholder explicitly instead of relying on it holding no federation role. Behavior changes: none.
@@ -855,6 +857,8 @@ All notable changes to this project are documented here. For workflow details, s
 ### Documentation
 
 - **The guides describe the permission helpers that ship** (`docs/architecture/helpers.md`, `docs/architecture/repository-map.md`, `docs/architecture/modules.md`, `docs/architecture/database.md`, `docs/architecture/workflows.md`, `docs/features/roles/roles.md`, `docs/features/roles/promote.md`, `AGENTS.md`, `.agents/rules/security-rules.md`): the helper reference, the repository map, and the agent rules described a permission module that no longer exists and named a recovery path that was removed with the sweep command. The gates and the target resolution are now documented where they live, the demote rule matches the implementation, and the rules name the repair paths that exist. Behavior changes: none, docs only.
+
+- **The cache reference describes the fresh-read path** (`docs/architecture/database.md`): the reference described a per-key lock that was dropped on every write, which is what let a stale fetch overwrite a newer value. It now describes the single-flight lock and the invalidation counter that keep the two apart. Behavior changes: none, docs only.
 
 - **The developer documentation describes the PostgreSQL deployment** (`docs/architecture/database.md`, `docs/architecture/repository-map.md`, `docs/architecture/utilities.md`, `docs/architecture/modules.md`, `docs/getting-started/setup.md`, `docs/operations/backup-and-restore.md`, `docs/operations/vercel.md`, `docs/operations/ci-cd.md`, `docs/operations/performance.md`, `docs/operations/proof-migration.md`, `docs/features/moderation/check.md`, `docs/features/moderation/warnings.md`, `docs/features/roles/roles.md`, `docs/features/misc-modules.md`, `docs/README.md`, `README.md`, `replit.md`, `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md`): the guides still described the MongoDB deployment, its collections, its backup tooling, and its environment variables. They now describe the tables, the migrations, the `pg_dump` runbook, and the connection string the code actually uses. Behavior changes: none, docs only.
 

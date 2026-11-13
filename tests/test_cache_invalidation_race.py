@@ -145,3 +145,85 @@ def test_cache_key_types(key: Any) -> None:
     cache = _cache()
     cache.put(key, "value")
     assert cache.get(key) == "value"
+
+
+def test_a_refresh_does_not_resurrect_an_invalidated_value() -> None:
+    """A fresh read that lands after a demotion must not republish the role.
+
+    The role cache serves the demotion through the fresh read path, so
+    the value it carries can predate the write. Publishing it would keep
+    the revoked role alive for the whole cache TTL.
+    """
+
+    async def _run() -> None:
+        cache = _cache()
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def _fetch() -> str:
+            started.set()
+            await release.wait()
+            return "admin"
+
+        async def _demote() -> None:
+            await started.wait()
+            cache.invalidate("k")
+            release.set()
+
+        result, _ = await asyncio.gather(cache.refresh("k", _fetch), _demote())
+        assert result == "admin"
+        assert cache.get("k") != "admin"
+
+    asyncio.run(_run())
+
+
+def test_a_refresh_publishes_an_unchanged_value() -> None:
+    """The ordinary fresh read still refreshes the cached value."""
+
+    async def _run() -> None:
+        cache = _cache()
+
+        async def _fetch() -> str:
+            return "admin"
+
+        assert await cache.refresh("k", _fetch) == "admin"
+        assert cache.get("k") == "admin"
+
+    asyncio.run(_run())
+
+
+def test_an_invalidation_does_not_break_the_single_flight() -> None:
+    """Concurrent readers of one key never run two source reads at once.
+
+    The invalidation used to drop the per-key lock, so a reader that
+    arrived after it started its own source read while the first one was
+    still in flight.
+    """
+
+    async def _run() -> None:
+        cache = _cache()
+        started = asyncio.Event()
+        release = asyncio.Event()
+        in_flight = 0
+        peak = 0
+
+        async def _fetch() -> str:
+            nonlocal in_flight, peak
+            in_flight += 1
+            peak = max(peak, in_flight)
+            started.set()
+            await release.wait()
+            in_flight -= 1
+            return "value"
+
+        first = asyncio.create_task(cache.get_or_fetch("k", _fetch))
+        await started.wait()
+        cache.invalidate("k")
+        second = asyncio.create_task(cache.get_or_fetch("k", _fetch))
+        await asyncio.sleep(0)
+        release.set()
+        await asyncio.gather(first, second)
+
+        assert peak == 1
+
+    asyncio.run(_run())

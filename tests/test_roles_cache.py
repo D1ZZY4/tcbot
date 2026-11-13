@@ -316,3 +316,49 @@ def test_is_owner_fresh_bypasses_cache(
         assert asyncio.run(users_roles.is_owner(61011, fresh=True)) is True
     finally:
         users_roles.owner_id_cache.invalidate(_OWNER_KEY)
+
+
+def test_a_demotion_during_a_fresh_read_is_not_undone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A demotion that lands during a fresh read must stay revoked.
+
+    The fresh read resolves the role in three separate reads, so a
+    demotion can land between the read and the publish. Publishing the
+    stale role would keep the revoked privilege alive for the whole
+    cache TTL on every cached read path.
+    """
+    uid = 61011
+    _invalidate(uid)
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def _fetch_one(stmt: Any) -> dict[str, int] | None:
+        return None
+
+    async def _admin(user_id: int) -> bool:
+        started.set()
+        await release.wait()
+        return True
+
+    async def _role(user_id: int) -> str | None:
+        return None
+
+    monkeypatch.setattr(users_roles, "fetch_one", _fetch_one)
+    monkeypatch.setattr(users_roles, "db_call", _identity)
+    monkeypatch.setattr(users_roles, "is_admin", _admin)
+    monkeypatch.setattr(users_roles, "get_role", _role)
+
+    async def _scenario() -> None:
+        task = asyncio.create_task(users_roles.get_effective_role(uid, fresh=True))
+        await started.wait()
+        # * The demotion lands while the fresh read is still running.
+        users_roles.effective_role_cache.invalidate(uid)
+        release.set()
+        assert await task == "admin"
+
+    try:
+        asyncio.run(_scenario())
+        assert users_roles.effective_role_cache.get(uid) != "admin"
+    finally:
+        _invalidate(uid)

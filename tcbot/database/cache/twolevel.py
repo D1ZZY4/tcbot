@@ -38,6 +38,24 @@ _REVOCATION_PREFIXES: frozenset[str] = frozenset({"role", "conn", "groups", "own
 _MGET_CHUNK_SIZE: int = 500
 
 
+class _KeyState:
+    """Single-flight lock plus the invalidation counter of one key.
+
+    The counter advances on every write and every invalidation, so a
+    fetch that started before the change can tell that its result is
+    stale and must not overwrite the newer value. The lock stays in
+    place for the whole fetch, so concurrent readers of one key still
+    share a single source read.
+    """
+
+    __slots__ = ("generation", "lock", "waiters")
+
+    def __init__(self) -> None:
+        self.generation: int = 0
+        self.lock: asyncio.Lock = asyncio.Lock()
+        self.waiters: int = 0
+
+
 class TwoLevelCache[T]:
     """Two-level cache: in-memory L1 (fast) + Redis L2 (distributed, optional).
 
@@ -46,7 +64,7 @@ class TwoLevelCache[T]:
     sites.
     """
 
-    __slots__ = ("_is_revocation", "_locks", "_mem", "_redis_prefix", "_redis_ttl")
+    __slots__ = ("_is_revocation", "_mem", "_redis_prefix", "_redis_ttl", "_states")
 
     def __init__(
         self,
@@ -63,10 +81,10 @@ class TwoLevelCache[T]:
         # * renames the prefix cannot turn a revocation write into a
         # * droppable one.
         self._is_revocation: bool = redis_prefix in _REVOCATION_PREFIXES
-        # * Per-key lock serialises concurrent fetches for one key across
-        # * L1 + L2 + DB. Dropped per fetch (and in invalidate) to bound
-        # * growth; clear() leaves in-flight locks alone.
-        self._locks: dict[Any, asyncio.Lock] = {}
+        # * Per-key state serialises concurrent fetches for one key across
+        # * L1 + L2 + DB and carries the invalidation counter. The entry is
+        # * dropped when the last waiter leaves, so the map stays bounded.
+        self._states: dict[Any, _KeyState] = {}
 
     # ── Sync operations (in-memory layer only) ── #
 
@@ -77,9 +95,9 @@ class TwoLevelCache[T]:
     def put(self, key: Any, val: T) -> None:
         """Store in memory and enqueue an ordered Redis write."""
         self._mem.put(key, val)
-        # * Drop the per-key lock so a fetch that started before this write
-        # * cannot overwrite the newer value with an older one.
-        self._locks.pop(key, None)
+        # * Advance the key's generation so a fetch that started before
+        # * this write cannot overwrite the newer value with an older one.
+        self._advance(key)
         self._redis_put_background(key, val)
 
     def invalidate(self, key: Any) -> None:
@@ -90,19 +108,18 @@ class TwoLevelCache[T]:
         other processes serving the revoked privilege until the key TTL.
         """
         self._mem.invalidate(key)
-        # * Drop the per-key lock so high-cardinality callers do not
-        # * accumulate a stale lock for every key ever fetched. The drop
-        # * also signals the in-flight fetch for this key that its result
-        # * predates the invalidation (see get_or_fetch).
-        self._locks.pop(key, None)
+        # * Advance the key's generation so an in-flight fetch discards its
+        # * stale result instead of resurrecting the revoked value.
+        self._advance(key)
         self._redis_del_background(key, droppable=not self._is_revocation)
 
     def clear(self) -> None:
         """Clear the in-memory layer (does not flush Redis keys)."""
         self._mem.clear()
-        # * Drop the per-key locks so a fetch that started before the clear
-        # * cannot write its pre-clear value back into L1.
-        self._locks.clear()
+        # * Advance every known generation so an in-flight fetch discards
+        # * its pre-clear result instead of writing it back into L1.
+        for state in self._states.values():
+            state.generation += 1
 
     async def clear_all(self) -> None:
         """Clear the in-memory layer AND delete all matching keys from Redis.
@@ -121,9 +138,10 @@ class TwoLevelCache[T]:
         (the sweep keeps running in the background and L1 is already clear).
         """
         self._mem.clear()
-        # * Drop the per-key locks so a fetch that started before the sweep
-        # * cannot write its pre-clear value back into L1.
-        self._locks.clear()
+        # * Advance every known generation so an in-flight fetch discards
+        # * its pre-sweep result.
+        for state in self._states.values():
+            state.generation += 1
         pattern = f"tcbot:{self._redis_prefix}:v2:*"
 
         async def _clear_redis() -> None:
@@ -287,7 +305,7 @@ class TwoLevelCache[T]:
         key: Any,
         fetch: Callable[[], Awaitable[T]],
     ) -> T:
-        """L1 → L2 → DB fetch with population of both layers on a miss.
+        """L1 -> L2 -> DB fetch with population of both layers on a miss.
 
         Layers checked in order:
         1. In-memory (sub-microsecond, no I/O).
@@ -295,22 +313,25 @@ class TwoLevelCache[T]:
            or previous bot run).
         3. ``fetch()`` coroutine (DB query); result is written to both layers.
 
-        A per-key ``asyncio.Lock`` serialises concurrent misses for the same
-        key so that only one ``fetch()`` runs; the winner populates the cache
+        A per-key lock serialises concurrent misses for the same key so
+        that only one ``fetch()`` runs; the winner populates the cache
         and all waiters read the same result. Different keys remain fully
-        parallel.
+        parallel. A value whose key was invalidated while the read was in
+        flight is discarded instead of published.
         """
         val = self._mem.get(key)
         if val is not CACHE_MISS:
             return cast("T", val)
 
-        # * Re-check L1 inside the lock to catch a winner that just populated it.
-        lock = self._locks.setdefault(key, asyncio.Lock())
+        state = self._state(key)
+        state.waiters += 1
         try:
-            async with lock:
+            async with state.lock:
+                # * Re-check L1 inside the lock to catch a winner that just populated it.
                 val = self._mem.get(key)
                 if val is not CACHE_MISS:
                     return cast("T", val)
+                generation = state.generation
 
                 # L2: Redis (bounded: a stalled Redis must not hold the hot path)
                 rc = await self._client()
@@ -341,7 +362,7 @@ class TwoLevelCache[T]:
                                     exc,
                                 )
                             else:
-                                if self._locks.get(key) is not lock:
+                                if state.generation != generation:
                                     # * The key was invalidated while the
                                     # * Redis read was in flight: the payload
                                     # * predates the change and must not be
@@ -361,7 +382,7 @@ class TwoLevelCache[T]:
                 # * Enqueued unconditionally so a reconnect before the
                 # * write still lands the value.
                 val = await fetch()
-                if self._locks.get(key) is not lock:
+                if state.generation != generation:
                     # * The key was invalidated or overwritten while the
                     # * fetch was in flight. The fetched value predates the
                     # * change, so caching it would resurrect a revoked
@@ -369,51 +390,63 @@ class TwoLevelCache[T]:
                     # * receives the value it asked for.
                     log.debug("Discarding stale fetch for invalidated key %s", key)
                     return cast("T", val)
-                self._mem.put(key, val)
-                rkey = self._rkey(key)
-                try:
-                    payload = msgspec.json.encode(
-                        _tag_scalars(val), enc_hook=_msgspec_enc_hook
-                    ).decode("utf-8")
-                except Exception as exc:
-                    # * L1 already serves this value: never fail the hot path here.
-                    log.debug("Redis payload encode failed for %s: %s", rkey, exc)
-                else:
-                    if cfg.redis_url:
-                        redis_io.enqueue_redis_mutation(
-                            self._redis_prefix,
-                            lambda: self._redis_set(rkey, payload),
-                            droppable=not self._is_revocation,
-                        )
-
+                self._publish(key, val)
                 return cast("T", val)
         finally:
-            # * Waiters hold their own reference; the value is already in L1.
-            # * Remove only our own lock: invalidate() or a later fetch may
-            # * have replaced it, and popping that replacement would break
-            # * mutual exclusion for the waiters still holding the new lock.
-            if self._locks.get(key) is lock:
-                self._locks.pop(key, None)
+            self._release(key, state)
+
+    async def refresh(self, key: Any, fetch: Callable[[], Awaitable[T]]) -> T:
+        """Re-read *key* from the source and publish the result.
+
+        A fresh read that lands after a write must not undo it: the
+        value the read carries predates the change, so publishing it
+        would resurrect a revoked role for the whole TTL. The generation
+        counter detects that race, and the stale value is returned to the
+        caller without being cached.
+        """
+        state = self._state(key)
+        state.waiters += 1
+        try:
+            async with state.lock:
+                generation = state.generation
+                val = await fetch()
+                if state.generation != generation:
+                    log.debug("Discarding stale refresh for invalidated key %s", key)
+                    return val
+                self._publish(key, val)
+                return val
+        finally:
+            self._release(key, state)
 
     # ── Internal helpers ── #
 
-    async def _client(self) -> Any:
-        """Return the Redis client, reconnecting after a failed startup.
+    def _state(self, key: Any) -> _KeyState:
+        """Return the single-flight state of *key*, creating it on first use."""
+        state = self._states.get(key)
+        if state is None:
+            state = _KeyState()
+            self._states[key] = state
+        return state
 
-        The client is resolved through the redis_io module so a patched
-        client keeps working; only a missing client triggers the
-        reconnect, which the client module rate-limits.
-        """
-        rc = redis_io.redis_client()
-        if rc is None:
-            rc = await redis_io.acquire_redis_client()
-        return rc
+    def _release(self, key: Any, state: _KeyState) -> None:
+        """Drop the state of *key* once its last waiter left."""
+        state.waiters -= 1
+        if state.waiters == 0 and self._states.get(key) is state:
+            del self._states[key]
 
-    def _rkey(self, key: Any) -> str:
-        return f"tcbot:{self._redis_prefix}:v2:{key}"
+    def _advance(self, key: Any) -> None:
+        """Advance the generation of *key* so in-flight fetches discard."""
+        state = self._states.get(key)
+        if state is not None:
+            state.generation += 1
 
-    def _redis_put_background(self, key: Any, val: T) -> None:
-        """Fire-and-forget Redis write without blocking the caller.
+    def _publish(self, key: Any, val: T) -> None:
+        """Store *val* in the memory layer and enqueue the ordered Redis write."""
+        self._mem.put(key, val)
+        self._enqueue_write(key, val)
+
+    def _enqueue_write(self, key: Any, val: T) -> None:
+        """Enqueue the ordered Redis write for *key* without blocking.
 
         Writes for revocation prefixes are never droppable: a dropped
         connection-flag write (for example a disconnect) would leave other
@@ -435,6 +468,25 @@ class TwoLevelCache[T]:
             lambda: self._redis_set(rkey, payload),
             droppable=not self._is_revocation,
         )
+
+    async def _client(self) -> Any:
+        """Return the Redis client, reconnecting after a failed startup.
+
+        The client is resolved through the redis_io module so a patched
+        client keeps working; only a missing client triggers the
+        reconnect, which the client module rate-limits.
+        """
+        rc = redis_io.redis_client()
+        if rc is None:
+            rc = await redis_io.acquire_redis_client()
+        return rc
+
+    def _rkey(self, key: Any) -> str:
+        return f"tcbot:{self._redis_prefix}:v2:{key}"
+
+    def _redis_put_background(self, key: Any, val: T) -> None:
+        """Fire-and-forget Redis write without blocking the caller."""
+        self._enqueue_write(key, val)
 
     def _redis_del_background(self, key: Any, *, droppable: bool = True) -> None:
         """Fire-and-forget Redis key deletion without blocking the caller."""

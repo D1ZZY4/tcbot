@@ -156,9 +156,10 @@ async def get_owner_id(*, fresh: bool = False) -> int | None:
         return row["user_id"] if row else None
 
     if fresh:
-        owner = await _fetch()
-        owner_id_cache.put(_OWNER_KEY, owner)
-        return owner
+        # * The refresh publishes the value only when the key was not
+        # * invalidated while the read was in flight, so a transfer that
+        # * lands mid-read cannot be undone in the cache.
+        return await owner_id_cache.refresh(_OWNER_KEY, _fetch)
     return cast("int | None", await owner_id_cache.get_or_fetch(_OWNER_KEY, _fetch))
 
 
@@ -471,9 +472,11 @@ async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None
         return "founder" if owner else "admin" if admin else role
 
     if fresh:
-        result = await _resolve()
-        effective_role_cache.put(user_id, result)
-        return result
+        # * The refresh publishes the value only when the key was not
+        # * invalidated while the read was in flight. A demotion that
+        # * lands mid-read must not be undone by the stale role the read
+        # * carries, or the revoked role keeps serving until the TTL.
+        return await effective_role_cache.refresh(user_id, _resolve)
     return cast(
         "str | None", await effective_role_cache.get_or_fetch(user_id, _resolve)
     )

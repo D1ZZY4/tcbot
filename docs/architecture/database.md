@@ -909,10 +909,17 @@ Methods:
   2. L2 Redis, bounded by a 1.0 s timeout (`_REDIS_GET_TIMEOUT_S`) so a stalled Redis falls through to the database fetch.
   3. Database `fetch()` coroutine; the result populates both layers (the L2 write is fire-and-forget and 2.0 s-bounded).
 
-A per-key `asyncio.Lock` coalesces concurrent misses so only one database
-fetch runs per key; the lock is dropped after the fetch and on `invalidate`
-so high-cardinality callers (profile lookups) never accumulate stale
-locks.
+A per-key lock coalesces concurrent misses so only one database fetch runs
+per key, and the lock stays in place for the whole fetch: a reader that
+arrives after a write still joins the running fetch instead of starting
+its own. The per-key state also carries an invalidation counter that
+advances on every write and every invalidation. A fetch that was already
+in flight compares the counter before it publishes, so a value that
+predates the change is handed to its caller but never cached. The state is
+dropped once its last waiter leaves, so high-cardinality callers (profile
+lookups) never accumulate stale entries.
+
+- `refresh(key, fetch)`: async, re-reads the key from the source and publishes the result. It is the path a fresh read uses: the value it carries can predate a concurrent write, and the generation counter keeps that stale value out of the cache.
 
 ### Redis key format and prefixes
 
