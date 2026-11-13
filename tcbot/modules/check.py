@@ -33,7 +33,9 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
-    from telegram import CallbackQuery, Update
+    from collections.abc import Awaitable, Callable
+
+    from telegram import CallbackQuery, InlineKeyboardMarkup, Update
 
     from tcbot.database.documents import BanDoc
 
@@ -388,10 +390,20 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-@decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
-@decorators.log_execution
-async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Render a paginated list of federation bans for the checked user."""
+# ─────────────────────── Paged history lists ───────────────────────── #
+# * The drill-down lists of the check card share one entry sequence:
+# * parse the page payload, answer a malformed payload, and render the
+# * list. One owner keeps a stale button from reaching a handler that
+# * did not guard the payload shape.
+
+
+async def _render_paged_list(
+    update: Update,
+    render: Callable[
+        [int, int, str | None], Awaitable[tuple[str, InlineKeyboardMarkup]]
+    ],
+) -> None:
+    """Render one paged history list of the checked user."""
     q = update.callback_query
     if q is None:
         return
@@ -401,7 +413,14 @@ async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     target_id, page = numbers
     locale = await locale_for_update(update)
-    await ack_and_render(q, Check.bans_list(target_id, page, locale))
+    await ack_and_render(q, render(target_id, page, locale))
+
+
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
+@decorators.log_execution
+async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render a paginated list for the checked user."""
+    await _render_paged_list(update, Check.bans_list)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
@@ -463,49 +482,22 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
 async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Render a paginated list of kick records for the checked user."""
-    q = update.callback_query
-    if q is None:
-        return
-    numbers = callback_numbers(q, 3)
-    if numbers is None:
-        await q.answer()
-        return
-    target_id, page = numbers
-    locale = await locale_for_update(update)
-    await ack_and_render(q, Check.kicks_list(target_id, page, locale))
+    """Render a paginated list for the checked user."""
+    await _render_paged_list(update, Check.kicks_list)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
 async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Render a paginated list of mute records for the checked user."""
-    q = update.callback_query
-    if q is None:
-        return
-    numbers = callback_numbers(q, 3)
-    if numbers is None:
-        await q.answer()
-        return
-    target_id, page = numbers
-    locale = await locale_for_update(update)
-    await ack_and_render(q, Check.mutes_list(target_id, page, locale))
+    """Render a paginated list for the checked user."""
+    await _render_paged_list(update, Check.mutes_list)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
 async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Render a paginated list of appeal records for the checked user."""
-    q = update.callback_query
-    if q is None:
-        return
-    numbers = callback_numbers(q, 3)
-    if numbers is None:
-        await q.answer()
-        return
-    target_id, page = numbers
-    locale = await locale_for_update(update)
-    await ack_and_render(q, Check.appeals_list(target_id, page, locale))
+    """Render a paginated list for the checked user."""
+    await _render_paged_list(update, Check.appeals_list)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #
