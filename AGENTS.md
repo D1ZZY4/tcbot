@@ -69,6 +69,34 @@ Optimize for measured efficiency and bounded concurrency, not unverified
 performance guarantees. Preserve correctness when ordering, dependencies,
 authorization, or side effects require sequential execution.
 
+## Database Schemas
+
+The project uses three PostgreSQL schemas and no more. Never create
+another one, and never point the tooling at a fourth.
+
+| Schema | Owner | Purpose |
+|---|---|---|
+| `public` | The deployment | The default schema of the server. The bot reads and writes it when `DB_SCHEMA` is unset or set to `public`. |
+| `test` | The integration tests | The schema `tests/postgres_support.py` builds and empties. It never holds deployment data. |
+| `development` | A developer | The schema the operator scripts use against a shared server, and the schema `DB_SCHEMA=development` selects. |
+
+Rules:
+
+- The deployment keeps `public`. `DB_SCHEMA` defaults to `public`, so a
+  deployment that does not configure it is unchanged.
+- The integration tests use `test`. The suite runs under xdist, and two
+  workers cannot share one schema, so one worker owns it and the others
+  skip the database-backed tests.
+- A developer who works against a shared server sets
+  `DB_SCHEMA=development`. The schema is created when it does not exist,
+  and the migrations fill it.
+- The schema objects (the views, the functions, the triggers, the
+  policies, and the reference data) always land in the schema the
+  connection was pointed at. The schema is read from the search path,
+  not from `current_schema()`, because `current_schema()` returns the
+  first schema of the path that exists and would silently fall back to
+  the next one.
+
 ## Project Overview
 
 TCF Bot is a Python Telegram bot for the Transsion Core Federation community. It manages federation-wide moderation actions, appeal workflows, staff roles, connected groups, audit logging, and health checks.
@@ -265,6 +293,9 @@ Important non-secret/runtime variables include:
 - `WEBHOOK_SECRET`: optional webhook secret for Telegram to sign update payloads.
 - `CRON_SECRET`: bearer token for the serverless warn-expiry cron endpoint (required on Vercel).
 - `REDIS_URL`: optional Redis connection URL for L2 cache.
+- `DB_POOL_SIZE`: PostgreSQL connection pool size; default `5`.
+- `DB_MAX_OVERFLOW`: extra connections the pool may open under load; default `5`.
+- `DB_SCHEMA`: PostgreSQL schema the bot reads and writes; default `public`. See [Database Schemas](#database-schemas).
 - `WARN_LIMIT`: per-group warn threshold that triggers auto-ban; default `3`.
 - `WARN_EXPIRY_DAYS`: days after which warn records expire; default `0` (disabled).
 - `FED_WARN_LIMIT`: federation-wide warn threshold that triggers auto-ban; default `0` (disabled).

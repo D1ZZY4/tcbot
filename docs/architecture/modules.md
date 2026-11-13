@@ -144,6 +144,16 @@ Always call `await q.answer()` at the beginning of callback handlers.
 
 Use role helpers from `users_roles` and `guards.resolve_and_check`; avoid manual chains of `is_owner()` + `is_admin()` checks.
 
+The schema also carries a permission catalog: `permission_definitions`
+names the capabilities, `role_permissions` says which role holds which
+one, and `users_roles.has_permission(user_id, permission_key)` asks the
+database whether a user holds one. The handlers gate on a tier instead,
+so the catalog and the tier model have to agree.
+`tests/test_rbac_catalog.py` pins that agreement: it names the
+capability and the tier of every gated command, and it fails when the
+seeded grants no longer match the tier model. A change to either side has
+to be a change to both.
+
 ## Module implementation checklist
 
 - Use `from __future__ import annotations` as the first non-comment line.

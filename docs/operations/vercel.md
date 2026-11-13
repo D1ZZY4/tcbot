@@ -41,8 +41,8 @@ flowchart TD
   long-lived transports, so command behaviour is identical.
 - APScheduler never starts on Vercel. Warn expiry (`WARN_EXPIRY_DAYS > 0`)
   runs via the daily Vercel Cron job hitting `/api/cron`, which calls the
-  same `expire_old_warns()` the scheduler uses. `member_cache` cleanup still
-  runs through the daily cleanup job and needs nothing.
+  same `expire_old_warns()` the scheduler uses. The daily cleanup of the
+  expired runtime state runs through the same job and needs nothing.
 - `GET /api/webhook` returns `OK` as a liveness probe.
 - Response contract, mirroring the Flask receiver in `alive.py`: `200`
   acknowledges handled or benign updates (Telegram stops retrying), `400`
@@ -67,6 +67,8 @@ Never commit real values.
 | `CRON_SECRET` | **Yes** | Bearer token for `/api/cron`. The endpoint fails closed (`503`) without it. |
 | `WEBHOOK_URL` | Build-time reference | Set to `https://<project>.vercel.app` so `set_webhook` (step 3) points at the deployment. Not read by the functions themselves. |
 | `REDIS_URL` | No | Recommended: without Redis, rate limiting and role caches are per-instance in-memory. Upstash Redis works. |
+| `DB_POOL_SIZE` | No | Default `5`. Serverless instances share one database, so keep the pool small enough for the connection limit of the database. |
+| `DB_MAX_OVERFLOW` | No | Default `5`. |
 | `WARN_EXPIRY_DAYS` | No | `0` disables expiry; set `> 0` to let the daily cron prune warns. |
 | `LOG_LEVEL` | No | Default `INFO`. |
 

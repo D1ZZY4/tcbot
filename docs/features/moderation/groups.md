@@ -27,7 +27,7 @@ flowchart TD
 
 `/tcgroups` lists every group currently connected to the federation, with an optional `Details` view that adds each group's chat ID alongside its title. The command is open to anyone, so the same `/tcgroups` reply in any chat shows the same global list.
 
-The list source is `groups_db.active_groups()`, which reads `federated_groups` where `is_active: True`, backed by the process-wide L1+L2 cache (`active_groups_cache` in `tcbot/database/cache/` keyed on `_ALL_GROUPS_KEY`). There is no per-user `ctx.user_data` caching: every toggle callback re-reads through the cache layer and edits the existing message in place.
+The list source is `groups_db.active_groups()`, which reads `connected_chats` where `is_active: True`, backed by the process-wide L1+L2 cache (`active_groups_cache` in `tcbot/database/cache/` keyed on `_ALL_GROUPS_KEY`). There is no per-user `ctx.user_data` caching: every toggle callback re-reads through the cache layer and edits the existing message in place.
 
 ## Commands and aliases
 
@@ -101,9 +101,9 @@ The command itself does not require any bot permissions; it only reads from the 
 
 ## Database impact
 
-`/tcgroups` does not write to the database. It reads `federated_groups` through `groups_db.active_groups()` and renders the result.
+`/tcgroups` does not write to the database. It reads `connected_chats` through `groups_db.active_groups()` and renders the result.
 
-`federated_groups` document fields used by the renderer:
+`connected_chats` document fields used by the renderer:
 
 | Field | Meaning |
 |---|---|

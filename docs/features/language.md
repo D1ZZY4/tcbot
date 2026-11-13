@@ -75,12 +75,14 @@ text; only the surrounding prose translates.
 
 - `user_settings` table (`user_id`, unique): one row per user with an
   explicit preference. Clearing deletes the row. Never touches
-  `member_cache`, so preference-only users cannot inflate user counts
+  `telegram_users`, so preference-only users cannot inflate user counts
   or appear in listings. The unique index on `user_id` is declared in
-  `tcbot/database/base.py` and shipped with an Alembic revision.
-- `federated_groups.locale`: optional column on the group row (no new
-  table, no new index; reads filter on the indexed `chat_id`).
-  Clearing unsets the field. Groups without a row cannot hold a locale.
+  `tcbot/database/base/settings.py` and shipped with an Alembic revision.
+- `chat_settings.locale`: optional column on the group configuration row
+  (no new index; reads filter on the indexed `chat_id`). A trigger creates
+  the configuration row when a group is connected, so every connected
+  group has one. Clearing unsets the field. Groups without a row cannot
+  hold a locale.
 - Both helpers store codes verbatim; validity is enforced at the
   command layer and defensively at resolution time.
 

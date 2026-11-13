@@ -193,7 +193,7 @@ Behavior:
 - `/cleanup` is rate limited to 3 per 60 s and uses bounded membership
   checks with `_MEMBERSHIP_CHECK_TIMEOUT = 3.0` per check.
 
-Database impact: `/leaveall` deactivates each `federated_groups` row in
+Database impact: `/leaveall` deactivates each `connected_chats` row in
 parallel with the leave and posts a `group_disconnected` log entry per
 group to `cfg.logs` (a leave counts as failed unless both `leave_chat` and
 `deactivate_group` succeed). `/cleanup` deactivates rows whose membership

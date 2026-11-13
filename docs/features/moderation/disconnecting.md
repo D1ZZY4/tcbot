@@ -36,7 +36,7 @@ Disconnection removes a group from the federation. There are two commands for th
 - `/tcdisconnect`: the group owner or any TC staff (Admin and above) can disconnect the current group from inside it. The bot leaves the group after deactivating the record.
 - `/rmtc`: TC staff (Admin and above) can force-remove a group by numeric chat ID, including groups the bot has already been kicked from. The bot also `leave_chat`s the ID, which fails silently when the bot is not in the group.
 
-Both commands call `db.groups_db.deactivate_group(chat_id)` to mark the `federated_groups` record inactive and invalidate the connected-groups cache.
+Both commands call `db.groups_db.deactivate_group(chat_id)` to mark the `connected_chats` record inactive and invalidate the connected-groups cache.
 
 ## Commands and aliases
 
@@ -112,14 +112,14 @@ update_one({"chat_id": chat_id}, {"$set": {"is_active": False}})
 The function:
 
 - Returns `True` when `matched_count > 0` (the record existed and was updated).
-- Returns `False` when the chat_id has no `federated_groups` record.
+- Returns `False` when the chat_id has no `connected_chats` record.
 
 It also updates the cache:
 
 - `connected_cache.put(chat_id, False)` so subsequent `is_connected` reads return False.
 - `active_groups_cache.invalidate(_ALL_GROUPS_KEY)` so subsequent `active_groups()` reads re-query the DB.
 
-`leave_chat` does not delete the row from `federated_groups`; the row stays as an inactive record. The bot's `my_chat_member` handler will also fire `deactivate_group` again when the bot actually leaves, but it is a no-op at that point.
+`leave_chat` does not delete the row from `connected_chats`; the row stays as an inactive record. The bot's `my_chat_member` handler will also fire `deactivate_group` again when the bot actually leaves, but it is a no-op at that point.
 
 ## Logs
 
@@ -142,7 +142,7 @@ The log includes:
 - An executor who is not the group creator and not TC staff is rejected with a friendly message; anonymous admins get the dedicated anonymous-mode reply.
 - A group that is not connected replies `This group is not connected to <community>.` and stops.
 - `/rmtc` without a numeric chat ID replies `Usage: /rmtc <chat_id>` and stops.
-- `/rmtc` for a chat ID that has no `federated_groups` record replies `replies.err_group_not_found(locale)` and stops.
+- `/rmtc` for a chat ID that has no `connected_chats` record replies `replies.err_group_not_found(locale)` and stops.
 - `/rmtc` for a chat the bot is not in still runs `leave_chat`, which raises a Telegram API error that is caught and logged at debug.
 - The DB deactivation is not gated on `leave_chat`; even if Telegram refuses to remove the bot, the group is marked disconnected.
 - Federation log send failures do not roll back the deactivation; the group is still marked inactive.
@@ -164,7 +164,7 @@ Key behaviors to keep in mind:
 9. `/rmtc` runs `leave_chat` even when the bot is not in the target chat; the API error is caught and logged.
 10. Both commands post `group_disconnected_log` to `cfg.logs`.
 11. The cache invalidation runs inside `deactivate_group` so subsequent `is_connected` and `active_groups` reads return up-to-date state.
-12. The `federated_groups` row is not deleted; it stays as an inactive record.
+12. The `connected_chats` row is not deleted; it stays as an inactive record.
 13. The bot's own `my_chat_member` handler is idempotent with these commands.
 14. The DB deactivation is not gated on `leave_chat`; even if Telegram refuses to remove the bot, the group is marked disconnected.
 15. Federation log send failures do not roll back the deactivation.

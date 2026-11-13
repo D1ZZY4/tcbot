@@ -69,7 +69,7 @@ await Demote.execute(bot,
 
 | Member | Purpose |
 |---|---|
-| `Demote.remove_role(target_id, target_role)` | Deletes the role record from **both** `tc_admins` and `tc_roles`. Clearing both is deliberate: a stale row in the other collection would otherwise resurrect the privilege on the next demote, because the effective role prefers the Admin row and hides the stale row until `remove_admin` reveals it. Returns True if any record was removed. |
+| `Demote.remove_role(target_id, target_role)` | Revokes the active role assignment of the user, whatever role it holds. A demotion never deletes a row: the assignment is marked `revoked`, so the history of who held which role stays readable. Returns True if an assignment was revoked. |
 | `Demote.execute(...)` | Removes the role, posts the federation log, and DMs the target. Returns True when a role row was actually removed, False when the role was already gone. A database failure propagates to the caller, which decides whether to proceed. Supports both manual and demote-before-enforcement callers via the `trigger` keyword. |
 | `demote_before_enforcement(...)` | Best-effort pre-fan-out re-demote: reads the live role and removes it. A lookup or demote failure logs loudly and enforcement still runs. Used by the ban, kick, mute, and join executors to close the proof-collection TOCTOU window. |
 | `demote_before_unban(...)` | Fail-closed pre-unban gate. Returns `UnbanGate.PROCEED` only when the role is gone; `DEMOTE_FAILED` and `ROLE_SURVIVED` block the unban. Used by `/tcunban` and the appeal-approve path. |
@@ -164,10 +164,9 @@ No `Demote` title, no `Trigger:` field; demote-before-enforcement paths look ide
 
 `Demote.remove_role` is the single point where the database is mutated:
 
-- `users_roles.remove_admin(target_id)` for Admin targets: deletes from `tc_admins`.
-- `users_roles.remove_role(target_id)` for Developer/Tester targets: deletes from `tc_roles`.
+- `users_roles.remove_role(target_id)` revokes the active role assignment of the target, whatever role it holds.
 
-Both helpers invalidate the affected user's entry in `effective_role_cache` so the next role read returns the post-demote state.
+The helper invalidates the affected user's entry in `effective_role_cache` so the next role read returns the post-demote state.
 
 ## Edge cases
 
@@ -183,7 +182,7 @@ Both helpers invalidate the affected user's entry in `effective_role_cache` so t
 - `/tcdemote` blocks self-demotion and Founder demotion.
 - Admin cannot demote Admin; Founder is required.
 - Confirmation callback re-checks executor permission at click time.
-- Confirm removes the correct table row (`tc_admins` for Admin, `tc_roles` for Developer/Tester).
+- Confirm revokes the active role assignment of the target.
 - Ban / kick / mute on a role-holding target removes the role before the destructive action.
 - The demote DM mentions the trigger verb (banned/kicked/muted); the federation log does not.
 - A pre-existing role record that is missing causes `Demote.execute` to return False without raising.

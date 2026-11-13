@@ -41,26 +41,25 @@ The role system controls who can perform moderation and administrative actions. 
 
 Effective roles are resolved by `users_roles.get_effective_role(user_id)`:
 
-1. Check whether the user is the current owner in `tc_owners`.
-2. Check whether the user is an Admin in `tc_admins`.
-3. Check whether the user has a custom role in `tc_roles`.
-4. Cache the result in `effective_role_cache`.
+1. Read the active `role_assignments` row of the user.
+2. Map its `role_key` back to the application vocabulary.
+3. Cache the result in `effective_role_cache`.
 
-Only `developer` and `tester` are accepted as custom roles: `set_role` refuses anything else on write, and resolution ignores an unknown stored value (logged as an error, treated as no custom role) so a legacy or hand-edited row can never grant privilege.
+Only `developer` and `tester` are accepted as custom roles: `set_role` refuses anything else on write, and resolution ignores an unknown stored value (logged as an error, treated as no role) so a legacy or hand-edited row can never grant privilege.
 
 The rank table is:
 
-| Effective role | Rank | Source |
+| Effective role | Rank | Catalog role key |
 |---|---:|---|
-| `founder` | 4 | `tc_owners` |
-| `admin` | 3 | `tc_admins` |
-| `developer` | 2 | `tc_roles.role` |
-| `tester` | 1 | `tc_roles.role` |
+| `founder` | 4 | `owner` |
+| `admin` | 3 | `admin` |
+| `developer` | 2 | `developer` |
+| `tester` | 1 | `moderator` |
 | `None` | 0 | No role |
 
 `ROLE_LABEL` maps these internal names to display labels: Founder, Admin, Developer, Tester.
 
-Only `developer` and `tester` are valid custom roles in `tc_roles`. Founder and Admin are stored separately.
+The catalog calls the last tier `moderator`; the handlers call it `tester`. `ROLE_KEY_BY_APP_ROLE` and `APP_ROLE_BY_ROLE_KEY` are the only place the two vocabularies meet.
 
 ## Permission model
 
@@ -85,16 +84,45 @@ Common moderation thresholds:
 | `/tcpromotelist` | Founder or Admin via `staff_only` |
 | Promotion approve/reject buttons | Founder only |
 
+### The permission catalog
+
+The schema carries a permission catalog next to the role assignments:
+`permission_definitions` names the capabilities, `role_permissions` says
+which role holds which one, and `role_definitions` gives every role its
+priority. The catalog is the reference the tier model is checked against.
+
+`users_roles.has_permission(user_id, permission_key)` is the single
+authorization primitive of the schema. It calls the database function
+`actor_has_permission`, which reads the active assignment and walks down
+to the permission list. It returns `False` for a user without an
+assignment, an expired assignment, or an unknown permission, so a failure
+never grants privilege.
+
+The handlers gate a command on a tier rather than on a permission key, so
+the two have to agree. `tests/test_rbac_catalog.py` pins that: for every
+gated command it names the capability and the tier the handler enforces,
+and the test fails when the seeded grants no longer match the tier model.
+A change to either side has to be a change to both.
+
+| Capability | Tiers that hold it |
+|---|---|
+| `moderation.ban`, `moderation.unban` | Founder, Admin, Developer |
+| `moderation.kick`, `moderation.mute`, `moderation.unmute`, `moderation.warn`, `moderation.unwarn`, `moderation.reset_warnings` | every tier |
+| `moderation.review_appeals`, `roles.promote`, `roles.demote` | Founder, Admin |
+| `roles.transfer_ownership`, `roles.review_promotion_requests`, `community.leave_all`, `community.speedtest` | Founder only |
+| `community.broadcast`, `community.cleanup`, `groups.remove` | Founder, Admin |
+
 ## Persistent tables
 
 | Collection | Purpose | Key fields |
 |---|---|---|
-| `tc_owners` | Stores the single Founder/owner. | `user_id` |
-| `tc_admins` | Stores Admin users. | `user_id`, `promoted_by`, `promoted_date` |
-| `tc_roles` | Stores custom Developer/Tester roles. | `user_id`, `role`, `assigned_by`, `assigned_at` |
-| `promotion_requests` | Stores pending/resolved Admin promotion requests. | `request_id`, `target_id`, `username`, `first_name`, `promoted_by`, `status`, `requested_date`, `resolved_date`, `resolved_by` |
+| `role_definitions` | The role catalog: the display name and the priority of every role. | `role_key`, `display_name`, `priority` |
+| `permission_definitions` | The permission catalog: the capability keys and their resource. | `permission_key`, `resource` |
+| `role_permissions` | Which role holds which permission. | `role_key`, `permission_key` |
+| `role_assignments` | The staff assignments, with their status and their expiry. | `user_id`, `role_key`, `status`, `assigned_by_user_id`, `assigned_at`, `expires_at`, `revoked_at` |
+| `promotion_requests` | Stores pending/resolved staff promotion requests. | `request_id`, `target_id`, `username`, `first_name`, `requested_role_key`, `promoted_by`, `status`, `requested_date`, `resolved_date`, `resolved_by` |
 
-Indexes are ensured for unique user IDs in `tc_owners`, `tc_admins`, and `tc_roles`. `promotion_requests` carries a unique `request_id`, a compound `(target_id, status)`, a compound `(status, requested_date)` that serves the pending-list sort, and a partial unique index on `target_id` restricted to `status: "pending"` so each user has at most one open request (the dedup guard both `cmd_promote_request` and the Admin request path rely on).
+A demotion revokes the assignment row, it never deletes it, so the history of who held which role stays readable. Indexes are ensured for one active assignment per user, at most one active owner, and the role and status filters. `promotion_requests` carries a unique `request_id`, a compound `(target_id, status)`, a compound `(status, requested_date)` that serves the pending-list sort, and a partial unique index on `target_id` restricted to `status: "pending"` so each user has at most one open request (the dedup guard both `cmd_promote_request` and the Admin request path rely on).
 
 Role and owner/admin writes invalidate relevant cache entries so permission checks see updated state. Effective-role and owner reads are cached: the per-user effective role serves from an L1 cache with a 60 s TTL and the owner ID from one with a 300 s TTL, so repeated authorization checks (auth decorators, `is_staff`, rate-limit tiering, promotion-request guards) cost zero database round trips on a hit. `set_owner` clears the entire effective-role cache because the previous owner's key is unknown.
 
@@ -154,8 +182,8 @@ The promotion executor rejects these cases:
 
 When Founder promotes a target to Admin:
 
-1. `users_roles.add_admin(target_id, founder_id)` upserts into `tc_admins`.
-2. If the target had a Developer/Tester role, `users_roles.remove_role(target_id)` removes it from `tc_roles`.
+1. `users_roles.add_admin(target_id, founder_id)` grants the `admin` role.
+2. If the target had a Developer/Tester role, `users_roles.remove_role(target_id)` revokes it.
 3. `users_cache.upsert_user(...)` caches the display name.
 4. A `promoted` log (with `role="admin"`) is sent to `cfg.logs`.
 5. The target is notified by DM when possible.
@@ -165,7 +193,7 @@ When Founder promotes a target to Admin:
 
 When Founder or Admin assigns Developer/Tester:
 
-1. `users_roles.set_role(target_id, role, assigned_by)` atomically upserts into `tc_roles` (no prior remove; the upsert replaces any existing Developer/Tester entry without a delete-then-insert window).
+1. `users_roles.set_role(target_id, role, assigned_by)` grants the role in one transaction that revokes the assignment it replaces, so the user never holds two active roles.
 2. `users_cache.upsert_user(...)` caches the display name.
 3. A `promoted` log (with the assigned role) is sent to `cfg.logs`.
 4. The target is notified by DM when possible.
@@ -176,7 +204,7 @@ Admins cannot directly assign Admin. When an Admin tries to promote a target to 
 
 1. The bot checks for an existing pending request for that target.
 2. A new request is inserted into `promotion_requests` with status `pending`.
-3. The Founder is fetched from `tc_owners`.
+3. The Founder is fetched from the active owner assignment.
 4. The Founder is notified by DM with Approve/Reject buttons if possible.
 5. If the Founder DM fails or no owner ID exists, the request is posted to the logs channel as a fallback.
 6. The command replies that the request was submitted.
@@ -218,7 +246,7 @@ Only the Founder can use these callbacks. The handler checks `users_roles.is_own
 
 Approval does the following:
 
-1. Adds the target to `tc_admins` with `users_roles.add_admin(...)`.
+1. Adds the target to `role_assignments` with `users_roles.add_admin(...)`.
 2. Marks the request `approved` with `queues_db.resolve(...)`.
 3. Best-effort cleanup mirrors the direct Founder path: clears any stale Developer/Tester row and refreshes the member cache (otherwise the stale row resurrects on the next demote).
 4. Sends a `promote_approved_log` to `cfg.logs`.
@@ -276,7 +304,7 @@ Confirmation callback data:
 | `Confirm` | `demote_confirm:<target_id>:<executor_id>` (legacy without executor still works) |
 | `Cancel` | `demote_cancel:<target_id>:<executor_id>` (legacy without executor still works) |
 
-The confirmation callback requires the prompt opener and re-checks executor permission and target role before writing. A different staffer tapping gets an alert and the prompt stays live. It clears the role row from **both** `tc_admins` and `tc_roles`: a stale row in the other collection would otherwise resurrect the privilege on the next demote.
+The confirmation callback requires the prompt opener and re-checks executor permission and target role before writing. A different staffer tapping gets an alert and the prompt stays live. It revokes the active assignment of the target, whatever role it holds, so no stale row can resurrect the privilege on the next demote.
 
 On success:
 
@@ -300,8 +328,8 @@ Flow:
 1. The target is resolved by reply, user ID, or username.
 2. Identity refusal rejects self-transfer, the bot, Telegram, other bots, anonymous-admin, and Founder targets.
 3. `resolve_and_check(..., min_role="developer")` refuses transferring to a staff target of equal or higher rank, the current Founder included.
-4. Any non-Founder role the target already holds is cleared first via `Demote.remove_role` (Admin from `tc_admins`, Developer/Tester from `tc_roles`), so the post-transfer state holds exactly one Founder with no residual Admin/Developer/Tester record.
-5. `users_roles.set_owner(target_id)` lands the new owner row in one upsert write first, so a mid-flight failure never leaves the federation ownerless; a converging cleanup removes any leftover second row.
+4. Any non-Founder role the target already holds is cleared first via `Demote.remove_role`, so the post-transfer state holds exactly one Founder with no residual Admin/Developer/Tester assignment.
+5. `users_roles.set_owner(target_id)` swaps the owner in one transaction: the active assignments of the new owner and of the old owner are revoked and the new owner assignment is inserted, all under an advisory lock, so a crash between them cannot leave the community without a Founder.
 6. The in-process error-reporter owner is refreshed to the new owner.
 7. The previous Founder is kept as Admin via `users_roles.add_admin(...)`; a failure here stays visible as a WARNING line telling the operator to grant Admin manually.
 8. The owner cache is updated and the effective-role cache is cleared entirely.
@@ -316,7 +344,7 @@ After transfer, the previous Founder becomes Admin and the new target becomes Fo
 
 Behavior:
 
-- The target's row is removed from `tc_admins` and from `tc_roles`, so no stale row survives in the other collection.
+- The target's active role assignment is revoked, so no stale assignment survives in the other collection.
 - Send the same `demoted` log to `cfg.logs` as manual demotion (the log never notes the trigger).
 - DM the target that their role was removed because they were banned, kicked, or muted.
 
@@ -353,7 +381,7 @@ Role and promotion logs are built in `messages/` (`audit_logs.py`):
 
 Key role-system behaviors to keep in mind:
 
-1. `get_effective_role` returns Founder over Admin/custom role, Admin over custom role, then custom role.
+1. `get_effective_role` returns the role of the active assignment, mapped to the application vocabulary.
 2. `role_rank(None)` returns `0`.
 3. `resolve_and_check` allows the action only when executor rank is strictly higher than target rank.
 4. Founder can directly promote Admin/Developer/Tester.
@@ -361,11 +389,11 @@ Key role-system behaviors to keep in mind:
 6. Admin attempting to promote Admin creates a pending request.
 7. Duplicate pending promotion requests for the same target are rejected.
 8. Non-Founder cannot approve/reject promotion request callbacks.
-9. Founder approval adds `tc_admins` and resolves the request.
-10. Founder rejection resolves the request without adding Admin.
+9. Founder approval grants the admin role and resolves the request.
+10. Founder rejection resolves the request without granting Admin.
 11. `/tcdemote` blocks self-demotion and Founder demotion.
 12. Admin cannot demote Admin.
-13. Confirm demotion removes the role row from both `tc_admins` and `tc_roles`.
-14. Transfer ownership makes the old Founder an Admin and replaces the owner record.
+13. Confirm demotion revokes the active role assignment of the target.
+14. Transfer ownership makes the old Founder an Admin and replaces the owner assignment.
 15. Ban/kick/mute auto-demotes lower-ranked staff targets and logs the role removal.
 16. Equal-rank and higher-rank targets are protected from ban/kick/mute/warn actions.

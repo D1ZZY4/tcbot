@@ -9,10 +9,13 @@ recover that data.
 
 | Table | Contents | Loss impact |
 |---|---|---|
-| `bans` | All active and historical federation bans | Critical: bans cannot be reconstructed from Telegram |
-| `tc_owners` / `tc_admins` / `tc_roles` | Staff role assignments | Critical: roles must be re-granted manually |
-| `federated_groups` | Connected group registry | High: reconnecting requires each group admin to re-run `/tcconnect` |
-| `warns` / `warn_counts` | Warning records and counters | Medium: warn history lost; users get a clean slate |
+| `moderation_actions` | All active and historical ban, mute, warn, and kick decisions | Critical: bans cannot be reconstructed from Telegram |
+| `moderation_cases` | The investigations the decisions belong to | Critical: the evidence trail of every decision |
+| `role_assignments` | Staff role assignments | Critical: roles must be re-granted manually |
+| `connected_chats` | Connected group registry | High: reconnecting requires each group admin to re-run `/tcconnect` |
+| `moderation_appeals` | The appeal history of every ban | High: the decision trail of the review process |
+| `telegram_users` | The Telegram identity registry | High: names and mentions stop resolving |
+| `audit_events` | The immutable cross-domain event log | High: the audit trail of who decided what |
 | `apscheduler_jobs` | Persistent scheduler data (APScheduler `SQLAlchemyJobStore`) | Medium: scheduler state may need verification after restore |
 
 ---
@@ -38,11 +41,12 @@ features, retention, and eligible tiers depend on the provider and plan.
 3. Monitor progress in the provider's restore job view.
 4. After restore, verify counts:
    ```sql
-   SELECT 'bans', count(*) FROM bans
-   UNION ALL SELECT 'federated_groups', count(*) FROM federated_groups
-   UNION ALL SELECT 'tc_roles', count(*) FROM tc_roles
-   UNION ALL SELECT 'warns', count(*) FROM warns
-   UNION ALL SELECT 'warn_counts', count(*) FROM warn_counts;
+   SELECT 'moderation_actions', count(*) FROM moderation_actions
+   UNION ALL SELECT 'moderation_cases', count(*) FROM moderation_cases
+   UNION ALL SELECT 'role_assignments', count(*) FROM role_assignments
+   UNION ALL SELECT 'connected_chats', count(*) FROM connected_chats
+   UNION ALL SELECT 'telegram_users', count(*) FROM telegram_users
+   UNION ALL SELECT 'audit_events', count(*) FROM audit_events;
    ```
 
 ---

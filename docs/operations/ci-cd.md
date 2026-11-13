@@ -52,6 +52,15 @@ would write, read, and delete live cache entries. The suite also moves
 the shared caches into a test-only key namespace, so no run can reach a
 deployment key.
 
+**The database-backed tests and xdist:** the suite runs with `-n auto`,
+and two workers cannot share one schema, because they would drop each
+other's tables. The integration tests therefore use one schema, `test`,
+and one worker owns it: the first xdist worker runs the database-backed
+tests, and the others skip them. The project uses three schemas and no
+more (`public` for the deployment, `test` for the integration tests, and
+`development` for a developer), so a run never leaves a schema behind
+that nobody owns.
+
 **Why this exists:**
 The three workflows provide a repeatable CI result for formatting, lint,
 types, imports, and behavioral checks. Whether they block merging depends
@@ -226,7 +235,7 @@ The Run Bot workflow forwards the full federation env surface as repository
 secrets, so every runtime variable must be set there for the runner:
 `DATABASE_URL`, `OWNER_ID`, `COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`,
 `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `REDIS_URL`,
-`WARN_EXPIRY_DAYS`,
+`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_SCHEMA`, `WARN_EXPIRY_DAYS`,
 `WARN_LIMIT`, `FED_WARN_LIMIT`, `API_ID`, `API_HASH`,
 `ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, `MODULES_NO_LOAD`, `SENTRY_DSN`,
 `MTPROTO_SESSION`, the `COMMUNITY_*_URL` links,

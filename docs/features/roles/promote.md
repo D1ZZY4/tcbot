@@ -90,8 +90,8 @@ await Promote.request_admin(
 | `Promote.available_roles_for(executor_role)` | Returns the roles an executor with `executor_role` can assign. |
 | `Promote.execute(...)` | Full role-assignment flow used by `/tcpromote` (command + inline button). Routes to `assign_admin`, `assign_subrole`, or `request_admin` depending on requested role and executor role. A target with an active ban is refused before any role is written. |
 | `Promote.request_admin(...)` | Enqueues an Admin promotion request and notifies the Founder via DM, with the log channel as a fallback. |
-| `assign_admin(...)` | Founder-only path that upserts `tc_admins`, removes any existing Developer/Tester role, sends the promotion log, and DMs the target. |
-| `assign_subrole(...)` | Founder/Admin path for Developer/Tester role; atomically replaces any previous custom role via `users_roles.set_role` (upsert, no separate remove step), sends the promotion log, and DMs the target. |
+| `assign_admin(...)` | Founder-only path that grants the admin role, revokes any existing Developer/Tester assignment, sends the promotion log, and DMs the target. |
+| `assign_subrole(...)` | Founder/Admin path for Developer/Tester role; replaces any previous assignment in one transaction via `users_roles.set_role`, sends the promotion log, and DMs the target. |
 
 ## Permission matrix
 
@@ -118,8 +118,8 @@ The command-level handler `cmd_promote` rejects self-promotion, the bot itself, 
 
 When the Founder issues `/tcpromote @user admin`:
 
-1. `users_roles.add_admin(target_id, founder_id)` upserts into `tc_admins`.
-2. If the target previously held Developer or Tester, `users_roles.remove_role(target_id)` clears `tc_roles`.
+1. `users_roles.add_admin(target_id, founder_id)` grants the admin role.
+2. If the target previously held Developer or Tester, `users_roles.remove_role(target_id)` revokes that assignment.
 3. `users_cache.upsert_user(target_id, None, target_fname)` refreshes the member cache.
 4. A `messages.promoted(role="admin", ...)` log is sent to `cfg.logs`.
 5. The target is DM'd a welcome notification.
@@ -129,7 +129,7 @@ When the Founder issues `/tcpromote @user admin`:
 
 When Founder or Admin assigns Developer/Tester:
 
-1. `users_roles.set_role(target_id, role, assigned_by)` atomically upserts into `tc_roles` (no separate remove step; the upsert replaces any existing Developer/Tester entry).
+1. `users_roles.set_role(target_id, role, assigned_by)` grants the role in one transaction that revokes the assignment it replaces, so the user never holds two active roles.
 2. `users_cache.upsert_user(...)` refreshes the cache.
 3. A `messages.promoted(role=role, ...)` log is sent to `cfg.logs`.
 4. Target is DM'd.
@@ -164,7 +164,7 @@ All callbacks re-check the tapper's current effective role (Founder/Admin) befor
 ### Approval path
 
 1. `queues_db.resolve(request_id, "approved", admin.id)` marks the request resolved. The claim is atomic, so a concurrent approve and reject cannot both win; the loser finds the request already resolved and stops.
-2. `users_roles.add_admin(target_id, admin.id)` upserts `tc_admins`.
+2. `users_roles.add_admin(target_id, admin.id)` grants the admin role.
 3. Best-effort cleanup mirrors the direct Founder path: `users_roles.remove_role(target_id)` clears any stale Developer/Tester row (otherwise it resurrects on the next demote) and `users_cache.upsert_user(...)` refreshes the display name. Failures only log; the promotion already committed.
 4. `messages.promote_approved_log(...)` is sent to `cfg.logs`.
 5. Target is DM'd a welcome notification.
@@ -195,7 +195,7 @@ The unified `promoted` builder places the role as a field below the user (`Role:
 ## Edge cases
 
 - The effective-role cache (`effective_role_cache` in `tcbot/database/cache/`) is invalidated by every write so subsequent reads see the new role.
-- A user holds at most one live role: the direct Founder path and the approval path both clear any Developer/Tester row when granting Admin, and Developer/Tester assignment is a single atomic upsert.
+- A user holds at most one live role: the direct Founder path and the approval path both revoke any Developer/Tester assignment when granting Admin, and Developer/Tester assignment replaces the previous one in a single transaction.
 - DM notification failures are tolerated through `asyncio.gather(..., return_exceptions=True)` or explicit fallback logging; promotion still completes.
 - Pending requests are not deleted after approval/rejection; they are flagged with `status`, `resolved_date`, and `resolved_by`.
 - `cmd_promote` and `cmd_demote` share `resolve_executor_target` plus `classify_and_load_role` in `tcbot/modules/helper/decorators/` (executor role + target, then classify + role, both parallel and fail-closed); the role-button and demote-confirm callbacks share `check_callback_staff` (rank re-check alongside `q.answer()` so the spinner clears in one round trip). Cancellation always propagates.
@@ -205,7 +205,7 @@ The unified `promoted` builder places the role as a field below the user (`Role:
 
 - Founder can promote any role directly.
 - Admin can promote Developer / Tester directly.
-- Admin promoting to Admin enqueues a request rather than writing `tc_admins`.
+- Admin promoting to Admin enqueues a request rather than granting the admin role.
 - Duplicate pending requests for the same target are rejected.
 - Non-Founder cannot approve/reject promotion requests.
 - Self-promotion, bot promotion, and promotion-of-Founder are rejected.

@@ -74,8 +74,8 @@ When the bot joins a group, PTB emits a `my_chat_member` update. `connection.on_
 
 - **Bot removed** (`LEFT` / `BANNED`): runs `is_connected`, `deactivate_group`, and `remove_pending` in parallel. If the group was previously connected, posts a `group_bot_removed_log` and deactivates the record.
 - **Bot demoted** (`MEMBER` or `RESTRICTED` from `ADMINISTRATOR`): the group is *not* deactivated because permissions may be restored shortly. A warning is posted to `cfg.logs` (except for the primary groups `cfg.main_group`, which are managed separately). Federation bans cannot be enforced until admin rights are restored.
-- **Bot promoted to admin with a pending request**: edits the prompt to a progress state first (buttons removed), then runs `complete_join`, and only then edits the prompt to `connected_message`. The pending entry is consumed. (Editing optimistically in parallel was a bug: a `complete_join` failure left the owner with a false confirmation while the group stayed absent from `federated_groups`.) The progress edit matters because the ban/mute replay inside `complete_join` can take minutes on large federations; without it the owner stares at a dead prompt, and the removed buttons close the double-tap window.
-- **Bot added to a group with no pending request**: posts `connection.join_prompt()` with `Connect` / `Cancel` buttons and writes a `pending_joins` entry via `db.groups_db.add_pending(chat.id, chat.title, by_user.id, prompt.message_id)`. Anonymous-admin adds are skipped because there is no `from_user` to record as owner. When the `get_pending` or `is_connected` read fails, the event is dropped without creating a prompt, so a database outage cannot produce a duplicate prompt on the next event.
+- **Bot promoted to admin with a pending request**: edits the prompt to a progress state first (buttons removed), then runs `complete_join`, and only then edits the prompt to `connected_message`. The pending entry is consumed. (Editing optimistically in parallel was a bug: a `complete_join` failure left the owner with a false confirmation while the group stayed absent from `connected_chats`.) The progress edit matters because the ban/mute replay inside `complete_join` can take minutes on large federations; without it the owner stares at a dead prompt, and the removed buttons close the double-tap window.
+- **Bot added to a group with no pending request**: posts `connection.join_prompt()` with `Connect` / `Cancel` buttons and writes a `join_requests` entry via `db.groups_db.add_pending(chat.id, chat.title, by_user.id, prompt.message_id)`. Anonymous-admin adds are skipped because there is no `from_user` to record as owner. When the `get_pending` or `is_connected` read fails, the event is dropped without creating a prompt, so a database outage cannot produce a duplicate prompt on the next event.
 
 ## `on_join_decision` callback flow
 
@@ -129,7 +129,7 @@ These are defined as `_REQUIRED_PERMS` in `connected_flow.py`. The same tuple is
 
 The connection flow touches two tables:
 
-`federated_groups` (via `groups_db`):
+`connected_chats` (via `groups_db`):
 
 | Field | Meaning |
 |---|---|
@@ -139,7 +139,7 @@ The connection flow touches two tables:
 | `added_date` | UTC connection time. |
 | `is_active` | Whether the group is currently connected. |
 
-`pending_joins` (via `groups_db`):
+`join_requests` (via `groups_db`):
 
 | Field | Meaning |
 |---|---|
@@ -176,7 +176,7 @@ Key behaviors to keep in mind:
 5. `complete_join` is awaited before the success reply so DB failures cannot produce a false "connected" confirmation.
 6. `complete_join` replays every active ban via `fan_out(bot.ban_chat_member)` and every active mute via `fan_out(bot.restrict_chat_member)`. The replay is bounded by a time budget: Telegram admits 20 requests a minute per group, so a long enforcement list would otherwise keep the connect handler running for a quarter of an hour. The replay stops at the budget, logs the number of bans and mutes that were not applied, and reports the connect as a blind replay so the owner re-adds the bot to finish it.
 7. `complete_join` posts a `group_connected_log` to `cfg.logs` regardless of how many bans/mutes were successfully applied.
-8. Adding the bot to a group auto-sends a `Connect` / `Cancel` prompt and writes a `pending_joins` entry.
+8. Adding the bot to a group auto-sends a `Connect` / `Cancel` prompt and writes a `join_requests` entry.
 9. Anonymous-admin adds do not produce a prompt.
 10. The auto-prompt path only consumes the pending entry once the bot is promoted to administrator with the required perms.
 11. Bot removal deactivates the group, clears any pending entry, and posts a `group_bot_removed_log`.
@@ -184,4 +184,4 @@ Key behaviors to keep in mind:
 13. The `Connect` button is owner-only; non-owner taps reply with the owner-only refusal.
 14. The `Cancel` button removes the pending entry, edits the prompt to a "Connection declined" message, posts a `group_connection_rejected_log`, and `leave_chat`.
 15. The admin-identity harvest task runs in the background so name lookups stay cached for the lifetime of the connected group.
-16. Reconnecting an existing group upserts the `federated_groups` record and resets `is_active=True`.
+16. Reconnecting an existing group upserts the `connected_chats` record and resets `is_active=True`.

@@ -108,7 +108,7 @@ If the target holds a federation role, the role is removed when the kick is enfo
 
 The demote runs at enforcement time because the reason and proof steps are still cancelable. A demote at the entry would strip the target's role, post the federation demote log, and DM the target that they were kicked even when the moderator cancelled the flow and no kick ever happened.
 
-`demote_before_enforcement` removes the role record (`tc_admins` for Admin, `tc_roles` for Developer/Tester), posts the federation demote log, and DMs the target. The step is best-effort: a role lookup or demote failure is logged loudly and the kick proceeds, because the kick audit row has already been written. The target keeps their rank only until a later join-time enforcement pass removes it.
+`demote_before_enforcement` revokes the active role assignment of the target, posts the federation demote log, and DMs the target. The step is best-effort: a role lookup or demote failure is logged loudly and the kick proceeds, because the kick audit row has already been written. The target keeps their rank only until a later join-time enforcement pass removes it.
 
 ## `execute_kick` behavior
 

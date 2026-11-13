@@ -112,6 +112,9 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | Variable | Default | Description |
 |---|---|---|
 | `ALBUM_DEBOUNCE_SECONDS` | `4` | Proof silence window before the ban executor runs (or tap Done to run at once). |
+| `DB_POOL_SIZE` | `5` | PostgreSQL connection pool size. Keep the total with `DB_MAX_OVERFLOW` within the connection limit the database grants. |
+| `DB_MAX_OVERFLOW` | `5` | Extra connections the pool may open under load. |
+| `DB_SCHEMA` | `public` | PostgreSQL schema the bot reads and writes. The project uses `public` for the deployment, `test` for the integration tests, and `development` for a developer. |
 | `MODULES_LOAD` | empty (all) | Allowlist of modules to load exclusively. |
 | `MODULES_NO_LOAD` | empty | Denylist of modules to skip. |
 

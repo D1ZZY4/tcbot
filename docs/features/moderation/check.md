@@ -78,7 +78,7 @@ Inline keyboard:
 [ Kicks (n) ] [ Mutes (n)  ]
 ```
 
-Founder targets show only `Role: Founder` (no `Assigned by` / `Assigned at`; `tc_owners` does not record metadata).
+Founder targets show only `Role: Founder` (no `Assigned by` / `Assigned at`; the owner assignment does not record metadata).
 
 ## Identity recognition
 
@@ -222,17 +222,14 @@ user.
 
 ## Indexes
 
-The indexes declared in `tcbot/database/base.py` make this view fast:
+The indexes declared in `tcbot/database/base/` make this view fast:
 
 | Collection | Index | Powers |
 |---|---|---|
-| `bans` | `(banned_user_id, timestamp -1, ban_id -1)` | `user_bans` history list |
-| `bans` | `(is_active, timestamp -1, ban_id -1)` | active counts, active list scans |
-| `warns` | `(user_id, timestamp -1)` | federation warn aggregates |
-| `warns` | `(user_id, chat_id, timestamp -1)` | per-chat warn list |
-| `kicks` | `(user_id, timestamp -1)` | `user_kicks` |
-| `mutes` | `(user_id, timestamp -1)` | `user_mutes` |
-| `member_cache` | `(user_id)` unique | `get_user` / `get_first_name` lookups |
+| `moderation_actions` | `(target_user_id, created_at desc)` | the per-user decision history |
+| `moderation_actions` | `(action_type, status)` | the active-ban, active-mute, and warn filters |
+| `moderation_appeals` | `(action_id)` and `(action_id, appellant_user_id)` | the appeal list of a ban |
+| `telegram_users` | `(user_id)` unique | `get_user` / `get_first_name` lookups |
 
 ## Edge cases
 
@@ -247,7 +244,7 @@ The indexes declared in `tcbot/database/base.py` make this view fast:
 - A user with no records shows zero counts and friendly empty-state messages in each drill-down.
 - Pagination clamps to the last page when the page index exceeds the available pages.
 - The Role line collapses to `Role: Founder` for the owner (no `Assigned by` / `Assigned at`).
-- The Role line shows `Assigned by` + `Assigned at` for Admin (from `tc_admins`) and Developer / Tester (from `tc_roles`).
+- The Role line shows `Assigned by` + `Assigned at` for Admin, Developer, and Tester, read from the active `role_assignments` row.
 - The `View Proof` button only appears when a ban has a `proof_message_id`.
 - The `View Appeal` button only appears when a ban has a non-empty `appeal_link`.
 - Tapping a button you are already viewing does not raise a Telegram error.

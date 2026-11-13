@@ -153,7 +153,7 @@ The update flow (after `Continue`):
 
 ## Connected-group enforcement
 
-Federation enforcement uses `groups_db.active_groups()` (connected groups from the `federated_groups` table) and then appends the primary groups (`cfg.main_group`) when they are not already in the list. It calls `ban_chat_member` for each group through `fan_out(...)`. `fan_out` caps concurrency and returns exceptions instead of raising them.
+Federation enforcement uses `groups_db.active_groups()` (connected groups from the `connected_chats` table) and then appends the primary groups (`cfg.main_group`) when they are not already in the list. It calls `ban_chat_member` for each group through `fan_out(...)`. `fan_out` caps concurrency and returns exceptions instead of raising them.
 
 The user-facing summary reports how many groups succeeded:
 
@@ -187,8 +187,8 @@ Auto-demotion is handled by `demote_before_enforcement(..., trigger="ban")` from
 
 The helper removes the role record, posts the federation demote log, and notifies the target by DM when possible:
 
-- Admin targets are removed from `tc_admins`.
-- Developer/Tester targets are removed from `tc_roles`.
+- Admin targets have their active role assignment revoked.
+- Developer/Tester targets have their active role assignment revoked.
 - A role auto-demotion log is sent to the federation logs channel.
 - The target is notified by DM when possible.
 
@@ -196,40 +196,40 @@ The step is best-effort: the ban record is already written at that point, so a r
 
 ## Ban database schema impact
 
-Ban records are stored in the `bans` table. New records include:
+A ban is one row of `moderation_actions` with `action_type = 'ban'` and
+`scope_type = 'community'`. The helpers join the decision with its
+messages and its appeal, so the reader sees one document. The fields the
+ban flow writes:
 
 | Field | Meaning |
 |---|---|
-| `ban_id` | Unique short ban identifier and appeal deep-link token. |
-| `banned_user_id` | Telegram user ID of the banned user. |
+| `external_ref` | Unique short ban identifier and appeal deep-link token. |
+| `target_user_id` | Telegram user ID of the banned user. |
 | `reason` | Moderator-provided reason. |
-| `admin_user_id` | Telegram user ID of the moderator who created or most recently updated the ban. |
-| `proof_message_id` | Message ID of uploaded proof in the proof destination. |
-| `log_message_id` | Message ID of the ban log in the logs destination. |
-| `previous_proof_message_id` | Previous proof message ID after an update. |
-| `previous_log_message_id` | Previous log message ID after an update. |
-| `until_date` | Reserved for future timed-ban support; currently `None` (permanent bans only). |
-| `duration_str` | Human-readable duration string; reserved alongside `until_date`; currently `None`. |
-| `timestamp` | Original ban creation time. |
-| `updated_timestamp` | Last update time, or `None` for a new ban. |
-| `is_active` | Whether the federation ban is still active. |
-| `update_count` | Number of times the active ban was updated. |
-| `review_message_id` | Appeal review message ID when an appeal is pending. |
-| `review_timestamp` | Time the appeal review card was created. |
-| `appeal_log_msg_id` | Appeal log message ID after appeal submission. |
-| `appeal_submitted_at` | Appeal submission time. |
-| `appeal_link` | Link to the forwarded appeal message. |
-| `rejected_by_id` | Telegram user ID of the staff member who rejected the appeal. |
-| `rejected_by_name` | Display name of the rejector at the time of rejection. |
-| `rejected_at` | Timestamp when the appeal was rejected. |
+| `actor_user_id` | Telegram user ID of the moderator who created or most recently updated the ban. |
+| `status` | `active` while the ban holds, `revoked` after an unban, `superseded` after a re-ban. |
+| `scope_type` | `community`: a ban applies to every active group. |
+| `origin_chat_id` | The group the command came from, when it came from one. |
+| `case_id` | The moderation case the decision belongs to. |
+| `evidence_upload_id` | The archived proof the decision cites. |
+| `action_origin` | `manual` for a ban a moderator issued. |
+| `metadata` | The annotation of the decision: the review slot, the appeal link, the update counter, and the previous proof reference. |
+
+The proof and log message IDs, the appeal fields, and the rejection
+fields live in the document the helpers compose: the message IDs come
+from `moderation_messages`, the appeal fields from `moderation_appeals`,
+and the review slot from the metadata of the decision.
 
 Indexes are ensured for:
 
-- `bans`: `(banned_user_id, is_active, timestamp desc, ban_id desc)` compound (serves `get_active_ban` filter+sort)
-- `bans`: unique `ban_id`
-- `bans`: unique partial `(banned_user_id)` where `is_active` is true (one active ban per user, enforced by the database)
+- `moderation_actions`: unique `external_ref` (the appeal deep link)
+- `moderation_actions`: unique partial `(target_user_id)` where the action is an active ban (one active ban per user, enforced by the database)
+- `moderation_actions`: `(target_user_id, created_at desc)` for the per-user history
+- `moderation_actions`: `(action_type, status)` for the active-ban filter
 
-Active-ban reads are deterministic: when duplicate active records exist for the same user, `get_active_ban` returns the newest by `timestamp` and then `ban_id`.
+A re-ban does not edit the previous decision: it writes a new one with
+`supersedes_action_id`, and the trigger moves the old one to `superseded`.
+The old reason, actor, and timestamps stay readable.
 
 ## Ban logs and proof logs
 

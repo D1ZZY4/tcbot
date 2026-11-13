@@ -64,24 +64,43 @@ tcbot/
 ├── alive.py                Flask health endpoint and webhook receiver
 ├── serverless.py           Vercel lifecycle: shared PTB app, update dispatch, cron expiry
 ├── database/
-│   ├── base.py              Table, column, constraint, and index definitions (schema source of truth)
+│   ├── base/               Table, column, constraint, and index definitions (schema source of truth)
+│   │   ├── identity.py       Telegram users, chats, membership, connected groups, join requests
+│   │   ├── settings.py       Group and user configuration
+│   │   ├── community.py      The community profile singleton
+│   │   ├── rbac.py           Role catalog, permission catalog, role assignments, promotion requests
+│   │   ├── rules.py          Rule sets, versions, items, acknowledgements
+│   │   ├── moderation.py     Cases, actions, appeals, messages, evidence
+│   │   ├── enforcement.py    Enforcement runs, targets, attempts
+│   │   ├── automation.py     Automation policies, versions, events, runs, steps
+│   │   ├── broadcast.py      Broadcast campaigns, targets, attempts
+│   │   ├── jobs.py           Scheduled job registry, job runs, retention policies, erasure queue
+│   │   └── runtime.py        MTProto state and the APScheduler job table
+│   ├── schema/             The SQL objects SQLAlchemy cannot express
+│   │   ├── views.sql          The derived views of the community
+│   │   ├── functions.sql      The functions, including the authorization primitive
+│   │   ├── triggers.sql       The triggers that protect the invariants
+│   │   ├── policies.sql       The row-level security policies
+│   │   └── seed.sql           The role, permission, retention, and job reference data
 │   ├── engine.py            Async engine, session boundary, circuit-breaker guard, query helpers
 │   ├── migrations.py        Alembic wiring: applies the pending revisions at startup
-│   ├── bans_db.py          Federation ban records (incl. per-user history)
-│   ├── groups_db.py        Connected groups and pending joins
-│   ├── users_cache.py      Member profile cache operations
-│   ├── users_roles.py      Owners/admins + dev/tester roles, effective-role resolution
-│   ├── warns_db.py         Warnings and warning counters (incl. per-user aggregates)
-│   ├── kicks_db.py         Kick audit records (incl. per-user history)
-│   ├── mutes_db.py         Mute audit records (incl. per-user history)
-│   ├── event_history.py    Shared shape of the per-user kick/mute event histories
+│   ├── bans_db/             Federation ban decisions and their appeal lifecycle
+│   │   ├── _queries.py         Reads: active ban, ban by reference, per-user history
+│   │   ├── _writes.py          Writes: create, update, review slot, appeal, decision
+│   │   └── _compose.py         Joins a decision with its messages and appeals
+│   ├── groups_db.py        Connected groups, group configuration, join requests
+│   ├── users_cache.py      Telegram identity cache operations
+│   ├── users_roles.py      Role assignments, effective-role resolution, the permission catalog
+│   ├── warns_db.py         Warning decisions and the per-group counters
+│   ├── kicks_db.py         Kick decisions and the per-user history
+│   ├── mutes_db.py         Mute decisions and the live active-mute view
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache/              TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   ├── redis_client.py     Optional async Redis client (owns the connect/degrade decision)
 │   ├── scheduler.py        APScheduler background jobs (SQLAlchemyJobStore)
 │   ├── mtproto.py          Bot-token MTProto client: resolve + member harvest
 │   ├── mtproto_store.py    PostgreSQL-backed Kurigram storage engine
-│   ├── settings_db.py      Per-user settings (locale preferences)
+│   ├── settings_db.py      Per-user settings (locale and timezone preferences)
 │   ├── documents.py        TypedDict document shapes
 │   └── types.py            NewType ID primitives
 ├── modules/
@@ -129,6 +148,8 @@ tcbot/
 | `tcbot/modules/helper/` | Shared handler helpers and keyboard factories | Top-level command registration |
 | `tcbot/modules/helper/pipelines/*_flow.py` | Conversation factories, state transitions, flow executors | Module discovery or `__handlers__` exports |
 | `tcbot/database/*_db.py` | Table-specific DB operations | Telegram API calls |
+| `tcbot/database/base/` | Table, column, constraint, and index definitions | Telegram API calls, module discovery |
+| `tcbot/database/schema/` | Views, functions, triggers, policies, and reference data | Telegram API calls, module discovery |
 | `tcbot/utils/` | Runtime infrastructure utilities | Feature-specific moderation policy |
 
 ```mermaid

@@ -21,11 +21,13 @@ flowchart TD
     DBHelpers --> Engine[engine.py<br/>async engine + session]
     DBHelpers --> Cache[cache/<br/>TwoLevelCache]
     DBHelpers --> Documents[documents.py<br/>TypedDicts]
-    DBHelpers --> Schema[base.py<br/>table definitions]
+    DBHelpers --> Schema[base/<br/>table definitions]
+    DBHelpers --> SQL[schema/<br/>views, functions, triggers, seed]
     Engine --> SQLAlchemy[SQLAlchemy 2.1 async<br/>Psycopg 3]
     SQLAlchemy --> Postgres[(PostgreSQL)]
     Schema --> Migrations[migrations.py<br/>Alembic]
     Migrations --> Postgres
+    SQL --> Migrations
     Cache --> L1[TTLCache L1<br/>in-memory]
     Cache --> L2[Redis L2<br/>optional]
     L2 --> Redis[(Redis)]
@@ -39,7 +41,7 @@ flowchart TD
 - Keep all SQL in `tcbot/database/` helpers. Command modules and workflows
   must not build statements or import the engine directly.
 - Put new database concerns in descriptive `*_db.py` files and add the
-  matching table and index to `base.py`.
+  matching table and index to `tcbot/database/base/`.
 - Helpers are async and fully typed; they use the `TypedDict` shapes from
   `documents.py` and the `NewType` primitives from `types.py`.
 - Stored timestamps are timezone-aware and in UTC. Use `utc_now()` from
@@ -51,35 +53,38 @@ flowchart TD
 
 | Module | Responsibility |
 |---|---|
-| `base.py` | The single source of truth for every table, column, constraint, and index. Alembic autogenerate and the runtime schema check both read it. |
+| `base/` | The single source of truth for every table, column, constraint, and index. The package splits the schema by domain: `identity`, `rbac`, `rules`, `moderation`, `enforcement`, `automation`, `broadcast`, `jobs`, `runtime`, `settings`, `community`. |
+| `schema/` | The database objects SQLAlchemy cannot express: the views, the functions, the triggers, the access policies, and the reference data. One SQL file each, applied in the order the files are listed. |
 | `migrations.py` | Applies the pending Alembic revisions at startup. |
 | `engine.py` | The async engine, the session boundary, the circuit-breaker guard, and the query helpers. |
 
 The schema is versioned with Alembic. `alembic/versions/0001_initial.py`
-creates every table and index of `base.py`, and every later revision adds
-to it; `engine.connect()` applies the pending revisions before the engine
-is published, so a fresh deployment boots against an empty database and an
-existing one is upgraded in place.
+creates the first layout, `0002_member_cache_sort_indexes.py` adds the
+sort indexes the paged user list needs, and `0003_community_schema.py`
+migrates an existing database to the community model. Every later revision
+adds to it; `engine.connect()` applies the pending revisions before the
+engine is published, so a fresh deployment boots against an empty database
+and an existing one is upgraded in place.
 
 ```bash
 # Apply the migrations by hand (the bot does this at startup).
 uv run alembic upgrade head
 
-# Generate a revision after changing base.py.
+# Generate a revision after changing base/.
 uv run alembic revision --autogenerate -m "describe the change"
 ```
 
-A schema change therefore needs three edits: the table in `base.py`, the
+A schema change therefore needs three edits: the table in `base/`, the
 matching Alembic revision, and the helper that uses it. The integration
-tests build their schema from `base.py`, so a revision that drifts from it
-is caught by `tests/test_schema_migration.py`, which migrates an empty
-schema and compares the result with the declared metadata.
+tests build their schema from `base/` and `schema/`, so a revision that
+drifts from them is caught by `tests/test_schema_migration.py`, which
+migrates an empty schema and compares the result with the declared
+metadata.
 
-`scripts/generate_initial_migration.py` is the bootstrap tool for the
-first revision of a new project. It refuses to overwrite an existing
-first revision: the applied revision is the database's history, and
-rewriting it would leave a deployed database on the old schema while the
-repository claims the change shipped.
+The `%SCHEMA%` placeholder in the SQL files stands for the schema the
+objects live in, so the same files apply to the deployment schema and to
+the schema an integration test owns. `tcbot.database.schema.apply_schema()`
+replaces the placeholder with the current schema and applies the files.
 
 The migration must not reconfigure the application logging. Alembic's
 standard recipe calls `fileConfig()`, which removes every handler the bot
@@ -88,6 +93,37 @@ level. The bot applies the migrations during startup, so the standard
 call would silence the bot and stop the error reports the moment it
 connects to the database. `alembic/env.py` therefore configures the
 Alembic logger on its own.
+
+## The community model
+
+The schema holds one community: one bot, one set of groups, one staff
+roster. There is no tenant column and no federation key, because a
+separate community would be a separate deployment.
+
+| Domain | Tables |
+|---|---|
+| Identity | `telegram_users`, `telegram_chats`, `chat_members`, `connected_chats`, `join_requests` |
+| Configuration | `community_settings`, `chat_settings`, `user_settings` |
+| Access | `role_definitions`, `permission_definitions`, `role_permissions`, `role_assignments`, `promotion_requests` |
+| Rules | `rule_sets`, `rule_set_versions`, `rule_items`, `rule_acknowledgements` |
+| Moderation | `moderation_cases`, `moderation_case_rules`, `moderation_actions`, `moderation_appeals`, `moderation_messages`, `moderation_evidence_uploads`, `moderation_evidence_items` |
+| Enforcement | `moderation_enforcement_runs`, `moderation_enforcement_targets`, `moderation_enforcement_attempts` |
+| Automation | `automation_policies`, `automation_policy_versions`, `automation_events`, `automation_runs`, `automation_run_steps`, `automation_run_step_attempts` |
+| Broadcast | `broadcast_campaigns`, `broadcast_targets`, `broadcast_attempts` |
+| Operations | `audit_events`, `scheduled_jobs`, `scheduled_job_runs`, `retention_policies`, `telegram_user_erasures`, `mtproto_state`, `apscheduler_jobs` |
+
+Two rules hold everywhere:
+
+- **One source of truth per domain.** A ban, a mute, a warning, and a kick
+  are all rows of `moderation_actions`. A group connection is a row of
+  `connected_chats`; its configuration is a row of `chat_settings`. The
+  views (`active_bans`, `active_mutes`, `warn_counts`, `community_members`,
+  `effective_chat_settings`, `moderation_timeline`, `role_permission_matrix`)
+  are derived, never a second copy of the facts.
+- **The scope is explicit.** A ban and a mute use `scope_type = 'community'`
+  and carry no `chat_id`. A warning and a kick use `scope_type = 'chat'`
+  and carry the group they belong to. The scope is never inferred from
+  `origin_chat_id`.
 
 ## Connection manager
 
@@ -107,8 +143,25 @@ blocking call on the loop.
 | `run_transaction(op, *, timeout=20.0)` | Runs a unit of work that spans several statements atomically on one session. It already runs through `db_call`, so a caller must not wrap it in another one. |
 | `fetch_all(stmt)` / `fetch_one(stmt)` / `fetch_value(stmt)` / `fetch_count(stmt)` / `count_rows(stmt)` | Read helpers. They run on an autocommit connection, so a read is one round trip. `count_rows` wraps a selection in a counting query so the result is the row count and never the first column. |
 | `run(stmt)` / `run_returning(stmt)` | Write helpers. `run` returns the affected row count, `run_returning` the rows a `RETURNING` clause produced. |
+| `run_script(sql)` | Runs a plain SQL script on the shared session. The script is not parameterised, so the percent signs of `format()` and the colons of the idempotency keys stay literal. |
 | `is_connection_error(exc)` / `is_transient_db_error(exc)` / `is_database_error(exc)` / `is_pool_timeout(exc)` | Error classification used by the circuit breaker and the error handler. `is_pool_timeout` recognises SQLAlchemy's own pool-timeout error, which does not inherit from the builtin `TimeoutError`. |
 | `constraint_name(exc)` | The name of the constraint an integrity error violated, so a caller can tell a duplicate identifier apart from a duplicate partial index. |
+
+### Transaction boundary
+
+`run_transaction` hands the callback the session of the transaction. Every
+statement the callback issues on that session joins the same transaction,
+so the unit either lands completely or not at all.
+
+The boundary is the whole point: a compensating write after the fact
+cannot restore the guarantee, because a crash between the two writes
+leaves the pair inconsistent. Two rules follow from it:
+
+- A callback must not call `engine.run()` or `engine.fetch_*()`. Those open
+  their own session and commit on their own, so the write lands outside the
+  transaction the callback was given.
+- A callback must not wrap itself in another `db_call`. The nested call
+  would record one failure twice and trip the circuit early.
 
 ### Connection parameters
 
@@ -116,22 +169,54 @@ blocking call on the loop.
 
 | Parameter | Value |
 |---|---|
-| `pool_size` | `20` |
-| `max_overflow` | `10` |
+| `pool_size` | `cfg.db_pool_size` (`DB_POOL_SIZE`, default `5`) |
+| `max_overflow` | `cfg.db_max_overflow` (`DB_MAX_OVERFLOW`, default `5`) |
 | `pool_timeout` | `10 s` |
 | `pool_recycle` | `1800 s` |
 | `pool_pre_ping` | `True` |
 | `connect_timeout` | `10 s` |
-| `options` | `-c timezone=UTC` |
+| `options` | `-c search_path=<DB_SCHEMA> -c timezone=UTC` |
 
-The pool is sized for a federation of dozens of groups, where every handler
-may read the member cache or the role tables at the same time. The session
-zone is pinned to UTC because the application works in UTC end to end and
-the session zone decides how a timestamp without one is read back.
+The pool size is configuration, not a constant, because it has to fit the
+number of connections the database grants the bot user. A pooler in
+transaction or session mode caps it at a small number, and a pool that is
+larger than the cap does not fail at startup: it fails later, as a "max
+clients reached" refusal on every call that needs a connection, and the
+circuit breaker reads that refusal as an outage of the database. The
+default of `5` plus `5` overflow fits a pooled deployment.
+
+The session zone is pinned to UTC because the application works in UTC end
+to end and the session zone decides how a timestamp without one is read
+back. The schema is named explicitly because a pooler in transaction mode
+does not carry the search path of the client into the session it hands
+out.
 
 The URL comes from `cfg.database_url` and is normalised to the
 `postgresql+psycopg://` scheme. `postgresql://` and `postgres://` are
 accepted as well.
+
+### Database schemas
+
+The project uses three PostgreSQL schemas and no more:
+
+| Schema | Owner | Purpose |
+|---|---|---|
+| `public` | The deployment | The default schema of the server. `DB_SCHEMA` defaults to it. |
+| `test` | The integration tests | The schema `tests/postgres_support.py` builds and empties. |
+| `development` | A developer | The schema the operator scripts use, and the schema `DB_SCHEMA=development` selects. |
+
+`cfg.db_schema` names the schema the application reads and writes. A
+schema that does not exist yet is created before the migrations run, so
+a fresh database comes up empty and a name nobody created never sends
+the schema objects into another schema.
+
+The schema objects (the views, the functions, the triggers, the
+policies, and the reference data) always land in the schema the
+connection was pointed at. `tcbot.database.schema` reads the schema from
+the search path instead of `current_schema()`, because `current_schema()`
+returns the first schema of the path that *exists*: a path that names a
+schema nobody created would silently place every object in the next
+schema of the path.
 
 ### Circuit breaker
 
@@ -163,16 +248,15 @@ database error.
 
 | Helper | Table(s) | Main responsibilities |
 |---|---|---|
-| `users_cache.py` | `member_cache` | Member profile cache: upsert, change-detection upsert, harvest, get, batch queries, mention formatting, counts, paged listing, name search. |
-| `users_roles.py` | `tc_owners`, `tc_admins`, `tc_roles` | Owner CRUD, admin CRUD, developer/tester role CRUD, effective-role resolution. |
-| `bans_db.py` | `bans` | Active ban lookup, ban creation/update, unban deactivation, appeal/review metadata, active ban lists, per-user history. |
-| `groups_db.py` | `federated_groups`, `pending_joins` | Connected group state, pending connection requests, group locale, cache invalidation, chat-migration repoint. |
-| `warns_db.py` | `warns`, `warn_counts` | Warning event history, per-group counters, limit checks, backfill/sync, clear, migration. |
-| `kicks_db.py` | `kicks` | Append-only kick audit records. |
-| `mutes_db.py` | `mutes`, `active_mutes` | Mute audit trail plus the live active-mute store used to re-apply restrictions. |
-| `event_history.py` | `kicks`, `mutes` | Shared shape of the per-user kick and mute histories: the newest-first paging, the per-user count, and the chat-migration repoint. |
-| `queues_db.py` | `promotion_requests` | Queued Admin promotion requests and resolution status. |
-| `settings_db.py` | `user_settings` | Per-user locale preference rows, kept apart from `member_cache`. |
+| `users_cache.py` | `telegram_users` | Telegram identity cache: upsert, change-detection upsert, harvest, get, batch queries, mention formatting, counts, paged listing, name search, erasure. |
+| `users_roles.py` | `role_assignments`, `role_definitions`, `role_permissions`, `permission_definitions` | Role assignment CRUD, effective-role resolution, the permission catalog and the permission check. |
+| `bans_db/` | `moderation_actions`, `moderation_cases`, `moderation_appeals`, `moderation_messages` | Ban decisions and their lifecycle: creation, update, review slot, appeal submission and decision, per-user history. |
+| `groups_db.py` | `connected_chats`, `telegram_chats`, `chat_settings`, `join_requests` | Connected group state, group configuration, pending connection requests, cache invalidation, chat-migration repoint. |
+| `warns_db.py` | `moderation_actions` (warn scope), `moderation_cases` | Warning decisions, per-group counters, limit checks, clear, expiry. |
+| `kicks_db.py` | `moderation_actions` (kick scope), `moderation_cases` | Kick decisions and their per-user history. |
+| `mutes_db.py` | `moderation_actions` (mute scope), `moderation_cases` | Mute decisions, the live active-mute view, and the per-user history. |
+| `queues_db.py` | `promotion_requests` | Queued staff promotion requests and their resolution status. |
+| `settings_db.py` | `user_settings` | Per-user locale and timezone preferences. |
 | `cache/` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with five public singletons. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton with pool management and liveness tracking. |
 | `scheduler.py` | PostgreSQL (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `SQLAlchemyJobStore`. |
@@ -181,7 +265,11 @@ database error.
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
 | `types.py` | type-only | `NewType` primitives: `UserId`, `GroupId`, `ChatId`, `BanId`. |
 
-## Member profiles (`users_cache.py`, table `member_cache`)
+## Telegram identities (`users_cache.py`, table `telegram_users`)
+
+`telegram_users` is the canonical identity of a Telegram user. The
+username is display metadata, never a key: it can change or disappear, so
+it never identifies anybody.
 
 ### Row shape: `UserDoc`
 
@@ -191,10 +279,13 @@ database error.
 | `username` | `str \| None` | Current username. |
 | `first_name` | `str \| None` | Current display name. |
 | `last_name` | `str \| None` | Current last name. |
-| `first_name_lower` | `str \| None` | Lowercase mirror of `first_name`; backs the prefix name search. |
-| `username_lower` | `str \| None` | Lowercase mirror of `username`; backs the prefix name search. |
-| `commit_date` | `datetime` | First-seen timestamp. The conflict action never rewrites it, so a refresh keeps the moment the profile was first cached. |
-| `last_updated` | `datetime` | Last write time; drives the stale-profile cleanup. |
+| `language_code` | `str \| None` | Telegram client language. |
+| `is_bot` | `bool` | Whether the account is a bot. |
+| `is_premium` | `bool` | Whether the account holds Telegram Premium. |
+| `first_seen_at` | `datetime` | First-seen timestamp. The conflict action never rewrites it, so a refresh keeps the moment the profile was first cached. |
+| `last_seen_at` | `datetime \| None` | Last sighting. |
+| `erased_at` | `datetime \| None` | Set when the account was deleted on Telegram and the profile was anonymised. |
+| `erasure_reason` | `str \| None` | Why the profile was anonymised. |
 
 ### Mutations
 
@@ -203,7 +294,7 @@ database error.
   `username`/`last_name` means "unknown, preserve the stored value": the
   conflict action carries only the refreshed columns, so the stored value
   stays. Pass `""` to clear a field. The conflict action never rewrites
-  `commit_date`. Populates the `user_mention_cache` entry when the write
+  `first_seen_at`. Populates the `user_mention_cache` entry when the write
   carried every field; a partial write (a preserved `username` or
   `last_name`) invalidates the entry instead, because the stored triple
   cannot be reconstructed from the write alone.
@@ -220,10 +311,18 @@ database error.
   object omits are cleared via `""` so removals propagate. Delegates to
   `upsert_user_if_changed`. Never use with partial data from ban/promote/
   check-by-ID paths (those must keep `None`).
+- `refresh_display_name(user_id: int, first_name: str) -> bool`
+  Writes a display name that changed, leaving the rest of the profile
+  alone. Used by the ban and kick executors, which learn a name without
+  learning a username.
 - `remember_identity(user_id: int, first_name: str | None, username: str | None, last_name: str | None) -> None`
   Mirrors a resolved identity into L1 only, no database I/O. Used after a
   Telegram-side resolve because `upsert_user` invalidates rather than
   populates. An empty identity stores the all-`None` not-found sentinel.
+- `mark_erased(user_id: int, reason: str) -> None`
+  Anonymises a deleted Telegram account: the profile fields are cleared
+  and `erased_at`/`erasure_reason` are written. The moderation history
+  keeps referring to the row, so the audit trail stays readable.
 
 ### Queries
 
@@ -257,8 +356,8 @@ database error.
   `COUNT(*)` over the whole table.
 - `all_users_page(*, skip: int = 0, limit: int = 200, sort_by: str = "first_name") -> list[UserDoc]`
   One server-side page. `sort_by` is validated against `_USER_SORT_FIELDS`
-  (`user_id`, `username`, `first_name`, `last_updated`), falling back to
-  `first_name`; `last_updated` sorts descending, everything else ascending.
+  (`user_id`, `username`, `first_name`, `last_seen_at`), falling back to
+  `first_name`; `last_seen_at` sorts descending, everything else ascending.
   Every accepted key maps to an indexed field and carries a `user_id`
   tie-break so the page order stays stable. The name sorts use the
   default-opclass `(first_name_lower, user_id)` and
@@ -299,29 +398,50 @@ cached identity has not changed, no database write is issued.
 `_update_member_cache` logs at DEBUG and swallows so a cache failure never
 breaks the update path.
 
-## Roles, owners, and admins (`users_roles.py`, tables `tc_owners`, `tc_admins`, `tc_roles`)
+## Access control (`users_roles.py`, tables `role_assignments`, `role_definitions`, `role_permissions`, `permission_definitions`)
 
-### Row shapes
+The schema holds two layers that have to agree: the **catalog** (the role
+definitions, the permission definitions, and the grants between them) and
+the **assignment** (who holds which role right now).
 
-`AdminDoc` (tc_owners and tc_admins rows):
+### Catalog
+
+| Table | Contents |
+|---|---|
+| `role_definitions` | The four system roles with their display name and priority: `owner` (100), `admin` (80), `developer` (60), `moderator` (40). |
+| `permission_definitions` | The permission keys and their resource namespace. The resource always matches the key prefix, and a check constraint enforces it. |
+| `role_permissions` | Which role holds which permission. |
+
+The catalog is reference data: it is seeded by `schema/seed.sql` and the
+seed is idempotent, so a deployment always starts from the same contract.
+
+The application speaks its own tier vocabulary: `founder`, `admin`,
+`developer`, `tester`. `ROLE_KEY_BY_APP_ROLE` and `APP_ROLE_BY_ROLE_KEY`
+translate between the two, and they are the only place the vocabularies
+meet. The catalog calls the last tier `moderator`; the handlers call it
+`tester`.
+
+### Assignment
+
+`role_assignments` is the row that says a user holds a role. A demotion
+revokes the row, it never deletes it, so the history of who held which role
+stays readable.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `user_id` | `UserId` | Owner or admin user ID (primary key). |
-| `promoted_by` | `UserId` | Who promoted the admin (tc_admins only). |
-| `promoted_date` | `datetime` | Promotion time (tc_admins only). |
+| `user_id` | `UserId` | The holder. |
+| `role_key` | `str` | One of the catalog role keys. |
+| `assigned_by_user_id` | `UserId \| None` | Who granted the role. |
+| `assigned_at` | `datetime` | When the role was granted. |
+| `status` | `str` | `active`, `revoked`, or `expired`. |
+| `expires_at` | `datetime \| None` | When the role stops being in force. |
+| `revoked_at` | `datetime \| None` | When the role was revoked. |
+| `revoked_by_user_id` | `UserId \| None` | Who revoked it. |
 
-`RoleDoc` (tc_roles):
-
-| Field | Type | Meaning |
-|---|---|---|
-| `user_id` | `UserId` | Role holder (primary key). |
-| `role` | `RoleName` | `"founder"`, `"admin"`, `"developer"`, or `"tester"` literal; only `developer`/`tester` are stored as custom roles. |
-| `assigned_by` | `UserId` | Admin who assigned the role. |
-| `assigned_at` | `datetime` | Assignment time. |
-
-`RoleRefDoc` (tc_roles): minimal row carrying only `user_id`, used for role
-index/roster lookups.
+An assignment is in force while its status is `active` and its expiry is in
+the future. A partial unique index allows one active assignment per user,
+and another allows at most one active `owner`, so two owners cannot exist
+even briefly.
 
 ### Role hierarchy
 
@@ -338,30 +458,29 @@ founder = 4 > admin = 3 > developer = 2 > tester = 1 > none = 0
 
 ### Effective-role resolution
 
-Resolution order in `get_effective_role`:
-
-1. `tc_owners` match returns `"founder"`.
-2. `tc_admins` match returns `"admin"`.
-3. `tc_roles` custom role returns `"developer"` or `"tester"`.
-4. No role returns `None`.
+`get_effective_role` reads the active assignment of the user and maps its
+role key back to the application vocabulary. A stored key outside the known
+set is ignored and logged as an error, so a hand-edited row cannot grant
+privilege.
 
 - `get_effective_role(user_id: int, *, fresh: bool = False) -> str | None`
-  Resolves the full effective role via `effective_role_cache.get_or_fetch`
-  (L1 60 s, L2 90 s). The `_fetch` reads owner/admin/custom role in
-  parallel with `return_exceptions=True`, calls `throw_if_cancelled`, and
-  re-raises any non-cancellation exception so a degraded "founder"/"admin"
-  result is never cached for a real database error. With `fresh=True` the
-  caches are bypassed and the rows are read directly (the cache is
+  Resolves the role through `effective_role_cache.get_or_fetch`
+  (L1 60 s, L2 90 s). A failed lookup propagates instead of caching a
+  degraded result: a cached "founder" for a real database error would
+  silently bypass authorization until the TTL expired. With `fresh=True`
+  the caches are bypassed and the row is read directly (the cache is
   refreshed with the result): enforcement gates use `fresh=True` so a
   demotion or transfer in another process is never hidden for the cache
   TTL. Executor-versus-target checks go through
   `guards.resolve_and_check()`, which fails closed when either lookup
   fails.
 - `role_meta(user_id: int) -> tuple[str | None, int | None, datetime | None]`
-  `(role, assigned_by, assigned_at)` for profile views. An owner has no
-  metadata (`None`s); an admin reads `promoted_by`/`promoted_date` from
-  `tc_admins`; a custom role reads `assigned_by`/`assigned_at` from
-  `tc_roles`. A missing row still returns the role with `None` metadata.
+  `(role, assigned_by, assigned_at)` for profile views. A missing row
+  still returns `None` metadata.
+- `cache_effective_role(user_id: int, role: str | None) -> None`
+  Publishes an already-resolved role into the cache, so a tier that read
+  the role straight from the database compares against the same value
+  later in the same request.
 
 ### Owner CRUD
 
@@ -376,82 +495,173 @@ Resolution order in `get_effective_role`:
   Enforcement gates (promotion decisions, the founder-only users list) use
   `fresh=True`.
 - `ensure_initial_owner(initial_id: int) -> None`
-  Inserts the founder when `tc_owners` is empty. On an integrity error
-  (another instance won the startup race) it invalidates the owner cache
-  instead of failing.
+  Inserts the founder when the community has no owner. On an integrity
+  error (another instance won the startup race) it invalidates the owner
+  cache instead of failing.
 - `set_owner(user_id: int) -> None`
-  Replaces the owner in one transaction: the insert and the convergence
-  delete commit together, so a crash between them cannot leave one or two
-  owner rows. The transaction takes a PostgreSQL advisory lock, so two
-  concurrent transfers serialise instead of interleaving: without the lock
-  the sequence insert A, insert B, delete != A, delete != B leaves the
-  table with **no** owner row, which would leave the whole federation
-  without a Founder until the next restart. The helper then verifies the
-  single-row invariant loudly, puts the new ID in the owner cache, and
-  calls `effective_role_cache.clear_all()` so no process keeps a stale
-  `"founder"` role after transfer. A failed transfer rolls back, fails
-  closed, and logs operator guidance. Owner reads use a sorted query so a
-  transient two-row state resolves deterministically.
+  Replaces the owner in one transaction: every active assignment of the
+  new owner and every active owner assignment is revoked, and the new
+  owner row is inserted, all inside the same transaction. The transaction
+  takes a PostgreSQL advisory lock, so two concurrent transfers serialise
+  instead of interleaving: without the lock the two transactions could
+  each revoke the other's owner row and leave the community with **no**
+  owner, which would leave the whole federation without a Founder until the
+  next restart. The helper then verifies the single-row invariant loudly,
+  puts the new ID in the owner cache, and calls
+  `effective_role_cache.clear_all()` so no process keeps a stale
+  `"founder"` role after the transfer. A failed transfer rolls back, fails
+  closed, and logs operator guidance.
 
-### Admin CRUD
+### Admin and custom role CRUD
 
-- `is_admin(user_id: int) -> bool`: existence check on `tc_admins`.
+- `is_admin(user_id: int) -> bool`: existence check on an active `admin` assignment.
 - `is_staff(user_id: int, *, fresh: bool = False) -> bool`: `get_effective_role(user_id, fresh=fresh) in ("founder", "admin")`. Keeps the historical fail-open-to-`False` contract: lookup failures log at WARNING and return `False`; cancellation still propagates. Callers that need a retry hint on outage use `get_effective_role` directly (like the appeal-review path and decorators). Enforcement callers (disconnect, group-language write) use `fresh=True` so a demotion is never hidden for the 60 s TTL; display-only callers keep the cached path.
-- `add_admin(user_id: int, promoted_by: int) -> None`: upsert through `ON CONFLICT DO NOTHING`; no-op if already present. Invalidates the target's effective role cache.
-- `remove_admin(user_id: int) -> bool`: delete; returns whether a row was deleted; invalidates the role cache.
-- `all_admins() -> list[AdminDoc]`: all admin rows.
+- `add_admin(user_id: int, promoted_by: int) -> None`: grants the admin role. Invalidates the target's effective role cache.
+- `remove_admin(user_id: int) -> bool`: revokes the admin role; returns whether an assignment was revoked.
+- `all_admins() -> list[AdminDoc]`: all active admin assignments.
 - `admin_count() -> int`: `COUNT(*)`.
-
-### Custom role CRUD
-
-- `set_role(user_id: int, role: str, assigned_by: int) -> None`: upsert `tc_roles` (`user_id`, `role`, `assigned_by`, `assigned_at`); invalidates the RoleDoc role cache.
-- `remove_role(user_id: int) -> bool`: delete the custom role; returns whether a row was deleted; invalidates the cache.
-- `get_role(user_id: int) -> str | None`: reads `tc_roles` only (no owner/admin fallback).
-- `all_by_role(role: str) -> list[RoleRefDoc]`: all users holding a specific custom role (serves the `(role)` index).
+- `set_role(user_id: int, role: str, assigned_by: int) -> None`: grants a developer or tester role. A role outside `VALID_ROLES` raises, so a stored "admin" or "founder" can never be written through this path.
+- `remove_role(user_id: int) -> bool`: revokes the active assignment of the user, whatever role it holds.
+- `get_role(user_id: int) -> str | None`: reads the active assignment only (no owner/admin fallback).
+- `all_by_role(role: str) -> list[RoleRefDoc]`: all users holding a specific role.
 - `role_count(role: str) -> int`: `COUNT(*)` on the role filter.
+- `active_assignments() -> list[RoleDoc]`: every active assignment.
+
+Granting and revoking are one transaction: the revocation and the
+assignment land together, so a user never holds two active roles and the
+database guard sees a single change.
+
+### Permissions
+
+- `has_permission(user_id: int, permission_key: str) -> bool`
+  The single authorization primitive of the schema. It calls the database
+  function `actor_has_permission`, which reads the active assignment and
+  walks down to the permission list. It returns `False` when there is no
+  assignment, when the assignment expired, and when the permission is
+  unknown, so a failure never grants privilege.
+- `permissions_for(user_id: int) -> list[str]`
+  The permission keys the user currently holds.
+- `permission_catalog() -> list[dict[str, object]]`
+  Every permission key with its resource and description.
+- `role_catalog() -> list[dict[str, object]]`
+  Every role key with its display name and priority, highest priority
+  first.
+
+The handlers gate a command on a tier rather than on a permission key.
+The two have to agree, and `tests/test_rbac_catalog.py` pins that: for
+every gated command it names the capability and the tier the handler
+enforces, and the test fails when the seeded grants no longer match the
+tier model. The catalog is the reference the tier model is checked against,
+so a change to one of them has to be a change to both.
 
 **Security notes:** role lookup failures reject the action where
 authorization is enforced (`get_effective_role` propagates,
 `resolve_and_check` fails closed). `is_staff` is the only deliberately
 coerce-to-`False` path and is kept for its historical callers.
 
-## Bans (`bans_db.py`, table `bans`)
+## Moderation decisions (`bans_db/`, tables `moderation_actions`, `moderation_cases`, `moderation_appeals`, `moderation_messages`)
 
-### Row shape: `BanDoc`
+A moderation decision is one row of `moderation_actions`. A ban, a mute, a
+warning, and a kick differ in their `action_type` and their `scope_type`,
+not in their storage.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `ban_id` | `BanId` (str) | Short unique ban identifier (generated by `make_short_id()`, default length 10). |
+| `id` | `int` | Surrogate primary key. |
+| `action_type` | `ActionType` | `ban`, `mute`, `warn`, or `kick`. |
+| `scope_type` | `ScopeType` | `community` for a ban and a mute, `chat` for a warning and a kick. |
+| `target_user_id` | `UserId` | The subject of the decision. |
+| `actor_user_id` | `UserId` | Who took the decision. |
+| `reason` | `str` | The reason. The database refuses an empty one. |
+| `duration_seconds` | `int \| None` | The intended duration; `None` means permanent. |
+| `created_at` | `datetime` | When the decision was taken. |
+| `expires_at` | `datetime \| None` | The absolute expiry; `NULL` means permanent. |
+| `status` | `ActionStatus` | `active`, `completed`, `revoked`, `expired`, or `superseded`. |
+| `external_ref` | `str` | The public reference carried by the appeal deep link: 10 to 32 lowercase alphanumerics, unique, and immutable once written. |
+| `case_id` | `int` | The case the decision belongs to. |
+| `evidence_upload_id` | `int \| None` | The evidence batch the decision cites. |
+| `supersedes_action_id` | `int \| None` | The decision this one replaces. |
+| `action_origin` | `str` | `manual`, `system`, `automated`, or `ai`. |
+| `chat_id` | `int \| None` | The group a chat-scoped decision belongs to. |
+| `origin_chat_id` | `int \| None` | The group the decision was taken in. |
+| `metadata` | `dict` | The annotation of the decision: the review slot, the appeal link, the update counter, and the previous proof reference. |
+
+The facts of a decision are immutable. The database rejects an update that
+changes the target, the actor, the reason, the scope, the expiry, the
+external reference, the case, or the evidence link: a correction is a new
+decision, and the old one keeps its history. The status and the metadata
+are the parts that may change.
+
+A ban and a mute start `active`; a warning and a kick start `completed`,
+because they are one-shot records. A partial unique index allows one
+active ban and one active mute per target, so a re-ban supersedes the
+previous decision instead of duplicating it.
+
+### Cases
+
+`moderation_cases` is the investigation a decision belongs to. A case has
+a subject, a status (`open`, `collecting_evidence`, `evidence_failed`,
+`under_review`, `escalated`, `resolved`, `dismissed`, `cancelled`), an
+opener, an assignee, and a closer. `requires_evidence` tells the decision
+whether a proof is mandatory.
+
+### Appeals and message references
+
+`moderation_appeals` is one appeal against one ban. The composite foreign
+key `(action_id, appellant_user_id)` points at
+`moderation_actions(id, target_user_id)`, so only the banned user can
+appeal, and a trigger refuses an appeal against anything but a ban. A
+partial unique index allows one open appeal per decision and appellant; a
+decided appeal stays in the history and a later appeal is a new row.
+
+`moderation_messages` records the Telegram messages that belong to a
+decision: the log, the review card, the appeal notice. It is a reference
+list, not the evidence archive.
+
+### Row shape: `BanDoc`
+
+The ban helpers join the decision with its messages and appeals, so the
+reader sees one document.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `ban_id` | `BanId` (str) | The public reference (`external_ref`) of the decision. |
 | `banned_user_id` | `UserId` | Target Telegram user ID. |
 | `reason` | `str` | Moderation reason. |
-| `admin_user_id` | `UserId` | Admin who created or last updated the ban. |
+| `admin_user_id` | `UserId` | Who created or last updated the decision. |
 | `proof_message_id` | `int` | Uploaded proof message ID in the proof destination. |
 | `log_message_id` | `int` | Audit log message ID. |
 | `previous_proof_message_id` | `int \| None` | Prior proof ID when an active ban was updated. |
 | `previous_log_message_id` | `int \| None` | Prior log ID when an active ban was updated. |
 | `timestamp` | `datetime` | Initial creation time. |
 | `updated_timestamp` | `datetime \| None` | Last update time. |
-| `until_date` | `datetime \| None` | Reserved for future timed-ban support; currently always `None`. |
-| `duration_str` | `str \| None` | Reserved for future timed-ban support; currently always `None`. |
-| `is_active` | `bool` | Whether the federation ban is currently active. |
+| `until_date` | `datetime \| None` | The expiry of the decision; `None` means permanent. |
+| `duration_str` | `str \| None` | The duration as the moderator wrote it. |
+| `is_active` | `bool` | Whether the ban is currently active. |
+| `status` | `ActionStatus` | The status of the decision. |
 | `update_count` | `int` | Number of updates applied. |
 | `review_message_id` | `int \| None` | Appeal review card message ID. |
 | `review_timestamp` | `datetime \| None` | When the review slot was claimed. |
 | `appeal_log_msg_id` | `int \| None` | Appeal log message ID (presence marks "appeal ever submitted"). |
 | `appeal_submitted_at` | `datetime \| None` | Appeal submission time. |
 | `appeal_link` | `str \| None` | Link to the submitted appeal. |
-| `rejected_by_id` | `int \| None` | Rejector Telegram ID (set by `set_rejected_by`). |
-| `rejected_by_name` | `str \| None` | Rejector display name. |
-| `rejected_at` | `datetime \| None` | Rejection time. |
+| `rejected_by_id` | `int \| None` | Reviewer Telegram ID. |
+| `rejected_at` | `datetime \| None` | Decision time. |
+| `case_id` | `int` | The case the decision belongs to. |
+| `evidence_upload_id` | `int \| None` | The evidence batch the decision cites. |
+| `action_origin` | `str` | How the decision was reached. |
+| `scope_type` | `ScopeType` | `community` for a ban. |
+| `origin_chat_id` | `int \| None` | The group the command came from. |
 
 ### Retrieval
 
+- `action_by_ref(ban_id: str) -> dict[str, Any] | None`
+  The raw decision row behind a public reference.
 - `get_active_ban(user_id: int) -> BanDoc | None`
-  The currently active ban for a user: filter `banned_user_id = ? AND
-  is_active`, sort `(timestamp desc, ban_id desc)`. Served by the compound
-  index.
+  The currently active ban for a user. A partial unique index keeps one
+  active ban per target, so the read is a single row.
 - `get_ban(ban_id: str) -> BanDoc | None`
-  Any ban record by its unique `ban_id`.
+  Any ban record by its public reference.
 
 ### Mutations
 
@@ -460,53 +670,74 @@ coerce-to-`False` path and is kept for its historical callers.
   exactly what a later read would return. If `ban_id` is `None`, one is
   generated. A violation of the one-active-ban-per-user constraint is
   treated as a lost race: the existing record is returned and the
-  moderation continues. A violation of the `ban_id` unique constraint on
-  a generated id is retried once with a fresh id, because the caller
-  never chose that id. The same violation on an id the caller supplied is
-  never swallowed, because the caller reuses the id for the appeal link
-  and the log patch.
+  moderation continues. A violation of the `external_ref` unique
+  constraint on a generated id is retried once with a fresh id, because
+  the caller never chose that id. The same violation on an id the caller
+  supplied is never swallowed, because the caller reuses the id for the
+  appeal link and the log patch.
 - `update_ban(ban_id: str, reason: str, admin_id: int, new_proof_id: int, new_log_id: int = 0, old_proof_id: int = 0, old_log_id: int = 0, *, until_date: datetime | None = None, duration_str: str | None = None) -> BanDoc | None`
-  One `UPDATE ... RETURNING`: updates reason, admin, proof/log IDs (moving
-  the old ones to `previous_*`), timestamps and `until_date`/`duration_str`,
-  and increments `update_count`.
+  One `UPDATE ... RETURNING`: updates reason, actor, proof/log IDs (moving
+  the old ones to `previous_*`), timestamps and the expiry, and increments
+  `update_count`.
 - `set_log_message_id(ban_id: str, log_msg_id: int) -> None`
   Patches only the audit log message ID (used when the ban log is edited).
 - `deactivate_all_active_bans(user_id: int) -> int`
-  Deactivates every active ban for a user in one statement; returns the
-  count deactivated. Used by unban and appeal-approval flows to clear any
-  duplicate active records.
+  Revokes every active ban for a user in one statement; returns the
+  count. Used by unban and appeal-approval flows to clear any duplicate
+  active records.
 - `deactivate_extra_active_bans(user_id: int, keep_ban_id: str) -> int`
-  Deactivates all active bans except the canonical `keep_ban_id`
-  (ban-update cleanup); returns the count deactivated.
+  Revokes all active bans except the canonical `keep_ban_id`
+  (ban-update cleanup); returns the count.
+- `submit_appeal(ban_id: str, appellant_user_id: int, appeal_text: str, review_message_id: int) -> bool`
+  Records the appeal and claims the review slot in one transaction. The
+  claim is a conditional update on the decision, so the database decides
+  the winner: two concurrent submissions cannot both write a row, and the
+  loser leaves the decision untouched. The appeal row and the claim have
+  to land together, because a claim without a row would leave a review
+  card that no decision can close, and a row without a claim would leave a
+  pending appeal that blocks every later appeal for the same decision.
 - `set_review_if_absent(ban_id: str, msg_id: int) -> bool`
-  Atomic claim of the pending-review slot: the statement requires
-  `review_message_id IS NULL`, so two concurrent appeal submissions cannot
-  both win. Returns whether this submit claimed the slot; the loser
-  discards its orphan review card.
+  The review slot claim on its own, for a flow that already filed the
+  appeal. The condition is part of the `UPDATE`, so the database decides
+  the winner.
+- `claim_appeal_decision(ban_id: str, review_msg_id: int) -> bool`
+  Consumes the review slot for a reviewer, so only one reviewer decides
+  the appeal. A claim that ends without a decision has to hand the slot
+  back with `restore_review`.
+- `restore_review(ban_id: str, review_msg_id: int, review_timestamp: datetime | None = None) -> bool`
+  Hands the slot back after a decision was not reached. The restore is
+  conditional on an active decision whose slot is free and that carries no
+  decided appeal, so it cannot resurrect a review that another reviewer
+  already closed.
+- `accept_appeal(ban_id: str, reviewer_id: int, note: str = "") -> bool`
+  Closes the open appeal as accepted and names the reviewer. Returns
+  `False` when no appeal was pending.
+- `set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None`
+  Closes the open appeal as rejected and names the reviewer, so the audit
+  trail survives log-channel loss.
+- `release_stale_review(ban_id: str) -> bool`
+  Withdraws the open appeal of a decision and frees its review slot in one
+  transaction. A review card nobody answered for a long time is stale, and
+  the withdrawn appeal must not keep occupying the decision.
 - `clear_review(ban_id: str) -> None`
   Clears the review slot so a rejected user can submit a new appeal.
-- `set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None`
-  Persists rejector identity and `rejected_at` so the audit trail survives
-  log-channel loss.
 - `set_appeal_log_msg(ban_id: str, msg_id: int, submitted_at: datetime | None = None, appeal_link: str = "") -> None`
-  Stores appeal metadata; `submitted_at` defaults to now.
+  Stores the appeal metadata and the message reference in one transaction.
 
 ### Statistics and history
 
 - `active_ban_count() -> int`: `COUNT(*)` over the active rows.
 - `active_bans_page(skip: int, limit: int) -> list[BanDoc]`
-  One server-side page of active bans, newest first (`(is_active,
-  timestamp desc, ban_id desc)` index). `limit` clamped to at least 1.
+  One server-side page of active bans, newest first. `limit` clamped to at least 1.
 - `active_bans_for_users(user_ids: list[int]) -> list[BanDoc]`
   Active bans for a set of IDs through `IN (...)`, newest first; backs
   name-search results. Returns `[]` for an empty input.
 - `active_ban_user_ids() -> list[int]`
-  Only the `banned_user_id`s of all active bans (projection-only, fastest
+  Only the target IDs of all active bans (projection-only, fastest
   path), newest first.
 - `user_appealable_bans(user_id: int, *, skip: int = 0, limit: int | None = None) -> list[BanDoc]`
-  The user's bans that ever had an appeal (`appeal_log_msg_id` present),
-  newest first; served by the partial index. `limit=None` returns the full
-  list.
+  The user's bans that ever had an appeal, newest first. `limit=None`
+  returns the full list.
 - `user_bans(user_id: int, *, skip: int = 0, limit: int | None = None) -> list[BanDoc]`
   Every ban (active and inactive) for a user, newest first.
 - `user_ban_count(user_id: int) -> int`: total bans ever issued against the user.
@@ -516,37 +747,43 @@ coerce-to-`False` path and is kept for its historical callers.
 `create_ban` absorbs only the one-active-ban race; every other integrity
 error propagates so moderation callers report the real failure.
 
-**Uniqueness:** a partial unique index on `(banned_user_id)` where
-`is_active` is true keeps one active ban per user, so two moderators
-reaching the warn threshold at the same moment cannot store two records
-that disagree about which ban is real. The database enforces the
-invariant; `create_ban` treats a collision as a lost race and reuses the
-winning record instead of failing the moderation action.
+**Uniqueness:** the partial unique index on the target of an active ban
+keeps one active ban per user, so two moderators reaching the warn
+threshold at the same moment cannot store two records that disagree about
+which ban is real. The database enforces the invariant; `create_ban`
+treats a collision as a lost race and reuses the winning record instead of
+failing the moderation action.
 
-## Groups (`groups_db.py`, tables `federated_groups`, `pending_joins`)
+## Groups (`groups_db.py`, tables `connected_chats`, `telegram_chats`, `chat_settings`, `join_requests`)
+
+Four tables, four jobs: `telegram_chats` holds the Telegram identity of a
+chat, `connected_chats` holds the connection to the community,
+`chat_settings` holds the configuration of a connected group, and
+`join_requests` holds the pending decision.
 
 ### Row shapes
 
-`GroupDoc` (federated_groups):
+`GroupDoc` (a connected group with its identity and its configuration):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `chat_id` | `GroupId` | Telegram group chat ID (primary key). |
-| `title` | `str` | Current group title. |
+| `chat_id` | `GroupId` | Telegram group chat ID (primary key of the registry). |
+| `title` | `str` | Current group title, from `telegram_chats`. |
 | `added_by` | `UserId` | Who connected the group. |
 | `added_date` | `datetime` | First connect date, preserved across re-adds and title refreshes. |
 | `is_active` | `bool` | Connection state; disconnect marks it `False` instead of deleting. |
-| `locale` | `str \| None` | Optional group-wide render locale chosen via `/language`. |
+| `locale` | `str \| None` | The group-wide render locale chosen via `/language`, from `chat_settings`. |
 
-`PendingGroupDoc` (pending_joins):
+`PendingGroupDoc` (`join_requests`):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `chat_id` | `ChatId` | Awaiting-approval chat ID (primary key, one pending per chat). |
-| `title` | `str` | Group title at request time. |
-| `owner_id` | `UserId` | Group owner requesting approval. |
-| `message_id` | `int` | The approval prompt message ID. |
+| `chat_id` | `ChatId` | The chat that asked to be connected. |
+| `owner_id` | `UserId` | The user who asked. |
+| `message_id` | `int` | The prompt message ID. |
 | `added_date` | `datetime` | Request time. |
+| `request_id` | `int` | The request row ID. |
+| `status` | `RequestStatus` | `pending`, `approved`, `rejected`, or `cancelled`. |
 
 ### Queries and mutations
 
@@ -570,41 +807,59 @@ winning record instead of failing the moderation action.
 - `deactivate_group(chat_id: int) -> bool`
   Sets `is_active = False`; returns `False` when the row does not exist.
   Puts `False` in `connected_cache` and invalidates the active-groups list
-  cache.
+  cache. The row stays: the moderation history refers to the group, so a
+  disconnect must not remove the identity.
 - `active_groups() -> list[GroupDoc]`
   All active groups, `active_groups_cache.get_or_fetch` (L1 30 s, L2 45 s,
   single entry keyed `__all__`).
 - `active_group_count() -> int`
   `COUNT(*)` over the active rows.
+- `with_primary_groups(groups, primary_ids, *extra_ids) -> list[dict[str, Any]]`
+  Appends the primary groups and any extra chat that is missing from the
+  list. Single owner for the "connected plus primaries" merge every
+  community-wide fan-out performs, so the dedup key and the synthesized
+  entry shape cannot drift between the ban, mute, warn, unban, and
+  appeal-approve paths.
 - `migrate_group(old_chat_id: int, new_chat_id: int) -> bool`
-  Chat-migration repoint. Updates `federated_groups` and `pending_joins`
-  in parallel (`return_exceptions=True`), logging and skipping any table
-  that failed while still processing the other. Returns `True` if any
-  record moved. When the target chat already has a row the primary key
-  rejects the repoint, so the stale old row is merged into the surviving
-  row in one transaction (the old row's group locale carries over when the
-  survivor has none) and the old row is dropped. Invalidates caches:
-  `connected_cache.put(old_chat_id, False)`, `connected_cache.put(new_chat_id,
-  ...)` only when the federated_groups row actually moved (a pending-only
-  migration must not poison `is_connected`), and
-  `active_groups_cache.invalidate(__all__)` when the group row moved. The
-  cached value mirrors the row that survived: the target row may be an
-  inactive one, and caching "connected" unconditionally would report a
-  disconnected group as connected for the whole cache TTL and pull it
-  into the federation fan-outs. Cancellation propagates.
+  Chat-migration repoint. Telegram retires the id of a basic group and
+  hands the bot the id of the supergroup that replaced it, so the
+  identity, the configuration, the registry, the membership, the open
+  request, and the decisions of that group have to follow the new id. The
+  move runs as one database transaction through the
+  `repoint_chat_records` function: the decisions point at the connected
+  group, so the new registry row has to exist before the decisions move,
+  and a half-moved group would be worse than one that did not move at
+  all. The old chat stays known but inactive, so the history that refers
+  to it stays readable. A row that already exists for the new chat keeps
+  its own connection state, because that row records a decision the
+  operator took about that chat. Returns `True` when the group was
+  connected and has been moved. Cancellation propagates.
 - `add_pending(chat_id: int, title: str, owner_id: int, message_id: int) -> None`
-  Upserts a pending join request (primary key `chat_id`, one pending per
-  chat).
+  Records the join request of a chat. The request facts are immutable, so
+  an open request is kept as it is: a second request for the same chat
+  reuses the open one instead of rewriting who asked for it and when.
 - `get_pending(chat_id: int) -> PendingGroupDoc | None`
-  Reads one pending request.
+  Reads one open request.
 - `remove_pending(chat_id: int) -> None`
-  Deletes the pending request after approval or rejection.
+  Closes the join request of a chat after approval or rejection.
+- `resolve_pending(chat_id: int, status: str, resolved_by: int, note: str | None = None) -> bool`
+  Decides the join request of a chat. The update is conditional on the
+  request still being pending, so two admins pressing the button at the
+  same moment produce one decision.
 
-### Group locale
+### Group configuration
 
-`federated_groups.locale` rides on the connected group's row; there is no
-separate preference table, and only connected groups hold settings. Reads
-filter on the indexed `chat_id`.
+`chat_settings` is the only place the configuration of a group lives. The
+registry holds the connection, the configuration holds the settings. A
+trigger creates the settings row when a chat is connected, so a connected
+group never lacks a place for its configuration.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `chat_id` | `GroupId` | The group (primary key, foreign key to the chat registry). |
+| `locale` | `str \| None` | The group-wide render locale. |
+| `timezone` | `str \| None` | The group timezone, as an IANA name. |
+| `settings` | `dict` | The flexible group settings. |
 
 - `get_group_locale(chat_id: int) -> str | None`
   Reads the stored group locale for the shared-audience resolution path
@@ -618,33 +873,45 @@ filter on the indexed `chat_id`.
   linger for the groups-list TTL). Validity against the translation
   catalog is enforced by the caller and at resolution time.
 
-**Error behavior:** every access uses `db_call()`. `migrate_group` never
-aborts the whole migration because one table failed: it logs per-table
-failures, skips that side, and reports whether anything moved.
+The `effective_chat_settings` view resolves the effective configuration of
+an active group: the group locale, then the community default; the group
+timezone, then the community default; and the global settings merged with
+the group settings. The merge is a shallow merge at the top level of the
+object, so a nested object needs an explicit rule at the application level.
 
-## Warnings (`warns_db.py`, tables `warns`, `warn_counts`)
+**Error behavior:** every access uses `db_call()`.
+
+## Warnings (`warns_db.py`, `moderation_actions` with `action_type = 'warn'`)
+
+A warning is a chat-scoped decision: it belongs to the group it was
+issued in and it never reaches another group.
 
 ### Row shapes
 
-`WarnDoc` (warns, one row per warning event):
+`WarnDoc` (one warning decision):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `id` | `int` | Surrogate primary key. |
 | `user_id` | `UserId` | Warned user. |
 | `reason` | `str` | Warning reason. |
 | `admin_id` | `UserId` | Admin who warned. |
 | `chat_id` | `ChatId` | Group where the warning was issued. |
 | `timestamp` | `datetime` | Warning time. |
 
-`WarnCountDoc` (warn_counts, one row per user/chat pair):
+`WarnCountDoc` (the `warn_counts` view, one row per user/chat pair):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `user_id` | `UserId` | Warned user (primary key with `chat_id`). |
-| `chat_id` | `ChatId` | Group (primary key with `user_id`). |
+| `user_id` | `UserId` | Warned user. |
+| `chat_id` | `ChatId` | Group. |
 | `count` | `int` | Running warning total for the pair. |
-| `updated_at` | `datetime` | Last counter update; drives warn-expiry pruning. |
+| `updated_at` | `datetime` | The time of the newest warning. |
+
+`warn_counts` is a view over the warning decisions, not a stored counter:
+it counts the warnings that are still in force, which is exactly what the
+auto-ban threshold needs. A counter that was stored separately could drift
+from the history it counts, and the drift would delay the ban a warning
+earned.
 
 The per-group threshold is `cfg.warn_limit` (env `WARN_LIMIT`, default 3,
 minimum 1). A second federation-wide threshold `cfg.fed_warn_limit` (env
@@ -655,130 +922,95 @@ minimum 1). A second federation-wide threshold `cfg.fed_warn_limit` (env
 ### Mutations
 
 - `add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int`
-  The history row and the counter land in one transaction
-  (`run_transaction`). They must agree: the counter is what the auto-ban
-  threshold reads, so a history row without its counter (or the other way
-  round) would silently delay the ban that the warning earned. The counter
-  is written with `INSERT ... ON CONFLICT DO UPDATE SET count = count + 1
-  RETURNING count`, so two concurrent warnings in the same group both
-  count. When the counter row is missing, the insert takes its value from
-  the warning history instead of starting at one: a counter that ignored
-  the rows already in the history would under-count and delay the
-  threshold. Returns the new warn count. A statement that returns no
-  counter row raises and rolls the transaction back rather than committing
-  a warning whose count is missing.
+  Writes the warning decision and returns the new warning count for the
+  pair. The decision and its case land in one transaction. The count is
+  derived from the history, so it cannot disagree with it.
 - `clear_warns(user_id: int, chat_id: int) -> int`
-  Deletes warn history plus the counter for one group; returns the history
-  deleted count. Both deletes share one transaction. They write the same
-  fact from two sides, so a failure between them would leave a counter
-  without its history, and a surviving counter keeps a count for warnings
-  that were cleared. Raises the delete failure instead of returning 0 (a
-  0 return means "nothing to clear"; reporting an outage as an empty state
-  would mislead the moderator).
+  Revokes the active warnings of one group and returns how many were
+  revoked. The history stays: the decision is revoked, never deleted.
 - `clear_all_warns(user_id: int) -> int`
-  Deletes warn history plus every counter across all groups (used on
-  federation auto-ban so a user starts with a clean slate). Raises like
-  `clear_warns`; callers inside `gather` inspect the captured exception.
+  Revokes every active warning across all groups (used on the federation
+  auto-ban so a user starts with a clean slate).
+- `clear_warns_for_chats(user_id: int, chat_ids: Sequence[int]) -> int`
+  Revokes the active warnings of the given groups in one pass.
+- `remove_last_warn(user_id: int, chat_id: int) -> bool`
+  Revokes the most recent warning of a group and returns `True` only when
+  a warning was actually revoked. The revocation is conditional on the
+  warning still being in force, so two callers that read the same warning
+  do not both revoke it.
 
 ### Queries
 
 - `warn_count(user_id: int, chat_id: int) -> int`
-  Current counter for a user in a group, via `_sync_warn_count`: reads the
-  counter row, or atomically backfills it from the warn history when
-  missing (`INSERT ... ON CONFLICT DO UPDATE`) so concurrent callers cannot
-  double-backfill.
+  The active warning count of a user in a group.
 - `get_warns(user_id: int, chat_id: int, *, skip: int = 0, limit: int | None = None) -> list[WarnDoc]`
   Full warn list for a user in a group, oldest first (timestamp ascending).
   `limit=None` returns everything.
-- `remove_last_warn(user_id: int, chat_id: int) -> bool`
-  Deletes the most recent warn row and decrements the counter in one
-  transaction. The decrement only runs when the delete removed a row, so
-  two callers that read the same warning do not both decrement. A failed
-  delete raises and leaves the counter untouched; a missing counter row is
-  rebuilt from history (`_recount_and_store`). Returns `True` only when a
-  warn was actually removed. Cancellation propagates.
 - `user_total_warns(user_id: int) -> int`
   Total warn rows recorded against the user across all groups.
 - `user_warn_groups(user_id: int) -> list[tuple[int, int]]`
   `[(chat_id, count), ...]` for every group where the user has warns,
-  sorted by `updated_at` descending.
+  sorted by the newest warning descending.
+- `warn_count_doc(user_id: int, chat_id: int) -> WarnCountDoc | None`
+  The counter row of a user/chat pair.
 - `federation_warn_count(user_id: int) -> int`
-  Total active warn count across all federation chats: a server-side
-  `SUM(count)` over the rows where `count > 0`. Returns 0 when there is
-  nothing. Used to evaluate the `FED_WARN_LIMIT` threshold.
-- `migrate_records(old_chat_id: int, new_chat_id: int) -> bool`
-  Chat-migration repoint. Warn history moves with one update; counter rows
-  merge by summation (per user, added into the supergroup counter through
-  an upsert) so a supergroup that already holds warns keeps the combined
-  total instead of losing one side to the per-pair primary key. Each old
-  counter is consumed with an atomic take (removed before its count lands
-  on the new pair), so a crash plus retry can only under-count, never
-  double-count into a false auto-ban. Each stage logs and skips on
-  failure. Returns `True` if any record moved. Called by
-  `greeting.on_chat_migration` alongside `groups_db.migrate_group` (plus
-  the kick/mute history repoints) so warning history and thresholds survive
-  a basic-group to supergroup migration.
+  Total active warn count across all federation chats. Used to evaluate
+  the `FED_WARN_LIMIT` threshold.
 
-**Error behavior:** warn deletions raise when the history delete fails
-(empty-state misreporting is a correctness hazard); counter-delete failures
-are repaired (recount for single-group clears, bounded retry for
-federation-wide clears) and stay non-fatal. Counter backfill is atomic so
-concurrent first-reads cannot double-count.
+**Error behavior:** warn revocations raise when the write fails
+(empty-state misreporting is a correctness hazard). Counter repairs recount
+the history and store the absolute count, so a repair that read the history
+in one statement and wrote the count in another could overwrite the
+increment of a warning that landed in between.
 
-**Counter repairs:** a repair recounts the history and stores the absolute
-count, so it runs in one transaction that locks the counter row before it
-counts. A repair that read the history in one statement and wrote the
-absolute count in another could overwrite the increment of a warning that
-landed in between: the counter would then sit one below the history and
-the auto-ban threshold would fire one warning late.
+## Kicks (`kicks_db.py`, `moderation_actions` with `action_type = 'kick'`)
 
-## Kicks (`kicks_db.py`, table `kicks`)
+A kick is a chat-scoped decision against one group. It is never a
+federation-wide action.
 
 ### Row shape: `KickDoc`
 
 | Field | Type | Meaning |
 |---|---|---|
-| `id` | `int` | Surrogate primary key. |
 | `user_id` | `UserId` | Kicked user. |
 | `chat_id` | `ChatId` | Group where the kick happened. |
 | `reason` | `str` | Kick reason. |
 | `admin_id` | `UserId` | Admin who kicked. |
 | `timestamp` | `datetime` | Kick time. |
 
-Kicks are an append-only audit trail; records are never deleted.
-
 - `log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> None`
-  Inserts one kick event.
+  Writes one kick decision.
 - `user_kicks(user_id: int, *, skip: int = 0, limit: int | None = None) -> list[KickDoc]`
   Every kick for a user, newest first. `limit=None` returns the full list.
 - `user_kick_count(user_id: int) -> int`
   Total kicks ever logged against the user.
 
-All operations route through `db_call()`.
+## Mutes (`mutes_db.py`, `moderation_actions` with `action_type = 'mute'`)
 
-## Mutes (`mutes_db.py`, tables `mutes`, `active_mutes`)
+A mute is a community-scoped decision: it applies to every active group of
+the community.
 
 ### Row shapes
 
-`MuteDoc` (mutes, one row per mute event):
+`MuteDoc` (one mute decision):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `id` | `int` | Surrogate primary key. |
 | `user_id` | `UserId` | Muted user. |
-| `chat_id` | `ChatId` | Group where the mute happened. |
+| `chat_id` | `ChatId \| None` | Always `None`: a mute is community-scoped. |
 | `reason` | `str` | Mute reason. |
 | `admin_id` | `UserId` | Admin who muted. |
 | `timestamp` | `datetime` | Mute time. |
 | `duration_secs` | `int \| None` | Set for timed mutes, `NULL` for permanent mutes. |
 
-`ActiveMuteDoc` (active_mutes, one row per currently muted user):
+`ActiveMuteDoc` (the `active_mutes` view, one row per currently muted
+user):
 
 | Field | Type | Meaning |
 |---|---|---|
 | `user_id` | `UserId` | Muted user (primary key). |
 | `until_date` | `datetime \| None` | `NULL` for a permanent mute, a UTC expiry datetime for a timed mute. |
-| `timestamp` | `datetime` | When the restriction was recorded. |
+| `timestamp` | `datetime` | When the decision was taken. |
 
 The live-state store powers two re-application paths: `greeting._handle_member`
 calls `get_active_mute` on every join event and re-restricts a still-muted
@@ -787,24 +1019,19 @@ out `restrict_chat_member` for every active mute when a new group connects.
 
 ### Mutations
 
-- `log_mute(user_id: int, chat_id: int, reason: str, admin_id: int, *, duration_secs: int | None = None) -> None`
-  Appends one audit event; `duration_secs` is stored only for timed mutes.
-- `set_active_mute(user_id: int, *, until: datetime | None = None) -> None`
-  Upserts the active-mute row. `until=None` creates a permanent mute; timed
-  mutes pass the UTC expiry matching the `until_date` sent to
-  `restrict_chat_member`. Called by the mute executor before the restrict
-  fan-out (fail-closed: no group is touched when the record cannot
-  persist).
+- `record_mute(user_id: int, reason: str, admin_id: int, *, until_date: datetime | None = None, duration_str: str | None = None) -> int`
+  Writes the community-scoped mute decision and returns its row ID. The
+  decision and its case land in one transaction. A violation of the
+  one-active-mute-per-user constraint is treated as a lost race: the
+  existing decision is returned and the mute proceeds.
 - `clear_active_mute(user_id: int) -> None`
-  Deletes the row on unmute.
+  Revokes the active mute of a user.
 
 ### Queries
 
 - `get_active_mute(user_id: int) -> ActiveMuteDoc | None`
   The user's active mute, or `None` when none exists or the timed mute has
-  expired. Both permanent (`until_date IS NULL`) and still-valid timed
-  mutes match the shared `_not_expired_clause` (`until_date IS NULL OR
-  until_date > now`).
+  expired.
 - `active_mute_docs() -> list[ActiveMuteDoc]`
   Every currently active mute, used for group-connect replay. Expired
   timed mutes are excluded at query time.
@@ -813,11 +1040,8 @@ out `restrict_chat_member` for every active mute when a new group connects.
   full list.
 - `user_mute_count(user_id: int) -> int`
   Total mute audit records for a user.
-
-PostgreSQL has no TTL index, so expired timed-mute rows are pruned by the
-daily `expire_stale_records` job (see
-[`Scheduler`](#scheduler-schedulerrpy)). The query-time filter stays in
-place, so an expired row is never reported even before the sweep runs.
+- `migrate_records(old_chat_id: int, new_chat_id: int) -> bool`
+  Chat-migration repoint for the chat-scoped records of a group.
 
 ## Promotion requests (`queues_db.py`, table `promotion_requests`)
 
@@ -826,14 +1050,16 @@ place, so an expired row is never reported even before the sweep runs.
 | Field | Type | Meaning |
 |---|---|---|
 | `request_id` | `str` | Short unique request ID (generated by `make_short_id()`, length 10). |
-| `target_id` | `UserId` | The user requesting promotion. |
+| `target_id` | `UserId` | The user asking for the promotion. |
 | `username` | `str \| None` | Target username at request time. |
 | `first_name` | `str` | Target display name at request time. |
-| `promoted_by` | `UserId` | Admin who initiated the request. |
-| `status` | `RequestStatus` | `"pending"`, `"approved"`, or `"rejected"` literal. |
+| `requested_role_key` | `str` | The catalog role the request asks for. |
+| `promoted_by` | `UserId` | Who initiated the request. |
+| `status` | `RequestStatus` | `pending`, `approved`, `rejected`, or `cancelled`. |
 | `requested_date` | `datetime` | When the request was queued. |
 | `resolved_date` | `datetime \| None` | When it was resolved. |
 | `resolved_by` | `UserId \| None` | Who resolved it. |
+| `decision_note` | `str \| None` | The note of the decision. |
 
 ### Helpers
 
@@ -867,8 +1093,10 @@ place, so an expired row is never reported even before the sweep runs.
 |---|---|---|
 | `user_id` | `UserId` | User ID (primary key, one preference row per user). |
 | `locale` | `str \| None` | Stored locale code (verbatim; validity enforced by the caller and at resolution time). |
+| `timezone` | `str \| None` | The personal timezone, as an IANA name. |
+| `preferences` | `dict` | The flexible personal preferences. |
 
-Preference-only rows are kept out of `member_cache` on purpose, so they
+Preference-only rows are kept out of `telegram_users` on purpose, so they
 never inflate cached-user counts or appear in user listings.
 
 ### Helpers
@@ -882,6 +1110,10 @@ never inflate cached-user counts or appear in user listings.
   Upserts the `{user_id, locale}` row, or deletes the row entirely when
   `locale is None` so the table holds only users with an explicit
   preference. Pops the L1 entry on write.
+- `get_user_settings(user_id: int) -> UserSettingsDoc | None`
+  The whole preference row.
+- `set_user_timezone(user_id: int, timezone: str | None) -> None`
+  Upserts the personal timezone.
 
 ## Caching (`cache/`, `redis_client.py`)
 
@@ -1045,8 +1277,8 @@ which is host-dependent, so the daily expiry would fire at a different
 local midnight on every machine.
 
 An unchanged schedule keeps its persisted fire time. Re-adding a job
-through `add_job(replace_existing=True)` rewrites `next_run_time` from the
-current clock, which would reset the daily cadence on every restart and
+through `add_job(replace_existing=True)` rewrites `next_run_time` from
+the current clock, which would reset the daily cadence on every restart and
 stop the job from ever firing on a bot that restarts more often than the
 interval. The stored job is therefore left untouched when its interval and
 arguments still match the desired configuration; only a changed
@@ -1057,8 +1289,9 @@ Recurring jobs:
 
 | Job ID | Trigger | Purpose |
 |---|---|---|
-| `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: deletes `warn_counts` rows older than the cutoff from `updated_at` and `warns` rows from `timestamp` in one transaction. Both must be pruned together: pruning only the counters lets the counter backfill rebuild them from the surviving history, and pruning only the history leaves a counter that counts a warning nobody can see. The transaction carries a 60 s budget of its own, because a bulk delete over a large history can run long. Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
-| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes the expired timed mutes from `active_mutes` and the stale profiles from `member_cache`. PostgreSQL has no TTL index, so this job replaces the TTL pruning the previous deployment relied on. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. |
+| `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: expires the warning decisions whose expiry has passed. The expiry is read at query time by the `warn_counts` view, so the sweep only makes the stored state match what the view already reports. Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
+| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: expires the timed mutes that have passed their expiry and sweeps the stale runtime state. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. |
+
 | `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal runs against the `postgres` store after the scheduler started (a removal issued before `start()` only searches the pending-job list and would leave the persisted row firing). `_cleanup_old_records()` stays importable as a no-op shim so a persisted record that still points at it can deserialize without `AttributeError`. |
 
 | `tcbot.enforcement_sync` (retired) | removed on every startup | The enforcement sweep that the `/tcsync` command drove. The command and the sweep were removed, so the schedule is removed on every startup and can no longer fire. |
@@ -1066,65 +1299,52 @@ Recurring jobs:
 Persistent per-ban unban jobs: there are NONE in the current code. The
 scheduler registers only the periodic jobs above (plus the legacy
 removal). There is no `DateTrigger` usage and no per-ban unban/untimed job
-API in `scheduler.py`; the module docstring's mention of "timed-ban"
-support refers to reserved `BanDoc.until_date`/`duration_str` fields that
-are always `None` today.
+API in `scheduler.py`.
 
 Scheduler error behavior: a background-task crash sets `_sched_error`,
 unblocks `start()` (so it never hangs forever), and `start()` re-raises as
-`RuntimeError`. `expire_old_warns` logs per-table delete failures, and a
-partial run (one table failed) raises a job failure after the error log
-instead of reporting success, so the scheduler and the serverless cron
-endpoint surface the incomplete expiry (a cancelled expiry propagates via
-`throw_if_cancelled` rather than reporting success). Removing a stale
-schedule whose removal fails for a reason other than not present logs at
-warning level, so a disabled schedule that keeps firing is visible in the
-logs.
+`RuntimeError`. Removing a stale schedule whose removal fails for a reason
+other than not present logs at warning level, so a disabled schedule that
+keeps firing is visible in the logs.
 
 ## Indexes
 
-The indexes live in `base.py` and are created by the Alembic migration, so
+The indexes live in `base/` and are created by the Alembic migration, so
 they exist before the first handler query reaches the database.
 
 | Table | Index | Purpose |
 |---|---|---|
-| `bans` | `(banned_user_id, is_active, timestamp desc, ban_id desc)` | `get_active_ban()` filter + sort. |
-| `bans` | unique `(ban_id)` | Data integrity. |
-| `bans` | `(banned_user_id, appeal_log_msg_id)` partial on `appeal_log_msg_id IS NOT NULL` | `user_appeal_count()` presence filter. |
-| `bans` | unique `(banned_user_id)` partial on `is_active` | One active ban per user. The database enforces the invariant that two moderators reaching the warn threshold at the same moment cannot store two records. |
-| `bans` | `(is_active, banned_user_id)` | Covering index for the `active_ban_user_ids()` lookup over the active slice. |
-| `bans` | `(is_active, timestamp desc, ban_id desc)` | `active_ban_count()` / `active_bans_page()` filter + sort. |
-| `bans` | `(banned_user_id, timestamp desc, ban_id desc)` | `/check` full ban history for a user. |
-| `tc_owners` | primary key `(user_id)` | One owner row per ID. |
-| `tc_admins` | primary key `(user_id)` | One admin row per ID. |
-| `tc_roles` | primary key `(user_id)` | One custom role per user. |
-| `tc_roles` | `(role)` | `all_by_role()` roster filter. |
-| `federated_groups` | primary key `(chat_id)` | One row per chat. |
-| `federated_groups` | `(is_active)` | Active-group listing / count. |
-| `pending_joins` | primary key `(chat_id)` | One pending request per chat. |
-| `member_cache` | primary key `(user_id)` | One profile per user. |
-| `member_cache` | `(username_lower, user_id)` with `text_pattern_ops` | Name search: the case-sensitive prefix query on the lowercase mirror. |
-| `member_cache` | `(first_name_lower, user_id)` with `text_pattern_ops` | Name search: the case-sensitive prefix query on the lowercase mirror. |
-| `member_cache` | `(username_lower, user_id)` default opclass | The paged users list sort on `username_lower`. A pattern opclass only provides the pattern comparison operators, so it cannot serve an `ORDER BY`. |
-| `member_cache` | `(first_name_lower, user_id)` default opclass | The paged users list sort on `first_name_lower`, the default sort. |
-| `member_cache` | `(last_updated desc, user_id)` | `all_users_page()` sort on the recency key. |
+| `moderation_actions` | unique `(external_ref)` | The public reference carried by the appeal deep link. |
+| `moderation_actions` | unique `(target_user_id)` partial on `action_type = 'ban' AND status = 'active'` | One active ban per target. |
+| `moderation_actions` | unique `(target_user_id)` partial on `action_type = 'mute' AND status = 'active'` | One active mute per target. |
+| `moderation_actions` | `(target_user_id, created_at desc)` | The per-user decision history. |
+| `moderation_actions` | `(action_type, status)` | The active-ban and active-mute filters. |
+| `moderation_actions` | `(actor_user_id)`, `(case_id)`, `(chat_id)`, `(origin_chat_id)`, `(evidence_upload_id)`, `(revoked_by_user_id)`, `(status)` | The foreign-key and filter columns of the decisions. |
+| `moderation_appeals` | `(action_id)`, `(status)`, `(reviewed_by_user_id)` | The appeal filters. |
+| `moderation_appeals` | unique `(action_id, appellant_user_id)` partial on `status = 'pending'` | One open appeal per decision and appellant. |
+| `moderation_appeals` | unique `(action_id, appellant_user_id)` | The composite foreign key target that enforces "only the banned user may appeal". |
+| `moderation_messages` | `(action_id)` | The message references of a decision. |
+| `moderation_cases` | `(subject_user_id)`, `(status)` | The case filters. |
+| `role_assignments` | unique `(user_id)` partial on `status = 'active'` | One active role per user. |
+| `role_assignments` | unique `(role_key)` partial on `status = 'active' AND role_key = 'owner'` | At most one active owner. |
+| `role_assignments` | `(user_id)`, `(role_key)`, `(status)`, `(expires_at)` | The role filters and the expiry sweep. |
+| `role_permissions` | `(permission_key)` | The reverse lookup of the grants. |
+| `permission_definitions` | `(resource)` | The permission filters by resource. |
+| `connected_chats` | primary key `(chat_id)` | One row per connected group. |
+| `connected_chats` | `(is_active)` | Active-group listing and count. |
+| `telegram_chats` | primary key `(chat_id)` | One row per chat identity. |
+| `chat_settings` | primary key `(chat_id)` | One configuration row per group. |
+| `join_requests` | `(chat_id)`, `(status)` | The pending-request filters. |
+| `telegram_users` | primary key `(user_id)` | One profile per user. |
+| `telegram_users` | `(username_lower, user_id)` with `text_pattern_ops` | Name search: the case-sensitive prefix query on the lowercase mirror. |
+| `telegram_users` | `(first_name_lower, user_id)` with `text_pattern_ops` | Name search: the case-sensitive prefix query on the lowercase mirror. |
+| `telegram_users` | `(username_lower, user_id)` default opclass | The paged users list sort on `username_lower`. A pattern opclass only provides the pattern comparison operators, so it cannot serve an `ORDER BY`. |
+| `telegram_users` | `(first_name_lower, user_id)` default opclass | The paged users list sort on `first_name_lower`, the default sort. |
 | `user_settings` | primary key `(user_id)` | One preference row per user. |
-| `warns` | `(user_id, chat_id, timestamp desc)` | Per-group history. PostgreSQL scans a btree backwards for the oldest-first view. |
-| `warns` | `(user_id, timestamp desc)` | `/check` history across groups. |
-| `warns` | `(timestamp)` | Warn-expiry sweep. |
-| `warns` | `(chat_id)` | `migrate_records()` repoint on a group upgrade. |
-| `warn_counts` | primary key `(user_id, chat_id)` | One counter per user/chat. |
-| `warn_counts` | `(updated_at)` | Warn-expiry counter sweep. |
-| `warn_counts` | `(user_id, count, updated_at desc)` | `user_warn_groups()` / `federation_warn_count()` filter + sort. |
-| `warn_counts` | `(chat_id)` | `migrate_records()` repoint on a group upgrade. |
-| `kicks` | `(user_id, timestamp desc)`, `(chat_id)` | Per-user history and group lookups. |
-| `mutes` | `(user_id, timestamp desc)`, `(chat_id)` | Per-user history and group lookups. |
-| `active_mutes` | primary key `(user_id)` | One live mute row per user (upserted by `set_active_mute`). |
-| `active_mutes` | `(until_date)` | `get_active_mute()` expiry filter and the stale-mute sweep. |
 | `promotion_requests` | unique `(request_id)` | One row per request ID. |
 | `promotion_requests` | `(target_id, status)` | Per-target history. |
 | `promotion_requests` | unique `(target_id)` partial on `status = 'pending'` | One pending request per user (concurrent promotes collapse to one entry). |
-| `promotion_requests` | `(status, requested_date)` | `all_pending()` filter + oldest-first sort. |
+| `promotion_requests` | `(status, requested_date)` | `all_pending()` filter and oldest-first sort. |
 | `mtproto_state` | `(date)` | `get_update_states()` oldest-first sort. |
 | `mtproto_state` | `(usernames)` GIN | MTProto peer lookup by username. |
 | `mtproto_state` | `(id)` with `text_pattern_ops` | The row key carries the session namespace as a prefix, so the peer and update-state lookups match on a prefix. |
@@ -1136,7 +1356,7 @@ scan when the database collation is `C`, and the deployment database is
 not, so without it the name search degrades to a sequential scan.
 
 If a new query depends on a new access pattern, add the matching index to
-`base.py` together with the helper change and generate the matching
+`base/` together with the helper change and generate the matching
 Alembic revision.
 
 ## Document typing
@@ -1148,23 +1368,35 @@ TypedDict from `documents.py` when reading or inserting records.
 
 | Table | TypedDict |
 |---|---|
-| `bans` | `BanDoc` |
-| `kicks` | `KickDoc` |
-| `mutes` | `MuteDoc` |
-| `active_mutes` | `ActiveMuteDoc` |
-| `warns` | `WarnDoc` |
-| `warn_counts` | `WarnCountDoc` |
-| `member_cache` | `UserDoc` |
-| `federated_groups` | `GroupDoc` |
+| `moderation_actions` (ban) | `BanDoc` |
+| `moderation_actions` (warn) | `WarnDoc` |
+| `moderation_actions` (kick) | `KickDoc` |
+| `moderation_actions` (mute) | `MuteDoc` |
+| `moderation_actions` | `ModerationActionDoc` |
+| `moderation_cases` | `ModerationCaseDoc` |
+| `moderation_appeals` | `AppealDoc` |
+| `moderation_evidence_uploads` | `EvidenceUploadDoc` |
+| `moderation_enforcement_runs` | `EnforcementRunDoc` |
+| `moderation_enforcement_targets` | `EnforcementTargetDoc` |
+| `audit_events` | `AuditEventDoc` |
+| `community_settings` | `CommunityProfileDoc` |
+| `telegram_users` | `UserDoc` |
+| `connected_chats` | `GroupDoc` |
+| `join_requests` | `PendingGroupDoc` |
+| `chat_settings` | `ChatSettingsDoc` |
 | `user_settings` | `UserSettingsDoc` |
-| `pending_joins` | `PendingGroupDoc` |
-| `tc_admins` | `AdminDoc` |
-| `tc_roles` | `RoleDoc` |
-| `tc_roles` (index reference) | `RoleRefDoc` |
+| `role_assignments` | `RoleDoc`, `AdminDoc` |
+| `role_assignments` (index reference) | `RoleRefDoc` |
 | `promotion_requests` | `PromotionRequestDoc` |
 
-Literal aliases: `RoleName = Literal["founder", "admin", "developer", "tester"]`;
-`RequestStatus = Literal["pending", "approved", "rejected"]`.
+Literal aliases: `RoleName = Literal["owner", "admin", "developer", "moderator"]`
+(the catalog vocabulary), `RequestStatus = Literal["pending", "approved",
+"rejected", "cancelled"]`, `ActionType = Literal["warn", "mute", "ban",
+"kick"]`, `ActionStatus = Literal["active", "completed", "revoked",
+"expired", "superseded"]`, `ScopeType = Literal["community", "chat"]`.
+
+The tier vocabulary the handlers use is `users_roles.RoleName = Literal[
+"founder", "admin", "developer", "tester"]`.
 
 ## Startup wiring and shutdown
 
@@ -1187,7 +1419,7 @@ Related `cfg` fields: `database_url`, `redis_url`, `warn_expiry_days`,
 
 - Do not build statements in command modules or workflow files.
 - Keep new table helpers in `*_db.py` files.
-- Change a table in `base.py` and ship the matching Alembic revision; the
+- Change a table in `base/` and ship the matching Alembic revision; the
   two must not drift.
 - Keep stored schema changes backward-compatible unless a migration plan
   exists.

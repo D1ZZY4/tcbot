@@ -118,7 +118,7 @@ Render-locale resolution shared by handlers, callbacks, and flows. Every entry p
 
 | Export | Purpose |
 |---|---|
-| `effective_locale(chat_type, user_id, chat_id)` | Resolves the render locale for a message: private chats read the sender's `user_settings` row, group-like chats read the group's `federated_groups.locale`. Only the locale the chat type consumes is read, so each resolution costs one lookup instead of two; a failed read degrades to `None` (falls through to the default) and never raises. |
+| `effective_locale(chat_type, user_id, chat_id)` | Resolves the render locale for a message: private chats read the sender's `user_settings` row, group-like chats read the group's `chat_settings.locale`. Only the locale the chat type consumes is read, so each resolution costs one lookup instead of two; a failed read degrades to `None` (falls through to the default) and never raises. |
 | `locale_for_update(update)` | Convenience wrapper using `update.effective_chat` / `update.effective_user`; missing chat or user falls back to `DEFAULT_LOCALE`. |
 | `locale_for_user(user_id)` | Personal locale for a DM to one user (ban notices, appeal updates), independent of any chat. |
 | `locale_for_chat(chat)` | Group locale when no `Update` is available (join/leave events carry the chat directly). Reads only the group row. |

@@ -142,13 +142,16 @@ PROOFS="-1001234567890"
 | `MODULES_LOAD` | No | comma-separated module names | Optional allowlist, e.g. `bans,appeals`. |
 | `MODULES_NO_LOAD` | No | comma-separated module names | Optional denylist, e.g. `maintenance,broadcast`. |
 | `REDIS_URL` | No | Redis URI | L2 cache connection string, e.g. `redis://localhost:6379/0`. When absent the bot uses in-process L1 cache only. |
+| `DB_POOL_SIZE` | No | integer >= 1 | Size of the PostgreSQL connection pool. Default `5`. Keep the total (`DB_POOL_SIZE` + `DB_MAX_OVERFLOW`) within the connection limit the database grants the bot user: a pooler in transaction or session mode caps it, and an oversized pool fails later as a "max clients reached" refusal that the circuit breaker reads as a database outage. |
+| `DB_MAX_OVERFLOW` | No | integer >= 0 | Extra connections the pool may open beyond `DB_POOL_SIZE` under load. Default `5`. These connections are closed again once the load drops. |
+| `DB_SCHEMA` | No | PostgreSQL identifier | The schema the bot reads and writes. Default `public`. The project uses three schemas and no more: `public` for the deployment, `test` for the integration tests, and `development` for a developer working against a shared server. A schema that does not exist yet is created at startup. |
 | `SENTRY_DSN` | No | DSN string | Error monitoring via Sentry (observability extra: install `tcbot[observability]`). When empty, monitoring is disabled. |
 | `WEBHOOK_URL` | No | URL | Base URL for webhook transport, e.g. `https://yourdomain.example.com`. An explicit value takes precedence over the automatically detected `REPLIT_DEV_DOMAIN`; when neither is available, the bot falls back to polling for local development. |
 | `WEBHOOK_SECRET` | No | random string | Secret token sent in the `X-Telegram-Bot-Api-Secret-Token` header by Telegram on every webhook POST. Auto-generated with `secrets.token_hex(32)` if absent. Set it explicitly for a stable deployment token. |
 | `CRON_SECRET` | Yes on Vercel | random string | Bearer token for the serverless warn-expiry cron endpoint. Requests without a matching token fail closed (`401`/`503`). |
 | `WARN_LIMIT` | No | integer >= 1 | Per-group warning threshold that triggers automatic federation ban. Default `3`. When a user's warn count in one group reaches or exceeds this value, they are federation-banned and their group warns cleared (on success). |
 | `FED_WARN_LIMIT` | No | integer >= 0 | Federation-wide warning threshold: sum of warn counts across all groups triggers an automatic federation ban when >= this value. Default `0` (disabled). Set to a positive integer to enable cross-group warn aggregation. |
-| `WARN_EXPIRY_DAYS` | No | positive integer | Days after which `warn_counts` records are deleted by the daily scheduler job. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
+| `WARN_EXPIRY_DAYS` | No | positive integer | Days after which warning decisions expire and stop counting towards the auto-ban threshold. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
 | `COMMUNITY_CHANNEL_URL` | No | http(s) URL | Main Channel button in the Additional Links menu. Built-in default `https://t.me/TranssionCoreFederation`. |
 | `COMMUNITY_GROUP_URL` | No | http(s) URL | Discussion Group button. Built-in default `https://t.me/TranssionCoreFederationGroup`. |
 | `COMMUNITY_LOGS_URL` | No | http(s) URL | Logs Channel button. Built-in default `https://t.me/TranssionCoreFederationLogs`. |
