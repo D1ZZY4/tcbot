@@ -12,6 +12,7 @@ import platform
 import re
 import sys
 import traceback
+from itertools import islice
 from typing import TYPE_CHECKING
 
 import telegram.error as _te
@@ -202,13 +203,13 @@ def attach(bot: Bot, chat_id: int, thread_id: int | None, *, owner_id: int = 0) 
 
 
 async def _ship_record(record: logging.LogRecord) -> None:
-    """Ship a log record to the error channel.
+    """Ship one log record to the error channel.
 
-    A wrapper, so the registered sink resolves ``report_record`` at call
-    time: an override of the reporter then takes effect without a
-    re-attach.
+    The record already passed the dedupe gate in
+    :func:`_schedule_record`, so the delivery only renders and sends it.
     """
-    await report_record(record)
+    exc = record.exc_info[1] if record.exc_info else None
+    await _deliver(exc, record)
 
 
 def _schedule_record(record: logging.LogRecord) -> None:
@@ -217,10 +218,17 @@ def _schedule_record(record: logging.LogRecord) -> None:
     The logger handler runs synchronously on the logging path, so the
     delivery is scheduled here and tracked for the shutdown drain. The
     reporter owns the delivery, so it also owns the delivery lifecycle.
+
+    The dedupe decision is taken here, before the task is created: one
+    task per error line would put the scan and the task creation on the
+    event loop exactly when an incident floods it, and most error lines
+    are duplicates that never ship.
     """
     if _bot is None:
         # * No bot yet: the record was emitted before the reporter was
         # * attached. There is nothing to ship it to.
+        return
+    if not _approved(record):
         return
     _report_tasks.spawn(_ship_record(record))
 
@@ -305,17 +313,31 @@ def _fingerprint_record(record: logging.LogRecord) -> tuple[object, ...]:
 
 
 def _seen_recently(fp: tuple[object, ...]) -> bool:
-    """Mark fp seen; True if already seen within the dedupe window."""
+    """Mark fp seen; True if already seen within the dedupe window.
+
+    The entries live in a plain dict, so they keep their insertion order.
+    Every sighting moves its entry to the end, which keeps the order
+    equal to the sighting order and lets the expired entries be pruned
+    from the front. Pruning that walks the whole map on every error line
+    would cost the event loop exactly when an incident floods it.
+    """
     now = monotonic()
-    for key in [k for k, at in _recent.items() if now - at > _DEDUPE_WINDOW]:
-        del _recent[key]
+    while _recent:
+        oldest = next(iter(_recent))
+        if now - _recent[oldest] <= _DEDUPE_WINDOW:
+            break
+        del _recent[oldest]
     if len(_recent) >= _RECENT_MAX:
-        for key, _ in sorted(_recent.items(), key=lambda x: x[1])[: _RECENT_MAX // 10]:
+        # * The map is full of live fingerprints: drop the oldest tenth so
+        # * the newest ones keep their slot.
+        for key in list(islice(_recent, _RECENT_MAX // 10)):
             del _recent[key]
-    if fp in _recent:
-        return True
+    seen = fp in _recent
+    if seen:
+        # * Move the entry to the end so the front stays the oldest.
+        del _recent[fp]
     _recent[fp] = now
-    return False
+    return seen
 
 
 def _dedup(exc: BaseException | None, record: logging.LogRecord | None) -> bool:
@@ -504,6 +526,35 @@ async def send_to_owner(text: str) -> None:
         log.warning("Failed to send owner DM: %s", exc)
 
 
+async def _deliver(exc: BaseException | None, record: logging.LogRecord | None) -> None:
+    """Render the report and send it to its destination."""
+    text = build_error_message(exc=exc, record=record)
+    if _owner_only(exc):
+        await send_to_owner(text)
+    else:
+        await send_to_log_errors(text)
+
+
+def _approved(record: logging.LogRecord) -> bool:
+    """Return True when the record is worth shipping.
+
+    Single owner of the delivery decision: the benign filter, the log
+    noise filter, the dedupe window, and the owner-DM budget. The
+    decision is taken on the logging path, before a task is created, so
+    a flood of duplicate errors costs one map lookup instead of one task
+    per line.
+    """
+    exc = record.exc_info[1] if record.exc_info else None
+    if _is_benign(exc) or _log_noise(record) or _dedup(exc, record):
+        return False
+    if _owner_only(exc) and _owner_suppressed(
+        _fingerprint_exc(exc) if exc is not None else _fingerprint_record(record)
+    ):
+        log.debug("Owner DM suppressed: budget spent.")
+        return False
+    return True
+
+
 async def report_exc(exc: BaseException, context: str | None = None) -> None:
     """Report an exception; owner-only errors go to owner DM."""
     if _is_benign(exc) or _dedup(exc, None):
@@ -520,15 +571,7 @@ async def report_exc(exc: BaseException, context: str | None = None) -> None:
 
 async def report_record(record: logging.LogRecord) -> None:
     """Report a LogRecord; deduped and noise-filtered."""
-    exc = record.exc_info[1] if record.exc_info else None
-    if _is_benign(exc) or _log_noise(record) or _dedup(exc, record):
+    if not _approved(record):
         return
-    text = build_error_message(record=record)
-    if _owner_only(exc):
-        fp = _fingerprint_exc(exc) if exc is not None else _fingerprint_record(record)
-        if _owner_suppressed(fp):
-            log.debug("Owner DM suppressed: budget spent.")
-            return
-        await send_to_owner(text)
-    else:
-        await send_to_log_errors(text)
+    exc = record.exc_info[1] if record.exc_info else None
+    await _deliver(exc, record)

@@ -111,6 +111,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The kick and mute histories share one shape** (`tcbot/database/event_history.py`, `tcbot/database/kicks_db.py`, `tcbot/database/mutes_db.py`): the newest-first paging, the per-user count, and the chat-migration repoint were two copies of the same code. Behavior changes: none.
 
+- **The error reporter decides before it schedules** (`tcbot/error_reporter.py`): every error line created a task and scanned the whole dedupe map, on the event loop, exactly when an incident floods it. The decision now happens before the task is created, and the map is pruned from the front instead of walked. Behavior changes: none.
+
 - **The role vocabulary has one home** (`tcbot/database/users_roles.py`, `tcbot/modules/helper/pipelines/promote_flow.py`): the spellings the promote command accepts lived in a conversation module; they now sit next to the role table and the rank map. Behavior changes: none.
 
 - **The Back button, the ban card, and the paged drill-downs have one owner** (`tcbot/modules/helper/keyboards/common.py`, `tcbot/modules/helper/ban_info.py`, `tcbot/modules/helper/pipelines/check_flow.py`, `tcbot/modules/helper/scope.py`): nine keyboards built their own Back button, the check card rendered a ban summary beside the shared ban detail, and the two drill-down lists repeated the same paging prologue. The shared helpers now own the button, the ban proof link and date, the paging arithmetic, and the scope cleanup. Behavior changes: none; the rendered text and the button layout are unchanged.
