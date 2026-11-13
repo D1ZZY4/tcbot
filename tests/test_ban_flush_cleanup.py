@@ -317,3 +317,57 @@ def test_live_unexpected_still_nags(monkeypatch: pytest.MonkeyPatch) -> None:
     outcome = asyncio.run(ban_flow.on_proof_unexpected(update, ctx))  # type: ignore[arg-type]
     assert outcome == ban_flow.WAITING_PROOF
     assert len(msg.replies) == 1
+
+
+# ─────────────── Timeout must not cancel a running ban ───────────────
+# * The conversation fallback fires for any prefixed command the moderator
+# * sends while the proof window is open. The auto-flush starts a few
+# * seconds after the last proof media, so a command sent in that window
+# * reaches the timeout handler while the ban is already executing.
+# * Cancelling there would cancel the in-flight fan-out after the ban
+# * record and the federation log were written: the federation would carry
+# * a ban that no group enforces.
+
+
+def _timeout_scenario(
+    monkeypatch: pytest.MonkeyPatch, *, flushing: bool
+) -> tuple[dict[tuple[int, int], Any], ban_flow._ProofSession]:
+    """Run the timeout handler against a session and report the registry."""
+    registry: dict[tuple[int, int], Any] = {}
+    monkeypatch.setattr(ban_flow, "_proof_sessions", registry)
+    update = _ZombieUpdate(message=_ZombieMessage())
+    ctx = _ZombieCtx({})
+    scope = flow_scope(ctx, update)  # type: ignore[arg-type]
+    scope.update({"ban_target_id": 33})
+    session = ban_flow._ProofSession(scope=scope, flushing=flushing)
+    key = (_FakeChat.id, _FakeUser.id)
+    registry[key] = session
+
+    async def _scenario() -> object:
+        registry[key] = session
+        return await ban_flow.on_proof_timeout(update, ctx)  # type: ignore[arg-type]
+
+    outcome = asyncio.run(_scenario())
+    assert outcome == ban_flow.ConversationHandler.END
+    return registry, session
+
+
+def test_proof_timeout_keeps_a_running_ban_alive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The timeout must not cancel a ban that is already executing."""
+    registry, session = _timeout_scenario(monkeypatch, flushing=True)
+    key = (_FakeChat.id, _FakeUser.id)
+    assert registry.get(key) is session
+    assert session.cancelled is False
+    assert session.flush_task is None
+
+
+def test_proof_timeout_cancels_an_idle_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A session that has not started flushing is still cancelled."""
+    registry, session = _timeout_scenario(monkeypatch, flushing=False)
+    key = (_FakeChat.id, _FakeUser.id)
+    assert key not in registry
+    assert session.cancelled is True

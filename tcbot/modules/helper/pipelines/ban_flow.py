@@ -872,6 +872,16 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     raw_msg = scope.get("ban_prompt_msg_id")
     prompt_chat = raw_chat if isinstance(raw_chat, int) else None
     prompt_msg_id = raw_msg if isinstance(raw_msg, int) else None
+    # * Once flushing has started the ban is executing. The timeout is the
+    # * conversation fallback, so it fires for any prefixed command the
+    # * moderator sends during the window. Cancelling here would cancel the
+    # * in-flight fan-out after the ban record and the federation log were
+    # * written: the federation would carry a ban no group enforces. The
+    # * running flush owns the prompt and replaces it with its summary.
+    for sess in list(_proof_sessions.values()):
+        if sess.scope is scope and sess.flushing:
+            log.info("Ban proof timeout ignored: the ban is already executing.")
+            return ConversationHandler.END
     _cancel_proof_session(scope)
     if prompt_chat and prompt_msg_id:
         try:
