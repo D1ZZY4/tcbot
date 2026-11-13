@@ -419,6 +419,20 @@ def _upload(base: str, cancel: threading.Event | None = None) -> tuple[float, in
     return total / elapsed_s * 8.0, total
 
 
+def _run_speedtest_locked(cancel: threading.Event | None = None) -> dict:
+    """Run the measurement and release the one-run lock when it ends.
+
+    The lock belongs to the worker, not to the handler: a timed-out run
+    leaves the measurement thread alive until its next request boundary,
+    and releasing the lock in the handler would admit a second run while
+    the first one still owns the host's bandwidth.
+    """
+    try:
+        return _run_speedtest(cancel)
+    finally:
+        _run_lock.release()
+
+
 def _run_speedtest(cancel: threading.Event | None = None) -> dict:
     """Run a full test synchronously; intended for thread-executor use only.
 
@@ -529,6 +543,7 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     cancel = threading.Event()
+    submitted = False
     try:
         loop = asyncio.get_running_loop()
         # * A bad route can hang the measurement for minutes; bound the
@@ -537,9 +552,11 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * request boundary, so the host's bandwidth is freed instead of
         # * staying saturated by a run nobody is waiting for.
         async with asyncio.timeout(_SPEEDTEST_TIMEOUT):
-            result: dict = await loop.run_in_executor(
-                _speedtest_executor(), _run_speedtest, cancel
+            future = loop.run_in_executor(
+                _speedtest_executor(), _run_speedtest_locked, cancel
             )
+            submitted = True
+            result: dict = await future
     except TimeoutError:
         cancel.set()
         log.warning("Speedtest timed out after %ds", _SPEEDTEST_TIMEOUT)
@@ -565,7 +582,10 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     finally:
-        _run_lock.release()
+        # * The worker releases the lock when it ends. Only a submission
+        # * that never reached the executor leaves the lock held here.
+        if not submitted:
+            _run_lock.release()
 
     async def _parse_failed() -> None:
         # * KeyError (shape drift) and TypeError (None where a mapping was
