@@ -12,7 +12,7 @@ commands live in [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
 ## Role Resolution and Authorization
 
 - Resolve roles with `users_roles.get_effective_role(user_id)`.
-- Use `decorators.resolve_and_check()` for executor-versus-target checks.
+- Use `guards.resolve_and_check()` for executor-versus-target checks.
 - Do not chain owner, admin, and role checks manually in handlers.
 - Do not compare role ranks inline in command modules.
 - Use `ROLE_LABEL` for user-facing role labels.

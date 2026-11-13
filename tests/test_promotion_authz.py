@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.decorators import checks
+from tcbot.modules.helper import guards
 from tcbot.modules.helper.pipelines import promote_flow
 
 # ─────────────────────────── Promotion guards ─────────────────────────── #
@@ -41,7 +41,7 @@ def test_banned_target_refusal_blocks_a_banned_user(
     """An active ban must produce a refusal line."""
     _install_ban(monkeypatch, ban={"_id": "b1"})
     refusal = asyncio.run(
-        checks.banned_target_refusal(42, "en-US", log_label="test ban-guard")
+        guards.banned_target_refusal(42, "en-US", log_label="test ban-guard")
     )
     assert refusal is not None
     assert "Banned" in refusal
@@ -54,7 +54,7 @@ def test_banned_target_refusal_allows_a_clean_user(
     _install_ban(monkeypatch, ban=None)
     assert (
         asyncio.run(
-            checks.banned_target_refusal(42, "en-US", log_label="test ban-guard")
+            guards.banned_target_refusal(42, "en-US", log_label="test ban-guard")
         )
         is None
     )
@@ -66,7 +66,7 @@ def test_banned_target_refusal_fails_closed_on_lookup_error(
     """An unknown ban state must refuse, not grant rank."""
     _install_ban(monkeypatch, raises=RuntimeError("db down"))
     refusal = asyncio.run(
-        checks.banned_target_refusal(42, "en-US", log_label="test ban-guard")
+        guards.banned_target_refusal(42, "en-US", log_label="test ban-guard")
     )
     assert refusal is not None
 
@@ -78,7 +78,7 @@ def test_banned_target_refusal_propagates_cancellation(
     _install_ban(monkeypatch, raises=asyncio.CancelledError())
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(
-            checks.banned_target_refusal(42, "en-US", log_label="test ban-guard")
+            guards.banned_target_refusal(42, "en-US", log_label="test ban-guard")
         )
 
 

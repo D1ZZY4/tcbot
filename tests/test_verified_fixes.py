@@ -13,7 +13,7 @@ from tcbot.database import users_roles
 from tcbot.database.types import GroupId
 from tcbot.modules import help as helpmod
 from tcbot.modules.help import _help_index_text, _module_text
-from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper import guards, keyboards
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.keyboards import nav_row
 from tcbot.modules.helper.messages import replies
@@ -249,7 +249,7 @@ def test_recheck_executor_rank() -> None:
         orig = db.users_roles.get_effective_role
         db.users_roles.get_effective_role = _tester  # type: ignore[assignment]
         try:
-            denied = await decorators.recheck_executor_rank(
+            denied = await guards.recheck_executor_rank(
                 _Msg(),  # type: ignore[arg-type]
                 9,
                 min_role="developer",
@@ -259,7 +259,7 @@ def test_recheck_executor_rank() -> None:
         msg = _Msg()
         db.users_roles.get_effective_role = _founder  # type: ignore[assignment]
         try:
-            allowed = await decorators.recheck_executor_rank(
+            allowed = await guards.recheck_executor_rank(
                 msg,  # type: ignore[arg-type]
                 9,
                 min_role="developer",

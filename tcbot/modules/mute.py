@@ -10,8 +10,7 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
-from tcbot import cfg
-from tcbot.modules.helper import decorators, identity
+from tcbot.modules.helper import decorators, targets
 from tcbot.modules.helper.messages import replies, safe_reply
 from tcbot.modules.helper.pipelines.mute_flow import (
     execute_unmute,
@@ -107,7 +106,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     reason skips the reason prompt and goes straight to proof collection).
     Returns ``ConversationHandler.END`` on validation failure.
     """
-    resolved = await decorators.resolve_mod_target(
+    resolved = await targets.resolve_mod_target(
         update,
         ctx,
         action="mute",
@@ -232,26 +231,14 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ``cmd_mute``), optionally emits a staff-action notice, then delegates to
     ``execute_unmute``.
     """
-    msg = update.effective_message
-    if msg is None:
-        return
-    resolved = await decorators.resolve_staff_target(
+    await targets.run_staff_action(
         update,
         ctx,
         action="unmute",
         min_role="tester",
         log_prefix="cmd_unmute",
+        execute=execute_unmute,
     )
-    if resolved is None:
-        return
-
-    notice = identity.staff_notice(
-        "unmute", resolved.ident, cfg.community_name, resolved.locale
-    )
-    if notice is not None:
-        await safe_reply(msg, notice, log_label="cmd_unmute notice")
-
-    await execute_unmute(update, ctx, resolved.target_id, resolved.target_name)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

@@ -25,9 +25,9 @@ from telegram.ext import ConversationHandler
 
 from tcbot import database as db
 from tcbot.modules import kick as kicking
-from tcbot.modules.helper import decorators
-from tcbot.modules.helper.decorators.checks import ModTarget
+from tcbot.modules.helper import targets
 from tcbot.modules.helper.pipelines import demote_flow, kick_flow
+from tcbot.modules.helper.targets import ModTarget
 
 
 class _FakeChat:
@@ -102,7 +102,7 @@ def test_the_kick_entry_does_not_demote(
         return "tester"
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(decorators, "resolve_mod_target", _resolve)
+    monkeypatch.setattr(targets, "resolve_mod_target", _resolve)
     monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_demote))
 
     msg = _FakeMsg()

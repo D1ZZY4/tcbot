@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, cast
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import database as db
-from tcbot.modules.helper import decorators, extraction, identity
-from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper import decorators, extraction, guards, identity
+from tcbot.modules.helper.guards import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
@@ -81,7 +81,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     if msg is None or admin is None:
         return
-    if not await decorators.require_federation_origin(
+    if not await guards.require_federation_origin(
         msg,
         chat_id=msg.chat.id,
         chat_type=msg.chat.type,

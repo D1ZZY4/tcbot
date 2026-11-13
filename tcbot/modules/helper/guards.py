@@ -2,35 +2,59 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Executor-vs-target permission checks shared by moderation entries."""
+"""Authorization gates: may the executor act, and on whom."""
 
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from telegram.ext import ContextTypes
-
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import extraction, identity
+from tcbot.modules.helper import identity
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
 from tcbot.modules.helper.messages import cb_error_edit, replies, safe_reply
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import parse_cmd_args
 
 if TYPE_CHECKING:
     from typing import Any
 
     from telegram import Bot, CallbackQuery, Message, Update, User
 
-    from tcbot.modules.helper.identity import Identity
+    from tcbot.database.users_roles import RoleName
 
 log = get_logger(__name__)
+
+# * Rank of an unknown tier name. The tier argument is a Literal, so a typo
+# * is a type error the checker reports; at runtime an unknown name must
+# * still fail closed, and the highest rank only ever refuses an action.
+_UNKNOWN_TIER_RANK: int = 99
+
+
+def required_rank(min_role: RoleName) -> int:
+    """Return the rank of the tier an executor must hold.
+
+    An unknown tier name resolves to the highest rank, so a mistake can
+    only refuse an action, never grant one.
+    """
+    return db.users_roles.ROLE_RANK.get(min_role, _UNKNOWN_TIER_RANK)
+
+
+def outranks(executor_role: str | None, target_role: str | None) -> bool:
+    """Return True when the executor outranks the target.
+
+    Single owner of the outrank comparison. Equal rank is refused, so a
+    peer can never act on a peer. A target without a federation role
+    passes: there is no rank to outrank.
+    """
+    if not target_role:
+        return True
+    return db.users_roles.role_rank(executor_role) > db.users_roles.role_rank(
+        target_role
+    )
 
 
 class EnforcementVerdict(Enum):
@@ -42,8 +66,44 @@ class EnforcementVerdict(Enum):
     LOOKUP_FAILED = "lookup_failed"
 
 
+class StaffAccess(Enum):
+    """Outcome of a staff-tier access check."""
+
+    ALLOWED = "allowed"
+    DENIED = "denied"
+    LOOKUP_FAILED = "lookup_failed"
+
+
+async def staff_access(user_id: int | None, *, min_role: RoleName) -> StaffAccess:
+    """Check whether *user_id* may act at the *min_role* tier.
+
+    The owner id always passes: the owner row and the founder role can
+    diverge briefly around a transfer, and the operator must keep
+    access. A lookup failure fails closed and is reported apart from a
+    refusal, so the caller can ask for a retry instead of denying the
+    action. Cancellation always propagates.
+    """
+    if user_id is None:
+        return StaffAccess.DENIED
+    try:
+        owner_r, role_r = await asyncio.gather(
+            db.users_roles.is_owner(user_id, fresh=True),
+            db.users_roles.get_effective_role(user_id, fresh=True),
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning("staff access check failed for %d: %s", user_id, exc)
+        return StaffAccess.LOOKUP_FAILED
+    if owner_r is True:
+        return StaffAccess.ALLOWED
+    if required_rank(min_role) > db.users_roles.role_rank(role_r):
+        return StaffAccess.DENIED
+    return StaffAccess.ALLOWED
+
+
 async def enforcement_verdict(
-    executor_id: int, target_id: int, *, min_role: str = "tester"
+    executor_id: int, target_id: int, *, min_role: RoleName = "tester"
 ) -> tuple[EnforcementVerdict, str | None]:
     """Re-check the executor against the target at enforcement time.
 
@@ -55,7 +115,8 @@ async def enforcement_verdict(
     fresh and applies the same rule as :func:`resolve_and_check`.
 
     The check fails closed: a role lookup that fails refuses the
-    enforcement, exactly like the entry check does.
+    enforcement, exactly like the entry check does. Cancellation is not a
+    lookup failure and propagates, so a shutdown never reads as a refusal.
 
     ``min_role`` is the lowest rank the executor must still hold. The
     tier and the outrank rule are checked here rather than in the caller,
@@ -73,6 +134,9 @@ async def enforcement_verdict(
         )
     except asyncio.CancelledError:
         raise
+    # * A cancelled read is a shutdown, not a verdict: the cancellation is
+    # * re-raised so the executor stops instead of reporting a refusal.
+    throw_if_cancelled((executor_role, target_role))
     if isinstance(executor_role, BaseException) or isinstance(
         target_role, BaseException
     ):
@@ -82,11 +146,9 @@ async def enforcement_verdict(
             target_id,
         )
         return EnforcementVerdict.LOOKUP_FAILED, None
-    if db.users_roles.role_rank(executor_role) < db.users_roles.role_rank(min_role):
+    if required_rank(min_role) > db.users_roles.role_rank(executor_role):
         return EnforcementVerdict.RANK_INSUFFICIENT, None
-    if target_role and db.users_roles.role_rank(
-        executor_role
-    ) <= db.users_roles.role_rank(target_role):
+    if not outranks(executor_role, target_role):
         return EnforcementVerdict.OUTRANKED, db.users_roles.role_label(target_role)
     return EnforcementVerdict.ALLOWED, None
 
@@ -107,30 +169,57 @@ def enforcement_refusal_text(
     return replies.refuse_role_lookup(locale, plain=True)
 
 
+async def enforcement_refusal(
+    executor_id: int,
+    target_id: int,
+    *,
+    min_role: RoleName,
+    action: str,
+    locale: str | None,
+) -> str | None:
+    """Return the refusal notice when the executor may not act, else None.
+
+    Single owner for the enforcement-time gate: the verdict, the refusal
+    log line, and the notice text. Every executor calls this instead of
+    re-implementing the check, so the four moderation paths cannot drift
+    apart on the rule or on the wording. The caller owns only the
+    transport that delivers the notice.
+    """
+    verdict, target_label = await enforcement_verdict(
+        executor_id, target_id, min_role=min_role
+    )
+    if verdict is EnforcementVerdict.ALLOWED:
+        return None
+    log.warning(
+        "%s refused for target=%d: executor=%d (%s)",
+        action,
+        target_id,
+        executor_id,
+        verdict.value,
+    )
+    return enforcement_refusal_text(verdict, target_label, locale)
+
+
 async def resolve_and_check(
     msg: Message,
     executor_id: int,
     target_id: int,
     *,
-    min_role: str,
+    min_role: RoleName,
 ) -> tuple[str | None, str | None]:
     """Validate executor permission and target eligibility for moderation actions.
 
     Replies on the message itself when the executor lacks rank or the target
     outranks the executor, then returns ``(None, None)``.
 
-    The executor's role is read from the cache and the target's role is
-    read fresh. Every caller sits behind an authorization decorator that
-    already resolved the executor's rank with a fresh read moments
-    earlier, and every tier refreshes the effective-role cache with that
-    value, so the cached value is the one the decorator validated. The
-    target keeps the fresh read because a demotion there must never be
-    hidden behind a TTL.
+    Both roles are read fresh. A demotion or a transfer in another process
+    must never be hidden behind the cache TTL, and the check must not
+    depend on a decorator having run first.
 
     On success, returns ``(executor_role, target_role)``.
     """
     executor_role, target_role = await asyncio.gather(
-        db.users_roles.get_effective_role(executor_id),
+        db.users_roles.get_effective_role(executor_id, fresh=True),
         db.users_roles.get_effective_role(target_id, fresh=True),
         return_exceptions=True,
     )
@@ -143,14 +232,14 @@ async def resolve_and_check(
     )
     executor_lookup_failed = isinstance(executor_role, BaseException)
     target_lookup_failed = isinstance(target_role, BaseException)
-    if isinstance(executor_role, BaseException):
+    if executor_lookup_failed:
         log.warning(
             "resolve_and_check executor role lookup failed for %d: %s",
             executor_id,
             executor_role,
         )
         executor_role = None
-    if isinstance(target_role, BaseException):
+    if target_lookup_failed:
         log.warning(
             "resolve_and_check target role lookup failed for %d: %s",
             target_id,
@@ -165,7 +254,7 @@ async def resolve_and_check(
             parse_mode=None,
         )
         return None, None
-    if db.users_roles.role_rank(executor_role) < db.users_roles.role_rank(min_role):
+    if required_rank(min_role) > db.users_roles.role_rank(executor_role):
         await safe_reply(
             msg,
             replies.refuse_rank_insufficient(locale, plain=True),
@@ -174,9 +263,7 @@ async def resolve_and_check(
         )
         return None, None
 
-    if target_role and db.users_roles.role_rank(
-        executor_role
-    ) <= db.users_roles.role_rank(target_role):
+    if not outranks(executor_role, target_role):
         label = db.users_roles.role_label(target_role)
         await safe_reply(
             msg,
@@ -197,7 +284,7 @@ async def classify_and_check(
     msg: Message,
     *,
     action: str,
-    min_role: str,
+    min_role: RoleName,
     target_is_bot: bool | None = None,
 ) -> tuple[identity.Identity, str | None] | None:
     """Classify the target and validate executor rank in parallel, fail closed.
@@ -246,7 +333,7 @@ async def recheck_executor_rank(
     msg: Message,
     executor_id: int,
     *,
-    min_role: str,
+    min_role: RoleName,
 ) -> bool:
     """Re-verify the executor still meets ``min_role`` at enforcement time.
 
@@ -273,7 +360,7 @@ async def recheck_executor_rank(
             parse_mode=None,
         )
         return False
-    if db.users_roles.role_rank(role) < db.users_roles.role_rank(min_role):
+    if required_rank(min_role) > db.users_roles.role_rank(role):
         await safe_reply(
             msg,
             replies.refuse_rank_insufficient(locale, plain=True),
@@ -339,130 +426,8 @@ async def require_federation_origin(
     return True
 
 
-# * One owner for the executor-plus-target fetch so a future fix cannot
-# * land in one command and miss the other. Gathers stay parallel so the
-# * hot path costs one cached round trip, never two serial ones.
-async def resolve_executor_target(
-    msg: Message,
-    admin_id: int,
-    update: Update,
-    args: list[str],
-    bot: Bot | None,
-    *,
-    action: str,
-    locale: str | None = None,
-) -> tuple[str, int, str | None] | None:
-    """Fetch executor role and target in parallel, fail closed.
-
-    Returns ``(executor_role, target_id, target_fname)`` or ``None`` when
-    the caller must return (retry reply already sent, or a genuinely
-    role-less executor denied silently like the decorator would).
-    Callers pass their already-resolved locale so the two DB reads behind
-    locale resolution do not run twice per command.
-
-    The executor's role comes from the cache and the target's from a fresh
-    read, for the same reason as :func:`resolve_and_check`: the decorator
-    in front of the handler already validated the executor's rank with a
-    fresh read, and the target must never be read from a stale cache.
-    """
-    if locale is None:
-        locale = await locale_for_update(update)
-    _exec_r, _target_r = await asyncio.gather(
-        db.users_roles.get_effective_role(admin_id),
-        extraction.extract_target(update, args, bot),
-        return_exceptions=True,
-    )
-    throw_if_cancelled((_exec_r, _target_r))
-    if isinstance(_exec_r, BaseException):
-        # * Fail closed on transient outage instead of going silently dead.
-        # * A genuinely role-less caller gets None below; the decorator
-        # * denies them properly on retry.
-        log.warning("cmd_%s executor role lookup failed: %s", action, _exec_r)
-        await safe_reply(
-            msg,
-            t("admins.error.role_lookup_failed", locale, plain=True),
-            log_label=f"cmd_{action} lookup-fail",
-            parse_mode=None,
-        )
-        return None
-    executor_role = _exec_r
-    if executor_role is None:
-        return None
-    if isinstance(_target_r, BaseException):
-        log.error("extract_target failed during %s: %s", action, _target_r)
-        await safe_reply(
-            msg,
-            replies.err_cannot_resolve(locale, plain=True),
-            log_label=f"cmd_{action} no-target",
-            parse_mode=None,
-        )
-        return None
-    target_id, target_fname = _target_r
-    if not target_id:
-        await safe_reply(
-            msg,
-            replies.err_cannot_resolve(locale, plain=True),
-            log_label=f"cmd_{action} no-target-id",
-            parse_mode=None,
-        )
-        return None
-    return executor_role, target_id, target_fname
-
-
-async def classify_and_load_role(
-    bot: Bot,
-    admin_id: int,
-    target_id: int,
-    target_fname: str | None,
-    msg: Message,
-    *,
-    action: str,
-    locale: str | None = None,
-) -> tuple[Identity, str | None] | None:
-    """Classify the target and load its live role in parallel, fail closed.
-
-    Returns ``(ident, current_role)`` or ``None`` when the caller must
-    return (retry reply already sent). Cancellation always propagates.
-    """
-    ident_r, role_r = await asyncio.gather(
-        identity.classify(bot, admin_id, target_id, target_fname),
-        db.users_roles.get_effective_role(target_id, fresh=True),
-        return_exceptions=True,
-    )
-    throw_if_cancelled((ident_r, role_r))
-    if isinstance(ident_r, BaseException):
-        log.error(
-            "identity.classify failed during %s for target=%d: %s",
-            action,
-            target_id,
-            ident_r,
-        )
-        await safe_reply(
-            msg,
-            t("admins.error.classify_failed", locale, plain=True),
-            log_label=f"cmd_{action} classify-failed",
-            parse_mode=None,
-        )
-        return None
-    if isinstance(role_r, BaseException):
-        log.error(
-            "target role lookup failed during %s for target=%d: %s",
-            action,
-            target_id,
-            role_r,
-        )
-        await safe_reply(
-            msg,
-            t("admins.error.role_lookup_failed", locale, plain=True),
-            log_label=f"cmd_{action} role-lookup-failed",
-            parse_mode=None,
-        )
-        return None
-    return ident_r, role_r
-
-
 async def check_callback_staff(
-    admin_id: int, q: CallbackQuery, update: Update, *, min_role: str = "admin"
+    admin_id: int, q: CallbackQuery, update: Update, *, min_role: RoleName = "admin"
 ) -> str | None:
     """Re-check the staff rank alongside ``q.answer()`` in parallel.
 
@@ -482,9 +447,9 @@ async def check_callback_staff(
     throw_if_cancelled((role_r, answer_r))
     if isinstance(answer_r, BaseException):
         log.debug("callback answer failed: %s", answer_r)
-    if isinstance(role_r, BaseException) or db.users_roles.role_rank(
-        role_r
-    ) < db.users_roles.role_rank(min_role):
+    if isinstance(role_r, BaseException) or required_rank(
+        min_role
+    ) > db.users_roles.role_rank(role_r):
         await cb_error_edit(
             q,
             replies.err_perm_expired(await locale_for_update(update), plain=True),
@@ -493,6 +458,39 @@ async def check_callback_staff(
         )
         return None
     return role_r
+
+
+async def check_callback_executor(
+    update: Update,
+    q: CallbackQuery,
+    admin: User | None,
+    *,
+    min_role: RoleName = "admin",
+) -> str | None:
+    """Refuse the anonymous-admin placeholder, then re-check the staff rank.
+
+    The placeholder appears as the sender when a real admin posts through
+    "send message as group", so the true identity is unknown. Every
+    federation command refuses it, and the callback paths refuse it here
+    too instead of relying on the placeholder holding no role.
+    """
+    if identity.is_anon_admin(admin):
+        await cb_error_edit(
+            q,
+            replies.refuse_anon_admin(await locale_for_update(update), plain=True),
+            log_label="callback anon-admin",
+            parse_mode=None,
+        )
+        return None
+    if admin is None:
+        await cb_error_edit(
+            q,
+            replies.err_perm_expired(await locale_for_update(update), plain=True),
+            log_label="callback perm-expired",
+            parse_mode=None,
+        )
+        return None
+    return await check_callback_staff(admin.id, q, update, min_role=min_role)
 
 
 async def prompt_owner_mismatch(
@@ -561,18 +559,24 @@ async def action_owner_mismatch(q: Any, update: Update, *, min_parts: int) -> bo
 def can_demote_admin(executor_role: str | None, target_role: str | None) -> bool:
     """Return True when the executor may demote a target holding ``target_role``.
 
-    Only an Admin target is restricted: demoting one needs the Founder.
-    Every other target follows the normal rank rule handled by the caller.
+    The rule is the same one the outrank check applies: the executor must
+    outrank the target. On top of that, demoting an Admin needs the
+    Founder, because an Admin is the tier a demotion would strip.
 
-    The target tier is compared through the shared rank table, so a tier
-    that joins it takes part in the comparison instead of slipping past a
-    hardcoded name. The Founder stays a named tier, because the rule is
-    about that one role and not about a rank number.
+    Both comparisons run through the shared rank table, so a tier that
+    joins it takes part in the rule instead of slipping past a hardcoded
+    name. The Founder stays a named tier, because the Admin rule is about
+    that one role and not about a rank number.
+
+    A target without a removable role passes: the caller decides whether
+    there is anything to demote.
     """
     if target_role is None:
         return True
     if db.users_roles.role_rank(target_role) < db.users_roles.role_rank("admin"):
-        return True
+        # * A target below the Admin tier follows the ordinary outrank
+        # * rule, which this helper owns.
+        return outranks(executor_role, target_role)
     return executor_role == "founder"
 
 
@@ -605,187 +609,23 @@ async def banned_target_refusal(
     return None
 
 
-@dataclass(frozen=True)
-class ModTarget:
-    """Resolved moderation target shared by the ban/kick/mute/warn entries.
-
-    ``args`` are the raw command tokens and ``has_explicit_target`` tells the
-    reason parser whether the first token was consumed as the target.
-    """
-
-    msg: Message
-    admin: User
-    locale: str
-    target_id: int
-    target_name: str | None
-    has_explicit_target: bool
-    args: list[str]
-    ident: identity.Identity
-
-
-@dataclass(frozen=True)
-class StaffTarget:
-    """Resolved target of a single-action moderation command.
-
-    The commands that act once and finish (unwarn, resetwarns, unmute)
-    share the same entry sequence and need nothing more than the target
-    and the identity that was classified for it.
-    """
-
-    target_id: int
-    target_name: str
-    ident: identity.Identity
-    locale: str
-
-
-async def resolve_staff_target(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
-    *,
-    action: str,
-    min_role: str,
-    log_prefix: str,
-    bot_check: bool = True,
-) -> StaffTarget | None:
-    """Run the shared entry sequence for single-action moderation commands.
-
-    Checks the federation origin, resolves the target, classifies it, and
-    refuses the protected identities. Replies on the message and returns
-    ``None`` on any failure, so the caller only performs its own action.
-
-    ``bot_check`` verifies the target is not a proven bot before the
-    classification, so a bot is refused rather than acted on. Cancellation
-    always propagates.
-    """
-    msg = update.effective_message
-    admin = update.effective_user
-    if msg is None or admin is None:
-        return None
-    locale = await locale_for_update(update)
-    if not await require_federation_origin(
-        msg,
-        chat_id=msg.chat.id,
-        chat_type=msg.chat.type,
-        locale=locale,
-        allow_private=False,
-        log_label=f"{log_prefix} origin",
-    ):
-        return None
-    args = parse_cmd_args(msg.text)
-    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
-    if not target_id:
-        await safe_reply(
-            msg,
-            replies.err_cannot_resolve(locale, plain=True),
-            log_label=f"{log_prefix} no-target",
-            parse_mode=None,
-        )
-        return None
-    classified = await classify_and_check(
-        ctx.bot,
-        admin.id,
-        target_id,
-        target_name,
-        msg,
-        action=action,
-        min_role=min_role,
-        target_is_bot=(
-            await identity.is_proven_bot(update, target_id, ctx.bot)
-            if bot_check
-            else None
-        ),
-    )
-    if classified is None:
-        return None
-    ident, _target_role = classified
-    refusal = identity.refuse_message(action, ident, locale)
-    if refusal is not None:
-        await safe_reply(msg, refusal, log_label=f"{log_prefix} refusal")
-        return None
-    return StaffTarget(
-        target_id=target_id,
-        target_name=target_name or str(target_id),
-        ident=ident,
-        locale=locale,
-    )
-
-
-async def resolve_mod_target(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
-    *,
-    action: str,
-    min_role: str,
-    allow_private: bool,
-    log_prefix: str,
-    bot_check: bool = False,
-) -> ModTarget | None:
-    """Run the shared entry sequence for reason/proof moderation commands.
-
-    Resolves the locale, checks the federation origin, extracts the target,
-    and runs the identity plus rank checks, replying and returning ``None``
-    on any failure. The caller keeps only duty-specific parsing (reason,
-    duration) and conversation setup. Cancellation always propagates.
-    """
-    msg = update.effective_message
-    admin = update.effective_user
-    if msg is None or admin is None or ctx.user_data is None:
-        return None
-    locale = await locale_for_update(update)
-    if not await require_federation_origin(
-        msg,
-        chat_id=msg.chat.id,
-        chat_type=msg.chat.type,
-        locale=locale,
-        allow_private=allow_private,
-        log_label=f"{log_prefix} origin",
-    ):
-        return None
-    args = parse_cmd_args(msg.text)
-    # * Resolution plus consumption in one call: a verified explicit
-    # * ID/@username overrides the reply target, and the consumed flag
-    # * tells the reason parser to drop args[0] as the target token.
-    (target_id, target_name), has_explicit_target = await extraction.extract_mod_target(
-        update, args, ctx.bot
-    )
-    if not target_id:
-        await safe_reply(
-            msg,
-            replies.err_cannot_resolve(locale, plain=True),
-            log_label=f"{log_prefix} no-target",
-            parse_mode=None,
-        )
-        return None
-    # * Warn needs a verified bot check before classifying so a proven bot
-    # * target is refused instead of warned; other actions classify bots
-    # * from the identity cache alone.
-    target_is_bot = (
-        await identity.is_proven_bot(update, target_id, ctx.bot) if bot_check else None
-    )
-    classified = await classify_and_check(
-        ctx.bot,
-        admin.id,
-        target_id,
-        target_name,
-        msg,
-        action=action,
-        min_role=min_role,
-        target_is_bot=target_is_bot,
-    )
-    if classified is None:
-        return None
-    ident, _target_role = classified
-    refusal = identity.refuse_message(action, ident, locale)
-    if refusal is not None:
-        await safe_reply(msg, refusal, log_label=f"{log_prefix} refusal")
-        return None
-    return ModTarget(
-        msg=msg,
-        admin=admin,
-        locale=locale,
-        target_id=target_id,
-        target_name=target_name,
-        has_explicit_target=has_explicit_target,
-        args=args,
-        ident=ident,
-    )
+__all__ = [
+    "EnforcementVerdict",
+    "StaffAccess",
+    "action_owner_mismatch",
+    "banned_target_refusal",
+    "can_demote_admin",
+    "cancel_owner_mismatch",
+    "check_callback_executor",
+    "check_callback_staff",
+    "classify_and_check",
+    "enforcement_refusal",
+    "enforcement_refusal_text",
+    "enforcement_verdict",
+    "outranks",
+    "prompt_owner_mismatch",
+    "recheck_executor_rank",
+    "require_federation_origin",
+    "required_rank",
+    "resolve_and_check",
+]

@@ -13,13 +13,11 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, identity, keyboards
-from tcbot.modules.helper.decorators import (
+from tcbot.modules.helper.guards import (
     action_owner_mismatch,
     can_demote_admin,
     cancel_owner_mismatch,
-    check_callback_staff,
-    classify_and_load_role,
-    resolve_executor_target,
+    check_callback_executor,
 )
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
@@ -31,8 +29,9 @@ from tcbot.modules.helper.messages import (
 )
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.promo_decision_flow import execute_promo_decision
-from tcbot.modules.helper.pipelines.promote_flow import ROLE_ALIASES, Promote
+from tcbot.modules.helper.pipelines.promote_flow import Promote
 from tcbot.modules.helper.pipelines.transfer_flow import execute_transfer
+from tcbot.modules.helper.targets import classify_and_load_role, resolve_executor_target
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, code, user_ref
 from tcbot.utils.i18n import Safe, t
@@ -123,7 +122,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         not has_explicit_target
         and args
         and extraction.reply_uid(msg) is None
-        and args[0].lstrip("@").lower() in ROLE_ALIASES
+        and args[0].lstrip("@").lower() in db.users_roles.ROLE_ALIASES
     ):
         await safe_reply(
             msg,
@@ -170,7 +169,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    role = ROLE_ALIASES.get(role_arg)
+    role = db.users_roles.ROLE_ALIASES.get(role_arg)
 
     if role:
         _, text = await Promote.execute(
@@ -247,7 +246,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if await action_owner_mismatch(q, update, min_parts=3):
         return
 
-    executor_role = await check_callback_staff(admin.id, q, update)
+    executor_role = await check_callback_executor(update, q, admin)
     if executor_role is None:
         return
 
@@ -378,7 +377,7 @@ async def on_promote_role_cancel(
     if admin is None:
         await q.answer()
         return
-    if await check_callback_staff(admin.id, q, update) is None:
+    if await check_callback_executor(update, q, admin) is None:
         return
     await safe_edit_cb(
         q,
@@ -510,7 +509,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     locale = await locale_for_update(update)
     if await action_owner_mismatch(q, update, min_parts=2):
         return
-    executor_role = await check_callback_staff(admin.id, q, update)
+    executor_role = await check_callback_executor(update, q, admin)
     if executor_role is None:
         return
 
@@ -641,7 +640,7 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     if admin is None:
         await q.answer()
         return
-    if await check_callback_staff(admin.id, q, update) is None:
+    if await check_callback_executor(update, q, admin) is None:
         return
     await safe_edit_cb(
         q,

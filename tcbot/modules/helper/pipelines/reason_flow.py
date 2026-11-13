@@ -20,7 +20,7 @@ from telegram.ext import (
 )
 from telegram.ext.filters import BaseFilter
 
-from tcbot.modules.helper import decorators
+from tcbot.modules.helper import guards
 from tcbot.modules.helper.keyboards import reason_step_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply
@@ -37,6 +37,8 @@ from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from tcbot.database.users_roles import RoleName
 
 log = get_logger(__name__)
 
@@ -142,13 +144,13 @@ class _FlowBase:
         reason: BuildReason,
         proof: BuildProof,
         executor: Callable[..., Any],
-        min_role: str,
+        min_role: RoleName,
     ) -> None:
         self.action = action
         self.reason = reason
         self.proof = proof
         self.executor = executor
-        self.min_role = min_role
+        self.min_role: RoleName = min_role
         self._reason_key = f"{action}_reason"
         self._proof_msgs_key = f"{action}_proof_msgs"
         self._extra_info_key = f"{action}_extra_info"
@@ -191,7 +193,7 @@ class _FlowBase:
                 except Exception as exc:
                     log.debug("%s recheck q.answer failed: %s", self.action, exc)
             return False
-        if await decorators.recheck_executor_rank(
+        if await guards.recheck_executor_rank(
             tap_msg, tap_user.id, min_role=self.min_role
         ):
             return True
@@ -562,7 +564,7 @@ def build_modaction_conv(
     entry_filter: BaseFilter,
     escape_filter: BaseFilter | None = None,
     *,
-    min_role: str,
+    min_role: RoleName,
 ) -> ConversationHandler:
     """Build a generic reason + proof ConversationHandler."""
     return _ModActionFlow(reason.action, reason, proof, executor, min_role).build(

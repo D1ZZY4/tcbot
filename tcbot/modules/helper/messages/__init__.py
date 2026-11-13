@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from tcbot.modules.helper.messages import replies
 from tcbot.modules.helper.messages.audit_logs import (
     LogBuilder,
     appeal_approved_edit,
@@ -96,6 +97,7 @@ __all__ = [
     "proof_caption_new",
     "proof_caption_update",
     "render_groups",
+    "replies",
     "resetwarns_log",
     "safe_edit",
     "safe_edit_cb",

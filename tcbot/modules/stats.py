@@ -16,8 +16,7 @@ from telegram.ext import (
     filters,
 )
 
-from tcbot import database as db
-from tcbot.modules.helper import decorators
+from tcbot.modules.helper import decorators, guards
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ack_and_render,
@@ -41,6 +40,8 @@ from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
 if TYPE_CHECKING:
     from telegram import CallbackQuery, Message, Update
+
+    from tcbot.database.users_roles import RoleName
 
 log = get_logger(__name__)
 
@@ -93,36 +94,22 @@ async def _pane_access(
     user_id: int | None,
     locale: str,
     *,
-    min_role: str,
+    min_role: RoleName,
     denial: str,
 ) -> bool:
     """Return True when the tapper may open a gated stats pane.
 
-    ``min_role`` names the lowest rank that passes; the rank table is the
-    single source of truth for the comparison. The owner id always passes,
-    because the owner row and the founder role can diverge briefly around
-    a transfer and the owner must keep operator access.
+    ``min_role`` names the lowest rank that passes; the shared gate owns
+    the comparison so the rank table stays the single source of truth.
 
-    Both checks are cached reads served in parallel, so the spinner clears
-    in one round trip. Lookup outages fail closed with a retry alert;
-    cancellation propagates via the bare gather below.
+    A lookup outage fails closed with a retry alert; cancellation
+    propagates.
     """
-    if user_id is None:
-        await _alert(q, denial)
-        return False
-    try:
-        owner_r, role_r = await asyncio.gather(
-            db.users_roles.is_owner(user_id, fresh=True),
-            db.users_roles.get_effective_role(user_id, fresh=True),
-        )
-    except Exception as exc:
-        log.warning("stats pane access check failed for %d: %s", user_id, exc)
+    access = await guards.staff_access(user_id, min_role=min_role)
+    if access is guards.StaffAccess.LOOKUP_FAILED:
         await _alert(q, t("stats.error.access_retry", locale, plain=True))
         return False
-    allowed = owner_r is True or db.users_roles.role_rank(
-        role_r
-    ) >= db.users_roles.role_rank(min_role)
-    if not allowed:
+    if access is not guards.StaffAccess.ALLOWED:
         await _alert(q, denial)
         return False
     return True
@@ -177,15 +164,10 @@ async def _require_staff_input(msg: Message, update: Update) -> str | None:
     """
     tapper = update.effective_user
     locale = await locale_for_update(update)
-    if tapper is None:
-        return None
-    try:
-        owner_r, role_r = await asyncio.gather(
-            db.users_roles.is_owner(tapper.id, fresh=True),
-            db.users_roles.get_effective_role(tapper.id, fresh=True),
-        )
-    except Exception as exc:
-        log.warning("stats search access check failed for %d: %s", tapper.id, exc)
+    access = await guards.staff_access(
+        tapper.id if tapper is not None else None, min_role="tester"
+    )
+    if access is guards.StaffAccess.LOOKUP_FAILED:
         await safe_reply(
             msg,
             t("stats.error.access_retry", locale, plain=True),
@@ -193,9 +175,7 @@ async def _require_staff_input(msg: Message, update: Update) -> str | None:
             parse_mode=None,
         )
         return None
-    if owner_r is not True and db.users_roles.role_rank(
-        role_r
-    ) < db.users_roles.role_rank("tester"):
+    if access is not guards.StaffAccess.ALLOWED:
         await safe_reply(
             msg,
             t("stats.error.staff_only", locale, plain=True),

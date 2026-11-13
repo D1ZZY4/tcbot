@@ -354,7 +354,7 @@ Resolution order in `get_effective_role`:
   refreshed with the result): enforcement gates use `fresh=True` so a
   demotion or transfer in another process is never hidden for the cache
   TTL. Executor-versus-target checks go through
-  `decorators.resolve_and_check()`, which fails closed when either lookup
+  `guards.resolve_and_check()`, which fails closed when either lookup
   fails.
 - `role_meta(user_id: int) -> tuple[str | None, int | None, datetime | None]`
   `(role, assigned_by, assigned_at)` for profile views. An owner has no

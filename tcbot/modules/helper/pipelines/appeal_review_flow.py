@@ -16,7 +16,7 @@ from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import messages
+from tcbot.modules.helper import guards, messages
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import cb_error_edit, send_log
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
@@ -183,9 +183,7 @@ class ApproveMixin:
         # ! action as /tcunban. Without this gate an Admin could strip a
         # ! peer Admin's rank and lift their ban, an outcome the sibling
         # ! command path refuses for equal rank.
-        if target_role and db.users_roles.role_rank(
-            approver_role
-        ) <= db.users_roles.role_rank(target_role):
+        if not guards.outranks(approver_role, target_role):
             log.warning(
                 "approve_appeal refused: approver %d (role=%s) does not outrank "
                 "target %d (role=%s)",

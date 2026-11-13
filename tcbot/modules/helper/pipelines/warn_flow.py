@@ -13,7 +13,7 @@ from telegram import Message, Update
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, keyboards, messages
+from tcbot.modules.helper import guards, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
 from tcbot.modules.helper.pipelines.demote_flow import Demote
@@ -82,19 +82,17 @@ async def execute_warn(
     # * promoted in that window must not be warned by a moderator who no
     # * longer outranks them. The check runs first so a refused warning
     # * leaves no record, no counter, no demotion, and no orphan proof.
-    verdict, target_label = await decorators.enforcement_verdict(
-        admin_id, target_id, min_role="tester"
+    refusal = await guards.enforcement_refusal(
+        admin_id,
+        target_id,
+        min_role="tester",
+        action="Warn",
+        locale=locale,
     )
-    if verdict is not decorators.EnforcementVerdict.ALLOWED:
-        log.warning(
-            "Warn refused for target=%d: executor=%d (%s)",
-            target_id,
-            admin_id,
-            verdict.value,
-        )
+    if refusal is not None:
         await safe_reply(
             msg,
-            decorators.enforcement_refusal_text(verdict, target_label, locale),
+            refusal,
             log_label="execute_warn rank-refusal",
             parse_mode=None,
         )

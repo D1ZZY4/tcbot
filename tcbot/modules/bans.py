@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import BanDoc
-from tcbot.modules.helper import decorators
+from tcbot.modules.helper import decorators, targets
 from tcbot.modules.helper.keyboards import ban_update_confirm_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import message_link, replies, safe_reply
@@ -96,7 +96,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ``WAITING_UPDATE_CONFIRM``, ``WAITING_PROOF``, or
     ``ConversationHandler.END`` on any failure.
     """
-    resolved = await decorators.resolve_mod_target(
+    resolved = await targets.resolve_mod_target(
         update,
         ctx,
         action="ban",

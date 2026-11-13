@@ -18,7 +18,7 @@ import pytest
 from tcbot import database as db
 from tcbot.database import users_cache
 from tcbot.modules import netspeed
-from tcbot.modules.helper.decorators import checks
+from tcbot.modules.helper import guards
 from tcbot.modules.helper.pipelines import mute_flow, proof_flow, stats_flow
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitBreaker, CircuitState
@@ -172,17 +172,17 @@ def test_classify_failure_replies(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _safe_reply(m: Any, text: str, **k: Any) -> None:
         replies.append(text)
 
-    monkeypatch.setattr(checks.identity, "classify", _classify)
-    monkeypatch.setattr(checks, "resolve_and_check", _resolve)
-    monkeypatch.setattr(checks, "effective_locale", _locale)
-    monkeypatch.setattr(checks, "safe_reply", _safe_reply)
+    monkeypatch.setattr(guards.identity, "classify", _classify)
+    monkeypatch.setattr(guards, "resolve_and_check", _resolve)
+    monkeypatch.setattr(guards, "effective_locale", _locale)
+    monkeypatch.setattr(guards, "safe_reply", _safe_reply)
 
     msg = MagicMock()
     msg.chat = MagicMock(type="group", id=1)
     bot = MagicMock()
 
     result = asyncio.run(
-        checks.classify_and_check(
+        guards.classify_and_check(
             bot, 1, 2, None, msg, action="ban", min_role="developer"
         )  # type: ignore[arg-type]
     )

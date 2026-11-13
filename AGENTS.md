@@ -125,7 +125,9 @@ Current stack:
 │   │   │   ├── pipelines/    ConversationHandler flows (one `*_flow.py` module each)
 │   │   │   ├── keyboards/    Inline keyboard builders
 │   │   │   │   └── nav.py     Previous/next row for paged views
-│   │   │   ├── decorators/    Rate limiter, role checks, execution logging
+│   │   │   ├── decorators/    Rate limiter, tier guards, execution logging
+│   │   │   ├── guards.py      Permission gates: may the executor act, and on whom
+│   │   │   ├── targets.py     Target resolution: who the command acts on
 │   │   │   ├── extraction/   Target/user extraction helpers
 │   │   │   ├── identity.py   Self/bot/Telegram/Founder/staff classification
 │   │   │   ├── locale.py     Render-locale resolution (per-update locale)

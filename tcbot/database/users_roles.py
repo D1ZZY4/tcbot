@@ -52,6 +52,22 @@ _OWNER_TRANSFER_LOCK_KEY: int = 7_313_919_265_517_001
 
 VALID_ROLES: tuple[Literal["developer", "tester"], ...] = ("developer", "tester")
 
+# * Name of a federation tier. The tier argument of every permission gate
+# * is typed with it, so a typo in a threshold name is a type error the
+# * checker reports instead of a rank that silently matches nobody.
+RoleName = Literal["founder", "admin", "developer", "tester"]
+
+# * Spellings the promote command accepts for a tier. The table is role
+# * vocabulary, so it belongs next to the other role tables rather than
+# * in a command module.
+ROLE_ALIASES: dict[str, str] = {
+    "admin": "admin",
+    "developer": "developer",
+    "dev": "developer",
+    "tester": "tester",
+    "test": "tester",
+}
+
 ROLE_RANK: dict[str, int] = {
     "founder": 4,
     "admin": 3,

@@ -13,7 +13,7 @@ from telegram import Bot, ChatPermissions, Update
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, keyboards, messages
+from tcbot.modules.helper import guards, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     replies,
@@ -85,21 +85,19 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     # * window must not be actioned by a moderator who no longer outranks
     # * them. The check runs before the active-mute record so a refused
     # * mute leaves no state behind.
-    verdict, target_label = await decorators.enforcement_verdict(
-        admin_id, target_id, min_role="tester"
+    refusal = await guards.enforcement_refusal(
+        admin_id,
+        target_id,
+        min_role="tester",
+        action="Mute",
+        locale=locale,
     )
-    if verdict is not decorators.EnforcementVerdict.ALLOWED:
-        log.warning(
-            "Mute refused for target=%d: executor=%d (%s)",
-            target_id,
-            admin_id,
-            verdict.value,
-        )
+    if refusal is not None:
         await safe_edit_message(
             bot,
             prompt_chat,
             prompt_id,
-            decorators.enforcement_refusal_text(verdict, target_label, locale),
+            refusal,
             log_level="debug",
             log_label="_execute_mute rank-refusal",
             catch_all=True,

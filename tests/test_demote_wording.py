@@ -19,7 +19,7 @@ import pytest
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators
+from tcbot.modules.helper import guards
 from tcbot.modules.helper.pipelines import warn_flow
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.utils.i18n import available_locales, load_catalog, t
@@ -62,7 +62,7 @@ def _wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     async def _verdict(
         executor_id: int, target_id: int, *, min_role: str = "tester"
     ) -> tuple[Any, Any]:
-        return decorators.EnforcementVerdict.ALLOWED, None
+        return guards.EnforcementVerdict.ALLOWED, None
 
     async def _add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int:
         return cfg.warn_limit
@@ -89,7 +89,7 @@ def _wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     async def _reply(msg: Any, text: str, **kwargs: Any) -> None:
         record["replies"].append(text)
 
-    monkeypatch.setattr(decorators, "enforcement_verdict", _verdict)
+    monkeypatch.setattr(guards, "enforcement_verdict", _verdict)
     monkeypatch.setattr(db.warns_db, "add_warn", _add_warn)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(warn_flow, "locale_for_update", _locale)

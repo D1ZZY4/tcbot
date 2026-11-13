@@ -13,12 +13,9 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.decorators import (
-    auth,
-    checks,
-    require_federation_origin,
-    resolve_and_check,
-)
+from tcbot.modules.helper import guards, targets
+from tcbot.modules.helper.decorators import auth
+from tcbot.modules.helper.guards import require_federation_origin, resolve_and_check
 
 
 def _msg(chat_type: str = "group", chat_id: int = -1001) -> Any:
@@ -40,8 +37,9 @@ def _install(monkeypatch: pytest.MonkeyPatch, log: _ReplyLog) -> None:
     async def _safe_reply(msg: Any, text: str, **kwargs: Any) -> None:
         await log.reply(msg, text, **kwargs)
 
-    monkeypatch.setattr(checks, "effective_locale", _locale)
-    monkeypatch.setattr(checks, "safe_reply", _safe_reply)
+    monkeypatch.setattr(guards, "effective_locale", _locale)
+    monkeypatch.setattr(guards, "safe_reply", _safe_reply)
+    monkeypatch.setattr(targets, "safe_reply", _safe_reply)
 
 
 def test_resolve_and_check_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -189,7 +187,7 @@ def test_recheck_executor_rank_allows_meeting_rank(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     assert (
-        asyncio.run(checks.recheck_executor_rank(_msg(), 11, min_role="developer"))
+        asyncio.run(guards.recheck_executor_rank(_msg(), 11, min_role="developer"))
         is True
     )
     assert log.texts == []
@@ -206,7 +204,7 @@ def test_recheck_executor_rank_refuses_demotion(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     assert (
-        asyncio.run(checks.recheck_executor_rank(_msg(), 11, min_role="tester"))
+        asyncio.run(guards.recheck_executor_rank(_msg(), 11, min_role="tester"))
         is False
     )
     assert len(log.texts) == 1
@@ -223,7 +221,7 @@ def test_recheck_executor_rank_fails_closed_on_outage(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
     assert (
-        asyncio.run(checks.recheck_executor_rank(_msg(), 11, min_role="tester"))
+        asyncio.run(guards.recheck_executor_rank(_msg(), 11, min_role="tester"))
         is False
     )
     assert len(log.texts) == 1
@@ -240,7 +238,7 @@ def test_recheck_executor_rank_propagates_cancellation(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _cancelled)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(checks.recheck_executor_rank(_msg(), 11, min_role="tester"))
+        asyncio.run(guards.recheck_executor_rank(_msg(), 11, min_role="tester"))
 
 
 def _update_ctx() -> tuple[Any, Any]:
@@ -280,14 +278,14 @@ def test_resolve_mod_target_returns_resolved_target(
     ) -> tuple[Any, Any]:
         return SimpleNamespace(kind="user"), None
 
-    monkeypatch.setattr(checks, "locale_for_update", _locale)
-    monkeypatch.setattr(checks, "require_federation_origin", _origin)
-    monkeypatch.setattr(checks.extraction, "extract_mod_target", _extract)
-    monkeypatch.setattr(checks, "classify_and_check", _classify)
-    monkeypatch.setattr(checks.identity, "refuse_message", lambda *a: None)
+    monkeypatch.setattr(targets, "locale_for_update", _locale)
+    monkeypatch.setattr(guards, "require_federation_origin", _origin)
+    monkeypatch.setattr(targets.extraction, "extract_mod_target", _extract)
+    monkeypatch.setattr(guards, "classify_and_check", _classify)
+    monkeypatch.setattr(targets.identity, "refuse_message", lambda *a: None)
 
     resolved = asyncio.run(
-        checks.resolve_mod_target(
+        targets.resolve_mod_target(
             update,
             ctx,
             action="ban",
@@ -321,12 +319,12 @@ def test_resolve_mod_target_replies_no_target(
     async def _extract(upd: Any, args: Any, bot: Any) -> tuple[Any, Any]:
         return (0, ""), False
 
-    monkeypatch.setattr(checks, "locale_for_update", _locale)
-    monkeypatch.setattr(checks, "require_federation_origin", _origin)
-    monkeypatch.setattr(checks.extraction, "extract_mod_target", _extract)
+    monkeypatch.setattr(targets, "locale_for_update", _locale)
+    monkeypatch.setattr(guards, "require_federation_origin", _origin)
+    monkeypatch.setattr(targets.extraction, "extract_mod_target", _extract)
 
     resolved = asyncio.run(
-        checks.resolve_mod_target(
+        targets.resolve_mod_target(
             update,
             ctx,
             action="kick",
@@ -369,15 +367,15 @@ def test_resolve_staff_target_returns_resolved_target(
     async def _not_bot(upd: Any, target_id: int, bot: Any) -> bool:
         return False
 
-    monkeypatch.setattr(checks, "locale_for_update", _locale)
-    monkeypatch.setattr(checks, "require_federation_origin", _origin)
-    monkeypatch.setattr(checks.extraction, "extract_target", _extract)
-    monkeypatch.setattr(checks, "classify_and_check", _classify)
-    monkeypatch.setattr(checks.identity, "is_proven_bot", _not_bot)
-    monkeypatch.setattr(checks.identity, "refuse_message", lambda *a: None)
+    monkeypatch.setattr(targets, "locale_for_update", _locale)
+    monkeypatch.setattr(guards, "require_federation_origin", _origin)
+    monkeypatch.setattr(targets.extraction, "extract_target", _extract)
+    monkeypatch.setattr(guards, "classify_and_check", _classify)
+    monkeypatch.setattr(targets.identity, "is_proven_bot", _not_bot)
+    monkeypatch.setattr(targets.identity, "refuse_message", lambda *a: None)
 
     resolved = asyncio.run(
-        checks.resolve_staff_target(
+        targets.resolve_staff_target(
             update,
             ctx,
             action="unwarn",
@@ -422,17 +420,17 @@ def test_resolve_staff_target_refuses_a_protected_identity(
     async def _not_bot(upd: Any, target_id: int, bot: Any) -> bool:
         return False
 
-    monkeypatch.setattr(checks, "locale_for_update", _locale)
-    monkeypatch.setattr(checks, "require_federation_origin", _origin)
-    monkeypatch.setattr(checks.extraction, "extract_target", _extract)
-    monkeypatch.setattr(checks, "classify_and_check", _classify)
-    monkeypatch.setattr(checks.identity, "is_proven_bot", _not_bot)
+    monkeypatch.setattr(targets, "locale_for_update", _locale)
+    monkeypatch.setattr(guards, "require_federation_origin", _origin)
+    monkeypatch.setattr(targets.extraction, "extract_target", _extract)
+    monkeypatch.setattr(guards, "classify_and_check", _classify)
+    monkeypatch.setattr(targets.identity, "is_proven_bot", _not_bot)
     monkeypatch.setattr(
-        checks.identity, "refuse_message", lambda *a: "refused, founder"
+        targets.identity, "refuse_message", lambda *a: "refused, founder"
     )
 
     resolved = asyncio.run(
-        checks.resolve_staff_target(
+        targets.resolve_staff_target(
             update,
             ctx,
             action="unmute",
@@ -460,7 +458,7 @@ def test_resolve_staff_target_refuses_a_disconnected_origin(
         return False
 
     resolved = asyncio.run(
-        checks.resolve_staff_target(
+        targets.resolve_staff_target(
             update,
             ctx,
             action="resetwarns",

@@ -21,7 +21,7 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, keyboards, messages
+from tcbot.modules.helper import guards, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
     appeal_deep_link,
@@ -379,22 +379,20 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     # * promoted in that window must not be banned by a moderator who no
     # * longer outranks them. The check runs first so a refused ban
     # * leaves no record, no proof, and no partial fan-out behind.
-    verdict, target_label = await decorators.enforcement_verdict(
-        admin_id, target_id, min_role="developer"
+    refusal = await guards.enforcement_refusal(
+        admin_id,
+        target_id,
+        min_role="developer",
+        action="Ban",
+        locale=locale,
     )
-    if verdict is not decorators.EnforcementVerdict.ALLOWED:
-        log.warning(
-            "Ban refused for target=%d: executor=%d (%s)",
-            target_id,
-            admin_id,
-            verdict.value,
-        )
+    if refusal is not None:
         if prompt_msg_id and prompt_chat_id:
             await safe_edit_message(
                 bot,
                 prompt_chat_id,
                 prompt_msg_id,
-                decorators.enforcement_refusal_text(verdict, target_label, locale),
+                refusal,
                 log_level="debug",
                 log_label="Ban rank-refusal prompt",
                 catch_all=True,
@@ -683,7 +681,7 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
         return ConversationHandler.END
     await q.answer()
     tapper = update.effective_user
-    if tapper is None or not await decorators.recheck_executor_rank(
+    if tapper is None or not await guards.recheck_executor_rank(
         msg, tapper.id, min_role="developer"
     ):
         for key in BAN_USER_DATA_KEYS:
@@ -805,9 +803,7 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         _proof_sessions.pop(key, None)
         _clear_ban_state(session.scope)
         return ConversationHandler.END
-    if not await decorators.recheck_executor_rank(
-        tap_msg, user.id, min_role="developer"
-    ):
+    if not await guards.recheck_executor_rank(tap_msg, user.id, min_role="developer"):
         try:
             await q.answer()
         except Exception as exc:

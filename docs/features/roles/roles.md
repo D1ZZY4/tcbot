@@ -1,6 +1,6 @@
 # Roles
 
-This document describes the current role and staff-management behavior implemented by `tcbot/modules/admins.py`, `tcbot/modules/helper/pipelines/promote_flow.py`, `tcbot/modules/helper/pipelines/demote_flow.py`, `tcbot/modules/helper/decorators/` (for `resolve_and_check`), `tcbot/modules/helper/identity.py` (for target identity refusals), `tcbot/database/users_roles.py`, and `tcbot/database/queues_db.py`.
+This document describes the current role and staff-management behavior implemented by `tcbot/modules/admins.py`, `tcbot/modules/helper/pipelines/promote_flow.py`, `tcbot/modules/helper/pipelines/demote_flow.py`, `tcbot/modules/helper/guards.py` (for `resolve_and_check`), `tcbot/modules/helper/identity.py` (for target identity refusals), `tcbot/database/users_roles.py`, and `tcbot/database/queues_db.py`.
 
 For promote command details, see [`promote.md`](promote.md). For demote command
 details, see [`demote.md`](demote.md). For module structure, see
@@ -64,9 +64,9 @@ Only `developer` and `tester` are valid custom roles in `tc_roles`. Founder and 
 
 ## Permission model
 
-The helper `role_rank(role)` converts an effective role into its numeric rank. Executor-versus-target checks go through `decorators.resolve_and_check()`, which allows the action only when the executor rank is strictly greater than the target rank. If either role lookup fails, the check fails closed with a retry reply rather than treating the failed lookup as a user with no role; cancellation always propagates.
+The helper `role_rank(role)` converts an effective role into its numeric rank. Executor-versus-target checks go through `guards.resolve_and_check()`, which allows the action only when the executor rank is strictly greater than the target rank. If either role lookup fails, the check fails closed with a retry reply rather than treating the failed lookup as a user with no role; cancellation always propagates.
 
-The rule is applied at two moments. The entry command compares the roles when the moderator starts the flow, and `decorators.enforcement_verdict()` compares them again when the action is enforced, because the reason and proof steps stay open for a minute. A target promoted in that window would otherwise be actioned by a moderator who no longer outranks them, so the ban, kick, mute, and warn executors re-read both roles fresh and refuse the action. The enforcement verdict also carries the tier the action needs, so a moderator demoted below that tier during the same window is refused there. The refusal happens before anything is recorded, so it leaves no audit row, no ban record, no warning counter, and no orphan proof behind. A role lookup that fails refuses the action as well.
+The rule is applied at two moments. The entry command compares the roles when the moderator starts the flow, and `guards.enforcement_refusal()` compares them again when the action is enforced, because the reason and proof steps stay open for a minute. A target promoted in that window would otherwise be actioned by a moderator who no longer outranks them, so the ban, kick, mute, and warn executors re-read both roles fresh and refuse the action. The enforcement verdict also carries the tier the action needs, so a moderator demoted below that tier during the same window is refused there. The refusal happens before anything is recorded, so it leaves no audit row, no ban record, no warning counter, and no orphan proof behind. A role lookup that fails refuses the action as well.
 
 Common moderation thresholds:
 

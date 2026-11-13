@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot import cfg
-from tcbot.modules.helper import decorators, extraction, identity
-from tcbot.modules.helper.decorators import resolve_and_check
+from tcbot.modules.helper import decorators, extraction, guards, identity, targets
+from tcbot.modules.helper.guards import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply
 from tcbot.modules.helper.pipelines.reason_flow import (
@@ -108,7 +108,7 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """
     # * Warn audit rows are scoped to the origin chat: only a connected
     # * group (or primary) may create, aggregate, or trigger threshold ban.
-    resolved = await decorators.resolve_mod_target(
+    resolved = await targets.resolve_mod_target(
         update,
         ctx,
         action="warn",
@@ -202,26 +202,14 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     Resolves the target, runs the identity check, optionally emits a
     staff-action notice, then delegates to ``execute_unwarn``.
     """
-    msg = update.effective_message
-    if msg is None:
-        return
-    resolved = await decorators.resolve_staff_target(
+    await targets.run_staff_action(
         update,
         ctx,
         action="unwarn",
         min_role="tester",
         log_prefix="cmd_unwarn",
+        execute=execute_unwarn,
     )
-    if resolved is None:
-        return
-
-    notice = identity.staff_notice(
-        "unwarn", resolved.ident, cfg.community_name, resolved.locale
-    )
-    if notice is not None:
-        await safe_reply(msg, notice, log_label="cmd_unwarn notice")
-
-    await execute_unwarn(update, ctx, resolved.target_id, resolved.target_name)
 
 
 # ─────────────────── Command Warn List </warns> ─────────────────── #
@@ -239,7 +227,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if admin is None:
         return
     locale = await locale_for_update(update)
-    if not await decorators.require_federation_origin(
+    if not await guards.require_federation_origin(
         msg,
         chat_id=msg.chat.id,
         chat_type=msg.chat.type,
@@ -280,26 +268,14 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     Resolves the target, runs the identity check, optionally emits a
     staff-action notice, then delegates to ``execute_resetwarns``.
     """
-    msg = update.effective_message
-    if msg is None:
-        return
-    resolved = await decorators.resolve_staff_target(
+    await targets.run_staff_action(
         update,
         ctx,
         action="resetwarns",
         min_role="tester",
         log_prefix="cmd_resetwarns",
+        execute=execute_resetwarns,
     )
-    if resolved is None:
-        return
-
-    notice = identity.staff_notice(
-        "resetwarns", resolved.ident, cfg.community_name, resolved.locale
-    )
-    if notice is not None:
-        await safe_reply(msg, notice, log_label="cmd_resetwarns notice")
-
-    await execute_resetwarns(update, ctx, resolved.target_id, resolved.target_name)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

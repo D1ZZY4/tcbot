@@ -15,7 +15,7 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
-from tcbot.modules.helper import decorators, messages
+from tcbot.modules.helper import decorators, guards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
 from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
@@ -78,7 +78,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     admin = update.effective_user
     if msg is None or admin is None:
         return
-    if not await decorators.require_federation_origin(
+    if not await guards.require_federation_origin(
         msg,
         chat_id=msg.chat.id,
         chat_type=msg.chat.type,

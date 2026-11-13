@@ -14,8 +14,8 @@ from telegram.ext import ContextTypes
 from tcbot import database as db
 from tcbot import error_reporter
 from tcbot.modules.helper import identity
-from tcbot.modules.helper.decorators import resolve_and_check
 from tcbot.modules.helper.extraction import extract_target
+from tcbot.modules.helper.guards import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ownership_transferred,

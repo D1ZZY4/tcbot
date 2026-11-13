@@ -17,7 +17,8 @@ from tcbot import database as db
 from tcbot.database import bans_db, mutes_db
 from tcbot.database import engine as engine_module
 from tcbot.database.base import active_mutes, bans
-from tcbot.modules.helper.decorators import checks, ratelimit
+from tcbot.modules.helper import guards
+from tcbot.modules.helper.decorators import ratelimit
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -53,13 +54,13 @@ async def ban_db(postgres_db: str) -> AsyncIterator[str]:
 
 def test_can_demote_admin_requires_the_founder() -> None:
     """Only the Founder may remove an Admin role."""
-    assert checks.can_demote_admin("founder", "admin") is True
-    assert checks.can_demote_admin("admin", "admin") is False
-    assert checks.can_demote_admin("developer", "admin") is False
+    assert guards.can_demote_admin("founder", "admin") is True
+    assert guards.can_demote_admin("admin", "admin") is False
+    assert guards.can_demote_admin("developer", "admin") is False
     # * Every other target follows the normal rank rule.
-    assert checks.can_demote_admin("admin", "developer") is True
-    assert checks.can_demote_admin("admin", "tester") is True
-    assert checks.can_demote_admin("admin", None) is True
+    assert guards.can_demote_admin("admin", "developer") is True
+    assert guards.can_demote_admin("admin", "tester") is True
+    assert guards.can_demote_admin("admin", None) is True
 
 
 def test_role_rank_orders_the_federation_hierarchy() -> None:

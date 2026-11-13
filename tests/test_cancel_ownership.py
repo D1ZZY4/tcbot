@@ -118,7 +118,7 @@ def test_non_owner_promote_action_alerts_and_keeps_prompt(
         raise AssertionError("staff check must not run for a foreign tapper")
 
     monkeypatch.setattr("tcbot.modules.admins.locale_for_update", _locale)
-    monkeypatch.setattr("tcbot.modules.admins.check_callback_staff", _boom)
+    monkeypatch.setattr("tcbot.modules.admins.check_callback_executor", _boom)
     query = _FakeQuery("promo_role:admin:7:1")
     asyncio.run(on_promote_role_btn(_update(query, 2), None))  # type: ignore[arg-type]
     assert query.answers[-1] == (
@@ -138,7 +138,7 @@ def test_non_owner_demote_action_alerts_and_keeps_prompt(
         raise AssertionError("staff check must not run for a foreign tapper")
 
     monkeypatch.setattr("tcbot.modules.admins.locale_for_update", _locale)
-    monkeypatch.setattr("tcbot.modules.admins.check_callback_staff", _boom)
+    monkeypatch.setattr("tcbot.modules.admins.check_callback_executor", _boom)
     query = _FakeQuery("demote_confirm:7:1")
     asyncio.run(on_demote_confirm(_update(query, 2), None))  # type: ignore[arg-type]
     assert query.answers[-1] == (

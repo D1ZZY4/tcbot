@@ -88,7 +88,9 @@ tcbot/
 │   ├── *.py                Command and callback modules
 │   └── helper/
 │       ├── ban_info.py     Ban detail renderer
-│       ├── decorators/     Auth, per-handler rate limits, tracing, resolve_and_check
+│       ├── decorators/     Auth, per-handler rate limits, tracing
+│       ├── guards.py       Permission gates: may the executor act, and on whom
+│       ├── targets.py      Target resolution: who the command acts on
 │       ├── extraction/     Target resolution and live identity refresh
 │       ├── identity.py     Identity classification, group-permission checks, refusal messages
 │       ├── keyboards/      Inline keyboard factories

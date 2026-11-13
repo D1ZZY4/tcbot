@@ -98,7 +98,7 @@ def test_picker_resolves_live_name_on_cache_miss(
         return Identity("user", target_id, target_fname or str(target_id))
 
     monkeypatch.setattr("tcbot.modules.admins.locale_for_update", _locale)
-    monkeypatch.setattr("tcbot.modules.admins.check_callback_staff", _staff)
+    monkeypatch.setattr("tcbot.modules.admins.check_callback_executor", _staff)
     monkeypatch.setattr("tcbot.modules.admins.identity.is_proven_bot", _not_bot)
     monkeypatch.setattr("tcbot.modules.admins.identity.classify", _classify)
     monkeypatch.setattr("tcbot.database.users_cache.get_first_name", _first_name)

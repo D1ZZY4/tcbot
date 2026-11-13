@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import keyboards, messages
-from tcbot.modules.helper.decorators.checks import banned_target_refusal
+from tcbot.modules.helper.guards import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_user
 from tcbot.modules.helper.messages import send_log
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -26,15 +26,6 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 # ───────────────────────── Role assignment ──────────────────────── #
-
-
-ROLE_ALIASES: dict[str, str] = {
-    "admin": "admin",
-    "developer": "developer",
-    "dev": "developer",
-    "tester": "tester",
-    "test": "tester",
-}
 
 
 async def assign_admin(

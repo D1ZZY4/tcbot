@@ -24,8 +24,8 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper import decorators, identity
-from tcbot.modules.helper.decorators.checks import EnforcementVerdict
+from tcbot.modules.helper import guards, identity
+from tcbot.modules.helper.guards import EnforcementVerdict
 from tcbot.modules.helper.pipelines import ban_flow, kick_flow
 
 
@@ -90,7 +90,7 @@ async def test_the_verdict_allows_an_executor_above_the_target(
     """A developer may act on a regular user."""
     _roles(monkeypatch, "developer", None)
 
-    verdict, label = await decorators.enforcement_verdict(111, 999)
+    verdict, label = await guards.enforcement_verdict(111, 999)
 
     assert verdict is EnforcementVerdict.ALLOWED
     assert label is None
@@ -102,7 +102,7 @@ async def test_the_verdict_refuses_a_target_who_outranks(
     """A developer may not act on an admin."""
     _roles(monkeypatch, "developer", "admin")
 
-    verdict, label = await decorators.enforcement_verdict(111, 999)
+    verdict, label = await guards.enforcement_verdict(111, 999)
 
     assert verdict is EnforcementVerdict.OUTRANKED
     assert label == "Admin"
@@ -114,7 +114,7 @@ async def test_the_verdict_refuses_a_target_of_equal_rank(
     """Equal rank is refused, exactly like the entry check does."""
     _roles(monkeypatch, "admin", "admin")
 
-    verdict, _label = await decorators.enforcement_verdict(111, 999)
+    verdict, _label = await guards.enforcement_verdict(111, 999)
 
     assert verdict is EnforcementVerdict.OUTRANKED
 
@@ -125,7 +125,7 @@ async def test_the_verdict_reads_both_roles_fresh(
     """The check must not run on a cached role."""
     calls = _roles(monkeypatch, "developer", None)
 
-    await decorators.enforcement_verdict(111, 999)
+    await guards.enforcement_verdict(111, 999)
 
     assert calls == [(111, True), (999, True)]
 
@@ -140,7 +140,7 @@ async def test_the_verdict_fails_closed_on_a_lookup_error(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
 
-    verdict, label = await decorators.enforcement_verdict(111, 999)
+    verdict, label = await guards.enforcement_verdict(111, 999)
 
     assert verdict is EnforcementVerdict.LOOKUP_FAILED
     assert label is None

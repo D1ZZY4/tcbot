@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes, ConversationHandler
 
-from tcbot.modules.helper import decorators
+from tcbot.modules.helper import decorators, targets
 from tcbot.modules.helper.messages import replies, safe_reply
 from tcbot.modules.helper.pipelines.kick_flow import kick_conversation, proof, reason
 from tcbot.modules.helper.pipelines.reason_flow import (
@@ -94,7 +94,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * chats ("Can't ban members in private chats"), so the shared resolver
     # * refuses private origins up front via allow_private=False; it also
     # * blocks disconnected groups from kicking in a non-federation chat.
-    resolved = await decorators.resolve_mod_target(
+    resolved = await targets.resolve_mod_target(
         update,
         ctx,
         action="kick",

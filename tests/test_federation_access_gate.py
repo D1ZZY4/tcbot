@@ -24,7 +24,7 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules import admins, stats
-from tcbot.modules.helper.decorators.checks import (
+from tcbot.modules.helper.guards import (
     EnforcementVerdict,
     enforcement_verdict,
 )

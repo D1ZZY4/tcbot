@@ -10,7 +10,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from tcbot import database as db
-from tcbot.modules.helper import decorators, keyboards, messages
+from tcbot.modules.helper import guards, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
@@ -72,19 +72,17 @@ async def execute_kick(
     # * window must not be actioned by a moderator who no longer outranks
     # * them. The check runs before the audit row and the proof upload so
     # * a refused kick leaves no record and no orphan proof behind.
-    verdict, target_label = await decorators.enforcement_verdict(
-        admin_id, target_id, min_role="tester"
+    refusal = await guards.enforcement_refusal(
+        admin_id,
+        target_id,
+        min_role="tester",
+        action="Kick",
+        locale=locale,
     )
-    if verdict is not decorators.EnforcementVerdict.ALLOWED:
-        log.warning(
-            "Kick refused for target=%d: executor=%d (%s)",
-            target_id,
-            admin_id,
-            verdict.value,
-        )
+    if refusal is not None:
         await safe_reply(
             msg,
-            decorators.enforcement_refusal_text(verdict, target_label, locale),
+            refusal,
             log_label="execute_kick rank-refusal",
             parse_mode=None,
         )
