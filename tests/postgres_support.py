@@ -40,7 +40,12 @@ TEST_DATABASE_URL_ENV: str = "TCBOT_TEST_DATABASE_URL"
 
 # * The integration tests own one PostgreSQL schema inside that database:
 # * the objects they create never collide with anything else in it.
-TEST_SCHEMA: str = "tcbot_test"
+# *
+# * The project uses three schemas and no more: ``public`` for the
+# * deployment, ``test`` for the integration tests, and ``development``
+# * for a developer working against a shared server. A stray schema
+# * would hide a migration that never ran, so nothing else is created.
+TEST_SCHEMA: str = "test"
 # * The named paramstyle keeps the rendered SQL free of the driver-specific
 # * percent escaping, so an assertion can look for the SQL the statement
 # * actually expresses.
@@ -60,22 +65,34 @@ def configured_database_url() -> str | None:
 def test_schema() -> str:
     """Return the schema this worker owns.
 
-    Every xdist worker owns its own schema, so the workers never share
-    tables and never delete each other's rows.
+    The schema does not carry a worker suffix: the project uses one
+    schema per purpose, and a second schema would be a schema nobody
+    owns. The continuous integration job runs the suite under xdist, and
+    two workers cannot share one schema, because they would drop each
+    other's tables. One worker therefore owns the schema and the others
+    skip the database-backed tests.
+    """
+    return TEST_SCHEMA
+
+
+def owns_test_schema() -> bool:
+    """Return True when this process may use the test schema.
+
+    Only the first xdist worker owns it. A serial run owns it, because
+    there is no other worker to collide with.
     """
     worker = os.environ.get("PYTEST_XDIST_WORKER", "").strip()
-    if not worker:
-        return TEST_SCHEMA
-    return f"{TEST_SCHEMA}_{worker}"
+    return not worker or worker == "gw0"
 
 
 def worker_schema(prefix: str) -> str:
-    """Return a per-worker schema name derived from *prefix*.
+    """Return the schema a dedicated worker owns.
 
     A module that owns a dedicated schema instead of the shared one
     still has to keep the workers apart: two tests of the same module
     can run on different workers, and they would otherwise create the
-    same schema at the same time.
+    same schema at the same time. The name stays inside the project
+    vocabulary: it is the shared schema with a worker marker.
     """
     worker = os.environ.get("PYTEST_XDIST_WORKER", "").strip()
     if not worker:
@@ -89,6 +106,11 @@ def require_test_database() -> str:
     if url is None:
         pytest.skip(
             f"{TEST_DATABASE_URL_ENV} is not set; "
+            "skipping the PostgreSQL integration test."
+        )
+    if not owns_test_schema():
+        pytest.skip(
+            "another xdist worker owns the test schema; "
             "skipping the PostgreSQL integration test."
         )
     return url
@@ -277,13 +299,29 @@ async def reset_community() -> None:
     registry names the staff member that changed it. The reference data
     is seeded again afterwards, so a test always finds the role
     catalog, the permission catalog, and the job registry in place.
+
+    The three statements travel in one round trip and one transaction:
+    the reset is paid once per test, and the round trips dominated it
+    when the server was reached over a network. The transaction is also
+    what makes the switch safe: a failing truncation rolls the
+    switch-off back, so the guards are never left disabled.
     """
-    await engine_module.run_script(_toggle_guards("DISABLE"))
-    try:
-        await engine_module.run_script(f"TRUNCATE {', '.join(TRUNCATE_TABLES)} CASCADE")
-    finally:
-        await engine_module.run_script(_toggle_guards("ENABLE"))
+    await engine_module.run_script(_reset_script())
     await reseed_reference_data()
+
+
+def _reset_script() -> str:
+    """Return the script that empties the community tables.
+
+    The guards are switched off, the tables are emptied, and the guards
+    are switched on again. The three statements run as one script, so
+    the server applies them in a single transaction.
+    """
+    return (
+        f"{_toggle_guards('DISABLE')};\n"
+        f"TRUNCATE {', '.join(TRUNCATE_TABLES)} CASCADE;\n"
+        f"{_toggle_guards('ENABLE')};\n"
+    )
 
 
 def _toggle_guards(action: str) -> str:
@@ -315,27 +353,20 @@ async def reseed_reference_data() -> None:
     """Restore the seeded reference data of the community.
 
     The seed statements are idempotent, so they can run again after a
-    reset without changing what they wrote. They are sent as plain SQL:
-    the reference data carries the percent signs of its idempotency
-    keys, and a parameter parser would read them as placeholders.
+    reset without changing what they wrote.
+
+    They travel in one round trip on the shared async engine. Sending
+    them one by one, and opening a separate synchronous engine for them,
+    spent seconds on the round trips alone when the server is reached
+    over a network: the reseed is part of every integration test, so
+    that cost is paid once per test.
     """
     schema = await engine_module.fetch_value(text("SELECT current_schema()"))
     scope = str(schema or "")
-    engine = create_engine(
-        sync_database_url(configured_database_url() or ""),
-        pool_pre_ping=True,
-        connect_args=_schema_connect_args(scope),
-    )
-    try:
-        with engine.begin() as conn:
-            cursor = conn.connection.cursor()
-            try:
-                for statement in seed_statements(scope):
-                    cursor.execute(statement)
-            finally:
-                cursor.close()
-    finally:
-        engine.dispose()
+    statements = seed_statements(scope)
+    if not statements:
+        return
+    await engine_module.run_script(";\n".join(statements) + ";\n")
 
 
 async def seed_users(*user_ids: int) -> None:
