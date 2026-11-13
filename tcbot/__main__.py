@@ -97,6 +97,12 @@ _member_cache_tasks = TaskTracker("member cache")
 _startup_tasks = TaskTracker("startup warm-up")
 _asyncio_report_tasks = TaskTracker("async error reports")
 _MEMBER_CACHE_MAX_CONCURRENT: int = 20
+# * Number of identity harvests dropped since the last report. The
+# * harvest is best-effort, so a saturated pool stops the bot from
+# * tracking new identities; the counter makes that visible instead of
+# * silent.
+_member_cache_drops: int = 0
+_MEMBER_CACHE_DROP_REPORT_EVERY: int = 100
 
 warnings.filterwarnings(
     "ignore",
@@ -110,6 +116,7 @@ warnings.filterwarnings(
 
 async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Cache the effective_user of every update; skip bots and empty names."""
+    global _member_cache_drops
     user = update.effective_user
     if not user or user.is_bot or not user.first_name:
         return
@@ -122,6 +129,18 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
             log.debug("Member cache update failed for %d: %s", uid, exc)
 
     if _member_cache_tasks.pending >= _MEMBER_CACHE_MAX_CONCURRENT:
+        # * The harvest is best-effort: dropping the update keeps the
+        # * event loop free, but the bot stops tracking that identity.
+        # * The report makes the drop visible without flooding the log.
+        _member_cache_drops += 1
+        if _member_cache_drops % _MEMBER_CACHE_DROP_REPORT_EVERY == 1:
+            log.warning(
+                "Member cache harvest saturated (%d in flight): %d identity "
+                "updates dropped since the last report.",
+                _MEMBER_CACHE_MAX_CONCURRENT,
+                _member_cache_drops,
+            )
+            _member_cache_drops = 0
         return
     _member_cache_tasks.spawn(_do_cache())
 
