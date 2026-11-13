@@ -121,8 +121,16 @@ def test_threshold_ban_stores_warn_proof_on_ban_record(
         admin_id: int,
         proof_msg_id: int,
         log_msg_id: int,
+        *args: Any,
+        **kwargs: Any,
     ) -> dict[str, Any]:
-        created.append({"proof_msg_id": proof_msg_id})
+        created.append(
+            {
+                "proof_msg_id": proof_msg_id,
+                "action_origin": kwargs.get("action_origin"),
+                "origin_chat_id": kwargs.get("origin_chat_id"),
+            }
+        )
         return {"ban_id": "b1"}
 
     async def _set_log(ban_id: str, log_msg_id: int) -> None:
@@ -160,6 +168,14 @@ def test_threshold_ban_stores_warn_proof_on_ban_record(
         )
     )
 
-    assert created == [{"proof_msg_id": 77}]
+    # * The threshold ban is an automated decision, so it is recorded
+    # * with that origin and it keeps the chat it came from.
+    assert created == [
+        {
+            "proof_msg_id": 77,
+            "action_origin": "automated",
+            "origin_chat_id": 22,
+        }
+    ]
     assert cleared == [42]
     assert len(msg.replies) == 1
