@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 from tcbot.database import engine as engine_module
-from tcbot.database import groups_db, kicks_db, mutes_db, warns_db
+from tcbot.database import event_history, groups_db, kicks_db, mutes_db, warns_db
 from tcbot.database.base import federated_groups
 from tcbot.utils.time_and_date import utc_now
 from tests.postgres_support import identity_db_call, literal_sql
@@ -108,6 +108,10 @@ def _patch(monkeypatch: pytest.MonkeyPatch, module: Any, rec: _Recorder) -> None
     monkeypatch.setattr(module, "fetch_all", rec.fetch_all, raising=False)
     monkeypatch.setattr(module, "fetch_one", rec.fetch_all, raising=False)
     monkeypatch.setattr(module, "run_transaction", rec.run_transaction, raising=False)
+    # * The kick and the mute repoint share one helper, so the recorder
+    # * has to stand in for that helper too.
+    monkeypatch.setattr(event_history, "db_call", identity_db_call)
+    monkeypatch.setattr(event_history, "run", rec.run, raising=False)
 
 
 @pytest.mark.parametrize(("module", "table"), _REPOINT_CASES)

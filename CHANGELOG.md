@@ -109,6 +109,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The help sections have one order** (`tcbot/modules/helper/messages/replies.py`, the command modules): every command module assembled its help entry by hand, and two modules placed the per-command help bodies on opposite sides of the target-syntax section. One builder now owns the section order. Behavior changes: the per-command help bodies of `/tcpromote` render before the target-syntax section, like they already did in `/check`.
 
+- **The kick and mute histories share one shape** (`tcbot/database/event_history.py`, `tcbot/database/kicks_db.py`, `tcbot/database/mutes_db.py`): the newest-first paging, the per-user count, and the chat-migration repoint were two copies of the same code. Behavior changes: none.
+
 - **The role vocabulary has one home** (`tcbot/database/users_roles.py`, `tcbot/modules/helper/pipelines/promote_flow.py`): the spellings the promote command accepts lived in a conversation module; they now sit next to the role table and the rank map. Behavior changes: none.
 
 - **The Back button, the ban card, and the paged drill-downs have one owner** (`tcbot/modules/helper/keyboards/common.py`, `tcbot/modules/helper/ban_info.py`, `tcbot/modules/helper/pipelines/check_flow.py`, `tcbot/modules/helper/scope.py`): nine keyboards built their own Back button, the check card rendered a ban summary beside the shared ban detail, and the two drill-down lists repeated the same paging prologue. The shared helpers now own the button, the ban proof link and date, the paging arithmetic, and the scope cleanup. Behavior changes: none; the rendered text and the button layout are unchanged.

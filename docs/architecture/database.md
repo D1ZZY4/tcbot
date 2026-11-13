@@ -170,6 +170,7 @@ database error.
 | `warns_db.py` | `warns`, `warn_counts` | Warning event history, per-group counters, limit checks, backfill/sync, clear, migration. |
 | `kicks_db.py` | `kicks` | Append-only kick audit records. |
 | `mutes_db.py` | `mutes`, `active_mutes` | Mute audit trail plus the live active-mute store used to re-apply restrictions. |
+| `event_history.py` | `kicks`, `mutes` | Shared shape of the per-user kick and mute histories: the newest-first paging, the per-user count, and the chat-migration repoint. |
 | `queues_db.py` | `promotion_requests` | Queued Admin promotion requests and resolution status. |
 | `settings_db.py` | `user_settings` | Per-user locale preference rows, kept apart from `member_cache`. |
 | `cache/` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with five public singletons. |

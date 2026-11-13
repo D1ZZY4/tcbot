@@ -6,14 +6,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import cast
 
-from sqlalchemy import func, select
-
+from tcbot.database import event_history
 from tcbot.database.base import kicks
 from tcbot.database.documents import KickDoc
-from tcbot.database.engine import db_call, fetch_all, fetch_value, run
+from tcbot.database.engine import db_call, run
 from tcbot.database.types import ChatId, UserId
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
@@ -66,28 +64,13 @@ async def user_kicks(
 
     ``limit=None`` returns the full list (backwards compatible).
     """
-    stmt = (
-        select(*_KICK_COLUMNS)
-        .where(kicks.c.user_id == user_id)
-        # * Tie-break on the surrogate id so the order is stable when two
-        # * events share a timestamp, matching the warn history.
-        .order_by(kicks.c.timestamp.desc(), kicks.c.id.desc())
-        .offset(max(0, skip))
-    )
-    if limit is not None:
-        stmt = stmt.limit(max(1, limit))
-    rows = await db_call(lambda: fetch_all(stmt))
+    rows = await event_history.user_history(kicks, user_id, skip=skip, limit=limit)
     return cast("list[KickDoc]", rows)
 
 
 async def user_kick_count(user_id: int) -> int:
     """Count every kick ever logged against the user."""
-    total = await db_call(
-        lambda: fetch_value(
-            select(func.count()).select_from(kicks).where(kicks.c.user_id == user_id)
-        )
-    )
-    return int(total or 0)
+    return await event_history.user_event_count(kicks, user_id)
 
 
 async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
@@ -97,19 +80,6 @@ async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
     does not split across the legacy chat. Kick rows carry no unique
     per-pair state, so a plain repoint is safe. Cancellation propagates.
     """
-    try:
-        affected = await db_call(
-            lambda: run(
-                kicks.update()
-                .where(kicks.c.chat_id == old_chat_id)
-                .values(chat_id=new_chat_id)
-            )
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        log.exception(
-            "kicks_db.migrate_records (%d -> %d) failed", old_chat_id, new_chat_id
-        )
-        return False
-    return affected > 0
+    return await event_history.migrate_chat(
+        kicks, old_chat_id, new_chat_id, label="kicks_db"
+    )

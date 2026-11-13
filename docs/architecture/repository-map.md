@@ -74,6 +74,7 @@ tcbot/
 │   ├── warns_db.py         Warnings and warning counters (incl. per-user aggregates)
 │   ├── kicks_db.py         Kick audit records (incl. per-user history)
 │   ├── mutes_db.py         Mute audit records (incl. per-user history)
+│   ├── event_history.py    Shared shape of the per-user kick/mute event histories
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache/              TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   ├── redis_client.py     Optional async Redis client (owns the connect/degrade decision)

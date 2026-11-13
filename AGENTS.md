@@ -108,6 +108,7 @@ Current stack:
 │   │   ├── warns_db.py       Warnings
 │   │   ├── kicks_db.py       Kicks
 │   │   ├── mutes_db.py       Mutes
+│   │   ├── event_history.py  Shared shape of the per-user kick/mute event histories
 │   │   ├── queues_db.py      Promotion requests
 │   │   ├── cache/            TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
