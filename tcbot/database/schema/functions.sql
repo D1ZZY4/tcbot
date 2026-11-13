@@ -997,15 +997,20 @@ BEGIN
        SET is_active = false
      WHERE chat_id = p_old_chat_id;
 
+    -- * The new chat inherits the connection state of the group it
+    -- * replaces: a group the operator disconnected stays disconnected.
+    -- * A row that already exists for the new chat keeps its own state,
+    -- * because that row records a decision the operator took about that
+    -- * chat, and a repoint must not undo it.
     INSERT INTO %SCHEMA%.connected_chats (
         chat_id, added_by_user_id, added_at, is_active
     )
-    SELECT p_new_chat_id, g.added_by_user_id, g.added_at, true
+    SELECT p_new_chat_id, g.added_by_user_id, g.added_at,
+           COALESCE(v_was_active, false)
       FROM %SCHEMA%.connected_chats AS g
      WHERE g.chat_id = p_old_chat_id
     ON CONFLICT (chat_id) DO UPDATE
-        SET is_active = true,
-            added_by_user_id = COALESCE(
+        SET added_by_user_id = COALESCE(
                 %SCHEMA%.connected_chats.added_by_user_id, EXCLUDED.added_by_user_id
             ),
             added_at = LEAST(%SCHEMA%.connected_chats.added_at, EXCLUDED.added_at);

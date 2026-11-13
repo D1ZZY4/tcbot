@@ -202,7 +202,10 @@ def test_the_group_repoint_moves_the_group_and_the_pending_join(
     # * configuration, the membership, the open request, and the
     # * decisions of the group all move through the same function.
     repoint_sql = literal_sql(rec.statements[0])
-    assert repoint_sql == "SELECT repoint_chat_records(10, 20)"
+    assert "repoint_chat_records(10, 20)" in repoint_sql
+    # * The summary is read as a flat column, so the caller does not
+    # * depend on how the driver decodes the JSONB the function returns.
+    assert "'was_active'" in repoint_sql
 
 
 def test_the_group_repoint_reports_no_match(
@@ -261,8 +264,9 @@ async def test_the_group_repoint_merges_away_a_stale_row(
     """A target chat that already has a row converges instead of failing.
 
     The chat id is the primary key of the group registry, so the repoint
-    cannot create a second row for the new chat. The stale old row is
-    merged into the surviving row and the migration still succeeds.
+    cannot create a second row for the new chat. The stale old row stays
+    known but inactive, so the history that refers to it stays readable,
+    and the surviving row carries the configuration of the group.
     """
     await reset_community()
     await seed_users(1, 2)
@@ -278,13 +282,72 @@ async def test_the_group_repoint_merges_away_a_stale_row(
 
     assert result is True
     rows = await engine_module.fetch_all(connected_chats.select())
-    assert [int(row["chat_id"]) for row in rows] == [20]
+    by_id = {int(row["chat_id"]): bool(row["is_active"]) for row in rows}
+    # * The old chat stays known but inactive, so the history that
+    # * refers to it stays readable.
+    assert by_id[10] is False
+    assert by_id[20] is True
     # * The group keeps the language it chose before the migration.
     settings = await engine_module.fetch_one(
         chat_settings.select().where(chat_settings.c.chat_id == 20)
     )
     assert settings is not None
     assert settings["locale"] == "id-ID"
+    await reset_community()
+
+
+@pytest.mark.postgres
+async def test_the_group_repoint_keeps_a_disconnected_group_disconnected(
+    postgres_db: str,
+) -> None:
+    """A group the operator disconnected must not be reconnected by a move.
+
+    The repoint carries the connection state of the group it replaces.
+    A group that was not managed before the move stays unmanaged after
+    it, so the community fan-outs do not pull it in.
+    """
+    await reset_community()
+    await seed_users(1, 2)
+    await seed_chats(10)
+    await engine_module.run(
+        connected_chats.update()
+        .where(connected_chats.c.chat_id == 10)
+        .values(is_active=False)
+    )
+
+    await groups_db.migrate_group(10, 20)
+
+    rows = await engine_module.fetch_all(connected_chats.select())
+    by_id = {int(row["chat_id"]): bool(row["is_active"]) for row in rows}
+    assert by_id.get(20) is False
+    await reset_community()
+
+
+@pytest.mark.postgres
+async def test_the_group_repoint_keeps_the_surviving_row_decision(
+    postgres_db: str,
+) -> None:
+    """A repoint must not undo the operator's decision about a chat.
+
+    The target chat already has a registry row, and that row records a
+    decision the operator took about it. The move keeps the row and its
+    state: reactivating a disconnected group would pull it into the
+    community fan-outs the operator took it out of.
+    """
+    await reset_community()
+    await seed_users(1, 2)
+    await seed_chats(10, 20)
+    await engine_module.run(
+        connected_chats.update()
+        .where(connected_chats.c.chat_id == 20)
+        .values(is_active=False)
+    )
+
+    await groups_db.migrate_group(10, 20)
+
+    rows = await engine_module.fetch_all(connected_chats.select())
+    by_id = {int(row["chat_id"]): bool(row["is_active"]) for row in rows}
+    assert by_id[20] is False
     await reset_community()
 
 

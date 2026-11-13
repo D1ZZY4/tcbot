@@ -476,7 +476,10 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
     """
     summary = await db_call(
         lambda: fetch_one(
-            text("SELECT repoint_chat_records(:old_chat_id, :new_chat_id)").bindparams(
+            text(
+                "SELECT (repoint_chat_records(:old_chat_id, :new_chat_id)"
+                " ->> 'was_active')::boolean AS was_active"
+            ).bindparams(
                 old_chat_id=old_chat_id,
                 new_chat_id=new_chat_id,
             )
@@ -486,12 +489,11 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
         return False
     moved = bool(summary.get("was_active"))
     connected_cache.put(old_chat_id, False)  # noqa: FBT003
-    if moved:
-        # * The cached value mirrors the row that survived. The target
-        # * row may be an inactive one (a group the operator
-        # * disconnected), so caching "connected" unconditionally would
-        # * report a disconnected group as connected for the whole
-        # * cache TTL and pull it into the community fan-outs.
-        connected_cache.put(new_chat_id, await _group_is_active(new_chat_id))
+    # * The cached value mirrors the row, not the move. The move may have
+    # * created the row of the new chat, and a row that already existed
+    # * keeps its own state, so caching "connected" unconditionally would
+    # * report a disconnected group as connected for the whole cache TTL
+    # * and pull it into the community fan-outs.
+    connected_cache.put(new_chat_id, await _group_is_active(new_chat_id))
     active_groups_cache.invalidate(_ALL_GROUPS_KEY)
     return moved
