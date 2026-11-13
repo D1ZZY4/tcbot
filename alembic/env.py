@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -24,6 +25,7 @@ if str(_ROOT) not in sys.path:
 
 from tcbot.database.base import metadata  # noqa: E402
 from tcbot.database.migrations import (  # noqa: E402
+    ensure_schema,
     set_database_url,
     stamp_bootstrap_schema,
 )
@@ -101,12 +103,14 @@ def _connection_options(url: str) -> str:
 
     The timezone pin matches the application engines, so a revision that
     writes a timestamp stores it in the zone the runtime reads it back
-    in. The options the connection already carries are kept: the
-    migration check runs inside a dedicated schema through ``PGOPTIONS``
-    or through an ``options`` parameter in the URL, and the connection
-    parameter replaces both of them when it is set.
+    in. The schema pin matches the application engine as well, so the
+    migration fills the same schema the application reads. The options
+    the connection already carries are kept: the migration check runs
+    inside a dedicated schema through ``PGOPTIONS`` or through an
+    ``options`` parameter in the URL, and the connection parameter
+    replaces both of them when it is set.
     """
-    parts: list[str] = []
+    parts: list[str] = [f"-c search_path={_db_schema()}"]
     url_options = make_url(url).query.get("options")
     if url_options:
         # * A repeated query parameter arrives as a tuple; libpq takes the
@@ -122,11 +126,28 @@ def _connection_options(url: str) -> str:
     return " ".join(parts)
 
 
+def _db_schema() -> str:
+    """Return the schema the migration fills.
+
+    The application reads the schema named by ``DB_SCHEMA`` and the
+    default schema of the server. The deployment owns ``public``, the
+    integration tests own ``test``, and a developer owns ``development``.
+    """
+    raw = os.environ.get("DB_SCHEMA", "").strip() or "public"
+    if not re.fullmatch(r"[a-z_][a-z0-9_]*", raw):
+        return "public"
+    return raw
+
+
 def run_migrations_online() -> None:
     """Run the migrations against a live database."""
     # * A synchronous engine is enough here: psycopg 3 drives the same
     # * server through its blocking API, and Alembic runs off the event
     # * loop anyway.
+    # * The schema is created before the revisions run, so a fresh
+    # * database comes up empty and a schema nobody created never sends
+    # * the migration objects into the next schema of the search path.
+    ensure_schema(url, _db_schema())
     connectable = create_engine(
         url,
         pool_pre_ping=True,

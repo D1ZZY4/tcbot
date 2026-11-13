@@ -21,6 +21,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from sqlalchemy import text
+
 from .loader import (
     SCHEMA_FILES,
     SCHEMA_PLACEHOLDER,
@@ -57,10 +59,21 @@ __all__ = [
 
 
 def _schema_of(connection: Connection) -> str:
-    """Return the quoted schema the connection writes to."""
-    raw = connection.exec_driver_sql("SELECT current_schema()").scalar()
-    schema = str(raw or "public")
-    return connection.dialect.identifier_preparer.quote_identifier(schema)
+    """Return the quoted schema the connection writes to.
+
+    The first entry of the search path is the schema the objects belong
+    to. ``current_schema()`` is deliberately not used: it returns the
+    first schema of the path that *exists*, so a path that names a
+    schema nobody created would silently place the views, the
+    functions, and the triggers in the next schema of the path instead
+    of failing.
+    """
+    raw = connection.exec_driver_sql("SHOW search_path").scalar()
+    first = str(raw or "").split(",")[0].strip().strip('"')
+    if not first or first.startswith("$"):
+        fallback = connection.exec_driver_sql("SELECT current_schema()").scalar()
+        first = str(fallback or "public")
+    return connection.dialect.identifier_preparer.quote_identifier(first)
 
 
 def apply_schema(connection: Connection) -> None:
@@ -71,10 +84,11 @@ def apply_schema(connection: Connection) -> None:
     replaced, and the reference data is inserted with an upsert.
     """
     schema = _schema_of(connection)
+    existing = _existing_tables(connection, schema)
     for name in SCHEMA_FILES:
         statements = file_statements(name, schema)
         if name == "triggers.sql":
-            statements = _drop_statements(name, schema) + statements
+            statements = _drop_statements(name, schema, existing) + statements
         execute_statements(connection, statements)
 
 
@@ -85,9 +99,10 @@ def drop_schema(connection: Connection) -> None:
     be dropped while a view still reads it.
     """
     schema = _schema_of(connection)
+    existing = _existing_tables(connection, schema)
     statements: list[str] = []
     for name in SCHEMA_FILES:
-        statements.extend(_drop_statements(name, schema))
+        statements.extend(_drop_statements(name, schema, existing))
     execute_statements(connection, statements)
 
 
@@ -100,7 +115,24 @@ def seed_statements(schema: str) -> list[str]:
     return file_statements("seed.sql", schema)
 
 
-def _drop_statements(name: str, schema: str) -> list[str]:
+def _existing_tables(connection: Connection, schema: str) -> set[str]:
+    """Return the tables the schema holds.
+
+    A trigger can only be dropped from a table that exists, and the
+    cleanup of a schema that was never built would fail on the first
+    missing table.
+    """
+    rows = connection.execute(
+        text(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = :schema"
+        ),
+        {"schema": schema.strip('"')},
+    ).scalars()
+    return {str(name) for name in rows}
+
+
+def _drop_statements(name: str, schema: str, existing: set[str]) -> list[str]:
     """Return the statements that remove the objects of one schema file.
 
     The names come from the file itself, so the objects that are
@@ -124,7 +156,10 @@ def _drop_statements(name: str, schema: str) -> list[str]:
         triggers: list[str] = []
         for match in _TRIGGER_PATTERN.finditer(raw):
             trigger = match.group(1)
-            table = match.group(2).replace(SCHEMA_PLACEHOLDER, schema)
-            triggers.append(f"DROP TRIGGER IF EXISTS {trigger} ON {table} CASCADE")
+            raw_table = match.group(2).replace(SCHEMA_PLACEHOLDER, schema)
+            table = raw_table.replace('"', "")
+            if table not in existing:
+                continue
+            triggers.append(f"DROP TRIGGER IF EXISTS {trigger} ON {raw_table} CASCADE")
         return triggers
     return []

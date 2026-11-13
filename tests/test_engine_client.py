@@ -79,11 +79,11 @@ def test_shared_kwargs_cover_server_timeouts(
 def test_shared_kwargs_size_the_connection_pool(
     captured_engine_kwargs: dict[str, Any],
 ) -> None:
-    """The pool carries the declared capacity and pings stale connections."""
+    """The pool carries the configured capacity and pings stale connections."""
     _connect()
 
-    assert captured_engine_kwargs["pool_size"] == engine_module._POOL_SIZE
-    assert captured_engine_kwargs["max_overflow"] == engine_module._MAX_OVERFLOW
+    assert captured_engine_kwargs["pool_size"] == engine_module.cfg.db_pool_size
+    assert captured_engine_kwargs["max_overflow"] == engine_module.cfg.db_max_overflow
     assert captured_engine_kwargs["pool_pre_ping"] is True
 
 

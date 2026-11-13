@@ -30,6 +30,23 @@ log = get_logger(__name__)
 _DEFAULT_PORT: int = 5000
 _DEFAULT_PROOFS: str = "-1003997518221"
 _ERR_OWNER_ID: str = "OWNER_ID is required and must be a positive integer."
+# * The connection pool of the database. The size has to fit the number
+# * of connections the database grants this user: a pooler in session or
+# * transaction mode caps it at a small number, and a pool that is larger
+# * than the cap does not fail at startup. It fails later, as a "max
+# * clients reached" refusal on every call that needs a connection, and
+# * the circuit breaker reads that refusal as an outage of the database.
+_DEFAULT_DB_POOL_SIZE: int = 5
+_DEFAULT_DB_MAX_OVERFLOW: int = 5
+# * The schema the application reads and writes. The deployment owns
+# * "public", the integration tests own "test", and a developer owns
+# * "development". Those three are the only schemas this project uses,
+# * so a stray schema cannot hide a migration that never ran.
+_DEFAULT_DB_SCHEMA: str = "public"
+# * A schema name reaches the server as part of a connection option, so
+# * it has to be a plain identifier. Anything else is refused instead of
+# * being quoted into the option string.
+_DB_SCHEMA_PATTERN: re.Pattern[str] = re.compile(r"^[a-z_][a-z0-9_]*$")
 _REPLIT_DEV_DOMAIN_VAR: str = "REPLIT_DEV_DOMAIN"
 _DEFAULT_COMMUNITY_CHANNEL_URL: str = "https://t.me/TranssionCoreFederation"
 _DEFAULT_COMMUNITY_GROUP_URL: str = "https://t.me/TranssionCoreFederationGroup"
@@ -211,6 +228,25 @@ def _env_or(key: str, default: str) -> str:
     return os.getenv(key, "").strip() or default
 
 
+def _db_schema_from_env() -> str:
+    """Read the schema the application works in.
+
+    The value reaches the server as a connection option, so only a plain
+    identifier is accepted. An unusable name falls back to the default
+    rather than producing a connection that fails on every call.
+    """
+    raw = os.getenv("DB_SCHEMA", "").strip() or _DEFAULT_DB_SCHEMA
+    if not _DB_SCHEMA_PATTERN.fullmatch(raw):
+        log.warning(
+            "Invalid DB_SCHEMA '%s'; using %s. The name has to be a plain "
+            "PostgreSQL identifier.",
+            raw,
+            _DEFAULT_DB_SCHEMA,
+        )
+        return _DEFAULT_DB_SCHEMA
+    return raw
+
+
 # ─────────────────────────────── Config model ────────────────────────────── #
 
 
@@ -239,6 +275,9 @@ class Configs:
     modules_load: tuple[str, ...]
     modules_no_load: tuple[str, ...]
     redis_url: str | None
+    db_pool_size: int
+    db_max_overflow: int
+    db_schema: str
     warn_expiry_days: int
     fed_warn_limit: int
     warn_limit: int
@@ -305,6 +344,13 @@ class Configs:
             modules_load=tuple(_env_list("MODULES_LOAD")),
             modules_no_load=tuple(_env_list("MODULES_NO_LOAD")),
             redis_url=os.getenv("REDIS_URL", "").strip() or None,
+            db_pool_size=_int_from_env(
+                "DB_POOL_SIZE", _DEFAULT_DB_POOL_SIZE, minimum=1
+            ),
+            db_max_overflow=_int_from_env(
+                "DB_MAX_OVERFLOW", _DEFAULT_DB_MAX_OVERFLOW, minimum=0
+            ),
+            db_schema=_db_schema_from_env(),
             warn_expiry_days=_int_from_env("WARN_EXPIRY_DAYS", 0, minimum=0),
             fed_warn_limit=_int_from_env("FED_WARN_LIMIT", 0, minimum=0),
             warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),

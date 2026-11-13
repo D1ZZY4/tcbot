@@ -65,10 +65,12 @@ jobs:
       LOG_LEVEL:               ${{ secrets.LOG_LEVEL }}
       PORT:                    ${{ secrets.PORT }}
       REDIS_URL:               ${{ secrets.REDIS_URL }}
+      DB_POOL_SIZE:            ${{ secrets.DB_POOL_SIZE }}
+      DB_MAX_OVERFLOW:         ${{ secrets.DB_MAX_OVERFLOW }}
+      DB_SCHEMA:               ${{ secrets.DB_SCHEMA }}
       WARN_EXPIRY_DAYS:        ${{ secrets.WARN_EXPIRY_DAYS }}
       WARN_LIMIT:              ${{ secrets.WARN_LIMIT }}
       FED_WARN_LIMIT:          ${{ secrets.FED_WARN_LIMIT }}
-      SYNC_INTERVAL_HOURS:     ${{ secrets.SYNC_INTERVAL_HOURS }}
       MTPROTO_SESSION:         ${{ secrets.MTPROTO_SESSION }}
       COMMUNITY_CHANNEL_URL:   ${{ secrets.COMMUNITY_CHANNEL_URL }}
       COMMUNITY_GROUP_URL:     ${{ secrets.COMMUNITY_GROUP_URL }}

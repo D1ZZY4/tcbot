@@ -43,9 +43,9 @@ log = get_logger(__name__)
 _DB_CALL_TIMEOUT_S: float = 20.0
 
 # * Connection pool. The bot serves dozens of groups, and every handler
-# * may read the member cache or the role tables at the same time.
-_POOL_SIZE: int = 20
-_MAX_OVERFLOW: int = 10
+# * may read the member cache or the role tables at the same time. The
+# * size comes from the configuration, because the pool has to fit the
+# * number of connections the database grants this user.
 _POOL_TIMEOUT_S: float = 10.0
 # * Recycle connections before a proxy or a load balancer drops them.
 _POOL_RECYCLE_S: float = 1800.0
@@ -334,19 +334,23 @@ async def connect() -> None:
     # * The migrations run before the engine is published, so the schema is
     # * current before the first handler query reaches the database. A
     # * fresh deployment therefore boots against an empty database.
+    await asyncio.to_thread(migrations.ensure_schema, url, cfg.db_schema)
     await asyncio.to_thread(migrations.upgrade_head, url)
     _engine = create_async_engine(
         url,
-        pool_size=_POOL_SIZE,
-        max_overflow=_MAX_OVERFLOW,
+        pool_size=cfg.db_pool_size,
+        max_overflow=cfg.db_max_overflow,
         pool_timeout=_POOL_TIMEOUT_S,
         pool_recycle=_POOL_RECYCLE_S,
         pool_pre_ping=True,
         connect_args={
             "connect_timeout": _CONNECT_TIMEOUT_S,
             # * The application works in UTC end to end; the session zone
-            # * decides how a timestamp without one is read back.
-            "options": "-c timezone=UTC",
+            # * decides how a timestamp without one is read back. The
+            # * schema is named explicitly because a pooler in
+            # * transaction mode does not carry the search path of the
+            # * client into the session it hands out.
+            "options": f"-c search_path={cfg.db_schema} -c timezone=UTC",
         },
     )
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
