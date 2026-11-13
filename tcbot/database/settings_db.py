@@ -6,15 +6,20 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
 import cachetools as _cachetools
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tcbot.database.base import user_settings
+from tcbot.database.base import telegram_users, user_settings
 from tcbot.database.documents import UserSettingsDoc
-from tcbot.database.engine import db_call, fetch_one, run
-from tcbot.database.types import UserId
+from tcbot.database.engine import db_call, fetch_one, run, run_transaction
 from tcbot.utils.logger import get_logger
+from tcbot.utils.time_and_date import utc_now
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
 
@@ -24,10 +29,10 @@ log = get_logger(__name__)
 _LOCALE_L1: _cachetools.TTLCache = _cachetools.TTLCache(maxsize=4096, ttl=300)
 
 # ─────────────────────── User Locale Preferences ───────────────────── #
-# * Stored apart from member_cache on purpose: locale rows must never
-# * inflate the cached-user counts or appear in user listings, so a
-# * bare {user_id, locale} row here is harmless while the same row
-# * in member_cache would corrupt stats and search results.
+# * Stored apart from the user profile on purpose: locale rows must never
+# * inflate the user counts or appear in user listings, so a bare
+# * {user_id, locale} row here is harmless while the same row in the
+# * profile table would corrupt stats and search results.
 
 
 async def get_user_locale(user_id: int) -> str | None:
@@ -57,28 +62,54 @@ async def get_user_locale(user_id: int) -> str | None:
 async def set_user_locale(user_id: int, locale: str | None) -> None:
     """Store a user locale, or clear it when ``locale`` is None.
 
-    Clearing deletes the row so the table holds only users with an
-    explicit preference. Locale codes are stored verbatim; validity
-    against the translation catalog is enforced by the caller (command
-    layer) and defensively at resolution time.
+    Clearing empties the locale and keeps the row, so the other
+    preferences of the user survive. Locale codes are stored verbatim;
+    validity against the translation catalog is enforced by the caller
+    (command layer) and defensively at resolution time.
     """
-    if locale is None:
-        await db_call(
-            lambda: run(
-                user_settings.delete().where(user_settings.c.user_id == user_id)
-            )
+
+    async def _work(sess: AsyncSession) -> None:
+        # * The settings row refers to the user profile, so the profile
+        # * has to exist before the preference can be stored.
+        await sess.execute(
+            pg_insert(telegram_users)
+            .values(user_id=user_id, created_at=utc_now(), updated_at=utc_now())
+            .on_conflict_do_nothing(index_elements=["user_id"])
         )
-        _LOCALE_L1.pop(user_id, None)
-        return
-    row: UserSettingsDoc = {"user_id": UserId(user_id), "locale": locale}
-    await db_call(
-        lambda: run(
+        await sess.execute(
             pg_insert(user_settings)
-            .values(user_id=row["user_id"], locale=row["locale"])
+            .values(user_id=user_id, locale=locale, updated_at=utc_now())
             .on_conflict_do_update(
                 index_elements=["user_id"],
-                set_={"locale": row["locale"]},
+                set_={"locale": locale, "updated_at": utc_now()},
             )
         )
-    )
+
+    await run_transaction(_work)
     _LOCALE_L1.pop(user_id, None)
+
+
+async def get_user_settings(user_id: int) -> UserSettingsDoc | None:
+    """Return the full preference row of a user, or None when unset."""
+    row = await db_call(
+        lambda: fetch_one(
+            select(
+                user_settings.c.user_id,
+                user_settings.c.locale,
+                user_settings.c.timezone,
+                user_settings.c.preferences,
+            ).where(user_settings.c.user_id == user_id)
+        )
+    )
+    return cast("UserSettingsDoc | None", row)
+
+
+async def set_user_timezone(user_id: int, timezone: str | None) -> None:
+    """Store the timezone of a user, or clear it when ``timezone`` is None."""
+    await db_call(
+        lambda: run(
+            user_settings.update()
+            .where(user_settings.c.user_id == user_id)
+            .values(timezone=timezone, updated_at=utc_now())
+        )
+    )

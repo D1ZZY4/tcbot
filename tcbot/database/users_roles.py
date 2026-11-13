@@ -2,18 +2,23 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Federation staff role helpers (tc_owners, tc_admins, and tc_roles)."""
+"""Staff role helpers over the role assignment table."""
 
 from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING, Literal, cast
 
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.exc import IntegrityError
 
-from tcbot.database.base import tc_admins, tc_owners, tc_roles
+from tcbot.database.base import (
+    permission_definitions,
+    role_assignments,
+    role_definitions,
+    role_permissions,
+    telegram_users,
+)
 from tcbot.database.cache import (
     _OWNER_KEY,
     effective_role_cache,
@@ -21,7 +26,6 @@ from tcbot.database.cache import (
 )
 from tcbot.database.documents import AdminDoc, RoleDoc, RoleRefDoc
 from tcbot.database.engine import (
-    constraint_name,
     db_call,
     fetch_all,
     fetch_one,
@@ -29,8 +33,6 @@ from tcbot.database.engine import (
     run,
     run_transaction,
 )
-from tcbot.database.types import UserId
-from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
@@ -39,6 +41,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql import Executable
+    from sqlalchemy.sql.elements import ColumnElement
 
 log = get_logger(__name__)
 
@@ -52,12 +55,12 @@ _OWNER_TRANSFER_LOCK_KEY: int = 7_313_919_265_517_001
 
 VALID_ROLES: tuple[Literal["developer", "tester"], ...] = ("developer", "tester")
 
-# * Name of a federation tier. The tier argument of every permission gate
+# * Name of a community role. The role argument of every permission gate
 # * is typed with it, so a typo in a threshold name is a type error the
 # * checker reports instead of a rank that silently matches nobody.
 RoleName = Literal["founder", "admin", "developer", "tester"]
 
-# * Spellings the promote command accepts for a tier. The table is role
+# * Spellings the promote command accepts for a role. The table is role
 # * vocabulary, so it belongs next to the other role tables rather than
 # * in a command module.
 ROLE_ALIASES: dict[str, str] = {
@@ -66,6 +69,8 @@ ROLE_ALIASES: dict[str, str] = {
     "dev": "developer",
     "tester": "tester",
     "test": "tester",
+    "moderator": "tester",
+    "mod": "tester",
 }
 
 ROLE_RANK: dict[str, int] = {
@@ -86,14 +91,43 @@ ROLE_LABEL: dict[str, str] = {
 # * Open-coding them per call site let a new tier land in ROLE_RANK and be
 # * missed by every set check, so the rank gate and the staff gate would
 # * disagree about the same user.
-# * STAFF_ROLES holds every role that can be demoted (Founder is protected
+# * STAFF_ROLES holds every role that can be demoted (the owner is protected
 # * and never demoted); FOUNDER_ADMIN_ROLES holds the roles that count as
-# * federation staff for permission gates.
+# * community staff for permission gates.
 STAFF_ROLES: frozenset[str] = frozenset({"admin", "developer", "tester"})
 FOUNDER_ADMIN_ROLES: frozenset[str] = frozenset({"founder", "admin"})
 
-# * Name of the primary key that rejects a duplicate owner row.
-_CONSTRAINT_OWNERS_PKEY: str = "tc_owners_pkey"
+# * The community catalog names the roles owner, admin, developer, and
+# * moderator. The application keeps its own vocabulary for the tiers
+# * the handlers compare against, so the translation between the two
+# * lives here and the rest of the code never sees a storage key.
+ROLE_KEY_BY_APP_ROLE: dict[str, str] = {
+    "founder": "owner",
+    "admin": "admin",
+    "developer": "developer",
+    "tester": "moderator",
+}
+APP_ROLE_BY_ROLE_KEY: dict[str, str] = {
+    value: key for key, value in ROLE_KEY_BY_APP_ROLE.items()
+}
+
+# * The role the community owner holds.
+_OWNER_ROLE: str = ROLE_KEY_BY_APP_ROLE["founder"]
+_ADMIN_ROLE: str = ROLE_KEY_BY_APP_ROLE["admin"]
+
+
+# * An assignment is in force while it is active and its expiry is in the
+# * future. The expiry is part of the condition, so it is read here
+# * instead of in an index predicate. The predicate is built per call: a
+# * timestamp frozen at import time would keep an assignment alive for
+# * the whole process lifetime, long after its expiry passed.
+def _active_assignment() -> tuple[ColumnElement[bool], ...]:
+    """Return the condition that selects the assignments that are in force."""
+    return (
+        role_assignments.c.status == "active",
+        (role_assignments.c.expires_at.is_(None))
+        | (role_assignments.c.expires_at > utc_now()),
+    )
 
 
 def role_rank(role: str | None) -> int:
@@ -130,8 +164,12 @@ async def _count(stmt: Executable) -> int:
 
 
 async def _owner_count() -> int:
-    """Return how many owner rows the table currently holds."""
-    return await _count(select(func.count()).select_from(tc_owners))
+    """Return how many active owner assignments the table currently holds."""
+    return await _count(
+        select(func.count())
+        .select_from(role_assignments)
+        .where(role_assignments.c.role_key == _OWNER_ROLE, *_active_assignment())
+    )
 
 
 # ───────────────────────── Owner CRUD ────────────────────────── #
@@ -141,16 +179,22 @@ async def get_owner_id(*, fresh: bool = False) -> int | None:
     """Return the current owner's user ID (L1->L2->DB cached).
 
     With ``fresh=True`` the cache is bypassed and the row is read directly
-    from the owners table, then the cache is refreshed. Enforcement decisions
-    use ``fresh=True`` so a transfer in another process is never hidden for
-    up to the 300 s owner TTL; display reads keep the cached fast path.
+    from the assignments table, then the cache is refreshed. Enforcement
+    decisions use ``fresh=True`` so a transfer in another process is never
+    hidden for up to the 300 s owner TTL; display reads keep the cached
+    fast path.
     """
 
     async def _fetch() -> int | None:
         # * The lowest owner row wins, exactly like the old sorted read.
         row = await db_call(
             lambda: fetch_one(
-                select(tc_owners.c.user_id).order_by(tc_owners.c.user_id).limit(1)
+                select(role_assignments.c.user_id)
+                .where(
+                    role_assignments.c.role_key == _OWNER_ROLE, *_active_assignment()
+                )
+                .order_by(role_assignments.c.user_id)
+                .limit(1)
             )
         )
         return row["user_id"] if row else None
@@ -171,52 +215,99 @@ async def is_owner(user_id: int, *, fresh: bool = False) -> bool:
     zero database round trips on cache hits. Errors propagate like the
     previous direct read so decorators keep their fail-closed retry reply.
 
-    With ``fresh=True`` the owner row is read directly from the owners
-    table (mirroring ``get_owner_id(fresh=True)``) so an ownership
-    transfer in another process is never hidden for up to the 300 s owner
-    TTL. Enforcement gates use it; display reads keep the cached fast path.
+    With ``fresh=True`` the owner row is read directly from the
+    assignments table (mirroring ``get_owner_id(fresh=True)``) so an
+    ownership transfer in another process is never hidden for up to the
+    300 s owner TTL. Enforcement gates use it; display reads keep the
+    cached fast path.
     """
     return (await get_owner_id(fresh=fresh)) == user_id
 
 
 async def ensure_initial_owner(initial_id: int) -> None:
-    """Create the first owner entry if the owners table is empty."""
+    """Create the first owner assignment if the community has no owner."""
     if await _owner_count() > 0:
         return
+
+    async def _work(sess: AsyncSession) -> None:
+        # * The assignment refers to the identity of the founder, so the
+        # * identity row has to exist before the assignment can point at
+        # * it. A founder the bot has never seen still owns the community.
+        await sess.execute(
+            pg_insert(telegram_users)
+            .values(user_id=initial_id, created_at=utc_now(), updated_at=utc_now())
+            .on_conflict_do_nothing(index_elements=["user_id"])
+        )
+        await sess.execute(
+            pg_insert(role_assignments)
+            .values(
+                user_id=initial_id,
+                role_key=_OWNER_ROLE,
+                status="active",
+                assigned_at=utc_now(),
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+
     try:
-        await db_call(lambda: run(pg_insert(tc_owners).values(user_id=initial_id)))
+        await run_transaction(_work)
         owner_id_cache.put(_OWNER_KEY, initial_id)
-    except IntegrityError as insert_error:
-        if constraint_name(insert_error) != _CONSTRAINT_OWNERS_PKEY:
-            # * Only the owner primary key may lose the startup race. Any
-            # * other integrity error is a real defect and must not be
-            # * swallowed here.
-            raise
-        # * Another instance won the startup race; drop the cache so the next read refreshes.
+    except Exception:
+        # * Another instance won the startup race; drop the cache so the
+        # * next read refreshes it.
         owner_id_cache.invalidate(_OWNER_KEY)
 
 
 async def set_owner(user_id: int) -> None:
     """Replace the current owner with user_id; clears the role cache."""
 
-    # * The transfer runs in one transaction: the insert and the
-    # * convergence delete commit together, so a crash between them cannot
-    # * leave one or two owner rows.
+    # * The transfer runs in one transaction: the new assignment and the
+    # * revocation of the old one commit together, so a crash between
+    # * them cannot leave two owners or none.
     # * The advisory lock serialises concurrent transfers. Without it two
-    # * transfers interleave (insert A, insert B, delete != A, delete != B)
-    # * and the table ends up with no owner row at all, which would leave
-    # * the whole federation without a Founder until the next restart.
+    # * transfers interleave and the table ends up with no owner row at
+    # * all, which would leave the whole community without an owner until
+    # * the next restart.
     async def _work(sess: AsyncSession) -> None:
         await sess.execute(
             text("SELECT pg_advisory_xact_lock(:key)"),
             {"key": _OWNER_TRANSFER_LOCK_KEY},
         )
+        # * A user holds one active role, so every active assignment of
+        # * the new owner is revoked before the owner row is written. A
+        # * target that still held the admin role would otherwise make
+        # * the insert fail and roll the whole transfer back.
         await sess.execute(
-            pg_insert(tc_owners)
-            .values(user_id=user_id)
+            role_assignments.update()
+            .where(
+                role_assignments.c.user_id == user_id,
+                role_assignments.c.status == "active",
+            )
+            .values(status="revoked", revoked_at=utc_now())
+        )
+        await sess.execute(
+            role_assignments.update()
+            .where(
+                role_assignments.c.role_key == _OWNER_ROLE,
+                role_assignments.c.status == "active",
+            )
+            .values(status="revoked", revoked_at=utc_now())
+        )
+        await sess.execute(
+            pg_insert(telegram_users)
+            .values(user_id=user_id, created_at=utc_now(), updated_at=utc_now())
             .on_conflict_do_nothing(index_elements=["user_id"])
         )
-        await sess.execute(delete(tc_owners).where(tc_owners.c.user_id != user_id))
+        await sess.execute(
+            pg_insert(role_assignments)
+            .values(
+                user_id=user_id,
+                role_key=_OWNER_ROLE,
+                status="active",
+                assigned_at=utc_now(),
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
 
     try:
         await run_transaction(_work)
@@ -229,7 +320,7 @@ async def set_owner(user_id: int) -> None:
         # * refused transfer.
         log.exception(
             "set_owner failed for user %d: the transfer was rolled back and "
-            "the previous Founder keeps the role. Inspect the tc_owners "
+            "the previous owner keeps the role. Inspect the role_assignments "
             "table and retry the transfer.",
             user_id,
         )
@@ -251,7 +342,7 @@ async def set_owner(user_id: int) -> None:
             )
     # * Full two-layer invalidation: old owner's ID is unknown, so we cannot
     # * call invalidate(old_id).  clear_all() sweeps L1 + all Redis keys with
-    # * the "role" prefix so no process reads a stale "founder" role after the
+    # * the "role" prefix so no process reads a stale "owner" role after the
     # * transfer completes.
     await effective_role_cache.clear_all()
 
@@ -263,112 +354,101 @@ async def is_admin(user_id: int) -> bool:
     """Return True if user_id is a registered admin."""
     row = await db_call(
         lambda: fetch_one(
-            select(tc_admins.c.user_id).where(tc_admins.c.user_id == user_id)
+            select(role_assignments.c.user_id).where(
+                role_assignments.c.user_id == user_id,
+                role_assignments.c.role_key == _ADMIN_ROLE,
+                *_active_assignment(),
+            )
         )
     )
     return row is not None
 
 
 async def add_admin(user_id: int, promoted_by: int) -> None:
-    """Add a new admin via upsert; no-op if already present."""
-    # * The conflict action is DO NOTHING: a repeated promotion leaves the
-    # * stored promoter and promotion date untouched, matching the old
-    # * insert-only upsert.
-    await db_call(
-        lambda: run(
-            pg_insert(tc_admins)
-            .values(
-                user_id=user_id,
-                promoted_by=promoted_by,
-                promoted_date=utc_now(),
-            )
-            .on_conflict_do_nothing(index_elements=["user_id"])
-        )
-    )
+    """Give the admin role to a user; no-op if the role is already held."""
+    await _assign_role(user_id, _ADMIN_ROLE, promoted_by)
     effective_role_cache.invalidate(user_id)
 
 
 async def remove_admin(user_id: int) -> bool:
-    """Remove an admin; return True if the entry was deleted."""
-    deleted = await db_call(
-        lambda: run(delete(tc_admins).where(tc_admins.c.user_id == user_id))
-    )
+    """Revoke the admin role; return True if an assignment was revoked."""
+    revoked = await _revoke_role(user_id, _ADMIN_ROLE)
     effective_role_cache.invalidate(user_id)
-    return deleted > 0
+    return revoked
 
 
 async def all_admins() -> list[AdminDoc]:
     """Return all admin documents."""
-    rows = await db_call(lambda: fetch_all(select(tc_admins.c.user_id)))
+    rows = await db_call(
+        lambda: fetch_all(
+            select(
+                role_assignments.c.user_id,
+                role_assignments.c.role_key,
+                role_assignments.c.assigned_by_user_id,
+                role_assignments.c.assigned_at,
+            ).where(
+                role_assignments.c.role_key == _ADMIN_ROLE,
+                *_active_assignment(),
+            )
+        )
+    )
     return cast("list[AdminDoc]", rows)
 
 
 async def admin_count() -> int:
     """Return the total count of registered admins."""
-    return await _count(select(func.count()).select_from(tc_admins))
+    return await _count(
+        select(func.count())
+        .select_from(role_assignments)
+        .where(role_assignments.c.role_key == _ADMIN_ROLE, *_active_assignment())
+    )
 
 
-# ──────────────────────── Custom roles ────────────────────────── #
+# ────────────────────────── Role CRUD ─────────────────────────── #
 
 
 async def set_role(user_id: int, role: str, assigned_by: int) -> None:
-    """Assign a custom role (developer/tester) to a user."""
+    """Assign a community role (developer/tester) to a user."""
     # ! CRITICAL: reject anything outside VALID_ROLES. get_effective_role
     # ! returns the stored value verbatim, so a stored "admin" or "founder"
-    # ! would grant real privilege to a tc_roles row.
+    # ! would grant real privilege to a role row.
     if role not in VALID_ROLES:
         raise ValueError(f"Refusing to store invalid custom role: {role!r}")
-    row: RoleDoc = {
-        "user_id": UserId(user_id),
-        "role": role,
-        "assigned_by": UserId(assigned_by),
-        "assigned_at": utc_now(),
-    }
-    # * The upsert overwrites the stored role, promoter, and timestamp on
-    # * every call: the old write replaced the whole role document.
-    await db_call(
-        lambda: run(
-            pg_insert(tc_roles)
-            .values(
-                user_id=row["user_id"],
-                role=row["role"],
-                assigned_by=row["assigned_by"],
-                assigned_at=row["assigned_at"],
-            )
-            .on_conflict_do_update(
-                index_elements=["user_id"],
-                set_={
-                    "role": row["role"],
-                    "assigned_by": row["assigned_by"],
-                    "assigned_at": row["assigned_at"],
-                },
-            )
-        )
-    )
+    await _assign_role(user_id, ROLE_KEY_BY_APP_ROLE[role], assigned_by)
     effective_role_cache.invalidate(user_id)
 
 
 async def remove_role(user_id: int) -> bool:
-    """Remove a user's custom role from the database."""
-    deleted = await db_call(
-        lambda: run(delete(tc_roles).where(tc_roles.c.user_id == user_id))
-    )
+    """Revoke a user's role; the assignment history stays readable."""
+    revoked = await _revoke_role(user_id, None)
     effective_role_cache.invalidate(user_id)
-    return deleted > 0
+    return revoked
 
 
 async def get_role(user_id: int) -> str | None:
-    """Get a user's custom role from the database only."""
+    """Return the role the user currently holds."""
     row = await db_call(
-        lambda: fetch_one(select(tc_roles.c.role).where(tc_roles.c.user_id == user_id))
+        lambda: fetch_one(
+            select(role_assignments.c.role_key).where(
+                role_assignments.c.user_id == user_id,
+                *_active_assignment(),
+            )
+        )
     )
-    return row["role"] if row else None
+    if row is None:
+        return None
+    return APP_ROLE_BY_ROLE_KEY.get(str(row["role_key"]))
 
 
 async def all_by_role(role: str) -> list[RoleRefDoc]:
-    """Get all users with a specific custom role."""
+    """Get all users with a specific role."""
     rows = await db_call(
-        lambda: fetch_all(select(tc_roles.c.user_id).where(tc_roles.c.role == role))
+        lambda: fetch_all(
+            select(role_assignments.c.user_id).where(
+                role_assignments.c.role_key == ROLE_KEY_BY_APP_ROLE.get(role, role),
+                *_active_assignment(),
+            )
+        )
     )
     return cast("list[RoleRefDoc]", rows)
 
@@ -376,8 +456,61 @@ async def all_by_role(role: str) -> list[RoleRefDoc]:
 async def role_count(role: str) -> int:
     """Count role members (count-only views; avoids fetching documents)."""
     return await _count(
-        select(func.count()).select_from(tc_roles).where(tc_roles.c.role == role)
+        select(func.count())
+        .select_from(role_assignments)
+        .where(
+            role_assignments.c.role_key == ROLE_KEY_BY_APP_ROLE.get(role, role),
+            *_active_assignment(),
+        )
     )
+
+
+async def _assign_role(user_id: int, role: str, assigned_by: int) -> None:
+    """Give one role to one user and revoke the role it replaces.
+
+    The revocation and the assignment land in one transaction, so a user
+    never holds two active roles and the database guard sees a single
+    change.
+    """
+
+    async def _work(sess: AsyncSession) -> None:
+        await sess.execute(
+            role_assignments.update()
+            .where(
+                role_assignments.c.user_id == user_id,
+                role_assignments.c.status == "active",
+            )
+            .values(
+                status="revoked", revoked_at=utc_now(), revoked_by_user_id=assigned_by
+            )
+        )
+        await sess.execute(
+            pg_insert(role_assignments)
+            .values(
+                user_id=user_id,
+                role_key=role,
+                assigned_by_user_id=assigned_by,
+                assigned_at=utc_now(),
+                status="active",
+            )
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+
+    await run_transaction(_work)
+
+
+async def _revoke_role(user_id: int, role: str | None) -> bool:
+    """Revoke the active assignment of one user, optionally one role."""
+    stmt = role_assignments.update().where(
+        role_assignments.c.user_id == user_id,
+        role_assignments.c.status == "active",
+    )
+    if role is not None:
+        stmt = stmt.where(role_assignments.c.role_key == role)
+    revoked = await db_call(
+        lambda: run(stmt.values(status="revoked", revoked_at=utc_now()))
+    )
+    return revoked > 0
 
 
 # ─────────────────────── Role resolution ──────────────────────── #
@@ -408,10 +541,10 @@ async def is_staff(user_id: int, *, fresh: bool = False) -> bool:
 
 
 async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None:
-    """Resolve a user's full effective role including owner/admin status (L1->L2->DB cached).
+    """Resolve the role the user currently holds (L1->L2->DB cached).
 
-    With ``fresh=True`` the effective-role, owner, and profile caches are
-    bypassed and the three rows are read directly from the database, then the
+    With ``fresh=True`` the effective-role and owner caches are bypassed
+    and the assignment is read directly from the database, then the
     effective-role cache is refreshed with the result. Enforcement gates
     (decorators, re-checks, demote repair, threshold ban exemption, appeal
     decisions) use ``fresh=True`` so a demotion in another process is never
@@ -419,57 +552,28 @@ async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None
     """
 
     async def _resolve() -> str | None:
-        # * Propagate DB errors so get_or_fetch does not cache a degraded role result.
-        # * A false "founder" or "admin" cached for a real error would silently bypass
-        # * authorization checks for every subsequent call until TTL expiry.
-        # * Fresh reads bypass the owner-id cache as well: owner transfer is
-        # * rare, but a stale cached owner would otherwise keep granting
-        # * founder for the 300 s owner TTL after the transfer landed.
-        if fresh:
-
-            async def _owner_direct() -> bool:
-                row = await db_call(
-                    lambda: fetch_one(
-                        select(tc_owners.c.user_id).where(
-                            tc_owners.c.user_id == user_id
-                        )
-                    )
+        # * Propagate DB errors so get_or_fetch does not cache a degraded role
+        # * result. A false "owner" cached for a real error would silently
+        # * bypass authorization checks for every subsequent call until TTL
+        # * expiry.
+        row = await db_call(
+            lambda: fetch_one(
+                select(role_assignments.c.role_key).where(
+                    role_assignments.c.user_id == user_id,
+                    *_active_assignment(),
                 )
-                return row is not None
-
-            owner, admin, role = await asyncio.gather(
-                _owner_direct(),
-                is_admin(user_id),
-                get_role(user_id),
-                return_exceptions=True,
             )
-        else:
-            owner, admin, role = await asyncio.gather(
-                is_owner(user_id),
-                is_admin(user_id),
-                get_role(user_id),
-                return_exceptions=True,
-            )
-        # * Explicit cancellation check first: CancelledError is a
-        # * BaseException, so the generic branches below would re-raise it
-        # * anyway, but spelling it out keeps a future ``except Exception``
-        # * refactor from silently swallowing shutdown here.
-        throw_if_cancelled((owner, admin, role))
-        if isinstance(owner, BaseException):
-            raise owner
-        if isinstance(admin, BaseException):
-            raise admin
-        if isinstance(role, BaseException):
-            raise role
-        if role is not None and role not in VALID_ROLES:
-            # ! CRITICAL: set_role rejects these on write, but a legacy or
-            # ! hand-edited tc_roles row could still carry "admin"/"founder".
+        )
+        role = row["role_key"] if row else None
+        if role is not None and role not in APP_ROLE_BY_ROLE_KEY:
+            # ! CRITICAL: the assignment table only stores known roles, but
+            # ! a hand-edited row could still carry something unexpected.
             # ! Returning it verbatim would grant real privilege, so treat
-            # ! unknown stored values as no custom role instead of trusting
-            # ! the document.
+            # ! unknown stored values as no role instead of trusting the
+            # ! document.
             log.error("Ignoring invalid stored role %r for user %d", role, user_id)
             role = None
-        return "founder" if owner else "admin" if admin else role
+        return APP_ROLE_BY_ROLE_KEY.get(str(role)) if role is not None else None
 
     if fresh:
         # * The refresh publishes the value only when the key was not
@@ -483,31 +587,130 @@ async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None
 
 
 async def role_meta(user_id: int) -> tuple[str | None, int | None, datetime | None]:
-    """Return ``(role, assigned_by, assigned_at)``; owner has no metadata."""
-    role = await get_effective_role(user_id)
-    if role is None:
-        return None, None, None
-    if role == "founder":
-        # * tc_owners stores only user_id; no metadata to surface.
-        return role, None, None
-    if role == "admin":
-        doc = await db_call(
-            lambda: fetch_one(
-                select(tc_admins.c.promoted_by, tc_admins.c.promoted_date).where(
-                    tc_admins.c.user_id == user_id
-                )
-            )
-        )
-        if doc:
-            return role, doc.get("promoted_by"), doc.get("promoted_date")
-        return role, None, None
-    doc = await db_call(
+    """Return ``(role, assigned_by, assigned_at)`` for the active assignment."""
+    row = await db_call(
         lambda: fetch_one(
-            select(tc_roles.c.assigned_by, tc_roles.c.assigned_at).where(
-                tc_roles.c.user_id == user_id
+            select(
+                role_assignments.c.role_key,
+                role_assignments.c.assigned_by_user_id,
+                role_assignments.c.assigned_at,
+            ).where(
+                role_assignments.c.user_id == user_id,
+                *_active_assignment(),
             )
         )
     )
-    if doc:
-        return role, doc.get("assigned_by"), doc.get("assigned_at")
-    return role, None, None
+    if not row:
+        return None, None, None
+    role = APP_ROLE_BY_ROLE_KEY.get(str(row["role_key"]))
+    return role, row.get("assigned_by_user_id"), row.get("assigned_at")
+
+
+# ───────────────────────── Permissions ─────────────────────────── #
+
+
+async def has_permission(user_id: int, permission_key: str) -> bool:
+    """Return True when the user holds the exact permission.
+
+    The check runs in the database: it reads the active assignment and
+    walks down to the permission list. It returns false when there is no
+    assignment, when the assignment expired, and when the permission is
+    unknown, so a failure never grants privilege.
+    """
+    row = await db_call(
+        lambda: fetch_value(
+            select(
+                text("actor_has_permission(:user_id, :permission_key)")
+                .bindparams(user_id=user_id, permission_key=permission_key)
+                .label("allowed")
+            )
+        )
+    )
+    return bool(row)
+
+
+async def permissions_for(user_id: int) -> list[str]:
+    """Return the permission keys the user currently holds."""
+    rows = await db_call(
+        lambda: fetch_all(
+            select(role_permissions.c.permission_key)
+            .join(
+                role_assignments,
+                role_assignments.c.role_key == role_permissions.c.role_key,
+            )
+            .where(
+                role_assignments.c.user_id == user_id,
+                *_active_assignment(),
+            )
+            .order_by(role_permissions.c.permission_key)
+        )
+    )
+    return [str(row["permission_key"]) for row in rows]
+
+
+async def permission_catalog() -> list[dict[str, object]]:
+    """Return the permission catalog with the resource of every entry."""
+    return await db_call(
+        lambda: fetch_all(
+            select(
+                permission_definitions.c.permission_key,
+                permission_definitions.c.resource,
+                permission_definitions.c.description,
+            ).order_by(permission_definitions.c.permission_key)
+        )
+    )
+
+
+async def role_catalog() -> list[dict[str, object]]:
+    """Return the role catalog with the priority of every role."""
+    return await db_call(
+        lambda: fetch_all(
+            select(
+                role_definitions.c.role_key,
+                role_definitions.c.display_name,
+                role_definitions.c.priority,
+            ).order_by(role_definitions.c.priority.desc())
+        )
+    )
+
+
+async def grant_permission(role_key: str, permission_key: str) -> bool:
+    """Give one permission to one role."""
+    await db_call(
+        lambda: run(
+            pg_insert(role_permissions)
+            .values(role_key=role_key, permission_key=permission_key)
+            .on_conflict_do_nothing(index_elements=["role_key", "permission_key"])
+        )
+    )
+    return True
+
+
+async def revoke_permission(role_key: str, permission_key: str) -> bool:
+    """Take one permission away from one role."""
+    removed = await db_call(
+        lambda: run(
+            role_permissions.delete().where(
+                role_permissions.c.role_key == role_key,
+                role_permissions.c.permission_key == permission_key,
+            )
+        )
+    )
+    return removed > 0
+
+
+# * The document shape of an active role assignment.
+_ROLE_COLUMNS = (
+    role_assignments.c.user_id,
+    role_assignments.c.role_key,
+    role_assignments.c.assigned_by_user_id,
+    role_assignments.c.assigned_at,
+)
+
+
+async def active_assignments() -> list[RoleDoc]:
+    """Return every active role assignment."""
+    rows = await db_call(
+        lambda: fetch_all(select(*_ROLE_COLUMNS).where(*_active_assignment()))
+    )
+    return cast("list[RoleDoc]", rows)

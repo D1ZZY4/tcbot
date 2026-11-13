@@ -357,10 +357,7 @@ async def _post_init(app: Application) -> None:
             "API_ID/API_HASH are required for MTProto identity resolution; refusing to boot degraded."
         )
     await init_shared_subsystems(app.bot, start_mtproto=True)
-    await sched_mod.start(
-        cfg.database_url,
-        cfg.warn_expiry_days,
-    )
+    await sched_mod.start(cfg.database_url)
     _startup_tasks.spawn(_warm_hot_caches())
     asyncio.get_running_loop().set_exception_handler(_make_asyncio_exc_handler())
     lec, _ = cfg.logs_errors

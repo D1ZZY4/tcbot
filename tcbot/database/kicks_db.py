@@ -2,56 +2,125 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Kick log helpers - tracks all kick events in groups."""
+"""Group kick helpers over the moderation decision tables.
+
+A kick is one decision in ``moderation_actions``. It is bound to the
+group it happened in, so it never reaches the other managed groups.
+"""
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
-from tcbot.database import event_history
-from tcbot.database.base import kicks
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from tcbot.database.base import moderation_actions, moderation_cases
 from tcbot.database.documents import KickDoc
-from tcbot.database.engine import db_call, run
+from tcbot.database.engine import db_call, fetch_all, fetch_value, run_transaction
 from tcbot.database.types import ChatId, UserId
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
 
 # ──────────────────────────── Table ─────────────────────────────── #
 # * The surrogate primary key stays out of the returned documents: the
-# * helpers expose the federation fields, not the storage identity.
-_KICK_COLUMNS = [c for c in kicks.c if c.name != "id"]
-
-# ─────────────────────── Collection Helpers ─────────────────────── #
-# * Internal table access utilities for the kicks database
-
+# * helpers expose the community fields, not the storage identity.
+_KICK_COLUMNS = (
+    moderation_actions.c.id,
+    moderation_actions.c.target_user_id,
+    moderation_actions.c.actor_user_id,
+    moderation_actions.c.reason,
+    moderation_actions.c.chat_id,
+    moderation_actions.c.created_at,
+    moderation_actions.c.status,
+    moderation_actions.c.case_id,
+)
 
 # ──────────────────────────── Mutations ─────────────────────────── #
-# * Functions that create or modify kick log records
+# * Functions that create or modify kick decisions.
 # * Used exclusively for audit logging of moderation actions
 
 
 async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> None:
     """Log a kick event to the database for audit purposes."""
-    doc: KickDoc = {
-        "user_id": UserId(user_id),
-        "chat_id": ChatId(chat_id),
-        "reason": reason,
-        "admin_id": UserId(admin_id),
-        "timestamp": utc_now(),
-    }
-    await db_call(
-        lambda: run(
-            kicks.insert().values(
-                user_id=doc["user_id"],
-                chat_id=doc["chat_id"],
-                reason=doc["reason"],
-                admin_id=doc["admin_id"],
-                timestamp=doc["timestamp"],
+    now = utc_now()
+
+    async def _work(sess: AsyncSession) -> None:
+        case_id = await _open_case(sess, user_id, admin_id, reason, chat_id)
+        await sess.execute(
+            pg_insert(moderation_actions).values(
+                action_type="kick",
+                scope_type="chat",
+                chat_id=chat_id,
+                origin_chat_id=chat_id,
+                target_user_id=user_id,
+                actor_user_id=admin_id,
+                reason=reason,
+                created_at=now,
+                status="completed",
+                case_id=case_id,
+                action_origin="manual",
             )
         )
+
+    await run_transaction(_work)
+
+
+async def _open_case(
+    sess: AsyncSession, target_id: int, admin_id: int, reason: str, chat_id: int
+) -> int:
+    """Return the open case of the target, or open one for the decision."""
+    existing = (
+        (
+            await sess.execute(
+                select(moderation_cases.c.id)
+                .where(
+                    moderation_cases.c.subject_user_id == target_id,
+                    moderation_cases.c.status.in_(
+                        ("open", "collecting_evidence", "under_review")
+                    ),
+                )
+                .order_by(moderation_cases.c.created_at.desc())
+                .limit(1)
+            )
+        )
+        .mappings()
+        .first()
     )
+    if existing is not None:
+        return int(existing["id"])
+
+    created = (
+        (
+            await sess.execute(
+                pg_insert(moderation_cases)
+                .values(
+                    subject_user_id=target_id,
+                    case_type="rule_violation",
+                    title=f"Kick of {target_id} in group {chat_id}",
+                    summary=reason,
+                    severity="medium",
+                    status="open",
+                    source="manual",
+                    opened_by_user_id=admin_id,
+                    requires_evidence=False,
+                )
+                .returning(moderation_cases.c.id)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if created is None:
+        raise RuntimeError("the moderation case was not written")
+    return int(created["id"])
 
 
 # ─────────────────────── Per-user history ───────────────────────── #
@@ -64,22 +133,46 @@ async def user_kicks(
 
     ``limit=None`` returns the full list (backwards compatible).
     """
-    rows = await event_history.user_history(kicks, user_id, skip=skip, limit=limit)
-    return cast("list[KickDoc]", rows)
+    stmt = (
+        select(*_KICK_COLUMNS)
+        .where(
+            moderation_actions.c.target_user_id == user_id,
+            moderation_actions.c.action_type == "kick",
+        )
+        .order_by(moderation_actions.c.created_at.desc())
+        .offset(max(0, skip))
+    )
+    if limit is not None:
+        stmt = stmt.limit(max(1, limit))
+    rows = await db_call(lambda: fetch_all(stmt))
+    return [
+        KickDoc(
+            user_id=UserId(int(row["target_user_id"])),
+            chat_id=ChatId(int(row["chat_id"])),
+            reason=str(row["reason"]),
+            admin_id=UserId(int(row["actor_user_id"])),
+            timestamp=cast("datetime", row["created_at"]),
+        )
+        for row in rows
+    ]
 
 
 async def user_kick_count(user_id: int) -> int:
     """Count every kick ever logged against the user."""
-    return await event_history.user_event_count(kicks, user_id)
-
-
-async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
-    """Repoint every kick record from ``old_chat_id`` to ``new_chat_id``.
-
-    Called on basic-group to supergroup migration so /check kick history
-    does not split across the legacy chat. Kick rows carry no unique
-    per-pair state, so a plain repoint is safe. Cancellation propagates.
-    """
-    return await event_history.migrate_chat(
-        kicks, old_chat_id, new_chat_id, label="kicks_db"
+    total = await db_call(
+        lambda: fetch_value(
+            select(func.count())
+            .select_from(moderation_actions)
+            .where(
+                moderation_actions.c.target_user_id == user_id,
+                moderation_actions.c.action_type == "kick",
+            )
+        )
     )
+    return int(total or 0)
+
+
+# ───────────────────────────── Migration ─────────────────────────── #
+# * The community schema moves a group as one transaction, so the
+# * decisions of a group follow it through
+# * :func:`tcbot.database.groups_db.migrate_group`.

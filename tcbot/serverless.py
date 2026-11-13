@@ -13,8 +13,6 @@ from typing import TYPE_CHECKING, Any
 from telegram import Update
 from telegram.ext import Application
 
-from tcbot import cfg
-
 # * Shared builder chain lives in tcbot.__main__ so webhook, polling, and
 # * serverless register the same handlers over the same transports.
 from tcbot.__main__ import (
@@ -24,7 +22,7 @@ from tcbot.__main__ import (
     register_handlers,
 )
 from tcbot.database.engine import connect, is_connected
-from tcbot.database.scheduler import expire_old_warns
+from tcbot.database.scheduler import expire_due_decisions
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -166,19 +164,21 @@ async def handle_telegram_payload(data: dict[str, Any]) -> tuple[int, str]:
 # ─────────────────────── Cron maintenance ─────────────────────── #
 
 
-async def run_warn_expiry() -> tuple[int, str]:
-    """Run warn expiry on demand for the Vercel Cron endpoint.
+async def run_expiry_sweep() -> tuple[int, str]:
+    """Run the expiry sweep on demand for the Vercel Cron endpoint.
+
+    The sweep expires the decisions and the role assignments that ran out
+    and queues the revoke runs that lift the restrictions on Telegram. It
+    runs whether or not the warning lifetime is configured, because a ban,
+    a mute, and a role assignment expire on their own deadline.
 
     Returns an (HTTP status, body) pair describing the outcome.
     """
-    days = cfg.warn_expiry_days
-    if days <= 0:
-        return 200, "warn expiry disabled (WARN_EXPIRY_DAYS=0)"
     try:
         if not is_connected():
             await connect()
-        await expire_old_warns(days)
+        await expire_due_decisions()
     except Exception:
-        log.exception("serverless: warn expiry failed")
-        return 500, "warn expiry failed"
-    return 200, f"warn expiry ran (older than {days}d pruned)"
+        log.exception("serverless: expiry sweep failed")
+        return 500, "expiry sweep failed"
+    return 200, "expiry sweep ran"

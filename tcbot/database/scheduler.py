@@ -11,16 +11,16 @@ import concurrent.futures
 import contextlib
 import functools
 from datetime import UTC, timedelta
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from apscheduler.job import Job
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import create_engine, delete
+from sqlalchemy import create_engine, text
 
-from tcbot.database.base import active_mutes, member_cache, warn_counts, warns
+from tcbot.database.base import chat_members
 from tcbot.database.engine import db_call, run, run_transaction
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import tzinfo
 
-    from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
@@ -75,112 +74,112 @@ _EXPIRE_OP_TIMEOUT_S: float = 60.0
 _MEMBER_CACHE_EXPIRE_DAYS: int = 90
 
 
-async def expire_old_warns(warn_expiry_days: int) -> None:
-    """Delete expired warn records from both ``warns`` and ``warn_counts``.
+async def expire_due_decisions() -> None:
+    """Expire the decisions and the role assignments that ran out.
 
-    Both tables must be pruned together. Deleting only ``warn_counts``
-    leaves individual ``warns`` rows intact; ``_sync_warn_count`` then
-    reconstructs the counter from those rows on the next warn operation,
-    making expiry a no-op. Deleting only ``warns`` leaves the counter
-    behind, and the counter is what the auto-ban threshold reads: the
-    user would keep a phantom warning with an empty history.
+    A decision carries its own expiry, so the sweep only has to move the
+    records whose deadline passed: the ban and the mute decisions go to
+    ``expired`` and a revoke enforcement run is queued for every group the
+    community still manages, and the role assignments go to ``expired``
+    with an audit event behind them. A warning that runs out stops
+    counting towards the threshold on its own: the counter reads the
+    expiry at query time, so the history stays readable and the sweep
+    never has to rewrite it.
 
-    The two deletes therefore share one transaction. Separate statements
-    would each commit on their own, so a failure between them could leave
-    exactly the half-pruned state the pair is meant to prevent. A
-    transaction commits both deletes or neither.
-
-    Called daily by APScheduler when ``WARN_EXPIRY_DAYS > 0``, or on demand by
-    the serverless cron endpoint (``api/cron.py`` on Vercel) which cannot run
-    a persistent scheduler.
-
-    A non-positive ``warn_expiry_days`` is a no-op: without this guard the
-    cutoff would equal now and the deletes below would wipe every warn.
+    Called daily by APScheduler, and on demand by the serverless cron
+    endpoint (``api/cron.py``) which cannot run a persistent scheduler.
     """
-    if warn_expiry_days <= 0:
-        log.info(
-            "Warn expiry skipped: WARN_EXPIRY_DAYS=%d disables expiry.",
-            warn_expiry_days,
-        )
-        return
-    cutoff = utc_now() - timedelta(days=warn_expiry_days)
-
-    async def _work(sess: AsyncSession) -> tuple[int, int]:
-        counts_result = await sess.execute(
-            delete(warn_counts).where(warn_counts.c.updated_at < cutoff)
-        )
-        warns_result = await sess.execute(
-            delete(warns).where(warns.c.timestamp < cutoff)
-        )
-        # * A write returns a cursor result, which carries the affected row
-        # * count. The generic result type does not expose it.
-        return (
-            cast("CursorResult", counts_result).rowcount,
-            cast("CursorResult", warns_result).rowcount,
-        )
-
     try:
         # * The budget belongs to the transaction itself: the run-level
         # * timeout would otherwise fire first and report a shorter
         # * deadline than the one the operator is told about.
-        counts_del, warns_del = await run_transaction(
-            _work,
+        summary = await run_transaction(
+            lambda sess: _expire_transaction(sess),
             timeout=_EXPIRE_OP_TIMEOUT_S,
         )
     except TimeoutError:
         log.exception(
-            "Warn expiry timed out after %ds; no expiry completed.",
+            "Expiry sweep timed out after %ds; no expiry completed.",
             _EXPIRE_OP_TIMEOUT_S,
         )
         # * A hung expiry must fail the run, not report success: returning
         # * normally would make the serverless cron endpoint answer 200
-        # * while warns were never pruned.
+        # * while the decisions were never expired.
         raise RuntimeError(
-            "Warn expiry timed out: no records expired; see errors above."
+            "Expiry sweep timed out: no records expired; see errors above."
         ) from None
     except Exception as exc:
-        # * The transaction rolled back, so the two tables still agree.
-        # * Surface the failure: the caller must not read the partial
-        # * state as a completed expiry.
-        log.exception("Warn expiry failed; the prune was rolled back.")
+        # * The transaction rolled back, so the decisions still agree with
+        # * their expiry. Surface the failure: the caller must not read
+        # * the partial state as a completed expiry.
+        log.exception("Expiry sweep failed; the sweep was rolled back.")
         raise RuntimeError(
-            "Warn expiry incomplete: the prune was rolled back; see errors above."
+            "Expiry sweep incomplete: the sweep was rolled back; see errors above."
         ) from exc
-    log.info(
-        "Warn expiry: removed %d warn_count and %d warn records older than %d days.",
-        counts_del,
-        warns_del,
-        warn_expiry_days,
+    log.info("Expiry sweep: %s.", summary)
+
+
+async def _expire_transaction(sess: AsyncSession) -> dict[str, Any]:
+    """Move the due records to their expired state inside one transaction.
+
+    The decisions and the role assignments are expired by the database, so
+    the transition rules live in one place. The revoke runs are queued in
+    the same transaction, so a decision can never be expired without the
+    job that lifts the restriction on Telegram.
+    """
+    decisions = await sess.execute(
+        text("SELECT expire_due_moderation_actions_and_queue_revokes()")
     )
+    roles = await sess.execute(text("SELECT expire_due_role_assignments_and_audit()"))
+    return {
+        "decisions": _summary_of(decisions),
+        "role_assignments": _summary_of(roles),
+    }
+
+
+def _summary_of(result: Any) -> dict[str, Any]:
+    """Return the JSON summary a database expiry function reports."""
+    payload = result.scalar()
+    if isinstance(payload, dict):
+        return payload
+    return {"count": int(payload or 0)}
+
+
+async def expire_old_warns(warn_expiry_days: int) -> None:
+    """Retired name of :func:`expire_due_decisions`.
+
+    The sweep used to patch the warnings that had no deadline, which the
+    community schema forbids: the expiry of a decision is a fact of it.
+    The warnings now carry their deadline from the moment they are filed,
+    so the sweep only expires the records that ran out. The old name
+    stays importable because a persisted job record still points at it.
+    """
+    await expire_due_decisions()
 
 
 async def expire_stale_records() -> None:
     """Delete the rows PostgreSQL cannot expire on its own.
 
-    The MongoDB deployment pruned two tables on its own: the timed
-    federation mutes whose deadline passed, and the cached profiles that
-    were not refreshed for 90 days. PostgreSQL has no TTL index, so the
-    same pruning runs here, once a day.
-
-    A timed mute row is only enforcement state: the query that reads it
-    already filters the expired rows out, so a late cleanup changes
-    nothing but the storage. The member cache rows keep the user
-    listings and the name search accurate, so they must be pruned or the
-    table grows without bound.
+    The membership cache is the only table that grows without bound: the
+    query that reads it filters on the last sighting, so a stale row is
+    only storage. The erasure queue is processed here as well, so an
+    account the user deleted on Telegram is anonymized even when the
+    scheduler was down.
 
     Called daily by APScheduler, and on demand by the serverless cron
-    endpoint (``api/cron.py``) which cannot run a persistent scheduler.
+    endpoint (``api/cron.py`` which cannot run a persistent scheduler.
     """
-    now = utc_now()
-    profile_cutoff = now - timedelta(days=_MEMBER_CACHE_EXPIRE_DAYS)
+    profile_cutoff = utc_now() - timedelta(days=_MEMBER_CACHE_EXPIRE_DAYS)
     try:
         async with asyncio.timeout(_EXPIRE_OP_TIMEOUT_S):
-            mutes_res, profiles_res = await asyncio.gather(
+            # * The two sweeps touch different tables, so they run
+            # * concurrently and the run waits for both.
+            members_res, erasures_res = await asyncio.gather(
                 db_call(
                     lambda: run(
-                        delete(active_mutes).where(
-                            active_mutes.c.until_date.isnot(None),
-                            active_mutes.c.until_date < now,
+                        chat_members.delete().where(
+                            chat_members.c.last_seen_at.isnot(None),
+                            chat_members.c.last_seen_at < profile_cutoff,
                         )
                     ),
                     # * Bulk deletes over the whole table may run long;
@@ -188,10 +187,8 @@ async def expire_stale_records() -> None:
                     timeout=None,
                 ),
                 db_call(
-                    lambda: run(
-                        delete(member_cache).where(
-                            member_cache.c.last_updated < profile_cutoff
-                        )
+                    lambda: run_transaction(
+                        lambda sess: _sweep_erasures(sess),
                     ),
                     timeout=None,
                 ),
@@ -206,8 +203,8 @@ async def expire_stale_records() -> None:
             "Stale record cleanup timed out: nothing expired; see errors above."
         ) from None
     # ! CRITICAL: a cancelled cleanup must propagate, not report success.
-    throw_if_cancelled((mutes_res, profiles_res))
-    failures = [r for r in (mutes_res, profiles_res) if isinstance(r, BaseException)]
+    throw_if_cancelled((members_res, erasures_res))
+    failures = [r for r in (members_res, erasures_res) if isinstance(r, BaseException)]
     if failures:
         for failure in failures:
             log.error("Stale record cleanup failed: %s", failure)
@@ -215,10 +212,16 @@ async def expire_stale_records() -> None:
             "Stale record cleanup incomplete; see errors above."
         ) from failures[0]
     log.info(
-        "Stale record cleanup: removed %d expired mute rows and %d stale profiles.",
-        mutes_res,
-        profiles_res,
+        "Stale record cleanup: removed %d stale memberships and processed %d erasures.",
+        members_res,
+        erasures_res,
     )
+
+
+async def _sweep_erasures(sess: AsyncSession) -> int:
+    """Process the erasure queue of the deleted Telegram accounts."""
+    result = await sess.execute(text("SELECT sweep_pending_user_erasures(25)"))
+    return int(result.scalar() or 0)
 
 
 async def _cleanup_old_records() -> None:
@@ -243,7 +246,12 @@ async def _cleanup_old_records() -> None:
 # * Stable IDs prevent duplicate schedules across restarts.
 # * (replace_existing=True updates the trigger without creating duplicates)
 
-_WARN_EXPIRY_SCHEDULE_ID: str = "tcbot.warn_expiry_daily"
+_EXPIRY_SCHEDULE_ID: str = "tcbot.expiry_daily"
+# * ID of the retired warn-expiry job. It patched the warnings that had no
+# * deadline, which the community schema forbids. The schedule is removed
+# * on every startup so it cannot fire; the id stays here so the removal
+# * keeps working on a job store written by an older version.
+_LEGACY_WARN_EXPIRY_SCHEDULE_ID: str = "tcbot.warn_expiry_daily"
 # * ID of the live stale-record cleanup job.
 _CLEANUP_SCHEDULE_ID: str = "tcbot.stale_cleanup_daily"
 # * ID of the retired weekly member_cache cleanup job. The schedule is
@@ -329,7 +337,6 @@ def _build_job_store(database_url: str) -> SQLAlchemyJobStore:
 
 async def _scheduler_background(
     database_url: str,
-    warn_expiry_days: int,
 ) -> None:
     """Long-running background task that owns the AsyncIOScheduler lifecycle.
 
@@ -377,7 +384,6 @@ async def _scheduler_background(
                 _reconcile_schedules,
                 scheduler,
                 store,
-                warn_expiry_days,
             ),
         )
         if _sched_ready is None:
@@ -514,23 +520,26 @@ def _remove_job(scheduler: AsyncIOScheduler, job_id: str, label: str) -> None:
 def _reconcile_schedules(
     scheduler: AsyncIOScheduler,
     store: SQLAlchemyJobStore,
-    warn_expiry_days: int,
 ) -> None:
     """Align the persisted schedules with the current configuration."""
-    if warn_expiry_days > 0:
-        _ensure_job(
-            scheduler,
-            store,
-            job_id=_WARN_EXPIRY_SCHEDULE_ID,
-            func=expire_old_warns,
-            trigger=IntervalTrigger(hours=24, timezone=_SCHEDULER_TIMEZONE),
-            args=(warn_expiry_days,),
-            misfire_grace_time=86400,
-        )
-        log.info("Scheduled warn expiry: every 24h, expiry_days=%d.", warn_expiry_days)
-    else:
-        # * Warn expiry disabled: remove stale schedule if previously active.
-        _remove_job(scheduler, _WARN_EXPIRY_SCHEDULE_ID, "Warn expiry")
+    # * The expiry sweep always runs: a ban, a mute, and a role
+    # * assignment that ran out have to be moved to their expired state
+    # * and, for the restrictions, lifted on Telegram.
+    _ensure_job(
+        scheduler,
+        store,
+        job_id=_EXPIRY_SCHEDULE_ID,
+        func=expire_due_decisions,
+        trigger=IntervalTrigger(hours=24, timezone=_SCHEDULER_TIMEZONE),
+        args=(),
+        misfire_grace_time=86400,
+    )
+    log.info("Scheduled expiry sweep: every 24h.")
+
+    # * The retired warn-expiry job patched the warnings that had no
+    # * deadline. The community schema treats the expiry of a decision as
+    # * a fact of it, so the schedule is removed instead of replaced.
+    _remove_job(scheduler, _LEGACY_WARN_EXPIRY_SCHEDULE_ID, "Warn expiry")
 
     # * PostgreSQL has no TTL index, so the daily cleanup job replaces the
     # * one the MongoDB TTL index used to provide.
@@ -558,7 +567,6 @@ def _reconcile_schedules(
 
 async def start(
     database_url: str,
-    warn_expiry_days: int,
 ) -> None:
     """Initialise and start the APScheduler background scheduler.
 
@@ -570,7 +578,6 @@ async def start(
 
     Args:
         database_url: PostgreSQL connection string (same as ``DATABASE_URL``).
-        warn_expiry_days: Days after which warn_counts are expired (0 = disabled).
 
     """
     global _sched_ready, _sched_stop, _sched_error, _sched_task
@@ -582,7 +589,7 @@ async def start(
     _sched_stop = asyncio.Event()
     _sched_error = None
     _sched_task = asyncio.create_task(
-        _scheduler_background(database_url, warn_expiry_days),
+        _scheduler_background(database_url),
         name="tcbot.scheduler",
     )
     try:

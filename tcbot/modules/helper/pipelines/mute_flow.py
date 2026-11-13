@@ -73,7 +73,6 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     dur_str = fmt_duration(duration, locale)
     until = utc_now() + duration if duration else None
     perms = ChatPermissions(can_send_messages=False)
-    duration_secs = int(duration.total_seconds()) if duration else None
     admin_fname = meta.get("mute_admin_fname", "Admin")
     chat_id = update.effective_chat.id if update.effective_chat else None
     if chat_id is None:
@@ -122,41 +121,27 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         )
         return
     groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
-    active_r: BaseException | None = None
-    # * Active record lands before fan-out: no group is touched on DB failure.
+    # * The decision lands before the fan-out: no group is touched on a
+    # * database failure. The decision and the live state are one record,
+    # * so the mute and its history cannot disagree.
+    record_r: BaseException | None = None
     try:
-        await db.mutes_db.set_active_mute(target_id, until=until)
+        await db.mutes_db.record_mute(
+            target_id,
+            chat_id,
+            reason_text,
+            admin_id,
+            until=until,
+        )
     except asyncio.CancelledError:
         raise
     except BaseException as exc:
-        active_r = exc
-    log_r: BaseException | None = None
-    if active_r is None:
-        try:
-            await db.mutes_db.log_mute(
-                target_id,
-                chat_id,
-                reason_text,
-                admin_id,
-                duration_secs=duration_secs,
-            )
-        except asyncio.CancelledError:
-            raise
-        except BaseException as exc:
-            log_r = exc
-    if log_r is not None or active_r is not None:
-        if active_r is None:
-            try:
-                await db.mutes_db.clear_active_mute(target_id)
-            except asyncio.CancelledError:
-                raise
-            except BaseException:
-                log.exception("Failed to delete active mute for %d", target_id)
+        record_r = exc
+    if record_r is not None:
         log.error(
-            "_execute_mute: mute DB write failed for target=%d (log=%s active=%s)",
+            "_execute_mute: mute DB write failed for target=%d (%s)",
             target_id,
-            log_r,
-            active_r,
+            record_r,
         )
         await safe_edit_message(
             bot,

@@ -252,8 +252,18 @@ async def execute_warn(
         ban_id: str | None = None
         if not already_banned:
             try:
+                # * The threshold ban is taken by the bot, not by a
+                # * moderator, so it is an automated decision: the proof
+                # * the moderator collected is optional here, and the
+                # * decision stands on the warnings themselves.
                 ban_doc = await db.bans_db.create_ban(
-                    target_id, reason_text, admin_id, warn_proof_id or 0, 0
+                    target_id,
+                    reason_text,
+                    admin_id,
+                    warn_proof_id or 0,
+                    0,
+                    action_origin="automated",
+                    origin_chat_id=chat_id,
                 )
                 ban_id = ban_doc.get("ban_id", "")
             except Exception:

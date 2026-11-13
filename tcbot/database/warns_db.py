@@ -2,189 +2,132 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Warnings collection helpers - manages user warning records in groups."""
+"""Group warning helpers over the moderation decision tables.
+
+A warning is one decision in ``moderation_actions``. The count the
+threshold reads is the ``warn_counts`` view, so the counter can never
+drift from the history that produced it.
+"""
 
 from __future__ import annotations
 
-import asyncio
-from itertools import batched
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import and_, case, exists, func, select, update
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tcbot.database.base import warn_counts, warns
+from tcbot import cfg
+from tcbot.database.base import moderation_actions, moderation_cases
 from tcbot.database.documents import WarnCountDoc, WarnDoc
 from tcbot.database.engine import (
     db_call,
     fetch_all,
     fetch_one,
     fetch_value,
-    run,
-    run_returning,
     run_transaction,
 )
-from tcbot.utils.dispatch import gather_bounded
+from tcbot.database.types import ChatId, UserId
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from datetime import datetime
 
-    from sqlalchemy import ColumnElement, Table
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
 
-# * Number of counter rows merged per batch during a chat migration. The
-# * merge runs one delete plus one upsert per counter, so an
-# * unbounded batch would create an unbounded number of pending round
-# * trips on a legacy group that holds a counter per warned user.
-_MIGRATION_CHUNK_SIZE: int = 200
+
+def _lifetime_seconds(lifetime: timedelta) -> int:
+    """Return the lifetime of a decision in whole seconds."""
+    return max(int(lifetime.total_seconds()), 0)
+
 
 # ──────────────────────────── Tables ────────────────────────────── #
 # * The surrogate primary key stays out of the returned documents: the
-# * helpers expose the federation fields, not the storage identity.
-_WARN_COLUMNS = [c for c in warns.c if c.name != "id"]
-
-
-def _scope_filter(
-    table: Table, user_id: int, chat_ids: Sequence[int] | None
-) -> ColumnElement[bool]:
-    """Match one user's rows, optionally limited to a set of chats.
-
-    ``chat_ids=None`` covers every chat the user appears in.
-    """
-    if chat_ids is None:
-        return table.c.user_id == user_id
-    return and_(table.c.user_id == user_id, table.c.chat_id.in_(chat_ids))
+# * helpers expose the community fields, not the storage identity.
+_WARN_COLUMNS = (
+    moderation_actions.c.id,
+    moderation_actions.c.target_user_id,
+    moderation_actions.c.actor_user_id,
+    moderation_actions.c.reason,
+    moderation_actions.c.chat_id,
+    moderation_actions.c.created_at,
+    moderation_actions.c.expires_at,
+    moderation_actions.c.status,
+    moderation_actions.c.case_id,
+)
 
 
 # ───────────────────────────── Counters ──────────────────────────── #
-
-
-async def _sync_warn_count(user_id: int, chat_id: int) -> int:
-    """Read the counter row, or backfill it from warn history when missing.
-
-    The backfill uses an insert-only conflict clause, so concurrent
-    callers cannot double-backfill the same missing counter row: the
-    loser of the insert race updates nothing and re-reads the winner's
-    count instead.
-    """
-    row = await db_call(
-        lambda: fetch_one(
-            select(warn_counts.c.count).where(
-                warn_counts.c.user_id == user_id,
-                warn_counts.c.chat_id == chat_id,
-            )
-        )
-    )
-    if row is not None:
-        counter: WarnCountDoc = cast("WarnCountDoc", row)
-        return int(counter.get("count") or 0)
-
-    total = await db_call(
-        lambda: fetch_value(
-            select(func.count())
-            .select_from(warns)
-            .where(warns.c.user_id == user_id, warns.c.chat_id == chat_id)
-        )
-    )
-    count = int(total or 0)
-    if count > 0:
-        rows = await db_call(
-            lambda: run_returning(
-                pg_insert(warn_counts)
-                .values(
-                    user_id=user_id,
-                    chat_id=chat_id,
-                    count=count,
-                    updated_at=utc_now(),
-                )
-                # * Insert-only conflict clause: an existing counter keeps
-                # * its own count, exactly like the former ``$setOnInsert``.
-                .on_conflict_do_nothing(index_elements=["user_id", "chat_id"])
-                .returning(warn_counts.c.count)
-            )
-        )
-        if rows:
-            return int(rows[0]["count"] or 0)
-        # * A concurrent caller won the backfill insert; the row exists
-        # * now, so re-read the winner's count instead of failing.
-        row = await db_call(
-            lambda: fetch_one(
-                select(warn_counts.c.count).where(
-                    warn_counts.c.user_id == user_id,
-                    warn_counts.c.chat_id == chat_id,
-                )
-            )
-        )
-        if row is not None:
-            return int(row["count"] or 0)
-    return count
-
-
-async def _recount_and_store(user_id: int, chat_id: int) -> None:
-    """Rebuild the counter from warn history after a failed atomic update.
-
-    Single owner for the repair path shared by every counter-write failure
-    below, so a fix to the recount logic cannot drift between call sites.
-
-    The recount and the write share one transaction, and the transaction
-    holds the counter row before it counts the history. A recount that
-    read the history in one statement and wrote the absolute count in
-    another could overwrite the increment of a warning that landed in
-    between: the counter would then sit one below the history, and the
-    auto-ban threshold would fire one warning late. Locking the counter
-    row first makes the concurrent ``add_warn`` wait, so it applies its
-    increment to the recounted value instead of losing it.
-    """
-    now = utc_now()
-
-    async def _work(sess: AsyncSession) -> None:
-        # * The conflict clause locks the counter row for the rest of the
-        # * transaction, and the insert takes the primary-key lock when the
-        # * row is missing. Either way a concurrent add_warn waits here.
-        await sess.execute(
-            pg_insert(warn_counts)
-            .values(user_id=user_id, chat_id=chat_id, count=0, updated_at=now)
-            .on_conflict_do_update(
-                index_elements=["user_id", "chat_id"],
-                set_={"updated_at": now},
-            )
-        )
-        total = (
-            await sess.execute(
-                select(func.count())
-                .select_from(warns)
-                .where(warns.c.user_id == user_id, warns.c.chat_id == chat_id)
-            )
-        ).scalar()
-        count = int(total or 0)
-        if count <= 0:
-            await sess.execute(
-                warn_counts.delete().where(
-                    warn_counts.c.user_id == user_id,
-                    warn_counts.c.chat_id == chat_id,
-                )
-            )
-            return
-        await sess.execute(
-            update(warn_counts)
-            .where(
-                warn_counts.c.user_id == user_id,
-                warn_counts.c.chat_id == chat_id,
-            )
-            .values(count=count, updated_at=now)
-        )
-
-    await run_transaction(_work)
+# * The counter is a view over the decisions, so it cannot fall behind
+# * the history that produced it and needs no repair path.
 
 
 async def warn_count(user_id: int, chat_id: int) -> int:
     """Get the current number of warnings for a user in a specific chat."""
-    return await _sync_warn_count(user_id, chat_id)
+    total = await db_call(
+        lambda: fetch_value(
+            text(
+                "SELECT count FROM warn_counts "
+                "WHERE chat_id = :chat_id AND user_id = :user_id"
+            ).bindparams(chat_id=chat_id, user_id=user_id)
+        )
+    )
+    return int(total or 0)
+
+
+async def _open_case(
+    sess: AsyncSession, target_id: int, admin_id: int, reason: str, chat_id: int
+) -> int:
+    """Return the open case of the target, or open one for the decision."""
+    existing = (
+        (
+            await sess.execute(
+                select(moderation_cases.c.id)
+                .where(
+                    moderation_cases.c.subject_user_id == target_id,
+                    moderation_cases.c.status.in_(
+                        ("open", "collecting_evidence", "under_review")
+                    ),
+                )
+                .order_by(moderation_cases.c.created_at.desc())
+                .limit(1)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if existing is not None:
+        return int(existing["id"])
+
+    created = (
+        (
+            await sess.execute(
+                pg_insert(moderation_cases)
+                .values(
+                    subject_user_id=target_id,
+                    case_type="rule_violation",
+                    title=f"Warning of {target_id} in group {chat_id}",
+                    summary=reason,
+                    severity="low",
+                    status="open",
+                    source="manual",
+                    opened_by_user_id=admin_id,
+                    requires_evidence=False,
+                )
+                .returning(moderation_cases.c.id)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if created is None:
+        raise RuntimeError("the moderation case was not written")
+    return int(created["id"])
 
 
 # ────────────────────────────── Records ──────────────────────────── #
@@ -193,89 +136,55 @@ async def warn_count(user_id: int, chat_id: int) -> int:
 async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int:
     """Add a new warning to a user in a specific chat.
 
-    The history row and the counter land in one transaction. They must
-    agree: the counter is what the auto-ban threshold reads, so a
-    history row without its counter (or the other way round) would
-    silently delay the ban that the warning earned. A crash between two
-    separate statements cannot be repaired afterwards, so the two
-    writes share a transaction instead.
+    Returns the number of warnings the user now holds in that group. The
+    decision and the case that holds it land in one transaction, and the
+    count is read from the view, so it always agrees with the history.
 
-    The counter row normally exists and the upsert increments it. When
-    it is missing, the insert takes its value from the warning history
-    instead of starting at one: a counter that ignored the rows already
-    in the history would under-count and delay the auto-ban threshold.
+    A warning carries its own deadline: the community schema treats the
+    expiry as a fact of the decision, so it is set when the warning is
+    filed. A warning that runs out stops counting towards the threshold
+    without its history being rewritten.
     """
     now = utc_now()
+    lifetime = timedelta(days=cfg.warn_expiry_days)
+    expires_at = now + lifetime if cfg.warn_expiry_days > 0 else None
 
-    async def _work(sess: AsyncSession) -> int:
+    async def _work(sess: AsyncSession) -> None:
+        case_id = await _open_case(sess, user_id, admin_id, reason, chat_id)
         await sess.execute(
-            pg_insert(warns).values(
-                user_id=user_id,
+            pg_insert(moderation_actions).values(
+                action_type="warn",
+                scope_type="chat",
                 chat_id=chat_id,
+                origin_chat_id=chat_id,
+                target_user_id=user_id,
+                actor_user_id=admin_id,
                 reason=reason,
-                admin_id=admin_id,
-                timestamp=now,
+                # * A warning that never expires has no duration: the
+                # * deadline and the duration always describe the same
+                # * decision.
+                duration_seconds=(
+                    _lifetime_seconds(lifetime) if expires_at is not None else None
+                ),
+                created_at=now,
+                expires_at=expires_at,
+                status="completed",
+                case_id=case_id,
+                action_origin="manual",
             )
         )
-        # * The counter row normally exists and the conflict clause
-        # * increments it, so the insert value is never used. When the row
-        # * is missing, the insert has to take the count from the history
-        # * instead of starting at one: a counter that ignored the rows
-        # * already in the history would under-count and delay the
-        # * auto-ban threshold.
-        # *
-        # * The history count grows with the user's history in that group,
-        # * so it must not run on the common path. The CASE makes the
-        # * database evaluate only the branch it needs, and the branch
-        # * that counts is skipped entirely when the counter row is there.
-        history_count = (
-            select(func.count())
-            .select_from(warns)
-            .where(warns.c.user_id == user_id, warns.c.chat_id == chat_id)
-            .scalar_subquery()
-        )
-        counter_exists = exists(
-            select(1)
-            .select_from(warn_counts)
-            .where(
-                warn_counts.c.user_id == user_id,
-                warn_counts.c.chat_id == chat_id,
-            )
-        )
-        result = await sess.execute(
-            pg_insert(warn_counts)
-            .values(
-                user_id=user_id,
-                chat_id=chat_id,
-                count=case((counter_exists, 1), else_=history_count),
-                updated_at=now,
-            )
-            .on_conflict_do_update(
-                index_elements=["user_id", "chat_id"],
-                set_={"count": warn_counts.c.count + 1, "updated_at": now},
-            )
-            .returning(warn_counts.c.count)
-        )
-        stored = result.scalar()
-        if stored is None:
-            # * The server returned no counter row, so the count is
-            # * unknown. The transaction is rolled back rather than
-            # * committing a warning whose count is missing.
-            raise RuntimeError(
-                f"warn counter for user {user_id} in chat {chat_id} returned no row"
-            )
-        return int(stored)
 
-    return await run_transaction(_work)
+    await run_transaction(_work)
+    return await warn_count(user_id, chat_id)
 
 
 async def clear_warns(user_id: int, chat_id: int) -> int:
-    """Remove ALL warnings for a user in a specific chat.
+    """Revoke ALL warnings for a user in a specific chat.
 
-    Raises the delete failure instead of returning 0: a 0 return means
-    "nothing to clear", and reporting an outage as an empty state would
-    mislead the moderator. The history and the counter clear together, so
-    the count the auto-ban threshold reads never outlives its history.
+    Raises the failure instead of returning 0: a 0 return means "nothing
+    to clear", and reporting an outage as an empty state would mislead
+    the moderator. The history stays readable, so the count the
+    auto-ban threshold reads never outlives its decision.
     """
     return await _clear_warn_docs(
         user_id,
@@ -285,13 +194,13 @@ async def clear_warns(user_id: int, chat_id: int) -> int:
 
 
 async def clear_all_warns(user_id: int) -> int:
-    """Remove ALL warnings for a user across every federation group.
+    """Revoke ALL warnings for a user across every group.
 
     Used on federation threshold ban to ensure the user starts with a clean warn
     slate in every group after a potential unban, preventing immediate re-ban
     from stale per-group counts accumulated before the federation ban.
 
-    Raises the delete failure like :func:`clear_warns` (a 0 return
+    Raises the failure like :func:`clear_warns` (a 0 return
     means "nothing cleared"); callers running inside ``gather`` inspect the
     captured exception instead.
     """
@@ -303,7 +212,7 @@ async def clear_all_warns(user_id: int) -> int:
 
 
 async def clear_warns_for_chats(user_id: int, chat_ids: Sequence[int]) -> int:
-    """Remove the warnings of *user_id* in the given groups only.
+    """Revoke the warnings of *user_id* in the given groups only.
 
     Used by a partially applied federation threshold ban: the groups where
     the ban landed lose their stale warn counts, while the groups where the
@@ -311,7 +220,7 @@ async def clear_warns_for_chats(user_id: int, chat_ids: Sequence[int]) -> int:
     Clearing everything would leave the failed groups with no warning and no
     ban.
 
-    Raises the delete failure like :func:`clear_warns`.
+    Raises the failure like :func:`clear_warns`.
     """
     chats = [c for c in dict.fromkeys(chat_ids) if c]
     if not chats:
@@ -329,48 +238,33 @@ async def _clear_warn_docs(
     *,
     scope: str,
 ) -> int:
-    """Delete warn history plus counter rows; shared by every clear path.
+    """Revoke the warnings of a user; shared by every clear path.
 
-    Both deletes share one transaction. They write the same fact from two
-    sides: the history rows are the record and the counter row is the
-    running total the auto-ban threshold reads. Separate commits would let
-    a failure between them leave a counter without its history, and a
-    surviving counter keeps a count for warnings that were cleared, which
-    fires the auto-ban threshold on a user who has none.
+    The decisions move to ``revoked`` instead of being deleted, so the
+    history of the warning stays readable and the count drops on its own.
 
-    Returns the history deleted count. Raises the delete failure instead
+    Returns the number of revoked decisions. Raises the failure instead
     of returning 0: a 0 return means "nothing to clear", and reporting an
     outage as an empty state would mislead the moderator. Cancellation
     propagates instead of reporting success.
     """
 
-    async def _work(sess: AsyncSession) -> tuple[int, int]:
-        warn_result = await sess.execute(
-            warns.delete().where(_scope_filter(warns, user_id, chat_ids))
+    async def _work(sess: AsyncSession) -> int:
+        stmt = moderation_actions.update().where(
+            moderation_actions.c.target_user_id == user_id,
+            moderation_actions.c.action_type == "warn",
+            moderation_actions.c.status == "completed",
         )
-        count_result = await sess.execute(
-            warn_counts.delete().where(_scope_filter(warn_counts, user_id, chat_ids))
-        )
-        # * A write returns a cursor result, which carries the affected row
-        # * count. The generic result type does not expose it.
-        return (
-            cast("CursorResult", warn_result).rowcount,
-            cast("CursorResult", count_result).rowcount,
-        )
+        if chat_ids is not None:
+            stmt = stmt.where(moderation_actions.c.chat_id.in_(chat_ids))
+        result = await sess.execute(stmt.values(status="revoked", revoked_at=utc_now()))
+        return cast("CursorResult", result).rowcount
 
     try:
-        # * A federation-wide clear removes every warning row of the user
-        # * across every group, so the delete can run long. The engine
-        # * budget of a single statement would cut it short and leave the
-        # * stale counts behind, which is the state the clear exists to
-        # * prevent.
-        warn_del, _cnt_del = await run_transaction(_work, timeout=None)
-    except asyncio.CancelledError:
-        raise
+        return int(await run_transaction(_work))
     except Exception:
         log.exception("%s failed", scope)
         raise
-    return int(warn_del)
 
 
 async def get_warns(
@@ -389,13 +283,18 @@ async def get_warns(
     ``limit=None`` returns the full list (backwards compatible).
     """
     order = (
-        (warns.c.timestamp.desc(), warns.c.id.desc())
+        (moderation_actions.c.created_at.desc(), moderation_actions.c.id.desc())
         if newest_first
-        else (warns.c.timestamp.asc(), warns.c.id.asc())
+        else (moderation_actions.c.created_at.asc(), moderation_actions.c.id.asc())
     )
     stmt = (
         select(*_WARN_COLUMNS)
-        .where(warns.c.user_id == user_id, warns.c.chat_id == chat_id)
+        .where(
+            moderation_actions.c.target_user_id == user_id,
+            moderation_actions.c.action_type == "warn",
+            moderation_actions.c.chat_id == chat_id,
+            moderation_actions.c.status == "completed",
+        )
         # * The surrogate id breaks timestamp ties so a page boundary
         # * cannot repeat or skip a record.
         .order_by(*order)
@@ -404,76 +303,80 @@ async def get_warns(
     if limit is not None:
         stmt = stmt.limit(max(1, limit))
     rows = await db_call(lambda: fetch_all(stmt))
-    return cast("list[WarnDoc]", rows)
+    return [_compose_warn(row) for row in rows]
+
+
+def _compose_warn(row: dict[str, Any]) -> WarnDoc:
+    """Return the warning document of one decision row."""
+    return WarnDoc(
+        user_id=cast("UserId", int(row["target_user_id"])),
+        reason=str(row["reason"]),
+        admin_id=cast("UserId", int(row["actor_user_id"])),
+        chat_id=cast("ChatId", int(row["chat_id"])),
+        timestamp=cast("datetime", row["created_at"]),
+    )
 
 
 async def remove_last_warn(user_id: int, chat_id: int) -> bool:
-    """Delete the most recent warn document. Returns True if one was removed.
+    """Revoke the most recent warning of a user in a chat.
 
-    The history delete and the counter decrement share one transaction.
-    The counter is what the auto-ban threshold reads, so a decrement
-    that outlives its delete (or a delete that outlives its decrement)
-    leaves the count below the history and delays the ban the warning
-    earned. The decrement also only runs when the delete actually
-    removed a row: two callers that read the same newest warning must
-    not both decrement the counter.
+    Returns True when one was revoked. The decision moves to ``revoked``
+    instead of being deleted, so the warning count drops without the
+    history losing the record.
     """
     row = await db_call(
         lambda: fetch_one(
-            select(warns.c.id)
-            .where(warns.c.user_id == user_id, warns.c.chat_id == chat_id)
-            .order_by(warns.c.timestamp.desc(), warns.c.id.desc())
+            select(moderation_actions.c.id)
+            .where(
+                moderation_actions.c.target_user_id == user_id,
+                moderation_actions.c.action_type == "warn",
+                moderation_actions.c.chat_id == chat_id,
+                moderation_actions.c.status == "completed",
+            )
+            .order_by(
+                moderation_actions.c.created_at.desc(), moderation_actions.c.id.desc()
+            )
             .limit(1)
         )
     )
     if row is None:
         return False
-    warn_id = int(row["id"])
+    revoked = await _revoke_warn(int(row["id"]))
+    return bool(revoked)
 
-    async def _work(sess: AsyncSession) -> tuple[bool, bool]:
-        deleted = await sess.execute(warns.delete().where(warns.c.id == warn_id))
-        if cast("CursorResult", deleted).rowcount == 0:
-            # * Another caller removed the same row first. It owns the
-            # * decrement, so this transaction must not touch the counter.
-            return False, False
-        counted = await sess.execute(
-            warn_counts.update()
+
+async def _revoke_warn(action_id: int) -> bool:
+    """Move one warning decision to ``revoked``."""
+
+    async def _work(sess: AsyncSession) -> bool:
+        result = await sess.execute(
+            moderation_actions.update()
             .where(
-                warn_counts.c.user_id == user_id,
-                warn_counts.c.chat_id == chat_id,
-                warn_counts.c.count > 0,
+                moderation_actions.c.id == action_id,
+                moderation_actions.c.status == "completed",
             )
-            .values(count=warn_counts.c.count - 1, updated_at=utc_now())
+            .values(status="revoked", revoked_at=utc_now())
         )
-        return True, cast("CursorResult", counted).rowcount > 0
+        return cast("CursorResult", result).rowcount > 0
 
-    try:
-        deleted, counted = await run_transaction(_work)
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        # * Fail closed like clear_warns: callers map False to "no
-        # * warnings", so an outage must raise instead of reporting an
-        # * empty state for a user that may still hold warns. The
-        # * transaction rolled back, so history and counter still agree.
-        log.exception("remove_last_warn failed for user=%d chat=%d", user_id, chat_id)
-        await _recount_and_store(user_id, chat_id)
-        raise
-    if not deleted:
-        # * The warning was already gone; the counter may still carry it.
-        await _recount_and_store(user_id, chat_id)
-        return False
-    if not counted:
-        # * No counter row to decrement, so the count is unknown.
-        await _recount_and_store(user_id, chat_id)
-    return True
+    return await run_transaction(_work)
 
 
 async def user_total_warns(user_id: int) -> int:
-    """Total number of warning rows recorded against the user (all groups)."""
+    """Return the historical number of warnings recorded against the user.
+
+    Every warning the user ever received counts, including the ones that
+    were cleared or that ran out. The count that is still in force is
+    :func:`federation_warn_count`.
+    """
     total = await db_call(
         lambda: fetch_value(
-            select(func.count()).select_from(warns).where(warns.c.user_id == user_id)
+            select(func.count())
+            .select_from(moderation_actions)
+            .where(
+                moderation_actions.c.target_user_id == user_id,
+                moderation_actions.c.action_type == "warn",
+            )
         )
     )
     return int(total or 0)
@@ -483,195 +386,48 @@ async def user_warn_groups(user_id: int) -> list[tuple[int, int]]:
     """Return [(chat_id, count), ...] for every group where the user has warns, newest first."""
     rows = await db_call(
         lambda: fetch_all(
-            select(warn_counts.c.chat_id, warn_counts.c.count)
-            .where(warn_counts.c.user_id == user_id, warn_counts.c.count > 0)
-            .order_by(warn_counts.c.updated_at.desc())
+            text(
+                "SELECT chat_id, count FROM warn_counts "
+                "WHERE user_id = :user_id AND count > 0"
+            ).bindparams(user_id=user_id)
         )
     )
     return [(int(d["chat_id"]), int(d["count"])) for d in rows]
 
 
+async def warn_count_doc(user_id: int, chat_id: int) -> WarnCountDoc | None:
+    """Return the counter row of one user in one group."""
+    row = await db_call(
+        lambda: fetch_one(
+            text(
+                "SELECT chat_id, user_id, count FROM warn_counts "
+                "WHERE chat_id = :chat_id AND user_id = :user_id"
+            ).bindparams(chat_id=chat_id, user_id=user_id)
+        )
+    )
+    return cast("WarnCountDoc | None", row)
+
+
 # ───────────────────────────── Migration ─────────────────────────── #
-
-
-async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
-    """Repoint every warn record and counter from ``old_chat_id`` to ``new_chat_id``.
-
-    Called when a basic group migrates to a supergroup. Both ``warns`` (audit
-    history) and ``warn_counts`` (the per-group counter rows that gate
-    the threshold ban) are keyed by ``chat_id``, so without this the
-    supergroup would silently start with a clean slate and lose all warning
-    history from the legacy chat. Counter rows merge by summation: when the
-    supergroup already holds warns, the counts add up instead of a blind
-    overwrite losing one side or violating the per-pair primary key.
-    Each old counter is consumed with an atomic take (removed before its
-    count is added to the new pair), so a crash plus retry can only
-    under-count, never double-count into a false threshold ban. Returns ``True``
-    if any record was updated.
-    """
-    try:
-        history_affected = await db_call(
-            lambda: run(
-                warns.update()
-                .where(warns.c.chat_id == old_chat_id)
-                .values(chat_id=new_chat_id)
-            )
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        log.exception(
-            "warns_db.migrate_records (%d -> %d) warns update failed",
-            old_chat_id,
-            new_chat_id,
-        )
-        return False
-    matched_any = history_affected > 0
-
-    try:
-        old_counters = await db_call(
-            lambda: fetch_all(
-                select(warn_counts.c.user_id, warn_counts.c.count).where(
-                    warn_counts.c.chat_id == old_chat_id
-                )
-            )
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        log.exception(
-            "warns_db.migrate_records (%d -> %d) counter read failed",
-            old_chat_id,
-            new_chat_id,
-        )
-        return matched_any
-
-    async def _merge_one_counter(doc: dict[str, Any]) -> bool:
-        """Atomic-take one old counter and land its count on the new pair.
-
-        Returns True when this user contributed to the migration. The take
-        and the landing share one transaction: with two statements the
-        delete could commit and the upsert then fail, and the count would
-        be gone with no row left to retry from. The old row is therefore
-        removed in the same transaction that adds its count to the new
-        pair, so a crash leaves both sides untouched.
-
-        Per-user failures log and return False; cancellation propagates
-        via gather_bounded below.
-        """
-        uid = doc.get("user_id")
-        cnt = int(doc.get("count", 0))
-        if uid is None or cnt <= 0:
-            return False
-        now = utc_now()
-
-        async def _work(sess: AsyncSession) -> bool:
-            taken_result = await sess.execute(
-                warn_counts.delete().where(
-                    warn_counts.c.user_id == uid,
-                    warn_counts.c.chat_id == old_chat_id,
-                )
-            )
-            # * A write returns a cursor result, which carries the affected
-            # * row count. The generic result type does not expose it.
-            if cast("CursorResult", taken_result).rowcount == 0:
-                return False
-            await sess.execute(
-                pg_insert(warn_counts)
-                .values(
-                    user_id=uid,
-                    chat_id=new_chat_id,
-                    count=cnt,
-                    updated_at=now,
-                )
-                .on_conflict_do_update(
-                    index_elements=["user_id", "chat_id"],
-                    set_={"count": warn_counts.c.count + cnt, "updated_at": now},
-                )
-            )
-            return True
-
-        try:
-            return await run_transaction(_work)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            log.exception(
-                "warns_db.migrate_records (%d -> %d) counter merge failed for user=%s",
-                old_chat_id,
-                new_chat_id,
-                uid,
-            )
-            return False
-
-    # * Per-user takes are independent, so the merge round trips run
-    # * concurrently under the shared database cap instead of one user at
-    # * a time (a large legacy group could otherwise stall for hundreds
-    # * of sequential trips).
-    # * The counter list is chunked: a legacy group can hold a counter per
-    # * warned user, and creating one task per counter up front would
-    # * build an unbounded task list and an unbounded number of pending
-    # * round trips.
-    merged = False
-    failed: list[dict[str, Any]] = []
-    for chunk in batched(old_counters, _MIGRATION_CHUNK_SIZE, strict=False):
-        results = await gather_bounded([_merge_one_counter(doc) for doc in chunk])
-        merged = merged or any(r is True for r in results)
-        failed.extend(
-            doc for doc, ok in zip(chunk, results, strict=False) if ok is not True
-        )
-    # * One bounded retry for the counters whose transaction failed: the
-    # * old row is still there, so the retry can still move its count.
-    if failed:
-        retry = await gather_bounded([_merge_one_counter(doc) for doc in failed])
-        merged = merged or any(r is True for r in retry)
-        still_failed = sum(1 for r in retry if r is not True)
-        if still_failed:
-            # * The stale rows are dropped below, so their counts are lost.
-            # * Under-counting is the safe direction: a lost count delays
-            # * the auto-ban, a double count would cause a wrongful one.
-            log.error(
-                "warns_db.migrate_records (%d -> %d): %d counters could not "
-                "be merged and their counts are dropped",
-                old_chat_id,
-                new_chat_id,
-                still_failed,
-            )
-    matched_any = matched_any or merged
-    try:
-        await db_call(
-            lambda: run(
-                warn_counts.delete().where(warn_counts.c.chat_id == old_chat_id)
-            ),
-            timeout=None,
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        log.exception(
-            "warns_db.migrate_records (%d -> %d) stale counter cleanup failed",
-            old_chat_id,
-            new_chat_id,
-        )
-    return matched_any
+# * The community schema moves a group as one transaction, so the
+# * decisions of a group follow it through
+# * :func:`tcbot.database.groups_db.migrate_group`. The warning counter
+# * is a view over the decisions, so it follows them on its own.
 
 
 async def federation_warn_count(user_id: int) -> int:
     """Total active warn count for a user across all federation chats.
 
-    Sums ``count`` across all ``warn_counts`` rows for the user via a
-    server-side aggregate, avoiding a Python-side sum over a
-    potentially large result set.  Returns 0 when the user has no active
-    warnings.
+    Sums the counter of every group through the view, avoiding a
+    Python-side sum over a potentially large result set.  Returns 0 when
+    the user has no active warnings.
     """
-    # * The aggregate scans every warn counter of the user; it is bounded by
-    # * the user's own rows and stays inside the default call budget.
     total = await db_call(
         lambda: fetch_value(
-            select(func.sum(warn_counts.c.count)).where(
-                warn_counts.c.user_id == user_id,
-                warn_counts.c.count > 0,
-            )
+            text(
+                "SELECT COALESCE(SUM(count), 0) FROM warn_counts "
+                "WHERE user_id = :user_id AND count > 0"
+            ).bindparams(user_id=user_id)
         )
     )
     return int(total or 0)

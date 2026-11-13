@@ -2,19 +2,22 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Federated groups and pending joins collection helpers."""
+"""Connected group registry, group configuration, and join requests."""
 
 from __future__ import annotations
 
-import asyncio
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import cachetools as _cachetools
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.exc import IntegrityError
 
-from tcbot.database.base import federated_groups, pending_joins
+from tcbot.database.base import (
+    chat_settings,
+    connected_chats,
+    join_requests,
+    telegram_chats,
+)
 from tcbot.database.cache import (
     _ALL_GROUPS_KEY,
     active_groups_cache,
@@ -22,7 +25,6 @@ from tcbot.database.cache import (
 )
 from tcbot.database.documents import GroupDoc, PendingGroupDoc
 from tcbot.database.engine import (
-    constraint_name,
     db_call,
     fetch_all,
     fetch_one,
@@ -30,38 +32,54 @@ from tcbot.database.engine import (
     run,
     run_transaction,
 )
+from tcbot.database.types import ChatId, GroupId, UserId
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
-    from typing import Any
+    from datetime import datetime
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
 
 # ──────────────────────────── Tables ────────────────────────────── #
-# * Both tables are keyed by the chat id, so a row is its own document:
-# * there is no surrogate id to hide from the returned records.
-_GROUP_COLUMNS = list(federated_groups.c)
-_PENDING_COLUMNS = list(pending_joins.c)
+# * The registry, the identity, the configuration, and the request are
+# * four tables: the registry holds the connection, the identity holds
+# * the Telegram profile, the configuration holds the settings, and the
+# * request holds the pending decision.
+_GROUP_COLUMNS = (
+    connected_chats.c.chat_id,
+    connected_chats.c.added_by_user_id,
+    connected_chats.c.added_at,
+    connected_chats.c.is_active,
+    telegram_chats.c.title,
+    chat_settings.c.locale,
+)
+_PENDING_COLUMNS = (
+    join_requests.c.chat_id,
+    join_requests.c.owner_user_id,
+    join_requests.c.request_message_id,
+    join_requests.c.status,
+    join_requests.c.requested_at,
+    join_requests.c.id,
+)
 
-# * Names of the primary keys that can reject a chat repoint. PostgreSQL
-# * names an unnamed primary key constraint after its table.
-_CONSTRAINT_GROUPS_PKEY: str = "federated_groups_pkey"
-_CONSTRAINT_PENDING_PKEY: str = "pending_joins_pkey"
 
-
-def _is_chat_key_violation(exc: IntegrityError, expected: str) -> bool:
-    """Return True when the failure is the chat id primary-key conflict.
-
-    The chat id is the only unique key of both tables, so a repoint can
-    only collide with the row that already owns the target chat. A driver
-    that reports no constraint name leaves no other candidate.
-    """
-    name = constraint_name(exc)
-    return not name or name == expected
+def _group_row(docs: list[dict[str, Any]]) -> list[GroupDoc]:
+    """Return the group documents with the column names the callers read."""
+    return [
+        GroupDoc(
+            chat_id=cast("GroupId", doc["chat_id"]),
+            title=doc.get("title") or "",
+            added_by=cast("UserId", doc.get("added_by_user_id") or 0),
+            added_date=cast("datetime", doc["added_at"]),
+            is_active=bool(doc.get("is_active")),
+            locale=doc.get("locale"),
+        )
+        for doc in docs
+    ]
 
 
 # ─────────────────────── Connected groups ────────────────────── #
@@ -73,8 +91,8 @@ async def get_group_titles(chat_ids: list[int]) -> dict[int, str]:
         return {}
     rows = await db_call(
         lambda: fetch_all(
-            select(federated_groups.c.chat_id, federated_groups.c.title).where(
-                federated_groups.c.chat_id.in_(chat_ids)
+            select(telegram_chats.c.chat_id, telegram_chats.c.title).where(
+                telegram_chats.c.chat_id.in_(chat_ids)
             )
         )
     )
@@ -93,12 +111,12 @@ async def refresh_group_title(chat_id: int, title: str) -> bool:
     """
     affected = await db_call(
         lambda: run(
-            federated_groups.update()
+            telegram_chats.update()
             .where(
-                federated_groups.c.chat_id == chat_id,
-                federated_groups.c.title != title,
+                telegram_chats.c.chat_id == chat_id,
+                telegram_chats.c.title != title,
             )
-            .values(title=title)
+            .values(title=title, updated_at=utc_now())
         )
     )
     if affected == 0:
@@ -108,7 +126,7 @@ async def refresh_group_title(chat_id: int, title: str) -> bool:
 
 
 async def is_connected(chat_id: int, *, fresh: bool = False) -> bool:
-    """Check if a group is currently active and connected to the federation (L1->L2->DB cached).
+    """Check if a group is currently active and connected to the community (L1->L2->DB cached).
 
     With ``fresh=True`` the cache is bypassed and the row is read directly
     from the database, then the cache is refreshed. The origin guard uses
@@ -119,9 +137,9 @@ async def is_connected(chat_id: int, *, fresh: bool = False) -> bool:
     async def _fetch() -> bool:
         row = await db_call(
             lambda: fetch_one(
-                select(federated_groups.c.chat_id).where(
-                    federated_groups.c.chat_id == chat_id,
-                    federated_groups.c.is_active.is_(True),
+                select(connected_chats.c.chat_id).where(
+                    connected_chats.c.chat_id == chat_id,
+                    connected_chats.c.is_active.is_(True),
                 )
             )
         )
@@ -135,17 +153,31 @@ async def is_connected(chat_id: int, *, fresh: bool = False) -> bool:
 
 
 async def add_group(chat_id: int, title: str, added_by: int) -> None:
-    """Add or update a group in the federated_groups table."""
+    """Connect a group to the community."""
     now = utc_now()
-    await db_call(
-        lambda: run(
-            pg_insert(federated_groups)
+
+    async def _work(sess: AsyncSession) -> None:
+        await sess.execute(
+            pg_insert(telegram_chats)
             .values(
                 chat_id=chat_id,
+                chat_type="supergroup",
                 title=title,
-                added_by=added_by,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=["chat_id"],
+                set_={"title": title, "updated_at": now},
+            )
+        )
+        await sess.execute(
+            pg_insert(connected_chats)
+            .values(
+                chat_id=chat_id,
+                added_by_user_id=added_by,
+                added_at=now,
                 is_active=True,
-                added_date=now,
             )
             .on_conflict_do_update(
                 index_elements=["chat_id"],
@@ -153,20 +185,25 @@ async def add_group(chat_id: int, title: str, added_by: int) -> None:
                 # * refreshes: stats shows it as the join date, so it stays
                 # * out of the conflict update instead of rewriting history
                 # * on every add.
-                set_={"title": title, "added_by": added_by, "is_active": True},
+                set_={"added_by_user_id": added_by, "is_active": True},
             )
         )
-    )
+
+    await run_transaction(_work)
     connected_cache.put(chat_id, True)  # noqa: FBT003
     active_groups_cache.invalidate(_ALL_GROUPS_KEY)
 
 
 async def deactivate_group(chat_id: int) -> bool:
-    """Mark a group as inactive (disconnect from federation)."""
+    """Disconnect a group from the community.
+
+    The row stays in the registry: the moderation history refers to the
+    group, so a disconnect must not remove the identity.
+    """
     affected = await db_call(
         lambda: run(
-            federated_groups.update()
-            .where(federated_groups.c.chat_id == chat_id)
+            connected_chats.update()
+            .where(connected_chats.c.chat_id == chat_id)
             .values(is_active=False)
         )
     )
@@ -183,10 +220,19 @@ async def active_groups() -> list[GroupDoc]:
     async def _fetch() -> list[GroupDoc]:
         rows = await db_call(
             lambda: fetch_all(
-                select(*_GROUP_COLUMNS).where(federated_groups.c.is_active.is_(True))
+                select(*_GROUP_COLUMNS)
+                .select_from(connected_chats)
+                .join(
+                    telegram_chats,
+                    telegram_chats.c.chat_id == connected_chats.c.chat_id,
+                )
+                .outerjoin(
+                    chat_settings, chat_settings.c.chat_id == connected_chats.c.chat_id
+                )
+                .where(connected_chats.c.is_active.is_(True))
             )
         )
-        return cast("list[GroupDoc]", rows)
+        return _group_row(rows)
 
     return cast(
         "list[GroupDoc]",
@@ -199,8 +245,8 @@ async def active_group_count() -> int:
     total = await db_call(
         lambda: fetch_value(
             select(func.count())
-            .select_from(federated_groups)
-            .where(federated_groups.c.is_active.is_(True))
+            .select_from(connected_chats)
+            .where(connected_chats.c.is_active.is_(True))
         )
     )
     return int(total or 0)
@@ -214,7 +260,7 @@ def with_primary_groups(
     """Append primary/extra group entries missing from *groups*.
 
     Single owner for the "connected plus primaries" merge every
-    federation-wide fan-out performs, so the dedup key and the
+    community-wide fan-out performs, so the dedup key and the
     synthesized entry shape cannot drift between the ban, mute, warn,
     unban, and appeal-approve paths. Falsy IDs (unset primaries) are
     skipped; callers pass ``(cfg.main_group,)`` plus any contextual chat
@@ -231,10 +277,9 @@ def with_primary_groups(
 
 
 # ───────────────────────── Group locale ────────────────────────── #
-
-# * Stored on the federated_groups row itself: locale rides alongside
-# * the group with no extra table, and reads filter on the already
-# * indexed chat_id. No upsert here: only connected groups hold settings.
+# * The locale lives in the group configuration, not in the registry:
+# * the registry holds the connection, the configuration holds the
+# * settings. Reads filter on the already indexed chat_id.
 # * L1 for locale reads: resolution runs on every group command, so hits
 # * must cost no I/O. Writes invalidate; TTL bounds staleness when
 # * another process changes the row. Unset (None) caches too.
@@ -249,9 +294,7 @@ async def get_group_locale(chat_id: int) -> str | None:
         pass
     row = await db_call(
         lambda: fetch_one(
-            select(federated_groups.c.locale).where(
-                federated_groups.c.chat_id == chat_id
-            )
+            select(chat_settings.c.locale).where(chat_settings.c.chat_id == chat_id)
         )
     )
     if row is None:
@@ -269,22 +312,13 @@ async def set_group_locale(chat_id: int, locale: str | None) -> bool:
     Returns True when a group row was matched. Locale codes are stored
     verbatim; validity is enforced by the caller and at resolution time.
     """
-    if locale is None:
-        affected = await db_call(
-            lambda: run(
-                federated_groups.update()
-                .where(federated_groups.c.chat_id == chat_id)
-                .values(locale=None)
-            )
+    affected = await db_call(
+        lambda: run(
+            chat_settings.update()
+            .where(chat_settings.c.chat_id == chat_id)
+            .values(locale=locale, updated_at=utc_now())
         )
-    else:
-        affected = await db_call(
-            lambda: run(
-                federated_groups.update()
-                .where(federated_groups.c.chat_id == chat_id)
-                .values(locale=locale)
-            )
-        )
+    )
     _GROUP_LOCALE_L1.pop(chat_id, None)
     # * active_groups() returns the row including its locale; without this
     # * the new locale stays stale for the groups-list TTL after a change.
@@ -296,105 +330,126 @@ async def set_group_locale(chat_id: int, locale: str | None) -> bool:
 
 
 async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) -> None:
-    """Add or update a pending join request from a group."""
+    """Record the join request of a group."""
     now = utc_now()
-    await db_call(
-        lambda: run(
-            pg_insert(pending_joins)
+
+    async def _work(sess: AsyncSession) -> None:
+        await sess.execute(
+            pg_insert(telegram_chats)
             .values(
                 chat_id=chat_id,
+                chat_type="supergroup",
                 title=title,
-                owner_id=owner_id,
-                message_id=message_id,
-                added_date=now,
+                created_at=now,
+                updated_at=now,
             )
             .on_conflict_do_update(
                 index_elements=["chat_id"],
-                set_={
-                    "title": title,
-                    "owner_id": owner_id,
-                    "message_id": message_id,
-                    "added_date": now,
-                },
+                set_={"title": title, "updated_at": now},
             )
         )
-    )
-
-
-async def get_pending(chat_id: int) -> PendingGroupDoc | None:
-    """Get a pending join request by chat ID."""
-    row = await db_call(
-        lambda: fetch_one(
-            select(*_PENDING_COLUMNS).where(pending_joins.c.chat_id == chat_id)
-        )
-    )
-    return cast("PendingGroupDoc | None", row)
-
-
-async def remove_pending(chat_id: int) -> None:
-    """Remove a pending join request after it's approved or rejected."""
-    await db_call(
-        lambda: run(pending_joins.delete().where(pending_joins.c.chat_id == chat_id))
-    )
-
-
-# ─────────────────────────── Migration ─────────────────────────── #
-
-
-async def _merge_group_row(old_chat_id: int, new_chat_id: int) -> None:
-    """Fold a stale group row into the row that already owns the new chat id.
-
-    The repoint cannot update the primary key in place because the target
-    row already exists, so the stale row is merged away instead. The
-    merge carries the old row's group locale over to the surviving row
-    when the survivor has none: a group that chose its language before
-    the migration keeps it.
-    """
-
-    async def _work(sess: AsyncSession) -> None:
-        old_row = (
-            (
-                await sess.execute(
-                    select(federated_groups.c.locale).where(
-                        federated_groups.c.chat_id == old_chat_id
-                    )
-                )
-            )
-            .mappings()
-            .first()
-        )
-        if old_row is None:
-            return
-        target_locale = (
-            (
-                await sess.execute(
-                    select(federated_groups.c.locale).where(
-                        federated_groups.c.chat_id == new_chat_id
-                    )
-                )
-            )
-            .mappings()
-            .first()
-        )
-        if target_locale is not None and target_locale["locale"] is None:
-            await sess.execute(
-                federated_groups.update()
-                .where(federated_groups.c.chat_id == new_chat_id)
-                .values(locale=old_row["locale"])
-            )
         await sess.execute(
-            federated_groups.delete().where(federated_groups.c.chat_id == old_chat_id)
+            pg_insert(join_requests)
+            .values(
+                chat_id=chat_id,
+                owner_user_id=owner_id,
+                request_message_id=message_id,
+                status="pending",
+                requested_at=now,
+            )
+            # * The request facts are immutable, so an open request is
+            # * kept as it is: a second request for the same chat reuses
+            # * the open one instead of rewriting who asked for it and
+            # * when.
+            .on_conflict_do_nothing(
+                index_elements=["chat_id"],
+                index_where=join_requests.c.status == "pending",
+            )
         )
 
     await run_transaction(_work)
+
+
+async def get_pending(chat_id: int) -> PendingGroupDoc | None:
+    """Get the open join request of a chat."""
+    row = await db_call(
+        lambda: fetch_one(
+            select(*_PENDING_COLUMNS).where(
+                join_requests.c.chat_id == chat_id,
+                join_requests.c.status == "pending",
+            )
+        )
+    )
+    if row is None:
+        return None
+    title_row = await db_call(
+        lambda: fetch_one(
+            select(telegram_chats.c.title).where(telegram_chats.c.chat_id == chat_id)
+        )
+    )
+    return PendingGroupDoc(
+        chat_id=cast("ChatId", row["chat_id"]),
+        title=(title_row or {}).get("title") or "",
+        owner_id=cast("UserId", row.get("owner_user_id") or 0),
+        message_id=row.get("request_message_id") or 0,
+        added_date=cast("datetime", row["requested_at"]),
+        request_id=int(row["id"]),
+        status="pending",
+    )
+
+
+async def remove_pending(chat_id: int) -> None:
+    """Close the join request of a chat after it was approved or rejected."""
+    await db_call(
+        lambda: run(
+            join_requests.update()
+            .where(
+                join_requests.c.chat_id == chat_id,
+                join_requests.c.status == "pending",
+            )
+            .values(status="cancelled", resolved_at=utc_now())
+        )
+    )
+
+
+async def resolve_pending(
+    chat_id: int,
+    status: str,
+    resolved_by: int,
+    note: str | None = None,
+) -> bool:
+    """Decide the join request of a chat.
+
+    The update is conditional on the request still being pending, so two
+    admins pressing the button at the same moment produce one decision.
+    """
+    affected = await db_call(
+        lambda: run(
+            join_requests.update()
+            .where(
+                join_requests.c.chat_id == chat_id,
+                join_requests.c.status == "pending",
+            )
+            .values(
+                status=status,
+                resolved_at=utc_now(),
+                resolved_by_user_id=resolved_by,
+                decision_note=note,
+            )
+        )
+    )
+    return affected > 0
+
+
+# ─────────────────────────── Migration ─────────────────────────── #
 
 
 async def _group_is_active(chat_id: int) -> bool:
     """Return whether the connected-group row of *chat_id* is active."""
     row = await db_call(
         lambda: fetch_one(
-            select(federated_groups.c.is_active).where(
-                federated_groups.c.chat_id == chat_id
+            select(connected_chats.c.is_active).where(
+                connected_chats.c.chat_id == chat_id
             )
         )
     )
@@ -402,124 +457,41 @@ async def _group_is_active(chat_id: int) -> bool:
 
 
 async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
-    """Update all group records from ``old_chat_id`` to ``new_chat_id`` after migration.
+    """Repoint every group record from ``old_chat_id`` to ``new_chat_id``.
 
-    Called when a basic group migrates to a supergroup. Updates both the
-    ``federated_groups`` and ``pending_joins`` tables and invalidates
-    the relevant cache entries. When the new chat already has a row (the
-    unique ``chat_id`` key would reject the repoint), the stale old row
-    is merged away instead of losing the migration. Returns ``True`` if
-    any record was updated. Cancellation propagates.
+    Called when a basic group migrates to a supergroup. Telegram retires
+    the old chat id and hands the bot the id of the supergroup that
+    replaced it, so the identity, the configuration, the registry, the
+    membership, the open request, and the decisions of that group have to
+    follow the new id.
+
+    The move runs as one database transaction: the decisions point at the
+    connected group, so the new registry row has to exist before the
+    decisions move, and a half-moved group would be worse than one that
+    did not move at all. The old chat stays known but inactive, so the
+    history that refers to it stays readable.
+
+    Returns ``True`` when the group was connected and has been moved.
+    Cancellation propagates.
     """
-    try:
-        group_affected = await db_call(
-            lambda: run(
-                federated_groups.update()
-                .where(federated_groups.c.chat_id == old_chat_id)
-                .values(chat_id=new_chat_id)
+    summary = await db_call(
+        lambda: fetch_one(
+            text("SELECT repoint_chat_records(:old_chat_id, :new_chat_id)").bindparams(
+                old_chat_id=old_chat_id,
+                new_chat_id=new_chat_id,
             )
         )
-        group_matched = group_affected > 0
-    except asyncio.CancelledError:
-        raise
-    except IntegrityError as exc:
-        if not _is_chat_key_violation(exc, _CONSTRAINT_GROUPS_PKEY):
-            log.exception(
-                "migrate_group (%d -> %d) federated_groups update failed",
-                old_chat_id,
-                new_chat_id,
-            )
-            return False
-        # * The supergroup row already exists: merge the stale old row away
-        # * so the migration still converges instead of dying on the key.
-        log.warning(
-            "migrate_group (%d -> %d): target row exists, merging old row away",
-            old_chat_id,
-            new_chat_id,
-        )
-        try:
-            await _merge_group_row(old_chat_id, new_chat_id)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            log.exception(
-                "migrate_group (%d -> %d) stale-row cleanup failed",
-                old_chat_id,
-                new_chat_id,
-            )
-            return False
-        group_matched = True
-    except Exception:
-        log.exception(
-            "migrate_group (%d -> %d) federated_groups update failed",
-            old_chat_id,
-            new_chat_id,
-        )
-        return False
-    try:
-        pending_affected = await db_call(
-            lambda: run(
-                pending_joins.update()
-                .where(pending_joins.c.chat_id == old_chat_id)
-                .values(chat_id=new_chat_id)
-            )
-        )
-    except asyncio.CancelledError:
-        raise
-    except IntegrityError as exc:
-        if not _is_chat_key_violation(exc, _CONSTRAINT_PENDING_PKEY):
-            log.exception(
-                "migrate_group (%d -> %d) pending_joins update failed",
-                old_chat_id,
-                new_chat_id,
-            )
-            pending_affected = None
-        else:
-            # * The new chat already has a pending row: drop the stale old row
-            # * so the migration converges instead of leaving a dangling
-            # * pending_joins record referencing the old chat id.
-            log.warning(
-                "migrate_group (%d -> %d): pending target row exists, merging old row away",
-                old_chat_id,
-                new_chat_id,
-            )
-            try:
-                await db_call(
-                    lambda: run(
-                        pending_joins.delete().where(
-                            pending_joins.c.chat_id == old_chat_id
-                        )
-                    )
-                )
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                log.exception(
-                    "migrate_group (%d -> %d) pending stale-row cleanup failed",
-                    old_chat_id,
-                    new_chat_id,
-                )
-            pending_affected = None
-    except Exception:
-        log.exception(
-            "migrate_group (%d -> %d) pending_joins update failed",
-            old_chat_id,
-            new_chat_id,
-        )
-        pending_affected = None
-    matched_any = group_matched or (
-        pending_affected is not None and pending_affected > 0
     )
-    if matched_any:
-        connected_cache.put(old_chat_id, False)  # noqa: FBT003
-        # * Only mark the new chat when its federated_groups row actually
-        # * moved: a pending-only migration must not poison is_connected.
-        if group_matched:
-            # * The cached value mirrors the row that survived. The target
-            # * row may be an inactive one (a group the operator
-            # * disconnected), so caching "connected" unconditionally would
-            # * report a disconnected group as connected for the whole
-            # * cache TTL and pull it into the federation fan-outs.
-            connected_cache.put(new_chat_id, await _group_is_active(new_chat_id))
-            active_groups_cache.invalidate(_ALL_GROUPS_KEY)
-    return matched_any
+    if summary is None:
+        return False
+    moved = bool(summary.get("was_active"))
+    connected_cache.put(old_chat_id, False)  # noqa: FBT003
+    if moved:
+        # * The cached value mirrors the row that survived. The target
+        # * row may be an inactive one (a group the operator
+        # * disconnected), so caching "connected" unconditionally would
+        # * report a disconnected group as connected for the whole
+        # * cache TTL and pull it into the community fan-outs.
+        connected_cache.put(new_chat_id, await _group_is_active(new_chat_id))
+    active_groups_cache.invalidate(_ALL_GROUPS_KEY)
+    return moved

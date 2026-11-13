@@ -237,6 +237,7 @@ async def _execute_ban_record(
     now: datetime,
     logs_chat: int,
     logs_thread: int | None,
+    proof_chat: int,
 ) -> tuple[int, bool, str]:
     """Write the ban record and post the federation log.
 
@@ -281,10 +282,17 @@ async def _execute_ban_record(
                 0,
                 old_proof_msg_id,
                 old_log_msg_id,
+                destination_chat_id=proof_chat,
             )
         else:
             written = await db.bans_db.create_ban(
-                target_id, reason, admin_id, proof_msg_id or 0, 0, ban_id
+                target_id,
+                reason,
+                admin_id,
+                proof_msg_id or 0,
+                0,
+                ban_id,
+                destination_chat_id=proof_chat,
             )
     except Exception:
         log.exception("Ban record write failed for ban_id=%s", ban_id)
@@ -481,6 +489,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             now=now,
             logs_chat=logs_chat,
             logs_thread=logs_thread,
+            proof_chat=proof_chat,
         )
     except asyncio.CancelledError:
         if not _groups_task.done():

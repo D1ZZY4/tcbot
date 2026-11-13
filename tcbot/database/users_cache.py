@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Member profile cache helpers (member_cache table only)."""
+"""Telegram user profile helpers (telegram_users table only)."""
 
 from __future__ import annotations
 
@@ -11,22 +11,25 @@ from typing import cast
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tcbot.database.base import member_cache
+from tcbot.database.base import telegram_users
 from tcbot.database.cache import CACHE_MISS, user_mention_cache
 from tcbot.database.documents import UserDoc
 from tcbot.database.engine import db_call, fetch_all, fetch_one, fetch_value, run
 from tcbot.utils.time_and_date import utc_now
 
 # ──────────────────────────── Table ────────────────────────────── #
-# * The lowercase mirrors stay out of the returned documents: they are
-# * index helpers for the prefix search, not part of the stored profile.
-_MEMBER_COLUMNS = [
-    member_cache.c.user_id,
-    member_cache.c.username,
-    member_cache.c.first_name,
-    member_cache.c.last_name,
-    member_cache.c.commit_date,
-    member_cache.c.last_updated,
+# * The stored columns are the ones the profile carries. The lowercase
+# * form of the searchable fields is an index helper, not a column.
+_USER_COLUMNS = [
+    telegram_users.c.user_id,
+    telegram_users.c.username,
+    telegram_users.c.first_name,
+    telegram_users.c.last_name,
+    telegram_users.c.language_code,
+    telegram_users.c.first_seen_at,
+    telegram_users.c.last_seen_at,
+    telegram_users.c.created_at,
+    telegram_users.c.updated_at,
 ]
 
 # * L1 mention-cache entries are [first_name, username, last_name] triples.
@@ -57,10 +60,10 @@ async def _fetch_mention_triple(user_id: int) -> list[str | None]:
     doc = await db_call(
         lambda: fetch_one(
             select(
-                member_cache.c.first_name,
-                member_cache.c.username,
-                member_cache.c.last_name,
-            ).where(member_cache.c.user_id == user_id)
+                telegram_users.c.first_name,
+                telegram_users.c.username,
+                telegram_users.c.last_name,
+            ).where(telegram_users.c.user_id == user_id)
         )
     )
     if doc:
@@ -69,7 +72,7 @@ async def _fetch_mention_triple(user_id: int) -> list[str | None]:
             doc.get("username"),
             doc.get("last_name"),
         ]
-    # * Sentinel: user has no member_cache row. All-None is used
+    # * Sentinel: user has no telegram_users row. All-None is used
     # * (not [str(user_id), None, None]) so the not-found case is unambiguous:
     # * a real first_name is never None, but str(user_id) could coincide
     # * with an actual numeric display name and would suppress fallback.
@@ -79,7 +82,7 @@ async def _fetch_mention_triple(user_id: int) -> list[str | None]:
 def is_placeholder_name(name: str | None) -> bool:
     """Return True when the name is a fallback rather than a real name.
 
-    Two fallback shapes exist in the member cache: a bare numeric ID and the
+    Two fallback shapes exist in the profile cache: a bare numeric ID and the
     legacy ``User <id>`` form older releases wrote. A view that renders
     either as a name shows the placeholder to the operator, so every
     surface must agree on what counts as a real name.
@@ -94,10 +97,10 @@ def is_placeholder_name(name: str | None) -> bool:
 
 
 async def get_user(user_id: int) -> UserDoc | None:
-    """Get the full cached profile for a specific user."""
+    """Get the full stored profile for a specific user."""
     row = await db_call(
         lambda: fetch_one(
-            select(*_MEMBER_COLUMNS).where(member_cache.c.user_id == user_id)
+            select(*_USER_COLUMNS).where(telegram_users.c.user_id == user_id)
         )
     )
     return cast("UserDoc | None", row)
@@ -110,7 +113,7 @@ async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
     round-trips on repeated lookups.  Cache is invalidated on every ``upsert_user``.
 
     Cache sentinel: ``[None, None, None]`` is stored when the user has no row in
-    ``member_cache``.  The consumer converts ``None`` → ``str(user_id)`` so the
+    ``telegram_users``.  The consumer converts ``None`` → ``str(user_id)`` so the
     returned tuple always contains a non-empty string as the first element.
     """
 
@@ -118,7 +121,7 @@ async def get_user_mention_data(user_id: int) -> tuple[str, str | None]:
         return await _fetch_mention_triple(user_id)
 
     data = await user_mention_cache.get_or_fetch(user_id, _fetch)
-    # * data[0] is None when the user has no member_cache row (sentinel).
+    # * data[0] is None when the user has no telegram_users row (sentinel).
     name = cast("str", data[0]) if data[0] is not None else str(user_id)
     return (name, data[1])
 
@@ -155,11 +158,11 @@ async def _mention_triples(
     docs = await db_call(
         lambda: fetch_all(
             select(
-                member_cache.c.user_id,
-                member_cache.c.first_name,
-                member_cache.c.username,
-                member_cache.c.last_name,
-            ).where(member_cache.c.user_id.in_(missing))
+                telegram_users.c.user_id,
+                telegram_users.c.first_name,
+                telegram_users.c.username,
+                telegram_users.c.last_name,
+            ).where(telegram_users.c.user_id.in_(missing))
         )
     )
     for doc in docs:
@@ -220,14 +223,14 @@ async def get_first_names_batch(user_ids: list[int]) -> dict[int, str]:
 
 
 async def get_first_name(user_id: int, fallback: str = "") -> str:
-    """Return cached first_name or caller's fallback (L1 → L2 Redis → DB cached).
+    """Return the stored first_name or caller's fallback (L1 → L2 Redis → DB cached).
 
     Routes through ``user_mention_cache.get_or_fetch`` so all three layers are
     checked in order and both L1 and L2 are populated on a miss -- exactly the
     same path as ``get_user_mention_data``.  Calling this function never causes
     a redundant database round-trip for a user already fetched by either helper.
 
-    When the user has no row in ``member_cache``, ``_fetch`` stores the
+    When the user has no row in ``telegram_users``, ``_fetch`` stores the
     sentinel ``[None, None, None]`` in the cache.  The sentinel is distinguished from a
     real name so the caller's ``fallback`` is returned instead of a raw numeric ID
     string (e.g. ``"Admin"`` instead of ``"123456789"``).
@@ -237,15 +240,15 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
         return await _fetch_mention_triple(user_id)
 
     data = await user_mention_cache.get_or_fetch(user_id, _fetch)
-    # * data[0] is None when the sentinel is in cache (user not in member_cache DB).
+    # * data[0] is None when the sentinel is in cache (user not in the table).
     # * Use caller's fallback in that case; otherwise return the real name.
     return cast("str", data[0]) if data[0] is not None else fallback
 
 
 async def total_users() -> int:
-    """Get the total number of unique users in the cache."""
+    """Get the total number of known users."""
     count = await db_call(
-        lambda: fetch_value(select(func.count()).select_from(member_cache))
+        lambda: fetch_value(select(func.count()).select_from(telegram_users))
     )
     return int(count or 0)
 
@@ -253,26 +256,35 @@ async def total_users() -> int:
 # * Sort keys for all_users_page(). Every key maps to a column that carries
 # * an index, and to the tie-break column that keeps the page order stable
 # * across pages.
-# * The name sorts run on the lowercase mirrors, which are the columns the
+# * The name sorts run on the lowercase form, which is the expression the
 # * name search already indexes. Sorting on the raw columns instead would
-# * need a second index per column and would order the list by raw byte
-# * value, so every capitalised name would sort before every lowercase one.
+# * order the list by raw byte value, so every capitalised name would sort
+# * before every lowercase one.
 _USER_SORT_FIELDS: dict[str, tuple[str, int, str]] = {
     "first_name": ("first_name_lower", 1, "user_id"),
     "username": ("username_lower", 1, "user_id"),
     "user_id": ("user_id", 1, "user_id"),
-    "last_updated": ("last_updated", -1, "user_id"),
+    "last_updated": ("updated_at", -1, "user_id"),
 }
 _DEFAULT_USER_SORT: str = "first_name"
+
+
+def _sort_column(field: str):
+    """Return the column a sort field maps to."""
+    if field == "first_name_lower":
+        return func.lower(telegram_users.c.first_name)
+    if field == "username_lower":
+        return func.lower(telegram_users.c.username)
+    return telegram_users.c[field]
 
 
 async def all_users_page(
     *, skip: int = 0, limit: int = 200, sort_by: str = _DEFAULT_USER_SORT
 ) -> list[UserDoc]:
-    """Return one page of cached users (server-side skip/limit).
+    """Return one page of known users (server-side skip/limit).
 
-    Prefer this over :func:`all_users` for paginated views: only the
-    visible slice travels over the wire regardless of cache size.
+    Prefer this over loading every user for paginated views: only the
+    visible slice travels over the wire regardless of the table size.
     """
     field, direction, tie_break = _USER_SORT_FIELDS.get(
         sort_by, _USER_SORT_FIELDS[_DEFAULT_USER_SORT]
@@ -280,15 +292,15 @@ async def all_users_page(
     # * Clamp once so cursor limit and fetch length can never disagree;
     # * callers always pass positive values, this only pins the edge.
     page_size = max(1, limit)
-    sort_column = member_cache.c[field]
+    sort_column = _sort_column(field)
     order_clauses = [sort_column.desc() if direction < 0 else sort_column.asc()]
     # * The tie-break keeps the order stable when two rows share the sort
     # * key, so a user cannot appear on two pages or on none.
     if tie_break != field:
-        order_clauses.append(member_cache.c[tie_break].asc())
+        order_clauses.append(telegram_users.c[tie_break].asc())
     rows = await db_call(
         lambda: fetch_all(
-            select(*_MEMBER_COLUMNS)
+            select(*_USER_COLUMNS)
             .order_by(*order_clauses)
             .offset(max(0, skip))
             .limit(page_size)
@@ -298,37 +310,36 @@ async def all_users_page(
 
 
 async def search_by_name(needle: str, limit: int = 5) -> list[UserDoc]:
-    """Return up to ``limit`` cached users whose name or username starts with ``needle``.
+    """Return up to ``limit`` known users whose name or username starts with ``needle``.
 
-    Runs a server-side prefix query against the lowercase mirror columns with
-    a result cap so only matching rows (and only the fields needed for
-    target resolution) travel over the wire, regardless of cache size. This
-    replaces the old pattern of loading all users into Python and scanning
-    linearly.
+    Runs a server-side prefix query against the lowercase form of the
+    searchable columns with a result cap so only matching rows (and only the
+    fields needed for target resolution) travel over the wire, regardless of
+    the table size.
     """
     if not needle or limit <= 0:
         return []
     # * Clamp: negative limits act as single-batch cursors in the driver and
     # * huge limits are unbounded scans; both would bypass the caps above.
     limit = max(1, min(limit, 100))
-    # * The query runs against the lowercase mirrors with a case-sensitive
+    # * The query runs against the lowercase form with a case-sensitive
     # * anchored prefix. PostgreSQL cannot serve a case-insensitive match
-    # * from an index, so the mirrors make the prefix a range scan instead
-    # * of a full table scan on every search.
+    # * from an index, so the lowercase expression makes the prefix a range
+    # * scan instead of a full table scan on every search.
     prefix = needle.lower()
     rows = await db_call(
         lambda: fetch_all(
             select(
-                member_cache.c.user_id,
-                member_cache.c.first_name,
-                member_cache.c.username,
+                telegram_users.c.user_id,
+                telegram_users.c.first_name,
+                telegram_users.c.username,
             )
             .where(
                 or_(
-                    member_cache.c.first_name_lower.startswith(
+                    func.lower(telegram_users.c.first_name).startswith(
                         prefix, escape="\\", autoescape=True
                     ),
-                    member_cache.c.username_lower.startswith(
+                    func.lower(telegram_users.c.username).startswith(
                         prefix, escape="\\", autoescape=True
                     ),
                 )
@@ -348,7 +359,7 @@ async def upsert_user(
     first_name: str,
     last_name: str | None = None,
 ) -> None:
-    """Update or insert a user's profile information into the cache.
+    """Update or insert a user's profile information.
 
     ``username`` and ``last_name`` are treated as "unknown, preserve existing":
     when a caller passes ``None`` for either field, the previous stored value
@@ -361,35 +372,27 @@ async def upsert_user(
     values: dict[str, object] = {
         "user_id": user_id,
         "first_name": first_name,
-        # * Lowercase mirrors of the searchable fields. The name search runs
-        # * a case-sensitive prefix query on them because PostgreSQL cannot
-        # * serve a case-insensitive match from an index.
-        "first_name_lower": first_name.lower(),
-        "last_updated": now,
-        # * The commit date is the insert-only timestamp: the conflict
-        # * action below never rewrites it, so a refresh keeps the moment
-        # * the profile was first cached.
-        "commit_date": now,
+        "updated_at": now,
+        "last_seen_at": now,
     }
     updates: dict[str, object] = {
         "first_name": first_name,
-        "first_name_lower": first_name.lower(),
-        "last_updated": now,
+        "updated_at": now,
     }
     if username is not None:
         values["username"] = username
-        values["username_lower"] = username.lower()
         updates["username"] = username
-        updates["username_lower"] = username.lower()
     if last_name is not None:
         values["last_name"] = last_name
         updates["last_name"] = last_name
     # * The conflict action carries only the refreshed fields, so a partial
     # * write (username or last name left as "unknown, preserve existing")
     # * keeps the stored column instead of clearing it.
+    # * The first sighting is not overwritten: the conflict action leaves
+    # * first_seen_at alone, so the moment the profile arrived stays readable.
     await db_call(
         lambda: run(
-            pg_insert(member_cache)
+            pg_insert(telegram_users)
             .values(**values)
             .on_conflict_do_update(
                 index_elements=["user_id"],
@@ -420,11 +423,11 @@ async def upsert_user_if_changed(
     (first_name, username, last_name) triple matches the incoming data, the
     DB write is skipped entirely and False is returned.  This eliminates
     the database round-trip for the vast majority of updates (where identity
-    data has not changed) and makes the hot-path member-cache handler
-    nearly free.  Legacy two-element cache entries count as changed.
+    data has not changed) and makes the hot-path profile handler nearly
+    free.  Legacy two-element cache entries count as changed.
 
     Both cache layers are consulted.  The in-memory layer is bounded and
-    thrashes once the federation holds more active users than it can hold,
+    thrashes once the community holds more active users than it can hold,
     so an L1-only check would fall through to a database write for every
     message of every user outside the working set.
 
@@ -504,3 +507,28 @@ def remember_identity(
         user_mention_cache.put(user_id, list(_NOT_FOUND_SENTINEL))
     else:
         user_mention_cache.put(user_id, [first_name, username, last_name])
+
+
+async def mark_erased(user_id: int, reason: str) -> None:
+    """Anonymize the profile of a deleted Telegram account.
+
+    The history keeps pointing at the account, so the audit trail stays
+    readable, but the personal data of the account is gone.
+    """
+    await db_call(
+        lambda: run(
+            telegram_users.update()
+            .where(telegram_users.c.user_id == user_id)
+            .values(
+                username=None,
+                first_name=None,
+                last_name=None,
+                language_code=None,
+                is_premium=False,
+                erased_at=utc_now(),
+                erasure_reason=reason,
+                updated_at=utc_now(),
+            )
+        )
+    )
+    user_mention_cache.invalidate(user_id)

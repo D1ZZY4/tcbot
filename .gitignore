@@ -62,6 +62,7 @@ nothing.md
 nothing-*.md
 account*
 replit.nix
+TCBOT_*.md
 
 # Platform assets and local config
 attached_assets/

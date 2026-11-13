@@ -247,6 +247,31 @@ async def run(stmt: Executable) -> int:
         return cast("CursorResult", result).rowcount
 
 
+async def run_script(sql: str) -> None:
+    """Run one script of plain SQL on the shared engine.
+
+    The script is sent as plain SQL, not as a parameterised statement.
+    The parameter parser of the driver reads a percent sign or a colon
+    as the start of a placeholder, and the scripts of this project carry
+    both: the percent signs of ``format()`` and the colons of the
+    idempotency keys.
+
+    The script runs in the transaction of the session, so it commits or
+    rolls back with the statements around it.
+    """
+    async with session() as sess:
+        connection = await sess.connection()
+        raw = await connection.get_raw_connection()
+        driver_connection = raw.driver_connection
+        if driver_connection is None:
+            raise RuntimeError("the database did not open a driver connection")
+        cursor = driver_connection.cursor()
+        try:
+            await cursor.execute(sql)
+        finally:
+            await cursor.close()
+
+
 async def run_returning(stmt: Executable) -> list[dict[str, Any]]:
     """Run one write with a RETURNING clause and return the stored rows."""
     async with session() as sess:

@@ -9,7 +9,7 @@ from __future__ import annotations
 from http.server import BaseHTTPRequestHandler
 
 from tcbot import cfg
-from tcbot.serverless import run, run_warn_expiry
+from tcbot.serverless import run, run_expiry_sweep
 from tcbot.utils.logger import get_logger
 from tcbot.utils.secrets import secret_matches
 
@@ -17,7 +17,7 @@ log = get_logger(__name__)
 
 
 class handler(BaseHTTPRequestHandler):
-    """Run scheduled maintenance (warn expiry); replaces APScheduler on Vercel."""
+    """Run scheduled maintenance (expiry sweep); replaces APScheduler on Vercel."""
 
     def _reply(self, status: int, body: str) -> None:
         """Send a plain-text response."""
@@ -29,7 +29,7 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self) -> None:
-        """Verify the cron secret, then prune expired warns when enabled."""
+        """Verify the cron secret, then expire the records that ran out."""
         # ! CRITICAL: fail closed like api/webhook.py. An empty CRON_SECRET
         # ! used to leave this endpoint open to anyone; the expiry run mutates
         # ! the database, so a missing secret refuses instead. Set CRON_SECRET
@@ -46,9 +46,9 @@ class handler(BaseHTTPRequestHandler):
             return
 
         try:
-            status, body = run(run_warn_expiry())
+            status, body = run(run_expiry_sweep())
         except Exception:
-            log.exception("cron: instance loop failed to run warn expiry.")
+            log.exception("cron: instance loop failed to run the expiry sweep.")
             self._reply(500, "Internal error")
             return
         self._reply(status, body)

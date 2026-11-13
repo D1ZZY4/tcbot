@@ -375,14 +375,3 @@ async def run_staff_action(
     if notice is not None:
         await safe_reply(msg, notice, log_label=f"{log_prefix} notice")
     await execute(update, ctx, resolved.target_id, resolved.target_name)
-
-
-__all__ = [
-    "ModTarget",
-    "StaffTarget",
-    "classify_and_load_role",
-    "resolve_executor_target",
-    "resolve_mod_target",
-    "resolve_staff_target",
-    "run_staff_action",
-]
