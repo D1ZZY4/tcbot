@@ -53,17 +53,22 @@ def _production_logging() -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _worker_cache_namespace() -> None:
-    """Give every xdist worker its own Redis namespace for the shared caches.
+def _cache_key_namespace() -> None:
+    """Move the shared caches into a test-only Redis namespace.
 
     The shared caches use fixed keys, and the owner cache uses one global
-    key. Two workers would therefore read each other's entries when
-    Redis is configured, and the tests that pin the cached and the fresh
-    read would fail depending on the worker order.
+    key. Two workers would therefore read each other's entries when Redis
+    is configured, and the tests that pin the cached and the fresh read
+    would fail depending on the worker order.
+
+    The namespace is applied in every run, not only under xdist. A serial
+    run against a deployment Redis would otherwise write, read, and
+    delete keys in the live namespace, where they collide with real cache
+    entries of the running bot. The test-only suffix keeps every key the
+    suite touches out of the deployment namespace.
     """
     worker = os.environ.get("PYTEST_XDIST_WORKER", "").strip()
-    if not worker:
-        return
+    suffix = f"-test-{worker}" if worker else "-test"
     for cache in (
         singletons.effective_role_cache,
         singletons.connected_cache,
@@ -71,7 +76,7 @@ def _worker_cache_namespace() -> None:
         singletons.owner_id_cache,
         singletons.user_mention_cache,
     ):
-        cache._redis_prefix = f"{cache._redis_prefix}-{worker}"
+        cache._redis_prefix = f"{cache._redis_prefix}{suffix}"
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -23,7 +23,10 @@ jobs:
       # * they skip, so the suite still passes without a database.
       TCBOT_TEST_DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
       # * The cache tests run against this server. Without it they skip.
-      REDIS_URL: "redis://127.0.0.1:6379/0"
+      # * The variable is test-only on purpose: the runtime REDIS_URL
+      # * names the deployment cache, and a suite that reaches it would
+      # * write, read, and delete live cache entries.
+      TCBOT_TEST_REDIS_URL: "redis://127.0.0.1:6379/0"
 
     services:
       postgres:

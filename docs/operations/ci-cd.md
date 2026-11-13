@@ -42,9 +42,15 @@ Three workflows with identical triggers (push to `main`, `feat/**`,
 
 **Service containers:** the test job starts a PostgreSQL and a Redis
 server. The database-backed and cache-backed tests read the server URL
-from `TCBOT_TEST_DATABASE_URL` and `REDIS_URL` and skip when the
-variable is unset, so the suite still passes without the services, but
-the job provides both so the real code paths run on every change.
+from `TCBOT_TEST_DATABASE_URL` and `TCBOT_TEST_REDIS_URL` and skip when
+the variable is unset, so the suite still passes without the services,
+but the job provides both so the real code paths run on every change.
+The Redis variable is deliberately not `REDIS_URL`: the runtime variable
+names the deployment cache, and the configuration loader imports
+`config.env` into the process environment, so a local run that used it
+would write, read, and delete live cache entries. The suite also moves
+the shared caches into a test-only key namespace, so no run can reach a
+deployment key.
 
 **Why this exists:**
 The three workflows provide a repeatable CI result for formatting, lint,

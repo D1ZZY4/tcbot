@@ -9,6 +9,13 @@ the real client speaks the wire format the cache expects. This module
 runs the same paths against a Redis server and skips when none is
 configured.
 
+The suite never touches a deployment Redis. It reads a dedicated
+test-only variable instead of the runtime one, because the runtime
+variable is also present in the process environment of a developer
+machine: the configuration loader imports ``config.env`` into the
+environment, so a local run would otherwise connect to the live cache
+and write, read, and delete keys in the live namespace.
+
 Every test owns its own keys. The workers of a parallel run share one
 Redis server, so a test that flushed the database would erase the keys
 another worker had just written.
@@ -16,6 +23,7 @@ another worker had just written.
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from typing import TYPE_CHECKING
 
@@ -31,9 +39,10 @@ from tcbot.database.cache.singletons import user_mention_cache
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-# * The integration tests read the server URL from the environment and
-# * skip when it is unset, so the committed suite never needs a server.
-REDIS_URL_ENV: str = "REDIS_URL"
+# * The integration tests read the server URL from a test-only variable
+# * and skip when it is unset, so the committed suite never needs a
+# * server and never reaches the Redis a deployment points at.
+REDIS_URL_ENV: str = "TCBOT_TEST_REDIS_URL"
 
 pytestmark = [pytest.mark.redis]
 
@@ -56,14 +65,17 @@ def _uid(base: int) -> int:
 
 @pytest.fixture(autouse=True)
 def _redis_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Restore the Redis configuration the session switched off.
+    """Point the cache and the client at the test server.
 
     The shared caches stay on their in-memory layer for the rest of the
     suite, because the Redis half of a cache is eventually consistent.
-    This module is the one that checks the Redis half.
+    This module is the one that checks the Redis half, so it restores the
+    Redis configuration with the test URL in place of the runtime one.
     """
-    monkeypatch.setattr(twolevel, "cfg", cfg)
-    monkeypatch.setattr(redis_client_mod, "cfg", cfg)
+    url = os.environ.get(REDIS_URL_ENV, "").strip()
+    test_cfg = dataclasses.replace(cfg, redis_url=url or None)
+    monkeypatch.setattr(twolevel, "cfg", test_cfg)
+    monkeypatch.setattr(redis_client_mod, "cfg", test_cfg)
 
 
 @pytest.fixture
