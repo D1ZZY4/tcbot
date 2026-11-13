@@ -245,6 +245,8 @@ flowchart TD
 
 Promotion is not a conversation. `Promote.execute(...)` in `pipelines/promote_flow.py` performs direct role assignment or creates a promotion request for Founder approval when required. `admins.py` registers the command and callback handlers.
 
+`Promote.available_roles_for(executor_role)` is the single owner of the grant table, and the executor reads it before it acts: only the tiers in that list may be handed out, only the Founder grants the Admin tier outright, and an Admin may request it instead. The spellings the command accepts live in `users_roles.ROLE_ALIASES` next to the rest of the role vocabulary.
+
 ## Demotion: `demote_flow.py`
 
 Demotion is not a conversation. `Demote.execute(...)` in `pipelines/demote_flow.py` handles two distinct paths controlled by the optional `trigger` argument. It returns `True` when a role row was actually removed and `False` when the role was already gone; a database failure propagates to the caller, which owns the failure policy.

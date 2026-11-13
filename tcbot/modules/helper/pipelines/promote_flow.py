@@ -251,7 +251,12 @@ class Promote:
 
     @staticmethod
     def available_roles_for(executor_role: str) -> list[str]:
-        """Return the roles an executor with the given role is allowed to assign."""
+        """Return the tiers an executor with the given role may hand out.
+
+        Single owner of the grant table: the role picker and the
+        executor read the same list, so an executor can never be offered
+        a tier the executor would then refuse to grant.
+        """
         if executor_role == "founder":
             return ["admin", "developer", "tester"]
         if executor_role == "admin":
@@ -287,6 +292,11 @@ class Promote:
         locale: str | None = None,
     ) -> tuple[bool, str]:
         """Execute a role assignment. Returns (success, reply_text)."""
+        # * The grant table is read here, not only in the role picker: the
+        # * command and the callback both check the executor, but the
+        # * helper owns the rule so a future caller cannot hand out rank
+        # * from a tier that may not grant it.
+        allowed = cls.available_roles_for(executor_role)
         if current_role == "founder":
             return False, t("admins.promote.target_is_founder", locale)
         if db.users_roles.role_rank(current_role) >= db.users_roles.role_rank(role):
@@ -302,6 +312,8 @@ class Promote:
         if refusal is not None:
             return False, refusal
         if role == "admin":
+            # * Only the Founder grants the Admin tier outright. An Admin
+            # * may request it, and the Founder decides on the request.
             if executor_role == "founder":
                 return await assign_admin(
                     bot,
@@ -312,10 +324,12 @@ class Promote:
                     current_role,
                     locale,
                 )
-            return await cls.request_admin(
-                bot, admin_id, target_id, target_fname, locale=locale
-            )
-        if executor_role not in db.users_roles.FOUNDER_ADMIN_ROLES:
+            if executor_role == "admin":
+                return await cls.request_admin(
+                    bot, admin_id, target_id, target_fname, locale=locale
+                )
+            return False, t("admins.promote.no_assign_perms", locale)
+        if role not in allowed:
             return False, t("admins.promote.no_assign_perms", locale)
         return await assign_subrole(
             bot,

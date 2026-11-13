@@ -470,6 +470,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **A cancelled role lookup no longer reads as a refusal** (`tcbot/modules/helper/guards.py`): the enforcement verdict turned a cancelled read into a refusal verdict, so a shutdown looked like a rejected action. The cancellation now propagates. Behavior changes: none.
 
+- **The promotion gate refuses a tier that may not grant** (`tcbot/modules/helper/pipelines/promote_flow.py`): the Admin branch had no tier check of its own and relied on the caller. The grant table now decides, and the executor reads it before it acts. Behavior changes: an executor below Admin rank is refused instead of enqueueing an Admin promotion request.
+
 - **The callback admin paths refuse the anonymous-admin placeholder** (`tcbot/modules/helper/guards.py`, `tcbot/modules/admins.py`): the shared callback gate now refuses the placeholder explicitly instead of relying on it holding no federation role. Behavior changes: none.
 
 - **The enforcement-time check now verifies the moderator's own tier** (`tcbot/modules/helper/guards.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `tcbot/modules/helper/pipelines/kick_flow.py`, `tcbot/modules/helper/pipelines/mute_flow.py`, `tcbot/modules/helper/pipelines/warn_flow.py`): the enforcement re-read both roles and refused an action when the target outranked the moderator, but it never checked that the moderator still held the tier the command required. A moderator demoted during the reason or proof window could still enforce. The verdict now carries the tier the action needs, and a moderator below it is refused with the rank notice. Behavior changes: a moderator demoted during the proof window can no longer enforce the action they started.

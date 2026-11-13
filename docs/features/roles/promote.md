@@ -63,10 +63,11 @@ Omitting the role triggers the inline button menu built by `keyboards.promote_ro
 
 ## `Promote` class API
 
-`pipelines/promote_flow.py` exposes a single `Promote` class with three entry points used by the command and callbacks. The module-level `ROLE_ALIASES` dict is exported for use by the command parser.
+`pipelines/promote_flow.py` exposes a single `Promote` class with three entry points used by the command and callbacks. `Promote.available_roles_for(executor_role)` is the single owner of the grant table: the role picker and the executor read the same list, so an executor is never offered a tier it would refuse to grant. The `ROLE_ALIASES` dict that maps the spellings the command accepts to a tier lives with the rest of the role vocabulary in `tcbot/database/users_roles.py`.
 
 ```python
-from tcbot.modules.helper.pipelines.promote_flow import ROLE_ALIASES, Promote
+from tcbot.database.users_roles import ROLE_ALIASES
+from tcbot.modules.helper.pipelines.promote_flow import Promote
 
 Promote.available_roles_for(executor_role)  # list[str]
 await Promote.execute(
