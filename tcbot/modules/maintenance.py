@@ -23,7 +23,7 @@ from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
-from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT
+from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Bot, Update
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
-# * Bound for one membership probe; single owner in time_and_date.
+# * Bound for one membership probe; single owner in the transport module.
 _MEMBERSHIP_CHECK_TIMEOUT = TELEGRAM_LOOKUP_TIMEOUT
 
 

@@ -13,6 +13,11 @@ HTTP_WRITE_TIMEOUT: int = 30
 HTTP_CONNECT_TIMEOUT: int = 30
 HTTP_POOL_TIMEOUT: int = 15
 
+# * Budget for a single Telegram lookup (get_chat, get_chat_member).
+# * It belongs with the other transport constants: a lookup is a
+# * transport call, not a clock concern.
+TELEGRAM_LOOKUP_TIMEOUT: float = 3.0
+
 # * Connection pool size for the underlying httpx client (API calls).
 # * Not used for update fetching in webhook mode; still needed for send/edit/etc.
 # * Sized above the fan_out cap (10): one full fan-out plus concurrent

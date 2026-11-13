@@ -113,6 +113,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The error reporter decides before it schedules** (`tcbot/error_reporter.py`): every error line created a task and scanned the whole dedupe map, on the event loop, exactly when an incident floods it. The decision now happens before the task is created, and the map is pruned from the front instead of walked. Behavior changes: none.
 
+- **The Telegram lookup budget moved next to the other transport constants** (`tcbot/utils/transport.py`, `tcbot/utils/time_and_date.py`): a lookup budget is a transport concern, not a clock concern. Behavior changes: none.
+
 - **The role vocabulary has one home** (`tcbot/database/users_roles.py`, `tcbot/modules/helper/pipelines/promote_flow.py`): the spellings the promote command accepts lived in a conversation module; they now sit next to the role table and the rank map. Behavior changes: none.
 
 - **The Back button, the ban card, and the paged drill-downs have one owner** (`tcbot/modules/helper/keyboards/common.py`, `tcbot/modules/helper/ban_info.py`, `tcbot/modules/helper/pipelines/check_flow.py`, `tcbot/modules/helper/scope.py`): nine keyboards built their own Back button, the check card rendered a ban summary beside the shared ban detail, and the two drill-down lists repeated the same paging prologue. The shared helpers now own the button, the ban proof link and date, the paging arithmetic, and the scope cleanup. Behavior changes: none; the rendered text and the button layout are unchanged.

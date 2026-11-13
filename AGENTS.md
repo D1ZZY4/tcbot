@@ -172,7 +172,7 @@ Current stack:
 │       ├── secrets.py         Constant-time secret comparison for inbound credentials
 │       ├── tasks.py           Background task lifecycle owner (TaskTracker)
 │       ├── time_and_date.py    Central clock: UTC store/display + measure + durations
-│       ├── transport.py        Shared PTB HTTP timeouts and pool size
+│       ├── transport.py        Shared PTB HTTP timeouts, pool size, and lookup budget
 │       └── update_processor.py Per-conversation update serialization for PTB
 ├── docs/                     Developer documentation grouped by category
 ├── .agents/                   Style rules

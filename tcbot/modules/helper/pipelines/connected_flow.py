@@ -35,7 +35,8 @@ from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.tasks import TaskTracker
-from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT, monotonic
+from tcbot.utils.time_and_date import monotonic
+from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Update

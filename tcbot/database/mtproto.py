@@ -16,7 +16,8 @@ from tcbot import cfg
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.dispatch import gather_bounded
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import TELEGRAM_LOOKUP_TIMEOUT, monotonic
+from tcbot.utils.time_and_date import monotonic
+from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from pyrogram import Client

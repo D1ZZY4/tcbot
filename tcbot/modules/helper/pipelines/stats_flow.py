@@ -40,10 +40,8 @@ from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page, paginate
 from tcbot.utils.tasks import TaskTracker
-from tcbot.utils.time_and_date import (
-    TELEGRAM_LOOKUP_TIMEOUT,
-    date_or_unknown,
-)
+from tcbot.utils.time_and_date import date_or_unknown
+from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
