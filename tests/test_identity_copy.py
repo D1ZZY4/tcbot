@@ -18,6 +18,7 @@ from tcbot import database as db
 from tcbot.modules.helper.identity import (
     Identity,
     classify,
+    is_proven_bot,
     profile_note,
     refuse_message,
     staff_notice,
@@ -120,6 +121,34 @@ def test_verify_not_bot_is_indeterminate_when_both_lookups_miss(
     monkeypatch.setattr(db.mtproto, "is_bot_user", _fake_is_bot_user)
     result = asyncio.run(verify_not_bot(_group_update(), 42, _ProbeFailBot()))  # type: ignore[arg-type]
     assert result is None
+
+
+def test_verify_not_bot_survives_a_failing_mtproto_lookup(
+    monkeypatch: Any,
+) -> None:
+    """A dead MTProto session is an unknown answer, never an exception."""
+
+    async def _boom(user_id: int) -> bool:
+        raise RuntimeError("mtproto session is down")
+
+    monkeypatch.setattr(db.mtproto, "is_bot_user", _boom)
+    result = asyncio.run(verify_not_bot(_group_update(), 42, _ProbeFailBot()))  # type: ignore[arg-type]
+    assert result is None
+
+
+def test_is_proven_bot_survives_a_failing_mtproto_lookup(
+    monkeypatch: Any,
+) -> None:
+    """The promotion gate never raises on a dead MTProto session."""
+
+    async def _boom(user_id: int) -> bool:
+        raise RuntimeError("mtproto session is down")
+
+    monkeypatch.setattr(db.mtproto, "is_bot_user", _boom)
+    assert (
+        asyncio.run(is_proven_bot(_group_update(), 42, _ProbeFailBot()))  # type: ignore[arg-type]
+        is False
+    )
 
 
 def test_classify_raises_when_the_role_cannot_be_resolved(

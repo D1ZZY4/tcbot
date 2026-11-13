@@ -218,10 +218,27 @@ async def verify_not_bot(
             user = getattr(member, "user", None)
             if user is not None:
                 return not bool(user.is_bot)
-    hit = await db.mtproto.is_bot_user(target_id)
+    hit = await _mtproto_bot_hit(target_id)
     if hit is None:
         return None
     return not bool(hit)
+
+
+async def _mtproto_bot_hit(target_id: int) -> bool | None:
+    """Return whether the target is a bot account, or None when unknown.
+
+    The lookup runs against the shared MTProto session, which is down
+    whenever the bot runs without it. An outage is an unknown answer,
+    never an exception: the ownership transfer fails closed on unknown,
+    and the promotion gate treats unknown as "not proven a bot".
+    """
+    try:
+        return await db.mtproto.is_bot_user(target_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("MTProto bot lookup failed for %d: %s", target_id, exc)
+        return None
 
 
 async def is_proven_bot(update: Update, target_id: int, bot: Bot | None) -> bool:
@@ -231,9 +248,10 @@ async def is_proven_bot(update: Update, target_id: int, bot: Bot | None) -> bool
     itself for free, otherwise one bounded membership probe runs in the
     current chat, then one MTProto peer lookup. Unknown (lookup failure,
     target absent, MTProto down) returns False so legitimate promotions
-    of off-group users keep working. Callers guard promotion and
-    ownership transfer, where a bot target would otherwise receive
-    privilege or brick the federation.
+    of off-group users keep working, and it never raises: a moderator
+    gets a reply either way. Callers guard promotion and ownership
+    transfer, where a bot target would otherwise receive privilege or
+    brick the federation.
     """
     return (await verify_not_bot(update, target_id, bot)) is False
 
