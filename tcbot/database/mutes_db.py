@@ -162,7 +162,7 @@ async def record_mute(
         return int(row["id"])
 
     try:
-        return await db_call(lambda: run_transaction(_work))
+        return await run_transaction(_work)
     except Exception as exc:
         if constraint_name(exc) != _CONSTRAINT_ACTIVE_MUTE:
             raise
@@ -174,7 +174,7 @@ async def record_mute(
             "Concurrent mute for user %d lost the race; retrying against it.",
             user_id,
         )
-        return await db_call(lambda: run_transaction(_work))
+        return await run_transaction(_work)
 
 
 def _duration_seconds(until: datetime | None) -> int | None:

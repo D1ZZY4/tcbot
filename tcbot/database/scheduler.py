@@ -186,10 +186,11 @@ async def expire_stale_records() -> None:
                     # * the run-level timeout bounds them instead.
                     timeout=None,
                 ),
-                db_call(
-                    lambda: run_transaction(
-                        lambda sess: _sweep_erasures(sess),
-                    ),
+                # * The transaction carries its own timeout, so it has to
+                # * be switched off here as well: the run-level timeout
+                # * is the bound that applies to the sweep.
+                run_transaction(
+                    lambda sess: _sweep_erasures(sess),
                     timeout=None,
                 ),
                 return_exceptions=True,

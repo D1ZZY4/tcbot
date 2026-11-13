@@ -289,7 +289,12 @@ async def create_ban(
         return dict(row)
 
     try:
-        row = await db_call(lambda: run_transaction(_work))
+        # * run_transaction already runs through the circuit breaker and
+        # * the timeout. Wrapping it in a second db_call would reserve the
+        # * half-open probe twice, so the inner call would be rejected
+        # * without reaching the database and the outer one would close
+        # * the circuit as if the service had answered.
+        row = await run_transaction(_work)
     except Exception as insert_error:
         violated = constraint_name(insert_error)
         if violated == CONSTRAINT_EXTERNAL_REF and auto_id:
@@ -300,7 +305,7 @@ async def create_ban(
             ban_id = make_ban_id()
             metadata[META_DURATION] = duration_str
             try:
-                row = await db_call(lambda: run_transaction(_work))
+                row = await run_transaction(_work)
             except Exception as retry_error:
                 # * The retry can lose a different race: a concurrent ban
                 # * for the same target. That case has its own handling, so
@@ -412,7 +417,7 @@ async def update_ban(
             )
         return dict(row)
 
-    row = await db_call(lambda: run_transaction(_work))
+    row = await run_transaction(_work)
     if row is None:
         return None
     docs = await compose_rows([row])
