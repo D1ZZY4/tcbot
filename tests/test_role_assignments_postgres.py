@@ -118,3 +118,32 @@ async def test_a_user_holds_at_most_one_active_role(roles_db: str) -> None:
     assert "uq_role_assignments_active_user" in (
         engine_module.constraint_name(excinfo.value)
     )
+
+
+async def test_the_configured_owner_takes_ownership_over_an_existing_role(
+    roles_db: str,
+) -> None:
+    """An owner seed replaces a lower role the configured owner already holds.
+
+    A restored database can carry a staff assignment for the configured
+    owner while the owner row is absent. The one-active-role index would
+    refuse the owner insert, and the community would boot without an owner
+    while the seed failure stayed silent.
+    """
+    await users_roles.set_role(42, "developer", 1)
+
+    await users_roles.ensure_initial_owner(42)
+
+    assert await users_roles.get_owner_id(fresh=True) == 42
+    assert await users_roles.get_effective_role(42, fresh=True) == "founder"
+
+
+async def test_a_demote_never_revokes_the_owner_assignment(roles_db: str) -> None:
+    """``remove_role`` leaves the Founder role alone; only ``set_owner`` swaps it."""
+    await users_roles.ensure_initial_owner(42)
+
+    removed = await users_roles.remove_role(42)
+
+    assert removed is False
+    assert await users_roles.get_owner_id(fresh=True) == 42
+    assert await users_roles.get_effective_role(42, fresh=True) == "founder"

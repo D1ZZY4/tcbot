@@ -225,14 +225,44 @@ async def is_owner(user_id: int, *, fresh: bool = False) -> bool:
 
 
 async def ensure_initial_owner(initial_id: int) -> None:
-    """Create the first owner assignment if the community has no owner."""
+    """Create the first owner assignment if the community has no owner.
+
+    The seed runs under the ownership-transfer lock and re-checks the table
+    inside it, so two instances starting together cannot both write an owner.
+    The configured owner may already hold a lower role on a restored
+    database; that assignment is revoked in the same transaction, because a
+    user holds one active role. A seed that still fails is logged once the
+    table is re-read, so a community left without an owner is visible instead
+    of silently inaccessible.
+    """
     if await _owner_count() > 0:
         return
 
-    async def _work(sess: AsyncSession) -> None:
-        # * The assignment refers to the identity of the founder, so the
-        # * identity row has to exist before the assignment can point at
-        # * it. A founder the bot has never seen still owns the community.
+    async def _work(sess: AsyncSession) -> int:
+        await sess.execute(
+            text("SELECT pg_advisory_xact_lock(:key)"),
+            {"key": _OWNER_TRANSFER_LOCK_KEY},
+        )
+        existing_owner = await sess.scalar(
+            select(role_assignments.c.user_id)
+            .where(role_assignments.c.role_key == _OWNER_ROLE, *_active_assignment())
+            .order_by(role_assignments.c.user_id)
+            .limit(1)
+        )
+        if existing_owner is not None:
+            return int(existing_owner)
+        # * The configured owner may already hold a lower role on a
+        # * restored database, and the one-active-role index would refuse
+        # * the owner insert. The owner role replaces it, exactly like an
+        # * ownership transfer does.
+        await sess.execute(
+            role_assignments.update()
+            .where(
+                role_assignments.c.user_id == initial_id,
+                role_assignments.c.status == "active",
+            )
+            .values(status="revoked", revoked_at=utc_now())
+        )
         await sess.execute(
             pg_insert(telegram_users)
             .values(user_id=initial_id, created_at=utc_now(), updated_at=utc_now())
@@ -246,16 +276,28 @@ async def ensure_initial_owner(initial_id: int) -> None:
                 status="active",
                 assigned_at=utc_now(),
             )
-            .on_conflict_do_nothing(index_elements=["id"])
+            .on_conflict_do_nothing()
         )
+        return initial_id
 
     try:
-        await run_transaction(_work)
-        owner_id_cache.put(_OWNER_KEY, initial_id)
+        owner_id = await run_transaction(_work)
     except Exception:
-        # * Another instance won the startup race; drop the cache so the
-        # * next read refreshes it.
+        # * Another instance may have completed the seed between the check
+        # * above and this transaction. Re-read the table: only a community
+        # * that still has no owner is a real failure.
         owner_id_cache.invalidate(_OWNER_KEY)
+        try:
+            owner_id = await get_owner_id(fresh=True)
+        except Exception:
+            owner_id = None
+        if owner_id is None:
+            log.exception(
+                "Initial owner seed failed for %d and no active owner exists",
+                initial_id,
+            )
+        return
+    owner_id_cache.put(_OWNER_KEY, owner_id)
 
 
 async def set_owner(user_id: int) -> None:
@@ -412,7 +454,12 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
 
 
 async def remove_role(user_id: int) -> bool:
-    """Revoke a user's role; the assignment history stays readable."""
+    """Revoke a user's community role; the assignment history stays readable.
+
+    The owner assignment is never revoked here: ownership changes through
+    ``set_owner``, which swaps the owner and its role in one transaction.
+    A demote therefore cannot leave the federation without a Founder.
+    """
     revoked = await _revoke_role(user_id, None)
     effective_role_cache.invalidate(user_id)
     return revoked
@@ -478,10 +525,15 @@ async def _assign_role(user_id: int, role: str, assigned_by: int) -> None:
 
 
 async def _revoke_role(user_id: int, role: str | None) -> bool:
-    """Revoke the active assignment of one user, optionally one role."""
+    """Revoke the active assignment of one user, optionally one role.
+
+    The owner assignment is excluded, so a demote path can never strip the
+    Founder role; only :func:`set_owner` replaces it.
+    """
     stmt = role_assignments.update().where(
         role_assignments.c.user_id == user_id,
         role_assignments.c.status == "active",
+        role_assignments.c.role_key != _OWNER_ROLE,
     )
     if role is not None:
         stmt = stmt.where(role_assignments.c.role_key == role)

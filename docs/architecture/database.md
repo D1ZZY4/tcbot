@@ -492,9 +492,14 @@ privilege.
   Enforcement gates (promotion decisions, the founder-only users list) use
   `fresh=True`.
 - `ensure_initial_owner(initial_id: int) -> None`
-  Inserts the founder when the community has no owner. On an integrity
-  error (another instance won the startup race) it invalidates the owner
-  cache instead of failing.
+  Inserts the founder when the community has no owner. The seed takes the
+  same advisory lock as an ownership transfer and re-checks the owner row
+  inside it, so two instances starting together cannot both write an owner.
+  A lower role the configured owner already holds is revoked in the same
+  transaction, because the one-active-role index would otherwise refuse the
+  owner insert. A seed that still fails after the transaction re-reads the
+  table: a competing seed is accepted silently, while a community left with
+  no owner is logged as an error instead of booting without its Founder.
 - `set_owner(user_id: int) -> None`
   Replaces the owner in one transaction: every active assignment of the
   new owner and every active owner assignment is revoked, and the new

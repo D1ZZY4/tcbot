@@ -54,6 +54,8 @@ def test_can_demote_admin_requires_the_founder() -> None:
     assert guards.can_demote_admin("founder", "admin") is True
     assert guards.can_demote_admin("admin", "admin") is False
     assert guards.can_demote_admin("developer", "admin") is False
+    # * The Founder is never demotable, not even by the Founder.
+    assert guards.can_demote_admin("founder", "founder") is False
     # * Every other target follows the normal rank rule.
     assert guards.can_demote_admin("admin", "developer") is True
     assert guards.can_demote_admin("admin", "tester") is True

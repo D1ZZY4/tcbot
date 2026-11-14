@@ -569,8 +569,12 @@ def can_demote_admin(executor_role: str | None, target_role: str | None) -> bool
     that one role and not about a rank number.
 
     A target without a removable role passes: the caller decides whether
-    there is anything to demote.
+    there is anything to demote. The Founder is never demotable, not even
+    by the Founder: the equal-rank rule and the protected-target rule both
+    forbid it, and a demote would revoke the owner assignment itself.
     """
+    if target_role == "founder":
+        return False
     if target_role is None:
         return True
     if db.users_roles.role_rank(target_role) < db.users_roles.role_rank("admin"):
