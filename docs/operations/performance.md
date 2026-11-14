@@ -18,10 +18,10 @@ The bot currently uses:
 - PostgreSQL projections and indexes for frequently accessed fields;
 - `asyncio.gather()` for independent database and Telegram operations;
 - `TwoLevelCache` with an in-process L1 and optional Redis L2: L2 reads are
-  bounded (1 s cap) so a stalled Redis falls through to the DB fetch instead
-  of holding the hot path, and L2 writes are fire-and-forget FIFO mutations
-  that can never fail the fetch (a payload-encode failure degrades to
-  L1-only);
+  bounded by the client's 2 s socket timeout, so a stalled Redis falls through
+  to the DB fetch instead of holding the hot path, and L2 writes are
+  fire-and-forget FIFO mutations that can never fail the fetch (a
+  payload-encode failure degrades to L1-only);
 - `COUNT(*)` on the narrowest index for count-only views;
 - callback acknowledgement alongside independent callback work where safe;
 - `fan_out()` from `tcbot/utils/dispatch.py` to bound concurrent work across

@@ -328,13 +328,14 @@ Flow:
 1. The target is resolved by reply, user ID, or username.
 2. Identity refusal rejects self-transfer, the bot, Telegram, other bots, anonymous-admin, and Founder targets.
 3. `resolve_and_check(..., min_role="developer")` refuses transferring to a staff target of equal or higher rank, the current Founder included.
-4. Any non-Founder role the target already holds is cleared first via `Demote.remove_role`, so the post-transfer state holds exactly one Founder with no residual Admin/Developer/Tester assignment.
-5. `users_roles.set_owner(target_id)` swaps the owner in one transaction: the active assignments of the new owner and of the old owner are revoked and the new owner assignment is inserted, all under an advisory lock, so a crash between them cannot leave the community without a Founder.
-6. The in-process error-reporter owner is refreshed to the new owner.
-7. The previous Founder is kept as Admin via `users_roles.add_admin(...)`; a failure here stays visible as a WARNING line telling the operator to grant Admin manually.
-8. The owner cache is updated and the effective-role cache is cleared entirely.
-9. An `ownership_transferred` log is sent to `cfg.logs` in parallel with the reply.
-10. The command replies with the new owner mention.
+4. The current owner is re-read fresh before the mutation. A concurrent transfer or a demotion that happened while the target was classified refuses the command, so an in-flight transfer cannot overwrite a newer owner.
+5. Any non-Founder role the target already holds is cleared first via `Demote.remove_role`, so the post-transfer state holds exactly one Founder with no residual Admin/Developer/Tester assignment.
+6. `users_roles.set_owner(target_id)` swaps the owner in one transaction: the active assignments of the new owner and of the old owner are revoked and the new owner assignment is inserted, all under an advisory lock, so a crash between them cannot leave the community without a Founder.
+7. The in-process error-reporter owner is refreshed to the new owner.
+8. The previous Founder is kept as Admin via `users_roles.add_admin(...)`; a failure here stays visible as a WARNING line telling the operator to grant Admin manually.
+9. The owner cache is updated and the effective-role cache is cleared entirely.
+10. An `ownership_transferred` log is sent to `cfg.logs` in parallel with the reply.
+11. The command replies with the new owner mention.
 
 After transfer, the previous Founder becomes Admin and the new target becomes Founder.
 

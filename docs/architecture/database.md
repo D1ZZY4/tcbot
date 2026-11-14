@@ -1191,11 +1191,11 @@ Methods:
 
 - `get(key)` / `put(key, val)` / `invalidate(key)`: synchronous, operate on L1; `put` and `invalidate` additionally enqueue an ordered (FIFO) Redis write/delete through the shared mutation chain for the cache's prefix.
 - `clear()`: synchronous, clears L1 only; never touches Redis.
-- `clear_all()`: async, clears L1 and deletes every Redis key matching `tcbot:<prefix>:v2:*` via `SCAN` + `UNLINK` in batches of 100 (never blocking `KEYS`). Each scan and unlink is bounded by the 2.0 s write timeout so a stalled sweep aborts instead of holding the FIFO mutation tail. Use when the affected key is unknown, for example after an ownership transfer. Not for hot paths.
+- `clear_all()`: async, clears L1 and deletes every Redis key matching `tcbot:<prefix>:v2:*` via `SCAN` + `UNLINK` in batches of 100 (never blocking `KEYS`). The whole sweep is bounded by a 10 s wait, and each Redis command relies on the client's socket timeout rather than a `wait_for` wrapper, so a stalled sweep never holds the FIFO mutation tail by cancelling a command mid-flight. Use when the affected key is unknown, for example after an ownership transfer. Not for hot paths.
 - `get_or_fetch(key, fetch)`: async hot path. Layer order:
   1. L1 in-memory (no I/O).
-  2. L2 Redis, bounded by a 1.0 s timeout (`_REDIS_GET_TIMEOUT_S`) so a stalled Redis falls through to the database fetch.
-  3. Database `fetch()` coroutine; the result populates both layers (the L2 write is fire-and-forget and 2.0 s-bounded).
+  2. L2 Redis, bounded by the client's 2.0 s socket timeout so a stalled Redis falls through to the database fetch.
+  3. Database `fetch()` coroutine; the result populates both layers (the L2 write is fire-and-forget).
 
 A per-key lock coalesces concurrent misses so only one database fetch runs
 per key, and the lock stays in place for the whole fetch: a reader that
@@ -1246,7 +1246,11 @@ Bare `cachetools` L1 caches (no Redis, no L2): `groups_db._GROUP_LOCALE_L1`
   failure (caller decides whether to abort or continue with in-memory
   only). Raises `RuntimeError` when the `hiredis` C extension is missing
   and `REDIS_URL` is set (verified lazily here, not at import, keeping
-  "Redis is optional" intact). Reconnects close the previous pool first so
+  "Redis is optional" intact). Connecting and closing are serialised per
+  event loop, and a repeated connect for the same URL reuses the live
+  client: a background cache write that reconnects during startup waits
+  for the running attempt instead of closing the pool it is about to use.
+  Reconnecting to a different URL closes the previous pool first so
   sockets are not orphaned.
 - `close() -> None`
   Closes the client (`aclose`) and explicitly disconnects the pool
@@ -1272,9 +1276,9 @@ Pool parameters: `decode_responses=True`, `max_connections=20`,
 
 ### Cache error/failure behavior
 
-- A stalled or failing Redis read on `get_or_fetch` never holds the hot path longer than 1.0 s; it falls through to the database fetch and marks the op failed.
+- A stalled or failing Redis read on `get_or_fetch` is bounded by the client's 2.0 s socket timeout; it falls through to the database fetch and marks the op failed.
 - A serialization failure degrades the cache to L1-only instead of failing a fetch that just succeeded.
-- Redis writes/deletes are fire-and-forget, bounded to 2.0 s each, and logged at DEBUG on failure; background-task errors are surfaced via a done-callback log, never raised into callers.
+- Redis writes/deletes are fire-and-forget and logged at DEBUG on failure; the client's socket timeout bounds each command, and background-task errors are surfaced via a done-callback log, never raised into callers. No cache path wraps a Redis command in `asyncio.wait_for`: cancelling one would return the pooled connection with its reply unread.
 - Redis failures after the first are not re-logged per op (transition logging only), and the pool/health state is tracked via `mark_op`.
 - Single-key deletes and writes for revocation prefixes (`role`, `conn`, `groups`, `owner`) are never dropped by the 200-deep mutation-queue bound: a dropped role revocation would leave other processes serving the revoked privilege until the key TTL (90-360 s). Display-name hints (`umention`) remain droppable; the next update refreshes them.
 - A cancelled predecessor does not drop its successors: each FIFO mutation shields its predecessor and only aborts on its own cancellation, so one cancelled task cannot cascade-cancel the tail.
@@ -1458,14 +1462,12 @@ TypedDict from `documents.py` when reading or inserting records.
 | `role_assignments` (index reference) | `RoleRefDoc` |
 | `promotion_requests` | `PromotionRequestDoc` |
 
-Literal aliases: `RoleName = Literal["owner", "admin", "developer", "moderator"]`
-(the catalog vocabulary), `RequestStatus = Literal["pending", "approved",
-"rejected", "cancelled"]`, `ActionStatus = Literal["active", "completed",
-"revoked", "expired", "superseded"]`, `ScopeType = Literal["community",
-"chat"]`.
+Literal aliases: `RequestStatus = Literal["pending", "approved", "rejected",
+"cancelled"]`, `ActionStatus = Literal["active", "completed", "revoked",
+"expired", "superseded"]`, `ScopeType = Literal["community", "chat"]`.
 
-The tier vocabulary the handlers use is `users_roles.RoleName = Literal[
-"founder", "admin", "developer", "tester"]`.
+The tier vocabulary is `users_roles.RoleName = Literal["founder", "admin",
+"developer", "tester"]`, the single role definition the handlers use.
 
 ## Startup wiring and shutdown
 

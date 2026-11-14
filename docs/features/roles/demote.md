@@ -59,7 +59,7 @@ Founder is never demotable through this flow; ownership transfer uses `/transfer
 ```python
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 
-await Demote.remove_role(target_id, target_role)              # bool
+await Demote.remove_role(target_id)                           # bool
 await Demote.execute(bot,
                      target_id, target_fname, target_role,
                      executor_id, executor_fname,
@@ -69,7 +69,7 @@ await Demote.execute(bot,
 
 | Member | Purpose |
 |---|---|
-| `Demote.remove_role(target_id, target_role)` | Revokes the active role assignment of the user, whatever role it holds. A demotion never deletes a row: the assignment is marked `revoked`, so the history of who held which role stays readable. Returns True if an assignment was revoked. |
+| `Demote.remove_role(target_id)` | Revokes the active role assignment of the user, whatever role it holds. A demotion never deletes a row: the assignment is marked `revoked`, so the history of who held which role stays readable. Returns True if an assignment was revoked. |
 | `Demote.execute(...)` | Removes the role, posts the federation log, and DMs the target. Returns True when a role row was actually removed, False when the role was already gone. A database failure propagates to the caller, which decides whether to proceed. Supports both manual and demote-before-enforcement callers via the `trigger` keyword. |
 | `demote_before_enforcement(...)` | Best-effort pre-fan-out re-demote: reads the live role and removes it. A lookup or demote failure logs loudly and enforcement still runs. Used by the ban, kick, mute, and join executors to close the proof-collection TOCTOU window. |
 | `demote_before_unban(...)` | Fail-closed pre-unban gate. Returns `UnbanGate.PROCEED` only when the role is gone; `DEMOTE_FAILED` and `ROLE_SURVIVED` block the unban. Used by `/tcunban` and the appeal-approve path. |

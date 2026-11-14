@@ -133,7 +133,7 @@ Logging setup is installed from `tcbot.__main__.main()`.
 | `BotLogFormatter` | Colored console formatter with time, date, module, line, request context, level, and message. Every record renders colored, including loguru and third-party records. |
 | `TelegramErrorHandler` | Logging handler that forwards error-level records to the registered sink. |
 | `set_record_sink(sink)` | Register the callable that ships a log record to the error channel. The sink is invoked synchronously and schedules the delivery itself. The error reporter registers itself at startup; the logger never imports it, because the reporter lives above the utils layer and a direct import would close a cycle. |
-| `setup(level=logging.INFO)` | Installs console and Telegram error handlers on the root logger and quiets noisy libraries. |
+| `setup(level=logging.INFO)` | Installs the single Loguru-to-stdlib bridge plus the console and Telegram error handlers on the root logger, and quiets noisy libraries. The stdlib console handler is the only console output path, so each record prints once. |
 | `get_logger(name)` | Return the loguru-backed logger for a module. Records bridge through the same stdlib handlers, so coloring, shipping, and level discipline match plain loggers. |
 | `bind_request_context(...)` / `clear_request_context()` | Bind `update_id`/`user_id`/`chat_id` rendered on every subsequent line until cleared. `log_execution` binds on handler entry and clears in a `finally` block, so concurrent updates never leak context (contextvars are task-local). |
 

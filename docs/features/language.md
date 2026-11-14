@@ -25,7 +25,7 @@ today; new locales land as data files with no Python changes.
 | Callback | Purpose |
 |---|---|
 | `language_menu` | Open the personal panel from the start menu. |
-| `lang:list:<scope>` | Re-render the option list (`scope` is `user` or `group`). |
+| `lang:list:<scope>` | Re-render the option list (`scope` is `user` or `group`). A group list tap requires group-management permission. |
 | `lang:set:<scope>:<locale>` | Save the locale and edit the panel into a confirmation. |
 
 The start menu (`main_menu_kb`) carries a bottom-row `Language` button
@@ -41,7 +41,8 @@ implementation.
    the scope is `group`, persists the choice, and edits the panel into
    a confirmation in the newly chosen language.
 3. Unknown locale taps answer with the unavailable notice; denied group
-   taps answer with the permission notice. Neither edits the panel.
+   taps (list or save) answer with the permission notice. Neither edits
+   the panel.
 
 ## Locale resolution
 
