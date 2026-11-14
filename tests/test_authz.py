@@ -469,6 +469,46 @@ def test_resolve_staff_target_refuses_a_disconnected_origin(
     assert resolved is None
 
 
+def test_resolve_executor_target_reads_the_role_fresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A demotion in another process must be visible to the executor fetch.
+
+    The promote and demote commands compare the executor role against the
+    target role. Reading that role from the cache would let a demoted
+    moderator finish a role change that started before the demotion.
+    """
+    update, _ctx = _update_ctx()
+    msg = update.effective_message
+    calls: list[bool] = []
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        calls.append(fresh)
+        # * The regression case: only the fresh read sees the demotion.
+        return None if fresh else "developer"
+
+    async def _target(*args: Any, **kwargs: Any) -> tuple[int, str]:
+        return (22, "Target")
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(targets.extraction, "extract_target", _target)
+
+    resolved = asyncio.run(
+        targets.resolve_executor_target(
+            msg,
+            11,
+            update,
+            ["22", "developer"],
+            None,
+            action="promote",
+            locale="en-US",
+        )
+    )
+
+    assert resolved is None
+    assert calls == [True]
+
+
 def test_the_owner_tier_refreshes_the_effective_role_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

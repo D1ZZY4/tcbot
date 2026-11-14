@@ -71,8 +71,9 @@ class StaffTarget:
 
 
 # * One owner for the executor-plus-target fetch so a future fix cannot
-# * land in one command and miss the other. Gathers stay parallel so the
-# * hot path costs one cached round trip, never two serial ones.
+# * land in one command and miss the other. The executor role is read fresh
+# * so a demotion in another process is never hidden by the role-cache TTL;
+# * the target resolution still runs in the same gather.
 async def resolve_executor_target(
     msg: Message,
     admin_id: int,
@@ -88,13 +89,15 @@ async def resolve_executor_target(
     Returns ``(executor_role, target_id, target_fname)`` or ``None`` when
     the caller must return (retry reply already sent, or a genuinely
     role-less executor denied silently like the decorator would).
-    Callers pass their already-resolved locale so the two DB reads behind
-    locale resolution do not run twice per command.
+    The executor role is read fresh, because a demotion in another process
+    must not stay hidden behind the role-cache TTL while the command is
+    still running. Callers pass their already-resolved locale so the two
+    DB reads behind locale resolution do not run twice per command.
     """
     if locale is None:
         locale = await locale_for_update(update)
     _exec_r, _target_r = await asyncio.gather(
-        db.users_roles.get_effective_role(admin_id),
+        db.users_roles.get_effective_role(admin_id, fresh=True),
         extraction.extract_target(update, args, bot),
         return_exceptions=True,
     )
