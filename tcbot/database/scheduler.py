@@ -252,7 +252,12 @@ async def _sweep_erasures(sess: AsyncSession) -> int:
     pending = await sess.execute(
         text(
             "SELECT user_id FROM telegram_user_erasures "
-            "WHERE status = 'pending' LIMIT 25"
+            "WHERE status = 'pending' "
+            # * The sweep processes the oldest requests first, so the same
+            # * order keeps the cache invalidation aligned with the batch
+            # * the database function is about to process.
+            "ORDER BY requested_at, id "
+            "LIMIT 25"
         )
     )
     erased_ids = [int(row[0]) for row in pending]
