@@ -486,22 +486,11 @@ async def execute_unwarn(
             log_label="execute_unwarn no-warns",
         )
         return
-    new_count = max(count - 1, 0)
     chat_title = chat.title or str(chat_id)
     warn_limit = cfg.warn_limit
     admin = update.effective_user
     if admin is None:
         return
-    log_text = messages.unwarn_log(
-        target_id,
-        target_name,
-        admin.id,
-        admin.first_name,
-        new_count,
-        cfg.warn_limit,
-        chat_id,
-        chat_title,
-    )
     try:
         removed = await db.warns_db.remove_last_warn(target_id, chat_id)
     except Exception:
@@ -543,7 +532,7 @@ async def execute_unwarn(
         admin.id,
         admin.first_name,
         new_count,
-        cfg.warn_limit,
+        warn_limit,
         chat_id,
         chat_title,
     )
