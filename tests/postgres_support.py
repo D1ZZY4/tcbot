@@ -469,6 +469,7 @@ async def seed_action(
     status: str | None = None,
     evidence_upload_id: int | None = None,
     expires_at: datetime | None = None,
+    created_at: datetime | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> int:
     """Insert one moderation decision and return its id.
@@ -477,6 +478,10 @@ async def seed_action(
     refuses a decision that starts revoked or expired. A terminal status
     is applied afterwards, in a second statement, so the row travels the
     same transition the application uses.
+
+    ``created_at`` lets a caller seed a decision whose lifetime already
+    passed; ``expires_at`` must still be after it, which is the invariant
+    the schema checks.
     """
     if action_type not in _INITIAL_STATUS:
         raise ValueError(f"Unknown moderation action type: {action_type!r}")
@@ -497,7 +502,7 @@ async def seed_action(
             target_user_id=target_user_id,
             actor_user_id=actor_user_id,
             reason=reason,
-            created_at=utc_now(),
+            created_at=created_at or utc_now(),
             expires_at=expires_at,
             status=_INITIAL_STATUS[action_type],
             external_ref=external_ref,

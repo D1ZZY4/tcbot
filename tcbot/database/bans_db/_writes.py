@@ -89,12 +89,20 @@ async def _open_case(
     )
 
 
-def _duration_seconds(until_date: datetime | None) -> int | None:
-    """Return the remaining lifetime of a decision in whole seconds."""
+def _duration_seconds(until_date: datetime | None, now: datetime) -> int | None:
+    """Return the remaining lifetime of a decision in whole seconds.
+
+    ``now`` is the moment the decision was created, taken once by the
+    caller so ``created_at`` and the duration describe the same instant.
+    A deadline that passed while the write was waiting is a bad request:
+    the schema refuses an expiry that is not after creation.
+    """
     if until_date is None:
         return None
-    remaining = int((until_date - utc_now()).total_seconds())
-    return max(remaining, 0)
+    remaining = int((until_date - now).total_seconds())
+    if remaining < 0:
+        raise ValueError("until_date must be in the future")
+    return remaining
 
 
 async def _reuse_existing(
@@ -152,6 +160,11 @@ async def create_ban(
         META_DURATION: duration_str,
         META_UPDATE_COUNT: 0,
     }
+    # * One clock reading for the whole decision. The case and proof writes
+    # * may take a moment over a network; using a later reading for
+    # * created_at could push it past a short deadline and the schema would
+    # * refuse the row as already expired.
+    now = utc_now()
 
     async def _work(sess: AsyncSession) -> dict[str, Any] | None:
         case_id = await _open_case(
@@ -172,8 +185,8 @@ async def create_ban(
                         target_user_id=target_id,
                         actor_user_id=admin_id,
                         reason=reason,
-                        duration_seconds=_duration_seconds(until_date),
-                        created_at=utc_now(),
+                        duration_seconds=_duration_seconds(until_date, now),
+                        created_at=now,
                         expires_at=until_date,
                         status="active",
                         external_ref=ban_id,
@@ -290,6 +303,9 @@ async def update_ban(
         META_PREVIOUS_LOG: old_log_id or None,
     }
     external_ref = make_ban_id()
+    # * Same single clock reading as create_ban: the case and proof writes
+    # * must not push created_at past the new deadline.
+    now = utc_now()
 
     async def _work(sess: AsyncSession) -> dict[str, Any] | None:
         case_id = await _open_case(
@@ -309,8 +325,8 @@ async def update_ban(
                         target_user_id=target_id,
                         actor_user_id=admin_id,
                         reason=reason,
-                        duration_seconds=_duration_seconds(until_date),
-                        created_at=utc_now(),
+                        duration_seconds=_duration_seconds(until_date, now),
+                        created_at=now,
                         expires_at=until_date,
                         status="active",
                         external_ref=external_ref,

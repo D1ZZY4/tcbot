@@ -13,7 +13,6 @@ is configured, so the committed suite never depends on one.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -27,7 +26,7 @@ from tcbot.database import bans_db, groups_db, users_cache, warns_db
 from tcbot.database import engine as engine_module
 from tcbot.database.base import moderation_actions, moderation_cases
 from tcbot.utils.time_and_date import utc_now
-from tests.postgres_support import reset_community, seed_chats, seed_users
+from tests.postgres_support import reset_community, seed_action, seed_chats, seed_users
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -69,17 +68,31 @@ async def test_a_ban_is_written_and_read_back(postgres: str) -> None:
 async def test_a_timed_ban_stops_being_active_at_its_deadline(postgres: str) -> None:
     """Every active read agrees once a timed ban's deadline passes."""
     await bans_db.create_ban(
-        42, "timed", 7, 11, 12, until_date=utc_now() + timedelta(seconds=1)
+        42, "timed", 7, 11, 12, until_date=utc_now() + timedelta(hours=1)
     )
+    # * Seed an elapsed ban directly so the check does not depend on a
+    # * wall-clock sleep: over a remote pooler a one-second ban is already
+    # * expired before the first assertion reaches the server.
+    elapsed_at = utc_now() - timedelta(minutes=5)
+    await seed_action(
+        "ban",
+        9,
+        actor_user_id=7,
+        reason="expired",
+        external_ref="expiredtimedban",
+        created_at=elapsed_at,
+        expires_at=elapsed_at + timedelta(minutes=1),
+    )
+
     assert await bans_db.active_ban_count() == 1
-
-    await asyncio.sleep(1.1)
-
-    assert await bans_db.get_active_ban(42) is None
-    assert await bans_db.active_ban_count() == 0
-    assert await bans_db.active_bans_page(0, 10) == []
-    assert await bans_db.active_bans_for_users([42]) == []
-    assert await bans_db.active_ban_user_ids() == []
+    assert await bans_db.get_active_ban(42) is not None
+    assert await bans_db.get_active_ban(9) is None
+    assert [
+        int(doc.get("target_user_id") or 0)
+        for doc in await bans_db.active_bans_page(0, 10)
+    ] == [42]
+    assert await bans_db.active_bans_for_users([9]) == []
+    assert await bans_db.active_ban_user_ids() == [42]
 
 
 async def test_the_database_refuses_a_second_active_ban(postgres: str) -> None:
