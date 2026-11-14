@@ -79,12 +79,11 @@ When the bot joins a group, PTB emits a `my_chat_member` update. `connection.on_
 
 ## `on_join_decision` callback flow
 
-The `Connect` / `Cancel` buttons are handled by `connection.on_join_decision`:
+The `Connect` / `Cancel` buttons are handled by `connection.on_join_decision`. Primary groups are refused immediately: the callback is answered and no connection is attempted, mirroring the `/tcconnect` and bot-added guards.
 
-0. Primary groups are refused immediately: the callback is answered and no connection is attempted, mirroring the `/tcconnect` and bot-added guards.
 1. Run `q.answer()` and `bot.get_chat_member(chat.id, user.id)` in parallel.
-2. If the member lookup raised, edit the prompt reply-markup off and reply with the role-check-failed notice.
-3. If the member is not the group `OWNER`, edit the reply-markup off and reply with the owner-only refusal.
+2. If the member lookup raised, answer with the role-check-failed alert and leave the prompt live.
+3. If the member is not the group `OWNER`, answer with the owner-only alert and leave the prompt live. The prompt is one shared message, so removing its keyboard on a refused tap would destroy the owner's only Connect button.
 4. For `tc_join`:
    - Fetch `bot.get_chat_member(chat.id, bot.id)` bounded with `asyncio.wait_for(timeout=3.0)`. On failure, edit the prompt to the bot-permission-verify notice and stop.
    - If `connection.check_perms(bot_member)` returns False, write `db.groups_db.add_pending(...)` first (reporting a failure notice if the write fails, since there is nothing to approve later), then edit the prompt to `connection.perms_required_message()`; the pending entry persists so the owner can retry once the bot is promoted correctly.

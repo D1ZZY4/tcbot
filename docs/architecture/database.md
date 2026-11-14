@@ -748,15 +748,15 @@ reader sees one document.
 
 ### Statistics and history
 
-- `active_ban_count() -> int`: `COUNT(*)` over the active rows.
+- `active_ban_count() -> int`: `COUNT(*)` over the active rows that have
+  not reached their deadline.
 - `active_bans_page(skip: int, limit: int) -> list[BanDoc]`
   One server-side page of active bans, newest first. `limit` clamped to at least 1.
 - `active_bans_for_users(user_ids: list[int]) -> list[BanDoc]`
   Active bans for a set of IDs through `IN (...)`, newest first; backs
   name-search results. Returns `[]` for an empty input.
 - `active_ban_user_ids() -> list[int]`
-  Only the target IDs of all active bans (projection-only, fastest
-  path), newest first.
+  Only the target IDs of all active bans (projection-only, fastest path).
 - `user_appealable_bans(user_id: int, *, skip: int = 0, limit: int | None = None) -> list[BanDoc]`
   The user's bans that ever had an appeal, newest first. `limit=None`
   returns the full list.
@@ -764,6 +764,12 @@ reader sees one document.
   Every ban (active and inactive) for a user, newest first.
 - `user_ban_count(user_id: int) -> int`: total bans ever issued against the user.
 - `user_appeal_count(user_id: int) -> int`: count of bans with an appeal submitted.
+
+Every active-ban read applies the same condition as the `active_bans`
+view: `status = 'active'` and `expires_at IS NULL OR expires_at > now()`.
+A timed ban whose deadline passed is therefore not counted, not listed,
+and not replayed into a newly connected group before the daily sweep
+moves it to `expired`.
 
 **Error behavior:** all operations route through `db_call()`.
 `create_ban` absorbs only the one-active-ban race; every other integrity

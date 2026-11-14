@@ -112,18 +112,17 @@ The executor's role is enforced by the `@decorators.staff_only` decorator on `cm
 - Admin tries to assign Admin to someone who is already Admin (handled by the rank check above).
 - Promoting a user who is currently Admin into Developer/Tester (must demote first).
 
-The command-level handler `cmd_promote` rejects self-promotion, the bot itself, Telegram, and anonymous-admin targets before delegating. Other (third-party) bots are not detected: `extract_target` returns only an ID and name, so they classify as regular users and can be promoted; only staff can trigger this, and the role is removable via `/tcdemote`.
+The command-level handler `cmd_promote` rejects self-promotion, the bot itself, Telegram, and anonymous-admin targets before delegating. A verified bot is refused as well: the quoted sender names itself for free, otherwise one bounded membership probe runs in the current chat, then one MTProto peer lookup. An off-group target whose lookup is unknown stays allowed by design, and only staff can trigger the command.
 
 ## Direct Founder promotion to Admin
 
 When the Founder issues `/tcpromote @user admin`:
 
-1. `users_roles.add_admin(target_id, founder_id)` grants the admin role.
-2. If the target previously held Developer or Tester, `users_roles.remove_role(target_id)` revokes that assignment.
-3. `users_cache.upsert_user(target_id, None, target_fname)` refreshes the member cache.
-4. A `messages.promoted(role="admin", ...)` log is sent to `cfg.logs`.
-5. The target is DM'd a welcome notification.
-6. The command replies with `Done. <mention> - <code id> is now a <community> Admin.`
+1. `users_roles.add_admin(target_id, founder_id)` grants the admin role. The assignment revokes the assignment it replaces in the same transaction, so a previous Developer or Tester role never survives beside the new one.
+2. `users_cache.upsert_user(target_id, None, target_fname)` refreshes the member cache.
+3. A `messages.promoted(role="admin", ...)` log is sent to `cfg.logs`.
+4. The target is DM'd a welcome notification.
+5. The command replies with `Done. <mention> - <code id> is now a <community> Admin.`
 
 ## Founder/Admin promotion to Developer/Tester
 
@@ -162,6 +161,8 @@ A user submits a request for themselves to become Admin. `cmd_promote_request` f
 All callbacks re-check the tapper's current effective role (Founder/Admin) before applying any write, so a user who lost permission between selecting and confirming is rejected with an alert. New prompts carry the opener in both the role buttons and the cancel button, so only that staffer can act on or collapse the picker; a different tapper gets an alert and the prompt stays live. Legacy taps without an executor segment act as the tapper with the rank re-check; the cancel buttons carry the same staff-rank gate, so a non-staffer can never collapse a prompt. The role and demote-confirm callbacks re-run the same identity refusal as the command path, so the anonymous-admin placeholder, a Telegram service account, and the tapper themselves cannot be reached through a callback either.
 
 ### Approval path
+
+A non-owner tap, or a failed owner lookup, answers with an alert and leaves the card actionable. The card is shared through the Founder DM or the log channel, so editing it would let any reader remove the Founder's only decision surface. A request that targets the current Founder is refused: approving it would rewrite the owner assignment as Admin and leave the federation without a Founder. A transfer cancels that pending request, so the card cannot be approved later.
 
 1. `queues_db.resolve(request_id, "approved", admin.id)` marks the request resolved. The claim is atomic, so a concurrent approve and reject cannot both win; the loser finds the request already resolved and stops.
 2. `users_roles.add_admin(target_id, admin.id)` grants the admin role. The assignment revokes the role the target held before it in the same transaction, so a stale Developer or Tester row cannot survive the promotion.
