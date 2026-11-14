@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING, cast
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tcbot.database.base import moderation_actions, moderation_cases
+from tcbot.database import moderation_db
+from tcbot.database.base import moderation_actions
 from tcbot.database.documents import KickDoc
 from tcbot.database.engine import db_call, fetch_all, fetch_value, run_transaction
 from tcbot.database.types import ChatId, UserId
@@ -69,6 +70,10 @@ async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> No
                 action_origin="manual",
             )
         )
+        # * The investigation ends with its decision: an open case is
+        # * picked up by the next decision about the same user, so the
+        # * history would collapse into one case per user.
+        await moderation_db.close_case(sess, case_id, admin_id)
 
     await run_transaction(_work)
 
@@ -77,50 +82,15 @@ async def _open_case(
     sess: AsyncSession, target_id: int, admin_id: int, reason: str, chat_id: int
 ) -> int:
     """Return the open case of the target, or open one for the decision."""
-    existing = (
-        (
-            await sess.execute(
-                select(moderation_cases.c.id)
-                .where(
-                    moderation_cases.c.subject_user_id == target_id,
-                    moderation_cases.c.status.in_(
-                        ("open", "collecting_evidence", "under_review")
-                    ),
-                )
-                .order_by(moderation_cases.c.created_at.desc())
-                .limit(1)
-            )
-        )
-        .mappings()
-        .first()
+    return await moderation_db.open_case(
+        sess,
+        target_id,
+        admin_id,
+        title=f"Kick of {target_id} in group {chat_id}",
+        summary=reason,
+        severity="medium",
+        requires_evidence=False,
     )
-    if existing is not None:
-        return int(existing["id"])
-
-    created = (
-        (
-            await sess.execute(
-                pg_insert(moderation_cases)
-                .values(
-                    subject_user_id=target_id,
-                    case_type="rule_violation",
-                    title=f"Kick of {target_id} in group {chat_id}",
-                    summary=reason,
-                    severity="medium",
-                    status="open",
-                    source="manual",
-                    opened_by_user_id=admin_id,
-                    requires_evidence=False,
-                )
-                .returning(moderation_cases.c.id)
-            )
-        )
-        .mappings()
-        .first()
-    )
-    if created is None:
-        raise RuntimeError("the moderation case was not written")
-    return int(created["id"])
 
 
 # ─────────────────────── Per-user history ───────────────────────── #
@@ -147,10 +117,10 @@ async def user_kicks(
     rows = await db_call(lambda: fetch_all(stmt))
     return [
         KickDoc(
-            user_id=UserId(int(row["target_user_id"])),
+            target_user_id=UserId(int(row["target_user_id"])),
             chat_id=ChatId(int(row["chat_id"])),
             reason=str(row["reason"]),
-            admin_id=UserId(int(row["actor_user_id"])),
+            actor_user_id=UserId(int(row["actor_user_id"])),
             timestamp=cast("datetime", row["created_at"]),
         )
         for row in rows

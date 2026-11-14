@@ -253,7 +253,7 @@ class SubmitMessageMixin:
         # * it once, but the conversation state is what carries the
         # * decision from the entry to this step, so the check is repeated
         # * where the appeal is actually filed.
-        if fresh_ban.get("banned_user_id") != user.id:
+        if fresh_ban.get("target_user_id") != user.id:
             await safe_reply(
                 msg,
                 t("appeals.submit.wrong_account", locale, plain=True),
@@ -565,7 +565,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
                 parse_mode=None,
             )
             return ConversationHandler.END
-        if ban.get("banned_user_id") != uid:
+        if ban.get("target_user_id") != uid:
             await safe_reply(
                 msg,
                 t("appeals.submit.wrong_account", locale, plain=True),

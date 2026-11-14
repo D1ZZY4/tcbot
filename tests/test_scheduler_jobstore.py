@@ -168,3 +168,21 @@ def test_startup_failure_does_not_leave_a_live_task(
         _run_scheduler()
     assert sched_mod._sched_task is None
     assert sched_mod.is_ready() is False
+
+
+def test_the_job_store_is_bound_to_its_scheduler() -> None:
+    """The store has to carry the scheduler it belongs to.
+
+    A job that is read back from the store inherits the scheduler of the
+    store. The scheduler is what turns the next run time of a due job
+    into a real date, so a store that is not bound makes every overdue
+    job raise instead of being rescheduled, and the job fires again on
+    every tick.
+    """
+    store = sched_mod._PreparedJobStore.__new__(sched_mod._PreparedJobStore)
+    sentinel = object()
+
+    sched_mod._PreparedJobStore.start(store, sentinel, "postgres")  # type: ignore[arg-type]
+
+    assert store._scheduler is sentinel
+    assert store._alias == "postgres"

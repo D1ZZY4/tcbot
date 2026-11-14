@@ -42,7 +42,7 @@ def _update_q(uid: int, ban_id: str) -> Any:
 def test_checkme_detail_refuses_other_user_card(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ban = {"ban_id": "b1", "banned_user_id": 22, "admin_user_id": 11, "is_active": True}
+    ban = {"ban_id": "b1", "target_user_id": 22, "actor_user_id": 11, "is_active": True}
 
     async def _get_ban(ban_id: str) -> Any:
         return ban

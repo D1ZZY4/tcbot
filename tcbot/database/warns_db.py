@@ -18,7 +18,8 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot import cfg
-from tcbot.database.base import moderation_actions, moderation_cases
+from tcbot.database import moderation_db
+from tcbot.database.base import moderation_actions
 from tcbot.database.documents import WarnCountDoc, WarnDoc
 from tcbot.database.engine import (
     db_call,
@@ -84,50 +85,15 @@ async def _open_case(
     sess: AsyncSession, target_id: int, admin_id: int, reason: str, chat_id: int
 ) -> int:
     """Return the open case of the target, or open one for the decision."""
-    existing = (
-        (
-            await sess.execute(
-                select(moderation_cases.c.id)
-                .where(
-                    moderation_cases.c.subject_user_id == target_id,
-                    moderation_cases.c.status.in_(
-                        ("open", "collecting_evidence", "under_review")
-                    ),
-                )
-                .order_by(moderation_cases.c.created_at.desc())
-                .limit(1)
-            )
-        )
-        .mappings()
-        .first()
+    return await moderation_db.open_case(
+        sess,
+        target_id,
+        admin_id,
+        title=f"Warning of {target_id} in group {chat_id}",
+        summary=reason,
+        severity="low",
+        requires_evidence=False,
     )
-    if existing is not None:
-        return int(existing["id"])
-
-    created = (
-        (
-            await sess.execute(
-                pg_insert(moderation_cases)
-                .values(
-                    subject_user_id=target_id,
-                    case_type="rule_violation",
-                    title=f"Warning of {target_id} in group {chat_id}",
-                    summary=reason,
-                    severity="low",
-                    status="open",
-                    source="manual",
-                    opened_by_user_id=admin_id,
-                    requires_evidence=False,
-                )
-                .returning(moderation_cases.c.id)
-            )
-        )
-        .mappings()
-        .first()
-    )
-    if created is None:
-        raise RuntimeError("the moderation case was not written")
-    return int(created["id"])
 
 
 # ────────────────────────────── Records ──────────────────────────── #
@@ -173,6 +139,10 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
                 action_origin="manual",
             )
         )
+        # * The investigation ends with its decision: an open case is
+        # * picked up by the next decision about the same user, so the
+        # * history would collapse into one case per user.
+        await moderation_db.close_case(sess, case_id, admin_id)
 
     await run_transaction(_work)
     return await warn_count(user_id, chat_id)
@@ -309,9 +279,9 @@ async def get_warns(
 def _compose_warn(row: dict[str, Any]) -> WarnDoc:
     """Return the warning document of one decision row."""
     return WarnDoc(
-        user_id=cast("UserId", int(row["target_user_id"])),
+        target_user_id=cast("UserId", int(row["target_user_id"])),
         reason=str(row["reason"]),
-        admin_id=cast("UserId", int(row["actor_user_id"])),
+        actor_user_id=cast("UserId", int(row["actor_user_id"])),
         chat_id=cast("ChatId", int(row["chat_id"])),
         timestamp=cast("datetime", row["created_at"]),
     )

@@ -478,30 +478,12 @@ async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         old_id = msg.migrate_from_chat_id
         new_id = update.effective_chat.id if update.effective_chat else None
         if old_id and new_id and old_id != new_id:
-            (
-                migrated,
-                _mutes_migrated,
-            ) = await asyncio.gather(
-                db.groups_db.migrate_group(old_id, new_id),
-                db.mutes_db.migrate_records(old_id, new_id),
-                return_exceptions=True,
-            )
-            throw_if_cancelled((migrated, _mutes_migrated))
-            if isinstance(migrated, BaseException):
-                log.error(
-                    "groups_db.migrate_group failed for %d -> %d: %s",
-                    old_id,
-                    new_id,
-                    migrated,
-                )
-                migrated = False
-            if isinstance(_mutes_migrated, BaseException):
-                log.error(
-                    "mutes_db.migrate_records failed for %d -> %d: %s",
-                    old_id,
-                    new_id,
-                    _mutes_migrated,
-                )
+            # * The repoint moves the whole group in one transaction: the
+            # * registry, the configuration, the membership, the open
+            # * request, and the decisions of the group. The decisions
+            # * carry their origin chat with them, so no second write is
+            # * needed for the community-scoped ones.
+            migrated = await db.groups_db.migrate_group(old_id, new_id)
             if migrated:
                 log.info(
                     "Federation group migrated: old_chat_id=%d new_chat_id=%d",

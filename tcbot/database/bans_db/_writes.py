@@ -13,12 +13,10 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot import cfg
+from tcbot.database import moderation_db
 from tcbot.database.base import (
     moderation_actions,
     moderation_appeals,
-    moderation_cases,
-    moderation_evidence_items,
-    moderation_evidence_uploads,
     moderation_messages,
 )
 from tcbot.database.documents import BanDoc
@@ -80,110 +78,15 @@ async def _open_case(
     requires_evidence: bool,
 ) -> int:
     """Return the open case of the target, or open one for the decision."""
-    existing = (
-        (
-            await sess.execute(
-                select(moderation_cases.c.id)
-                .where(
-                    moderation_cases.c.subject_user_id == target_id,
-                    moderation_cases.c.status.in_(
-                        ("open", "collecting_evidence", "under_review")
-                    ),
-                )
-                .order_by(moderation_cases.c.created_at.desc())
-                .limit(1)
-            )
-        )
-        .mappings()
-        .first()
+    return await moderation_db.open_case(
+        sess,
+        target_id,
+        admin_id,
+        title=f"Community ban of {target_id}",
+        summary=reason,
+        severity="unknown",
+        requires_evidence=requires_evidence,
     )
-    if existing is not None:
-        return int(existing["id"])
-
-    created = (
-        (
-            await sess.execute(
-                pg_insert(moderation_cases)
-                .values(
-                    subject_user_id=target_id,
-                    case_type="rule_violation",
-                    title=f"Community ban of {target_id}",
-                    summary=reason,
-                    severity="unknown",
-                    status="collecting_evidence",
-                    source="manual",
-                    opened_by_user_id=admin_id,
-                    requires_evidence=requires_evidence,
-                )
-                .returning(moderation_cases.c.id)
-            )
-        )
-        .mappings()
-        .first()
-    )
-    if created is None:
-        raise RuntimeError("the moderation case was not written")
-    return int(created["id"])
-
-
-async def _archive_proof(
-    sess: AsyncSession,
-    case_id: int,
-    admin_id: int,
-    proof_message_id: int,
-    destination_chat_id: int,
-) -> int | None:
-    """Archive one proof message and return the batch id.
-
-    The batch walks the lifecycle of the table: it is queued when it is
-    written, the worker claims it, the archived item lands, and the
-    batch closes as completed once its items are in place.
-    """
-    if not proof_message_id or not destination_chat_id:
-        return None
-
-    upload_id = (
-        (
-            await sess.execute(
-                pg_insert(moderation_evidence_uploads)
-                .values(
-                    case_id=case_id,
-                    uploaded_by_user_id=admin_id,
-                    destination_chat_id=destination_chat_id,
-                    expected_item_count=1,
-                    is_required=True,
-                    status="queued",
-                )
-                .returning(moderation_evidence_uploads.c.id)
-            )
-        )
-        .mappings()
-        .first()
-    )
-    if upload_id is None:
-        return None
-    batch_id = int(upload_id["id"])
-
-    await sess.execute(
-        moderation_evidence_uploads.update()
-        .where(moderation_evidence_uploads.c.id == batch_id)
-        .values(status="uploading")
-    )
-    await sess.execute(
-        pg_insert(moderation_evidence_items).values(
-            upload_id=batch_id,
-            destination_chat_id=destination_chat_id,
-            archive_message_id=proof_message_id,
-            media_type="photo",
-            item_order=0,
-        )
-    )
-    await sess.execute(
-        moderation_evidence_uploads.update()
-        .where(moderation_evidence_uploads.c.id == batch_id)
-        .values(status="completed", primary_message_id=proof_message_id)
-    )
-    return batch_id
 
 
 def _duration_seconds(until_date: datetime | None) -> int | None:
@@ -254,7 +157,7 @@ async def create_ban(
         case_id = await _open_case(
             sess, target_id, admin_id, reason, requires_evidence=requires_evidence
         )
-        upload_id = await _archive_proof(
+        upload_id = await moderation_db.archive_proof(
             sess, case_id, admin_id, proof_msg_id, archive_chat
         )
         row = (
@@ -297,6 +200,11 @@ async def create_ban(
                     recorded_by_user_id=admin_id,
                 )
             )
+        # * The investigation ends with its decision. A case that stays
+        # * open is picked up by the next decision about the same user,
+        # * so the history of the community collapses into one case per
+        # * user instead of one case per incident.
+        await moderation_db.close_case(sess, case_id, admin_id)
         return dict(row)
 
     try:
@@ -364,7 +272,8 @@ async def update_ban(
     A re-ban is a new decision that supersedes the active one: the old
     action keeps its reason, actor, and timestamps, so the history of the
     case stays readable. The new decision carries the new reason and the
-    new proof.
+    new proof, and it opens its own case: a re-ban is a new incident, and
+    the case of the ban it replaces is already closed.
     """
     current = await get_ban(ban_id)
     if current is None:
@@ -373,6 +282,7 @@ async def update_ban(
         destination_chat_id if destination_chat_id is not None else cfg.proofs[0]
     )
     proof_id = new_proof_id or old_proof_id
+    target_id = cast("int", current.get("target_user_id"))
     metadata: dict[str, Any] = {
         META_DURATION: duration_str,
         META_UPDATE_COUNT: int(current.get("update_count", 0) or 0) + 1,
@@ -382,8 +292,10 @@ async def update_ban(
     external_ref = make_ban_id()
 
     async def _work(sess: AsyncSession) -> dict[str, Any] | None:
-        case_id = int(current.get("case_id") or 0)
-        upload_id = await _archive_proof(
+        case_id = await _open_case(
+            sess, target_id, admin_id, reason, requires_evidence=True
+        )
+        upload_id = await moderation_db.archive_proof(
             sess, case_id, admin_id, proof_id, archive_chat
         )
         row = (
@@ -394,7 +306,7 @@ async def update_ban(
                         action_type="ban",
                         scope_type="community",
                         chat_id=None,
-                        target_user_id=cast("int", current.get("banned_user_id")),
+                        target_user_id=target_id,
                         actor_user_id=admin_id,
                         reason=reason,
                         duration_seconds=_duration_seconds(until_date),
@@ -426,6 +338,7 @@ async def update_ban(
                     recorded_by_user_id=admin_id,
                 )
             )
+        await moderation_db.close_case(sess, case_id, admin_id)
         return dict(row)
 
     row = await run_transaction(_work)
@@ -458,11 +371,13 @@ async def set_log_message_id(ban_id: str, log_msg_id: int) -> None:
 
 
 async def deactivate_all_active_bans(user_id: int) -> int:
-    """Revoke every active ban for a user. Returns the number of bans revoked.
+    """Revoke the active ban of a user. Returns the number of bans revoked.
 
-    Use this in unban and appeal-approve flows to ensure all active bans are
-    cleared regardless of how many were created (guarding against duplicate
-    active bans that may exist from earlier race conditions or re-ban paths).
+    The database keeps one active ban per target, so this revokes the one
+    decision that is in force. It is the single authoritative write of an
+    unban: if it fails, the user is still banned in the database while
+    the chats say otherwise, and the join path would ban the user again
+    on the next membership event.
     """
     return await db_call(
         lambda: run(
@@ -471,27 +386,6 @@ async def deactivate_all_active_bans(user_id: int) -> int:
                 moderation_actions.c.target_user_id == user_id,
                 moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
-            )
-            .values(status="revoked", revoked_at=utc_now())
-        )
-    )
-
-
-async def deactivate_extra_active_bans(user_id: int, keep_ban_id: str) -> int:
-    """Revoke the active bans of a user except the one that is kept.
-
-    Called during the ban flow when an existing active ban is being updated
-    to suppress any stale duplicate active bans while preserving the canonical
-    record that is being reused. Returns the number of extras revoked.
-    """
-    return await db_call(
-        lambda: run(
-            moderation_actions.update()
-            .where(
-                moderation_actions.c.target_user_id == user_id,
-                moderation_actions.c.action_type == "ban",
-                moderation_actions.c.status == "active",
-                moderation_actions.c.external_ref != keep_ban_id,
             )
             .values(status="revoked", revoked_at=utc_now())
         )

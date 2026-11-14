@@ -64,19 +64,14 @@ class Demote:
     """
 
     @staticmethod
-    async def remove_role(target_id: int, target_role: str) -> bool:
-        """Remove the user's role from every role collection.
+    async def remove_role(target_id: int) -> bool:
+        """Revoke every active role assignment of the target.
 
-        Always clears both ``tc_admins`` and ``tc_roles``: a stale row in
-        the other collection would otherwise resurrect privilege on the
-        next demote (effective role prefers Admin, hiding the stale row
-        until ``remove_admin`` reveals it). True when any row was cleared.
+        A user holds one active role and the community keeps the
+        assignments in one table, so one statement clears them all.
+        True when an assignment was revoked.
         """
-        cleared_admin, cleared_role = await asyncio.gather(
-            db.users_roles.remove_admin(target_id),
-            db.users_roles.remove_role(target_id),
-        )
-        return cleared_admin or cleared_role
+        return await db.users_roles.remove_role(target_id)
 
     @classmethod
     async def execute(
@@ -102,7 +97,7 @@ class Demote:
         it runs, so a failure must never block the action. The unban path
         enforces the fail-closed rule itself in :func:`demote_before_unban`.
         """
-        removed = await cls.remove_role(target_id, target_role)
+        removed = await cls.remove_role(target_id)
         if not removed:
             # * No row in the expected collection: normally already-gone
             # * (safe to proceed), but loud so a stale-cache wrong-collection

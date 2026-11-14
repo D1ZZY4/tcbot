@@ -187,11 +187,11 @@ async def execute_promo_decision(
                 parse_mode=None,
             )
             return
-        # * A Developer/Tester row left beside the new Admin record
-        # * resurrects on the next demote, so clean up best-effort; the
-        # * promotion already committed, so failures only log.
+        # * The assignment already revoked the role the target held
+        # * before it, in the same transaction. A second revocation
+        # * afterwards would also revoke the admin role it had just
+        # * written, so the promoted user would end up with no role.
         cleanup_r = await asyncio.gather(
-            db.users_roles.remove_role(target_id),
             db.users_cache.upsert_user(target_id, None, target_fname),
             return_exceptions=True,
         )

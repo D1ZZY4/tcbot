@@ -16,12 +16,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database import engine as engine_module
 from tcbot.database import queues_db
-from tcbot.database.base import promotion_requests
 from tcbot.database.queues_db import AlreadyPendingError, DuplicateKeyError
+from tests.postgres_support import reset_community, seed_promotion_request, seed_users
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -30,9 +29,10 @@ if TYPE_CHECKING:
 @pytest.fixture
 async def queue_db(postgres_db: str) -> AsyncIterator[str]:
     """Start from an empty promotion-queue table."""
-    await engine_module.run(promotion_requests.delete())
+    await reset_community()
+    await seed_users(1, 7, 9, 42, 99)
     yield postgres_db
-    await engine_module.run(promotion_requests.delete())
+    await reset_community()
 
 
 def _stub_ids(monkeypatch: pytest.MonkeyPatch, ids: list[str]) -> list[str]:
@@ -51,15 +51,7 @@ def _stub_ids(monkeypatch: pytest.MonkeyPatch, ids: list[str]) -> list[str]:
 
 async def _seed(request_id: str, target_id: int, status: str = "pending") -> None:
     """Insert one promotion request straight into the table."""
-    await engine_module.run(
-        pg_insert(promotion_requests).values(
-            request_id=request_id,
-            target_id=target_id,
-            first_name="Target",
-            promoted_by=1,
-            status=status,
-        )
-    )
+    await seed_promotion_request(request_id, target_id, status=status)
 
 
 async def test_collision_retries_once_then_succeeds(
@@ -90,7 +82,7 @@ async def test_pending_violation_short_circuits_without_retry(
 
     assert isinstance(exc_info.value, DuplicateKeyError)
     assert engine_module.constraint_name(exc_info.value) == (
-        "uq_promotion_requests_pending"
+        "uq_promotion_requests_pending_target"
     )
     assert id_calls == ["only"]
 

@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tcbot.database.base import moderation_actions, moderation_cases
+from tcbot.database import moderation_db
+from tcbot.database.base import moderation_actions
 from tcbot.database.documents import ActiveMuteDoc, MuteDoc
 from tcbot.database.engine import (
     constraint_name,
@@ -159,6 +160,10 @@ async def record_mute(
         )
         if row is None:
             raise RuntimeError("the mute decision was not written")
+        # * The investigation ends with its decision: an open case is
+        # * picked up by the next decision about the same user, so the
+        # * history would collapse into one case per user.
+        await moderation_db.close_case(sess, case_id, admin_id)
         return int(row["id"])
 
     try:
@@ -188,50 +193,15 @@ async def _open_case(
     sess: AsyncSession, target_id: int, admin_id: int, reason: str
 ) -> int:
     """Return the open case of the target, or open one for the decision."""
-    existing = (
-        (
-            await sess.execute(
-                select(moderation_cases.c.id)
-                .where(
-                    moderation_cases.c.subject_user_id == target_id,
-                    moderation_cases.c.status.in_(
-                        ("open", "collecting_evidence", "under_review")
-                    ),
-                )
-                .order_by(moderation_cases.c.created_at.desc())
-                .limit(1)
-            )
-        )
-        .mappings()
-        .first()
+    return await moderation_db.open_case(
+        sess,
+        target_id,
+        admin_id,
+        title=f"Community mute of {target_id}",
+        summary=reason,
+        severity="unknown",
+        requires_evidence=False,
     )
-    if existing is not None:
-        return int(existing["id"])
-
-    created = (
-        (
-            await sess.execute(
-                pg_insert(moderation_cases)
-                .values(
-                    subject_user_id=target_id,
-                    case_type="rule_violation",
-                    title=f"Community mute of {target_id}",
-                    summary=reason,
-                    severity="unknown",
-                    status="open",
-                    source="manual",
-                    opened_by_user_id=admin_id,
-                    requires_evidence=False,
-                )
-                .returning(moderation_cases.c.id)
-            )
-        )
-        .mappings()
-        .first()
-    )
-    if created is None:
-        raise RuntimeError("the moderation case was not written")
-    return int(created["id"])
 
 
 # ──────────────────────── Active mute store ─────────────────────── #
@@ -358,32 +328,10 @@ def _compose_mute(row: dict[str, Any]) -> MuteDoc:
     """Return the mute document of one decision row."""
     origin = row.get("origin_chat_id")
     return MuteDoc(
-        user_id=UserId(int(row["target_user_id"])),
+        target_user_id=UserId(int(row["target_user_id"])),
         chat_id=ChatId(int(origin)) if origin is not None else None,
         reason=str(row["reason"]),
-        admin_id=UserId(int(row["actor_user_id"])),
+        actor_user_id=UserId(int(row["actor_user_id"])),
         timestamp=cast("datetime", row["created_at"]),
         duration_secs=cast("int | None", row.get("duration_seconds")),
-    )
-
-
-async def migrate_records(old_chat_id: int, new_chat_id: int) -> bool:
-    """Repoint every mute record from ``old_chat_id`` to ``new_chat_id``.
-
-    Called on basic-group to supergroup migration so /check mute history
-    does not split across the legacy chat. Mute decisions are community
-    scoped, so only the origin chat moves. Cancellation propagates.
-    """
-    return (
-        await db_call(
-            lambda: run(
-                moderation_actions.update()
-                .where(
-                    moderation_actions.c.action_type == "mute",
-                    moderation_actions.c.origin_chat_id == old_chat_id,
-                )
-                .values(origin_chat_id=new_chat_id)
-            )
-        )
-        > 0
     )

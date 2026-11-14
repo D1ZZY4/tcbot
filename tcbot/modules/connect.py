@@ -147,9 +147,9 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # * Primary groups are required enforcement destinations, not federation
-    # * members; connecting them would pollute federated_groups with an ID
-    # * that fan-out paths unconditionally include.
+    # * Primary groups are required enforcement destinations, not managed
+    # * groups; connecting them would add an ID to the connected-group
+    # * registry that the fan-out paths include anyway.
     if cfg.is_primary_group(chat.id):
         await safe_reply(
             msg,

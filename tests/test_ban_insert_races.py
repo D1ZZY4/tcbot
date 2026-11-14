@@ -97,7 +97,7 @@ async def test_the_identifier_retry_keeps_the_canonical_ban(
     record = await bans_db.create_ban(42, "spam", 7, 11, 12)
 
     assert record.get("ban_id") == "canonical01"
-    assert record.get("banned_user_id") == 42
+    assert record.get("target_user_id") == 42
 
 
 async def test_the_identifier_retry_stores_the_new_ban(
@@ -110,4 +110,4 @@ async def test_the_identifier_retry_stores_the_new_ban(
     record = await bans_db.create_ban(42, "spam", 7, 11, 12)
 
     assert record.get("ban_id") == "fresh00001"
-    assert record.get("banned_user_id") == 42
+    assert record.get("target_user_id") == 42

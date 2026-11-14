@@ -298,7 +298,7 @@ class CheckBansMixin:
                 ban=Safe(code(ban_id)),
             )
             return text, back_to_module_kb(f"check_bans:{target_id}:0", locale)
-        if not ban or ban.get("banned_user_id") != target_id:
+        if not ban or ban.get("target_user_id") != target_id:
             text = t(
                 "checking.bans.not_found",
                 locale,
@@ -588,7 +588,7 @@ class CheckEventsMixin:
             return _maybe_caveat(
                 text, locale, failed=count_failed or warns_failed
             ), check_paged_markup(None, check_warns_back_row(target_id, locale))
-        admin_ids = [w.get("admin_id", 0) for w in warns if w.get("admin_id")]
+        admin_ids = [w.get("actor_user_id", 0) for w in warns if w.get("actor_user_id")]
         admin_name_map = (
             await db.users_cache.get_first_names_batch(admin_ids) if admin_ids else {}
         )
@@ -612,7 +612,7 @@ class CheckEventsMixin:
                 if stored_reason is not None
                 else t("checking.events.no_reason", locale, plain=True)
             )[:_REASON_PREVIEW_LEN]
-            admin_id = w.get("admin_id", 0)
+            admin_id = w.get("actor_user_id", 0)
             admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
             lines.append(
                 t(
@@ -698,7 +698,7 @@ async def _per_chat_event_list(
             target_id, locale
         )
     chat_ids = list({r["chat_id"] for r in records if "chat_id" in r})
-    admin_ids = [r.get("admin_id", 0) for r in records if r.get("admin_id")]
+    admin_ids = [r.get("actor_user_id", 0) for r in records if r.get("actor_user_id")]
     titles, admin_name_map = await asyncio.gather(
         db.groups_db.get_group_titles(chat_ids),
         db.users_cache.get_first_names_batch(admin_ids)
@@ -733,7 +733,7 @@ async def _per_chat_event_list(
         )[:_REASON_PREVIEW_LEN]
         chat_id = rec.get("chat_id", 0)
         title = titles.get(chat_id) or str(chat_id)
-        admin_id = rec.get("admin_id", 0)
+        admin_id = rec.get("actor_user_id", 0)
         admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
         lines.append(
             t(

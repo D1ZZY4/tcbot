@@ -16,14 +16,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
 from tcbot import cfg
 from tcbot.database import bans_db
 from tcbot.database import engine as engine_module
-from tcbot.database.base import moderation_actions, moderation_cases
-from tests.postgres_support import reset_community, seed_chats, seed_users
+from tests.postgres_support import (
+    reset_community,
+    seed_action,
+    seed_chats,
+    seed_users,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -46,34 +49,16 @@ async def _insert_ban(
     active: bool = True,
 ) -> None:
     """Insert one ban decision straight into the table."""
-    case = (
-        await engine_module.run_returning(
-            pg_insert(moderation_cases)
-            .values(
-                subject_user_id=user_id,
-                title="Raw ban",
-                status="open",
-                source="manual",
-                opened_by_user_id=7,
-                requires_evidence=False,
-            )
-            .returning(moderation_cases.c.id)
-        )
-    )[0]
-    await engine_module.run(
-        pg_insert(moderation_actions).values(
-            action_type="ban",
-            scope_type="community",
-            target_user_id=user_id,
-            actor_user_id=7,
-            reason="spam",
-            status="active" if active else "revoked",
-            external_ref=ban_id,
-            case_id=case["id"],
-            # * The automated origin needs no archived proof, so the raw
-            # * insert can file the decision without one.
-            action_origin="automated",
-        )
+    await seed_action(
+        "ban",
+        user_id,
+        actor_user_id=7,
+        reason="spam",
+        external_ref=ban_id,
+        # * The automated origin needs no archived proof, so the raw
+        # * insert can file the decision without one.
+        action_origin="automated",
+        status="active" if active else "revoked",
     )
 
 
@@ -155,36 +140,25 @@ async def test_create_ban_still_fails_on_a_real_id_collision(
     )
 
 
-async def test_deactivate_extra_active_bans_keeps_one_record(
+async def test_the_second_active_ban_is_refused_by_the_database(
     ban_db: str,
 ) -> None:
-    """The cleanup helper revokes the duplicates and keeps the canonical one."""
+    """A second active ban for the same target never reaches the table.
+
+    The partial unique index is the guard, so the duplicate-ban cleanup
+    the application used to run is not needed: the second insert is
+    refused instead of being written and revoked afterwards.
+    """
     await _insert_ban(42, "oldban0001")
-    await _insert_ban(42, "newban0001")
 
-    count = await bans_db.deactivate_extra_active_bans(42, "newban0001")
+    with pytest.raises(IntegrityError) as excinfo:
+        await _insert_ban(42, "newban0001")
 
-    assert count == 1
-    active = await bans_db.get_active_ban(42)
-    assert active is not None
-    assert active.get("ban_id") == "newban0001"
-    assert await bans_db.user_ban_count(42) == 2
-
-
-async def test_deactivate_extra_active_bans_touches_only_that_user(
-    ban_db: str,
-) -> None:
-    """A user without duplicates keeps its single active ban."""
-    await _insert_ban(42, "oldban0001")
-    await _insert_ban(42, "newban0001")
-    await _insert_ban(43, "onlyban001")
-
-    count = await bans_db.deactivate_extra_active_bans(42, "newban0001")
-
-    assert count == 1
-    other = await bans_db.get_active_ban(43)
-    assert other is not None
-    assert other.get("ban_id") == "onlyban001"
+    assert (
+        engine_module.constraint_name(excinfo.value)
+        == "uq_moderation_actions_active_ban"
+    )
+    assert await bans_db.user_ban_count(42) == 1
 
 
 async def test_the_canonical_record_is_the_active_one(ban_db: str) -> None:

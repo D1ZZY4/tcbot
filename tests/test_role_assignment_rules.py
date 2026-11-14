@@ -229,9 +229,8 @@ def _install_transfer(
             raise RuntimeError("write failed")
         seen["admins"].append(user_id)
 
-    async def _remove_role(user_id: int, role: str) -> bool:
-        _ = role
-        seen["roles"].append((user_id, role))
+    async def _remove_role(user_id: int) -> bool:
+        seen["roles"].append(user_id)
         return True
 
     async def _ban(user_id: int) -> Any:

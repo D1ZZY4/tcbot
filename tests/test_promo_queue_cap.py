@@ -13,11 +13,10 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from tcbot import database as db
-from tcbot.database import engine as engine_module
 from tcbot.database import queues_db
-from tcbot.database.base import promotion_requests
 from tcbot.modules import admins
 from tcbot.utils.i18n import t
+from tests.postgres_support import reset_community, seed_users
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -26,9 +25,10 @@ if TYPE_CHECKING:
 @pytest.fixture
 async def promo_db(postgres_db: str) -> AsyncIterator[str]:
     """Start from an empty promotion-queue table."""
-    await engine_module.run(promotion_requests.delete())
+    await reset_community()
+    await seed_users(1, 2, 3, 9)
     yield postgres_db
-    await engine_module.run(promotion_requests.delete())
+    await reset_community()
 
 
 async def test_pending_count_counts_only_the_pending_rows(promo_db: str) -> None:

@@ -34,19 +34,22 @@ async def assign_admin(
     admin_fname: str,
     target_id: int,
     target_fname: str,
-    current_role: str | None,
     locale: str | None = None,
 ) -> tuple[bool, str]:
-    """Founder-only path: directly add the target to tc_admins and log it."""
+    """Founder-only path: directly give the target the admin role and log it."""
     try:
         await db.users_roles.add_admin(target_id, admin_id)
     except Exception:
         log.exception("_assign_admin: add_admin failed for target=%d", target_id)
         return False, t("admins.promote.save_fail", locale)
-    cleanup: list = [db.users_cache.upsert_user(target_id, None, target_fname)]
-    if current_role in ("developer", "tester"):
-        cleanup.append(db.users_roles.remove_role(target_id))
-    cleanup_results = await asyncio.gather(*cleanup, return_exceptions=True)
+    # * The assignment revokes the role the target held before it, in the
+    # * same transaction, so no second cleanup write is needed. One that
+    # * revoked the roles again afterwards would also revoke the admin
+    # * role it had just written.
+    cleanup_results = await asyncio.gather(
+        db.users_cache.upsert_user(target_id, None, target_fname),
+        return_exceptions=True,
+    )
     throw_if_cancelled(cleanup_results)
     for _r in cleanup_results:
         if isinstance(_r, BaseException):
@@ -321,7 +324,6 @@ class Promote:
                     admin_fname,
                     target_id,
                     target_fname,
-                    current_role,
                     locale,
                 )
             if executor_role == "admin":

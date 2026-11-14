@@ -63,8 +63,8 @@ def test_self_review_is_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
         "is_active": True,
         "review_message_id": 1,
         "review_timestamp": datetime.now(UTC),
-        "admin_user_id": 7,
-        "banned_user_id": 7,
+        "actor_user_id": 7,
+        "target_user_id": 7,
         "rejected_at": None,
     }
 
@@ -131,8 +131,8 @@ def _run_approve(query: _FakeQuery, approver_role: str = "founder") -> None:
         "is_active": True,
         "review_message_id": 1,
         "review_timestamp": datetime.now(UTC),
-        "admin_user_id": 1,
-        "banned_user_id": 9,
+        "actor_user_id": 1,
+        "target_user_id": 9,
         "rejected_at": None,
         "appeal_link": "",
         "appeal_submitted_at": None,

@@ -118,35 +118,6 @@ def test_the_reacted_constraint_names_exist_in_the_schema() -> None:
     assert bans_db.CONSTRAINT_EXTERNAL_REF in constraint_names
 
 
-def test_deactivate_extra_active_bans_keeps_the_canonical_record(
-    recorder: _Recorder,
-) -> None:
-    """Every other active ban of the user is revoked."""
-    recorder.affected = 2
-
-    count = asyncio.run(bans_db.deactivate_extra_active_bans(42, "keep"))
-
-    assert count == 2
-    sql = literal_sql(recorder.statements[0])
-    assert sql.startswith("UPDATE moderation_actions SET status='revoked'")
-    assert "moderation_actions.target_user_id = 42" in sql
-    assert "moderation_actions.action_type = 'ban'" in sql
-    assert "moderation_actions.status = 'active'" in sql
-    assert "moderation_actions.external_ref != 'keep'" in sql
-
-
-def test_deactivate_extra_active_bans_is_a_noop_without_duplicates(
-    recorder: _Recorder,
-) -> None:
-    """A user with one active ban has nothing to revoke."""
-    recorder.affected = 0
-
-    count = asyncio.run(bans_db.deactivate_extra_active_bans(42, "keep"))
-
-    assert count == 0
-    assert len(recorder.statements) == 1
-
-
 def test_deactivate_all_active_bans_clears_every_active_record(
     recorder: _Recorder,
 ) -> None:

@@ -52,8 +52,8 @@ async def build_ban_detail(
     """Return (formatted text, proof_link or None) for a ban document."""
     # * BanDoc is total=False: every key access below uses .get() with a
     # * display-safe fallback so a sparse record renders instead of raising.
-    uid = ban.get("banned_user_id", 0)
-    aid = ban.get("admin_user_id", 0)
+    uid = ban.get("target_user_id", 0)
+    aid = ban.get("actor_user_id", 0)
 
     if target_fname is None:
         # Fetch mention data for both users in parallel
@@ -114,7 +114,7 @@ async def build_ban_summary(
     the usernames are read here, because a mention link is built from
     the numeric id and the names are only its label.
     """
-    aid = ban.get("admin_user_id", 0)
+    aid = ban.get("actor_user_id", 0)
 
     _user_r, _admin_r = await asyncio.gather(
         db.users_cache.get_user_mention_data(user_id),

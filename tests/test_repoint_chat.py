@@ -16,26 +16,15 @@ from typing import Any
 import pytest
 
 from tcbot.database import engine as engine_module
-from tcbot.database import groups_db, mutes_db
-from tcbot.database.base import chat_settings, connected_chats
+from tcbot.database import groups_db
+from tcbot.database.base import chat_settings, connected_chats, moderation_actions
 from tests.postgres_support import (
     identity_db_call,
     literal_sql,
     reset_community,
+    seed_action,
     seed_chats,
     seed_users,
-)
-
-# * The helper that repoints a single decision type, with the statement it
-# * is expected to send. A warning and a kick have no helper of their own:
-# * the group repoint moves every decision in one transaction.
-_REPOINT_CASES: tuple[tuple[Any, str], ...] = (
-    (
-        mutes_db,
-        "UPDATE moderation_actions SET origin_chat_id=20 "
-        "WHERE moderation_actions.action_type = 'mute' "
-        "AND moderation_actions.origin_chat_id = 10",
-    ),
 )
 
 
@@ -112,76 +101,6 @@ def _patch(monkeypatch: pytest.MonkeyPatch, module: Any, rec: _Recorder) -> None
     monkeypatch.setattr(module, "fetch_all", rec.fetch_all, raising=False)
     monkeypatch.setattr(module, "fetch_one", rec.fetch_one, raising=False)
     monkeypatch.setattr(module, "run_transaction", rec.run_transaction, raising=False)
-
-
-@pytest.mark.parametrize(("module", "expected"), _REPOINT_CASES)
-def test_the_repoint_moves_every_row_of_the_old_chat(
-    monkeypatch: pytest.MonkeyPatch, module: Any, expected: str
-) -> None:
-    """The update targets the old chat id and writes the new one."""
-    rec = _Recorder()
-    rec.affected = 3
-    _patch(monkeypatch, module, rec)
-
-    result = asyncio.run(module.migrate_records(10, 20))
-
-    assert result is True
-    assert literal_sql(rec.statements[0]) == expected
-
-
-@pytest.mark.parametrize(("module", "expected"), _REPOINT_CASES)
-def test_the_repoint_reports_no_match(
-    monkeypatch: pytest.MonkeyPatch, module: Any, expected: str
-) -> None:
-    """A chat without history is not a migration."""
-    rec = _Recorder()
-    rec.affected = 0
-    _patch(monkeypatch, module, rec)
-
-    result = asyncio.run(module.migrate_records(10, 20))
-
-    assert result is False
-    _ = expected
-
-
-@pytest.mark.parametrize(("module", "expected"), _REPOINT_CASES)
-def test_the_repoint_propagates_a_generic_failure(
-    monkeypatch: pytest.MonkeyPatch, module: Any, expected: str
-) -> None:
-    """A database failure must not look like a finished migration.
-
-    The caller collects the exception and logs it, so a failure stays
-    visible instead of being reported as "nothing to move".
-    """
-    rec = _Recorder()
-    rec.error = RuntimeError("db blip")
-    _patch(monkeypatch, module, rec)
-
-    async def _run_coro() -> None:
-        with pytest.raises(RuntimeError, match="db blip"):
-            await module.migrate_records(10, 20)
-
-    asyncio.run(_run_coro())
-    assert len(rec.statements) == 1
-    _ = expected
-
-
-@pytest.mark.parametrize(("module", "expected"), _REPOINT_CASES)
-def test_the_repoint_propagates_cancellation(
-    monkeypatch: pytest.MonkeyPatch, module: Any, expected: str
-) -> None:
-    """A cancelled migration never reports success."""
-    rec = _Recorder()
-    rec.error = asyncio.CancelledError()
-    _patch(monkeypatch, module, rec)
-
-    async def _run_coro() -> None:
-        with pytest.raises(asyncio.CancelledError):
-            await module.migrate_records(10, 20)
-
-    asyncio.run(_run_coro())
-    assert len(rec.statements) == 1
-    _ = expected
 
 
 # ───────────────────────────── Groups ────────────────────────────── #
@@ -293,6 +212,38 @@ async def test_the_group_repoint_merges_away_a_stale_row(
     )
     assert settings is not None
     assert settings["locale"] == "id-ID"
+    await reset_community()
+
+
+@pytest.mark.postgres
+async def test_the_group_repoint_moves_the_origin_chat_of_every_decision(
+    postgres_db: str,
+) -> None:
+    """The origin chat of a decision follows the group it came from.
+
+    A community-scoped decision (a mute) names the group it was issued
+    from in its origin chat. The repoint moves that reference together
+    with the group, so the decision history does not split across the
+    retired chat and the migration needs no second write.
+    """
+    await reset_community()
+    await seed_users(1, 2)
+    await seed_chats(10, 20)
+    await seed_action(
+        "mute",
+        2,
+        actor_user_id=1,
+        chat_id=None,
+        origin_chat_id=10,
+    )
+
+    await groups_db.migrate_group(10, 20)
+
+    row = await engine_module.fetch_one(
+        moderation_actions.select().where(moderation_actions.c.target_user_id == 2)
+    )
+    assert row is not None
+    assert row["origin_chat_id"] == 20
     await reset_community()
 
 

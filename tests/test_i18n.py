@@ -439,7 +439,10 @@ async def test_user_locale_roundtrip(locale_db: str) -> None:
     stored = await engine_module.fetch_one(
         user_settings.select().where(user_settings.c.user_id == 1)
     )
-    assert stored is None
+    # * Clearing a preference empties the value and keeps the row: the
+    # * other preferences of the user live in the same row.
+    assert stored is not None
+    assert stored["locale"] is None
 
 
 async def test_user_locales_isolated(locale_db: str) -> None:

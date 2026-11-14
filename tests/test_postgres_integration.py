@@ -50,9 +50,9 @@ async def test_a_ban_is_written_and_read_back(postgres: str) -> None:
 
     stored = await bans_db.get_ban(ban_id)
     assert stored is not None
-    assert stored.get("banned_user_id") == 42
+    assert stored.get("target_user_id") == 42
     assert stored.get("reason") == "spam"
-    assert stored.get("admin_user_id") == 7
+    assert stored.get("actor_user_id") == 7
     assert stored.get("proof_message_id") == 11
     assert stored.get("log_message_id") == 12
     assert stored.get("is_active") is True

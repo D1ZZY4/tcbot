@@ -145,10 +145,9 @@ def compose_row(
     return BanDoc(
         id=action_id,
         ban_id=cast("BanId", str(row["external_ref"])),
-        external_ref=str(row["external_ref"]),
-        banned_user_id=row["target_user_id"],
+        target_user_id=row["target_user_id"],
         reason=str(row["reason"]),
-        admin_user_id=row["actor_user_id"],
+        actor_user_id=row["actor_user_id"],
         proof_message_id=proof_message_id or 0,
         log_message_id=messages.get("log", 0),
         previous_proof_message_id=metadata.get(META_PREVIOUS_PROOF),

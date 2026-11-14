@@ -370,13 +370,6 @@ async def add_admin(user_id: int, promoted_by: int) -> None:
     effective_role_cache.invalidate(user_id)
 
 
-async def remove_admin(user_id: int) -> bool:
-    """Revoke the admin role; return True if an assignment was revoked."""
-    revoked = await _revoke_role(user_id, _ADMIN_ROLE)
-    effective_role_cache.invalidate(user_id)
-    return revoked
-
-
 async def all_admins() -> list[AdminDoc]:
     """Return all admin documents."""
     rows = await db_call(

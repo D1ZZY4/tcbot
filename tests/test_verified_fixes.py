@@ -129,8 +129,8 @@ def test_ban_detail_escapes_moderator_reason() -> None:
         try:
             return await build_ban_detail(
                 {
-                    "banned_user_id": 11,
-                    "admin_user_id": 22,
+                    "target_user_id": 11,
+                    "actor_user_id": 22,
                     "reason": "spam_here *now* [x](y)",
                     "ban_id": "abc",
                 },  # type: ignore[typeddict-item]

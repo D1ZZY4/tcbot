@@ -234,7 +234,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if ban is None:
         return
     # * Crafted taps on another user's card must not render it.
-    if ban.get("banned_user_id", 0) != q.from_user.id:
+    if ban.get("target_user_id", 0) != q.from_user.id:
         log.debug("checkme_detail ownership mismatch ban=%s", ban_id)
         return
     if not ban or not ban.get("is_active"):
@@ -276,7 +276,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     ban = await _load_ban_for_callback(q, ban_id, locale, log_label="checkme_back")
     if ban is None:
         return
-    if ban.get("banned_user_id", 0) != q.from_user.id:
+    if ban.get("target_user_id", 0) != q.from_user.id:
         log.debug("checkme_back ownership mismatch ban=%s", ban_id)
         return
     if not ban:
@@ -288,8 +288,8 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         )
         return
 
-    uid = ban.get("banned_user_id", 0)
-    aid = ban.get("admin_user_id", 0)
+    uid = ban.get("target_user_id", 0)
+    aid = ban.get("actor_user_id", 0)
     admin_fallback = t("checking.profile.admin_fallback", locale, plain=True)
     fname, admin_fname = await asyncio.gather(
         db.users_cache.get_first_name(uid, str(uid)),

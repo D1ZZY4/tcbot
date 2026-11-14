@@ -424,7 +424,7 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
     """Cache every member of *chat_id* the session can see; return harvested count.
 
     One-shot backfill for silent members no Bot API call ever observed: each
-    seen identity lands in member_cache, so later bans and checks resolve by
+    seen identity lands in the identity table, so later bans and checks resolve by
     name. Stops early on FloodWait or when the timeslice budget runs out
     (returns the count so far); peer hashes persist in shared storage as a
     side effect for future direct resolves.

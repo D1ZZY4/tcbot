@@ -22,15 +22,22 @@ from tcbot.database.base import (
     SCHEMA_TABLES,
     connected_chats,
     metadata,
+    moderation_actions,
+    moderation_appeals,
+    moderation_cases,
+    promotion_requests,
     telegram_chats,
     telegram_users,
 )
 from tcbot.database.schema import apply_schema, seed_statements
 from tcbot.database.schema import drop_schema as drop_schema_objects
 from tcbot.utils.circuit_breaker import postgres as postgres_circuit
+from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
+    from datetime import datetime
+    from typing import Any
 
     from sqlalchemy.sql import ClauseElement
 
@@ -401,6 +408,186 @@ async def seed_chats(*chat_ids: int, connected: bool = True) -> None:
     await engine_module.run(
         connected_chats.insert().values([{"chat_id": cid} for cid in unique]),
     )
+
+
+# * The status a decision starts in. A ban and a mute are in force from
+# * the moment they are filed, a warning and a kick are one-shot
+# * decisions that are already complete. The schema refuses any other
+# * initial status.
+_INITIAL_STATUS: dict[str, str] = {
+    "ban": "active",
+    "mute": "active",
+    "warn": "completed",
+    "kick": "completed",
+}
+
+
+async def seed_case(
+    subject_user_id: int,
+    *,
+    opened_by_user_id: int | None = None,
+    title: str = "Test case",
+    summary: str | None = None,
+    requires_evidence: bool = False,
+    status: str = "open",
+) -> int:
+    """Insert one moderation case and return its id.
+
+    A case starts as an open investigation: the evidence policy, the
+    subject, and the creator are immutable afterwards, so a test that
+    needs a different policy has to open a different case.
+    """
+    rows = await engine_module.run_returning(
+        moderation_cases.insert()
+        .values(
+            subject_user_id=subject_user_id,
+            case_type="rule_violation",
+            title=title,
+            summary=summary,
+            severity="unknown",
+            status=status,
+            source="manual",
+            opened_by_user_id=opened_by_user_id,
+            requires_evidence=requires_evidence,
+        )
+        .returning(moderation_cases.c.id)
+    )
+    return int(rows[0]["id"])
+
+
+async def seed_action(
+    action_type: str,
+    target_user_id: int,
+    *,
+    actor_user_id: int = 7,
+    reason: str = "spam",
+    chat_id: int | None = None,
+    origin_chat_id: int | None = None,
+    external_ref: str | None = None,
+    case_id: int | None = None,
+    action_origin: str = "automated",
+    status: str | None = None,
+    evidence_upload_id: int | None = None,
+    expires_at: datetime | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> int:
+    """Insert one moderation decision and return its id.
+
+    The decision is born in its initial status, because the schema
+    refuses a decision that starts revoked or expired. A terminal status
+    is applied afterwards, in a second statement, so the row travels the
+    same transition the application uses.
+    """
+    if action_type not in _INITIAL_STATUS:
+        raise ValueError(f"Unknown moderation action type: {action_type!r}")
+    if external_ref is None:
+        external_ref = f"{action_type}{target_user_id:08d}"
+    scope_type = "community" if action_type in ("ban", "mute") else "chat"
+    if scope_type == "chat" and chat_id is None:
+        raise ValueError("A chat-scoped decision needs the chat it belongs to")
+    if case_id is None:
+        case_id = await seed_case(target_user_id, opened_by_user_id=actor_user_id)
+    rows = await engine_module.run_returning(
+        moderation_actions.insert()
+        .values(
+            action_type=action_type,
+            scope_type=scope_type,
+            chat_id=chat_id,
+            origin_chat_id=chat_id if origin_chat_id is None else origin_chat_id,
+            target_user_id=target_user_id,
+            actor_user_id=actor_user_id,
+            reason=reason,
+            created_at=utc_now(),
+            expires_at=expires_at,
+            status=_INITIAL_STATUS[action_type],
+            external_ref=external_ref,
+            metadata=metadata or {},
+            case_id=case_id,
+            evidence_upload_id=evidence_upload_id,
+            action_origin=action_origin,
+        )
+        .returning(moderation_actions.c.id)
+    )
+    action_id = int(rows[0]["id"])
+    if status is not None and status != _INITIAL_STATUS[action_type]:
+        await engine_module.run(
+            moderation_actions.update()
+            .where(moderation_actions.c.id == action_id)
+            .values(status=status, revoked_at=utc_now())
+        )
+    return action_id
+
+
+async def seed_promotion_request(
+    request_id: str,
+    target_user_id: int,
+    *,
+    requested_by_user_id: int = 1,
+    requested_role_key: str = "admin",
+    status: str = "pending",
+    username: str | None = None,
+    first_name: str = "Target",
+) -> None:
+    """Insert one promotion request straight into the queue table.
+
+    A request is born pending and reaches its terminal status through a
+    second statement, because the schema refuses a request that is born
+    resolved.
+    """
+    await engine_module.run(
+        promotion_requests.insert().values(
+            request_id=request_id,
+            target_user_id=target_user_id,
+            requested_role_key=requested_role_key,
+            requested_by_user_id=requested_by_user_id,
+            status="pending",
+            requested_at=utc_now(),
+            metadata={"username": username, "first_name": first_name},
+        )
+    )
+    if status != "pending":
+        await engine_module.run(
+            promotion_requests.update()
+            .where(promotion_requests.c.request_id == request_id)
+            .values(status=status, resolved_at=utc_now())
+        )
+
+
+async def seed_appeal(
+    action_id: int,
+    appellant_user_id: int,
+    *,
+    appeal_text: str = "please reconsider",
+    status: str = "pending",
+    reviewed_by_user_id: int | None = None,
+    decision_note: str | None = None,
+) -> None:
+    """Insert one appeal against a decision.
+
+    An appeal is born pending and reaches its terminal status through a
+    second statement, because the schema refuses an appeal that is born
+    decided.
+    """
+    await engine_module.run(
+        moderation_appeals.insert().values(
+            action_id=action_id,
+            appellant_user_id=appellant_user_id,
+            appeal_text=appeal_text,
+            status="pending",
+            submitted_at=utc_now(),
+        )
+    )
+    if status != "pending":
+        await engine_module.run(
+            moderation_appeals.update()
+            .where(moderation_appeals.c.action_id == action_id)
+            .values(
+                status=status,
+                resolved_at=utc_now(),
+                reviewed_by_user_id=reviewed_by_user_id,
+                decision_note=decision_note,
+            )
+        )
 
 
 async def identity_db_call(op: Callable[[], Awaitable[Any]], **_kwargs: Any) -> Any:

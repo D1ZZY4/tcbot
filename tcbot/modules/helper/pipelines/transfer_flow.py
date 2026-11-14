@@ -139,9 +139,9 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     target_uname = ident.username
 
     # * Rank-check the target so the new owner keeps no residual
-    # * Developer/Tester role beside the Founder record. Clear via
-    # * Demote.remove_role (not the bare helper) so an Admin target leaves
-    # * tc_admins rather than a stale row the next demote would resurrect.
+    # * Developer/Tester role beside the Founder record. Clear it via
+    # * Demote.remove_role (not the bare helper) so the revocation also
+    # * clears the cache and posts the audit trail.
     role_check = await resolve_and_check(
         msg, current_owner.id, target_id, min_role="developer"
     )
@@ -150,7 +150,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     _executor_role, target_role = role_check
     if target_role and target_role != "founder":
         try:
-            await Demote.remove_role(target_id, target_role)
+            await Demote.remove_role(target_id)
             log.info(
                 "cmd_transfer cleared pre-existing role %s from new owner %d",
                 target_role,

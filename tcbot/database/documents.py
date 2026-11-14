@@ -34,15 +34,16 @@ class BanDoc(TypedDict, total=False):
 
     The decision lives in ``moderation_actions`` and the Telegram
     messages beside it in ``moderation_messages``. The helper joins
-    them, so the reader sees one document.
+    them, so the reader sees one document. The target and the actor carry
+    the names the decision table gives them, so one vocabulary names
+    them across every moderation document.
     """
 
     id: int
     ban_id: BanId
-    external_ref: str
-    banned_user_id: UserId
+    target_user_id: UserId
     reason: str
-    admin_user_id: UserId
+    actor_user_id: UserId
     proof_message_id: int
     log_message_id: int
     previous_proof_message_id: int | None
@@ -144,10 +145,10 @@ class UserSettingsDoc(TypedDict, total=False):
 class KickDoc(TypedDict, total=False):
     """Row shape of a single kick decision (append-only audit record)."""
 
-    user_id: UserId
+    target_user_id: UserId
     chat_id: ChatId
     reason: str
-    admin_id: UserId
+    actor_user_id: UserId
     timestamp: datetime
 
 
@@ -158,10 +159,10 @@ class MuteDoc(TypedDict, total=False):
     timed mutes, reflecting how long the restriction was intended to last.
     """
 
-    user_id: UserId
+    target_user_id: UserId
     chat_id: ChatId | None
     reason: str
-    admin_id: UserId
+    actor_user_id: UserId
     timestamp: datetime
     duration_secs: int | None
 
@@ -182,9 +183,9 @@ class ActiveMuteDoc(TypedDict, total=False):
 class WarnDoc(TypedDict, total=False):
     """Row shape of a single warning issued to a user."""
 
-    user_id: UserId
+    target_user_id: UserId
     reason: str
-    admin_id: UserId
+    actor_user_id: UserId
     chat_id: ChatId
     timestamp: datetime
 

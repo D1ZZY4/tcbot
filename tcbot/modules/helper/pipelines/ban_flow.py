@@ -259,7 +259,7 @@ async def _execute_ban_record(
     )
     bot_username = bot.username or ""
     old_admin_id = (
-        int(existing.get("admin_user_id", admin_id)) if existing else admin_id
+        int(existing.get("actor_user_id", admin_id)) if existing else admin_id
     )
     old_admin_fname = admin_fname
     if existing is not None:
@@ -420,16 +420,6 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         ban_id = (
             str(existing.get("ban_id", "")) if is_update else db.bans_db.make_ban_id()
         )
-        if is_update:
-            extras = await db.bans_db.deactivate_extra_active_bans(
-                target_id, existing.get("ban_id", "")
-            )
-            if extras > 0:
-                log.warning(
-                    "Suppressed %d duplicate active ban(s) for user %d before update",
-                    extras,
-                    target_id,
-                )
         if is_update:
             prev_proof_msg_id = existing.get("proof_message_id")
             prev_proof_link = (

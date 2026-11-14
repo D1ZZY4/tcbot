@@ -282,25 +282,6 @@ async def execute_warn(
                     reply_markup=proof_kb,
                 )
                 return
-            # * Two moderators hitting the threshold at the same moment can
-            # * insert two active records; converge on the canonical one so
-            # * /check and the appeal deep link agree on the same ban.
-            try:
-                extras = await db.bans_db.deactivate_extra_active_bans(
-                    target_id, ban_id
-                )
-            except Exception:
-                log.exception(
-                    "Duplicate active ban cleanup failed for user %d", target_id
-                )
-            else:
-                if extras > 0:
-                    log.warning(
-                        "Suppressed %d duplicate active ban(s) for user %d after "
-                        "warn-threshold ban",
-                        extras,
-                        target_id,
-                    )
         try:
             log_msg = await send_log(
                 ctx.bot,

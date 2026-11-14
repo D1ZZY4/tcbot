@@ -65,7 +65,7 @@ __help__: replies.HelpEntry = get_help()
 # ────────────────── Command Leave All </leaveall> ───────────────── #
 
 # * Primary groups (main_group) are managed separately from the
-# * federated_groups collection. They are always-required destinations for
+# * connected-group registry. They are always-required destinations for
 # * primary-group enforcement (ban / unban / mute / warn fan-out) and for the
 # * federation log channel. They must not be torn down by leaveall / cleanup
 # * / disconnect / rmtc paths. Guarded by cfg.is_primary_group (single
@@ -185,8 +185,8 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 log_label="leaveall groups-failed",
             )
         return
-    # * Never tear down the primary groups. They are not in
-    # * ``federated_groups`` today, but the explicit guard is defence in
+    # * Never tear down the primary groups. They are not in the
+    # * connected-group registry today, but the explicit guard is defence in
     # * depth: if a future change ever adds them to the collection, or if
     # * ``cfg.main_group`` is misconfigured, this prevents a global leaveall
     # * from cutting the bot out of its required enforcement destinations.

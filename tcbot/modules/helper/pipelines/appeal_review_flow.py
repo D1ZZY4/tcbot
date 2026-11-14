@@ -562,7 +562,7 @@ class AppealReviewMixin(AppealVerdictsMixin):
             return
         review_ts = ban.get("review_timestamp")
         if review_ts and reviewer_locked_out(
-            review_ts, ban.get("admin_user_id") or 0, admin.id
+            review_ts, ban.get("actor_user_id") or 0, admin.id
         ):
             try:
                 await q.answer(
@@ -577,7 +577,7 @@ class AppealReviewMixin(AppealVerdictsMixin):
             except Exception as exc:
                 log.debug("Appeal review-locked answer failed: %s", exc)
             return
-        target_id = ban.get("banned_user_id", 0)
+        target_id = ban.get("target_user_id", 0)
         # ! CRITICAL: A banned user who gains staff must never judge their own appeal.
         if admin.id == target_id:
             try:

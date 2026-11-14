@@ -18,13 +18,19 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot import database as db
 from tcbot.database import engine as engine_module
-from tcbot.database.base import moderation_actions, moderation_appeals, moderation_cases
+from tcbot.database.base import moderation_actions
 from tcbot.modules.helper.pipelines import appeal_review_flow
-from tests.postgres_support import reset_community, seed_chats, seed_users
+from tests.postgres_support import (
+    reset_community,
+    seed_action,
+    seed_appeal,
+    seed_case,
+    seed_chats,
+    seed_users,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -86,8 +92,8 @@ def _ban(target_role: str = "admin") -> dict[str, Any]:
         "is_active": True,
         "review_message_id": 1,
         "review_timestamp": datetime.now(UTC),
-        "admin_user_id": 1,
-        "banned_user_id": 9,
+        "actor_user_id": 1,
+        "target_user_id": 9,
         "rejected_at": None,
         "appeal_link": "",
         "appeal_submitted_at": None,
@@ -214,64 +220,30 @@ async def _store_ban(
     review_message_id: int | None = None,
 ) -> None:
     """Store one decision with the review state under test."""
-    case = (
-        (
-            await sess.execute(
-                pg_insert(moderation_cases)
-                .values(
-                    subject_user_id=9,
-                    title="Appeal under review",
-                    status="open",
-                    source="manual",
-                    opened_by_user_id=1,
-                    requires_evidence=False,
-                )
-                .returning(moderation_cases.c.id)
-            )
-        )
-        .mappings()
-        .first()
-    )
-    assert case is not None
+    case_id = await seed_case(9, opened_by_user_id=1, title="Appeal under review")
     metadata: dict[str, Any] = {}
     if review_message_id is not None:
         metadata["review_message_id"] = review_message_id
-    action = (
-        (
-            await sess.execute(
-                pg_insert(moderation_actions)
-                .values(
-                    action_type="ban",
-                    scope_type="community",
-                    target_user_id=9,
-                    actor_user_id=1,
-                    reason="spam",
-                    status="active" if active else "revoked",
-                    external_ref=ban_id,
-                    case_id=case["id"],
-                    metadata=metadata,
-                    # * The automated origin needs no archived proof, so
-                    # * the test can file the decision without one.
-                    action_origin="automated",
-                )
-                .returning(moderation_actions.c.id)
-            )
-        )
-        .mappings()
-        .first()
+    action_id = await seed_action(
+        "ban",
+        9,
+        actor_user_id=1,
+        reason="spam",
+        external_ref=ban_id,
+        case_id=case_id,
+        metadata=metadata,
+        # * The automated origin needs no archived proof, so the test can
+        # * file the decision without one.
+        action_origin="automated",
+        status="active" if active else "revoked",
     )
-    assert action is not None
     if rejected:
-        await sess.execute(
-            pg_insert(moderation_appeals).values(
-                action_id=action["id"],
-                appellant_user_id=9,
-                appeal_text="please reconsider",
-                status="rejected",
-                resolved_at=datetime.now(UTC),
-                reviewed_by_user_id=1,
-                decision_note="Admin",
-            )
+        await seed_appeal(
+            action_id,
+            9,
+            status="rejected",
+            reviewed_by_user_id=1,
+            decision_note="Admin",
         )
 
 

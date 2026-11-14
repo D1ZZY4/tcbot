@@ -241,7 +241,7 @@ class OverviewViews:
         all_user_ids.extend(d.get("user_id", 0) for d in developers)
         all_user_ids.extend(t.get("user_id", 0) for t in testers)
         mention_data_map = await db.users_cache.get_mention_data_batch(all_user_ids)
-        # * Staff without a member_cache row render as raw numeric IDs.
+        # * Staff without an identity row render as raw numeric IDs.
         # * Resolve those names live (bounded, failures keep the ID) so a
         # * legacy staff row never displays as an ID in the roster.
         if bot is not None:
@@ -539,7 +539,7 @@ class BanViews:
             return t("stats.error.db_fail", locale), stats_back_kb(locale)
         if total == 0:
             return t("stats.bans_view.empty", locale), stats_back_kb(locale)
-        uids = [b.get("banned_user_id", 0) for b in chunk]
+        uids = [b.get("target_user_id", 0) for b in chunk]
         fname_map = await db.users_cache.get_first_names_batch(uids) if uids else {}
         lines = [
             t(
@@ -553,7 +553,7 @@ class BanViews:
         ]
         base_idx = page * _PAGE_SIZE
         for i, ban in enumerate(chunk, start=1):
-            uid = ban.get("banned_user_id", 0)
+            uid = ban.get("target_user_id", 0)
             fname = fname_map.get(uid, str(uid))
             lines.append(
                 t(
@@ -670,11 +670,11 @@ class SearchViews:
         if not results:
             text = t("stats.search.empty", locale, query=query)
             return text, cls._search_results_kb(0, locale)
-        uids = [b.get("banned_user_id", 0) for b in results]
+        uids = [b.get("target_user_id", 0) for b in results]
         fname_map = await db.users_cache.get_first_names_batch(uids)
         lines = [t("stats.search.header", locale, query=query, n=len(results)) + "\n"]
         for i, ban in enumerate(results, start=1):
-            uid = ban.get("banned_user_id", 0)
+            uid = ban.get("target_user_id", 0)
             fname = fname_map.get(uid, str(uid))
             lines.append(
                 t(

@@ -78,7 +78,7 @@ def test_review_post_failure_stays_retryable(
     async def _get_ban(ban_id: str) -> dict[str, Any]:
         # * The decision has to belong to the sender: the submit step
         # * checks that before it files the appeal.
-        return {"is_active": True, "banned_user_id": 42}
+        return {"is_active": True, "target_user_id": 42}
 
     async def _upsert(*args: Any, **kwargs: Any) -> None:
         return None
