@@ -507,28 +507,3 @@ def remember_identity(
         user_mention_cache.put(user_id, list(_NOT_FOUND_SENTINEL))
     else:
         user_mention_cache.put(user_id, [first_name, username, last_name])
-
-
-async def mark_erased(user_id: int, reason: str) -> None:
-    """Anonymize the profile of a deleted Telegram account.
-
-    The history keeps pointing at the account, so the audit trail stays
-    readable, but the personal data of the account is gone.
-    """
-    await db_call(
-        lambda: run(
-            telegram_users.update()
-            .where(telegram_users.c.user_id == user_id)
-            .values(
-                username=None,
-                first_name=None,
-                last_name=None,
-                language_code=None,
-                is_premium=False,
-                erased_at=utc_now(),
-                erasure_reason=reason,
-                updated_at=utc_now(),
-            )
-        )
-    )
-    user_mention_cache.invalidate(user_id)

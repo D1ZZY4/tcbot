@@ -320,10 +320,6 @@ it never identifies anybody.
   Mirrors a resolved identity into L1 only, no database I/O. Used after a
   Telegram-side resolve because `upsert_user` invalidates rather than
   populates. An empty identity stores the all-`None` not-found sentinel.
-- `mark_erased(user_id: int, reason: str) -> None`
-  Anonymises a deleted Telegram account: the profile fields are cleared
-  and `erased_at`/`erasure_reason` are written. The moderation history
-  keeps referring to the row, so the audit trail stays readable.
 
 ### Queries
 
@@ -568,7 +564,7 @@ not in their storage.
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | `int` | Surrogate primary key. |
-| `action_type` | `ActionType` | `ban`, `mute`, `warn`, or `kick`. |
+| `action_type` | `str` | `ban`, `mute`, `warn`, or `kick`. |
 | `scope_type` | `ScopeType` | `community` for a ban and a mute, `chat` for a warning and a kick. |
 | `target_user_id` | `UserId` | The subject of the decision. |
 | `actor_user_id` | `UserId` | Who took the decision. |
@@ -868,10 +864,6 @@ chat, `connected_chats` holds the connection to the community,
   Reads one open request.
 - `remove_pending(chat_id: int) -> None`
   Closes the join request of a chat after approval or rejection.
-- `resolve_pending(chat_id: int, status: str, resolved_by: int, note: str | None = None) -> bool`
-  Decides the join request of a chat. The update is conditional on the
-  request still being pending, so two admins pressing the button at the
-  same moment produce one decision.
 
 ### Group configuration
 
@@ -1118,17 +1110,9 @@ promotion flow reads the same vocabulary the table stores.
 
 ## Per-user settings (`settings_db.py`, table `user_settings`)
 
-### Row shape: `UserSettingsDoc`
-
-| Field | Type | Meaning |
-|---|---|---|
-| `user_id` | `UserId` | User ID (primary key, one preference row per user). |
-| `locale` | `str \| None` | Stored locale code (verbatim; validity enforced by the caller and at resolution time). |
-| `timezone` | `str \| None` | The personal timezone, as an IANA name. |
-| `preferences` | `dict` | The flexible personal preferences. |
-
-Preference-only rows are kept out of `telegram_users` on purpose, so they
-never inflate cached-user counts or appear in user listings.
+The table stores one preference row per user. Preference-only rows are kept
+out of `telegram_users` on purpose, so they never inflate cached-user counts
+or appear in user listings.
 
 ### Helpers
 
@@ -1138,13 +1122,8 @@ never inflate cached-user counts or appear in user listings.
   `cachetools` L1 `_LOCALE_L1` (maxsize 4096, ttl 300 s), not a
   Redis-backed `TwoLevelCache`.
 - `set_user_locale(user_id: int, locale: str | None) -> None`
-  Upserts the `{user_id, locale}` row, or deletes the row entirely when
-  `locale is None` so the table holds only users with an explicit
-  preference. Pops the L1 entry on write.
-- `get_user_settings(user_id: int) -> UserSettingsDoc | None`
-  The whole preference row.
-- `set_user_timezone(user_id: int, timezone: str | None) -> None`
-  Upserts the personal timezone.
+  Upserts the locale of the user and keeps the row when `locale` is `None`,
+  so the other preferences survive a reset. Pops the L1 entry on write.
 
 ## Caching (`cache/`, `redis_client.py`)
 
@@ -1413,28 +1392,19 @@ TypedDict from `documents.py` when reading or inserting records.
 | `moderation_actions` (warn) | `WarnDoc` |
 | `moderation_actions` (kick) | `KickDoc` |
 | `moderation_actions` (mute) | `MuteDoc` |
-| `moderation_actions` | `ModerationActionDoc` |
-| `moderation_cases` | `ModerationCaseDoc` |
-| `moderation_appeals` | `AppealDoc` |
-| `moderation_evidence_uploads` | `EvidenceUploadDoc` |
-| `moderation_enforcement_runs` | `EnforcementRunDoc` |
-| `moderation_enforcement_targets` | `EnforcementTargetDoc` |
-| `audit_events` | `AuditEventDoc` |
-| `community_settings` | `CommunityProfileDoc` |
+| `moderation_actions` (active mute) | `ActiveMuteDoc` |
 | `telegram_users` | `UserDoc` |
 | `connected_chats` | `GroupDoc` |
 | `join_requests` | `PendingGroupDoc` |
-| `chat_settings` | `ChatSettingsDoc` |
-| `user_settings` | `UserSettingsDoc` |
 | `role_assignments` | `AdminDoc` |
 | `role_assignments` (index reference) | `RoleRefDoc` |
 | `promotion_requests` | `PromotionRequestDoc` |
 
 Literal aliases: `RoleName = Literal["owner", "admin", "developer", "moderator"]`
 (the catalog vocabulary), `RequestStatus = Literal["pending", "approved",
-"rejected", "cancelled"]`, `ActionType = Literal["warn", "mute", "ban",
-"kick"]`, `ActionStatus = Literal["active", "completed", "revoked",
-"expired", "superseded"]`, `ScopeType = Literal["community", "chat"]`.
+"rejected", "cancelled"]`, `ActionStatus = Literal["active", "completed",
+"revoked", "expired", "superseded"]`, `ScopeType = Literal["community",
+"chat"]`.
 
 The tier vocabulary the handlers use is `users_roles.RoleName = Literal[
 "founder", "admin", "developer", "tester"]`.

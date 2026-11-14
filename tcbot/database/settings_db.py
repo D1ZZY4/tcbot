@@ -6,15 +6,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import cachetools as _cachetools
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import telegram_users, user_settings
-from tcbot.database.documents import UserSettingsDoc
-from tcbot.database.engine import db_call, fetch_one, run, run_transaction
+from tcbot.database.engine import db_call, fetch_one, run_transaction
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
@@ -87,29 +86,3 @@ async def set_user_locale(user_id: int, locale: str | None) -> None:
 
     await run_transaction(_work)
     _LOCALE_L1.pop(user_id, None)
-
-
-async def get_user_settings(user_id: int) -> UserSettingsDoc | None:
-    """Return the full preference row of a user, or None when unset."""
-    row = await db_call(
-        lambda: fetch_one(
-            select(
-                user_settings.c.user_id,
-                user_settings.c.locale,
-                user_settings.c.timezone,
-                user_settings.c.preferences,
-            ).where(user_settings.c.user_id == user_id)
-        )
-    )
-    return cast("UserSettingsDoc | None", row)
-
-
-async def set_user_timezone(user_id: int, timezone: str | None) -> None:
-    """Store the timezone of a user, or clear it when ``timezone`` is None."""
-    await db_call(
-        lambda: run(
-            user_settings.update()
-            .where(user_settings.c.user_id == user_id)
-            .values(timezone=timezone, updated_at=utc_now())
-        )
-    )

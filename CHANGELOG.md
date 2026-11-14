@@ -867,6 +867,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Removed
 
+- **The unreferenced settings, erasure, join-request, and document-shape helpers are gone** (`tcbot/database/settings_db.py`, `tcbot/database/users_cache.py`, `tcbot/database/groups_db.py`, `tcbot/database/documents.py`, `docs/architecture/database.md`): `get_user_settings`, `set_user_timezone`, `mark_erased`, and `resolve_pending` had no callers, and the route and write path they described had moved to other helpers or to the schema functions. Ten TypedDict shapes that no module imported are removed with them, and the document inventory lists the shapes that remain. Behavior changes: none.
+
 - **The throttle tier of the removed sweep is gone** (`tcbot/modules/helper/decorators/ratelimit.py`, `tcbot/modules/helper/decorators/__init__.py`, `tests/test_moderation_contracts.py`): the sweep tier had no handler left after the `/tcsync` command was removed, so it only described a budget nothing spent. Behavior changes: none.
 
 - **The unused schema-file helper is gone** (`tcbot/database/schema/loader.py`): `apply_sql_file` had no caller, and the schema package already applies the files through `schema_statements` and `execute_statements`. Behavior changes: none.

@@ -412,35 +412,6 @@ async def remove_pending(chat_id: int) -> None:
     )
 
 
-async def resolve_pending(
-    chat_id: int,
-    status: str,
-    resolved_by: int,
-    note: str | None = None,
-) -> bool:
-    """Decide the join request of a chat.
-
-    The update is conditional on the request still being pending, so two
-    admins pressing the button at the same moment produce one decision.
-    """
-    affected = await db_call(
-        lambda: run(
-            join_requests.update()
-            .where(
-                join_requests.c.chat_id == chat_id,
-                join_requests.c.status == "pending",
-            )
-            .values(
-                status=status,
-                resolved_at=utc_now(),
-                resolved_by_user_id=resolved_by,
-                decision_note=note,
-            )
-        )
-    )
-    return affected > 0
-
-
 # ─────────────────────────── Migration ─────────────────────────── #
 
 
