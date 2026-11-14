@@ -255,7 +255,33 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         return_exceptions=True,
     )
     if isinstance(results, BaseException):
-        results = []
+        # * An outage must not render as "no bans match this query": the
+        # * operator would read a failed search as a clean result.
+        log.error("Stats search failed for query %r: %s", query, results)
+        chat_id = ctx.user_data.get(CHAT_KEY)
+        msg_id = ctx.user_data.get(MSG_KEY)
+        if chat_id is not None and msg_id is not None:
+            await safe_edit_message(
+                ctx.bot,
+                chat_id,
+                msg_id,
+                t("stats.error.db_fail", locale),
+                log_level="debug",
+                log_label="Stats search error",
+                catch_all=True,
+            )
+        else:
+            # * The search message was deleted before the lookup, so a
+            # * reply has no source message; send the notice directly.
+            try:
+                await ctx.bot.send_message(
+                    msg.chat_id,
+                    t("stats.error.db_fail", locale),
+                    parse_mode="MarkdownV2",
+                )
+            except Exception as exc:
+                log.debug("Stats search error notice failed: %s", exc)
+        return
 
     ctx.user_data[RESULTS_KEY] = results
     ctx.user_data["stats_last_query"] = query
