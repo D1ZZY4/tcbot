@@ -20,7 +20,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import create_engine, text
 
+from tcbot import cfg
 from tcbot.database.base import chat_members
+from tcbot.database.connection_options import schema_options
 from tcbot.database.engine import db_call, run, run_transaction
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
@@ -334,7 +336,10 @@ def _build_job_store(database_url: str) -> SQLAlchemyJobStore:
         pool_pre_ping=True,
         connect_args={
             "connect_timeout": _JOBSTORE_CONNECT_TIMEOUT_S,
-            "options": "-c timezone=UTC",
+            # * The job table belongs to the same schema as the rest of the
+            # * application. Without the search path a deployment that names
+            # * a schema would create and read the table in ``public``.
+            "options": schema_options(cfg.db_schema),
         },
     )
     store = _PreparedJobStore(engine=engine, tablename=_JOBSTORE_TABLE)

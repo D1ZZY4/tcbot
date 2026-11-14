@@ -142,6 +142,7 @@ Current stack:
 │   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
 │   │   ├── scheduler.py      APScheduler background task + SQLAlchemyJobStore
 │   │   ├── engine.py         Async engine, session boundary, circuit-breaker guard
+│   │   ├── connection_options.py  libpq search_path and UTC options shared by every engine
 │   │   ├── base/             Table, column, constraint, and index definitions
 │   │   ├── migrations.py     Alembic wiring: applies the pending revisions at startup
 │   │   ├── documents.py      Typed document shapes

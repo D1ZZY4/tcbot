@@ -83,6 +83,7 @@ tcbot/
 │   │   ├── policies.sql       The row-level security policies
 │   │   └── seed.sql           The role, permission, retention, and job reference data
 │   ├── engine.py            Async engine, session boundary, circuit-breaker guard, query helpers
+│   ├── connection_options.py libpq search_path and UTC options shared by every engine
 │   ├── migrations.py        Alembic wiring: applies the pending revisions at startup
 │   ├── bans_db/             Federation ban decisions and their appeal lifecycle
 │   │   ├── _queries.py         Reads: active ban, ban by reference, per-user history

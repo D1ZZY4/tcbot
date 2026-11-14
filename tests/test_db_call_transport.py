@@ -181,12 +181,18 @@ def test_the_engine_is_recreated_after_close(
     def _noop_migrations(_url: str) -> None:
         return None
 
+    def _noop_ensure_schema(_url: str, _schema: str) -> None:
+        return None
+
     async def _noop_ping() -> None:
         return None
 
     monkeypatch.setattr(engine_module, "create_async_engine", _fake_create_async_engine)
     monkeypatch.setattr(
         engine_module.migrations, "upgrade_head", _noop_migrations, raising=True
+    )
+    monkeypatch.setattr(
+        engine_module.migrations, "ensure_schema", _noop_ensure_schema, raising=True
     )
     monkeypatch.setattr(engine_module, "_ping", _noop_ping)
     monkeypatch.setattr(engine_module, "_database_url", lambda: _TEST_URL)

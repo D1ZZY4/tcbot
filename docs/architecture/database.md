@@ -57,6 +57,7 @@ flowchart TD
 | `schema/` | The database objects SQLAlchemy cannot express: the views, the functions, the triggers, the access policies, and the reference data. One SQL file each, applied in the order the files are listed. |
 | `migrations.py` | Applies the pending Alembic revisions at startup. |
 | `engine.py` | The async engine, the session boundary, the circuit-breaker guard, and the query helpers. |
+| `connection_options.py` | The libpq `search_path` and UTC options shared by the async engine, the migrations, and the scheduler job store. |
 
 The schema is versioned with Alembic. `alembic/versions/0001_initial.py`
 creates the first layout, `0002_member_cache_sort_indexes.py` adds the
@@ -1275,7 +1276,9 @@ registered under the explicit alias `postgres` inside a single
 `AsyncIOScheduler`. The store owns a synchronous engine with a two-
 connection pool and short timeouts (2 s connect, 5 s pool timeout), because
 it reads and writes on the event loop: a database outage must stall the
-bot for seconds, not for the main engine's timeout.
+bot for seconds, not for the main engine's timeout. The store's connection
+carries the same `search_path` and UTC zone as the main engine, so the job
+table lands in `DB_SCHEMA` instead of the server default.
 
 The `apscheduler_jobs` table is the library's own schema, so the
 application migrations do not mirror it. It is created on the scheduler

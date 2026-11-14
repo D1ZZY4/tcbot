@@ -30,6 +30,18 @@ class _FakeAsyncEngine:
         self.disposed = True
 
 
+@pytest.fixture(autouse=True)
+def _restore_engine_state() -> Any:
+    """Restore the published engine so connect() cannot leak into later tests."""
+    previous_engine = engine_module._engine
+    previous_factory = engine_module._session_factory
+    try:
+        yield
+    finally:
+        engine_module._engine = previous_engine
+        engine_module._session_factory = previous_factory
+
+
 @pytest.fixture
 def captured_engine_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Return the kwargs connect() passes to create_async_engine()."""
@@ -43,12 +55,18 @@ def captured_engine_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     def _noop_migrations(_url: str) -> None:
         return None
 
+    def _noop_ensure_schema(_url: str, _schema: str) -> None:
+        return None
+
     async def _noop_ping() -> None:
         return None
 
     monkeypatch.setattr(engine_module, "create_async_engine", _fake_create_async_engine)
     monkeypatch.setattr(
         engine_module.migrations, "upgrade_head", _noop_migrations, raising=True
+    )
+    monkeypatch.setattr(
+        engine_module.migrations, "ensure_schema", _noop_ensure_schema, raising=True
     )
     monkeypatch.setattr(engine_module, "_ping", _noop_ping)
     monkeypatch.setattr(
@@ -74,6 +92,10 @@ def test_shared_kwargs_cover_server_timeouts(
     assert captured_engine_kwargs["pool_recycle"] == engine_module._POOL_RECYCLE_S
     connect_args = captured_engine_kwargs["connect_args"]
     assert connect_args["connect_timeout"] == engine_module._CONNECT_TIMEOUT_S
+    # * The session runs in the configured schema and in UTC, exactly like
+    # * the scheduler job store and the migration connection.
+    assert f"search_path={engine_module.cfg.db_schema}" in connect_args["options"]
+    assert "timezone=UTC" in connect_args["options"]
 
 
 def test_shared_kwargs_size_the_connection_pool(

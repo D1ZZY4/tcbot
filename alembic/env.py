@@ -24,6 +24,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from tcbot.database.base import metadata  # noqa: E402
+from tcbot.database.connection_options import TIMEZONE_OPTION  # noqa: E402
 from tcbot.database.migrations import (  # noqa: E402
     ensure_schema,
     set_database_url,
@@ -122,7 +123,7 @@ def _connection_options(url: str) -> str:
     env_options = os.environ.get("PGOPTIONS", "").strip()
     if env_options:
         parts.append(env_options)
-    parts.append("-c timezone=UTC")
+    parts.append(TIMEZONE_OPTION)
     return " ".join(parts)
 
 

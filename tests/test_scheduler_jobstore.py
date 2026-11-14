@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from typing import Any
 
 import pytest
@@ -186,3 +187,47 @@ def test_the_job_store_is_bound_to_its_scheduler() -> None:
 
     assert store._scheduler is sentinel
     assert store._alias == "postgres"
+
+
+def test_the_job_store_uses_the_application_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The job table must live in the configured schema, not in ``public``.
+
+    The store owns a synchronous engine of its own, so it does not inherit
+    the search path of the async engine. Without the explicit option a
+    developer working in ``development`` would create and read
+    ``apscheduler_jobs`` in the deployment schema.
+    """
+    captured: dict[str, Any] = {}
+
+    class _FakeJobsTable:
+        @staticmethod
+        def create(engine: object, *, checkfirst: bool) -> None:
+            captured["created_on"] = engine
+            captured["checkfirst"] = checkfirst
+
+    class _FakeStore:
+        def __init__(self, *, engine: object, tablename: str) -> None:
+            self.engine = engine
+            self.jobs_t = _FakeJobsTable()
+            captured["tablename"] = tablename
+
+    def _fake_create_engine(url: str, **kwargs: Any) -> object:
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(sched_mod, "create_engine", _fake_create_engine)
+    monkeypatch.setattr(sched_mod, "_PreparedJobStore", _FakeStore)
+    monkeypatch.setattr(
+        sched_mod, "cfg", dataclasses.replace(sched_mod.cfg, db_schema="development")
+    )
+
+    store = sched_mod._build_job_store(_TEST_URL)
+
+    assert store.engine is captured["created_on"]
+    assert captured["tablename"] == sched_mod._JOBSTORE_TABLE
+    options = captured["kwargs"]["connect_args"]["options"]
+    assert "search_path=development" in options
+    assert "timezone=UTC" in options

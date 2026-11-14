@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import (
 
 from tcbot import cfg
 from tcbot.database import migrations
+from tcbot.database.connection_options import schema_options
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.logger import get_logger
 
@@ -345,12 +346,7 @@ async def connect() -> None:
         pool_pre_ping=True,
         connect_args={
             "connect_timeout": _CONNECT_TIMEOUT_S,
-            # * The application works in UTC end to end; the session zone
-            # * decides how a timestamp without one is read back. The
-            # * schema is named explicitly because a pooler in
-            # * transaction mode does not carry the search path of the
-            # * client into the session it hands out.
-            "options": f"-c search_path={cfg.db_schema} -c timezone=UTC",
+            "options": schema_options(cfg.db_schema),
         },
     )
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
