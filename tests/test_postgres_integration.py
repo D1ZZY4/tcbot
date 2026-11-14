@@ -13,7 +13,7 @@ is configured, so the committed suite never depends on one.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -167,6 +167,25 @@ async def test_the_group_locale_round_trips(postgres: str) -> None:
 
     assert await groups_db.set_group_locale(-1001, None) is True
     assert await groups_db.get_group_locale(-1001) is None
+
+
+async def test_a_profile_write_refreshes_last_seen(postgres: str) -> None:
+    """Every profile write advances the last-sighting timestamp."""
+    await users_cache.upsert_user(7, "Alice_1", "Alice", "Smith")
+    old = datetime(2020, 1, 1, tzinfo=UTC)
+    await engine_module.run(
+        telegram_users.update()
+        .where(telegram_users.c.user_id == 7)
+        .values(last_seen_at=old)
+    )
+
+    await users_cache.upsert_user(7, None, "Alice")
+
+    stored = await users_cache.get_user(7)
+    assert stored is not None
+    seen = stored.get("last_seen_at")
+    assert isinstance(seen, datetime)
+    assert seen > old
 
 
 async def test_a_membership_harvest_records_the_group(postgres: str) -> None:

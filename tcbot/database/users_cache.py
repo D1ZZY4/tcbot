@@ -378,6 +378,7 @@ async def upsert_user(
     updates: dict[str, object] = {
         "first_name": first_name,
         "updated_at": now,
+        "last_seen_at": now,
     }
     if username is not None:
         values["username"] = username
