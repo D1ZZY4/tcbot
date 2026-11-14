@@ -110,6 +110,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **The promotion request document carries the schema vocabulary** (`tcbot/database/documents.py`, `tcbot/database/queues_db.py`, `tcbot/modules/admins.py`, `tcbot/modules/helper/pipelines/promo_decision_flow.py`, `tests/test_queues_enqueue.py`, `tests/test_promo_queue_cap.py`): `target_id`, `promoted_by`, `requested_date`, `resolved_date`, and `resolved_by` named columns the table calls `target_user_id`, `requested_by_user_id`, `requested_at`, `resolved_at`, and `resolved_by_user_id`. The document and its readers now use the stored names, like the moderation documents. Behavior changes: none; the stored requests are unchanged.
+
 - **The moderation documents name the target and the actor the way the schema does** (`tcbot/database/documents.py`, `tcbot/database/bans_db/_compose.py`, `tcbot/database/warns_db.py`, `tcbot/database/mutes_db.py`, `tcbot/database/kicks_db.py`): the ban, warning, mute, and kick documents carried three different vocabularies for the same two columns, so a reader had to know which document used which name. Every moderation document now uses `target_user_id` and `actor_user_id`, the names the decision table gives them. Behavior changes: none; the stored decisions are unchanged.
 
 - **The unused permission mutators are gone** (`tcbot/database/users_roles.py`): the helpers that granted and revoked a permission were never called, and a grant would have changed the authorization of every holder of a role without an audit entry and without invalidating the role cache. The read side of the catalog stays, and it is now covered by the contract test. Behavior changes: none.

@@ -131,15 +131,15 @@ def _compose(row: dict[str, Any]) -> PromotionRequestDoc:
         metadata = {}
     return PromotionRequestDoc(
         request_id=cast("str", row["request_id"]),
-        target_id=cast("UserId", int(row["target_user_id"])),
+        target_user_id=cast("UserId", int(row["target_user_id"])),
         username=cast("str | None", metadata.get("username")),
         first_name=cast("str", metadata.get("first_name") or ""),
         requested_role_key=cast("str", row["requested_role_key"]),
-        promoted_by=cast("UserId", int(row["requested_by_user_id"])),
+        requested_by_user_id=cast("UserId", int(row["requested_by_user_id"])),
         status=cast("RequestStatus", str(row["status"])),
-        requested_date=cast("datetime", row["requested_at"]),
-        resolved_date=cast("datetime | None", row.get("resolved_at")),
-        resolved_by=cast("UserId | None", row.get("resolved_by_user_id")),
+        requested_at=cast("datetime", row["requested_at"]),
+        resolved_at=cast("datetime | None", row.get("resolved_at")),
+        resolved_by_user_id=cast("UserId | None", row.get("resolved_by_user_id")),
         decision_note=cast("str | None", row.get("decision_note")),
     )
 

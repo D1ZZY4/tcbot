@@ -120,9 +120,9 @@ A change to either side has to be a change to both.
 | `permission_definitions` | The permission catalog: the capability keys and their resource. | `permission_key`, `resource` |
 | `role_permissions` | Which role holds which permission. | `role_key`, `permission_key` |
 | `role_assignments` | The staff assignments, with their status and their expiry. | `user_id`, `role_key`, `status`, `assigned_by_user_id`, `assigned_at`, `expires_at`, `revoked_at` |
-| `promotion_requests` | Stores pending/resolved staff promotion requests. | `request_id`, `target_id`, `username`, `first_name`, `requested_role_key`, `promoted_by`, `status`, `requested_date`, `resolved_date`, `resolved_by` |
+| `promotion_requests` | Stores pending/resolved staff promotion requests. | `request_id`, `target_user_id`, `username`, `first_name`, `requested_role_key`, `requested_by_user_id`, `status`, `requested_at`, `resolved_at`, `resolved_by_user_id`, `decision_note` |
 
-A demotion revokes the assignment row, it never deletes it, so the history of who held which role stays readable. Indexes are ensured for one active assignment per user, at most one active owner, and the role and status filters. `promotion_requests` carries a unique `request_id`, a compound `(target_id, status)`, a compound `(status, requested_date)` that serves the pending-list sort, and a partial unique index on `target_id` restricted to `status: "pending"` so each user has at most one open request (the dedup guard both `cmd_promote_request` and the Admin request path rely on).
+A demotion revokes the assignment row, it never deletes it, so the history of who held which role stays readable. Indexes are ensured for one active assignment per user, at most one active owner, and the role and status filters. `promotion_requests` carries a unique `request_id`, a status index and a target index that serve the pending-list filters, and a partial unique index on `target_user_id` restricted to `status = 'pending'` so each user has at most one open request (the dedup guard both `cmd_promote_request` and the Admin request path rely on).
 
 Role and owner/admin writes invalidate relevant cache entries so permission checks see updated state. Effective-role and owner reads are cached: the per-user effective role serves from an L1 cache with a 60 s TTL and the owner ID from one with a 300 s TTL, so repeated authorization checks (auth decorators, `is_staff`, rate-limit tiering, promotion-request guards) cost zero database round trips on a hit. `set_owner` clears the entire effective-role cache because the previous owner's key is unknown.
 
@@ -374,7 +374,7 @@ Role and promotion logs are built in `messages/` (`audit_logs.py`):
 - Founder cannot be assigned over or demoted through the normal role commands.
 - Admin cannot demote Admin; Founder is required.
 - Admin cannot directly promote a target to Admin; a request is created instead.
-- Pending promotion requests are not deleted after approval/rejection; they are marked with `status`, `resolved_date`, and `resolved_by`.
+- Pending promotion requests are not deleted after approval/rejection; they are marked with `status`, `resolved_at`, and `resolved_by_user_id`.
 - DM notification failures are tolerated in most role flows through `asyncio.gather(..., return_exceptions=True)` or explicit fallback logging.
 
 ## Behavior reference

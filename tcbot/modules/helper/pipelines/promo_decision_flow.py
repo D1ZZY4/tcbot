@@ -127,7 +127,7 @@ async def execute_promo_decision(
             parse_mode=None,
         )
         return
-    target_id = req.get("target_id", 0)
+    target_id = req.get("target_user_id", 0)
     target_fname = req.get("first_name", str(target_id))
 
     if action == "promo_approve":

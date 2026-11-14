@@ -43,7 +43,7 @@ async def test_pending_count_counts_only_the_pending_rows(promo_db: str) -> None
 def _rows(n: int = 200) -> list[dict[str, Any]]:
     return [
         {
-            "target_id": i,
+            "target_user_id": i,
             "first_name": f"U{i}",
             "username": None,
             "request_id": f"r{i}",

@@ -820,7 +820,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             )
         )
     for req in pending:
-        target_id = req.get("target_id", 0)
+        target_id = req.get("target_user_id", 0)
         target_fname = req.get("first_name", "unknown")
         uname_val = req.get("username")
         uname = (

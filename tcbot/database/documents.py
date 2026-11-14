@@ -25,7 +25,7 @@ class AdminDoc(TypedDict, total=False):
 
     user_id: UserId
     role_key: str
-    assigned_by: UserId
+    assigned_by_user_id: UserId
     assigned_at: datetime
 
 
@@ -329,16 +329,20 @@ class CommunityProfileDoc(TypedDict, total=False):
 
 
 class PromotionRequestDoc(TypedDict, total=False):
-    """Row shape of a pending or resolved staff promotion request."""
+    """Row shape of a pending or resolved staff promotion request.
+
+    The document carries the column names of ``promotion_requests`` so a
+    reader does not need a second vocabulary for the same fields.
+    """
 
     request_id: str
-    target_id: UserId
+    target_user_id: UserId
     username: str | None
     first_name: str
     requested_role_key: str
-    promoted_by: UserId
+    requested_by_user_id: UserId
     status: RequestStatus
-    requested_date: datetime
-    resolved_date: datetime | None
-    resolved_by: UserId | None
+    requested_at: datetime
+    resolved_at: datetime | None
+    resolved_by_user_id: UserId | None
     decision_note: str | None

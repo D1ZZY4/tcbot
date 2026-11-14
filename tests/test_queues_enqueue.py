@@ -67,7 +67,7 @@ async def test_collision_retries_once_then_succeeds(
     assert id_calls == ["first", "second"]
     stored = await queues_db.get_request_by_id("second")
     assert stored is not None
-    assert stored.get("target_id") == 7
+    assert stored.get("target_user_id") == 7
 
 
 async def test_pending_violation_short_circuits_without_retry(
