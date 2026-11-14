@@ -47,16 +47,6 @@ _REQUEST_COLUMNS = [
     promotion_requests.c.metadata,
 ]
 
-# * The promotion list renders only these fields, so the query projects
-# * them instead of shipping the whole row to the handler.
-_LIST_COLUMNS = [
-    promotion_requests.c.request_id,
-    promotion_requests.c.target_user_id,
-    promotion_requests.c.requested_role_key,
-    promotion_requests.c.requested_at,
-    promotion_requests.c.metadata,
-]
-
 # * Names of the two unique constraints that can reject an insert.
 _CONSTRAINT_REQUEST_ID: str = "uq_promotion_requests_request_id"
 _CONSTRAINT_PENDING: str = "uq_promotion_requests_pending_target"
@@ -243,7 +233,10 @@ async def all_pending() -> list[PromotionRequestDoc]:
     """
     rows = await db_call(
         lambda: fetch_all(
-            select(*_LIST_COLUMNS)
+            # * _compose reads the full document shape, so the list uses the
+            # * same projection as the single-row readers instead of a second
+            # * column list that can drift behind it.
+            select(*_REQUEST_COLUMNS)
             .where(promotion_requests.c.status == "pending")
             .order_by(promotion_requests.c.requested_at.asc())
             .limit(_PENDING_PAGE_SIZE)

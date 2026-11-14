@@ -500,6 +500,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The Redis drain leaves queued mutations running** (`tcbot/database/cache/redis_io.py`, `tests/test_cache_fifo_cancel.py`): the bounded shutdown drain waited through `wait_for(gather(...))`, which cancels the tasks it stops waiting for, so a slow Redis lost the very writes the drain promises to leave running. The drain now waits without cancelling. Behavior changes: a shutdown during a Redis stall keeps the queued mutations alive.
 
+- **The promotion list reads the columns its document needs** (`tcbot/database/queues_db.py`, `tests/test_promo_queue_cap.py`): the pending list projected a narrower column set than the shared document composer read, so `/tcpromotelist` raised `KeyError` on the first pending request. The list now uses the same projection as the single-row readers. Behavior changes: the pending list renders instead of failing.
+
 
 - **A failed migration releases its engine** (`alembic/env.py`): the migration engine was disposed only on the success path, so a revision that raised left its pool behind and every retried boot leaked another one. The engine is now disposed in a finally block. Behavior changes: none; a failed boot still fails loudly.
 

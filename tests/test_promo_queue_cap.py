@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -38,6 +39,41 @@ async def test_pending_count_counts_only_the_pending_rows(promo_db: str) -> None
     await queues_db.resolve(await queues_db.enqueue(3, None, "Three", 9), "rejected", 9)
 
     assert await queues_db.pending_count() == 2
+
+
+def test_all_pending_composes_the_full_request_document(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The list reader feeds the same document shape as the single readers."""
+    row = {
+        "request_id": "r1",
+        "target_user_id": 7,
+        "requested_role_key": "admin",
+        "requested_by_user_id": 1,
+        "status": "pending",
+        "requested_at": datetime.now(UTC),
+        "resolved_at": None,
+        "resolved_by_user_id": None,
+        "decision_note": None,
+        "metadata": {"username": None, "first_name": "Target"},
+    }
+
+    async def _fetch(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        return [row]
+
+    async def _db_call(op: Any) -> Any:
+        return await op()
+
+    monkeypatch.setattr(queues_db, "fetch_all", _fetch)
+    monkeypatch.setattr(queues_db, "db_call", _db_call)
+
+    docs = asyncio.run(queues_db.all_pending())
+
+    assert len(docs) == 1
+    assert docs[0].get("request_id") == "r1"
+    assert docs[0].get("target_user_id") == 7
+    assert docs[0].get("status") == "pending"
+    assert docs[0].get("requested_by_user_id") == 1
 
 
 def _rows(n: int = 200) -> list[dict[str, Any]]:
