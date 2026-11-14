@@ -408,13 +408,17 @@ async def is_bot_user(target_id: int) -> bool | None:
 
     Uses the same peer lookup as resolve_user but surfaces the bot flag
     instead of the name triple. Promotion and transfer guards use it to
-    refuse bot targets; client down, unknown peer, flood, and nameless
-    all map to None (unknown, never False-as-fact).
+    refuse bot targets; client down, unknown peer, flood, a non-user peer
+    (a group or channel id), and a nameless user all map to None (unknown,
+    never False-as-fact).
     """
     user = await _fetch_user(target_id)
-    if user is None:
+    if user is None or not getattr(user, "first_name", ""):
         return None
-    return bool(getattr(user, "is_bot", False))
+    is_bot = getattr(user, "is_bot", None)
+    if is_bot is None:
+        return None
+    return bool(is_bot)
 
 
 # ──────────────────────── Member harvest ────────────────────────── #

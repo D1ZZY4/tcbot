@@ -124,7 +124,7 @@ class _FakeClient:
     def __init__(self, *, connected: bool = True, error: Any = None) -> None:
         self.is_connected = connected
         self._error = error
-        self._user = _FakeMTUser()
+        self._user: Any = _FakeMTUser()
         self._resolved: Any = None
         self.start_called = False
         self.stopped = False
@@ -330,3 +330,32 @@ def test_resolve_username_none_when_disconnected(
     monkeypatch.setattr(mtproto, "_client", _FakeClient(connected=False))
 
     assert asyncio.run(mtproto.resolve_username("ghost")) is None
+
+
+def test_is_bot_user_maps_the_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _FakeClient()
+    fake._user = SimpleNamespace(first_name="Ghost", is_bot=True)
+    monkeypatch.setattr(mtproto, "_client", fake)
+
+    assert asyncio.run(mtproto.is_bot_user(42)) is True
+
+
+def test_is_bot_user_returns_none_for_a_group_peer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A chat peer has no ``is_bot`` flag; it must not read as a human."""
+    fake = _FakeClient()
+    fake._user = SimpleNamespace(id=-1001, title="Group")
+    monkeypatch.setattr(mtproto, "_client", fake)
+
+    assert asyncio.run(mtproto.is_bot_user(-1001)) is None
+
+
+def test_is_bot_user_returns_none_for_a_nameless_peer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeClient()
+    fake._user = SimpleNamespace(first_name="", is_bot=False)
+    monkeypatch.setattr(mtproto, "_client", fake)
+
+    assert asyncio.run(mtproto.is_bot_user(42)) is None
