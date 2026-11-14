@@ -110,9 +110,10 @@ async def start() -> bool:
     global _lease_owner, _heartbeat_task, _auth_dead, _client
     if _auth_dead:
         raise RuntimeError(
-            "MTProto session was invalidated (AUTH_KEY_DUPLICATED or "
-            "AUTH_KEY_NOT_FOUND); refusing to reconnect in-process. Stop "
-            "every instance, purge the session docs, and boot one."
+            "MTProto session was invalidated (AUTH_KEY_DUPLICATED, "
+            "AUTH_KEY_NOT_FOUND, or SESSION_REVOKED); refusing to reconnect "
+            "in-process. Stop every instance, purge the session docs, and "
+            "boot one."
         )
     c = client()
     if c.is_connected:
@@ -154,21 +155,23 @@ async def start() -> bool:
         _lease_owner = None
         raise
     except Exception as exc:
-        # * A rejected stored key (duplicate live instance, or a
-        # * server-invalidated key) must degrade, never abort boot: killing
-        # * the whole process over MTProto takes federation enforcement
-        # * offline for a lookup enhancement. Park it sticky (no in-process
-        # * re-login races) and serve Bot-API-only until a restart.
-        if is_auth_key_duplicated(exc) or is_auth_key_not_found(exc):
+        # * A rejected stored key (duplicate live instance, a
+        # * server-invalidated key, or a revoked session) must degrade,
+        # * never abort boot: killing the whole process over MTProto takes
+        # * federation enforcement offline for a lookup enhancement. Park it
+        # * sticky (no in-process re-login races) and serve Bot-API-only
+        # * until a restart.
+        if _is_auth_fatal(exc):
             _auth_dead = True
             await _release_lease_quietly(store, owner)
             _lease_owner = None
             log.exception(
-                "MTProto connect rejected (406 AUTH_KEY_DUPLICATED or "
-                "transport 404 AUTH_KEY_NOT_FOUND): the shared key is dead. "
-                "Serving Bot-API-only. Operator action: stop every bot "
-                "instance, delete the '%s:*' docs from mtproto_state, then "
-                "boot one.",
+                "MTProto connect rejected (406 AUTH_KEY_DUPLICATED, "
+                "transport 404 AUTH_KEY_NOT_FOUND, or 401 SESSION_REVOKED): "
+                "the stored session is dead. Serving Bot-API-only. Operator "
+                "action: stop every bot instance, delete the '%s:*' docs from "
+                "mtproto_state, then boot one; the bot-token login mints a "
+                "fresh session.",
                 cfg.mtproto_session,
             )
             return False
@@ -298,6 +301,45 @@ def is_auth_key_not_found(exc: BaseException) -> bool:
     return isinstance(exc, AuthKeyNotFound)
 
 
+def is_session_revoked(exc: BaseException) -> bool:
+    """Check whether Telegram revoked the stored session (401 SESSION_REVOKED).
+
+    A revoked session is not a transport failure: the auth key is still
+    present locally but Telegram no longer accepts it, because the session
+    was terminated from another client. It needs the same operator-driven
+    recovery as a dead auth key, never an in-process reconnect loop.
+    """
+    try:
+        from pyrogram.errors import (  # noqa: PLC0415 (heavy extra; import only on use)
+            SessionRevoked,
+        )
+    except ImportError:
+        return type(exc).__name__ == "SessionRevoked"
+    return isinstance(exc, SessionRevoked)
+
+
+def _is_auth_fatal(exc: BaseException) -> bool:
+    """Return True when *exc* means the stored session can never reconnect."""
+    return (
+        is_auth_key_duplicated(exc)
+        or is_auth_key_not_found(exc)
+        or is_session_revoked(exc)
+    )
+
+
+async def _park_on_auth_failure(exc: BaseException) -> None:
+    """Park MTProto when a lookup reports an invalidated session.
+
+    Runtime lookups swallow their errors and fall through to the next
+    resolver, which would keep a revoked session in place and log a debug
+    line per lookup. The first fatal error parks the client instead, so the
+    log carries one actionable line and every later lookup returns quickly.
+    """
+    if _auth_dead or not _is_auth_fatal(exc):
+        return
+    await handle_auth_failure()
+
+
 async def handle_auth_failure() -> None:
     """Park MTProto after Telegram invalidates the shared auth key.
 
@@ -313,11 +355,11 @@ async def handle_auth_failure() -> None:
         return
     _auth_dead = True
     log.error(
-        "MTProto auth key invalidated by Telegram (406 AUTH_KEY_DUPLICATED "
-        "or transport 404 AUTH_KEY_NOT_FOUND): the shared key is dead. "
-        "Parked MTProto; identity lookups degrade to Bot-API-only. Operator "
-        "action: stop every bot instance, delete the '%s:*' docs from "
-        "mtproto_state, then boot one.",
+        "MTProto session invalidated by Telegram (406 AUTH_KEY_DUPLICATED, "
+        "transport 404 AUTH_KEY_NOT_FOUND, or 401 SESSION_REVOKED): the "
+        "stored session is dead. Parked MTProto; identity lookups degrade to "
+        "Bot-API-only. Operator action: stop every bot instance, delete the "
+        "'%s:*' docs from mtproto_state, then boot one.",
         cfg.mtproto_session,
     )
     try:
@@ -348,6 +390,7 @@ async def _fetch_user(target_id: int) -> User | None:
     except Exception as exc:
         # * FloodWait carries the wait in .value; either way the answer is
         # * "not now": never sleep the moderation loop for it.
+        await _park_on_auth_failure(exc)
         wait = getattr(exc, "value", None)
         if wait is not None:
             log.warning("MTProto FloodWait for %d: retry in %ss.", target_id, wait)
@@ -395,6 +438,7 @@ async def resolve_username(username: str) -> tuple[int, str, str | None] | None:
     except asyncio.CancelledError:
         raise
     except Exception as exc:
+        await _park_on_auth_failure(exc)
         log.debug("MTProto username resolve failed for %s: %s", username, exc)
         return None
     for user in resolved.users:
@@ -530,6 +574,7 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
             except Exception as flush_exc:
                 log.debug("Member harvest partial flush failed: %s", flush_exc)
             return count
+        await _park_on_auth_failure(exc)
         raise
     finally:
         # * A cancelled scan leaves the coroutines that were collected since

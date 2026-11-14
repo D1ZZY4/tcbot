@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from pyrogram.errors import SessionRevoked
 
 from tcbot import database as db
 from tcbot.database import mtproto
@@ -98,6 +99,39 @@ def test_start_fatal_when_bot_session_fails(
 
     with pytest.raises(RuntimeError, match="bot session failed"):
         asyncio.run(mtproto.start())
+
+
+def test_start_degrades_on_a_revoked_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A revoked session must not boot-loop the whole bot.
+
+    Telegram invalidated the stored session, which needs operator action.
+    Killing the process over it would take moderation offline in a restart
+    loop, so the client parks and the bot serves Bot-API-only.
+    """
+    _with_creds(monkeypatch, 12345, "hash")
+    _stub_lease(monkeypatch)
+    monkeypatch.setattr(
+        mtproto, "_client", _FakeClient(connected=False, error=SessionRevoked())
+    )
+
+    assert asyncio.run(mtproto.start()) is False
+    assert mtproto.is_auth_dead() is True
+
+
+def test_resolve_parks_the_client_on_a_revoked_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lookup that reports a revoked session parks MTProto once."""
+    _with_creds(monkeypatch, 12345, "hash")
+    fake = _FakeClient(error=SessionRevoked())
+    monkeypatch.setattr(mtproto, "_client", fake)
+
+    assert asyncio.run(mtproto.resolve_user(42)) is None
+    assert mtproto.is_auth_dead() is True
+    assert fake.stopped is True
+    assert mtproto._client is None
 
 
 class _FakeMTUser:

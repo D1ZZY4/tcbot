@@ -287,6 +287,7 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
         if exc is not None and (
             mtproto_mod.is_auth_key_duplicated(exc)
             or mtproto_mod.is_auth_key_not_found(exc)
+            or mtproto_mod.is_session_revoked(exc)
         ):
             if mtproto_mod.is_auth_dead():
                 log.debug("[asyncio] dead MTProto auth key suppressed.")
