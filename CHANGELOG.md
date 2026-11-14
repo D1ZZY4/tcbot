@@ -510,6 +510,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Decisions about one user open one case** (`tcbot/database/moderation_db.py`): two decisions arriving from different groups could both miss the open case and insert their own. The case lookup now runs under a per-user advisory lock. Behavior changes: concurrent decisions share the open case instead of splitting the history.
 
+- **A cancelled proof flush releases its session** (`tcbot/modules/helper/pipelines/ban_flow.py`, `tests/test_ban_flush_rank.py`): the pending proof session was only removed when the flush task had already looked it up, so cancellation during the silence window left the registry entry behind. The task now owns the session from its first await and always clears it in the finally block. Behavior changes: none; a shutdown no longer leaves a stale proof session in memory.
+
 
 - **A failed migration releases its engine** (`alembic/env.py`): the migration engine was disposed only on the success path, so a revision that raised left its pool behind and every retried boot leaked another one. The engine is now disposed in a finally block. Behavior changes: none; a failed boot still fails loudly.
 

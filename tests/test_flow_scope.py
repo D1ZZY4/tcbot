@@ -187,11 +187,15 @@ def test_the_ban_proof_session_snapshots_its_own_conversation(
 
     update_a = _FakeUpdate(chat_id=100, user_id=42)
     update_a.effective_message = object()
-    outcome = asyncio.run(
-        ban_flow.on_proof_received(update_a, ctx)  # type: ignore[arg-type]
-    )
 
-    assert outcome == ban_flow.WAITING_PROOF
-    session = registry[(100, 42)]
-    assert session.meta["ban_target_id"] == 111
-    assert registry.get((200, 42)) is None
+    async def _scenario() -> int:
+        outcome = await ban_flow.on_proof_received(update_a, ctx)  # type: ignore[arg-type]
+        session = registry[(100, 42)]
+        assert session.meta["ban_target_id"] == 111
+        assert registry.get((200, 42)) is None
+        if session.flush_task is not None:
+            session.flush_task.cancel()
+            await asyncio.gather(session.flush_task, return_exceptions=True)
+        return outcome
+
+    assert asyncio.run(_scenario()) == ban_flow.WAITING_PROOF

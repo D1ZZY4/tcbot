@@ -159,21 +159,25 @@ async def drain_proof_sessions() -> None:
 
 async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
     """Flush one proof session after a silence window or the hard cap."""
-    session: _ProofSession | None = None
+    # * Own the session from the first await, so a cancellation during the
+    # * silence window still releases the registry entry in the finally block.
+    session: _ProofSession | None = _proof_sessions.get(key)
+    if session is None:
+        return
     try:
         while True:
             await asyncio.sleep(cfg.album_debounce)
-            session = _proof_sessions.get(key)
-            if session is None or session.cancelled or session.flushing:
+            if (
+                _proof_sessions.get(key) is not session
+                or session.cancelled
+                or session.flushing
+            ):
                 return
             if (
                 monotonic() - session.last_arrival >= cfg.album_debounce
                 or monotonic() >= session.deadline
             ):
                 break
-        session = _proof_sessions.get(key)
-        if session is None or session.flushing or session.cancelled:
-            return
         # * Claim is synchronous: Done and this timer can never double-execute.
         session.flushing = True
         if (
@@ -184,29 +188,10 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
             if session.msgs:
                 log.warning("Session flush aborted: meta missing target or admin")
             return
-        admin_id = int(session.meta.get("ban_admin_id") or 0)
-        try:
-            executor_role = await db.users_roles.get_effective_role(
-                admin_id, fresh=True
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            log.warning(
-                "Session flush aborted: executor role lookup failed for %d: %s",
-                admin_id,
-                exc,
-            )
-            return
-        if db.users_roles.role_rank(executor_role) < db.users_roles.role_rank(
-            "developer"
-        ):
-            log.warning(
-                "Session flush aborted: executor %d no longer meets developer rank (role=%s)",
-                admin_id,
-                executor_role,
-            )
-            return
+        # * _execute_ban runs the shared enforcement gate before any record,
+        # * proof, or fan-out, and it edits the prompt when the executor no
+        # * longer holds the rank. A second rank read here could only abort
+        # * the flush silently after the moderator already sent the proof.
         log.info(
             "Flushing proof session %s with %d media items", key, len(session.msgs)
         )

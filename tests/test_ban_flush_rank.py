@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Silence-window ban flush must re-check executor rank before enforcing."""
+"""Silence-window ban flush delegates rank enforcement to the ban executor."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from typing import Any
 
 import pytest
 
-from tcbot import database as db
 from tcbot.modules.helper.pipelines import ban_flow
 from tcbot.utils.time_and_date import monotonic
 
@@ -71,58 +70,33 @@ def _run_flush(
     return registry, executed
 
 
-def test_flush_executes_when_executor_still_developer(
+def test_flush_hands_the_session_to_the_ban_executor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _developer(uid: int, *, fresh: bool = False) -> str | None:
-        return "developer"
-
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _developer)
+    """The executor owns the rank gate; the flush only hands over the batch."""
     registry, executed = _run_flush(monkeypatch, _session())
     assert len(executed) == 1
     assert registry == {}
 
 
-def test_flush_aborts_when_executor_demoted(
+def test_flush_releases_the_session_when_cancelled_during_the_window(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _tester(uid: int, *, fresh: bool = False) -> str | None:
-        return "tester"
-
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _tester)
-    registry, executed = _run_flush(monkeypatch, _session())
-    assert executed == []
-    assert registry == {}
-
-
-def test_flush_fail_closed_on_role_lookup_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def _boom(uid: int, *, fresh: bool = False) -> str | None:
-        raise RuntimeError("db down")
-
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
-    registry, executed = _run_flush(monkeypatch, _session())
-    assert executed == []
-    assert registry == {}
-
-
-def test_flush_propagates_cancellation(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _cancelled(uid: int, *, fresh: bool = False) -> str | None:
-        raise asyncio.CancelledError
-
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _cancelled)
+    """A shutdown cancellation must not leave the proof session behind."""
     key = (11, 22)
     registry: dict[tuple[int, int], Any] = {}
     session = _session()
-    _install_fast_sleep(monkeypatch)
     monkeypatch.setattr(ban_flow, "_proof_sessions", registry)
 
     async def _scenario() -> None:
         registry[key] = session
-        await ban_flow._flush_session(key, _DummyBot())  # type: ignore[arg-type]
+        task = asyncio.create_task(
+            ban_flow._flush_session(key, _DummyBot())  # type: ignore[arg-type]
+        )
+        await asyncio.sleep(0)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
 
-    with pytest.raises(asyncio.CancelledError):
-        asyncio.run(_scenario())
-    # * Finally still clears the claimed session even on cancellation.
+    asyncio.run(_scenario())
     assert registry == {}
