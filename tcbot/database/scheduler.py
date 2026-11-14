@@ -24,7 +24,7 @@ from tcbot import cfg, enforcement_worker
 from tcbot.database.base import chat_members
 from tcbot.database.cache import effective_role_cache, user_mention_cache
 from tcbot.database.connection_options import schema_options
-from tcbot.database.engine import db_call, run, run_transaction
+from tcbot.database.engine import run_transaction
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
@@ -128,7 +128,18 @@ async def _expire_transaction(sess: AsyncSession) -> dict[str, Any]:
     the transition rules live in one place. The revoke runs are queued in
     the same transaction, so a decision can never be expired without the
     job that lifts the restriction on Telegram.
+
+    A transaction-level advisory lock serialises the sweep across every
+    live bot instance, so two schedulers cannot expire the same records
+    and queue duplicate revokes.
     """
+    locked = await sess.scalar(
+        text("SELECT pg_try_advisory_xact_lock(hashtextextended(:scope, 0))"),
+        {"scope": "tcbot:expiry"},
+    )
+    if not locked:
+        log.info("Expiry sweep skipped: another instance owns the lock.")
+        return {"skipped": True}
     decisions = await sess.execute(
         text("SELECT expire_due_moderation_actions_and_queue_revokes()")
     )
@@ -176,15 +187,8 @@ async def expire_stale_records() -> None:
             # * The two sweeps touch different tables, so they run
             # * concurrently and the run waits for both.
             members_res, erasures_res = await asyncio.gather(
-                db_call(
-                    lambda: run(
-                        chat_members.delete().where(
-                            chat_members.c.last_seen_at.isnot(None),
-                            chat_members.c.last_seen_at < profile_cutoff,
-                        )
-                    ),
-                    # * Bulk deletes over the whole table may run long;
-                    # * the run-level timeout bounds them instead.
+                run_transaction(
+                    lambda sess: _cleanup_members(sess, profile_cutoff),
                     timeout=None,
                 ),
                 # * The transaction carries its own timeout, so it has to
@@ -220,8 +224,31 @@ async def expire_stale_records() -> None:
     )
 
 
+async def _cleanup_members(sess: AsyncSession, cutoff: Any) -> int:
+    """Delete stale membership rows under a cross-instance lock."""
+    locked = await sess.scalar(
+        text("SELECT pg_try_advisory_xact_lock(hashtextextended(:scope, 0))"),
+        {"scope": "tcbot:cleanup:members"},
+    )
+    if not locked:
+        return 0
+    result = await sess.execute(
+        chat_members.delete().where(
+            chat_members.c.last_seen_at.isnot(None),
+            chat_members.c.last_seen_at < cutoff,
+        )
+    )
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
 async def _sweep_erasures(sess: AsyncSession) -> int:
-    """Process the erasure queue of the deleted Telegram accounts."""
+    """Process the erasure queue under a cross-instance lock."""
+    locked = await sess.scalar(
+        text("SELECT pg_try_advisory_xact_lock(hashtextextended(:scope, 0))"),
+        {"scope": "tcbot:cleanup:erasures"},
+    )
+    if not locked:
+        return 0
     pending = await sess.execute(
         text(
             "SELECT user_id FROM telegram_user_erasures "

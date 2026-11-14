@@ -494,6 +494,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **A profile write refreshes its last-sighting timestamp** (`tcbot/database/users_cache.py`, `tests/test_postgres_integration.py`): the insert supplied `last_seen_at` but the conflict update never wrote it, so the column and its index stayed at the first sighting. The conflict update now refreshes it. Behavior changes: any write that reaches the profile row advances the timestamp.
 
 - **The legacy import no longer uses MD5** (`alembic/versions/0003_community_schema.py`): the deterministic external references of imported mutes and legacy ids were derived with MD5, which CodeQL flags as a weak hash even though the value is an identifier, not a credential. They now use SHA-256. Behavior changes: a legacy database that has not run revision 0003 yet gets different 16-character references; deployments that already ran it are unchanged.
+- **Expiry and cleanup sweeps are single-owner across instances** (`tcbot/database/scheduler.py`): two bot instances could both run the daily expiry or cleanup and queue duplicate revokes. Each sweep now takes a transaction advisory lock, so the second instance skips the tick. Behavior changes: duplicate scheduled runs become no-ops.
+
 
 - **A failed migration releases its engine** (`alembic/env.py`): the migration engine was disposed only on the success path, so a revision that raised left its pool behind and every retried boot leaked another one. The engine is now disposed in a finally block. Behavior changes: none; a failed boot still fails loudly.
 
