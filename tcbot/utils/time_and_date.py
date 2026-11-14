@@ -59,7 +59,22 @@ _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
 _SECS_PER_HOUR: int = 3_600
 _SECS_PER_DAY: int = 86_400
 _DAYS_PER_YEAR: int = 365
+_DAYS_PER_MONTH: int = 30
 _MAX_DURATION_DAYS: int = 36500
+
+# * Seconds in one unit of each accepted suffix. A dict lookup keeps the
+# * conversion to the requested unit only: building every unit eagerly
+# * overflowed ``timedelta`` for the year form and rejected a second-based
+# * token that was still inside the documented cap.
+_DURATION_UNIT_SECONDS: dict[str, int] = {
+    "s": 1,
+    "m": 60,
+    "h": _SECS_PER_HOUR,
+    "d": _SECS_PER_DAY,
+    "w": 7 * _SECS_PER_DAY,
+    "mo": _DAYS_PER_MONTH * _SECS_PER_DAY,
+    "ye": _DAYS_PER_YEAR * _SECS_PER_DAY,
+}
 
 
 def parse_duration(raw: str) -> timedelta | None:
@@ -72,20 +87,14 @@ def parse_duration(raw: str) -> timedelta | None:
         # * timedelta(0) is falsy; a "0s" token must be invalid, never
         # * permanent (None would disable expiry on mute expiry paths).
         return None
-    unit = m.group(2).lower()
+    unit_seconds = _DURATION_UNIT_SECONDS.get(m.group(2).lower())
+    if unit_seconds is None:
+        return None
     try:
-        result = {
-            "s": timedelta(seconds=value),
-            "m": timedelta(minutes=value),
-            "h": timedelta(hours=value),
-            "d": timedelta(days=value),
-            "w": timedelta(weeks=value),
-            "mo": timedelta(days=value * 30),
-            "ye": timedelta(days=value * _DAYS_PER_YEAR),
-        }.get(unit)
+        result = timedelta(seconds=value * unit_seconds)
     except OverflowError:
         return None
-    if result is None or result.days > _MAX_DURATION_DAYS:
+    if result.days > _MAX_DURATION_DAYS:
         return None
     return result
 
