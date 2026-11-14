@@ -15,6 +15,7 @@ from tcbot.modules.helper.extraction.resolve import (
     extract_mod_target,
     extract_target,
     first_arg_is_explicit,
+    parse_user_id_token,
     reply_uid,
 )
 
@@ -24,6 +25,7 @@ __all__ = [
     "first_arg_is_explicit",
     "identity_needs_refresh",
     "launch_identity_refresh",
+    "parse_user_id_token",
     "reply_uid",
     "sync_user_identity",
 ]

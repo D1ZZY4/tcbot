@@ -194,7 +194,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None or admin is None:
         return
     args = parse_cmd_args(msg.text)
-    if not args or not args[0].lstrip("-").isdigit():
+    if not args:
         await safe_reply(
             msg,
             t("disconnecting.state.usage", locale, plain=True),
@@ -202,8 +202,16 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode=None,
         )
         return
-
-    chat_id = int(args[0])
+    try:
+        chat_id = int(args[0])
+    except ValueError:
+        await safe_reply(
+            msg,
+            t("disconnecting.state.usage", locale, plain=True),
+            log_label="cmd_rmtc usage",
+            parse_mode=None,
+        )
+        return
 
     # * Primary groups (main, exec) are required destinations for ban /
     # * unban / mute / warn fan-out and the federation log channel. They

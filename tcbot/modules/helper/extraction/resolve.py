@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import TYPE_CHECKING
 
 from telegram import Chat
@@ -25,6 +26,25 @@ log = get_logger(__name__)
 # * the user-facing reply. Per-call budget is the shared project-wide value.
 _GET_CHAT_TIMEOUT = TELEGRAM_LOOKUP_TIMEOUT
 
+# * A Telegram user ID is a positive decimal integer. Groups and channels
+# * carry negative IDs (or resolve through a chat lookup), so a token that
+# * does not name a positive integer is not a user target.
+_USER_ID_RE = re.compile(r"-?\d+")
+
+
+def parse_user_id_token(token: str) -> int | None:
+    """Return the positive user ID a token names, or ``None``.
+
+    Shape and range are checked together so a call site cannot accept a
+    malformed signed token and then raise inside ``int()``. A group or
+    channel ID is negative and is deliberately rejected: federation
+    decisions target users, never chats.
+    """
+    if not _USER_ID_RE.fullmatch(token):
+        return None
+    value = int(token)
+    return value if value > 0 else None
+
 
 async def _safe_get_chat(bot: Bot, ident: str | int) -> Chat | ChatFullInfo | None:
     """Call ``bot.get_chat`` with a bounded timeout; returns ``None`` on failure."""
@@ -41,7 +61,7 @@ async def _safe_get_chat(bot: Bot, ident: str | int) -> Chat | ChatFullInfo | No
 def first_arg_is_explicit(args: list[str]) -> bool:
     """Return True when ``args[0]`` is shaped like an explicit target.
 
-    Shape only (leading numeric ID or ``@username``), no I/O: whether the
+    Shape only (positive numeric ID or ``@username``), no I/O: whether the
     token actually names someone is decided by the resolver. Shared by
     :func:`extract_target` (override detection),
     :func:`extract_mod_target` (reason splitting), and the promotion entry
@@ -52,7 +72,9 @@ def first_arg_is_explicit(args: list[str]) -> bool:
     first = args[0]
     # * A bare "@" names nobody; treating it as explicit would only
     # * divert the reply path into a resolution that returns None.
-    return first.lstrip("-").isdigit() or (first.startswith("@") and len(first) > 1)
+    return parse_user_id_token(first) is not None or (
+        first.startswith("@") and len(first) > 1
+    )
 
 
 async def _best_name(uid: int, *primary: str | None) -> str:
@@ -96,6 +118,11 @@ async def extract_target(
        moderation paths resolve reply, numeric ID, and ``@username`` only.
     4. Text mention entity
     5. @Mention entity
+
+    Only Telegram users resolve. A group or channel ID, and an ``@username``
+    that resolves to a group or channel, is not a moderation target and
+    yields no hit. A Telegram user ID is positive; a negative token is a
+    chat ID and is rejected before any lookup.
 
     With ``prefer_explicit=True`` (read-only views such as /check, where
     showing the wrong person costs nothing), any resolving arg wins over
@@ -147,29 +174,24 @@ async def extract_target(
 
 
 def reply_uid(msg: Message) -> int | None:
-    """Return the user/channel ID quoted by ``msg``, or ``None``.
+    """Return the user ID quoted by ``msg``, or ``None``.
 
     Synchronous core of the reply-target decision, shared by
     :func:`_reply_target` and :func:`extract_mod_target` so both agree on
     who the quoted message names. Mirrors the skip rules exactly:
-    GroupAnonymousBot and the Telegram service account never count, and a
-    channel sender is not an actionable target.
+    GroupAnonymousBot and the Telegram service account never count, a
+    channel sender is not an actionable target, and neither is a group
+    sender (a group ID names no user).
     """
     target_msg = msg.reply_to_message
     if target_msg is None:
         return None
     from_user = target_msg.from_user
-    if from_user is not None:
-        if from_user.id not in (ANONYMOUS_BOT_ID, TELEGRAM_USER_ID):
-            return from_user.id
-        if from_user.id == ANONYMOUS_BOT_ID:
-            # * The sender_chat behind an anonymous admin is the group
-            # * itself; never hand it out as a target.
-            return None
-    sender = target_msg.sender_chat
-    if sender is not None and sender.type != Chat.CHANNEL:
-        return sender.id
-    return None
+    if from_user is None:
+        return None
+    if from_user.id in (ANONYMOUS_BOT_ID, TELEGRAM_USER_ID):
+        return None
+    return from_user.id
 
 
 async def _reply_target(msg: Message) -> tuple[int, str] | None:
@@ -185,12 +207,9 @@ async def _reply_target(msg: Message) -> tuple[int, str] | None:
     if target_msg is None:  # * Unreachable: reply_uid just saw one.
         return None
     from_user = target_msg.from_user
-    if from_user is not None and from_user.id == uid:
-        return uid, from_user.first_name or await _best_name(uid)
-    sender = target_msg.sender_chat
-    if sender is not None and sender.id == uid:
-        return uid, sender.title or await _best_name(uid)
-    return uid, await _best_name(uid)
+    if from_user is None:  # * Unreachable: reply_uid just read it.
+        return None
+    return uid, from_user.first_name or await _best_name(uid)
 
 
 async def _args_target(
@@ -208,14 +227,16 @@ async def _args_target(
     for a moderation target.
 
     With ``verified=True`` only real Telegram users count: numeric IDs and
-    ``@usernames`` that resolve to a chat with a ``first_name`` (so groups
-    and channels are rejected) and the partial-name search never runs.
+    ``@usernames`` that resolve to a private chat, and the partial-name
+    search never runs. The private-chat check applies in every mode, so a
+    group or channel never becomes a moderation target.
     """
     arg = args[0].lstrip("@")
 
-    # * Priority 2a: Numeric ID
-    if arg.lstrip("-").isdigit():
-        uid = int(arg)
+    # * Priority 2a: Numeric ID. Only a positive ID names a user: a
+    # * negative token is a chat ID and is rejected before any lookup.
+    uid = parse_user_id_token(arg)
+    if uid is not None:
         # * Fast path: IDs are immutable, so a cached identity is
         # * authoritative for resolution and the live get_chat round
         # * trip (a full _GET_CHAT_TIMEOUT on a blip) can be skipped.
@@ -236,18 +257,23 @@ async def _args_target(
         chat_username: str | None = None
         if bot:
             chat = await _safe_get_chat(bot, uid)
-            if chat is not None:
+            if chat is not None and getattr(chat, "type", None) == Chat.PRIVATE:
                 chat_first = chat.first_name
                 chat_username = chat.username
         if verified and not chat_first:
             return None
         return uid, await _best_name(uid, chat_first, chat_username)
 
+    if _USER_ID_RE.fullmatch(arg):
+        # * A numeric token outside the positive user-id range is a chat id,
+        # * not a username; there is nothing left to resolve.
+        return None
+
     # * Priority 2b: @username lookup
     if bot and arg:
         chat = await _safe_get_chat(bot, f"@{arg}")
         if chat is not None:
-            if verified and not getattr(chat, "first_name", None):
+            if getattr(chat, "type", None) != Chat.PRIVATE:
                 return None
             return chat.id, await _best_name(
                 chat.id, chat.first_name, chat.username, arg
@@ -257,7 +283,8 @@ async def _args_target(
         hit = await db.mtproto.resolve_username(arg)
         if hit is not None:
             uid, fname, _ = hit
-            return uid, await _best_name(uid, fname, arg)
+            if uid > 0:
+                return uid, await _best_name(uid, fname, arg)
 
     # * Priority 3: Partial name search in users_cache, read-only
     # * callers only (see _args_target docstring for why moderation
@@ -269,7 +296,7 @@ async def _args_target(
         if matches:
             user = matches[0]
             uid = user.get("user_id")
-            if uid:
+            if uid and int(uid) > 0:
                 return uid, user.get("first_name") or await _best_name(uid)
     return None
 
@@ -338,10 +365,13 @@ async def _entity_target(msg: Message, bot: Bot | None) -> tuple[int, str] | Non
                     continue
                 chat = await _safe_get_chat(bot, f"@{uname}")
                 if chat is not None:
+                    if getattr(chat, "type", None) != Chat.PRIVATE:
+                        continue
                     return chat.id, await _best_name(chat.id, chat.first_name, uname)
                 hit = await db.mtproto.resolve_username(uname)
                 if hit is not None:
                     uid, fname, _ = hit
-                    return uid, await _best_name(uid, fname, uname)
+                    if uid > 0:
+                        return uid, await _best_name(uid, fname, uname)
 
     return None

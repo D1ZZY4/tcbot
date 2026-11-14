@@ -322,3 +322,72 @@ def test_username_bot_hit_skips_mtproto(monkeypatch) -> None:  # type: ignore[no
         77,
         "Some",
     )
+
+
+def test_parse_user_id_token_rejects_chats_and_malformed_tokens() -> None:
+    """Only a positive decimal token names a Telegram user."""
+    assert ex.parse_user_id_token("42") == 42
+    assert ex.parse_user_id_token("-1001234567890") is None
+    assert ex.parse_user_id_token("--100") is None
+    assert ex.parse_user_id_token("4x2") is None
+    assert ex.parse_user_id_token("0") is None
+
+
+def test_a_negative_chat_id_is_not_a_moderation_target(monkeypatch) -> None:
+    """A group or channel ID can never be the target of a moderation action."""
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+
+    assert _run(
+        ex.extract_target(_update(_msg()), ["-1001234567890"], cast("Any", bot))
+    ) == (None, None)
+    assert bot.calls == []
+
+
+def test_a_malformed_signed_token_does_not_raise(monkeypatch) -> None:
+    """The old shape check let ``--100`` reach ``int()`` and raise."""
+    _stub_cache(monkeypatch)
+    assert _run(ex.extract_target(_update(_msg()), ["--100"], None)) == (None, None)
+
+
+def test_a_username_resolving_to_a_group_is_not_a_user(monkeypatch) -> None:
+    """A public group or channel username must not become a moderation target."""
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+    bot.chats["@somegroup"] = SimpleNamespace(
+        id=-1001234567890,
+        first_name=None,
+        username="somegroup",
+        type="supergroup",
+    )
+
+    assert _run(
+        ex.extract_target(_update(_msg()), ["@somegroup"], cast("Any", bot))
+    ) == (
+        None,
+        None,
+    )
+
+
+def test_a_group_sender_chat_is_not_a_reply_target(monkeypatch) -> None:
+    """A quoted group message names no user, so the reply path yields nobody."""
+    _stub_cache(monkeypatch)
+    reply = _msg()
+    reply.reply_to_message = SimpleNamespace(
+        from_user=None,
+        sender_chat=SimpleNamespace(id=-1001234567890, type="supergroup"),
+    )
+
+    assert _run(ex.extract_target(_update(reply), [], None)) == (None, None)
+
+
+def test_the_telegram_service_account_reply_is_not_a_target(monkeypatch) -> None:
+    """The service account falls through even when the message names a chat."""
+    _stub_cache(monkeypatch)
+    reply = _msg()
+    reply.reply_to_message = SimpleNamespace(
+        from_user=_user(777000, "Telegram"),
+        sender_chat=SimpleNamespace(id=-1001234567890, type="supergroup"),
+    )
+
+    assert _run(ex.extract_target(_update(reply), [], None)) == (None, None)

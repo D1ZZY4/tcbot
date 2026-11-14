@@ -21,6 +21,7 @@ from telegram.ext import (
 from telegram.ext.filters import BaseFilter
 
 from tcbot.modules.helper import guards
+from tcbot.modules.helper.extraction import parse_user_id_token
 from tcbot.modules.helper.keyboards import reason_step_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply
@@ -63,8 +64,7 @@ def parse_inline_reason(
         reply_target_id is not None
         and not has_explicit_target
         and tokens
-        and tokens[0].lstrip("-").isdigit()
-        and int(tokens[0]) == reply_target_id
+        and parse_user_id_token(tokens[0]) == reply_target_id
     ):
         tokens = tokens[1:]
     return " ".join(tokens).strip()
