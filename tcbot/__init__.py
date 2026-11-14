@@ -126,16 +126,30 @@ def parse_port(port_str: str) -> int:
 
 
 def parse_chat_id(raw: str) -> tuple[int, int | None]:
-    """Parse ``CHAT_ID`` or ``CHAT_ID/THREAD_ID`` into a tuple."""
+    """Parse ``CHAT_ID`` or ``CHAT_ID/THREAD_ID`` into a tuple.
+
+    A thread id has to be positive; a zero or negative segment names no
+    forum thread and is dropped instead of reaching Telegram as a
+    ``message_thread_id`` the API refuses.
+    """
     if not raw:
         return 0, None
     try:
         if "/" in raw:
             chat_str, thread_str = raw.split("/", 1)
-            return int(chat_str), int(thread_str)
+            chat_id = int(chat_str)
+            thread_id = int(thread_str)
+            if thread_id <= 0:
+                # * The value may name a private chat, so it stays out of
+                # * the log; the operator already knows which variable it is.
+                log.warning(
+                    "Invalid CHAT_ID thread segment; using the chat without a thread."
+                )
+                return chat_id, None
+            return chat_id, thread_id
         return int(raw), None
     except ValueError, TypeError:
-        log.warning("Invalid CHAT_ID format '%s', defaulting to 0.", raw)
+        log.warning("Invalid CHAT_ID format, defaulting to 0.")
         return 0, None
 
 
@@ -277,8 +291,26 @@ def _chat_id_from_env(key: str) -> int:
     try:
         return int(raw)
     except ValueError:
-        log.warning("Invalid %s '%s', defaulting to 0.", key, raw)
+        # * The value may identify a private chat, so it stays out of the log.
+        log.warning("Invalid %s value, defaulting to 0.", key)
         return 0
+
+
+def _main_group_from_env() -> int:
+    """Read ``MAIN_GROUP``; a group id has to be negative.
+
+    Telegram group and channel ids are negative, so a positive value names
+    a user and can never be the community group. The value is treated as
+    unset instead of silently matching nothing or, worse, a private chat.
+    """
+    value = _chat_id_from_env("MAIN_GROUP")
+    if value > 0:
+        log.warning(
+            "MAIN_GROUP must be a negative group chat id; treating the "
+            "configured value as unset."
+        )
+        return 0
+    return value
 
 
 def _env_or(key: str, default: str) -> str:
@@ -392,7 +424,7 @@ class Configs:
             prefixes=prefixes,
             port=parse_port(os.getenv("PORT", str(_DEFAULT_PORT)).strip()),
             bind_host=_env_or("BIND_HOST", _DEFAULT_BIND_HOST),
-            main_group=_chat_id_from_env("MAIN_GROUP"),
+            main_group=_main_group_from_env(),
             logs=parse_chat_id(os.getenv("LOGS", "").strip()),
             logs_errors=parse_chat_id(os.getenv("LOGS_ERRORS", "").strip()),
             proofs=parse_chat_id(os.getenv("PROOFS", "").strip() or _DEFAULT_PROOFS),

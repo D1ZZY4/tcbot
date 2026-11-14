@@ -76,6 +76,15 @@ def test_is_primary_group_requires_configured_main_group(
     assert loaded.is_primary_group(-1001234567890) is False
 
 
+def test_positive_main_group_is_treated_as_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A user id is not a group: a positive MAIN_GROUP must never match."""
+    loaded = _load(monkeypatch, MAIN_GROUP="123456789")
+    assert loaded.main_group == 0
+    assert loaded.is_primary_group(123456789) is False
+
+
 def test_chat_destinations_parse_into_chat_thread_pairs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -99,6 +108,14 @@ def test_invalid_chat_id_falls_back_to_zero(
     """A malformed destination resolves to the unset sentinel, not a crash."""
     loaded = _load(monkeypatch, LOGS="not-a-chat")
     assert loaded.logs == (0, None)
+
+
+def test_non_positive_thread_id_is_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telegram rejects thread id 0, so the destination keeps its chat only."""
+    loaded = _load(monkeypatch, LOGS="-1001111111111/0")
+    assert loaded.logs == (-1001111111111, None)
 
 
 def test_port_falls_back_to_default_for_invalid_values(
