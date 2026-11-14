@@ -13,6 +13,8 @@ is configured, so the committed suite never depends on one.
 
 from __future__ import annotations
 
+import asyncio
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -24,6 +26,7 @@ from tcbot import cfg
 from tcbot.database import bans_db, groups_db, users_cache, warns_db
 from tcbot.database import engine as engine_module
 from tcbot.database.base import moderation_actions, moderation_cases
+from tcbot.utils.time_and_date import utc_now
 from tests.postgres_support import reset_community, seed_chats, seed_users
 
 if TYPE_CHECKING:
@@ -61,6 +64,22 @@ async def test_a_ban_is_written_and_read_back(postgres: str) -> None:
     assert active is not None
     assert str(active.get("ban_id")) == ban_id
     assert await bans_db.active_ban_count() == 1
+
+
+async def test_a_timed_ban_stops_being_active_at_its_deadline(postgres: str) -> None:
+    """Every active read agrees once a timed ban's deadline passes."""
+    await bans_db.create_ban(
+        42, "timed", 7, 11, 12, until_date=utc_now() + timedelta(seconds=1)
+    )
+    assert await bans_db.active_ban_count() == 1
+
+    await asyncio.sleep(1.1)
+
+    assert await bans_db.get_active_ban(42) is None
+    assert await bans_db.active_ban_count() == 0
+    assert await bans_db.active_bans_page(0, 10) == []
+    assert await bans_db.active_bans_for_users([42]) == []
+    assert await bans_db.active_ban_user_ids() == []
 
 
 async def test_the_database_refuses_a_second_active_ban(postgres: str) -> None:

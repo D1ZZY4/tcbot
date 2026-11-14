@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select
 
@@ -17,6 +17,22 @@ from tcbot.utils.time_and_date import utc_now
 
 from ._compose import compose_rows
 from ._shared import ACTION_COLUMNS
+
+if TYPE_CHECKING:
+    from sqlalchemy.sql.elements import ColumnElement
+
+
+def _in_force() -> ColumnElement[bool]:
+    """Return the condition an active ban has to meet to still be in force.
+
+    A timed ban stops being active at its deadline, even before the daily
+    sweep moves the row to ``expired``. Every active read applies the same
+    condition as the ``active_bans`` view, so a count, a list, and a replay
+    cannot disagree about a ban whose deadline passed.
+    """
+    return (moderation_actions.c.expires_at.is_(None)) | (
+        moderation_actions.c.expires_at > utc_now()
+    )
 
 
 async def action_by_ref(ban_id: str) -> dict[str, Any] | None:
@@ -40,8 +56,7 @@ async def get_active_ban(user_id: int) -> BanDoc | None:
                 moderation_actions.c.target_user_id == user_id,
                 moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
-                (moderation_actions.c.expires_at.is_(None))
-                | (moderation_actions.c.expires_at > utc_now()),
+                _in_force(),
             )
             .order_by(moderation_actions.c.created_at.desc())
             .limit(1)
@@ -74,6 +89,7 @@ async def active_ban_count() -> int:
             .where(
                 moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
+                _in_force(),
             )
         )
     )
@@ -94,6 +110,7 @@ async def active_bans_page(skip: int, limit: int) -> list[BanDoc]:
             .where(
                 moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
+                _in_force(),
             )
             .order_by(moderation_actions.c.created_at.desc())
             .offset(max(0, skip))
@@ -117,6 +134,7 @@ async def active_bans_for_users(user_ids: list[int]) -> list[BanDoc]:
                 moderation_actions.c.target_user_id.in_(user_ids),
                 moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
+                _in_force(),
             )
             .order_by(moderation_actions.c.created_at.desc())
         )
@@ -164,6 +182,7 @@ async def active_ban_user_ids() -> list[int]:
             .where(
                 moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
+                _in_force(),
             )
             .distinct()
         )
