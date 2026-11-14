@@ -508,6 +508,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **A fresh connection read republishes through the guarded cache path** (`tcbot/database/groups_db.py`): `is_connected(fresh=True)` wrote its result with `put()`, so a read that started before a concurrent disconnect could overwrite the newer state for the cache TTL. It now uses `refresh()`, which discards a result whose key changed while the read was in flight. Behavior changes: none for an ordinary read.
 
+- **Decisions about one user open one case** (`tcbot/database/moderation_db.py`): two decisions arriving from different groups could both miss the open case and insert their own. The case lookup now runs under a per-user advisory lock. Behavior changes: concurrent decisions share the open case instead of splitting the history.
+
 
 - **A failed migration releases its engine** (`alembic/env.py`): the migration engine was disposed only on the success path, so a revision that raised left its pool behind and every retried boot leaked another one. The engine is now disposed in a finally block. Behavior changes: none; a failed boot still fails loudly.
 

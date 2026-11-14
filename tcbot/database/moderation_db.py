@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import moderation_cases, moderation_evidence_items
@@ -52,6 +52,12 @@ async def open_case(
     decision have to land together, so a decision whose case cannot be
     written leaves no case behind.
     """
+    # * Decisions about one subject can arrive from different groups at the
+    # * same time, and the select-then-insert would otherwise open two cases.
+    await sess.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
+        {"scope": f"case:{subject_user_id}"},
+    )
     stmt = select(moderation_cases.c.id).where(
         moderation_cases.c.subject_user_id == subject_user_id,
         moderation_cases.c.status.in_(OPEN_CASE_STATUSES),
