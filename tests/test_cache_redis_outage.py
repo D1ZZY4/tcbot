@@ -2,12 +2,11 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Redis outage handling: L2 writes abort on timeout and mark liveness."""
+"""Redis outage handling: a failed L2 write is recorded and never raised."""
 
 from __future__ import annotations
 
 import asyncio
-import time
 
 import pytest
 
@@ -16,25 +15,32 @@ import tcbot.database.redis_client as redis_client_mod
 from tcbot.database.cache import redis_io
 
 
-class _FakeStalledRedis:
-    """Redis double whose writes never complete."""
+class _FakeTimedOutRedis:
+    """Redis double that raises the driver's socket timeout."""
+
+    def __init__(self) -> None:
+        self.completed = False
 
     async def set(self, *args: object, **kwargs: object) -> bool:
-        await asyncio.sleep(60)
-        return True
+        _ = (args, kwargs)
+        self.completed = True
+        raise TimeoutError("Timeout reading from redis")
 
     async def delete(self, *args: object, **kwargs: object) -> int:
-        await asyncio.sleep(60)
-        return 1
+        _ = (args, kwargs)
+        self.completed = True
+        raise TimeoutError("Timeout reading from redis")
 
 
 class _FakeOkRedis:
     """Redis double whose writes succeed immediately."""
 
     async def set(self, *args: object, **kwargs: object) -> bool:
+        _ = (args, kwargs)
         return True
 
     async def delete(self, *args: object, **kwargs: object) -> int:
+        _ = (args, kwargs)
         return 1
 
 
@@ -52,25 +58,29 @@ def _cache() -> cache_mod.TwoLevelCache[object]:
     )
 
 
-def test_redis_set_times_out_and_marks_unhealthy(
+def test_redis_set_marks_unhealthy_on_a_driver_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(redis_io, "_REDIS_WRITE_TIMEOUT_S", 0.05)
-    monkeypatch.setattr(redis_io, "redis_client", lambda: _FakeStalledRedis())
-    started = time.monotonic()
+    """The socket timeout is recorded without being raised to the caller."""
+    fake = _FakeTimedOutRedis()
+    monkeypatch.setattr(redis_io, "redis_client", lambda: fake)
+
     asyncio.run(_cache()._redis_set("k", "v"))
-    assert time.monotonic() - started < 1.0
+
+    assert fake.completed is True
     assert redis_client_mod.liveness() is False
 
 
-def test_redis_delete_times_out_and_marks_unhealthy(
+def test_redis_delete_marks_unhealthy_on_a_driver_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(redis_io, "_REDIS_WRITE_TIMEOUT_S", 0.05)
-    monkeypatch.setattr(redis_io, "redis_client", lambda: _FakeStalledRedis())
-    started = time.monotonic()
+    """A failed delete is recorded too."""
+    fake = _FakeTimedOutRedis()
+    monkeypatch.setattr(redis_io, "redis_client", lambda: fake)
+
     asyncio.run(_cache()._redis_delete("k"))
-    assert time.monotonic() - started < 1.0
+
+    assert fake.completed is True
     assert redis_client_mod.liveness() is False
 
 

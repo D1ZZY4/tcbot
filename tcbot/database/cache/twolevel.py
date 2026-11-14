@@ -143,6 +143,9 @@ class TwoLevelCache[T]:
         The Redis sweep is never dropped by the mutation-queue bound, and the
         wait for it is bounded so a dead-Redis backlog cannot stall the caller
         (the sweep keeps running in the background and L1 is already clear).
+        Individual commands rely on the client's socket timeout rather than
+        ``wait_for``: cancelling a Redis command leaves its reply unread on the
+        pooled connection.
         """
         self._mem.clear()
         # * Advance every known generation so an in-flight fetch discards
@@ -158,15 +161,9 @@ class TwoLevelCache[T]:
             cursor: int = 0
             try:
                 while True:
-                    cursor, keys = await asyncio.wait_for(
-                        live.scan(cursor, match=pattern, count=100),
-                        timeout=redis_io._REDIS_WRITE_TIMEOUT_S,
-                    )
+                    cursor, keys = await live.scan(cursor, match=pattern, count=100)
                     if keys:
-                        await asyncio.wait_for(
-                            live.unlink(*keys),
-                            timeout=redis_io._REDIS_WRITE_TIMEOUT_S,
-                        )
+                        await live.unlink(*keys)
                     if cursor == 0:
                         break
             except asyncio.CancelledError:
@@ -223,10 +220,11 @@ class TwoLevelCache[T]:
             return CACHE_MISS
         rkey = self._rkey(key)
         try:
-            raw = await asyncio.wait_for(
-                rc.get(rkey),
-                timeout=redis_io._REDIS_GET_TIMEOUT_S,
-            )
+            # * No ``wait_for`` here: cancelling a Redis command leaves its
+            # * reply unread on a pooled connection, and the next command
+            # * would read that stale reply. The client's socket timeout
+            # * aborts a stalled op and disconnects the connection cleanly.
+            raw = await rc.get(rkey)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -276,10 +274,7 @@ class TwoLevelCache[T]:
         for start in range(0, len(missing), _MGET_CHUNK_SIZE):
             chunk = missing[start : start + _MGET_CHUNK_SIZE]
             try:
-                raws = await asyncio.wait_for(
-                    rc.mget(*[self._rkey(key) for key in chunk]),
-                    timeout=redis_io._REDIS_GET_TIMEOUT_S,
-                )
+                raws = await rc.mget(*[self._rkey(key) for key in chunk])
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -347,10 +342,7 @@ class TwoLevelCache[T]:
                 ):
                     rkey = self._rkey(key)
                     try:
-                        raw = await asyncio.wait_for(
-                            rc.get(rkey),
-                            timeout=redis_io._REDIS_GET_TIMEOUT_S,
-                        )
+                        raw = await rc.get(rkey)
                     except asyncio.CancelledError:
                         raise
                     except Exception as exc:
@@ -499,10 +491,7 @@ class TwoLevelCache[T]:
     async def _tombstoned(self, rc: Any, key: Any) -> bool:
         """Return True while another process has a pending revocation."""
         try:
-            exists = await asyncio.wait_for(
-                rc.exists(self._tombstone_key(key)),
-                timeout=redis_io._REDIS_GET_TIMEOUT_S,
-            )
+            exists = await rc.exists(self._tombstone_key(key))
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -527,10 +516,7 @@ class TwoLevelCache[T]:
         if rc is None:
             return
         try:
-            await asyncio.wait_for(
-                rc.set(rkey, "1", ex=_TOMBSTONE_TTL_S),
-                timeout=redis_io._REDIS_WRITE_TIMEOUT_S,
-            )
+            await rc.set(rkey, "1", ex=_TOMBSTONE_TTL_S)
         except Exception as exc:
             log.debug("Redis tombstone write failed for %s: %s", rkey, exc)
 
@@ -554,17 +540,15 @@ class TwoLevelCache[T]:
 
         The client resolves at run time, not enqueue time: a reconnect
         between queueing and execution must not write through a dead pool.
-        The per-op wait_for abandons a stalled write (the socket timeout
-        bounds the underlying op); abandonment only delays an L2 hint.
+        The client's socket timeout bounds the op; the call is not wrapped
+        in ``wait_for`` because a cancelled Redis command leaves its reply
+        unread on the pooled connection.
         """
         rc = await self._client()
         if rc is None:
             return
         try:
-            await asyncio.wait_for(
-                rc.set(rkey, payload, ex=self._redis_ttl),
-                timeout=redis_io._REDIS_WRITE_TIMEOUT_S,
-            )
+            await rc.set(rkey, payload, ex=self._redis_ttl)
         except Exception as exc:
             _redis_mod.mark_op(ok=False)
             log.debug("Redis set failed for %s: %s", rkey, exc)
@@ -577,10 +561,7 @@ class TwoLevelCache[T]:
         if rc is None:
             return
         try:
-            await asyncio.wait_for(
-                rc.delete(rkey),
-                timeout=redis_io._REDIS_WRITE_TIMEOUT_S,
-            )
+            await rc.delete(rkey)
         except Exception as exc:
             _redis_mod.mark_op(ok=False)
             log.debug("Redis delete failed for %s: %s", rkey, exc)

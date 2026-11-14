@@ -14,8 +14,6 @@ from tcbot.database.cache.codec import (
 from tcbot.database.cache.memory import CACHE_MISS, TTLCache
 from tcbot.database.cache.redis_io import (
     _CLEAR_ALL_TIMEOUT_S,
-    _REDIS_GET_TIMEOUT_S,
-    _REDIS_WRITE_TIMEOUT_S,
     acquire_redis_client,
     drain_redis_mutations,
     enqueue_redis_mutation,
@@ -37,8 +35,6 @@ __all__ = [
     "_ALL_GROUPS_KEY",
     "_CLEAR_ALL_TIMEOUT_S",
     "_OWNER_KEY",
-    "_REDIS_GET_TIMEOUT_S",
-    "_REDIS_WRITE_TIMEOUT_S",
     "TTLCache",
     "TwoLevelCache",
     "_decode_redis_value",

@@ -39,12 +39,11 @@ _DRAIN_TIMEOUT_S: float = 5.0
 # * Ceiling for one clear_all wait; the sweep keeps running past it so a
 # * dead-Redis backlog delays the caller briefly instead of stalling it.
 _CLEAR_ALL_TIMEOUT_S: float = 10.0
-# * Upper bound for one L2 read on the hot path; a timeout falls through
-# * to the DB fetch, so correctness never depends on Redis.
-_REDIS_GET_TIMEOUT_S: float = 1.0
-# * Per-op ceiling for fire-and-forget L2 writes; abandonment only delays
-# * an L2 hint because mutations serialize FIFO per prefix.
-_REDIS_WRITE_TIMEOUT_S: float = 2.0
+# * Per-operation deadlines belong to the client's socket timeout, not to a
+# * ``wait_for`` wrapper: cancelling a Redis command leaves its reply unread
+# * on the pooled connection, and the next command would read that stale
+# * reply. ``redis_client`` owns the socket timeout and disconnects a
+# * connection that times out before it returns to the pool.
 
 
 # ─────────────────────────── Client access ─────────────────────────── #
