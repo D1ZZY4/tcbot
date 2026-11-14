@@ -72,6 +72,28 @@ def test_cancelled_predecessor_does_not_drop_successor() -> None:
     assert "third" in ran
 
 
+def test_drain_timeout_leaves_the_queued_mutation_running() -> None:
+    """A slow Redis op must outlive the bounded shutdown drain."""
+
+    async def _scenario() -> None:
+        started = asyncio.Event()
+        gate = asyncio.Event()
+
+        async def _slow() -> None:
+            started.set()
+            await gate.wait()
+
+        task = redis_io.enqueue_redis_mutation("test-fifo", _slow, droppable=False)
+        assert task is not None
+        await started.wait()
+        await redis_io.drain_redis_mutations(timeout=0.01)
+        assert not task.cancelled()
+        gate.set()
+        await task
+
+    asyncio.run(_scenario())
+
+
 def test_self_cancellation_still_aborts() -> None:
     async def _scenario() -> list[str]:
         ran: list[str] = []

@@ -212,11 +212,12 @@ async def drain_redis_mutations(timeout: float = _DRAIN_TIMEOUT_S) -> None:
     ]
     if not pending:
         return
-    try:
-        await asyncio.wait_for(
-            asyncio.gather(*pending, return_exceptions=True), timeout=timeout
-        )
-    except TimeoutError:
+    # * asyncio.wait does not cancel the tasks it stops waiting for, unlike
+    # * wait_for(gather(...)), which would abort the very mutations the drain
+    # * promises to leave running.
+    _done, still_pending = await asyncio.wait(pending, timeout=timeout)
+    if still_pending:
         log.debug(
-            "Redis drain timed out with %d mutations still pending.", len(pending)
+            "Redis drain timed out with %d mutations still pending.",
+            len(still_pending),
         )
