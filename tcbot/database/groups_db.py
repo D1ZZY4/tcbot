@@ -146,9 +146,10 @@ async def is_connected(chat_id: int, *, fresh: bool = False) -> bool:
         return row is not None
 
     if fresh:
-        connected = await _fetch()
-        connected_cache.put(chat_id, connected)
-        return connected
+        # * refresh() republishes only when the key was not invalidated while
+        # * the read was in flight, so a concurrent disconnect cannot be
+        # * overwritten by the older connected value.
+        return await connected_cache.refresh(chat_id, _fetch)
     return cast("bool", await connected_cache.get_or_fetch(chat_id, _fetch))
 
 
@@ -368,6 +369,9 @@ async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) 
         )
 
     await run_transaction(_work)
+    # * The pending write also refreshes the chat title, which the active
+    # * group listing renders.
+    active_groups_cache.invalidate(_ALL_GROUPS_KEY)
 
 
 async def get_pending(chat_id: int) -> PendingGroupDoc | None:
@@ -467,4 +471,7 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
     # * and pull it into the community fan-outs.
     connected_cache.put(new_chat_id, await _group_is_active(new_chat_id))
     active_groups_cache.invalidate(_ALL_GROUPS_KEY)
+    # * The locale cache is keyed by chat id; both ids moved.
+    _GROUP_LOCALE_L1.pop(old_chat_id, None)
+    _GROUP_LOCALE_L1.pop(new_chat_id, None)
     return moved

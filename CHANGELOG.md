@@ -506,6 +506,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **A concurrent mute supersedes the committed decision** (`tcbot/database/mutes_db.py`, `tests/test_mute_expiry.py`): two mutes that both read the same active decision inserted the same supersede target, and the trigger rejected the loser with an error the unique-constraint retry never caught. The write now takes a per-user advisory lock, so the loser re-reads the committed decision and supersedes it. Behavior changes: simultaneous mutes of one user record instead of surfacing a database error.
 
+- **A fresh connection read republishes through the guarded cache path** (`tcbot/database/groups_db.py`): `is_connected(fresh=True)` wrote its result with `put()`, so a read that started before a concurrent disconnect could overwrite the newer state for the cache TTL. It now uses `refresh()`, which discards a result whose key changed while the read was in flight. Behavior changes: none for an ordinary read.
+
 
 - **A failed migration releases its engine** (`alembic/env.py`): the migration engine was disposed only on the success path, so a revision that raised left its pool behind and every retried boot leaked another one. The engine is now disposed in a finally block. Behavior changes: none; a failed boot still fails loudly.
 
