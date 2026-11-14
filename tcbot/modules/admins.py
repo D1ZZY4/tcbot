@@ -160,7 +160,6 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ctx.bot,
             admin.id,
             admin.first_name,
-            executor_role,
             target_id,
             target_fname or str(target_id),
             current_role,
@@ -230,8 +229,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if await action_owner_mismatch(q, update, min_parts=3):
         return
 
-    executor_role = await check_callback_executor(update, q, admin)
-    if executor_role is None:
+    if await check_callback_executor(update, q, admin) is None:
         return
 
     if await identity.is_proven_bot(update, target_id, ctx.bot):
@@ -322,7 +320,6 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         ctx.bot,
         admin.id,
         admin.first_name,
-        executor_role,
         target_id,
         target_fname,
         current_role,

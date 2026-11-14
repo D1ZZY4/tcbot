@@ -35,6 +35,7 @@ def _bot() -> Any:
 def _install_promote(
     monkeypatch: pytest.MonkeyPatch,
     *,
+    executor_role: str = "founder",
     current_role: str | None = None,
     banned: bool = False,
 ) -> dict[str, Any]:
@@ -72,10 +73,15 @@ def _install_promote(
         _ = user_id
         return "en-US"
 
+    async def _effective_role(user_id: int, *, fresh: bool = False) -> str:
+        _ = (user_id, fresh)
+        return executor_role
+
     monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
     monkeypatch.setattr(db.users_roles, "set_role", _set_role)
     monkeypatch.setattr(db.users_roles, "remove_role", _remove_role)
     monkeypatch.setattr(db.users_roles, "get_owner_id", _owner)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _effective_role)
     monkeypatch.setattr(db.users_cache, "upsert_user", _upsert)
     monkeypatch.setattr(db.bans_db, "get_active_ban", _ban)
     monkeypatch.setattr(db.queues_db, "enqueue", _enqueue)
@@ -101,7 +107,7 @@ def test_founder_assigns_admin_directly(monkeypatch: pytest.MonkeyPatch) -> None
     seen = _install_promote(monkeypatch)
     ok, _text = asyncio.run(
         promote_flow.Promote.execute(
-            _bot(), 1, "Founder", "founder", 42, "Target", None, "admin", "en-US"
+            _bot(), 1, "Founder", 42, "Target", None, "admin", "en-US"
         )
     )
     assert ok is True
@@ -113,10 +119,10 @@ def test_admin_promotion_to_admin_queues_a_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An Admin may not grant Admin; the request goes to the Founder."""
-    seen = _install_promote(monkeypatch)
+    seen = _install_promote(monkeypatch, executor_role="admin")
     ok, _text = asyncio.run(
         promote_flow.Promote.execute(
-            _bot(), 1, "Admin", "admin", 42, "Target", None, "admin", "en-US"
+            _bot(), 1, "Admin", 42, "Target", None, "admin", "en-US"
         )
     )
     assert ok is True
@@ -126,13 +132,12 @@ def test_admin_promotion_to_admin_queues_a_request(
 
 def test_admin_assigns_a_subrole_directly(monkeypatch: pytest.MonkeyPatch) -> None:
     """An Admin may grant Developer and Tester directly."""
-    seen = _install_promote(monkeypatch)
+    seen = _install_promote(monkeypatch, executor_role="admin")
     ok, _text = asyncio.run(
         promote_flow.Promote.execute(
             _bot(),
             1,
             "Admin",
-            "admin",
             42,
             "Target",
             None,
@@ -146,13 +151,12 @@ def test_admin_assigns_a_subrole_directly(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_developer_may_not_assign_any_role(monkeypatch: pytest.MonkeyPatch) -> None:
     """A Developer has no assignment rights."""
-    seen = _install_promote(monkeypatch)
+    seen = _install_promote(monkeypatch, executor_role="developer")
     ok, _text = asyncio.run(
         promote_flow.Promote.execute(
             _bot(),
             1,
             "Developer",
-            "developer",
             42,
             "Target",
             None,
@@ -175,7 +179,6 @@ def test_promotion_refuses_a_higher_ranked_target(
             _bot(),
             1,
             "Founder",
-            "founder",
             42,
             "Target",
             "admin",
@@ -195,7 +198,6 @@ def test_promotion_refuses_the_founder(monkeypatch: pytest.MonkeyPatch) -> None:
             _bot(),
             1,
             "Founder",
-            "founder",
             42,
             "Target",
             "founder",
@@ -216,12 +218,17 @@ def _install_transfer(
     banned: bool = False,
     bot_target: bool = False,
     add_admin_fails: bool = False,
+    owner_still_current: bool = True,
 ) -> dict[str, Any]:
     """Install the collaborators of the ownership-transfer path."""
     seen: dict[str, Any] = {"owner": [], "admins": [], "roles": []}
 
     async def _set_owner(user_id: int) -> None:
         seen["owner"].append(user_id)
+
+    async def _is_owner(user_id: int, *, fresh: bool = False) -> bool:
+        _ = (user_id, fresh)
+        return owner_still_current
 
     async def _add_admin(user_id: int, promoted_by: int) -> None:
         _ = promoted_by
@@ -263,6 +270,7 @@ def _install_transfer(
 
     monkeypatch.setattr(transfer_flow, "extract_target", _extract)
     monkeypatch.setattr(db.users_roles, "set_owner", _set_owner)
+    monkeypatch.setattr(db.users_roles, "is_owner", _is_owner)
     monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
     monkeypatch.setattr(db.users_roles, "remove_role", _remove_role)
     monkeypatch.setattr(transfer_flow, "resolve_and_check", _resolve_and_check)
@@ -323,6 +331,20 @@ def test_transfer_refuses_a_banned_target(monkeypatch: pytest.MonkeyPatch) -> No
     )
     assert seen["owner"] == []
     assert seen["admins"] == []
+
+
+def test_transfer_refuses_when_the_owner_changed_mid_flight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A concurrent transfer must not be overwritten by a stale command."""
+    seen = _install_transfer(monkeypatch, owner_still_current=False)
+    ctx = SimpleNamespace(bot=_bot())
+    asyncio.run(
+        transfer_flow.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
+    )
+    assert seen["owner"] == []
+    assert seen["admins"] == []
+    assert seen["roles"] == []
 
 
 def test_transfer_refuses_a_bot_target(monkeypatch: pytest.MonkeyPatch) -> None:

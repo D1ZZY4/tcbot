@@ -138,10 +138,35 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
     target_uname = ident.username
 
+    # * Ownership may have moved while the target was classified and
+    # * verified. Re-read it at the mutation point, so a second in-flight
+    # * transfer cannot overwrite a newer owner and a demoted founder
+    # * cannot hand the federation over. A failed lookup refuses.
+    try:
+        still_owner = await db.users_roles.is_owner(current_owner.id, fresh=True)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("cmd_transfer owner re-check failed")
+        await safe_reply(
+            msg,
+            replies.err_role_verify(locale, plain=True),
+            log_label="cmd_transfer owner-check-failed",
+            parse_mode=None,
+        )
+        return
+    if not still_owner:
+        await safe_reply(
+            msg,
+            replies.err_perm_expired(locale, plain=True),
+            log_label="cmd_transfer owner-changed",
+            parse_mode=None,
+        )
+        return
+
     # * Rank-check the target so the new owner keeps no residual
-    # * Developer/Tester role beside the Founder record. Clear it via
-    # * Demote.remove_role (not the bare helper) so the revocation also
-    # * clears the cache and posts the audit trail.
+    # * Developer/Tester role beside the Founder record. The shared demote
+    # * helper revokes the assignment and invalidates the role cache.
     role_check = await resolve_and_check(
         msg, current_owner.id, target_id, min_role="developer"
     )

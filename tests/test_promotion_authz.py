@@ -35,6 +35,16 @@ def _install_ban(
     monkeypatch.setattr(db.bans_db, "get_active_ban", _get_active_ban)
 
 
+def _install_executor_role(monkeypatch: pytest.MonkeyPatch, role: str | None) -> None:
+    """Install the fresh executor role read at the mutation point."""
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        _ = (user_id, fresh)
+        return role
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+
+
 def test_banned_target_refusal_blocks_a_banned_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -87,6 +97,7 @@ def test_promote_execute_refuses_a_banned_target(
 ) -> None:
     """The promotion chokepoint must not grant rank to a banned user."""
     _install_ban(monkeypatch, ban={"_id": "b1"})
+    _install_executor_role(monkeypatch, "founder")
 
     granted: list[int] = []
 
@@ -100,7 +111,6 @@ def test_promote_execute_refuses_a_banned_target(
             _bot(),
             1,
             "Founder",
-            "founder",
             42,
             "Target",
             None,
@@ -113,11 +123,73 @@ def test_promote_execute_refuses_a_banned_target(
     assert "Banned" in text
 
 
+def test_promote_execute_rechecks_the_executor_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A demotion during target classification must not still grant rank.
+
+    The command checks the executor at entry, then classifies the target
+    and probes the bot before the grant. The grant re-reads the role, so
+    the demoted executor cannot assign the tier it no longer holds.
+    """
+    _install_ban(monkeypatch, ban=None)
+    _install_executor_role(monkeypatch, "tester")
+    granted: list[int] = []
+
+    async def _add_admin(user_id: int, promoted_by: int) -> None:
+        granted.append(user_id)
+
+    monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
+
+    ok, text = asyncio.run(
+        promote_flow.Promote.execute(
+            _bot(),
+            1,
+            "Founder",
+            42,
+            "Target",
+            None,
+            "admin",
+            "en-US",
+        )
+    )
+    assert ok is False
+    assert granted == []
+    assert text
+
+
+def test_promote_execute_fails_closed_on_a_role_lookup_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unknown executor role refuses the grant instead of allowing it."""
+
+    async def _boom(user_id: int, *, fresh: bool = False) -> str | None:
+        _ = (user_id, fresh)
+        raise RuntimeError("role table unavailable")
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
+    granted: list[int] = []
+
+    async def _add_admin(user_id: int, promoted_by: int) -> None:
+        granted.append(user_id)
+
+    monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
+
+    ok, _text = asyncio.run(
+        promote_flow.Promote.execute(
+            _bot(), 1, "Founder", 42, "Target", None, "admin", "en-US"
+        )
+    )
+    assert ok is False
+    assert granted == []
+
+
 def test_promote_execute_allows_a_clean_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A clean target still reaches the assignment path."""
     _install_ban(monkeypatch, ban=None)
+    _install_executor_role(monkeypatch, "founder")
     assigned: list[tuple[int, str]] = []
 
     async def _set_role(user_id: int, role: str, assigned_by: int) -> None:
@@ -132,7 +204,6 @@ def test_promote_execute_allows_a_clean_target(
             _bot(),
             1,
             "Founder",
-            "founder",
             42,
             "Target",
             None,

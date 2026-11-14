@@ -253,7 +253,7 @@ class Promote:
     """All federation-promotion logic."""
 
     @staticmethod
-    def available_roles_for(executor_role: str) -> list[str]:
+    def available_roles_for(executor_role: str | None) -> list[str]:
         """Return the tiers an executor with the given role may hand out.
 
         Single owner of the grant table: the role picker and the
@@ -287,14 +287,34 @@ class Promote:
         bot: Bot,
         admin_id: int,
         admin_fname: str,
-        executor_role: str,
         target_id: int,
         target_fname: str,
         current_role: str | None,
         role: str,
         locale: str | None = None,
     ) -> tuple[bool, str]:
-        """Execute a role assignment. Returns (success, reply_text)."""
+        """Execute a role assignment. Returns (success, reply_text).
+
+        The executor role is read fresh at the mutation point: the
+        command and the role picker both resolve it earlier, and the
+        target classification and bot probe in between can take seconds.
+        A demotion or ownership transfer in that window must not still
+        grant the rank the executor held at entry. A failed lookup
+        refuses the grant.
+        """
+        try:
+            executor_role = await db.users_roles.get_effective_role(
+                admin_id, fresh=True
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning(
+                "Promote.execute executor role lookup failed for %d: %s",
+                admin_id,
+                exc,
+            )
+            return False, t("admins.error.role_lookup_failed", locale)
         # * The grant table is read here, not only in the role picker: the
         # * command and the callback both check the executor, but the
         # * helper owns the rule so a future caller cannot hand out rank
