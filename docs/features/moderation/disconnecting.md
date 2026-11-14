@@ -105,13 +105,13 @@ The deactivation runs before the fan-out (not in parallel with it) precisely to 
 
 Both commands call `db.groups_db.deactivate_group(chat_id)`, which performs:
 
-```python
-update_one({"chat_id": chat_id}, {"$set": {"is_active": False}})
+```sql
+UPDATE connected_chats SET is_active = FALSE WHERE chat_id = :chat_id
 ```
 
 The function:
 
-- Returns `True` when `matched_count > 0` (the record existed and was updated).
+- Returns `True` when the update affected a row (the record existed and was updated).
 - Returns `False` when the chat_id has no `connected_chats` record.
 
 It also updates the cache:

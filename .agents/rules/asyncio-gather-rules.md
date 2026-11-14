@@ -161,7 +161,7 @@ Rules:
 - Avoid returning cursor results to handlers; convert to plain lists inside
   helpers when practical.
 - Use projection when large rows do not need every column.
-- Add the index in `tcbot/database/base.py` and ship an Alembic revision
+- Add the index in `tcbot/database/base/` and ship an Alembic revision
   when adding an index-sensitive query.
 - Pre-resolve per-item lookups for paginated views before formatting.
 - Use `gather_bounded()` for pure database bursts; reserve `fan_out()` for

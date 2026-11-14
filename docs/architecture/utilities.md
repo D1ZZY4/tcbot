@@ -152,7 +152,6 @@ layer must not depend on it.
 | `build_error_message(exc=None, record=None, context=None)` | Formats exception or log-record details for Telegram. |
 | `send_to_log_errors(text)` | Sends a prepared message to the error destination. |
 | `report_exc(exc, context=None)` | Reports an exception. |
-| `report_record(record)` | Reports a logging record. |
 | `drain_pending()` | Await the in-flight error deliveries at shutdown (bounded). |
 
 The reporter classifies expected Telegram errors, trims long tracebacks, escapes MarkdownV2, and avoids raising if the destination is not configured.

@@ -164,7 +164,7 @@ flowchart TD
     Proof -->|media, then Done| Exec[_execute_mute]
     Proof -->|skip| Exec
     Proof -->|cancel| End
-    Exec -->|persist record first, abort on DB failure| Stored[log_mute + set_active_mute]
+    Exec -->|persist record first, abort on DB failure| Stored[record_mute]
     Stored -->|fan_out restrict + upload proof concurrently| Groups[Active connected groups]
     Groups -->|post audit log| LogChat[Log channel]
     Groups -->|edit prompt summary| Summary[Moderator summary]

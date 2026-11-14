@@ -1,6 +1,6 @@
 # Banning
 
-This document describes the current federation ban, ban lookup, and unban behavior implemented by `tcbot/modules/bans.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `tcbot/modules/check.py`, `tcbot/modules/unban.py`, and `tcbot/database/bans_db.py`.
+This document describes the current federation ban, ban lookup, and unban behavior implemented by `tcbot/modules/bans.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `tcbot/modules/check.py`, `tcbot/modules/unban.py`, and `tcbot/database/bans_db/`.
 
 For the appeal flow following a ban, see [`../appeals.md`](../appeals.md). For
 the check command used to look up bans, see [`check.md`](check.md). For warnings

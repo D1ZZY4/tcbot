@@ -150,7 +150,7 @@ Date: <utc>
 `Stats.open_search` records `(chat_id, message_id)` in `ctx.user_data` so the user's free-text query message can be deleted and the original card edited in place. Search runs through `Stats.search_run`:
 
 - Numeric query → `bans_db.get_active_ban(int(query))`.
-- Non-numeric query → anchored prefix lookup in the member cache via `users_cache.search_by_name` (same semantics as command target resolution, capped at 30 hits), then a single `$in` fetch of their active bans via `bans_db.active_bans_for_users`. Only matching rows travel over the wire.
+- Non-numeric query → anchored prefix lookup in the member cache via `users_cache.search_by_name` (same semantics as command target resolution, capped at 30 hits), then a single `WHERE target_user_id IN (...)` fetch of their active bans via `bans_db.active_bans_for_users`. Only matching rows travel over the wire.
 
 Results are rendered with a numbered keyboard whose footer carries a `New Search` button and a `Cancel` button. Each hit opens `Stats.search_detail`, which reuses `build_ban_detail` and offers `View Proof` plus a `« Back` button that returns to the results (or the search prompt when no results are stored) without re-running the query.
 
@@ -196,7 +196,7 @@ The previous `stats_chats_flow.py` has been removed; its responsibilities live e
 | `users_cache.search_by_name(needle, limit=...)` | Anchored prefix lookup for free-text search (same semantics as command target resolution). |
 | `bans_db.active_ban_count()` | Active-ban count for the overview. |
 | `bans_db.active_bans_page()` / `active_ban_count()` | Paginated ban list (server-side skip/limit). |
-| `bans_db.active_bans_for_users()` | Name-search hits (single `$in` fetch). |
+| `bans_db.active_bans_for_users()` | Name-search hits (single `IN` fetch). |
 | `bans_db.get_active_ban(uid)` | Direct ID search hit. |
 | `bans_db.get_ban(ban_id)` | Stable-ID detail fetch for search details (immune to list shifts). |
 | `groups_db.active_group_count()` | Connected-group count for the overview. |

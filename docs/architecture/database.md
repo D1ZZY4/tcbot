@@ -521,10 +521,8 @@ privilege.
 - `admin_count() -> int`: `COUNT(*)`.
 - `set_role(user_id: int, role: str, assigned_by: int) -> None`: grants a developer or tester role. A role outside `VALID_ROLES` raises, so a stored "admin" or "founder" can never be written through this path.
 - `remove_role(user_id: int) -> bool`: revokes the active assignment of the user, whatever role it holds.
-- `get_role(user_id: int) -> str | None`: reads the active assignment only (no owner/admin fallback).
 - `all_by_role(role: str) -> list[RoleRefDoc]`: all users holding a specific role.
 - `role_count(role: str) -> int`: `COUNT(*)` on the role filter.
-- `active_assignments() -> list[RoleDoc]`: every active assignment.
 
 Granting and revoking are one transaction: the revocation and the
 assignment land together, so a user never holds two active roles and the
@@ -925,7 +923,7 @@ issued in and it never reaches another group.
 | `chat_id` | `ChatId` | Group where the warning was issued. |
 | `timestamp` | `datetime` | Warning time. |
 
-`WarnCountDoc` (the `warn_counts` view, one row per user/chat pair):
+The `warn_counts` view (one row per user/chat pair):
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -978,8 +976,6 @@ minimum 1). A second federation-wide threshold `cfg.fed_warn_limit` (env
 - `user_warn_groups(user_id: int) -> list[tuple[int, int]]`
   `[(chat_id, count), ...]` for every group where the user has warns,
   sorted by the newest warning descending.
-- `warn_count_doc(user_id: int, chat_id: int) -> WarnCountDoc | None`
-  The counter row of a user/chat pair.
 - `federation_warn_count(user_id: int) -> int`
   Total active warn count across all federation chats. Used to evaluate
   the `FED_WARN_LIMIT` threshold.
@@ -1354,6 +1350,7 @@ they exist before the first handler query reaches the database.
 | Table | Index | Purpose |
 |---|---|---|
 | `moderation_actions` | unique `(external_ref)` | The public reference carried by the appeal deep link. |
+| `moderation_actions` | unique `(id, target_user_id)` | The composite foreign key target that enforces "only the banned user may appeal". |
 | `moderation_actions` | unique `(target_user_id)` partial on `action_type = 'ban' AND status = 'active'` | One active ban per target. |
 | `moderation_actions` | unique `(target_user_id)` partial on `action_type = 'mute' AND status = 'active'` | One active mute per target. |
 | `moderation_actions` | `(target_user_id, created_at desc)` | The per-user decision history. |
@@ -1361,7 +1358,6 @@ they exist before the first handler query reaches the database.
 | `moderation_actions` | `(actor_user_id)`, `(case_id)`, `(chat_id)`, `(origin_chat_id)`, `(evidence_upload_id)`, `(revoked_by_user_id)`, `(status)` | The foreign-key and filter columns of the decisions. |
 | `moderation_appeals` | `(action_id)`, `(status)`, `(reviewed_by_user_id)` | The appeal filters. |
 | `moderation_appeals` | unique `(action_id, appellant_user_id)` partial on `status = 'pending'` | One open appeal per decision and appellant. |
-| `moderation_appeals` | unique `(action_id, appellant_user_id)` | The composite foreign key target that enforces "only the banned user may appeal". |
 | `moderation_messages` | `(action_id)` | The message references of a decision. |
 | `moderation_cases` | `(subject_user_id)`, `(status)` | The case filters. |
 | `role_assignments` | unique `(user_id)` partial on `status = 'active'` | One active role per user. |
@@ -1381,9 +1377,9 @@ they exist before the first handler query reaches the database.
 | `telegram_users` | `(first_name_lower, user_id)` default opclass | The paged users list sort on `first_name_lower`, the default sort. |
 | `user_settings` | primary key `(user_id)` | One preference row per user. |
 | `promotion_requests` | unique `(request_id)` | One row per request ID. |
-| `promotion_requests` | `(target_id, status)` | Per-target history. |
-| `promotion_requests` | unique `(target_id)` partial on `status = 'pending'` | One pending request per user (concurrent promotes collapse to one entry). |
-| `promotion_requests` | `(status, requested_date)` | `all_pending()` filter and oldest-first sort. |
+| `promotion_requests` | `(target_user_id)` | Per-target history and the pending lookup. |
+| `promotion_requests` | unique `(target_user_id)` partial on `status = 'pending'` | One pending request per user (concurrent promotes collapse to one entry). |
+| `promotion_requests` | `(status)` | The pending filter of `all_pending()` and `pending_count()`. |
 | `mtproto_state` | `(date)` | `get_update_states()` oldest-first sort. |
 | `mtproto_state` | `(usernames)` GIN | MTProto peer lookup by username. |
 | `mtproto_state` | `(id)` with `text_pattern_ops` | The row key carries the session namespace as a prefix, so the peer and update-state lookups match on a prefix. |
@@ -1424,7 +1420,7 @@ TypedDict from `documents.py` when reading or inserting records.
 | `join_requests` | `PendingGroupDoc` |
 | `chat_settings` | `ChatSettingsDoc` |
 | `user_settings` | `UserSettingsDoc` |
-| `role_assignments` | `RoleDoc`, `AdminDoc` |
+| `role_assignments` | `AdminDoc` |
 | `role_assignments` (index reference) | `RoleRefDoc` |
 | `promotion_requests` | `PromotionRequestDoc` |
 

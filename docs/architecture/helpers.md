@@ -50,7 +50,6 @@ Decorators provide authorization, handler-level rate limiting, and debug tracing
 | `THROTTLE_FEDERATION` | 3 calls / 60 s | Federation-wide commands that fan out over every group. |
 | `THROTTLE_BULK` | 3 calls / 300 s | Bulk commands that run for minutes. |
 | `THROTTLE_CRITICAL` | 1 call / 300 s | A single destructive operation per window. |
-| `THROTTLE_SWEEP` | 2 calls / 300 s | The scheduled federation sweep. |
 
 The Redis key already carries the handler name, so two handlers on the same tier keep independent buckets.
 

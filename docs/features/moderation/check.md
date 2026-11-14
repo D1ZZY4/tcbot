@@ -224,7 +224,7 @@ user.
 
 The indexes declared in `tcbot/database/base/` make this view fast:
 
-| Collection | Index | Powers |
+| Table | Index | Powers |
 |---|---|---|
 | `moderation_actions` | `(target_user_id, created_at desc)` | the per-user decision history |
 | `moderation_actions` | `(action_type, status)` | the active-ban, active-mute, and warn filters |

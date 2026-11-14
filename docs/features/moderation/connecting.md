@@ -149,7 +149,7 @@ The connection flow touches two tables:
 | `message_id` | Chat message ID of the auto-sent join prompt. |
 | `added_date` | UTC request time. |
 
-`add_group` is an `update_one` upsert keyed by `chat_id`, so reconnecting an existing group resets `is_active=True` and updates the title/owner. `add_group` and `add_pending` invalidate the relevant cache entries.
+`add_group` is an upsert on `chat_id`, so reconnecting an existing group resets `is_active=True` and updates the title/owner. The chat identity row (`telegram_chats`) and the connection row (`connected_chats`) are written in one transaction, and the first-connect date stays out of the conflict update so the join date in the statistics keeps its original value. `add_group` and `add_pending` invalidate the relevant cache entries.
 
 ## Edge cases
 

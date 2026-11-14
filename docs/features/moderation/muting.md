@@ -1,6 +1,6 @@
 # Muting
 
-This document describes the current federation mute and unmute behavior implemented by `tcbot/modules/mute.py` (the `/tcmute` and `/tcunmute` entry points), `tcbot/modules/helper/pipelines/mute_flow.py` (the `_execute_mute` and `execute_unmute` executors), `tcbot/utils/time_and_date.py` (the duration helpers), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation), and `tcbot/database/mutes_db.py` (the persistent `mutes` and `active_mutes` tables).
+This document describes the current federation mute and unmute behavior implemented by `tcbot/modules/mute.py` (the `/tcmute` and `/tcunmute` entry points), `tcbot/modules/helper/pipelines/mute_flow.py` (the `_execute_mute` and `execute_unmute` executors), `tcbot/utils/time_and_date.py` (the duration helpers), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation), and `tcbot/database/mutes_db.py` (the mute decisions in `moderation_actions` and the `active_mutes` view).
 
 For the ban flow, see [`banning.md`](banning.md). For the kick flow, see
 [`kicking.md`](kicking.md). For role auto-demotion on mute, see
@@ -21,7 +21,7 @@ flowchart TD
     ReasonStep -->|no| ReasonPrompt[WAITING_REASON]
     ReasonPrompt --> ProofStep
     ProofStep --> Exec[execute_mute: persist record then restrict]
-    Exec --> Store[log_mute + set_active_mute DB writes]
+    Exec --> Store[record_mute DB write]
     Store -->|write failed| AbortM[Retry notice, no group touched]
     Store -->|stored| FanOut[fan_out restrict + upload proof concurrently]
     FanOut --> Log[log channel post]
@@ -36,7 +36,7 @@ flowchart TD
 
 ## Purpose
 
-A federation mute restricts a user from sending messages, media, stickers, and polls across all active connected groups at once, plus the primary groups (`cfg.main_group`). Mutes may be timed (with a duration token) or permanent (`until_date=None`). The mute flow accepts an optional inline reason and optional proof, posts a federation mute log, writes an audit row to the `mutes` table, and persists an active-mute record in `active_mutes` so unmute and group-connect replay can find it. Targets that hold a federation role are auto-demoted when the mute is enforced.
+A federation mute restricts a user from sending messages, media, stickers, and polls across all active connected groups at once, plus the primary groups (`cfg.main_group`). Mutes may be timed (with a duration token) or permanent (`until_date=None`). The mute flow accepts an optional inline reason and optional proof, posts a federation mute log, and writes one mute decision to `moderation_actions`; the `active_mutes` view projects the decisions that are in force, so unmute and group-connect replay can find them. Targets that hold a federation role are auto-demoted when the mute is enforced.
 
 `/tcunmute` clears the active-mute record and restores full send permissions across the same set of groups.
 
@@ -156,7 +156,7 @@ Execution order:
 
 1. Resolve the origin chat from the update; abort before any side effect when it is absent.
 2. Build the active-groups list: `groups_db.active_groups()` plus any primary groups (`cfg.main_group`) that are not already present. A fetch outage aborts with a retry notice and no group is touched.
-3. Persist `db.mutes_db.log_mute(...)` and `db.mutes_db.set_active_mute(target_id, until=until)` first. Either write failing aborts with a retry notice and no group is touched (fail-closed, mirroring the ban flow and the warn auto-ban): enforcing chats without an `active_mutes` row would leave a restriction that `/tcunmute` refuses to lift.
+3. Persist `db.mutes_db.record_mute(...)` first. A failing write aborts with a retry notice and no group is touched (fail-closed, mirroring the ban flow and the warn auto-ban): enforcing chats without a stored decision would leave a restriction that `/tcunmute` refuses to lift.
 4. Build the restriction `ChatPermissions(can_send_messages=False)` and the `until_date` value (`utc_now() + duration` or `None` for permanent).
 5. Remove the target's effective role via `demote_before_enforcement(..., trigger="mute")` (best-effort; the mute proceeds even if the demote fails).
 6. Fan `restrict_chat_member` across the group list with `fan_out(...)` while uploading proof to `cfg.proofs` concurrently (caption `messages.proof_caption_new`). Failed calls are counted with `count_transient_errors(results)`; an upload failure degrades to no proof link.
@@ -185,39 +185,51 @@ The fan-out errors are counted but do not roll back the DB mute record; group co
 2. Build the full-perms `ChatPermissions` with all messaging permissions enabled.
 3. Fetch active groups with `db.groups_db.active_groups()`. A fetch outage aborts with a retry reply before anything is touched, so the active record stays and a retry works.
 4. Fan `restrict_chat_member(chat_id, target_id, permissions=full_perms)` across the connected groups plus the primary groups and count transient failures.
-5. Clear the active-mute record with `db.mutes_db.clear_active_mute(target_id)` before announcing. A clear failure aborts with a retry reply and no success message, so a failed clear never announces a restored user. When every group failed, the record is kept instead and the reply asks for a retry, so a re-run re-drives the full fan-out.
+5. Clear the active-mute decision with `db.mutes_db.clear_active_mute(target_id)` before announcing. A clear failure aborts with a retry reply and no success message, so a failed clear never announces a restored user. When any group failed, the decision is kept instead and the failure notice asks for a retry, so a re-run re-drives the full fan-out.
 6. Run two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
    - `bot.send_message(cfg.logs, unmute_log, ...)`.
    - `msg.reply_text(reply, ...)`.
 
-The reply reads `<user> has been unmuted - restored in <ok>/<total> groups.`
+The reply reads `<user> has been unmuted.` followed by the applied line, which names how many groups were restored.
+
+### Unmute failure reporting
+
+The fan-out outcome is reported through the shared `replies.applied_summary` helper, the same one the ban and the warn threshold ban use, so the four federation executors report a partial enforcement the same way.
+
+- A complete unmute renders the `muting.applied.full` line: `Restored in <total>/<total> groups.`
+- A partial unmute renders `muting.note.unmute_partial`, which says the user was unmuted in some groups only and names the groups that failed, followed by the `muting.applied.partial` line with the restored and failed counts. The mute decision is kept, so a later `/tcunmute` reaches the groups that failed.
+- A total failure renders `muting.note.unmute_failed` followed by the `muting.applied.none` line, which names every group that refused and points at the bot's admin rights. The mute decision is kept.
+
+A benign Telegram refusal (the user was never in the chat, the chat is gone) counts as applied: there was nothing to restore there.
 
 ## Database impact
 
-The `mutes` table stores audit rows; `active_mutes` stores the live restriction record.
+A mute is one row in `moderation_actions` with `action_type = 'mute'`. The live state and the history are the same row: an active mute is a decision whose `status` is `active`, and lifting it moves the row to `revoked`. The `active_mutes` view projects the rows that are in force.
 
-`mutes` document fields:
+`record_mute` writes the decision and the case that holds it in one transaction, so a mute without an investigation cannot exist. A second mute of an already-muted user is a new decision that supersedes the old one: the history keeps the first mute and its reason, and only the newest decision is in force. The stored deadline never moves backwards, so a timed mute cannot shorten a longer restriction and a permanent mute is never downgraded to a timed one.
+
+`MuteDoc` document fields:
 
 | Field | Meaning |
 |---|---|
-| `user_id` | Muted Telegram user ID. |
+| `target_user_id` | Muted Telegram user ID. |
 | `chat_id` | Group chat ID where the mute command was issued. |
 | `reason` | Moderator-provided reason or localized `replies.no_reason(locale)` text. |
-| `admin_id` | Telegram user ID of the moderator. |
+| `actor_user_id` | Telegram user ID of the moderator. |
 | `timestamp` | UTC mute creation time. |
-| `duration_secs` | Optional; total seconds when the mute is timed. |
+| `duration_secs` | Optional; total seconds when the mute is timed, absent for a permanent one. |
 
-`active_mutes` document fields:
+`ActiveMuteDoc` document fields (the `active_mutes` view):
 
 | Field | Meaning |
 |---|---|
 | `user_id` | Muted Telegram user ID. |
 | `until_date` | UTC datetime when the restriction expires, or `None` for permanent. |
-| `timestamp` | UTC record-write time. |
+| `timestamp` | UTC decision-write time. |
 
-Expired timed mutes are filtered at query time by `get_active_mute` and `active_mute_docs` using the predicate `$or: [{until_date: None}, {until_date: {$gt: now}}]`. A TTL index on `active_mutes.until_date` additionally auto-deletes expired timed rows from storage; permanent mutes (`None`/missing) never TTL-expire.
+The `active_mutes` view filters on `status = 'active'` and on the deadline (`expires_at IS NULL OR expires_at > now()`), so an expired timed mute is not in force even before the daily sweep moves it to its expired state.
 
-`active_mutes` is consumed by:
+The active mute is consumed by:
 
 - `execute_unmute` to decide whether to proceed.
 - `on_bot_added` -> `connection.complete_join` -> `mutes_db.active_mute_docs()` so newly connected groups replay the mute immediately via `restrict_chat_member`.
@@ -260,9 +272,9 @@ Key behaviors to keep in mind:
 8. Proof is skippable; skipped proof records nothing.
 9. The `_UNMUTE_CMDS` filter is excluded from the mute conversation fallback so unmute can interrupt a pending mute conversation.
 10. `execute_mute` restricts across `active_groups()` plus `cfg.main_group`, deduplicated.
-11. `execute_mute` writes both `log_mute` (audit) and `set_active_mute` (live record) so group connect can replay.
+11. `execute_mute` writes the mute decision before it restricts any group, so group connect can replay an active mute.
 12. `execute_unmute` refuses to fan unrestrict calls when no active mute record exists.
 13. The `until_date` value matches the value passed to `restrict_chat_member`; `None` means permanent.
-14. Expired timed mutes are excluded from `get_active_mute` and `active_mute_docs` by query-time filtering, and a TTL index prunes the expired rows from storage.
+14. Expired timed mutes are excluded from `get_active_mute` and `active_mute_docs` by query-time filtering, and the daily sweep moves the expired decisions to their expired state.
 15. Federation log send failure does not roll back the mute.
 16. Newly connected groups reapply active mutes on connect via `connection.complete_join`.

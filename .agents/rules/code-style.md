@@ -252,7 +252,7 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 - Feature and command modules must not build SQLAlchemy statements directly or perform raw insert, update, or delete operations.
 - Place new database concerns in descriptive `*_db.py` modules.
 - When a database module exceeds the file budget, split it into a same-named `*_db/` package following the module-splitting rules.
-- Add indexes for new tables and index-sensitive queries in `tcbot/database/base.py`, and ship an Alembic revision with them.
+- Add indexes for new tables and index-sensitive queries in `tcbot/database/base/`, and ship an Alembic revision with them.
 - Keep database helpers asynchronous and fully typed.
 - Invalidate relevant caches after cache-sensitive writes.
 - Use `documents.py` for document shapes and `Literal` aliases.

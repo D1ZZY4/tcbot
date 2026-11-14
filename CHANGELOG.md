@@ -55,7 +55,6 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Circuit-breaker and member-cache contracts are pinned** (`tests/test_circuit_breaker.py`, `tests/test_member_cache_writes.py`, `tests/test_complete_join.py`): the recovery probe transition, the change-detection write, and the connect replay budget are covered as executable contracts. Behavior changes: none.
 
-- **MongoDB query shapes are verified without a live server** (`pyproject.toml`, `uv.lock`, `tests/test_ban_uniqueness_mongo.py`): the duplicate-ban migration and the one-active-ban guarantee depend on MongoDB semantics a hand-written double cannot prove, so the in-memory MongoDB engine runs the same aggregation pipeline and the same partial unique index. Behavior changes: none; the dependency is development-only.
 - **Production observability via optional extras** (`tcbot/alive.py`, `tcbot/__main__.py`, `tcbot/__init__.py`, `config.env.example`): a `/metrics` endpoint on the keep-alive server when prometheus-client is installed, the uvloop event loop on Linux when the package is present, and Sentry initialisation when `SENTRY_DSN` is set. Behavior changes: the operations surfaces appear only with their extras configured.
 
 - **Property-based invariant checks** (`tests/test_property.py`): hypothesis-backed checks that `esc()` never emits an unescaped special, `parse_list` never raises, and `message_link` stays canonical. Behavior changes: none for operators.
@@ -71,11 +70,9 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Runtime builder is public** (`tcbot/__main__.py`, `tcbot/serverless.py`): the shared builder, app build, and handler wiring use public names. Behavior changes: none.
 
-- **Fresh role and connection reads for enforcement gates** (`tcbot/database/users_roles.py`, `tcbot/database/groups_db.py`, `tcbot/modules/helper/decorators/`): owner, effective-role, and connection lookups accept a fresh bypass that reads MongoDB directly and refreshes the cache. Enforcement gates use it so a demotion, transfer, or disconnect in another process is never hidden for the cache TTL; display reads keep the cached fast path. Behavior changes: demotions, transfers, and disconnects take effect immediately for moderation commands.
+- **Fresh role and connection reads for enforcement gates** (`tcbot/database/users_roles.py`, `tcbot/database/groups_db.py`, `tcbot/modules/helper/decorators/`): owner, effective-role, and connection lookups accept a fresh bypass that reads the database directly and refreshes the cache. Enforcement gates use it so a demotion, transfer, or disconnect in another process is never hidden for the cache TTL; display reads keep the cached fast path. Behavior changes: demotions, transfers, and disconnects take effect immediately for moderation commands.
 
 - **Broadcast coverage for partial failures** (`tests/test_broadcasting.py`): broadcast counting is pinned for total success and for mixed benign and transient failures. Behavior changes: none for operators.
-
-- **Direct pymongo dependency** (`pyproject.toml`, `uv.lock`): the code imports `pymongo.errors` and `bson` in many modules, so the dependency is now declared explicitly within the major version the project already runs. Behavior changes: none; the resolved version is unchanged.
 
 - **Authorization checks for federation origin and bot verification** (`tcbot/modules/helper/guards.py`, `tcbot/modules/helper/identity.py`, `tests/test_authz.py`): a shared origin guard requires moderation commands to start from a connected or primary group, and a tri-state bot check distinguishes a verified human from a verified bot and from an unknown lookup. The new checks fail closed on lookup failure and propagate cancellation. Behavior changes: disconnected groups are refused, and unknown ownership-transfer targets ask for a retry.
 
@@ -88,8 +85,6 @@ All notable changes to this project are documented here. For workflow details, s
 - **Modern dependency stack for structured logging, testing, and code quality** (`pyproject.toml`, `.pre-commit-config.yaml`, `tcbot/utils/logger.py`): logging runs on `loguru` with `contextvars`-based per-request context, bridged to stdlib so capture and error shipping keep working, plus `pytest-asyncio` for proper async test execution, `pre-commit` with Ruff and pyright hooks for automated quality enforcement, and `py-spy` for production profiling. Two dependencies (`taskiq`, `pydantic-settings`) were evaluated but excluded due to Python 3.14 compatibility issues with pydantic's type evaluation internals; they will be re-added when pydantic releases a compatible version.
 
 - **Parallel test execution** (`pyproject.toml`, `uv.lock`, `.github/workflows/test-pytest.yml`, `docs/operations/ci-cd.md`): the dev group gains `pytest-xdist` (Python 3.14 support verified upstream and by a local parallel run) and CI runs the suite with `-n auto`, and the serial and parallel runs cover the same ground. Behavior changes: none, faster feedback only.
-
-- **Sync reconciles active mutes** (`tcbot/modules/sync.py`, `tcbot/database/scheduler.py`, `i18n/en-US/syncing.toml`, `i18n/id-ID/syncing.toml`, `docs/features/moderation/sync.md`): bare and targeted runs re-apply live mutes within the shared pair budget after the ban sweep, and the summary gains a re-muted count. Restricted non-muted users are never unrestriced. Behavior changes: sweeps now restrict seemingly-unrestricted muted members.
 
 - **Warn auto-ban stores the warn proof on the ban record** (`tcbot/modules/helper/pipelines/warn_flow.py`, `tests/test_warn_autoban_guard.py`, `docs/features/moderation/warnings.md`): the proof upload collected with the threshold warn becomes the ban `proof_message_id`, so `/check` shows View Proof instead of an empty slot. Behavior changes: auto-ban records now carry the warn proof.
 
@@ -133,7 +128,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The help sections have one order** (`tcbot/modules/helper/messages/replies.py`, the command modules): every command module assembled its help entry by hand, and two modules placed the per-command help bodies on opposite sides of the target-syntax section. One builder now owns the section order. Behavior changes: the per-command help bodies of `/tcpromote` render before the target-syntax section, like they already did in `/check`.
 
-- **The kick and mute histories share one shape** (`tcbot/database/event_history.py`, `tcbot/database/kicks_db.py`, `tcbot/database/mutes_db.py`): the newest-first paging, the per-user count, and the chat-migration repoint were two copies of the same code. Behavior changes: none.
+- **The kick and mute histories share one shape** (`tcbot/database/kicks_db.py`, `tcbot/database/mutes_db.py`): the newest-first paging, the per-user count, and the chat-migration repoint were two copies of the same code. Behavior changes: none.
 
 - **The error reporter decides before it schedules** (`tcbot/error_reporter.py`): every error line created a task and scanned the whole dedupe map, on the event loop, exactly when an incident floods it. The decision now happens before the task is created, and the map is pruned from the front instead of walked. Behavior changes: none.
 
@@ -179,7 +174,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **A busy conversation no longer starves the federation** (`tcbot/utils/update_processor.py`): the update processor took a global concurrency slot before the conversation lock, so every update queued behind a busy conversation held a slot while it waited. A burst large enough to fill the cap left every other chat without a handler. The processor now takes the conversation lock first. Behavior changes: the global cap bounds the handlers that run rather than the ones that wait.
 
-- **The scheduler's database client fails fast** (`tcbot/database/mongos.py`, `tcbot/database/scheduler.py`): the schedule store reads and writes on the event loop, but its client inherited the main client's 45-second socket timeout, so an unreachable database could freeze the webhook receiver and every handler for that long. The store now has its own short timeouts and the scheduler retries the read on its own schedule. Behavior changes: a database outage stalls the schedule store for at most a few seconds instead of tens of seconds.
+- **The scheduler's database client fails fast** (`tcbot/database/scheduler.py`): the schedule store reads and writes on the event loop, but its client inherited the main client's 45-second socket timeout, so an unreachable database could freeze the webhook receiver and every handler for that long. The store now has its own short timeouts and the scheduler retries the read on its own schedule. Behavior changes: a database outage stalls the schedule store for at most a few seconds instead of tens of seconds.
 
 - **One throttle table for every command module** (`tcbot/modules/helper/decorators/ratelimit.py`, `tcbot/modules/`): the twenty-three command modules each declared their own rate-limit constants, in four different spellings, so two handlers that meant the same thing could throttle differently. Nine named tiers now hold every budget, and each handler names the tier it draws from. Behavior changes: none; every handler keeps the exact limit and window it had before.
 
@@ -199,7 +194,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The legacy help attributes are gone** (`tcbot/modules/help.py`, `tcbot/modules/`): every help-bearing module declared the same content three times, and the builder read the two legacy copies. The builder now reads the unified entry through the module's `get_help(locale)` builder. Behavior changes: none; the help output is unchanged.
 
-- **The paged users list is served by the indexes** (`tcbot/database/mongos.py`, `tcbot/database/users_cache.py`): the name mirrors now carry a compound index with the user id tie-break the page order needs, so the list no longer sorts in memory over the whole member cache. Behavior changes: the user list is ordered by the lowercase name mirrors, so a capitalised name no longer sorts before every lowercase one.
+- **The paged users list is served by the indexes** (`tcbot/database/base/identity.py`, `tcbot/database/users_cache.py`): the name mirrors now carry a compound index with the user id tie-break the page order needs, so the list no longer sorts in memory over the whole member cache. Behavior changes: the user list is ordered by the lowercase name mirrors, so a capitalised name no longer sorts before every lowercase one.
 
 - **The schedules run on UTC** (`tcbot/database/scheduler.py`): the schedules inherited the host's local zone, which is unpicklable when the zone came from a file stream and host-dependent besides, so the daily expiry fired at a different local midnight on every machine. The schedules and the stored triggers now run on UTC. Behavior changes: none; the daily expiry fires at the same wall-clock time everywhere.
 
@@ -227,7 +222,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The main-group check has one owner** (`tcbot/modules/helper/pipelines/appeal_submit_flow.py`): the group-appeal entry compared the chat id with the configured main group inline instead of using the shared primary-group guard. The guard now decides it everywhere. Behavior changes: none; the same chats are accepted.
 
-- **The hot path has a measured baseline** (`scripts/benchmark_hotpath.py`, `docs/operations/performance.md`): the database call transport, the two-level cache, and the bounded fan-out can now be measured in-process, without MongoDB, Redis, or a Telegram connection. Behavior changes: none; the benchmark is a development tool.
+- **The hot path has a measured baseline** (`scripts/benchmark_hotpath.py`, `docs/operations/performance.md`): the database call transport, the two-level cache, and the bounded fan-out can now be measured in-process, without a database server, Redis, or a Telegram connection. Behavior changes: none; the benchmark is a development tool.
 
 - **One configuration model instead of an adapter layer** (`tcbot/__init__.py`): the runtime configuration was parsed into one model and then forwarded property by property through a second class. Behavior changes: none; the same values are available under the same names, the list settings are immutable, and the model rejects mutation after loading.
 
@@ -235,8 +230,6 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Local artifacts stay out of version control** (`.gitignore`): coverage data, pytest and hypothesis caches, HTML reports, and the proof-migration resume state are ignored, so local runs never leak into commits. Behavior changes: none for operators.
 - **Manifest realigned to grouped dependency sets** (`pyproject.toml`, `uv.lock`): runtime, optional, and development dependencies are organised by responsibility; the test lint ignores narrow to the specific doc rules tests actually skip, and coverage is wired into the test workflow. Behavior changes: none for operators.
-
-- **Database layer moves from Motor to synchronous PyMongo** (`tcbot/database/mongos.py`, `tcbot/database/*_db.py`, `tcbot/database/mtproto_store.py`, `tcbot/database/scheduler.py`, `scripts/migrate_proofs.py`): `db_call` now runs a zero-argument sync operation on a worker thread through the same MongoDB circuit; collections, indexes, schemas, and helper signatures are unchanged. A cancelled operation may still land once its thread finishes, which the atomic read patterns already tolerate. Behavior changes: none for operators.
 
 - **Speedtest drops its heavy provider dependency** (`tcbot/modules/netspeed.py`, `tests/test_netspeed.py`, `pyproject.toml`): `/speedtest` now measures latency, download, and upload against speedtest.net over the certifi TLS bundle, rendering the same result fields; unavailable geodata shows "N/A". The share image is gone. Behavior changes: results no longer carry a share image.
 
@@ -262,13 +255,11 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Message helpers split into safe edits and audit logs** (`tcbot/modules/helper/messages/`): the audit-log builders move to `audit_logs.py` and the safe-edit transport to `safe_edits.py` behind the same package import surface. Behavior changes: none.
 
-- **Single-group enforcement calls are time-bounded** (`tcbot/modules/greeting.py`, `tcbot/modules/greeting.py`, `tcbot/modules/helper/pipelines/kick_flow.py`, `tcbot/modules/sync.py`): join, join-request, kick, and sync enforcement writes now share the 3-second Telegram lookup budget instead of holding a join or fan-out slot until the HTTP timeout. Behavior changes: stalled calls now fail fast and retry on the next event instead of blocking.
-
-- **Sync staff stripping runs concurrently** (`tcbot/modules/sync.py`): role removals for banned/muted holders now run through the bounded gather helper instead of one await per holder. Behavior changes: none; same removals, less sequential latency.
+- **Single-group enforcement calls are time-bounded** (`tcbot/modules/greeting.py`, `tcbot/modules/helper/pipelines/kick_flow.py`): join, join-request, and kick enforcement writes now share the 3-second Telegram lookup budget instead of holding a join or fan-out slot until the HTTP timeout. Behavior changes: stalled calls now fail fast and retry on the next event instead of blocking.
 
 - **Localized fallbacks for bot name and admin name** (`tcbot/modules/privacy.py`, `tcbot/modules/check.py`, `i18n/`): the privacy bot-name fallback and the checkme admin-name fallback read `privacy.msg.bot_fallback` and `checking.profile.admin_fallback` in the viewer's locale. Behavior changes: Indonesian viewers read translated fallback names; default-locale wording is unchanged.
 
-- **Shared document types now type their writers** (`tcbot/database/users_roles.py`, `tcbot/database/settings_db.py`, `tcbot/database/users_roles.py`): `set_role` and `set_user_locale` write through `RoleDoc` and `UserSettingsDoc`, and `VALID_ROLES` is a literal tuple so the validation narrows the role. Behavior changes: none.
+- **Shared document types now type their readers** (`tcbot/database/users_roles.py`, `tcbot/database/settings_db.py`): the role and preference helpers return the shared document shapes, and `VALID_ROLES` is a literal tuple so the validation narrows the role. Behavior changes: none.
 
 - **Unused helpers removed** (`tcbot/utils/circuit_breaker.py`, `tcbot/utils/i18n.py`, `tcbot/utils/prefixes.py`): `is_open`, `reload_catalog`, and `_BotLike` had no callers. Behavior changes: none.
 
@@ -298,15 +289,13 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Docker port follows the environment** (`Dockerfile`, `docker-compose.yml`): the published port and health probe use the configured port instead of a fixed 5000. Behavior changes: custom ports work in Docker.
 
-- **Moderation requires a federation origin** (`tcbot/modules/bans.py`, `tcbot/modules/mute.py`, `tcbot/modules/kick.py`, `tcbot/modules/warns.py`, `tcbot/modules/unban.py`, `tcbot/modules/sync.py`): ban, unban, and sync accept bot DM or any connected or primary group, while mute, warn, kick, and their manage commands require a connected or primary group. A connection-state outage blocks the action with a retry notice instead of proceeding. Behavior changes: commands from disconnected groups, and private mute, warn, and kick, are refused.
+- **Moderation requires a federation origin** (`tcbot/modules/bans.py`, `tcbot/modules/mute.py`, `tcbot/modules/kick.py`, `tcbot/modules/warns.py`, `tcbot/modules/unban.py`): ban and unban accept bot DM or any connected or primary group, while mute, warn, kick, and their manage commands require a connected or primary group. A connection-state outage blocks the action with a retry notice instead of proceeding. Behavior changes: commands from disconnected groups, and private mute, warn, and kick, are refused.
 
 - **Ownership transfer needs a verified human** (`tcbot/modules/admins.py`, `tcbot/modules/helper/identity.py`): transfer proceeds only when the target is verified human. A verified bot is refused, and an indeterminate lookup asks for a retry instead of granting ownership on the benefit of the doubt. Promotion keeps allowing unknown off-group targets. Behavior changes: transfer during a lookup outage asks for a retry.
 
 - **Telegram circuit trips on accumulated transients** (`tcbot/utils/circuit_breaker.py`, `tcbot/utils/dispatch.py`): ordinary successes no longer erase earlier transient failures, so a partial outage with interleaved successes can still open the circuit and skip doomed slots. Only a successful recovery probe closes it. Behavior changes: partial outages pause quickly instead of firing timeouts.
 
 - **Catalog loads at startup on both transports** (`tcbot/__main__.py`, `tcbot/serverless.py`): the message catalog loads once during startup rather than on the first command, so the first reply no longer pays the full file scan on the event loop. Behavior changes: none visible, faster first reply.
-
-- **Index startup stays inside the connection pool** (`tcbot/database/mongos.py`): every index creation runs through the database circuit and the startup batch runs with bounded concurrency instead of firing all at once. Behavior changes: none on healthy startup.
 
 - **Member harvest batches its writes** (`tcbot/database/mtproto.py`): group backfill collects identities and flushes them in bounded batches instead of awaiting one write at a time, while the time budget, flood handling, and partial counts stay the same. Behavior changes: none, faster backfill.
 
@@ -322,7 +311,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Transports share one application builder and Redis decision** (`tcbot/serverless.py`, `tcbot/__main__.py`, `tcbot/database/redis_client.py`): the PTB builder chain lives once in the process entry point, the Redis connect/degrade decision lives once in the redis client, and serverless imports handlers from the entry module. Behavior changes: none.
 
-- **Chat-migration repoint in one helper** (`tcbot/database/_migration.py`, `kicks_db.py`, `mutes_db.py`, `warns_db/migrate.py`): kick, mute, and warn history repoint through one shared helper. Behavior changes: none; repoint-failure log lines now carry the shared helper's logger tag.
+- **Chat-migration repoint in one helper** (`tcbot/database/groups_db.py`, `tcbot/database/schema/functions.sql`): kick, mute, and warn history repoint through the one database function the group migration calls. Behavior changes: none; repoint-failure log lines now carry the shared helper's logger tag.
 
 - **Dependency versions bumped to latest releases** (`pyproject.toml`, `uv.lock`): lower bounds and pinned versions now track the current releases of every runtime and development dependency, including Motor, Flask, Redis, cachetools, Kurigram, loguru, msgspec, and the testing and lint tooling. Behavior changes: none.
 
@@ -358,11 +347,11 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Prefix-wide cache clears are never dropped** (`tcbot/database/cache/`): the mutation-queue bound skips revocations, and the clear wait is bounded so a dead backlog delays briefly instead of stalling. Behavior changes: revocations always reach Redis.
 
-- **MTProto store indexed and fresh** (`tcbot/database/mtproto_store.py`, `mongos.py`): username/phone lookups gain indexes, namespace patterns are escaped, and username writes bump the freshness timestamp the expiry check reads. Behavior changes: lookups stay fast as membership grows; refreshed names stop expiring early.
+- **MTProto store indexed and fresh** (`tcbot/database/mtproto_store.py`, `tcbot/database/base/runtime.py`): username/phone lookups gain indexes, namespace patterns are escaped, and username writes bump the freshness timestamp the expiry check reads. Behavior changes: lookups stay fast as membership grows; refreshed names stop expiring early.
 
-- **Scheduler store client fully bounded** (`tcbot/database/mongos.py`, `scheduler.py`): the job-store connection shares the socket and pool bounds. Behavior changes: none on healthy runs.
+- **Scheduler store client fully bounded** (`tcbot/database/scheduler.py`): the job-store connection shares the socket and pool bounds. Behavior changes: none on healthy runs.
 
-- **Health treats both circuits the same** (`tcbot/alive.py`): a half-open Telegram circuit degrades the verdict like MongoDB already did; Redis stays a hint-only field. Behavior changes: recovery probes report degraded instead of ok.
+- **Health treats both circuits the same** (`tcbot/alive.py`): a half-open Telegram circuit degrades the verdict like the database circuit already did; Redis stays a hint-only field. Behavior changes: recovery probes report degraded instead of ok.
 
 - **Independent reads run in parallel on promotion and appeal paths** (`tcbot/modules/admins.py`, `appeal_review_flow.py`): the promotion-list slice and its total, plus the review-card and DM locales on approve, reject, and appeal-reject, load in one gather instead of two serial round trips. Behavior changes: none, same replies with fewer sequential waits.
 
@@ -396,8 +385,6 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Undecodable Vercel updates answer 400, not 500** (`tcbot/serverless.py`): a payload that fails `de_json` can never parse on retry, so it is rejected like any other malformed body instead of inviting pointless Telegram retries. Matches the documented response contract. Behavior changes: decode failures return `400` instead of `500`.
 
-- **Sync pair selection never materializes the cross product** (`tcbot/modules/sync.py`): `take_pairs` takes from a lazy generator via `islice` instead of building the full user-by-group list before truncating, so a huge federation sweep no longer spikes memory and CPU to discard almost all of it. Same pairs, same truncation flag. Behavior changes: none.
-
 - **One owner for conversation state keys and list rendering** (`tcbot/modules/helper/pipelines/ban_flow.py`, `banning.py`, `kicking.py`, `muting.py`, `warnings.py`, `groups.py`, `start.py`, `tests/test_ban_flush_cleanup.py`): the ban key tuple lives once in `ban_flow` as `BAN_USER_DATA_KEYS` (the parallel entry-point list is gone, including a `ban_duration` entry nothing ever set), kick/mute/warn key tuples move to module level with the mute prompt ID completed, and the shared group-list renderer is public as `render_groups` instead of a cross-module private import. Behavior changes: none.
 
 - **Promotion and ownership transfer refuse verified bot targets** (`tcbot/modules/admins.py`, `tcbot/modules/helper/identity.py`, `i18n/en-US/admins.toml`, `i18n/id-ID/admins.toml`): a shared verified-only check (quoted sender, one bounded membership probe, one MTProto peer lookup) refuses bot targets, while unknown targets stay allowed so off-group promotions keep working. Behavior changes: promoting a proven bot, or transferring ownership to one, now replies with a refusal instead of granting privilege.
@@ -418,13 +405,11 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **User-list sorts limited to indexed fields** (`tcbot/database/users_cache.py`): unindexed sort keys fall back to first-name order instead of forcing a collection scan plus an in-memory sort. Behavior changes: requests for removed sort keys render in first-name order.
 
-- **Sync sweep order is deterministic** (`tcbot/modules/sync.py`, `docs/features/moderation/sync.md`): group and ban ID lists are sorted before pairing, so the checked order and the truncation victims are identical run to run. Behavior changes: repeated truncated sweeps converge instead of covering arbitrary slices.
-
 - **Webhook decode failures answer 400, enqueue failures 500** (`tcbot/alive.py`): undecodable bodies are rejected before the enqueue path, and the catch-all message names enqueueing only. Behavior changes: malformed webhook bodies return `400` instead of `500`; transient queue failures still return `503`/`500`.
 
 - **Health reports the update-queue depth** (`tcbot/alive.py`, `docs/operations/backup-and-restore.md`): the `/health` body gains an `update_queue` field showing PTB backlog (`null` before the receiver is wired). Behavior changes: one new response field for watchdog paging; the verdict logic is unchanged.
 
-- **Shutdown closes the shared MongoDB client** (`tcbot/database/mongos.py`, `tcbot/__main__.py`): the connection handle is retained at connect time and closed after every drain at teardown. Behavior changes: none on the happy path; pooled sockets release instead of lingering past shutdown.
+- **Shutdown closes the shared database engine** (`tcbot/database/engine.py`, `tcbot/__main__.py`): the engine is published only after the ping succeeds, and it is closed after every drain at teardown. Behavior changes: none on the happy path; pooled sockets release instead of lingering past shutdown.
 
 - **MTProto resolvers share one peer lookup** (`tcbot/database/mtproto.py`): name resolution and the bot-flag check funnel through a single fetch helper with identical flood handling, so the two can no longer disagree on failure semantics. Behavior changes: a flood wait during a bot-flag check now logs a warning like name resolution does.
 
@@ -445,8 +430,6 @@ All notable changes to this project are documented here. For workflow details, s
 - **Cron endpoint rejects POST explicitly** (`api/cron.py`): non-GET callers get `405` with a warning line instead of the default `501` silence. Behavior changes: POST now answers `405`.
 
 - **Both transports share one startup path** (`tcbot/__main__.py`, `tcbot/serverless.py`): the connect, index, owner-seed, Redis, and error-reporter steps live in one helper both transports call, so a change lands on webhook, polling, and serverless together. Serverless still skips MTProto as before. Behavior changes: none.
-
-- **Scheduler receives its sync runner explicitly** (`tcbot/database/scheduler.py`, `tcbot/__main__.py`): the enforcement runner is now a start argument instead of a private attribute patched after startup, so the scheduled sweep can never run before its runner exists. Behavior changes: none.
 
 - **Check keyboards have one owner** (`tcbot/modules/helper/keyboards/check.py`, `check_flow.py`): the back and paged markups are built in the keyboard package, and the check flows keep only the text rendering. Button labels, callback data, and in-flight keyboards are unchanged. Behavior changes: none.
 
@@ -488,15 +471,19 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Logging never raises on format or timestamp failures** (`tcbot/utils/logger.py`, `tcbot/utils/time_and_date.py`): percent formatting and console timestamp conversion fall back to a degraded line instead of raising into the caller, and the duration helper imports the catalog at module level. Behavior changes: none on the happy path; malformed format strings and shutdown stamp failures render placeholders instead of crashing the handler.
 
-- **Database helpers live in single files** (`tcbot/database/bans_db/`, `tcbot/database/groups_db.py`, `tcbot/database/mongos.py`, `tcbot/database/mtproto.py`, `tcbot/database/mtproto_store.py`, `tcbot/database/scheduler.py`, `tcbot/database/users_cache.py`, `tcbot/database/users_roles.py`, `tcbot/database/warns_db.py`): every former `*_db/` and support package merges its submodules into one file, so each domain has one home. Behavior changes: none; `db.*` keeps the same functions and patchable globals, and scheduler job paths stay on `tcbot.database.scheduler`.
-
 - **Dependency versions bumped to latest releases** (`pyproject.toml`, `uv.lock`): `cachetools` moves to 8.0.0 and `kurigram` to 2.2.27, with `kuricrypt` replacing `tgcrypto` and `virtualenv` to 21.15.6 via the lockfile. Behavior changes: none. The `apscheduler` pin stays at 3.11.3.
-
-- **Sync runner imports at startup** (`tcbot/__main__.py`): the enforcement sync runner now imports at module level instead of inside startup, so the scheduler wiring follows the same top-level import rule as every other handler dependency. Behavior changes: none; scheduled sweeps run as before.
 
 - **Join notices await directly** (`tcbot/modules/greeting.py`): the single banned-joiner notice now awaits its reply directly instead of gathering a zero-or-one item list, keeping the same debug log and cancellation propagation with one less indirection. Behavior changes: none; replies and logs are unchanged.
 
 ### Fixed
+
+- **A second polling instance says so instead of flooding the log** (`tcbot/__main__.py`, `tests/test_runtime_errors.py`): Telegram answers a poll from a second instance with a conflict, and the handler logged it as an unhandled exception with a traceback every few seconds, which buried the rest of the log and shipped a report for an operator situation. The conflict now gets one actionable warning line, and the owner still hears about it through the owner DM. Behavior changes: none.
+
+- **A bot started outside Replit no longer hands its updates away** (`tcbot/__init__.py`, `tcbot/__main__.py`, `tests/test_config.py`): the webhook URL was picked up from `REPLIT_DEV_DOMAIN` without checking that this process is the one the platform exposes. A workspace shell that starts the bot by hand inherited the variable, registered the Replit dev domain with Telegram, and then received nothing: the bot looked healthy and answered no command. The dev domain is now used only when a Replit runtime variable proves the process is the application, and every other case polls. Behavior changes: a local run of the bot polls instead of registering a webhook it cannot receive; a Replit deployment and an explicit `WEBHOOK_URL` are unchanged.
+
+- **A partial unmute no longer reads as a total one** (`tcbot/modules/helper/pipelines/mute_flow.py`, `i18n/en-US/muting.toml`, `i18n/id-ID/muting.toml`, `tests/test_unmute_flow.py`): the unmute path reported the same notice whether every group failed or only some of them did, and that notice claimed the user could not be unmuted in any group. A partial unmute now says how many groups were restored, names the groups that failed, and keeps the mute record so a later retry reaches them. Behavior changes: a partial unmute reports the restored and failed groups instead of claiming a total failure, and the complete unmute notice carries the same applied line.
+
+- **The unwarn log line is built once** (`tcbot/modules/helper/pipelines/warn_flow.py`): the unwarn executor built the federation log text before the warning was removed and built it again after, so the first one was discarded. The duplicate is gone, so the two copies cannot drift apart. Behavior changes: none.
 
 - **An overdue background job is rescheduled instead of firing on every tick** (`tcbot/database/scheduler.py`, `tests/test_scheduler_jobstore.py`): the job store skipped the whole start sequence of the library to keep its table creation off the event loop, and that also skipped the part that binds the store to its scheduler. A job read back from the store therefore carried no scheduler, and the scheduler could not turn the next run time of a due job into a real date: the reschedule raised inside the scheduler callback, the new run time was never written back, and the job stayed overdue. Every daily job of the community ran again on every scheduler tick, each run a delete and a transaction against the database. The store is bound to its scheduler again, and only the table creation stays off the event loop. Behavior changes: none; an overdue job runs once and is scheduled for its next slot.
 
@@ -610,7 +597,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **An unresolved role is no longer treated as no role** (`tcbot/modules/helper/identity.py`): the target classification degraded to "regular user" when the role lookup failed. Because the protected-target refusals are keyed on the role kind, a database outage could remove the protection that keeps a Founder from being moderated. The classification now fails closed on an unresolved role. Behavior changes: a moderation action is refused while the role of the target cannot be resolved.
 
-- **The stored update-state sort no longer scans** (`tcbot/database/mongos.py`): the schedule store read the MTProto update states in date order without an index on that field, so every read sorted the namespace rows in memory. The field is indexed now.
+- **The stored update-state sort no longer scans** (`tcbot/database/base/runtime.py`): the schedule store read the MTProto update states in date order without an index on that field, so every read sorted the namespace rows in memory. The field is indexed now.
 
 - **A failed background task reports itself once** (`tcbot/utils/tasks.py`): a tracked task that raised was reported by the event loop as an unretrieved task exception, which re-entered the reporting path that produced it. The tracker retrieves the exception and logs it under the tracker's own label.
 
@@ -634,19 +621,15 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **A timed mute no longer downgrades a permanent one** (`tcbot/database/mutes_db.py`): writing a deadline over a stored permanent expiry would let the TTL index delete the row when that deadline passed, so the bot lost the enforcement state for a user it still restricted. The stored expiry now only ever moves further into the future. Behavior changes: a timed mute never shortens a longer expiry and never replaces a permanent one.
 
-- **A failed startup no longer leaks its resources** (`tcbot/__main__.py`, `tcbot/serverless.py`, `tcbot/database/mongos.py`): the Mongo client was published only after the ping succeeded, so a failed attempt kept a monitor thread and a socket alive, and the serverless path leaked one httpx client per failed warm invocation. The failed attempts now release what they opened. Behavior changes: none.
+- **A failed startup no longer leaks its resources** (`tcbot/__main__.py`, `tcbot/serverless.py`, `tcbot/database/engine.py`): the engine was published only after the ping succeeded, so a failed attempt kept a pool and its sockets alive, and the serverless path leaked one httpx client per failed warm invocation. The failed attempts now release what they opened. Behavior changes: none.
 
 - **A private chat no longer leaks into the error channel** (`tcbot/__main__.py`): the error report carried the user id, the chat id, and the message text of every failed update, so a personal message could reach the operator channel. A private chat now contributes the display name only. Behavior changes: the operator report names the sender but not the chat id and not the message text.
-
-- **A failed executor-role lookup no longer crashes the sweep** (`tcbot/modules/sync.py`): the targeted sweep read the executor role without a guard, so a database outage raised out of the handler instead of the retry notice. The lookup now fails closed. Behavior changes: none; an outage replies with the retry notice.
 
 - **Approving an appeal no longer unbans a user who kept their role** (`tcbot/modules/helper/pipelines/appeal_review_flow.py`, `tcbot/modules/unban.py`, `tcbot/modules/helper/pipelines/demote_flow.py`): the appeal-approve path demoted a role-holding target but ignored the result, while the `/tcunban` path checked it and aborted when the role survived. A target whose role outlived the demote was therefore unbanned with federation rank intact. Behavior changes: approving an appeal now blocks when the demote fails or when the role still resolves, replies with a localized notice, and leaves the ban active so the reviewer can retry.
 
 - **A rejected probe no longer strands the circuit half open** (`tcbot/utils/circuit_breaker.py`, `tcbot/utils/dispatch.py`): a recovery probe that ended in an API refusal or an application error only released the probe slot and left the circuit in `HALF_OPEN`, which admits one caller at a time and rejects every concurrent one. After a breaker trip the database layer collapsed to a single query at a time and a federation fan-out applied its enforcement to one group while reporting the rest as failures. Behavior changes: a probe that reaches the service closes the circuit; only a transient transport failure sends it back to `OPEN`.
 
-- **A name search no longer scans the whole member cache** (`tcbot/database/users_cache.py`, `tcbot/database/mongos.py`): the search matched a case-insensitive regex, and MongoDB cannot use an index for one, so every search scanned every member the bot had ever seen. The search now runs an indexed case-sensitive prefix query over lowercase mirror fields, and a startup backfill fills the mirrors for the rows older releases wrote. Behavior changes: none; the same names match.
-
-- **The enforcement sweep no longer overruns the per-group Telegram rate** (`tcbot/modules/sync.py`): the sweep issued every checked pair into one group, but Telegram admits twenty requests a minute per group, so the queued probes were cancelled by their own timeout and reported as enforcement failures that never happened. Each group now carries a bounded number of pairs per run, the ban and mute passes share that budget, and each run continues where the previous one stopped so the users past the cap are covered next time. Behavior changes: none; the sweep checks fewer pairs per run but reports no phantom failures.
+- **A name search no longer scans the whole member cache** (`tcbot/database/users_cache.py`, `tcbot/database/base/identity.py`): the search matched a case-insensitive pattern that no index could serve, so every search scanned every member the bot had ever seen. The search now runs an indexed case-sensitive prefix query over lowercase mirror fields, and a startup backfill fills the mirrors for the rows older releases wrote. Behavior changes: none; the same names match.
 
 - **A moderation command no longer resolves the executor role twice** (`tcbot/modules/helper/guards.py`): every authorization decorator already reads the executor's rank with a fresh read, and the executor-versus-target check read it again, so one moderation command cost nine database round trips. The check now takes the executor's role from the cache the decorator just refreshed and keeps the target read fresh. Behavior changes: none; a demotion of the target is still never hidden behind a cache window.
 
@@ -654,21 +637,19 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The group connect no longer runs for a quarter of an hour** (`tcbot/modules/helper/pipelines/connected_flow.py`): the enforcement replay sent every active ban and mute into the new group, but Telegram admits only 20 requests a minute per group, so a long list kept the connect handler running far past any request window and left the group half-enforced. Behavior changes: the replay runs within a bounded budget, reports how many bans and mutes it could not apply, and the connect is reported as a partial replay so the owner runs `/tcsync` to finish it.
 
-- **The enforcement sweep covers the main group** (`tcbot/modules/sync.py`, `tests/test_syncing.py`, `docs/features/moderation/sync.md`): the reconciliation sweep read only the connected groups, but the ban, mute, and unban executors also enforce in the main group. Because the main group is not part of `federated_groups`, a drift there was never looked at and could never be repaired. Behavior changes: the sweep and the targeted verification now run against the connected groups plus the main group, and the main group leads the sweep order so it always fits inside the pair budget.
-
 - **A malformed credential header is a rejection, not a server error** (`tcbot/utils/secrets.py`, `tcbot/alive.py`, `api/webhook.py`, `api/cron.py`, `tests/test_secrets.py`): the constant-time secret comparison rejected non-ASCII strings with a `TypeError`, so a request carrying a non-ASCII secret header raised inside the handler and surfaced as an unhandled failure instead of a clean rejection. Behavior changes: the webhook receiver answers 403 and the cron endpoint answers 401 for a malformed credential, exactly as they do for a wrong one.
 
 - **The revocation queue contract is testable without a Redis server** (`tests/test_cache_revocation_queue.py`): the queue-saturation tests never configured Redis, but the cache only enqueues L2 mutations when Redis is configured, so the two tests failed on a default checkout. The tests now declare the configuration the production contract requires. Behavior changes: none; the queue bound, the non-droppable revocation path, and the droppable hint path are unchanged.
 
 - **The check profile no longer reads the warn counters twice** (`tcbot/modules/helper/pipelines/check_flow.py`): the federation warn total is the sum of the per-group counts the profile already read, so the second query over the same rows is gone. Behavior changes: none; the total is the same.
 
-- **Database calls get their own worker pool and a per-call budget** (`tcbot/database/mongos.py`): database work shared the event loop's default executor with other blocking calls, and a caller waited for the full socket timeout on a hung operation. Behavior changes: database calls run on a dedicated bounded pool, a hung operation releases the caller after 20 seconds, and the timeout counts as an outage signal for the circuit breaker.
+- **Database calls get a per-call budget** (`tcbot/database/engine.py`): a caller waited for the full socket timeout on a hung operation, and a hung database call held the event loop's worker pool. Behavior changes: database calls run on the async engine, a hung operation releases the caller after 20 seconds, and the timeout counts as an outage signal for the circuit breaker.
 
 - **A Redis outage no longer disables the shared cache for the process lifetime** (`tcbot/database/redis_client.py`, `tcbot/database/cache/`): a Redis that was down at boot was never re-established, so cross-process role and connection state diverged until the key TTL expired. Behavior changes: the client is re-established lazily, at most one attempt per 30 seconds, and the shared cache recovers on its own.
 
 - **The Redis mutation queue is bounded at every level** (`tcbot/database/cache/redis_io.py`): revocation operations were never dropped, so a dead Redis grew the queue without limit. Behavior changes: past a thousand queued mutations even a revocation is dropped with an error-level warning instead of exhausting the process memory.
 
-- **One active ban per user is enforced by the database** (`tcbot/database/mongos.py`, `tcbot/database/bans_db/`): two moderators reaching the warn threshold at the same moment could store two active bans, so the profile and the appeal link disagreed on which ban was real. Behavior changes: a unique partial index keeps one active ban per user, the duplicates older releases left behind are deactivated (never deleted) on the next startup, and a lost insert race reuses the winning record instead of failing the moderation action.
+- **One active ban per user is enforced by the database** (`tcbot/database/base/moderation.py`, `tcbot/database/bans_db/`): two moderators reaching the warn threshold at the same moment could store two active bans, so the profile and the appeal link disagreed on which ban was real. Behavior changes: a unique partial index keeps one active ban per user, the duplicates older releases left behind are deactivated (never deleted) on the next startup, and a lost insert race reuses the winning record instead of failing the moderation action.
 
 - **The primary group is recognised again** (`tcbot/__init__.py`): the primary-group check rejected every chat ID below zero, but Telegram group and channel IDs are negative, so the main group never matched. Behavior changes: the main group is recognised as a primary destination, federation moderation is accepted from it, join enforcement runs there, and it can no longer be disconnected, removed, or connected like an ordinary group.
 
@@ -678,9 +659,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **A scheduler that cannot start fails the boot** (`tcbot/database/scheduler.py`): the captured startup error was written to a local variable instead of the module state the boot check reads, so the bot started with a dead scheduler and logged it as ready. Behavior changes: a broken job store aborts startup instead of serving traffic without scheduled maintenance.
 
-- **Scheduler startup no longer stalls the event loop** (`tcbot/database/scheduler.py`): the job store performs blocking database calls, which ran on the event loop and froze the webhook receiver while MongoDB was unreachable. Behavior changes: a degraded database delays startup instead of hanging the running bot.
-
-- **The bare sync sweep keeps Admin roles from a Developer** (`tcbot/modules/sync.py`): the sweep stripped staff rank from banned or muted holders and only the targeted run carried the executor rank, so a Developer could remove an Admin role through the command. Behavior changes: a Developer cannot strip an Admin role; the scheduled sweep still reconciles every staff role.
+- **Scheduler startup no longer stalls the event loop** (`tcbot/database/scheduler.py`): the job store performs blocking database calls, which ran on the event loop and froze the webhook receiver while the database was unreachable. Behavior changes: a degraded database delays startup instead of hanging the running bot.
 
 - **A banned user cannot gain federation rank** (`tcbot/modules/helper/guards.py`, `tcbot/modules/helper/pipelines/promote_flow.py`, `tcbot/modules/helper/pipelines/promo_decision_flow.py`): the promotion paths never checked for an active ban, so a banned user could hold staff rank and moderate from any chat where the ban did not land. Behavior changes: promotions, promotion requests, and the approval of a queued request refuse a banned target and fail closed when the ban state cannot be read.
 
@@ -697,8 +676,6 @@ All notable changes to this project are documented here. For workflow details, s
 - **Zero duration no longer becomes a permanent mute** (`tcbot/utils/time_and_date.py`): `parse_duration` rejects a zero value instead of returning a falsy delta the mute executor coerced to permanent. Behavior changes: `/tcmute <target> 0s` now errors instead of muting forever.
 
 - **New bans without proof no longer proceed** (`tcbot/modules/helper/pipelines/ban_flow.py`): a new ban whose proof upload returns nothing now aborts before any group is touched and explains the failure on the prompt. Behavior changes: proof-less new bans are refused instead of stored with proof zero.
-
-- **Sync keeps admin rank for non-founder executors** (`tcbot/modules/sync.py`): targeted `/tcsync` now carries the executor role into the staff-strip step, so a developer cannot strip an admin through sync. Behavior changes: admin rows survive targeted sync unless the executor is the founder; scheduled sweeps still reconcile all roles.
 
 - **Partial unmute no longer discards the mute record** (`tcbot/modules/helper/pipelines/mute_flow.py`): a partial fan-out now keeps the active mute so a later sync can re-drive the remaining chats. Behavior changes: partial unmute keeps the record and reports failure instead of clearing it.
 
@@ -726,15 +703,11 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Circuit breaker decays a sustained healthy run** (`tcbot/utils/circuit_breaker.py`): a long consecutive success streak clears the lifetime failure count. Behavior changes: failures spread over months no longer combine into a spurious open.
 
-- **Sync strips stale staff rank** (`tcbot/modules/sync.py`, `tests/test_syncing.py`, `docs/features/moderation/sync.md`): bare and targeted runs clear admin, developer, and tester rows from banned or muted holders before fan-out. Behavior changes: a re-promoted banned user no longer keeps rank through a sweep.
-
 - **Mute no longer demotes on an aborted reason** (`tcbot/modules/mute.py`): duration and reason checks now run before the auto-demote, so an overlong reason never strips a role. Behavior changes: role removal is skipped when the command aborts.
 
 - **Unban aborts when the role survives the cleanup demote** (`tcbot/modules/unban.py`): when the demote clears no row, the fresh role is re-read and the unban stops if the target still holds staff rank. Behavior changes: a still-staff target keeps both role and ban instead of being unbanned with rank intact.
 
 - **Join handling propagates shutdown** (`tcbot/modules/greeting.py`): new-member handling now propagates task cancellation instead of logging it as per-item failure. Behavior changes: none during normal operation.
-
-- **Sync treats unexpected refusals as failures** (`tcbot/modules/sync.py`, `docs/features/moderation/sync.md`): membership and enforcement errors now count through the shared benign check only, so non-benign refusals surface in the failed total. Behavior changes: some skips now read as failures.
 
 - **Cache fetch keeps mutual exclusion** (`tcbot/database/cache/twolevel.py`): a finishing fetch removes only its own lock, so concurrent misses for the same key cannot run two database fetches after a lock handoff. Behavior changes: none on single-threaded use; shared misses fetch once.
 
@@ -778,7 +751,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Silence-window ban flush re-checks executor rank** (`tcbot/modules/helper/pipelines/ban_flow.py`, `docs/features/moderation/banning.md`): the background flush now checks that the moderator still meets Developer rank before enforcing, so a moderator demoted during proof collection can no longer ban from a stale session. A role lookup outage aborts the flush the same way. Behavior changes: demoted moderators no longer enforce through a silence flush.
 
-- **Mongo circuit counts only transient errors** (`tcbot/utils/circuit_breaker.py`, `tcbot/database/mongos.py`, `docs/architecture/database.md`): the breaker now counts connectivity failures, timeouts, and retryable write concerns toward opening, while application errors propagate without recording a failure. Client-side operation timeouts are recognised through the documented timeout property. Behavior changes: a bad write no longer opens the database circuit; outages still open it.
+- **The database circuit counts only transient errors** (`tcbot/utils/circuit_breaker.py`, `tcbot/database/engine.py`, `docs/architecture/database.md`): the breaker now counts connectivity failures, timeouts, and pool saturation toward opening, while application errors propagate without recording a failure. Behavior changes: a bad write no longer opens the database circuit; outages still open it.
 
 - **Dead MTProto auth key parks instead of flooding reports** (`tcbot/database/mtproto.py`, `tcbot/__main__.py`, `tcbot/error_reporter.py`, `docs/getting-started/setup.md`): a missing auth key, including when it surfaces during session restart, now parks MTProto once with one operator card and keeps the bot on Bot-API-only until the session docs are purged and one instance reboots. Behavior changes: a dead key no longer repeats as code-bug reports while enforcement stays online.
 
@@ -786,7 +759,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Fan-out partial failures no longer masquerade as code bugs** (`tcbot/utils/dispatch.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `unban_flow.py`, `mute_flow.py`, `mute_flow.py`, `appeal_review_flow.py`, `tcbot/error_reporter.py`): the error-level summary now attaches a representative transient exception as `exc_info`, so the reporter classifies it by its real Telegram type, shows a traceback, and gives a retry hint instead of "[?] Unknown / Needs a code fix". The reporter also stops claiming a traceback exists for records with no exception. Behavior changes: partial-failure reports now name the actual transient error and its recovery action.
 
-- **Concurrent first-warns no longer drop one warning** (`tcbot/database/warns_db.py`, `counters.py`, `tests/test_warn_counter_race.py`): when two moderators warn the same user in the same chat for the first time at once, the counter increment retries after losing the insert race, and the backfill path re-reads the winner's count instead of failing. Behavior changes: both warnings land instead of one getting a database-failure retry reply.
+- **Concurrent first-warns no longer drop one warning** (`tcbot/database/warns_db.py`, `tests/test_warn_counter_race.py`): when two moderators warn the same user in the same chat for the first time at once, the counter increment retries after losing the insert race, and the backfill path re-reads the winner's count instead of failing. Behavior changes: both warnings land instead of one getting a database-failure retry reply.
 
 - **Owner transfer cleans up split-brain rows with a retry** (`tcbot/database/users_roles.py`, `tests/test_set_owner_cleanup.py`): the convergence delete backs off and retries transient failures, and a persistent failure logs explicit operator guidance (which row to remove) before the transfer still fails closed. Behavior changes: none on the happy path; a one-off database blip no longer strands two owner rows.
 
@@ -803,8 +776,6 @@ All notable changes to this project are documented here. For workflow details, s
 - **MTProto writes degrade instead of crashing update handling** (`tcbot/database/mtproto_store.py`): non-transient store failures are logged and returned instead of propagating into Pyrogram's background task. Behavior changes: update handling continues instead of dying on a store error.
 
 - **MTProto lease claim no longer grants a live foreign lease** (`tcbot/database/mtproto_store.py`): the retry helper now catches only `WriteConcernError`, so control-flow errors such as `DuplicateKeyError` propagate to `claim_owner`, which refuses a lease already held by another live owner. Behavior changes: none on the happy path.
-
-- **Sync re-applies mutes with aware datetimes** (`tcbot/modules/sync.py`): mute expiry values are normalized to UTC before being sent to Telegram. Behavior changes: none on the happy path.
 
 - **Connection requests reject anonymous admins** (`tcbot/modules/connect.py`): groups posting as the anonymous admin can no longer submit an unattributable connection request. Behavior changes: anonymous-admin requests are refused.
 
@@ -832,9 +803,9 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Runner forwards the MTProto credentials** (`.github/workflows/run-bot.yml`, `docs/operations/ci-cd.md`): the merge that made `API_ID` / `API_HASH` mandatory at boot never added them to the runner env, so every run crashed on startup until the watchdog gave up after five rapid deaths. The workflow now forwards both secrets and the guide lists them as required. Behavior changes: runs boot instead of fail-looping. Repository secrets `API_ID` and `API_HASH` still need to be set once in the repo settings.
 
-- **MTProto store retries transient write errors** (`tcbot/database/mtproto_store.py`): Pyrogram's background `handle_updates()` task persists update states through the MongoDB store. A transient replica-set failover (`WriteConcernError` code 11602 / `InterruptedDueToReplStateChange`) with the `RetryableWriteError` label now retries up to 3 times with exponential backoff instead of crashing the background task and flooding the error channel. All write operations (scalar upserts, peer updates, username writes, update-state merges, and deletes) benefit from the retry wrapper. Behavior changes: brief replica-set elections no longer produce unhandled task exceptions.
+- **MTProto store retries transient write errors** (`tcbot/database/mtproto_store.py`): Pyrogram's background `handle_updates()` task persists update states through the shared store. A transient write failure now retries up to 3 times with exponential backoff instead of crashing the background task and flooding the error channel. All write operations (scalar upserts, peer updates, username writes, update-state merges, and deletes) benefit from the retry wrapper. Behavior changes: brief database interruptions no longer produce unhandled task exceptions.
 
-- **Single-owner MTProto lease plus invalidated-session parking** (`tcbot/database/mtproto.py`, `mtproto_store.py`, `tcbot/__main__.py`, `tcbot/error_reporter.py`, `docs/getting-started/setup.md`, `docs/architecture/database.md`): only the instance holding a short-lived MongoDB lease keeps a live MTProto connection, so two simultaneous instances can no longer kill the shared auth key with `406 AUTH_KEY_DUPLICATED`; losers serve Bot-API-only until takeover. When Telegram reports an invalidated key, the client parks once with a loud actionable card and every resolver degrades instead of crash-looping, and error fingerprints ignore task IDs and hex addresses so one incident ships one card instead of a flood. A rejected stored key at connect time also degrades instead of aborting boot, so enforcement stays online while the session awaits the operator purge-and-restart. Behavior changes: a second simultaneous instance no longer connects MTProto; a dead session degrades instead of looping.
+- **Single-owner MTProto lease plus invalidated-session parking** (`tcbot/database/mtproto.py`, `mtproto_store.py`, `tcbot/__main__.py`, `tcbot/error_reporter.py`, `docs/getting-started/setup.md`, `docs/architecture/database.md`): only the instance holding a short-lived database lease keeps a live MTProto connection, so two simultaneous instances can no longer kill the shared auth key with `406 AUTH_KEY_DUPLICATED`; losers serve Bot-API-only until takeover. When Telegram reports an invalidated key, the client parks once with a loud actionable card and every resolver degrades instead of crash-looping, and error fingerprints ignore task IDs and hex addresses so one incident ships one card instead of a flood. A rejected stored key at connect time also degrades instead of aborting boot, so enforcement stays online while the session awaits the operator purge-and-restart. Behavior changes: a second simultaneous instance no longer connects MTProto; a dead session degrades instead of looping.
 
 - **Stats search detail parses callback data safely** (`tcbot/modules/stats.py`): the callback query handler for search result detail now catches both `ValueError` and `IndexError` when parsing the index from callback data, preventing a crash on malformed input. Behavior changes: malformed search callbacks no longer raise unhandled exceptions.
 
@@ -849,8 +820,6 @@ All notable changes to this project are documented here. For workflow details, s
 - **Link-preview default has one owner** (`tcbot/serverless.py`, `tcbot/__main__.py`): the serverless transport imports the constant instead of redefining it. Behavior changes: none, identical preview suppression on both transports.
 
 - **Redis hint follows the uv-only rule** (`tcbot/database/redis_client.py`): the missing-extension error points at `uv add` instead of `pip install`. Behavior changes: message text only.
-
-- **Module logger ordering hardened** (`tcbot/database/mongos.py`): the logger is defined before the DNS helper that references it. Behavior changes: none.
 
 - **Scheduler startup cannot hang on a stuck task** (`tcbot/database/scheduler.py`, `tests/test_scheduler_start.py`): the readiness-timeout path unwinds the background task with the same bounded 2-second gather as the cancellation path. Behavior changes: a task ignoring cancellation no longer stalls boot past the bound; a warning names it.
 
@@ -886,13 +855,19 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Removed
 
+- **The throttle tier of the removed sweep is gone** (`tcbot/modules/helper/decorators/ratelimit.py`, `tcbot/modules/helper/decorators/__init__.py`, `tests/test_moderation_contracts.py`): the sweep tier had no handler left after the `/tcsync` command was removed, so it only described a budget nothing spent. Behavior changes: none.
+
+- **The unused schema-file helper is gone** (`tcbot/database/schema/loader.py`): `apply_sql_file` had no caller, and the schema package already applies the files through `schema_statements` and `execute_statements`. Behavior changes: none.
+
+- **The duplicate readers of the role and the warn counter are gone** (`tcbot/database/users_roles.py`, `tcbot/database/warns_db.py`, `tcbot/database/documents.py`): `get_role`, `active_assignments`, and `warn_count_doc` had no caller, and each offered a second way to read what `get_effective_role`, `all_by_role`, and `warn_count` already read. The two document shapes that only those readers used are gone with them. Behavior changes: none.
+
 - **The single-kind chat repoint is gone** (`tcbot/database/mutes_db.py`, `tcbot/modules/greeting.py`): the group repoint already moves the origin chat of every decision together with the group, in one transaction, so the extra write for the mute decisions only repeated work and could race the group move. Behavior changes: none; a group migration still moves every decision with the group.
 
 - **The role revocation helper that cleared two collections is gone** (`tcbot/modules/helper/pipelines/demote_flow.py`, `tcbot/database/users_roles.py`): the community keeps the role assignments in one table, so a demote cleared the admin assignment and the remaining assignment with two concurrent writes. One statement clears them, and the helper that revoked only the admin role had no caller left. Behavior changes: none; a demote still revokes the role the target holds.
 
 - **The unused stats back-row factory is gone** (`tcbot/modules/helper/keyboards/stats.py`): it had no callers and the back button it built is covered by the stats back markup. Behavior changes: none.
 
-- **The redundant warning index is gone** (`tcbot/database/mongos.py`): the warning history kept an ascending twin of its descending index. One index serves both sort directions, so the twin only added a write to every warning and a second copy of the rows in memory. Databases that still carry it drop it at startup.
+- **The redundant warning index is gone** (`tcbot/database/base/moderation.py`): the warning history kept an ascending twin of its descending index. One index serves both sort directions, so the twin only added a write to every warning and a second copy of the rows in memory. Databases that still carry it drop it at startup.
 
 - **The duplicate anonymous-admin check is gone** (`tcbot/modules/helper/identity.py`, `tcbot/modules/helper/decorators/auth.py`, `tcbot/modules/connect.py`, `tcbot/modules/disconnecting.py`, `tcbot/modules/admins.py`): the identity helper that was meant to own the GroupAnonymousBot check was never called, and four modules inlined the same comparison instead. The helper is now the one owner. Behavior changes: none; the same placeholder is refused on the same paths.
 
@@ -904,7 +879,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Unused helpers and forwarding wrappers** (`tcbot/utils/time_and_date.py`, `tcbot/database/mtproto.py`, `tcbot/modules/helper/messages/replies.py`, `tcbot/modules/helper/pipelines/stats_flow.py`, `tcbot/modules/helper/pipelines/check_flow.py`, `tcbot/modules/helper/decorators/auth.py`, `tcbot/modules/helper/keyboards/__init__.py`): a speculative timestamp helper, a configuration alias, a permission notice with no renderer, four keyboard wrappers that only forwarded, a placeholder alias, and an unused import. Behavior changes: none; the unused permission notice is removed from both locale catalogs.
 
-- **Motor and speedtest-cli leave the dependency graph** (`pyproject.toml`, `uv.lock`): the database layer now runs on synchronous PyMongo and `/speedtest` on speedtest.net, so neither package is needed. Behavior changes: none for operators beyond the entries above.
+- **Motor and speedtest-cli leave the dependency graph** (`pyproject.toml`, `uv.lock`): the database layer runs on PostgreSQL and `/speedtest` on speedtest.net, so neither package is needed. Behavior changes: none for operators beyond the entries above.
 
 - **Unused UTC display helper removed** (`tcbot/utils/time_and_date.py`, `docs/architecture/utilities.md`): `utc_now_str()` had no callers and its rows in the utilities guide are gone. Display rendering stays on `fmt_dt()`. Behavior changes: none.
 
@@ -929,6 +904,18 @@ All notable changes to this project are documented here. For workflow details, s
 - **Unused ban helpers removed** (`tcbot/database/bans_db/`, `docs/architecture/database.md`): `deactivate_ban` and `set_review` had no callers; `deactivate_all_active_bans`, `deactivate_extra_active_bans`, and `set_review_if_absent` are the live helpers. Behavior changes: none.
 
 ### Documentation
+
+- **The database reference matches the declared schema** (`docs/architecture/database.md`): the index inventory listed a unique appeal index on the wrong table and two promotion-queue indexes with column names the schema does not use, and the helper lists named readers and a document shape that are gone. The reference now matches the declared metadata and the code. Behavior changes: none, docs only.
+
+- **The unreleased changelog no longer describes the retired database** (`CHANGELOG.md`): the pending section still carried entries for the MongoDB client, the removed enforcement sweep, and the dependencies and test files that went with them, so it contradicted the entries that describe the PostgreSQL layer and the removal of the sweep. The entries whose subject no longer exists are gone, and the entries that describe the shipped implementation name the files that ship. Behavior changes: none.
+
+- **The index inventory names the indexes that exist** (`docs/architecture/database.md`): the table listed a unique appeal index on the wrong table and two promotion-queue indexes with column names the schema does not use. The inventory now matches the declared metadata. Behavior changes: none, docs only.
+
+- **The mute guide describes the community schema** (`docs/features/moderation/muting.md`, `docs/features/moderation/connecting.md`, `docs/features/moderation/disconnecting.md`, `docs/features/moderation/check.md`, `docs/features/statistics.md`, `docs/architecture/workflows.md`): the guides still described the mute collections, the MongoDB query operators, and the group upsert that the PostgreSQL layer replaced, so they pointed at helpers and columns that no longer exist. The guides now name the mute decisions, the `active_mutes` view, and the SQL the helpers run. Behavior changes: none, docs only.
+
+- **The module paths in the rules and the feature guides match the tree** (`.agents/rules/code-style.md`, `.agents/rules/asyncio-gather-rules.md`, `docs/features/moderation/banning.md`, `docs/features/moderation/unbanning.md`): the table package and the ban package were named with their former single-file paths. Behavior changes: none, docs only.
+
+- **The transport rule is documented where the operator reads it** (`config.env.example`, `README.md`, `AGENTS.md`, `docs/README.md`, `docs/getting-started/setup.md`, `replit.md`): the guides said the Replit dev domain was auto-detected without saying that the detection needs the Replit runtime, so the local-development fallback was not documented. Behavior changes: none, docs only.
 
 - **The guides describe the community schema** (`docs/architecture/database.md`, `docs/architecture/repository-map.md`, `docs/architecture/helpers.md`, `docs/architecture/modules.md`, `docs/architecture/workflows.md`, `docs/features/roles/roles.md`, `docs/features/roles/promote.md`, `docs/features/roles/demote.md`, `docs/features/moderation/banning.md`, `docs/features/moderation/check.md`, `docs/features/moderation/connecting.md`, `docs/features/moderation/disconnecting.md`, `docs/features/moderation/groups.md`, `docs/features/moderation/kicking.md`, `docs/features/moderation/warnings.md`, `docs/features/language.md`, `docs/features/misc-modules.md`, `docs/getting-started/setup.md`, `docs/operations/backup-and-restore.md`, `docs/operations/ci-cd.md`, `docs/operations/performance.md`, `docs/operations/vercel.md`, `README.md`, `AGENTS.md`): the guides still described the table layout the schema migration replaced, so they named tables the deployment does not have and described counters, counters-as-tables, and role collections that no longer exist. The database reference now describes the community model: the identity, configuration, access, moderation, enforcement, automation, broadcast, and operations domains, the derived views, the transaction boundary, and the catalog that the tier model is checked against. The feature guides name the table each flow writes, and the environment tables name the schema and the pool the bot works with. Behavior changes: none, docs only.
 
@@ -956,7 +943,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The guides describe the demote API that ships** (`docs/features/moderation/banning.md`, `docs/features/moderation/kicking.md`, `docs/features/moderation/muting.md`, `docs/features/roles/demote.md`, `docs/architecture/workflows.md`, `docs/architecture/helpers.md`): three guides named a demote helper that does not exist, and the shared gates that replaced the copies are now documented with their failure policy. Behavior changes: none, docs only.
 
-- **The guides describe the layout that ships** (`AGENTS.md`, `docs/architecture/repository-map.md`, `docs/architecture/utilities.md`, `docs/architecture/helpers.md`, `docs/architecture/database.md`, `docs/features/moderation/sync.md`): the repository map, the utility and helper tables, the database reference, and the sweep guide now list the error reporter at the package root, the navigation-row builder, the page arithmetic, the log delivery helper, the role sets and labels, the placeholder-name rule, the lowercase name mirrors, and the per-group sweep budget. Behavior changes: none, docs only.
+- **The guides describe the layout that ships** (`AGENTS.md`, `docs/architecture/repository-map.md`, `docs/architecture/utilities.md`, `docs/architecture/helpers.md`, `docs/architecture/database.md`): the repository map, the utility and helper tables, and the database reference now list the error reporter at the package root, the navigation-row builder, the page arithmetic, the log delivery helper, the role sets and labels, the placeholder-name rule, the lowercase name mirrors, and the per-group enforcement budget. Behavior changes: none, docs only.
 
 - **The guides describe the enforcement order that ships** (`docs/architecture/workflows.md`, `docs/features/moderation/banning.md`, `docs/features/moderation/kicking.md`, `docs/features/moderation/warnings.md`, `docs/features/moderation/disconnecting.md`, `docs/features/moderation/groups.md`, `docs/features/appeals.md`, `docs/features/roles/roles.md`): the ban write and the log post, the kick audit write, the warn-counter repair, the disconnect staff check, the group-list renderer, the appeal review gate, and the removed appeal helper now match the code. Behavior changes: none, docs only.
 
@@ -988,7 +975,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Guides match the enabled runner** (`README.md`, `AGENTS.md`, `.agents/rules/docs-sync.md`, `docs/operations/ci-cd.md`, `docs/architecture/helpers.md`, `docs/architecture/repository-map.md`, `docs/getting-started/setup.md`, `CONTRIBUTING.md`, `config.env.example`, `docs/architecture/helpers.md`, `docs/architecture/database.md`, `docs/features/roles/roles.md`, `.agents/rules/security-rules.md`, `docs/features/moderation/check.md`, `docs/features/statistics.md`, `.pre-commit-config.yaml`): the runner is documented as active, missing contributor links and stale role-check references are gone, startup ownership and discovery match the runtime package, the session namespace ships active, and the public check and stats panes are marked public by design. Behavior changes: none, docs only.
 
-- **CI secrets list corrected** (`docs/operations/ci-cd.md`): the runner forwards `SYNC_INTERVAL_HOURS` and the community links; only `CRON_SECRET` is not forwarded. Behavior changes: none, docs only.
+- **CI secrets list corrected** (`docs/operations/ci-cd.md`): the runner forwards the community links and the database settings; only `CRON_SECRET` is not forwarded. Behavior changes: none, docs only.
 
 - **Repository map includes the startup packages** (`docs/architecture/repository-map.md`, `AGENTS.md`): the config and runtime packages, the shared migration helper, and the thin entry module are documented. Behavior changes: none, docs only.
 
@@ -1034,7 +1021,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Validation pointers follow the surviving sources** (`AGENTS.md`, `.agents/rules/`, `docs/architecture/repository-map.md`): rule headers now name `docs/operations/ci-cd.md` for checks and `AGENTS.md` for read and update discipline, and the repository map lists the six remaining rule files. Behavior changes: none, docs only.
 
-- **Driver and path references match the tree** (`.agents/rules/docs-sync.md`, `.agents/rules/asyncio-gather-rules.md`, `tcbot/__init__.py`, `tcbot/serverless.py`, `tcbot/database/mongos.py`, `tcbot/database/scheduler.py`, `docs/features/moderation/warnings.md`, `docs/features/moderation/check.md`): the synchronous PyMongo `db_call` model and the single-file database paths replace the retired driver and package-form paths. Behavior changes: none, docs and comments only.
+- **Driver and path references match the tree** (`.agents/rules/docs-sync.md`, `.agents/rules/asyncio-gather-rules.md`, `tcbot/__init__.py`, `tcbot/serverless.py`, `tcbot/database/engine.py`, `tcbot/database/scheduler.py`, `docs/features/moderation/warnings.md`, `docs/features/moderation/check.md`): the asynchronous SQLAlchemy `db_call` model and the package-form database paths replace the retired driver and single-file paths. Behavior changes: none, docs and comments only.
 
 </details>
 
