@@ -66,12 +66,11 @@ __help__: replies.HelpEntry = get_help()
 
 # ────────────────── Command Leave All </leaveall> ───────────────── #
 
-# * Primary groups (main_group) are managed separately from the
-# * connected-group registry. They are always-required destinations for
-# * primary-group enforcement (ban / unban / mute / warn fan-out) and for the
-# * federation log channel. They must not be torn down by leaveall / cleanup
-# * / disconnect / rmtc paths. Guarded by cfg.is_primary_group (single
-# * source of truth in tcbot/__init__.py) at every call site below.
+# * Primary groups (main_group) are required federation destinations and are
+# * seeded into the connected-group registry at startup. They must not be
+# * torn down by leaveall / cleanup / disconnect / rmtc paths. Guarded by
+# * cfg.is_primary_group (single source of truth in tcbot/__init__.py) at
+# * every call site below.
 
 
 @dataclass(frozen=True)
@@ -161,8 +160,8 @@ async def _leave_one(
 async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Leave all active connected groups and deactivate their DB records.
 
-    Fetches active groups (excluding the primary groups, which are
-    managed separately), fans out individual leave-and-deactivate
+    Fetches active groups (excluding the primary groups, which are required
+    enforcement destinations), fans out individual leave-and-deactivate
     coroutines concurrently (``_leave_one``), then edits the status
     message with the final success/failure counts. A leave counts as
     successful only when both ``leave_chat`` and ``deactivate_group``
@@ -185,11 +184,9 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 log_label="leaveall groups-failed",
             )
         return
-    # * Never tear down the primary groups. They are not in the
-    # * connected-group registry today, but the explicit guard is defence in
-    # * depth: if a future change ever adds them to the collection, or if
-    # * ``cfg.main_group`` is misconfigured, this prevents a global leaveall
-    # * from cutting the bot out of its required enforcement destinations.
+    # * Never tear down the primary groups. They are in the registry as
+    # * required enforcement destinations, but leaveall must keep them
+    # * reachable; the explicit guard is defence in depth.
     groups = [g for g in all_groups if not cfg.is_primary_group(g.get("chat_id"))]
     if not groups:
         status_msg = update.effective_message

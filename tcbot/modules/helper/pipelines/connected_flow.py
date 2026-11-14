@@ -210,6 +210,16 @@ class ConnectionAddedMixin:
             return
         if new_status in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR):
             if cfg.is_primary_group(chat.id):
+                # * A primary group is not connected through the join flow,
+                # * but its registry row has to exist before it can hold a
+                # * chat-scoped decision. Re-register it here so a bot that
+                # * was removed and re-added keeps that capability.
+                try:
+                    await db.groups_db.ensure_primary_group(chat.id, chat.title)
+                except Exception:
+                    log.exception(
+                        "Primary group registration failed for chat %d", chat.id
+                    )
                 return
             pending, is_already_connected = await asyncio.gather(
                 db.groups_db.get_pending(chat.id),

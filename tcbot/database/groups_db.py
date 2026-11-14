@@ -73,7 +73,7 @@ def _group_row(docs: list[dict[str, Any]]) -> list[GroupDoc]:
     return [
         GroupDoc(
             chat_id=cast("GroupId", doc["chat_id"]),
-            title=doc.get("title") or "",
+            title=doc.get("title") or "Unknown",
             added_by=cast("UserId", doc.get("added_by_user_id") or 0),
             added_date=cast("datetime", doc["added_at"]),
             is_active=bool(doc.get("is_active")),
@@ -152,6 +152,47 @@ async def is_connected(chat_id: int, *, fresh: bool = False) -> bool:
         # * overwritten by the older connected value.
         return await connected_cache.refresh(chat_id, _fetch)
     return cast("bool", await connected_cache.get_or_fetch(chat_id, _fetch))
+
+
+async def ensure_primary_group(chat_id: int, title: str | None = None) -> None:
+    """Register a primary group as a managed chat without a connect prompt.
+
+    A primary group is a required enforcement destination, but it is not
+    connected through the join flow. The moderation schema nevertheless
+    requires chat-scoped decisions to name an active connected chat, so the
+    primary group needs a registry row of its own. The row is active, like
+    a connected group, and the regular connect path still refuses to
+    create it. The title is only written when the caller has one.
+    """
+    if not chat_id:
+        return
+
+    async def _work(sess: AsyncSession) -> None:
+        chat_stmt = pg_insert(telegram_chats).values(
+            chat_id=chat_id,
+            chat_type="supergroup",
+            title=title,
+        )
+        if title is None:
+            chat_stmt = chat_stmt.on_conflict_do_nothing(index_elements=["chat_id"])
+        else:
+            chat_stmt = chat_stmt.on_conflict_do_update(
+                index_elements=["chat_id"],
+                set_={"title": title, "updated_at": utc_now()},
+            )
+        await sess.execute(chat_stmt)
+        await sess.execute(
+            pg_insert(connected_chats)
+            .values(chat_id=chat_id, is_active=True)
+            .on_conflict_do_update(
+                index_elements=["chat_id"],
+                set_={"is_active": True},
+            )
+        )
+
+    await run_transaction(_work)
+    connected_cache.put(chat_id, True)  # noqa: FBT003
+    active_groups_cache.invalidate(_ALL_GROUPS_KEY)
 
 
 async def add_group(chat_id: int, title: str, added_by: int) -> None:

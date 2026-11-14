@@ -194,6 +194,16 @@ async def test_a_group_connection_creates_the_missing_owner(postgres: str) -> No
     assert await users_cache.get_user(77) is not None
 
 
+async def test_a_primary_group_can_hold_a_chat_scoped_decision(postgres: str) -> None:
+    """The primary group registry row lets a warn be recorded there."""
+    await groups_db.ensure_primary_group(-1003, "Primary Group")
+
+    await warns_db.add_warn(42, "spam", 7, -1003)
+
+    assert await groups_db.is_connected(-1003, fresh=True) is True
+    assert await warns_db.warn_count(42, -1003) == 1
+
+
 async def test_a_profile_write_refreshes_last_seen(postgres: str) -> None:
     """Every profile write advances the last-sighting timestamp."""
     await users_cache.upsert_user(7, "Alice_1", "Alice", "Smith")

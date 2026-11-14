@@ -338,8 +338,9 @@ async def init_shared_subsystems(bot: Bot) -> None:
     log.info("Connecting to PostgreSQL...")
     await connect()
     log.info("Running parallel setup (owner seed, Redis, MTProto)...")
-    owner_r, _, mtproto_r = await asyncio.gather(
+    owner_r, primary_r, redis_r, mtproto_r = await asyncio.gather(
         db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
+        db.groups_db.ensure_primary_group(cfg.main_group),
         redis_client.connect_if_configured(),
         mtproto_mod.start(),
         return_exceptions=True,
@@ -347,6 +348,8 @@ async def init_shared_subsystems(bot: Bot) -> None:
     throw_if_cancelled((owner_r, mtproto_r))
     if isinstance(owner_r, BaseException):
         log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
+    if isinstance(primary_r, BaseException):
+        log.warning("Primary group registration failed (non-fatal): %s", primary_r)
     if isinstance(mtproto_r, BaseException):
         raise mtproto_r
     if mtproto_r is False:
