@@ -154,18 +154,22 @@ def run_migrations_online() -> None:
         pool_pre_ping=True,
         connect_args={"options": _connection_options(url)},
     )
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            compare_type=True,
-        )
-        stamp_bootstrap_schema(
-            context.get_context(), connection, ScriptDirectory.from_config(config)
-        )
-        with context.begin_transaction():
-            context.run_migrations()
-    connectable.dispose()
+    try:
+        with connectable.connect() as connection:
+            context.configure(
+                connection=connection,
+                target_metadata=target_metadata,
+                compare_type=True,
+            )
+            stamp_bootstrap_schema(
+                context.get_context(), connection, ScriptDirectory.from_config(config)
+            )
+            with context.begin_transaction():
+                context.run_migrations()
+    finally:
+        # * A revision that raises must not leave the migration pool behind:
+        # * the bot retries the boot, and every attempt would leak one.
+        connectable.dispose()
 
 
 if context.is_offline_mode():

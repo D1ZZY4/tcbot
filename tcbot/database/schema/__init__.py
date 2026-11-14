@@ -44,7 +44,7 @@ _FUNCTION_PATTERN = re.compile(
 )
 _TRIGGER_PATTERN = re.compile(
     r"CREATE TRIGGER\s+(\S+)\s+.*?\bON\s+(\S+)",
-    re.IGNORECASE,
+    re.IGNORECASE | re.DOTALL,
 )
 
 __all__ = [
@@ -157,7 +157,10 @@ def _drop_statements(name: str, schema: str, existing: set[str]) -> list[str]:
         for match in _TRIGGER_PATTERN.finditer(raw):
             trigger = match.group(1)
             raw_table = match.group(2).replace(SCHEMA_PLACEHOLDER, schema)
-            table = raw_table.replace('"', "")
+            # * _existing_tables reports unqualified names, so compare the
+            # * table name after the schema qualifier instead of the
+            # * qualified name.
+            table = raw_table.rsplit(".", 1)[-1].replace('"', "")
             if table not in existing:
                 continue
             triggers.append(f"DROP TRIGGER IF EXISTS {trigger} ON {raw_table} CASCADE")
