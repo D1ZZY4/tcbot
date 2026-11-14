@@ -61,9 +61,7 @@ def reviewer_locked_out(
     return elapsed < _LOCK_WINDOW
 
 
-async def _update_or_send_log(
-    bot: Bot, lc: int, lt: int | None, msg_id: int | None, text: str
-) -> None:
+async def _update_or_send_log(bot: Bot, lc: int, msg_id: int | None, text: str) -> None:
     """Edit the existing appeal log message, or post a new one as fallback."""
     if msg_id:
         try:
@@ -147,7 +145,6 @@ class ApproveMixin:
         target_id: int,
         admin: User,
         lc: int,
-        lt: int | None,
         update: Update,
         approver_role: str | None,
     ) -> bool:
@@ -300,7 +297,6 @@ class ApproveMixin:
             _update_or_send_log(
                 bot,
                 lc,
-                lt,
                 int(ban.get("appeal_log_msg_id") or 0) or None,
                 messages.appeal_approved_edit(
                     target_id,
@@ -362,7 +358,6 @@ class RejectMixin:
         target_id: int,
         admin: User,
         lc: int,
-        lt: int | None,
         update: Update,
     ) -> bool:
         """Reject the appeal; return True when the rejection was recorded.
@@ -426,7 +421,6 @@ class RejectMixin:
         await _update_or_send_log(
             bot,
             lc,
-            lt,
             int(ban.get("appeal_log_msg_id") or 0) or None,
             messages.appeal_rejected_edit(
                 target_id,
@@ -615,7 +609,7 @@ class AppealReviewMixin(AppealVerdictsMixin):
             except Exception as exc:
                 log.debug("Appeal claim-loser answer failed: %s", exc)
             return
-        lc, lt = cfg.logs
+        lc = cfg.logs[0]
         # * The claim consumed the review slot. A path that ends without a
         # * decision must hand the slot back, or the card dies with the
         # * appeal undecided and the banned user can appeal again at once.
@@ -634,13 +628,12 @@ class AppealReviewMixin(AppealVerdictsMixin):
                     target_id,
                     admin,
                     lc,
-                    lt,
                     update,
                     approver_role=role_result,
                 )
             else:
                 decided = await self._reject_appeal(
-                    ctx.bot, q, ban, ban_id, target_id, admin, lc, lt, update
+                    ctx.bot, q, ban, ban_id, target_id, admin, lc, update
                 )
         except asyncio.CancelledError:
             # * A cancelled decision reaches no verdict either, so the

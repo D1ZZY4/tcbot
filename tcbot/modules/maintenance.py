@@ -98,8 +98,6 @@ class _LeaveResult:
 async def _leave_one(
     bot: Bot,
     grp: GroupDoc,
-    lc: int,
-    lt: int | None,
     admin_id: int,
     admin_name: str,
 ) -> _LeaveResult:
@@ -214,11 +212,10 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
         except Exception as exc:
             log.debug("leaveall status reply failed: %s", exc)
-    lc, lt = cfg.logs
 
     # * Semaphore-bounded to respect Telegram rate limits on large federations.
     all_results = await fan_out(
-        [_leave_one(ctx.bot, g, lc, lt, admin.id, admin.first_name) for g in groups]
+        [_leave_one(ctx.bot, g, admin.id, admin.first_name) for g in groups]
     )
 
     # * ``fan_out`` returns ``T | BaseException`` so a transport error raised

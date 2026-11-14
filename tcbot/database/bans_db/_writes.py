@@ -477,22 +477,6 @@ async def claim_appeal_decision(ban_id: str, review_msg_id: int) -> bool:
     return affected > 0
 
 
-def _rejected_appeal_exists() -> ColumnElement[bool]:
-    """Return the condition that the row carries a rejected appeal.
-
-    The condition correlates with the decision the statement updates, so
-    it can be used directly in the WHERE clause of that update.
-    """
-    return (
-        select(moderation_appeals.c.id)
-        .where(
-            moderation_appeals.c.action_id == moderation_actions.c.id,
-            moderation_appeals.c.status == "rejected",
-        )
-        .exists()
-    )
-
-
 def _open_appeal_exists(action_id: int, appellant_user_id: int) -> ColumnElement[bool]:
     """Return the condition that the decision carries an open appeal.
 
@@ -747,7 +731,6 @@ async def set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None:
 async def set_appeal_log_msg(
     ban_id: str,
     msg_id: int,
-    submitted_at: datetime | None = None,
     appeal_link: str = "",
 ) -> None:
     """Attach appeal-related metadata to a ban record."""
