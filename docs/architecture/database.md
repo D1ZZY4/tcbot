@@ -817,7 +817,7 @@ chat, `connected_chats` holds the connection to the community,
 | Field | Type | Meaning |
 |---|---|---|
 | `chat_id` | `ChatId` | The chat that asked to be connected. |
-| `owner_id` | `UserId` | The user who asked. |
+| `owner_id` | `UserId` | The user who asked, or `0` when an anonymous admin add named no account (stored as `NULL`). |
 | `message_id` | `int` | The prompt message ID. |
 | `added_date` | `datetime` | Request time. |
 | `request_id` | `int` | The request row ID. |

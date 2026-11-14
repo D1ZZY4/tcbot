@@ -25,10 +25,11 @@ Optional secrets:
 
 - `REDIS_URL`: Redis connection URL for L2 cache.
 - `WEBHOOK_SECRET`: Secret token for Telegram webhook validation.
-- `PORT`: Flask keep-alive port. Must be `8080` on Replit to match the
-  `[[ports]]` mapping in `.replit` (public webhook traffic reaches local
-  port 8080; any other value makes the webhook unreachable and the bot
-  silent). The same file also publishes the default keep-alive port 5000.
+- `PORT`: Flask keep-alive port. Use a local port that the `[[ports]]`
+  mapping in `.replit` publishes. The repository maps both `5000` and
+  `8080`; a webhook only reaches the value you configure, so keep the
+  mapping and `PORT` in sync. An unset or invalid value falls back to
+  `5000`, which the same file publishes.
 
 Replit Secrets are injected as environment variables at runtime. They are
 never committed to the repository and do not require a `.env` file.
@@ -52,14 +53,14 @@ to polling for local development.
 
 ### Keep-Alive Server
 
-The Flask keep-alive server binds to `0.0.0.0:${PORT}`. Replit's proxy
-requires an HTTP server listening on the assigned port. The bot starts this
-server automatically before connecting to Telegram.
+The Flask keep-alive server binds to `${BIND_HOST}:${PORT}`. `BIND_HOST`
+defaults to `0.0.0.0`, which is what Replit's proxy expects. The bot starts
+this server automatically before connecting to Telegram.
 
-Set `PORT` to `8080` so the server listens where the Replit proxy forwards
-public traffic (see the `[[ports]]` mapping in `.replit`). Any other port
-binds fine locally but Telegram webhook deliveries die at the proxy with
-HTTP 502 and the bot never replies.
+Set `PORT` to a local port the `[[ports]]` mapping in `.replit` publishes
+(the repository maps `5000` and `8080`). A port without a mapping binds
+fine locally but Telegram webhook deliveries die at the proxy with HTTP 502
+and the bot never replies.
 
 If `PORT` is unset, invalid, or outside `1..65535`, the application defaults
 to `5000`, and the `5000` mapping in `.replit` publishes that default.
@@ -132,8 +133,9 @@ reach it. Check the webhook secret matches between Telegram and Replit Secrets.
 
 ### Keep-alive not responding
 
-Ensure the Flask server is listening on `0.0.0.0:${PORT}` and that the Replit
-proxy is forwarding to the correct port. The `/health` endpoint should return
+Ensure the Flask server is listening on `${BIND_HOST}:${PORT}` (`BIND_HOST`
+defaults to `0.0.0.0`) and that the Replit proxy is forwarding to the correct
+port. The `/health` endpoint should return
 JSON with subsystem status.
 
 ### PostgreSQL connection errors

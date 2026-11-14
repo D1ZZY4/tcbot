@@ -52,9 +52,9 @@ cp config.env.example .env
 docker compose up --build
 ```
 
-Set `BOT_TOKEN`, `OWNER_ID`, and the destination variables required by the
-features you enable in `.env`. The `bot` service waits for both PostgreSQL and
-Redis health checks before startup. The image runs:
+Set `BOT_TOKEN`, `OWNER_ID`, `API_ID`, `API_HASH`, and the destination
+variables required by the features you enable in `.env`. The `bot` service waits
+for both PostgreSQL and Redis health checks before startup. The image runs:
 
 ```bash
 uv run --frozen python -m tcbot
@@ -64,8 +64,8 @@ uv run --frozen python -m tcbot
 
 For Replit or another hosting platform:
 
-1. Store `BOT_TOKEN`, `DATABASE_URL`, and `OWNER_ID` in the platform secret
-   manager or its environment configuration.
+1. Store `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `API_ID`, and `API_HASH`
+   in the platform secret manager or its environment configuration.
 2. Store the required destination values (`LOGS`, plus `PROOFS` and `APPEALS`
    when those features are enabled) as environment variables or secrets.
 3. Start the bot with `uv run python -m tcbot`.
@@ -129,7 +129,7 @@ PROOFS="-1001234567890"
 | `PREFIXES` | No | Python-style list or CSV | Command prefixes. Default is `["/", "!", "."]`. |
 | `PORT` | No | integer or `auto` | Flask keep-alive port. `auto`, invalid, or out-of-range values resolve to `5000`. |
 | `BIND_HOST` | No | interface address | Listener interface for the keep-alive and webhook server. Default `0.0.0.0`; use `127.0.0.1` behind a local reverse proxy. |
-| `MAIN_GROUP` | Usually | integer chat ID | Main community group or forum. |
+| `MAIN_GROUP` | Usually | negative integer chat ID | Main community group or forum. A positive value is treated as unset with a warning. |
 | `PROOFS` | Usually | `chat_id` or `chat_id/thread_id` | Destination for ban proof media. Defaults to the community proof channel (`-1003997518221`); override to use a different chat or forum thread. |
 | `LOGS` | Yes | `chat_id` or `chat_id/thread_id` | Audit-log destination. |
 | `LOGS_ERRORS` | Recommended | `chat_id` or `chat_id/thread_id` | Error-report destination. When empty, reports fall back to the owner DM instead of being dropped. |
@@ -202,7 +202,7 @@ offline over this dead key.
 
 1. `tcbot.__init__` loads configuration into `cfg` and fails fast when `BOT_TOKEN`, `DATABASE_URL`, or `OWNER_ID` are missing.
 2. `tcbot.__main__.main()` configures logging.
-3. `tcbot.alive.start_keepalive()` starts Flask on `0.0.0.0:PORT`.
+3. `tcbot.alive.start_keepalive()` starts Flask on `BIND_HOST:PORT` (`BIND_HOST` defaults to `0.0.0.0`).
 4. PTB `ApplicationBuilder` builds the bot application.
 5. `tcbot.modules.get_handlers()` imports active modules and stops startup if an enabled module fails to import.
 6. Signal handlers (`SIGTERM`, `SIGINT`) are registered immediately before the PTB lifecycle begins.

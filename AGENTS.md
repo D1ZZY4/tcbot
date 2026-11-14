@@ -274,7 +274,6 @@ Never commit real credentials. Required secret values include:
 
 - `BOT_TOKEN`: Telegram bot token from BotFather.
 - `DATABASE_URL`: PostgreSQL connection string. The bot applies its schema migrations at startup.
-- `OWNER_ID`: initial federation founder Telegram user ID (positive integer; boot refuses without it).
 - `API_ID`: Telegram API ID for MTProto identity lookups; boot refuses without it.
 - `API_HASH`: Telegram API hash matching `API_ID`; boot refuses without it.
 

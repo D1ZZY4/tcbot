@@ -32,7 +32,7 @@ flowchart TD
 
 ## Purpose
 
-A connected group is a Telegram supergroup or basic group that has been onboarded into the federation. Once connected, the bot enforces existing federation bans and mutes on join, applies new bans/mutes as they are issued, and broadcasts staff messages into the group. There are two ways a group gets connected: a group admin runs `/tcconnect` inside the group, or the bot is added to the group, becomes an administrator, and the group owner taps `Connect` on the auto-sent prompt.
+A connected group is a Telegram supergroup or basic group that has been onboarded into the federation. A forum is a supergroup in Telegram, so forums are supported; channels are not, because they have no member list to moderate. Once connected, the bot enforces existing federation bans and mutes on join, applies new bans/mutes as they are issued, and broadcasts staff messages into the group. There are two ways a group gets connected: a group admin runs `/tcconnect` inside the group, or the bot is added to the group, becomes an administrator, and the group owner taps `Connect` on the auto-sent prompt.
 
 The connection process also replays active federation bans and mutes onto the new group so a freshly connected group is in the same enforcement state as any existing group.
 
@@ -50,7 +50,7 @@ There is no `/tcconnect` alias for the auto-prompt path; the prompt uses inline 
 
 `/tcconnect` is registered as a plain `MessageHandler`; there is no conversation. The handler:
 
-1. Rejects private chat with `replies.err_group_only(locale)`.
+1. Rejects any chat that is not a basic group or a supergroup (private chats and channels) with `replies.err_group_only(locale)`. Forums are supergroups, so they are accepted.
 2. Fetches four independent reads in parallel via `asyncio.gather(..., return_exceptions=True)`:
    - `bot.get_chat_member(chat.id, user.id)` for the executor (bounded with `asyncio.wait_for(timeout=3.0)`).
    - `db.groups_db.is_connected(chat.id)`.
@@ -68,6 +68,8 @@ There is no `/tcconnect` alias for the auto-prompt path; the prompt uses inline 
 12. If `complete_join` raises, replies `Failed to connect the group due to a server error. Please try again.` and stops. The reply is intentionally not sent until after `complete_join` succeeds, so a DB failure does not produce a false "connected" confirmation.
 13. Otherwise, replies `connection.connected_message()`.
 
+A sender that Telegram reports as the anonymous group admin is refused before the gather with `connecting.state.anon_admin`. The placeholder names no real account, so the request cannot be attributed. The notice tells the admin to send the command from their own account with "Remain Anonymous" disabled; this is common in forums.
+
 ## Auto-prompt on bot addition
 
 When the bot joins a group, PTB emits a `my_chat_member` update. `connection.on_bot_added` handles every change to the bot's own member status:
@@ -75,7 +77,7 @@ When the bot joins a group, PTB emits a `my_chat_member` update. `connection.on_
 - **Bot removed** (`LEFT` / `BANNED`): runs `is_connected`, `deactivate_group`, and `remove_pending` in parallel. If the group was previously connected, posts a `group_bot_removed_log` and deactivates the record.
 - **Bot demoted** (`MEMBER` or `RESTRICTED` from `ADMINISTRATOR`): the group is *not* deactivated because permissions may be restored shortly. A warning is posted to `cfg.logs` (except for the primary groups `cfg.main_group`, which are managed separately). Federation bans cannot be enforced until admin rights are restored.
 - **Bot promoted to admin with a pending request**: edits the prompt to a progress state first (buttons removed), then runs `complete_join`, and only then edits the prompt to `connected_message`. The pending entry is consumed. (Editing optimistically in parallel was a bug: a `complete_join` failure left the owner with a false confirmation while the group stayed absent from `connected_chats`.) The progress edit matters because the ban/mute replay inside `complete_join` can take minutes on large federations; without it the owner stares at a dead prompt, and the removed buttons close the double-tap window.
-- **Bot added to a group with no pending request**: posts `connection.join_prompt()` with `Connect` / `Cancel` buttons and writes a `join_requests` entry via `db.groups_db.add_pending(chat.id, chat.title, by_user.id, prompt.message_id)`. Anonymous-admin adds are skipped because there is no `from_user` to record as owner. When the `get_pending` or `is_connected` read fails, the event is dropped without creating a prompt, so a database outage cannot produce a duplicate prompt on the next event.
+- **Bot added to a group with no pending request**: posts `connection.join_prompt()` with `Connect` / `Cancel` buttons and writes a `join_requests` entry via `db.groups_db.add_pending(chat.id, chat.title, owner_id, prompt.message_id)`. A normal adder is recorded as `owner_id`; when the update names no real account (anonymous forum admin or a missing `from_user`), the prompt is still sent and the row stores no owner (`0` in the document, `NULL` in the table), because the `Connect` button is restricted to the group creator and remains decidable. When the `get_pending` or `is_connected` read fails, the event is dropped without creating a prompt, so a database outage cannot produce a duplicate prompt on the next event.
 
 ## `on_join_decision` callback flow
 
@@ -159,7 +161,7 @@ The connection flow touches two tables:
 - A bot without the required admin permissions is rejected before `complete_join` runs.
 - `complete_join` raises `RuntimeError` if `add_group` fails; the success reply is intentionally not sent in that case. Previously the reply was sent in parallel with `complete_join`, which silently swallowed DB failures and produced a false "connected" confirmation.
 - The auto-prompt path requires the bot to become an administrator before `complete_join` fires; if the bot is only a member, the pending entry stays and no connect happens until the owner re-promotes and re-taps.
-- Anonymous-admin adds to the bot are skipped silently because there is no `from_user.id` to record as owner.
+- Anonymous-admin adds to the bot still send the owner-only prompt. The pending row records `owner_id = 0` because the update names no real account, and the group creator can still decide from the prompt.
 - Demoting the bot (admin -> member/restricted) does *not* deactivate the group; it only posts a warning to the federation log channel.
 - Removing the bot (left/banned) deactivates the group, removes any pending entry, and posts a `group_bot_removed_log` to the federation log channel.
 - The admin-identity harvest is fire-and-forget; a strong reference is kept in `_harvest_tasks` so the coroutine is not garbage-collected before completion.
@@ -175,8 +177,8 @@ Key behaviors to keep in mind:
 5. `complete_join` is awaited before the success reply so DB failures cannot produce a false "connected" confirmation.
 6. `complete_join` replays every active ban via `fan_out(bot.ban_chat_member)` and every active mute via `fan_out(bot.restrict_chat_member)`. The replay is bounded by a time budget: Telegram admits 20 requests a minute per group, so a long enforcement list would otherwise keep the connect handler running for a quarter of an hour. The replay stops at the budget, logs the number of bans and mutes that were not applied, and reports the connect as a blind replay so the owner re-adds the bot to finish it.
 7. `complete_join` posts a `group_connected_log` to `cfg.logs` regardless of how many bans/mutes were successfully applied.
-8. Adding the bot to a group auto-sends a `Connect` / `Cancel` prompt and writes a `join_requests` entry.
-9. Anonymous-admin adds do not produce a prompt.
+8. Adding the bot to a group or forum auto-sends a `Connect` / `Cancel` prompt and writes a `join_requests` entry.
+9. Anonymous-admin adds still produce the prompt with `owner_id = 0`; the group creator decides.
 10. The auto-prompt path only consumes the pending entry once the bot is promoted to administrator with the required perms.
 11. Bot removal deactivates the group, clears any pending entry, and posts a `group_bot_removed_log`.
 12. Bot demotion does not deactivate the group; only a warning is posted to `cfg.logs`.

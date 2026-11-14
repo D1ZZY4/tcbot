@@ -51,6 +51,7 @@ and `rules/asyncio-gather-rules.md`.
 | `features/` | User-visible flows and detailed moderation, role, appeal, and statistics behavior. |
 | `operations/` | Backup and restore, CI/CD, and performance guidance. |
 | `reference/` | Stable UI and callback conventions such as keyboard styles. |
+| `releases/` | Published release notes, one document per version. |
 
 ## Runtime package map
 

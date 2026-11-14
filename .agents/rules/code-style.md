@@ -166,7 +166,7 @@ Detailed failure propagation, concurrency, cancellation, and timeout behavior fo
 Command and callback handlers use this decorator order:
 
 ```python
-@decorators.ratelimiter(limit=5, period=60)
+@decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.mod_only
 @decorators.log_execution
 async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

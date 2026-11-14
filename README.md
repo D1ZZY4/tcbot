@@ -22,10 +22,10 @@ Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `API_ID`, and `API_HAS
 ## What It Does
 
 - **Federation bans with proof.** `/tcban` collects proof media or text first, then enforces across every connected group and stores the proof reference for review.
-- **Appeals.** Banned users submit through a deep link in bot DM. Staff approve or reject from review cards posted in the main group.
+- **Appeals.** Banned users submit through a deep link in bot DM or with `#appeal` in the main group. Staff approve or reject from review cards posted in the main group.
 - **Standard moderation.** `/tckick`, `/tcmute`, `/tcwarn`, `/tcunban`, and `/check` cover kick, mute, warn, unban, and ban-history lookup. Warn thresholds can trigger an automatic federation ban.
 - **Staff roles.** Founder, Admin, Developer, and Tester hierarchy with promotion requests, demotion, and automatic demotion before a staff member is banned, kicked, or muted.
-- **Connected groups.** Groups opt in with `/tcconnect`. Multi-group actions fan out with bounded concurrency so one failing group does not abort the rest.
+- **Connected groups.** Groups and forums opt in with `/tcconnect`. Multi-group actions fan out with bounded concurrency so one failing group does not abort the rest.
 - **Audit trail.** Moderation, appeal, role, and error reports go to the configured log destinations.
 
 ## Commands
@@ -49,7 +49,7 @@ Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `API_ID`, and `API_HAS
 | `/tcbroadcast` | Staff-only broadcast to every connected group. |
 | `/ping`, `/speedtest` | Latency check and throughput measurement; `/st full` uses a larger sample. |
 
-Appeals are submitted by the banned user in bot DM through a deep link. Command prefixes are configurable (default `/`, `!`, `.`).
+Appeals are submitted by the banned user in bot DM through a deep link, or with `#appeal` in the main group. Command prefixes are configurable (default `/`, `!`, `.`).
 
 ## Configuration
 
@@ -107,13 +107,14 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 |---|---|---|
 | `WARN_LIMIT` | `3` | Per-group warns triggering auto-ban (minimum `1`, fires at or above the limit). |
 | `FED_WARN_LIMIT` | `0` (disabled) | Federation-wide warns triggering auto-ban. |
-| `WARN_EXPIRY_DAYS` | `0` (disabled) | Days after which warn counts expire via a daily job. |
+| `WARN_EXPIRY_DAYS` | `0` (disabled) | Days after which a warning stops counting towards the auto-ban threshold. The history is kept. |
 
-### Timeouts and modules
+### Timeouts, cache, and modules
 
 | Variable | Default | Description |
 |---|---|---|
 | `ALBUM_DEBOUNCE_SECONDS` | `4` | Proof silence window before the ban executor runs (or tap Done to run at once). |
+| `REDIS_URL` | empty (L1 only) | Optional Redis URL for the shared L2 cache. Without it the bot uses the in-process cache. |
 | `DB_POOL_SIZE` | `5` | PostgreSQL connection pool size. Keep the total with `DB_MAX_OVERFLOW` within the connection limit the database grants. |
 | `DB_MAX_OVERFLOW` | `5` | Extra connections the pool may open under load. |
 | `DB_SCHEMA` | `public` | PostgreSQL schema the bot reads and writes. The project uses `public` for the deployment, `test` for the integration tests, and `development` for a developer. |
