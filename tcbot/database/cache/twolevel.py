@@ -37,6 +37,11 @@ _REVOCATION_PREFIXES: frozenset[str] = frozenset({"role", "conn", "groups", "own
 # * key count, so a large batch is split into bounded chunks.
 _MGET_CHUNK_SIZE: int = 500
 
+# * Short-lived marker written just before a revocation delete. It closes
+# * the cross-process window where a reader could fetch the old L2 value
+# * before the queued delete of another process lands.
+_TOMBSTONE_TTL_S: int = 10
+
 
 class _KeyState:
     """Single-flight lock plus the invalidation counter of one key.
@@ -111,6 +116,8 @@ class TwoLevelCache[T]:
         # * Advance the key's generation so an in-flight fetch discards its
         # * stale result instead of resurrecting the revoked value.
         self._advance(key)
+        if self._is_revocation:
+            self._redis_tombstone_background(key)
         self._redis_del_background(key, droppable=not self._is_revocation)
 
     def clear(self) -> None:
@@ -335,7 +342,9 @@ class TwoLevelCache[T]:
 
                 # L2: Redis (bounded: a stalled Redis must not hold the hot path)
                 rc = await self._client()
-                if rc is not None:
+                if rc is not None and (
+                    not self._is_revocation or not await self._tombstoned(rc, key)
+                ):
                     rkey = self._rkey(key)
                     try:
                         raw = await asyncio.wait_for(
@@ -483,6 +492,47 @@ class TwoLevelCache[T]:
 
     def _rkey(self, key: Any) -> str:
         return f"tcbot:{self._redis_prefix}:v2:{key}"
+
+    def _tombstone_key(self, key: Any) -> str:
+        return f"tcbot:{self._redis_prefix}:v2:tombstone:{key}"
+
+    async def _tombstoned(self, rc: Any, key: Any) -> bool:
+        """Return True while another process has a pending revocation."""
+        try:
+            exists = await asyncio.wait_for(
+                rc.exists(self._tombstone_key(key)),
+                timeout=redis_io._REDIS_GET_TIMEOUT_S,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug("Redis tombstone check failed for %s: %s", key, exc)
+            return False
+        return bool(exists)
+
+    def _redis_tombstone_background(self, key: Any) -> None:
+        """Mark a key as revoked before its L2 delete is queued."""
+        if not cfg.redis_url:
+            return
+        rkey = self._tombstone_key(key)
+        redis_io.enqueue_redis_mutation(
+            self._redis_prefix,
+            lambda: self._redis_tombstone(rkey),
+            droppable=False,
+        )
+
+    async def _redis_tombstone(self, rkey: str) -> None:
+        """Write the short-lived tombstone with the shared failure policy."""
+        rc = await self._client()
+        if rc is None:
+            return
+        try:
+            await asyncio.wait_for(
+                rc.set(rkey, "1", ex=_TOMBSTONE_TTL_S),
+                timeout=redis_io._REDIS_WRITE_TIMEOUT_S,
+            )
+        except Exception as exc:
+            log.debug("Redis tombstone write failed for %s: %s", rkey, exc)
 
     def _redis_put_background(self, key: Any, val: T) -> None:
         """Fire-and-forget Redis write without blocking the caller."""

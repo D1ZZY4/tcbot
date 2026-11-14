@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from tcbot import cfg
-from tcbot.database.cache import twolevel
+from tcbot.database.cache import redis_io, twolevel
 from tcbot.database.cache.twolevel import TwoLevelCache
 
 
@@ -96,6 +96,34 @@ def test_explicit_put_during_a_fetch_wins() -> None:
         assert cache.get("k") == "fresh"
 
     asyncio.run(_run())
+
+
+def test_a_cross_process_tombstone_forces_the_source_read() -> None:
+    """A revocation marker written by another process must hide old L2 data."""
+
+    class _TombstoneRedis:
+        async def exists(self, key: str) -> int:
+            return 1
+
+        async def get(self, key: str) -> bytes:
+            raise AssertionError("L2 must not be read while a tombstone is live")
+
+    async def _run() -> None:
+        cache = TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix="role")
+        calls = 0
+
+        async def _fetch() -> str:
+            nonlocal calls
+            calls += 1
+            return "fresh"
+
+        assert await cache.get_or_fetch("k", _fetch) == "fresh"
+        assert calls == 1
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(twolevel, "cfg", dataclasses.replace(cfg, redis_url="redis://x"))
+        patch.setattr(redis_io, "redis_client", lambda: _TombstoneRedis())
+        asyncio.run(_run())
 
 
 def test_normal_fetch_still_populates_the_cache() -> None:

@@ -496,6 +496,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **The legacy import no longer uses MD5** (`alembic/versions/0003_community_schema.py`): the deterministic external references of imported mutes and legacy ids were derived with MD5, which CodeQL flags as a weak hash even though the value is an identifier, not a credential. They now use SHA-256. Behavior changes: a legacy database that has not run revision 0003 yet gets different 16-character references; deployments that already ran it are unchanged.
 - **Expiry and cleanup sweeps are single-owner across instances** (`tcbot/database/scheduler.py`): two bot instances could both run the daily expiry or cleanup and queue duplicate revokes. Each sweep now takes a transaction advisory lock, so the second instance skips the tick. Behavior changes: duplicate scheduled runs become no-ops.
 
+- **A cross-process revocation hides the old L2 value** (`tcbot/database/cache/twolevel.py`, `tests/test_cache_invalidation_race.py`): a reader in another process could fetch the pre-revocation value from Redis before the queued delete landed. Revocation prefixes now write a short-lived tombstone that forces the source read. Behavior changes: a demotion or disconnect cannot be served from stale L2 during the delete window.
+
 
 - **A failed migration releases its engine** (`alembic/env.py`): the migration engine was disposed only on the success path, so a revision that raised left its pool behind and every retried boot leaked another one. The engine is now disposed in a finally block. Behavior changes: none; a failed boot still fails loudly.
 

@@ -61,11 +61,12 @@ def test_role_delete_survives_sat_queue_but_mention_drops() -> None:
         role_cache.invalidate(123)
         mention_cache.invalidate(123)
 
-        # Role delete enqueued despite the bound; mention delete dropped.
-        assert redis_io._redis_pending[("role", loop)] == before_role + 1
+        # * Role invalidate enqueues the tombstone and then the delete; both
+        # * are non-droppable. The mention delete is droppable and dropped.
+        assert redis_io._redis_pending[("role", loop)] == before_role + 2
         assert redis_io._redis_pending[("umention", loop)] == before_mention
         new_tasks = set(redis_io._redis_bg_tasks) - tasks_before
-        assert len(new_tasks) == 1
+        assert len(new_tasks) == 2
         for task in new_tasks:
             task.cancel()
         await asyncio.gather(*new_tasks, return_exceptions=True)
