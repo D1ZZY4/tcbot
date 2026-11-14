@@ -235,12 +235,22 @@ def webhook_route() -> tuple[str, int]:
         try:
             future.result(timeout=_WEBHOOK_ENQUEUE_TIMEOUT_S)
         except concurrent.futures.TimeoutError:
-            future.cancel()
+            # * Only a cancelled enqueue may be retried. When cancellation
+            # * does not take (the coroutine already started), the update
+            # * still lands when the queue frees, and a 503 would make
+            # * Telegram deliver the same moderation update twice.
+            if future.cancel():
+                log.warning(
+                    "Webhook: PTB update queue did not accept the update within %.1fs.",
+                    _WEBHOOK_ENQUEUE_TIMEOUT_S,
+                )
+                return "Service unavailable", 503
             log.warning(
-                "Webhook: PTB update queue did not accept the update within %.1fs.",
+                "Webhook: PTB update queue accepted the update after %.1fs; "
+                "acknowledging to avoid duplicate delivery.",
                 _WEBHOOK_ENQUEUE_TIMEOUT_S,
             )
-            return "Service unavailable", 503
+            return "OK", 200
         except Exception:
             log.exception("Webhook: PTB update queue rejected the update.")
             return "Service unavailable", 503

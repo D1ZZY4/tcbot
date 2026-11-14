@@ -208,8 +208,9 @@ class _FakeWhQueue:
 
 
 class _FakeFuture:
-    def __init__(self, *, exc: Exception | None = None) -> None:
+    def __init__(self, *, exc: Exception | None = None, cancel_ok: bool = True) -> None:
         self._exc = exc
+        self._cancel_ok = cancel_ok
         self.cancelled = False
 
     def result(self, timeout: float | None = None) -> None:
@@ -218,7 +219,7 @@ class _FakeFuture:
 
     def cancel(self) -> bool:
         self.cancelled = True
-        return True
+        return self._cancel_ok
 
 
 def _wire_webhook(
@@ -405,6 +406,29 @@ def test_webhook_503_when_enqueue_timeout(monkeypatch: pytest.MonkeyPatch) -> No
     body, code = _call_webhook(json_data={"update_id": 1})
     assert code == 503
     assert body == "Service unavailable"
+
+
+def test_webhook_200_when_enqueue_timeout_cannot_be_cancelled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An enqueue that already started must be acknowledged, not retried.
+
+    Cancelling the coroutine failed, so the update will still land once the
+    queue frees. Answering 503 would make Telegram deliver the same
+    moderation update a second time.
+    """
+    _wire_webhook(monkeypatch, queue=_FakeWhQueue(), loop=object(), bot=object())
+    _stub_de_json(monkeypatch, ret=object())
+    monkeypatch.setattr(
+        alive_mod.asyncio,
+        "run_coroutine_threadsafe",
+        lambda coro, loop: _FakeFuture(
+            exc=concurrent.futures.TimeoutError("slow"), cancel_ok=False
+        ),
+    )
+    body, code = _call_webhook(json_data={"update_id": 1})
+    assert code == 200
+    assert body == "OK"
 
 
 def test_webhook_503_when_future_raises(monkeypatch: pytest.MonkeyPatch) -> None:
