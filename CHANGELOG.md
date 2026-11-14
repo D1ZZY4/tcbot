@@ -502,6 +502,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The promotion list reads the columns its document needs** (`tcbot/database/queues_db.py`, `tests/test_promo_queue_cap.py`): the pending list projected a narrower column set than the shared document composer read, so `/tcpromotelist` raised `KeyError` on the first pending request. The list now uses the same projection as the single-row readers. Behavior changes: the pending list renders instead of failing.
 
+- **A role grant cannot replace the Founder** (`tcbot/database/users_roles.py`, `tests/test_set_owner_cleanup.py`): the grant revoked every active assignment of the target before inserting the new role, including the owner row, so `add_admin` or `set_role` aimed at the owner left the community without a Founder while the owner cache still named them. The grant now leaves the owner assignment to `set_owner`; a conflicting grant fails the one-active-role rule and rolls back. Behavior changes: a grant that targets the current owner is refused instead of corrupting ownership.
+
 
 - **A failed migration releases its engine** (`alembic/env.py`): the migration engine was disposed only on the success path, so a revision that raised left its pool behind and every retried boot leaked another one. The engine is now disposed in a finally block. Behavior changes: none; a failed boot still fails loudly.
 

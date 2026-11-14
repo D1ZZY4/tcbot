@@ -12,6 +12,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql.expression import Update
 
 from tcbot.database import engine as engine_module
@@ -36,6 +37,7 @@ _OWNER_IDS: tuple[int, ...] = (
     61100,
     61200,
     61300,
+    61020,
 )
 
 
@@ -119,6 +121,22 @@ async def test_a_failed_transfer_keeps_the_previous_owner(
 
     assert await _owner_ids() == [61003]
     users_roles.owner_id_cache.invalidate(_OWNER_KEY)
+
+
+async def test_a_role_grant_never_replaces_the_owner(owner_db: str) -> None:
+    """Only set_owner may replace the Founder role.
+
+    add_admin/set_role revoke the active assignment before the insert, and
+    the owner row must be excluded from that revocation. A grant aimed at
+    the owner therefore fails the one-active-role rule and leaves the
+    community with its owner intact.
+    """
+    await users_roles.set_owner(61020)
+
+    with pytest.raises(IntegrityError):
+        await users_roles.add_admin(61020, 61020)
+
+    assert await _owner_ids() == [61020]
 
 
 async def test_set_owner_persistent_delete_failure_reraises_with_guidance(

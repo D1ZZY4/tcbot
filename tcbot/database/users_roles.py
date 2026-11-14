@@ -298,6 +298,9 @@ async def ensure_initial_owner(initial_id: int) -> None:
             )
         return
     owner_id_cache.put(_OWNER_KEY, owner_id)
+    # * The seed may have replaced a lower role of the configured owner, so
+    # * a cached effective role for that user is stale.
+    effective_role_cache.invalidate(initial_id)
 
 
 async def set_owner(user_id: int) -> None:
@@ -341,14 +344,12 @@ async def set_owner(user_id: int) -> None:
             .on_conflict_do_nothing(index_elements=["user_id"])
         )
         await sess.execute(
-            pg_insert(role_assignments)
-            .values(
+            pg_insert(role_assignments).values(
                 user_id=user_id,
                 role_key=_OWNER_ROLE,
                 status="active",
                 assigned_at=utc_now(),
             )
-            .on_conflict_do_nothing(index_elements=["id"])
         )
 
     try:
@@ -499,26 +500,29 @@ async def _assign_role(user_id: int, role: str, assigned_by: int) -> None:
     """
 
     async def _work(sess: AsyncSession) -> None:
+        # ! CRITICAL: never revoke the owner assignment here. Only
+        # ! set_owner replaces the Founder; a grant that targeted the owner
+        # ! must fail the active-user uniqueness rule instead of leaving the
+        # ! community without an owner.
         await sess.execute(
             role_assignments.update()
             .where(
                 role_assignments.c.user_id == user_id,
                 role_assignments.c.status == "active",
+                role_assignments.c.role_key != _OWNER_ROLE,
             )
             .values(
                 status="revoked", revoked_at=utc_now(), revoked_by_user_id=assigned_by
             )
         )
         await sess.execute(
-            pg_insert(role_assignments)
-            .values(
+            pg_insert(role_assignments).values(
                 user_id=user_id,
                 role_key=role,
                 assigned_by_user_id=assigned_by,
                 assigned_at=utc_now(),
                 status="active",
             )
-            .on_conflict_do_nothing(index_elements=["id"])
         )
 
     await run_transaction(_work)
