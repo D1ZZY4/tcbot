@@ -194,6 +194,19 @@ def _env_list(key: str) -> list[str]:
     return parse_list(os.getenv(key, "") or "")
 
 
+def _bool_from_env(key: str, *, default: bool = False) -> bool:
+    """Read a boolean env var, warning and falling back on an unknown value."""
+    raw = os.getenv(key, "").strip().lower()
+    if not raw:
+        return default
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    log.warning("Invalid boolean for %s, using %s.", key, default)
+    return default
+
+
 def _parse_log_level(raw: str) -> int:
     """Resolve a log-level name; unknown names fall back to INFO."""
     level = _LOG_LEVELS.get(raw.strip().upper())
@@ -319,6 +332,7 @@ class Configs:
     db_pool_size: int
     db_max_overflow: int
     db_schema: str
+    pg_cron_enabled: bool
     warn_expiry_days: int
     fed_warn_limit: int
     warn_limit: int
@@ -391,6 +405,7 @@ class Configs:
                 "DB_MAX_OVERFLOW", _DEFAULT_DB_MAX_OVERFLOW, minimum=0
             ),
             db_schema=_db_schema_from_env(),
+            pg_cron_enabled=_bool_from_env("PG_CRON_ENABLED", default=False),
             warn_expiry_days=_int_from_env("WARN_EXPIRY_DAYS", 0, minimum=0),
             fed_warn_limit=_int_from_env("FED_WARN_LIMIT", 0, minimum=0),
             warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),

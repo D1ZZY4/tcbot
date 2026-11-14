@@ -30,7 +30,7 @@ from tcbot import database as db
 from tcbot.alive import register_webhook, start_keepalive
 from tcbot.database import engine as db_engine
 from tcbot.database import mtproto as mtproto_mod
-from tcbot.database import redis_client
+from tcbot.database import pg_cron, redis_client
 from tcbot.database import scheduler as sched_mod
 from tcbot.database.cache import drain_redis_mutations
 from tcbot.database.engine import close as close_database
@@ -375,7 +375,8 @@ async def _post_init(app: Application) -> None:
         )
     await init_shared_subsystems(app.bot, start_mtproto=True)
     configure_enforcement_worker(app.bot)
-    await sched_mod.start(cfg.database_url)
+    pg_cron_active = await pg_cron.sync_schedules()
+    await sched_mod.start(cfg.database_url, database_jobs_in_pg_cron=pg_cron_active)
     _startup_tasks.spawn(_warm_hot_caches())
     asyncio.get_running_loop().set_exception_handler(_make_asyncio_exc_handler())
     lec, _ = cfg.logs_errors

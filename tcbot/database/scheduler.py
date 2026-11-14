@@ -353,6 +353,8 @@ def _build_job_store(database_url: str) -> SQLAlchemyJobStore:
 
 async def _scheduler_background(
     database_url: str,
+    *,
+    database_jobs_in_pg_cron: bool,
 ) -> None:
     """Long-running background task that owns the AsyncIOScheduler lifecycle.
 
@@ -400,6 +402,7 @@ async def _scheduler_background(
                 _reconcile_schedules,
                 scheduler,
                 store,
+                database_jobs_in_pg_cron=database_jobs_in_pg_cron,
             ),
         )
         if _sched_ready is None:
@@ -536,21 +539,25 @@ def _remove_job(scheduler: AsyncIOScheduler, job_id: str, label: str) -> None:
 def _reconcile_schedules(
     scheduler: AsyncIOScheduler,
     store: SQLAlchemyJobStore,
+    *,
+    database_jobs_in_pg_cron: bool,
 ) -> None:
     """Align the persisted schedules with the current configuration."""
-    # * The expiry sweep always runs: a ban, a mute, and a role
-    # * assignment that ran out have to be moved to their expired state
-    # * and, for the restrictions, lifted on Telegram.
-    _ensure_job(
-        scheduler,
-        store,
-        job_id=_EXPIRY_SCHEDULE_ID,
-        func=expire_due_decisions,
-        trigger=IntervalTrigger(hours=24, timezone=_SCHEDULER_TIMEZONE),
-        args=(),
-        misfire_grace_time=86400,
-    )
-    log.info("Scheduled expiry sweep: every 24h.")
+    # * The expiry sweep always runs somewhere. pg_cron owns it when the
+    # * extension is active, so APScheduler must not run a second copy.
+    if database_jobs_in_pg_cron:
+        _remove_job(scheduler, _EXPIRY_SCHEDULE_ID, "Expiry sweep (pg_cron)")
+    else:
+        _ensure_job(
+            scheduler,
+            store,
+            job_id=_EXPIRY_SCHEDULE_ID,
+            func=expire_due_decisions,
+            trigger=IntervalTrigger(hours=24, timezone=_SCHEDULER_TIMEZONE),
+            args=(),
+            misfire_grace_time=86400,
+        )
+        log.info("Scheduled expiry sweep: every 24h.")
 
     # * The retired warn-expiry job patched the warnings that had no
     # * deadline. The community schema treats the expiry of a decision as
@@ -596,17 +603,22 @@ def _reconcile_schedules(
 
 async def start(
     database_url: str,
+    *,
+    database_jobs_in_pg_cron: bool = False,
 ) -> None:
     """Initialise and start the APScheduler background scheduler.
 
-    Spawns a dedicated asyncio task that calls ``scheduler.start()`` inside the
-    running event loop.  Uses ``SQLAlchemyJobStore`` so all schedules and job
-    state survive bot restarts.
+    Spawns a dedicated asyncio task that calls ``scheduler.start()`` inside
+    the running event loop. Uses ``SQLAlchemyJobStore`` so all schedules and
+    job state survive bot restarts. ``database_jobs_in_pg_cron`` removes the
+    pure-database expiry schedule when pg_cron already owns it.
 
     Blocks until the scheduler is ready to accept schedule operations.
 
     Args:
         database_url: PostgreSQL connection string (same as ``DATABASE_URL``).
+        database_jobs_in_pg_cron: Remove the pure-database expiry schedule
+            when pg_cron already owns it.
 
     """
     global _sched_ready, _sched_stop, _sched_error, _sched_task
@@ -618,7 +630,9 @@ async def start(
     _sched_stop = asyncio.Event()
     _sched_error = None
     _sched_task = asyncio.create_task(
-        _scheduler_background(database_url),
+        _scheduler_background(
+            database_url, database_jobs_in_pg_cron=database_jobs_in_pg_cron
+        ),
         name="tcbot.scheduler",
     )
     try:
