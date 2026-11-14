@@ -52,7 +52,6 @@ _DEFAULT_COMMUNITY_CHANNEL_URL: str = "https://t.me/TranssionCoreFederation"
 _DEFAULT_COMMUNITY_GROUP_URL: str = "https://t.me/TranssionCoreFederationGroup"
 _DEFAULT_COMMUNITY_LOGS_URL: str = "https://t.me/TranssionCoreFederationLogs"
 _DEFAULT_COMMUNITY_APPEAL_URL: str = "https://t.me/TranssionCoreFederationAppeals"
-_DEFAULT_COMMUNITY_TRAVEL_URL: str = "https://t.me/+S2C_ppFvHlAwMzNl"
 # * The Replit dev domain is only usable when this process is the one the
 # * Replit platform exposes. The variable is also set in a workspace shell
 # * that starts the bot by hand, and the dev domain there points at the
@@ -331,7 +330,6 @@ class Configs:
     community_group_url: str
     community_logs_url: str
     community_appeal_url: str
-    community_travel_url: str
     api_id: int
     api_hash: str
     mtproto_session: str
@@ -411,9 +409,6 @@ class Configs:
             ),
             community_logs_url=_env_or(
                 "COMMUNITY_LOGS_URL", _DEFAULT_COMMUNITY_LOGS_URL
-            ),
-            community_travel_url=_env_or(
-                "COMMUNITY_TRAVEL_URL", _DEFAULT_COMMUNITY_TRAVEL_URL
             ),
             api_id=_int_from_env("API_ID", 0, minimum=0),
             api_hash=os.getenv("API_HASH", "").strip(),

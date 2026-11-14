@@ -66,10 +66,9 @@ No commands. A single callback renders the community links menu.
 |---|---|
 | `additional_menu` | Render `additional.msg.body` with `additional_menu_kb`. |
 
-`additional_menu_kb` always shows the channel, group, appeal, logs, and
-travel rows. Each row uses the matching env URL
-(`COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`,
-`COMMUNITY_APPEAL_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_TRAVEL_URL`) and
+`additional_menu_kb` shows the channel, group, appeal, and logs rows. Each
+row uses the matching env URL (`COMMUNITY_CHANNEL_URL`,
+`COMMUNITY_GROUP_URL`, `COMMUNITY_APPEAL_URL`, `COMMUNITY_LOGS_URL`) and
 falls back to the built-in community link when the value is empty. Rate
 limit: 15 callbacks per 30 s. No database impact.
 

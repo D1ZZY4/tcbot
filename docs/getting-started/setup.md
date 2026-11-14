@@ -79,7 +79,7 @@ Docker, Heroku, VPS with systemd, Windows over RDP) live in the collapsible
 
 ### Community links (optional)
 
-The Additional Links menu in the bot start screen shows all five buttons by default: Main Channel, Discussion Group, Logs Channel, Appeals Channel, and TRAVEL. Each reads `COMMUNITY_*_URL`; a non-empty env value overrides the built-in default, and empty falls back to it, so a fresh deployment shows every button with zero setup. A non-http(s) env value is rejected: it logs a warning and that button is omitted.
+The Additional Links menu in the bot start screen shows four buttons by default: Main Channel, Discussion Group, Logs Channel, and Appeals Channel. Each reads `COMMUNITY_*_URL`; a non-empty env value overrides the built-in default, and empty falls back to it, so a fresh deployment shows every button with zero setup. A non-http(s) env value is rejected: it logs a warning and that button is omitted.
 
 | Variable | Button label |
 |---|---|
@@ -87,7 +87,6 @@ The Additional Links menu in the bot start screen shows all five buttons by defa
 | `COMMUNITY_GROUP_URL` | Discussion Group |
 | `COMMUNITY_LOGS_URL` | Logs Channel |
 | `COMMUNITY_APPEAL_URL` | Appeals Channel |
-| `COMMUNITY_TRAVEL_URL` | TRAVEL - Transsion Development (Community) |
 
 ## Environment variable format
 
@@ -156,9 +155,8 @@ PROOFS="-1001234567890"
 | `COMMUNITY_GROUP_URL` | No | http(s) URL | Discussion Group button. Built-in default `https://t.me/TranssionCoreFederationGroup`. |
 | `COMMUNITY_LOGS_URL` | No | http(s) URL | Logs Channel button. Built-in default `https://t.me/TranssionCoreFederationLogs`. |
 | `COMMUNITY_APPEAL_URL` | No | http(s) URL | Appeals Channel button. Built-in default `https://t.me/TranssionCoreFederationAppeals`. |
-| `COMMUNITY_TRAVEL_URL` | No | http(s) URL | TRAVEL community button. Built-in default `https://t.me/+S2C_ppFvHlAwMzNl`. |
 
-Each community link falls back to its built-in default when empty, so all five buttons show with zero setup. A non-http(s) value is ignored with a warning and hides that button.
+Each community link falls back to its built-in default when empty, so all four buttons show with zero setup. A non-http(s) value is ignored with a warning and hides that button.
 
 MTProto runs on the bot token alone: no phone number, no login code, no
 session file. Fill `API_ID` / `API_HASH` and boot connects a bot-token

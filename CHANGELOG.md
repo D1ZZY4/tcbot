@@ -871,6 +871,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Removed
 
+- **The TRAVEL community button is gone** (`tcbot/__init__.py`, `tcbot/modules/helper/keyboards/menus.py`, `i18n/en-US/button.toml`, `i18n/id-ID/button.toml`, `i18n/en-US/additional.toml`, `i18n/id-ID/additional.toml`, `config.env.example`, `README.md`, `AGENTS.md`, `docs/getting-started/setup.md`, `docs/features/misc-modules.md`, `.github/workflows/run-bot.yml`): `COMMUNITY_TRAVEL_URL` and the button it fed were removed. The Additional Links menu shows Main Channel, Discussion Group, Logs Channel, and Appeals Channel, each still falling back to its built-in link. Behavior changes: the TRAVEL button no longer appears, and `COMMUNITY_TRAVEL_URL` is ignored. Migration: drop the variable from the environment and the repository secrets.
+
 - **The unreferenced settings, erasure, join-request, and document-shape helpers are gone** (`tcbot/database/settings_db.py`, `tcbot/database/users_cache.py`, `tcbot/database/groups_db.py`, `tcbot/database/documents.py`, `docs/architecture/database.md`): `get_user_settings`, `set_user_timezone`, `mark_erased`, and `resolve_pending` had no callers, and the route and write path they described had moved to other helpers or to the schema functions. Ten TypedDict shapes that no module imported are removed with them, and the document inventory lists the shapes that remain. Behavior changes: none.
 
 - **The throttle tier of the removed sweep is gone** (`tcbot/modules/helper/decorators/ratelimit.py`, `tcbot/modules/helper/decorators/__init__.py`, `tests/test_moderation_contracts.py`): the sweep tier had no handler left after the `/tcsync` command was removed, so it only described a budget nothing spent. Behavior changes: none.

@@ -136,18 +136,6 @@ def additional_menu_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     if logs_btn:
         rows.append([logs_btn])
 
-    travel_url = _https_url(cfg.community_travel_url, "travel")
-    if travel_url:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    t("button.travel", locale, plain=True),
-                    url=travel_url,
-                    style=KeyboardButtonStyle.PRIMARY,
-                )
-            ]
-        )
-
     rows.append(
         [
             InlineKeyboardButton(
