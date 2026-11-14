@@ -158,6 +158,10 @@ Use the cache layer already associated with the database helper:
 - `clear_all()` is required when the entire Redis prefix must be invalidated.
 - `invalidate(key)` is preferred when the changed record identifies one key.
 - Redis is optional. Without `REDIS_URL`, the cache remains in-process.
+- Revocation prefixes (`role`, `conn`, `groups`, `owner`) write a
+  short-lived tombstone before the Redis delete. A reader in another
+  process that misses L1 pays one extra EXISTS on the tombstone, and skips
+  the old L2 value while the delete is in flight.
 
 Do not add a second cache namespace or bypass the cache with a direct Redis
 operation. An L2 write can never fail the fetch it follows: after a database
@@ -171,7 +175,7 @@ serialization, and invalidation details.
 Outbound Telegram HTTP tuning lives in one owner, `tcbot/utils/transport.py`
 (see [`../architecture/utilities.md`](../architecture/utilities.md)):
 `API_POOL_SIZE` (16) and the timeouts (read 60 s, write 30 s, connect 30 s,
-pool 15 s) are applied identically by `__main__.py` and `serverless.py`.
+pool 15 s) are applied by `__main__.py` for both webhook and polling transport.
 Polling mode adds a dedicated getUpdates connection pool of 4
 (`_UPDATES_POOL_SIZE`, defined in `tcbot/__main__.py`). On top of the pool,
 `fan_out()` caps in-flight Telegram calls at 10 via its semaphore, so the
@@ -215,7 +219,10 @@ The daily stale-record sweep passes `timeout=None` for its two bulk deletes
 can run long; the run as a whole is bounded by a 60 s deadline. The expiry
 sweep moves the due decisions and role assignments and queues the revoke runs
 in one transaction with the same 60 s budget, so a decision can never expire
-without the job that lifts the restriction.
+without the job that lifts the restriction. Both sweeps take a transaction
+advisory lock, so overlapping bot instances cannot duplicate the work. The
+five-minute enforcement worker consumes the queue and lifts the restriction
+on Telegram.
 
 A warning does not maintain a counter row. The per-group and federation counts
 are read from the `warn_counts` view over the decision history, so the count
@@ -242,10 +249,9 @@ an unbounded queue exhausts the process memory.
 The Redis client belongs to the event loop that created it: its sockets are
 bound to that loop. A client that is handed to another running loop would
 wait for an answer that can never arrive, so the cache treats it as absent
-and the reconnect path replaces it. The long-lived transports run one loop
-for the whole process, and the serverless path keeps one shared loop across
-warm invocations, so the client stays valid there. The guard exists for the
-case where the loop is replaced under a live client.
+and the reconnect path replaces it. The bot runs one loop for the whole
+process, so the client stays valid there. The guard exists for the case
+where the loop is replaced under a live client.
 
 ## Measuring a suspected bottleneck
 

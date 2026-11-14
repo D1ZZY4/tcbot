@@ -182,11 +182,13 @@ the origin chat of a decision.
 |---|---|---|---|
 | `/leaveall` | `/exitall`, `/tcleave` | Leave every non-primary connected group and mark them inactive. | Founder only |
 | `/cleanup` | `/tcclean`, `/tcc` | Check active groups and deactivate ones the bot can no longer access. | Staff+ |
+| `/tcforget` | `/tcf` | Queue one Telegram-account erasure for the next cleanup sweep. | Founder only |
 
 Behavior:
 
-- Primary groups (`main_group`) are never touched by either
-  command; they are guarded at every call site by `cfg.is_primary_group`.
+- Primary groups (`main_group`) are never touched by `/leaveall` or
+  `/cleanup`; they are guarded at every call site by
+  `cfg.is_primary_group`.
 - `/leaveall` is rate limited to 1 per 300 s and runs bounded per-group
   leave + deactivate. A group counts as failed when either the leave or the
   deactivate fails (a successful `leave_chat` with a failed deactivate would
@@ -194,31 +196,44 @@ Behavior:
 - `/cleanup` is rate limited to 3 per 60 s and uses bounded membership
   checks with `_MEMBERSHIP_CHECK_TIMEOUT = 3.0` per check.
 
+- `/tcforget <user_id> <reason>` queues an erasure through
+  `request_user_erasure`; the daily cleanup sweep anonymises the profile,
+  revokes live roles and moderation actions, and invalidates the affected
+  name and role cache entries.
+
 Database impact: `/leaveall` deactivates each `connected_chats` row in
 parallel with the leave and posts a `group_disconnected` log entry per
 group to `cfg.logs` (a leave counts as failed unless both `leave_chat` and
 `deactivate_group` succeed). `/cleanup` deactivates rows whose membership
 check reports the bot as `left` or `kicked`; a failed membership check
-keeps the group (fail closed).
+keeps the group (fail closed). `/tcforget` writes a pending
+`telegram_user_erasures` row.
 
 ## Netspeed: `netspeed.py`
 
 | Command | Aliases | Purpose | Access |
 |---|---|---|---|
 | `/ping` | `/p` | Telegram API round-trip latency in ms. | Founder only |
-| `/speedtest` | `/st` | Full speed test (download, upload, ping, client/server details) against speedtest.net. | Founder only |
+| `/speedtest` | `/st` | Speed test (download, upload, ping, client/server details) against speedtest.net. Add `full` for a larger sample. | Founder only |
 
 Behavior:
 
 - `/ping` replies "Pinging…", measures the elapsed time, and edits the
   message to the latency (single round-trip read).
 - `/speedtest` replies "Running…", fetches config and the server list,
-  picks the lowest-latency server among the five closest, then measures
+  prefers the client's own country when it has enough servers, picks the
+  lowest-latency server among the ten closest, then measures
   download and upload concurrently in an executor thread bounded by
-  `_SPEEDTEST_TIMEOUT = 180` s, and edits the result. Timeouts and
-  unparseable results (missing keys or `None` where a mapping was expected)
-  edit a dedicated notice instead of raising. The result renders the same
-  detail fields without a share image; unavailable geodata renders "N/A".
+  `_SPEEDTEST_TIMEOUT = 180` s, and edits the result.
+- `/speedtest full` (or `/st full`) uses a larger sample and four
+  connections per direction, bounded by `_SPEEDTEST_TIMEOUT_FULL = 300` s.
+  The quick mode deliberately keeps the payload small so the measurement
+  does not starve Telegram traffic; a quick result is a diagnostic, not a
+  line-rate benchmark.
+- The timestamp is epoch seconds, and the ping is rounded to one decimal.
+  Timeouts and unparseable results edit a dedicated notice instead of
+  raising. The result keeps the same detail fields without a share image;
+  unavailable geodata renders "N/A".
 
 Rate limit: 3 per 60 s for both commands, `@owner_only`. No database impact.
 

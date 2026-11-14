@@ -61,9 +61,11 @@ flowchart TD
 
 The schema is versioned with Alembic. `alembic/versions/0001_initial.py`
 creates the first layout, `0002_member_cache_sort_indexes.py` adds the
-sort indexes the paged user list needs, and `0003_community_schema.py`
-migrates an existing database to the community model. Every later revision
-adds to it; `engine.connect()` applies the pending revisions before the
+sort indexes the paged user list needs, `0003_community_schema.py`
+migrates an existing database to the community model, and
+`0004_reapply_schema_objects.py` reapplies the SQL objects after a function
+body changed. Every later revision adds to it; `engine.connect()` applies
+the pending revisions before the
 engine is published, so a fresh deployment boots against an empty database
 and an existing one is upgraded in place.
 
@@ -257,6 +259,9 @@ database error.
 | `kicks_db.py` | `moderation_actions` (kick scope), `moderation_cases` | Kick decisions and their per-user history. |
 | `mutes_db.py` | `moderation_actions` (mute scope), `moderation_cases` | Mute decisions, the live active-mute view, and the per-user history. |
 | `queues_db.py` | `promotion_requests` | Queued staff promotion requests and their resolution status. |
+| `enforcement_db.py` | `moderation_enforcement_runs`, `moderation_enforcement_targets`, `moderation_enforcement_attempts` | Claim queued expiry revokes, record per-group outcomes, and requeue abandoned runs. |
+| `erasure_db.py` | `telegram_user_erasures` | Queue one account erasure through the database function. |
+| `pg_cron.py` | `cron.job` (optional) | Register or remove the database-only maintenance jobs when pg_cron is enabled. |
 | `settings_db.py` | `user_settings` | Per-user locale and timezone preferences. |
 | `cache/` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with five public singletons. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton with pool management and liveness tracking. |
@@ -284,7 +289,7 @@ it never identifies anybody.
 | `is_bot` | `bool` | Whether the account is a bot. |
 | `is_premium` | `bool` | Whether the account holds Telegram Premium. |
 | `first_seen_at` | `datetime` | First-seen timestamp. The conflict action never rewrites it, so a refresh keeps the moment the profile was first cached. |
-| `last_seen_at` | `datetime \| None` | Last sighting. |
+| `last_seen_at` | `datetime \| None` | Last profile write (advanced whenever a write reaches the row). |
 | `erased_at` | `datetime \| None` | Set when the account was deleted on Telegram and the profile was anonymised. |
 | `erasure_reason` | `str \| None` | Why the profile was anonymised. |
 
@@ -742,7 +747,7 @@ reader sees one document.
 - `set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None`
   Closes the open appeal as rejected and names the reviewer, so the audit
   trail survives log-channel loss.
-- `release_stale_review(ban_id: str) -> bool`
+- `release_stale_review(ban_id: str, review_message_id: int) -> bool`
   Withdraws the open appeal of a decision and frees its review slot in one
   transaction. A review card nobody answered for a long time is stale, and
   the withdrawn appeal must not keep occupying the decision.
@@ -1323,8 +1328,16 @@ Recurring jobs:
 
 | Job ID | Trigger | Purpose |
 |---|---|---|
-| `tcbot.expiry_daily` | `IntervalTrigger(hours=24)` | Calls `expire_due_decisions()`: moves the ban, mute, and role-assignment rows whose deadline passed to `expired` and queues the revoke runs that lift the restrictions on Telegram. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs the sweep once. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
-| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. |
+| `tcbot.expiry_daily` | `IntervalTrigger(hours=24)` | Calls `expire_due_decisions()`: moves the ban, mute, and role-assignment rows whose deadline passed to `expired` and queues the matching revoke enforcement runs. A mute already carries its Telegram `until_date`, so its restriction lifts natively. Registered only when pg_cron does not own expiry. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs the sweep once. The sweep takes a transaction advisory lock, so two bot instances cannot expire the same records. |
+| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. Each branch takes its own transaction advisory lock. |
+| `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued revoke runs and lifts the expired ban or mute across the recorded groups. Always registered. Failed targets retry up to three attempts, five minutes apart. |
+
+When `PG_CRON_ENABLED` is true and the database has the `pg_cron`
+extension, `pg_cron.sync_schedules()` registers the registry jobs
+`moderation.expire`, `role.expire`, and `enforcement.reconcile`, and
+APScheduler removes its own expiry job. If the extension is missing or a
+registration fails, the bot logs a warning and keeps APScheduler as the
+single owner.
 
 Retired schedules are removed on every startup:
 
@@ -1429,19 +1442,20 @@ The tier vocabulary the handlers use is `users_roles.RoleName = Literal[
 
 ## Startup wiring and shutdown
 
-`init_shared_subsystems` in `tcbot/__main__.py` (called by `_post_init` for
-long-lived transports and by serverless with `start_mtproto=False`) runs, in
-order: `connect()` (which applies the pending Alembic revisions and pings
+`init_shared_subsystems` in `tcbot/__main__.py` (called by `_post_init`) runs,
+in order: `connect()` (which applies the pending Alembic revisions and pings
 the server), then in parallel `ensure_initial_owner(cfg.initial_owner_id)`
 (failures non-fatal), `redis_client.connect_if_configured()` when
 configured (connection failure degrades to in-memory cache only with a
-warning), and `mtproto.start()` on long-lived transports (an exception
-aborts boot; a degraded `False` warns and continues Bot-API-only). Then
-`scheduler.start(cfg.database_url, cfg.warn_expiry_days)`,
-followed by a background `_warm_hot_caches` task that pre-loads owner ID,
-active groups, and the owner's effective role into L1+L2. `_post_shutdown`
-stops the scheduler, closes Redis, and disposes the database engine.
-Related `cfg` fields: `database_url`, `redis_url`, `warn_expiry_days`,
+warning), and `mtproto.start()` (an exception aborts boot; a degraded
+`False` warns and continues Bot-API-only). Then the bot attaches the live
+bot to `enforcement_worker`, calls `pg_cron.sync_schedules()` to decide
+whether PostgreSQL owns the database-only jobs, and starts
+`scheduler.start(cfg.database_url, database_jobs_in_pg_cron=...)`.
+A background `_warm_hot_caches` task pre-loads owner ID, active groups, and
+the owner's effective role into L1+L2. `_post_shutdown` stops the
+scheduler, closes Redis, and disposes the database engine. Related `cfg`
+fields: `database_url`, `redis_url`, `db_schema`, `pg_cron_enabled`,
 `initial_owner_id`.
 
 ## Safety rules

@@ -7,8 +7,8 @@ Replit-specific deployment, see [`../../replit.md`](../../replit.md).
 
 ## Prerequisites
 
-- Python 3.14 (the pinned runtime for local, Docker, and Vercel; the
-  package floor is `>=3.14` and it is also the tested runtime).
+- Python 3.14 (the pinned runtime for local and Docker; the package floor is
+  `>=3.14` and it is also the tested runtime).
 - [`uv`](https://docs.astral.sh/uv/) for dependency and lockfile management.
 - A Telegram bot token from BotFather.
 - A PostgreSQL deployment, local or hosted (the bot applies its own schema migrations).
@@ -73,9 +73,9 @@ For Replit or another hosting platform:
 
 Do not commit a filled `config.env` file.
 
-Per-platform tutorials (GitHub Actions 24/7 runner, Vercel serverless,
-Docker, Heroku, VPS with systemd, Windows over RDP) live in the collapsible
-`Deployment` section of [`../../README.md`](../../README.md#deployment).
+Per-platform tutorials (GitHub Actions 24/7 runner, Docker, Heroku, VPS with
+systemd, Windows over RDP) live in the collapsible `Deployment` section of
+[`../../README.md`](../../README.md#deployment).
 
 ### Community links (optional)
 
@@ -128,6 +128,7 @@ PROOFS="-1001234567890"
 | `COMMUNITY_NAME` | No | string | Display name in messages and logs. Defaults to `Bot`. |
 | `PREFIXES` | No | Python-style list or CSV | Command prefixes. Default is `["/", "!", "."]`. |
 | `PORT` | No | integer or `auto` | Flask keep-alive port. `auto`, invalid, or out-of-range values resolve to `5000`. |
+| `BIND_HOST` | No | interface address | Listener interface for the keep-alive and webhook server. Default `0.0.0.0`; use `127.0.0.1` behind a local reverse proxy. |
 | `MAIN_GROUP` | Usually | integer chat ID | Main community group or forum. |
 | `PROOFS` | Usually | `chat_id` or `chat_id/thread_id` | Destination for ban proof media. Defaults to the community proof channel (`-1003997518221`); override to use a different chat or forum thread. |
 | `LOGS` | Yes | `chat_id` or `chat_id/thread_id` | Audit-log destination. |
@@ -144,10 +145,10 @@ PROOFS="-1001234567890"
 | `DB_POOL_SIZE` | No | integer >= 1 | Size of the PostgreSQL connection pool. Default `5`. Keep the total (`DB_POOL_SIZE` + `DB_MAX_OVERFLOW`) within the connection limit the database grants the bot user: a pooler in transaction or session mode caps it, and an oversized pool fails later as a "max clients reached" refusal that the circuit breaker reads as a database outage. |
 | `DB_MAX_OVERFLOW` | No | integer >= 0 | Extra connections the pool may open beyond `DB_POOL_SIZE` under load. Default `5`. These connections are closed again once the load drops. |
 | `DB_SCHEMA` | No | PostgreSQL identifier | The schema the bot reads and writes. Default `public`. The project uses three schemas and no more: `public` for the deployment, `test` for the integration tests, and `development` for a developer working against a shared server. A schema that does not exist yet is created at startup. |
+| `PG_CRON_ENABLED` | No | boolean | Let the database run moderation expiry, role expiry, and stuck-enforcement reconciliation through pg_cron. When enabled and the extension exists, APScheduler drops those schedules. Default `false`. |
 | `SENTRY_DSN` | No | DSN string | Error monitoring via Sentry (observability extra: install `tcbot[observability]`). When empty, monitoring is disabled. |
 | `WEBHOOK_URL` | No | URL | Base URL for webhook transport, e.g. `https://yourdomain.example.com`. An explicit value takes precedence over the automatically detected `REPLIT_DEV_DOMAIN`; when neither is available, the bot falls back to polling for local development. The dev domain is only used when the bot runs as the Replit application, so a workspace shell that starts the bot by hand polls instead of registering a webhook another process would receive. |
 | `WEBHOOK_SECRET` | No | random string | Secret token sent in the `X-Telegram-Bot-Api-Secret-Token` header by Telegram on every webhook POST. Auto-generated with `secrets.token_hex(32)` if absent. Set it explicitly for a stable deployment token. |
-| `CRON_SECRET` | Yes on Vercel | random string | Bearer token for the serverless warn-expiry cron endpoint. Requests without a matching token fail closed (`401`/`503`). |
 | `WARN_LIMIT` | No | integer >= 1 | Per-group warning threshold that triggers automatic federation ban. Default `3`. When a user's warn count in one group reaches or exceeds this value, they are federation-banned and their group warns cleared (on success). |
 | `FED_WARN_LIMIT` | No | integer >= 0 | Federation-wide warning threshold: sum of warn counts across all groups triggers an automatic federation ban when >= this value. Default `0` (disabled). Set to a positive integer to enable cross-group warn aggregation. |
 | `WARN_EXPIRY_DAYS` | No | positive integer | Days after which warning decisions expire and stop counting towards the auto-ban threshold. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
@@ -157,6 +158,24 @@ PROOFS="-1001234567890"
 | `COMMUNITY_APPEAL_URL` | No | http(s) URL | Appeals Channel button. Built-in default `https://t.me/TranssionCoreFederationAppeals`. |
 
 Each community link falls back to its built-in default when empty, so all four buttons show with zero setup. A non-http(s) value is ignored with a warning and hides that button.
+
+### Optional pg_cron
+
+If the database supports the `pg_cron` extension, the pure-database
+maintenance can run inside PostgreSQL instead of the bot process. Install
+the extension and let the bot schedule it:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+```
+
+Set `PG_CRON_ENABLED=true` and restart the bot. At startup it registers
+`moderation.expire`, `role.expire`, and `enforcement.reconcile` through
+`cron.schedule`, then removes the matching APScheduler expiry job. The bot
+still runs the Telegram enforcement worker. If the extension or the
+privilege is missing, the bot logs a warning and keeps APScheduler as the
+single owner. A managed provider may require enabling the extension from
+its dashboard first.
 
 MTProto runs on the bot token alone: no phone number, no login code, no
 session file. Fill `API_ID` / `API_HASH` and boot connects a bot-token

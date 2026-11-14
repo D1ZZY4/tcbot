@@ -38,9 +38,9 @@ Suggested reading path:
    appeals, or statistics).
 4. [`CHANGELOG.md`](CHANGELOG.md) for what changed recently and why.
 
-The index also covers operations (backup, CI/CD, performance, Vercel)
-and stable references (keyboard styles). Reading it first is faster
-than reverse-engineering the codebase.
+The index also covers operations (backup, CI/CD, performance) and
+stable references (keyboard styles). Reading it first is faster than
+reverse-engineering the codebase.
 
 ## Ways to Contribute
 

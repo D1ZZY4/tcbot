@@ -14,7 +14,6 @@ This page maps the repository structure and the service boundaries between packa
 ```text
 <project root>/
 ├── tcbot/                  Main Python package
-├── api/                    Vercel serverless endpoints (webhook, cron)
 ├── docs/                   Documentation grouped by purpose
 ├── i18n/                   Translation catalogs (en-US source, id-ID mirror)
 ├── tests/                  Pytest test suite
@@ -23,8 +22,7 @@ This page maps the repository structure and the service boundaries between packa
 ├── pyproject.toml          Dependencies and Ruff config
 ├── pyrightconfig.json      Pyright type checker configuration
 ├── uv.lock                 Locked dependency graph
-├── vercel.json             Vercel functions, timeouts, and cron schedule
-├── .python-version         Pinned Python for Vercel and uv (3.14)
+├── .python-version         Pinned Python for uv (3.14)
 ├── config.env.example      Environment variable template
 ├── README.md               Project overview
 ├── CONTRIBUTING.md         Contribution workflow and review checklist
@@ -62,7 +60,7 @@ tcbot/
 ├── __main__.py             App lifecycle, builder, errors, and main startup
 ├── error_reporter.py       Telegram error classification and shipping to LOGS_ERRORS
 ├── alive.py                Flask health endpoint and webhook receiver
-├── serverless.py           Vercel lifecycle: shared PTB app, update dispatch, cron expiry
+├── enforcement_worker.py   Claims queued expiry revokes and lifts restrictions on Telegram
 ├── database/
 │   ├── base/               Table, column, constraint, and index definitions (schema source of truth)
 │   │   ├── identity.py       Telegram users, chats, membership, connected groups, join requests
@@ -90,7 +88,10 @@ tcbot/
 │   │   ├── _writes.py          Writes: create, update, review slot, appeal, decision
 │   │   └── _compose.py         Joins a decision with its messages and appeals
 │   ├── moderation_db.py     Shared write path of the decisions: case, proof, closing
+│   ├── enforcement_db.py   Claim and record the queued expiry revokes
+│   ├── erasure_db.py       Queue a Telegram-account erasure
 │   ├── groups_db.py        Connected groups, group configuration, join requests
+│   ├── pg_cron.py          Optional pg_cron ownership of database-only jobs
 │   ├── users_cache.py      Telegram identity cache operations
 │   ├── users_roles.py      Role assignments, effective-role resolution, the permission catalog
 │   ├── warns_db.py         Warning decisions and the per-group counters
@@ -146,6 +147,7 @@ tcbot/
 | Area | Owns | Must not own |
 |---|---|---|
 | `tcbot/__main__.py` | App lifecycle, handler wiring, DB init, and webhook transport (polling fallback for local dev only) | Feature business logic |
+| `tcbot/alive.py` | Flask health endpoint and the webhook receiver | Feature business logic |
 | `tcbot/modules/*.py` | Command entry points, handler registration, user-facing permissions | Raw SQL writes, duplicate conversation state handlers |
 | `tcbot/modules/helper/` | Shared handler helpers and keyboard factories | Top-level command registration |
 | `tcbot/modules/helper/pipelines/*_flow.py` | Conversation factories, state transitions, flow executors | Module discovery or `__handlers__` exports |

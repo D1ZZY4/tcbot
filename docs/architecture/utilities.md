@@ -274,7 +274,7 @@ Single owner for the outbound Telegram transport tuning used by every runtime en
 | `API_POOL_SIZE` | Connection pool size for the underlying httpx client. |
 | `TELEGRAM_LOOKUP_TIMEOUT` | Standard 3s budget for a single Telegram lookup (`get_chat`, `get_chat_member`). |
 
-Both `tcbot/__main__.py` (webhook and polling) and `tcbot/serverless.py` (Vercel) import these instead of redefining them, so timeout and pool behavior stays identical across transports.
+`tcbot/__main__.py` imports these for both webhook and polling transport instead of redefining them, so timeout and pool behavior stays identical across transports.
 
 ## `tasks.py`
 
@@ -305,7 +305,7 @@ The processor takes the conversation lock before the global concurrency slot. PT
 
 ## `secrets.py`
 
-Single owner for the constant-time comparison of inbound credentials (Telegram webhook secret, cron bearer token).
+Single owner for the constant-time comparison of inbound credentials (the Telegram webhook secret).
 
 | Export | Purpose |
 |---|---|
@@ -313,7 +313,7 @@ Single owner for the constant-time comparison of inbound credentials (Telegram w
 
 `hmac.compare_digest` raises `TypeError` on non-ASCII strings, so a credential header carrying a non-ASCII byte would otherwise fail inside the request handler and surface as an unhandled 500 instead of a clean rejection. Comparing bytes keeps the timing-safe guarantee and turns every malformed credential into an ordinary mismatch. Callers must refuse an unset secret before calling the helper: a missing secret fails closed rather than matching an empty header.
 
-Both the Flask receiver (`tcbot/alive.py`) and the Vercel endpoints (`api/webhook.py`, `api/cron.py`) use this helper, so the rejection contract stays identical across deployments.
+The Flask receiver (`tcbot/alive.py`) uses this helper, so the rejection contract stays identical across deployments.
 
 ## Utility boundaries
 

@@ -104,9 +104,9 @@ duplicate review card.
 When the checks pass:
 
 1. The user's appeal message is forwarded to the configured appeals destination (`cfg.appeals`).
-2. A staff review card is posted to `cfg.main_group`, and a second copy with the same Approve/Reject buttons is posted in `cfg.appeals`, so either surface stays actionable.
+2. A staff review card is posted to `cfg.main_group`; once its message id is known, the Approve/Reject keyboard is attached and a second copy with the same buttons is posted in `cfg.appeals`, so either surface stays actionable. The card id is the decision token, so a card left behind by an earlier appeal cannot decide a newer one.
 3. A submitted-appeal log is posted to `cfg.logs`.
-4. The pending-review slot is claimed atomically with `bans_db.set_review_if_absent`, so a concurrent duplicate submit cannot overwrite the winner and orphan its card. The loser deletes its own orphan review card best-effort and is told the appeal is already pending.
+4. The pending-review slot and the appeal row are claimed atomically with `bans_db.submit_appeal`, so a concurrent duplicate submit cannot overwrite the winner and orphan its card. The loser deletes its own orphan review card best-effort and is told the appeal is already pending.
 5. Appeal-log metadata is stored with `bans_db.set_appeal_log_msg` when the log post succeeded.
 6. The original DM instruction message is edited to confirm submission.
 7. The user is cached/updated in `users_cache`.
@@ -120,14 +120,20 @@ The review card contains two inline buttons:
 
 | Button | Callback data |
 |---|---|
-| `Approve` | `appeal_approve_<ban_id>` |
-| `Reject` | `appeal_reject_<ban_id>` |
+| `Approve` | `appeal_approve_<ban_id>_<review_message_id>` |
+| `Reject` | `appeal_reject_<ban_id>_<review_message_id>` |
 
-Both callbacks use the underscore-delimited `<action>_<ban_id>` shape that
-the handler registers and parses (`appeals.py` pattern
-`^appeal_(approve|reject)_\S+$`; `appeal_review_flow.py` slices the tail
-after `appeal_reject_`). Both `keyboards.appeal_review_kb()` buttons emit
-this underscore shape, so Approve and Reject taps reach the review handler.
+Both callbacks use the underscore-delimited
+`<action>_<ban_id>_<review_message_id>` shape that the handler registers and
+parses (`appeals.py` pattern `^appeal_(approve|reject)_\S+_\d+$`;
+`appeal_review_flow.py` splits the last segment). Both
+`keyboards.appeal_review_kb()` buttons emit this shape, so Approve and Reject
+taps reach the review handler. The trailing id must still match the live
+`review_message_id` on the ban record; a card from an earlier appeal carries
+a stale id and is refused with the shared stale-card alert. A card posted
+before this payload shape existed has no trailing id: it is accepted only
+when the tapped message is the live review card, so an upgrade does not
+strand an appeal that is awaiting a decision.
 
 The DM instruction message has a cancel button:
 
@@ -187,6 +193,7 @@ for staff:
 - Taps from non-staff users.
 - Taps by the banned user themselves (self-review is refused with a popup and the card stays actionable).
 - Taps inside the 12-hour banning-admin priority window by a different admin.
+- Taps on a card whose review-message id no longer matches the live review slot (a card left behind by an earlier appeal).
 - Repeat taps after the appeal was already decided (the winner's verdict edit is preserved).
 - Taps during a role-lookup outage.
 - Taps when the ban read fails (`appeals.review.db_retry` popup, card untouched for a re-tap).
@@ -235,11 +242,12 @@ Approval is a federation unban. It removes the Telegram ban across all connected
 
 When a staff member rejects an appeal:
 
-1. `bans_db.set_rejected_by(ban_id, admin.id, admin.first_name)` records the rejector's identity (`rejected_by_id`, `rejected_by_name`, `rejected_at`) in parallel with the target display-name read, so the 24-hour cooldown holds even if a later write fails while saving one DB round trip. If this write fails, rejection aborts with the review card untouched and the tapper gets a retry alert, so a re-tap retries the full sequence.
-2. The ban remains active.
-3. The review message is edited to show who rejected it and the inline keyboard is removed. The edit runs before the review marker is cleared so a successful edit removes live buttons before the DB slot frees.
-4. The user receives a DM telling them the appeal was reviewed and not approved, and `bans_db.clear_review(ban_id)` clears `review_message_id` and `review_timestamp` so the user can submit a new appeal after the cooldown. These two run together so a DM failure does not block the DB write.
-5. The submitted-appeal log message is edited to a rejected version when possible.
+1. The target's effective role is read fresh and the reviewer must outrank it, exactly like approval and `/tcunban`. A role-lookup outage fails closed with a retry alert, and a peer (equal rank) target is refused with the shared outrank notice before anything is written.
+2. `bans_db.set_rejected_by(ban_id, admin.id, admin.first_name)` records the rejector's identity (`rejected_by_id`, `rejected_by_name`, `rejected_at`). If this write fails, rejection aborts with the review card untouched and the tapper gets a retry alert, so a re-tap retries the full sequence.
+3. The ban remains active.
+4. The review message is edited to show who rejected it and the inline keyboard is removed. The edit runs before the review marker is cleared so a successful edit removes live buttons before the DB slot frees.
+5. The user receives a DM telling them the appeal was reviewed and not approved, and `bans_db.clear_review(ban_id)` clears `review_message_id` and `review_timestamp` so the user can submit a new appeal after the cooldown. These two run together so a DM failure does not block the DB write.
+6. The submitted-appeal log message is edited to a rejected version when possible.
 
 A failed card edit still proceeds to the DM plus clear step with a warning log (matching the approve path): the decision is already committed in `rejected_at`, so keeping the marker would block the user past the 24-hour cooldown until the 72-hour stale window. Each side effect is inspected: a failed DM logs at warning level, a failed card edit at warning level, and a failed `clear_review` at error level (the pending review would still be in the database).
 

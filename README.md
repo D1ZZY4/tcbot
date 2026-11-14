@@ -45,8 +45,9 @@ Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `API_ID`, and `API_HAS
 | `/help`, `/start` | Topic help and the start menu. |
 | `/language` | Per-user or per-group interface language. |
 | `/leaveall`, `/cleanup` | Founder-only mass leave and staff-only cleanup of dead group records. |
+| `/tcforget` (alias `/tcf`) | Founder-only account erasure request for the next cleanup sweep. |
 | `/tcbroadcast` | Staff-only broadcast to every connected group. |
-| `/ping`, `/speedtest` | Latency check and throughput measurement. |
+| `/ping`, `/speedtest` | Latency check and throughput measurement; `/st full` uses a larger sample. |
 
 Appeals are submitted by the banned user in bot DM through a deep link. Command prefixes are configurable (default `/`, `!`, `.`).
 
@@ -80,6 +81,7 @@ Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (e
 | `COMMUNITY_NAME` | No | `Bot` | Display name used in bot messages and logs. |
 | `PREFIXES` | No | `["/", "!", "."]` | Python-style list of command prefixes. |
 | `PORT` | No | `5000` | Flask health-server port (`1`-`65535`); `auto` or invalid values fall back to `5000`. |
+| `BIND_HOST` | No | `0.0.0.0` | Listener interface; set `127.0.0.1` behind a local reverse proxy. |
 | `LOG_LEVEL` | No | `INFO` | One of `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
 
 ### Federation chats
@@ -115,6 +117,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | `DB_POOL_SIZE` | `5` | PostgreSQL connection pool size. Keep the total with `DB_MAX_OVERFLOW` within the connection limit the database grants. |
 | `DB_MAX_OVERFLOW` | `5` | Extra connections the pool may open under load. |
 | `DB_SCHEMA` | `public` | PostgreSQL schema the bot reads and writes. The project uses `public` for the deployment, `test` for the integration tests, and `development` for a developer. |
+| `PG_CRON_ENABLED` | `false` | Let pg_cron run the pure-database expiry, role-expiry, and stuck-enforcement sweeps. Requires the extension; otherwise APScheduler keeps them. |
 | `MODULES_LOAD` | empty (all) | Allowlist of modules to load exclusively. |
 | `MODULES_NO_LOAD` | empty | Denylist of modules to skip. |
 
@@ -123,8 +126,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | Variable | Description |
 |---|---|
 | `WEBHOOK_URL` | Public HTTPS base URL for webhook transport; empty falls back to polling. Auto-detected from `REPLIT_DEV_DOMAIN` only when the bot runs as the Replit application. |
-| `WEBHOOK_SECRET` | Used as-is when set, auto-generated per restart when empty; required on Vercel. |
-| `CRON_SECRET` | Bearer token for `/api/cron`; empty refuses every request (fail closed). |
+| `WEBHOOK_SECRET` | Used as-is when set, auto-generated per restart when empty. |
 | `API_ID` | Required: Telegram API ID for MTProto identity lookups; boot refuses without it. |
 | `API_HASH` | Required: Telegram API hash matching `API_ID`; never commit the real value. |
 | `MTPROTO_SESSION` | Namespace for the shared MTProto session in PostgreSQL (default `tcbot_mtproto`). |
@@ -152,7 +154,7 @@ docker compose up --build
 
 The compose setup reads `.env`, so copy `config.env.example` to `.env` first. Details are in [`docs/getting-started/setup.md`](docs/getting-started/setup.md).
 
-In production set `WEBHOOK_URL` to the public HTTPS base URL so Telegram delivers updates to `POST /webhook`. Requests are validated against `WEBHOOK_SECRET`. On Vercel the webhook and the daily warn-expiry cron run as serverless functions; `WEBHOOK_SECRET` and `CRON_SECRET` are required there. See [`docs/operations/vercel.md`](docs/operations/vercel.md). On Replit keep secrets in Replit Secrets and use the same run command; see [`replit.md`](replit.md).
+In production set `WEBHOOK_URL` to the public HTTPS base URL so Telegram delivers updates to `POST /webhook`. Requests are validated against `WEBHOOK_SECRET`. On Replit keep secrets in Replit Secrets and use the same run command; see [`replit.md`](replit.md).
 
 > [!CAUTION]
 > Never run two live bot instances with the same token (for example polling locally while webhook mode is deployed). The transports fight over updates and Telegram reports `Conflict` errors.
@@ -161,7 +163,7 @@ One pitfall to avoid: committing `config.env` with real values because local tes
 
 ## Deployment
 
-Run exactly one live instance per token on exactly one target below. Every target runs the same command (`uv run python -m tcbot`) except Vercel serverless, which uses `/api/webhook` + `/api/cron` instead of a process.
+Run exactly one live instance per token on exactly one target below. Every target runs the same command (`uv run python -m tcbot`).
 
 <details>
 <summary>GitHub Actions automation (lint, auto-fix, dependencies, CodeQL)</summary>
@@ -174,7 +176,7 @@ Seven CI workflows run automatically; no secrets needed (validation steps use du
 - **CodeQL** (`codeql.yml`): on push/PR to `main` plus weekly Tuesday 15:38 UTC. Scans the `actions` and `python` languages with `build-mode: none`; findings land under the repository Security tab.
 - **Run Bot** (`run-bot.yml`): self-chaining 24/7 runner with webhook-first transport, plus daily restart checks.
 
-Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run ruff check .`, the 1000-line file-size budget over `tcbot/` and `api/`, and `uv run python -c "import tcbot"`. Full reference: [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md).
+Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run ruff check .`, the 1000-line file-size budget over `tcbot/`, and `uv run python -c "import tcbot"`. Full reference: [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md).
 </details>
 
 <details>
@@ -188,19 +190,6 @@ Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run 
 4. Verify in the run logs (`Bot started`, `subsystems ready`); crash tails ship as credential-scrubbed artifacts kept 7 days.
 
 Fail-fast guard: 5 deaths within 10 minutes aborts the run (usually bad config); the cron recovers after you fix secrets. Full reference: [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md). Respect GitHub Actions usage limits and Terms of Service; this runner is a community convenience, not a hosting SLA.
-</details>
-
-<details>
-<summary>Vercel native serverless</summary>
-
-Telegram delivers each update to `/api/webhook`; Vercel Cron drives warn expiry through `/api/cron`. No process, no polling, no scheduler.
-
-1. Vercel → Project → Settings → Environment Variables: set `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `WEBHOOK_SECRET` (required, fail-closed `503` without it), `CRON_SECRET` (required, fail-closed without it).
-2. Deploy with `vercel --prod` (dependencies from `pyproject.toml` + `uv.lock`, Python `3.14`, two functions with `maxDuration: 60` plus a daily `02:00 UTC` cron per `vercel.json`).
-3. Stop every other instance for this token, then register the webhook once per URL: `curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" -d "url=https://<project>.vercel.app/api/webhook" -d "secret_token=<WEBHOOK_SECRET>" -d "drop_pending_updates=true"`.
-4. Validate: `GET /api/webhook` → `200 OK`; `/checkme` in bot DM replies; `GET /api/cron` with `Authorization: Bearer <CRON_SECRET>` → `200`.
-
-Limits: multi-step conversations are best-effort (cold starts drop instance-memory state), timed unbans never fire, large fan-outs can approach the function timeout. Proof-gated moderation belongs on a long-lived transport. Full reference: [`docs/operations/vercel.md`](docs/operations/vercel.md).
 </details>
 
 <details>
@@ -268,7 +257,7 @@ WantedBy=multi-user.target
 
 ## Health Check
 
-The Flask keep-alive server binds to `0.0.0.0:${PORT}` (defaults to `5000` on unset, invalid, or out-of-range values).
+The Flask keep-alive server binds to `${BIND_HOST}:${PORT}` (`BIND_HOST` defaults to `0.0.0.0`; the port defaults to `5000` on unset, invalid, or out-of-range values).
 
 - `GET /` returns `OK` for uptime monitors.
 - `GET /health` returns subsystem status (database, Redis, scheduler, circuit breakers) as JSON, with HTTP 503 while degraded.

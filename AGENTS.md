@@ -127,7 +127,7 @@ Current stack:
 │   ├── __main__.py           App lifecycle, builder, errors, and main startup
 │   ├── error_reporter.py     Error classification, dedup, and shipping to LOGS_ERRORS
 │   ├── alive.py              Flask keep-alive and webhook receiver
-│   ├── serverless.py         Vercel lifecycle: shared PTB app, update dispatch, cron expiry
+│   ├── enforcement_worker.py Expiry revoke queue consumer and Telegram delivery
 │   ├── database/             PostgreSQL helpers, one package per table/domain
 │   │   ├── users_cache.py    Member profile cache operations
 │   │   ├── users_roles.py    Role system: owners/admins/roles
@@ -139,12 +139,15 @@ Current stack:
 │   │   ├── mutes_db.py       Mutes
 │   │   ├── queues_db.py      Promotion requests
 │   │   ├── cache/            TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
+│   │   ├── pg_cron.py        Optional pg_cron ownership of database-only jobs
 │   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
 │   │   ├── scheduler.py      APScheduler background task + SQLAlchemyJobStore
 │   │   ├── engine.py         Async engine, session boundary, circuit-breaker guard
 │   │   ├── connection_options.py  libpq search_path and UTC options shared by every engine
 │   │   ├── base/             Table, column, constraint, and index definitions
 │   │   ├── migrations.py     Alembic wiring: applies the pending revisions at startup
+│   │   ├── enforcement_db.py Claim and record the queued expiry revokes
+│   │   ├── erasure_db.py     Queue a Telegram-account erasure
 │   │   ├── documents.py      Typed document shapes
 │   │   ├── types.py          Domain primitive types
 │   │   ├── settings_db.py    Per-user locale preferences
@@ -208,13 +211,11 @@ Current stack:
 ├── .github/                   CI workflows (lint, type-check, tests, runner)
 ├── i18n/                      Localized message catalogs (en-US source of truth)
 ├── tests/                     Automated checks (run with the dummy-env suite)
-├── api/                       Vercel serverless endpoints (webhook, cron)
 ├── scripts/                   One-shot operator tools (migration checks, schema checks, hot-path benchmark)
 ├── config.env.example        Environment variable template
 ├── docker-compose.yml        Local bot + PostgreSQL + Redis compose setup
 ├── Dockerfile                Container image definition
-├── vercel.json               Vercel functions, timeouts, and cron schedule
-├── .python-version           Pinned Python for Vercel and uv (3.14)
+├── .python-version           Pinned Python for uv (3.14)
 ├── pyproject.toml            Dependencies and Ruff settings
 ├── uv.lock                   Locked dependency graph
 ├── pyrightconfig.json        pyright type checker configuration
@@ -284,6 +285,7 @@ Important non-secret/runtime variables include:
 - `COMMUNITY_NAME`: display name used in bot messages and logs.
 - `PREFIXES`: command prefix list, default `['/', '!', '.']`.
 - `PORT`: Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
+- `BIND_HOST`: listener interface for the keep-alive and webhook server, default `0.0.0.0`; use `127.0.0.1` behind a local reverse proxy.
 - `MAIN_GROUP`, `COMMUNITY_GROUP_URL`: community chat IDs / links.
 - `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`: log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id` (channel, group, or forum thread).
 - `ALBUM_DEBOUNCE_SECONDS`: proof silence window before the ban executor runs.
@@ -292,11 +294,11 @@ Important non-secret/runtime variables include:
 - `MODULES_LOAD`, `MODULES_NO_LOAD`: optional module allowlist/denylist.
 - `WEBHOOK_URL`: explicit webhook URL for production; overrides `REPLIT_DEV_DOMAIN`.
 - `WEBHOOK_SECRET`: optional webhook secret for Telegram to sign update payloads.
-- `CRON_SECRET`: bearer token for the serverless warn-expiry cron endpoint (required on Vercel).
 - `REDIS_URL`: optional Redis connection URL for L2 cache.
 - `DB_POOL_SIZE`: PostgreSQL connection pool size; default `5`.
 - `DB_MAX_OVERFLOW`: extra connections the pool may open under load; default `5`.
 - `DB_SCHEMA`: PostgreSQL schema the bot reads and writes; default `public`. See [Database Schemas](#database-schemas).
+- `PG_CRON_ENABLED`: optional pg_cron ownership of the pure-database expiry, role-expiry, and reconciliation jobs; default `false`.
 - `WARN_LIMIT`: per-group warn threshold that triggers auto-ban; default `3`.
 - `WARN_EXPIRY_DAYS`: days after which warn records expire; default `0` (disabled).
 - `FED_WARN_LIMIT`: federation-wide warn threshold that triggers auto-ban; default `0` (disabled).

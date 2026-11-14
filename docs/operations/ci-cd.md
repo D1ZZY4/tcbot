@@ -29,7 +29,7 @@ Three workflows with identical triggers (push to `main`, `feat/**`,
 
 - **Lint (Ruff)** (`.github/workflows/lint-ruff.yml`): `uv run ruff format
   --check .`, `uv run ruff check .`, the 1000-line file-size budget over
-  `tcbot/` and `api/`, and `uv run python -c "import tcbot"`.
+  `tcbot/`, and `uv run python -c "import tcbot"`.
 - **Lint (Pyright)** (`.github/workflows/lint-pyright.yml`): `uv run pyright`.
 - **Test (Pytest)** (`.github/workflows/test-pytest.yml`): `uv run pytest tests/ -q -n auto --cov=tcbot --cov-branch --cov-report=term-missing --cov-report=html` (parallel via `pytest-xdist`, coverage via `pytest-cov`, report uploaded as the `coverage-report` artifact).
 
@@ -234,15 +234,15 @@ Without `BOT_PAT`, the Run Bot workflow cannot dispatch its own next run; it fal
 The Run Bot workflow forwards the full federation env surface as repository
 secrets, so every runtime variable must be set there for the runner:
 `DATABASE_URL`, `OWNER_ID`, `COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`,
-`PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `REDIS_URL`,
-`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_SCHEMA`, `WARN_EXPIRY_DAYS`,
+`PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `BIND_HOST`,
+`PG_CRON_ENABLED`, `REDIS_URL`, `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_SCHEMA`,
+`WARN_EXPIRY_DAYS`,
 `WARN_LIMIT`, `FED_WARN_LIMIT`, `API_ID`, `API_HASH`,
 `ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, `MODULES_NO_LOAD`, `SENTRY_DSN`,
 `MTPROTO_SESSION`, the `COMMUNITY_*_URL` links,
 alongside `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `WEBHOOK_URL`, and
-`WEBHOOK_SECRET`. Only `CRON_SECRET` is **not** forwarded by the runner: the
-cron endpoint is Vercel-only, and the long-lived transport schedules
-maintenance through APScheduler instead.
+`WEBHOOK_SECRET`. The runner schedules maintenance through APScheduler, the
+same as every other long-lived transport.
 
 ---
 
