@@ -86,7 +86,7 @@ The federation log emitted by `messages.demoted(target_id, target_fname, role, b
 ## Manual demotion flow (`/tcdemote`)
 
 1. Founder or Admin runs `/tcdemote <target>`. The `@staff_only` decorator rejects non-staff executors.
-2. `cmd_demote` resolves the target via `extract_target` in parallel with the executor's effective role (`users_roles.get_effective_role`) through the shared `_resolve_executor_target` helper (same helper backs `cmd_promote`).
+2. `cmd_demote` resolves the target via `extract_target` in parallel with the executor's effective role through the shared `targets.resolve_executor_target` helper (same helper backs `cmd_promote`). The executor role is read fresh, so a demotion in another process is not hidden by the role-cache TTL.
 3. The bot reads the target's effective role. Identity refusal fires first (`self`, this bot, Telegram, other bots, anonymous admin, and Founder all have dedicated refusal lines, e.g. Founder gets `... is the Founder - try /transferowner ...`).
    - If the role is `None`/empty, the bot replies `That user doesn't hold a role that can be removed.` and stops.
    - If the target is `"admin"` and the executor is not Founder, the bot replies `Only the Founder can demote an Admin.` and stops.

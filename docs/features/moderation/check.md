@@ -177,7 +177,7 @@ All callbacks are registered in `tcbot/modules/check.py` and run safely on repea
 
 ## Async behavior and parallel reads
 
-The profile view performs eleven independent reads plus an optional twelfth identity classification in a single `asyncio.gather`:
+The profile view performs ten independent reads plus an optional eleventh identity classification in a single `asyncio.gather`:
 
 ```python
 (
@@ -189,7 +189,6 @@ The profile view performs eleven independent reads plus an optional twelfth iden
     appeal_total,
     warn_total,
     warn_groups,
-    fed_warn_total,
     kick_total,
     mute_total,
 ) = await asyncio.gather(
@@ -201,7 +200,6 @@ The profile view performs eleven independent reads plus an optional twelfth iden
     db.bans_db.user_appeal_count(target_id),
     db.warns_db.user_total_warns(target_id),
     db.warns_db.user_warn_groups(target_id),
-    db.warns_db.federation_warn_count(target_id),
     db.kicks_db.user_kick_count(target_id),
     db.mutes_db.user_mute_count(target_id),
     # only when executor_id is known:
@@ -209,6 +207,10 @@ The profile view performs eleven independent reads plus an optional twelfth iden
     return_exceptions=True,
 )
 ```
+
+The federation warning total is the sum of the per-group counts that
+`user_warn_groups` already returned, so the profile does not read the same
+rows a second time.
 
 Per-record renderers in `kicks_list`, `mutes_list`, and `warns_in_group` also gather admin-name lookups and group-title lookups up front so the line loop is purely synchronous string-building.
 

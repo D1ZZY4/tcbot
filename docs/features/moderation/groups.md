@@ -25,7 +25,7 @@ flowchart TD
 
 ## Purpose
 
-`/tcgroups` lists every group currently connected to the federation, with an optional `Details` view that adds each group's chat ID alongside its title. The command is open to anyone, so the same `/tcgroups` reply in any chat shows the same global list.
+`/tcgroups` lists every group currently connected to the federation, with an optional `Details` view that adds each group's chat ID alongside its title. The command is open to anyone, so the same `/tcgroups` reply in any chat shows the same global list. The primary group is registered as an active managed chat at startup, so it is part of the list even though it never goes through the connect flow.
 
 The list source is `groups_db.active_groups()`, which reads `connected_chats` where `is_active: True`, backed by the process-wide L1+L2 cache (`active_groups_cache` in `tcbot/database/cache/` keyed on `_ALL_GROUPS_KEY`). There is no per-user `ctx.user_data` caching: every toggle callback re-reads through the cache layer and edits the existing message in place.
 
@@ -113,12 +113,13 @@ The command itself does not require any bot permissions; it only reads from the 
 
 `active_groups` filters on `is_active: True`. The call goes through `active_groups_cache.get_or_fetch(_ALL_GROUPS_KEY, _fetch)` so the cache layer short-circuits repeated reads within the TTL.
 
-The cache is invalidated whenever `add_group`, `deactivate_group`, or `migrate_group` mutates the table, so the listing picks up new connects, disconnects, and supergroup migrations without manual intervention.
+The cache is invalidated whenever `add_group`, `ensure_primary_group`, `deactivate_group`, or `migrate_group` mutates the table, so the listing picks up new connects, primary registration, disconnects, and supergroup migrations without manual intervention.
 
 ## Edge cases
 
 - An empty list replies `No groups are currently connected to <community>.` and does not show the toggle keyboard.
 - A group with a missing `title` renders as `Unknown`.
+- The primary group is listed because startup registers it with `groups_db.ensure_primary_group`; `/tcconnect`, `/tcdisconnect`, and `/rmtc` still refuse to manage it through the connect or teardown commands.
 - A failed `active_groups()` read in the command replies the localized `replies.err_groups_load_failed(locale)` text instead of a (misleading) empty list.
 - A failed `active_groups()` read in a toggle keeps the toggle keyboard in place so re-tapping retries the fetch; it never renders `Count: 0` from a broken read.
 - Rendered output longer than `_MAX_RENDER_CHARS` (3800) is truncated with a localized `groups.list.more` suffix.

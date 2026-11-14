@@ -137,7 +137,7 @@ Rules for `/tcwarn`:
 - Founder targets are protected.
 - Targets with rank equal to or higher than the executor are protected.
 - A higher-ranked executor can warn a lower-ranked staff target.
-- A single warning below the warn limit does not auto-demote the target. However, if the target holds a federation role when their warn count reaches or exceeds `cfg.warn_limit` (checked with `>=`, so a post-failure retry still demotes), the auto-demote (`Demote.execute(trigger="ban")`) fires and the staff target is exempted from the auto-ban; the warn itself is still recorded. Staff are never auto-banned via warnings.
+- A single warning below the warn limit does not auto-demote the target. However, if the target holds a federation role when their warn count reaches or exceeds `cfg.warn_limit` (checked with `>=`, so a post-failure retry still demotes), the auto-demote (`Demote.execute(trigger="warn")`) fires and the staff target is exempted from the auto-ban; the warn itself is still recorded. Staff are never auto-banned via warnings.
 
 `/tcunwarn` and `/resetwarns` handle staff targets differently:
 
@@ -209,7 +209,7 @@ Executor database reads fail closed with a retry notice instead of ending the co
 
 When `execute_warn(...)` adds a warning, it receives the new warning count. Two thresholds are then evaluated in order:
 
-**Step 1: Per-group check.** If `count >= cfg.warn_limit`, the auto-ban trigger is set to `"per_group"`. The `>=` operator (not `==`) ensures a retry after a total enforcement failure still fires: warns are cleared only on success, so a 0/N fan-out leaves the count at the limit and the next warn re-drives the ban; the `already_banned` guard skips re-creation when the record already exists, and duplicate active records from a true concurrent race are cleaned by `deactivate_all_active_bans` on unban.
+**Step 1: Per-group check.** If `count >= cfg.warn_limit`, the auto-ban trigger is set to `"per_group"`. The `>=` operator (not `==`) ensures a retry after a total enforcement failure still fires: warns are cleared only on success, so a 0/N fan-out leaves the count at the limit and the next warn re-drives the ban; the `already_banned` guard skips re-creation when the record already exists, and the one-active-ban index keeps the record canonical.
 
 **Step 2: Federation-wide check (only if step 1 did not fire).** If `cfg.fed_warn_limit > 0`, the bot reads `federation_warn_count(target_id)` (total warns across all groups). If `fed_count >= cfg.fed_warn_limit`, the auto-ban trigger is set to `"fed_global"`. This `>=` is intentional: the aggregate is not atomic across groups, so `>=` ensures no trigger is missed; the already-banned guard prevents double bans.
 
@@ -225,14 +225,14 @@ The trigger uses `>=` for per-group (retry-safe after total enforcement failure)
 
 1. The target role is re-read for the auto-ban decision. A role-lookup failure aborts the auto-ban with a retry reply instead of proceeding as non-staff; the persisted warn count re-fires the `>=` threshold on the next warn.
 2. Active federation groups, any existing active ban, and the audit log are fetched/sent in parallel via `asyncio.gather`.
-2. If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban row in the `bans` table (the same row used by `/tcban`), reusing the warn proof upload as the ban `proof_message_id` when one was collected so `/check` shows View Proof. This makes the ban appealable via the standard appeal flow. If the write fails, the auto-ban aborts before any group is touched (fail-closed, mirroring `execute_unban`): the threshold warn stays recorded and the admin is told to ban manually with `/tcban` once the database recovers.
-3. `fan_out()` propagates `ban_chat_member` to all active connected groups plus MAIN_GROUP.
-4. Per-group failures are logged at WARNING level with group title, chat_id, and exception.
-5. An applied-to summary is computed: "Applied to X/Y groups", "Applied to X/Y groups (Z failed: ...)", or "WARNING: ban not enforced in any group" when all fail. When the group-list fetch itself fails, the reply gains a reduced-scope WARNING suffix (and an error is logged) instead of reporting full success over the reachable subset.
-6. The warning slate is cleared only where the ban landed. A complete enforcement (no transient failure) calls `warns_db.clear_all_warns(target_id)` so a later unban does not re-ban on stale counts. A partial enforcement calls `warns_db.clear_warns_for_chats(target_id, landed_chats)` instead: the groups where the ban failed keep their warnings, so their threshold can fire again. Clearing everything after a partial enforcement would leave those groups with no warning and no ban.
-7. The originating group receives a reply that the user hit the warn limit and has been federation-banned, including the applied-to summary.
-8. If the user already holds an active federation ban, a new ban document is not created; `fan_out()` still runs to ensure enforcement in any newly connected groups.
-9. A newly created ban record is the only active ban of the target: a partial unique index refuses a second one, so `/check` and the appeal deep link always agree on the same record.
+3. If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban decision in `moderation_actions` (the same record used by `/tcban`), reusing the warn proof upload as the ban `proof_message_id` when one was collected so `/check` shows View Proof. This makes the ban appealable via the standard appeal flow. If the write fails, the auto-ban aborts before any group is touched (fail-closed, mirroring `execute_unban`): the threshold warn stays recorded and the admin is told to ban manually with `/tcban` once the database recovers.
+4. `fan_out()` propagates `ban_chat_member` to all active connected groups plus MAIN_GROUP.
+5. Per-group failures are logged at WARNING level with group title, chat_id, and exception.
+6. An applied-to summary is computed: "Applied to X/Y groups", "Applied to X/Y groups (Z failed: ...)", or "WARNING: ban not enforced in any group" when all fail. When the group-list fetch itself fails, the reply gains a reduced-scope WARNING suffix (and an error is logged) instead of reporting full success over the reachable subset.
+7. The warning slate is cleared only where the ban landed. A complete enforcement (no transient failure) calls `warns_db.clear_all_warns(target_id)` so a later unban does not re-ban on stale counts. A partial enforcement calls `warns_db.clear_warns_for_chats(target_id, landed_chats)` instead: the groups where the ban failed keep their warnings, so their threshold can fire again. Clearing everything after a partial enforcement would leave those groups with no warning and no ban.
+8. The originating group receives a reply that the user hit the warn limit and has been federation-banned, including the applied-to summary.
+9. If the user already holds an active federation ban, a new ban decision is not created; `fan_out()` still runs to ensure enforcement in any newly connected groups.
+10. A newly created ban decision is the only active ban of the target: a partial unique index refuses a second one, so `/check` and the appeal deep link always agree on the same record.
 
 Both auto-ban branches behave as follows:
 
@@ -251,11 +251,11 @@ Flow:
 3. Handle bot/Founder/staff messages as described above.
 4. Read current warning count.
 5. If count is zero, reply that the target has no warnings in this group.
-6. Remove the newest warning document with `warns_db.remove_last_warn(...)`.
+6. Remove the newest warning decision with `warns_db.remove_last_warn(...)`.
 7. Send an `unwarn_log` to `cfg.logs`.
 8. Reply with the new count.
 
-The newest warning is selected by `timestamp` descending, then `_id` descending.
+The newest warning is selected by `created_at` descending, then `id` descending.
 
 ## `/warns` / `/warnlist` behavior
 

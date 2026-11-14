@@ -152,7 +152,7 @@ Date: <utc>
 - Numeric query → `bans_db.get_active_ban(int(query))`.
 - Non-numeric query → anchored prefix lookup in the member cache via `users_cache.search_by_name` (same semantics as command target resolution, capped at 30 hits), then a single `WHERE target_user_id IN (...)` fetch of their active bans via `bans_db.active_bans_for_users`. Only matching rows travel over the wire.
 
-Results are rendered with a numbered keyboard whose footer carries a `New Search` button and a `Cancel` button. Each hit opens `Stats.search_detail`, which reuses `build_ban_detail` and offers `View Proof` plus a `« Back` button that returns to the results (or the search prompt when no results are stored) without re-running the query.
+Results are rendered with a numbered keyboard whose footer carries a `New Search` button and a `Cancel` button. Each hit opens `Stats.search_detail`, which reuses `build_ban_detail` and offers `View Proof` plus a `« Back` button that returns to the results (or the search prompt when no results are stored) without re-running the query. A failed search read renders the database-retry notice instead of an empty result, so an outage is never reported as "no matching bans".
 
 The free-text input handler is scoped to private chats and only fires while the search panel is active; it ignores every other text message.
 

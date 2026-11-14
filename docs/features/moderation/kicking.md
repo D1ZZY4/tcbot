@@ -29,7 +29,7 @@ flowchart TD
 
 ## Purpose
 
-A kick removes a user from the current group only, not from the federation. The implementation ban-then-unbans the user in the current chat so they can rejoin via invite link; federation-wide enforcement is reserved for `/tcban`. The kick flow accepts an optional inline reason, supports optional proof, posts a kick log, and writes an audit row to the `kicks` table. Targets that hold a federation role are auto-demoted when the kick is enforced, which preserves the role-vs-state invariant.
+A kick removes a user from the current group only, not from the federation. The implementation ban-then-unbans the user in the current chat so they can rejoin via invite link; federation-wide enforcement is reserved for `/tcban`. The kick flow accepts an optional inline reason, supports optional proof, posts a kick log, and writes an audit decision to `moderation_actions` with `action_type = 'kick'`. Targets that hold a federation role are auto-demoted when the kick is enforced, which preserves the role-vs-state invariant.
 
 ## Commands and aliases
 
@@ -132,21 +132,21 @@ If `ban_chat_member` itself raises (the chat-level exception, not the paralleliz
 
 ## Database impact
 
-Kick audit records are stored in the `kicks` table. Each record contains:
+Kick audit decisions are stored in `moderation_actions` with `action_type = 'kick'` and `scope_type = 'chat'`. Each decision contains:
 
 | Field | Meaning |
 |---|---|
-| `user_id` | Telegram user ID of the kicked user. |
+| `target_user_id` | Telegram user ID of the kicked user. |
 | `chat_id` | Group chat ID where the kick happened. |
 | `reason` | Moderator-provided reason or localized `replies.no_reason(locale)` text when skipped. |
-| `admin_id` | Telegram user ID of the moderator who issued the kick. |
-| `timestamp` | UTC kick creation time. |
+| `actor_user_id` | Telegram user ID of the moderator who issued the kick. |
+| `created_at` | UTC kick creation time. |
 
 `kicks_db.log_kick` is the only insert path. `kicks_db.user_kicks` and `kicks_db.user_kick_count` power the `/check` profile drill-down.
 
 Indexes are ensured for:
 
-- `kicks`: `(user_id, timestamp -1)` for `user_kicks` history list, `(chat_id)` for per-group kick queries.
+- `moderation_actions`: `(target_user_id, created_at desc)` for the per-user history and `(chat_id)` for per-group kick queries.
 
 ## Logs and keyboards
 

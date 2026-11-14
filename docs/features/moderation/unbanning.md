@@ -27,7 +27,7 @@ flowchart TD
 
 ## Purpose
 
-`/tcunban` clears an active federation ban by deactivating the underlying `bans` records and unbanning the target across every active connected group plus the primary groups (`cfg.main_group`). The appeal-approve path runs its own inline sequence that mirrors `execute_unban` (deactivate, primary-group backfill, fan-out, logs); it does not call `execute_unban` directly.
+`/tcunban` clears an active federation ban by revoking the underlying `moderation_actions` ban decisions and unbanning the target across every active connected group plus the primary groups (`cfg.main_group`). The appeal-approve path runs its own inline sequence that mirrors `execute_unban` (deactivate, primary-group backfill, fan-out, logs); it does not call `execute_unban` directly.
 
 The Developer minimum rank (instead of Tester) is enforced because unban is irreversible at the database level and a low-rank moderator could otherwise quietly undo a Founder ban.
 
@@ -102,8 +102,8 @@ Unban uses three `bans_db` helpers:
 
 | Helper | Purpose |
 |---|---|
-| `get_active_ban(user_id)` | Returns the newest active ban document (sorted by `timestamp`, then `ban_id` descending). Used by the manual command path and revalidated by the appeal flow. |
-| `deactivate_all_active_bans(user_id)` | Deactivates every active ban for the user in one `UPDATE` statement. Returns the number of bans deactivated. Used by the manual command and mirrored by the appeal-approval inline sequence so duplicate active records (from earlier race conditions) are cleared in one operation. |
+| `get_active_ban(user_id)` | Returns the active ban document that is still in force. Used by the manual command path and revalidated by the appeal flow. |
+| `deactivate_all_active_bans(user_id)` | Revokes every active ban decision for the user in one `UPDATE` statement. Returns the number of decisions revoked. Used by the manual command and mirrored by the appeal-approval inline sequence. |
 | `make_ban_id()` | Not used here; only listed because the helper file is shared. |
 
 Manual unban has no scheduler interaction: neither `bans_db` nor `unban_flow` creates a scheduled job. Bans created by the bot are not time-limited, so no per-ban `unban.<ban_id>` job exists. The scheduled expiry sweep still records an expired decision and queues a revoke run, and `enforcement_worker.py` lifts any restriction left by a decision that did carry a deadline. Mutes already expire natively in Telegram through `until_date`.
@@ -130,7 +130,7 @@ There is no appeal-resolution field on the manual unban log. When `/tcunban` is 
 ## Edge cases
 
 - An unban attempt with no active ban record replies `<user> has no active federation ban.` and does not fan `unban_chat_member` calls.
-- `deactivate_all_active_bans` clears every active ban, not just the one returned by `get_active_ban`; duplicate active records (which can exist from earlier race conditions or re-ban paths) are suppressed in one operation.
+- `deactivate_all_active_bans` revokes every active ban decision for the target. The partial unique index keeps at most one active ban, so the write normally closes one row; the statement still handles every active row in one operation.
 - `unban_chat_member` is called with `only_if_banned=True`, so it is a no-op in groups where the user is not currently banned.
 - The pre-fetch in `cmd_unban` can fail (DB error); the executor falls back to its own `get_active_ban` call. If that re-fetch also fails, the command replies with a retry notice instead of crashing out with no operator feedback.
 - The Developer rank minimum (`mod_only`) prevents a Tester from unbanning a Founder or Admin; the rank check fires before the active-ban pre-fetch.

@@ -25,7 +25,7 @@ flowchart TD
 
 ## Purpose
 
-A federation ban marks a user as banned in the persistent `bans` table and applies the Telegram ban across all active connected groups. The ban workflow requires a moderator reason and proof media, records proof/log message IDs, and exposes an appeal deep link for the banned user.
+A federation ban marks a user as banned in the persistent `moderation_actions` decision table (as a `ban` decision) and applies the Telegram ban across all active connected groups. The ban workflow requires a moderator reason and proof media, records proof/log message IDs, and exposes an appeal deep link for the banned user.
 
 ## Commands and aliases
 
@@ -310,7 +310,7 @@ Flow:
 3. The bot rejects attempts to unban itself.
 4. Founder and staff targets are treated as not federation-bannable and no unban is attempted.
 5. `bans_db.get_active_ban(target_id)` must return a record.
-6. All active bans for the target are deactivated atomically with `bans_db.deactivate_all_active_bans(target_id)`, which handles any duplicate active records in one operation.
+6. All active bans for the target are revoked atomically with `bans_db.deactivate_all_active_bans(target_id)`; the one-active-ban index keeps the operation to the single decision in force.
 7. The target is unbanned from all active connected groups with `only_if_banned=True`.
 8. An unban log is sent to `cfg.logs`.
 9. The command reply reports the success count.
@@ -319,7 +319,7 @@ Manual unban does not currently edit any pending appeal review card. It deactiva
 
 ## Edge cases
 
-- When the `bans` write (`create_ban` / `update_ban`) fails, the flow aborts before any group is touched and the prompt is edited with a database-retry notice. This fail-closed path mirrors `execute_unban` and the warn auto-ban flow, and keeps a chat-enforced ban from existing without a database record.
+- When the ban write (`create_ban` / `update_ban`) fails, the flow aborts before any group is touched and the prompt is edited with a database-retry notice. This fail-closed path mirrors `execute_unban` and the warn auto-ban flow, and keeps a chat-enforced ban from existing without a decision record.
 - Empty proof input returns `None` fast; a failed photo gallery upload falls through to the document loop so collected file proof still lands instead of being discarded. Only a batch with no usable item stores `0` as proof ID.
 - If the ban log send fails, the database write may still complete, but no log message ID is stored.
 - If active group enforcement partially fails, the ban record remains active and the summary reports partial success.
@@ -349,4 +349,4 @@ Key behaviors to keep in mind:
 13. `/checkme` on an active ban shows `Details`, optional `Proof`, and `Appeal` buttons.
 14. `/check` on a user shows full federation profile with bans/warns/kicks/mutes/appeals drill-down.
 15. `/tcunban` deactivates the active ban and unbans across all connected groups.
-16. Active-ban reads prefer the newest active duplicate record.
+16. Active-ban reads use the same expiry condition as the `active_bans` view, and the partial unique index keeps at most one active ban per target.

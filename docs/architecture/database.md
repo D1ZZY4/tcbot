@@ -295,6 +295,13 @@ it never identifies anybody.
 
 ### Mutations
 
+- `ensure_users(sess: AsyncSession, *user_ids: int) -> None`
+  Creates the identity rows a dependent write references when they are
+  missing, with one idempotent `INSERT ... ON CONFLICT DO NOTHING` inside
+  the caller's transaction. The moderation decision, role-assignment,
+  promotion-request, and group-registry writes call it before their own
+  insert, so an account the member cache has never seen does not fail a
+  foreign key.
 - `upsert_user(user_id: int, username: str | None, first_name: str, last_name: str | None = None) -> None`
   Unconditional upsert through `INSERT ... ON CONFLICT DO UPDATE`. `None` for
   `username`/`last_name` means "unknown, preserve the stored value": the
@@ -633,9 +640,18 @@ apart on the case lifecycle or on the evidence batch.
 
 | Function | Purpose |
 |---|---|
-| `open_case(sess, subject_user_id, actor_user_id, *, title, summary, severity, requires_evidence) -> int` | Returns the open case of the subject, or opens one for the decision. |
+| `open_case(sess, subject_user_id, actor_user_id, *, title, summary, severity, requires_evidence) -> int` | Ensures the subject and actor identity rows exist, then returns the open case of the subject or opens one for the decision. The identity insert is idempotent and joins the same transaction, because the case and the decision reference `telegram_users` for both accounts. |
 | `archive_proof(sess, case_id, uploader_user_id, proof_message_id, destination_chat_id) -> int \| None` | Archives one proof message and returns the batch id. The batch walks `queued`, `uploading`, `completed`. |
 | `close_case(sess, case_id, actor_user_id) -> None` | Closes the case of a decision that was filed. A case that was closed by somebody else keeps its own closing actor and moment. |
+
+The shared write path also guarantees the identity rows a dependent write
+references: the member cache only learns a profile from an observed update,
+so a target, moderator, role granter, or group owner the bot has never seen
+would otherwise fail the `telegram_users` foreign key and lose the write. The
+same `users_cache.ensure_users` insert is used by the moderation-decision,
+role-assignment, promotion-request, and group-registry writes, so every
+dependent write creates its missing identity rows idempotently in the same
+transaction.
 
 ### Appeals and message references
 
@@ -840,8 +856,16 @@ chat, `connected_chats` holds the connection to the community,
   and the cache refreshed: the origin guard uses `fresh=True` so a
   disconnect in another process is never hidden for the TTL.
 - `add_group(chat_id: int, title: str, added_by: int) -> None`
-  Upsert that preserves `added_date` and sets `is_active = True`. Puts
-  `True` in `connected_cache` and invalidates the active-groups list cache.
+  Upsert that preserves `added_date` and sets `is_active = True`. Creates
+  the owner identity row when the member cache has not seen the account
+  yet. Puts `True` in `connected_cache` and invalidates the active-groups
+  list cache.
+- `ensure_primary_group(chat_id: int, title: str | None = None) -> None`
+  Registers a primary group as an active connected chat without a connect
+  prompt. Chat-scoped decisions require an active connected row, so the
+  startup path and the bot-added path use this helper for the required
+  primary group. It preserves an existing row and its title when no title
+  is supplied.
 - `deactivate_group(chat_id: int) -> bool`
   Sets `is_active = False`; returns `False` when the row does not exist.
   Puts `False` in `connected_cache` and invalidates the active-groups list
@@ -849,7 +873,10 @@ chat, `connected_chats` holds the connection to the community,
   disconnect must not remove the identity.
 - `active_groups() -> list[GroupDoc]`
   All active groups, `active_groups_cache.get_or_fetch` (L1 30 s, L2 45 s,
-  single entry keyed `__all__`).
+  single entry keyed `__all__`). The primary group is registered at
+  startup, so it is part of this list and of every federation fan-out that
+  starts from it; the explicit primary merge remains as the defensive
+  deduplicated addition.
 - `active_group_count() -> int`
   `COUNT(*)` over the active rows.
 - `with_primary_groups(groups, primary_ids, *extra_ids) -> list[dict[str, Any]]`
@@ -1330,7 +1357,7 @@ Recurring jobs:
 |---|---|---|
 | `tcbot.expiry_daily` | `IntervalTrigger(hours=24)` | Calls `expire_due_decisions()`: moves the ban, mute, and role-assignment rows whose deadline passed to `expired` and queues the matching revoke enforcement runs. A mute already carries its Telegram `until_date`, so its restriction lifts natively. Registered only when pg_cron does not own expiry. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs the sweep once. The sweep takes a transaction advisory lock, so two bot instances cannot expire the same records. |
 | `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. Each branch takes its own transaction advisory lock. |
-| `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued revoke runs and lifts the expired ban or mute across the recorded groups. Always registered. Failed targets retry up to three attempts, five minutes apart. |
+| `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued revoke runs and lifts the expired ban or mute across the recorded groups. A failed run is logged and left for the stale-run requeue while the remaining claimed runs still execute. Failed targets retry up to three attempts, five minutes apart. Always registered. |
 
 When `PG_CRON_ENABLED` is true and the database has the `pg_cron`
 extension, `pg_cron.sync_schedules()` registers the registry jobs

@@ -198,6 +198,7 @@ sequenceDiagram
     Main->>DB: connect() (apply Alembic revisions, create engine, ping)
     par parallel setup
         Main->>DB: ensure_initial_owner()
+        Main->>DB: ensure_primary_group()
         Main->>Main: connect Redis (optional)
         Main->>Main: start MTProto (fail fast without API_ID/API_HASH)
     end
