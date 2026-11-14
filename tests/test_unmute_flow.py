@@ -33,13 +33,16 @@ class _FakeMsg:
 class _FakeBot:
     """Bot double recording unrestricts and log sends."""
 
-    def __init__(self) -> None:
+    def __init__(self, fail_chats: set[int] | None = None) -> None:
         self.unrestricted: list[int] = []
         self.logs: list[str] = []
+        self.fail_chats = fail_chats or set()
 
     async def restrict_chat_member(
         self, chat_id: int, user_id: int, **kwargs: Any
     ) -> object:
+        if chat_id in self.fail_chats:
+            raise RuntimeError("flood wait")
         self.unrestricted.append(chat_id)
         return True
 
@@ -153,3 +156,70 @@ def test_happy_path_clears_then_announces(
     assert bot.unrestricted != []
     assert len(msg.replies) == 1
     assert msg.replies[0] != _retry()
+
+
+# * The two failure shapes are separate notices: a partial unmute restored
+# * most groups, so telling the moderator that the user could not be
+# * unmuted in any group is wrong.
+
+
+def _two_groups() -> list[dict[str, Any]]:
+    """Return a group list that already carries the primary group."""
+    return [{"chat_id": 5, "title": "G"}, {"chat_id": -1, "title": "P"}]
+
+
+def test_partial_unmute_reports_the_split_and_keeps_the_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _install(monkeypatch, groups=_two_groups())
+    msg, bot = _FakeMsg(), _FakeBot(fail_chats={5})
+    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    assert calls["clear"] == []
+    assert len(msg.replies) == 1
+    applied = replies.applied_summary(
+        "en-US",
+        "muting.applied",
+        total=2,
+        failed=1,
+        transient=[({"chat_id": 5, "title": "G"}, RuntimeError("flood wait"))],
+    )
+    assert msg.replies == [
+        t(
+            "muting.note.unmute_partial",
+            "en-US",
+            user=Safe(user_ref(42, "T")),
+            applied=Safe(applied),
+        )
+    ]
+    # * The split is named, so the moderator sees that one group was
+    # * restored and one failed.
+    assert "1/2" in msg.replies[0]
+
+
+def test_total_unmute_failure_reports_every_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _install(monkeypatch, groups=_two_groups())
+    msg, bot = _FakeMsg(), _FakeBot(fail_chats={5, -1})
+    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    assert calls["clear"] == []
+    assert len(msg.replies) == 1
+    applied = replies.applied_summary(
+        "en-US",
+        "muting.applied",
+        total=2,
+        failed=2,
+        transient=[
+            ({"chat_id": 5, "title": "G"}, RuntimeError("flood wait")),
+            ({"chat_id": -1, "title": "P"}, RuntimeError("flood wait")),
+        ],
+    )
+    assert msg.replies == [
+        t(
+            "muting.note.unmute_failed",
+            "en-US",
+            user=Safe(user_ref(42, "T")),
+            applied=Safe(applied),
+        )
+    ]
+    assert "2/2" in msg.replies[0]

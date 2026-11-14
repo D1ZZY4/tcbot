@@ -306,29 +306,33 @@ async def execute_unmute(
     )
     outcome = summarize_fanout(groups, results, action="Unmute", target_id=target_id)
     failed = outcome.failed
-    if groups and failed >= outcome.total:
-        await safe_reply(
-            msg,
-            t(
-                "muting.note.unmute_failed",
-                locale,
-                user=Safe(user_ref(target_id, target_name)),
-            ),
-            log_label="execute_unmute total-fail",
-        )
-        return
     if failed > 0:
-        # * Partial success: keep the DB record so a later re-drive can
-        # * reach the remaining muted chats. Clearing here would strand
-        # * the user muted with no repair path.
+        # * The mute record is kept on every failure, so a later re-drive
+        # * reaches the chats that did not answer. Clearing it here would
+        # * strand the user muted in those groups with no repair path.
+        # * The notice names the groups that failed and reports how many
+        # * were restored, so a partial unmute is not read as a total one.
+        applied_line = replies.applied_summary(
+            locale,
+            "muting.applied",
+            total=outcome.total,
+            failed=failed,
+            transient=outcome.transient,
+        )
+        key = (
+            "muting.note.unmute_failed"
+            if failed >= outcome.total
+            else "muting.note.unmute_partial"
+        )
         await safe_reply(
             msg,
             t(
-                "muting.note.unmute_failed",
+                key,
                 locale,
                 user=Safe(user_ref(target_id, target_name)),
+                applied=Safe(applied_line),
             ),
-            log_label="execute_unmute partial-fail",
+            log_label="execute_unmute fail",
         )
         return
     logs_chat, _ = cfg.logs
@@ -338,12 +342,20 @@ async def execute_unmute(
         admin.id,
         admin.first_name,
     )
+    # * The same applied line the failure notice carries, so a complete
+    # * unmute and a partial one are reported the same way.
+    applied_line = replies.applied_summary(
+        locale,
+        "muting.applied",
+        total=outcome.total,
+        failed=0,
+        transient=outcome.transient,
+    )
     reply = t(
         "muting.unmute.body",
         locale,
         user=Safe(user_ref(target_id, target_name)),
-        done=len(groups) - failed,
-        total=len(groups),
+        applied=Safe(applied_line),
     )
     try:
         await db.mutes_db.clear_active_mute(target_id)
