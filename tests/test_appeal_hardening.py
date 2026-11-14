@@ -149,7 +149,6 @@ def _run_approve(query: _FakeQuery, approver_role: str = "founder") -> None:
             9,
             admin,  # type: ignore[arg-type]
             0,
-            None,
             _fake_update(query, 1),  # type: ignore[arg-type]
             approver_role=approver_role,
         )
