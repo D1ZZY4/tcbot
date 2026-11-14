@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import weakref
 
 import redis.asyncio as aioredis
 
@@ -40,6 +41,17 @@ log = get_logger(__name__)
 
 _client: aioredis.Redis | None = None
 _pool: aioredis.ConnectionPool | None = None
+# * The URL the live client was built from, so a repeated connect for the
+# * same endpoint is a no-op instead of a pool rebuild.
+_connected_url: str | None = None
+
+# * One lifecycle lock per event loop. Connecting and closing are serialised,
+# * because they own the same pool: a background L2 write that reconnects
+# * while the startup connect is still running would otherwise close the
+# * pool the startup path is about to publish.
+_lifecycle_locks: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock] = (
+    weakref.WeakKeyDictionary()
+)
 
 # * The event loop the client was created on. A redis client holds
 # * sockets that belong to that loop, so a client handed to another
@@ -54,7 +66,7 @@ _liveness: bool | None = None
 
 # ─────────────── Connection pool / socket parameters ────────────── #
 # * The socket timeout doubles as the ceiling for background L2 writes
-# * (cache.py issues them without an extra wait_for wrapper: cancelling a
+# * (cache/twolevel.py issues them without an extra wait_for wrapper: cancelling a
 # * waiter would abandon a live socket op and dirty the pooled connection,
 # * while a socket-level timeout aborts cleanly). Keep it small enough
 # * that a stalled Redis cannot serialize the FIFO mutation queue.
@@ -84,18 +96,29 @@ async def connect(url: str) -> None:
     * hiredis is verified lazily here instead of at import time so that the
     * bot can start without Redis (or without hiredis) when REDIS_URL is
     * unset. This keeps the "Redis is optional" contract intact.
+
+    Connecting is serialised per event loop and idempotent for the same
+    URL: a concurrent caller waits for the running attempt and then reuses
+    its client instead of building a second pool and closing the first.
     """
-    global _client_loop, _pool_loop
     if not _hiredis_available:
         raise RuntimeError(
             "hiredis C extension is required when REDIS_URL is set. "
             "Install with: uv add 'redis[hiredis]'"
         )
-    global _client, _pool
+    async with _lifecycle_lock():
+        if _connected_url == url and client_is_usable():
+            return
+        await _connect_locked(url)
+
+
+async def _connect_locked(url: str) -> None:
+    """Build the pool and client; the caller holds the lifecycle lock."""
+    global _client, _client_loop, _connected_url, _pool, _pool_loop
     # * Reconnect must not orphan the previous pool: with an explicitly
     # * passed pool the client does not own it, so close first (silent
     # * when nothing is connected yet).
-    await close()
+    await _close_locked()
     pool = aioredis.ConnectionPool.from_url(
         url,
         decode_responses=True,
@@ -117,12 +140,22 @@ async def connect(url: str) -> None:
         raise
     _client = c
     _pool = pool
+    _connected_url = url
     # * The client now belongs to this loop. A later call on another loop
     # * has to treat it as absent.
     _client_loop = asyncio.get_running_loop()
-    global _pool_loop
     _pool_loop = _client_loop
     log.info("Redis connected (hiredis %s).", _HIREDIS_VERSION)
+
+
+def _lifecycle_lock() -> asyncio.Lock:
+    """Return the connect/close lock of the running event loop."""
+    loop = asyncio.get_running_loop()
+    lock = _lifecycle_locks.get(loop)
+    if lock is None:
+        lock = asyncio.Lock()
+        _lifecycle_locks[loop] = lock
+    return lock
 
 
 async def connect_if_configured() -> None:
@@ -182,7 +215,14 @@ async def ensure_connected() -> aioredis.Redis | None:
 
 async def close() -> None:
     """Close the Redis client and release all pooled connections."""
-    global _client, _client_loop, _pool, _pool_loop
+    async with _lifecycle_lock():
+        await _close_locked()
+
+
+async def _close_locked() -> None:
+    """Release the client and pool; the caller holds the lifecycle lock."""
+    global _client, _client_loop, _connected_url, _pool, _pool_loop
+    _connected_url = None
     if _client is not None:
         try:
             if _loop_is_usable(_client_loop):
@@ -248,7 +288,7 @@ def _loop_is_usable(loop: asyncio.AbstractEventLoop | None) -> bool:
 
 
 def mark_op(*, ok: bool) -> None:
-    """Record the outcome of one Redis operation (called from cache.py).
+    """Record the outcome of one Redis operation (called from cache/twolevel.py).
 
     Sets module-level liveness and logs transitions, so an outage is
     visible in the log stream on failure and the recovery is visible
