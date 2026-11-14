@@ -1,0 +1,66 @@
+bringing up nodes...
+bringing up nodes...
+
+s.s.s..s................................................................ [  7%]
+.........ss..s...s..s.s.....ssss.ss.ssssssssssss.sssssssssssssssssss.... [ 15%]
+......................................sss.......s.ss.ss.s.s.ss.s.s.sss.. [ 23%]
+..ssss...................F.F................s..ss....................... [ 31%]
+.....................................s.................................. [ 38%]
+..................................................sss.........s.sss..... [ 46%]
+................................................ssss.................... [ 54%]
+.........ss.................................sssss.ssss.s.ssss.sss..ss.s. [ 62%]
+sss.......sssssss...........................s........................... [ 69%]
+................................ssssss..................sssss....s...... [ 77%]
+....................sss.................ss..ssss.....ssss............... [ 85%]
+.............................ssssssssssssssssssss....................... [ 93%]
+..............ssssssssss......................................s          [100%]
+=================================== FAILURES ===================================
+_________________ test_a_private_origin_never_joins_the_scope __________________
+[gw1] linux -- Python 3.14.10 /home/runner/work/tcbot/tcbot/.venv/bin/python
+
+    def test_a_private_origin_never_joins_the_scope() -> None:
+        """A ban issued from the bot PM has no group to enforce in."""
+        scope = _scope([], 555)
+        assert 555 not in scope
+>       assert scope == [ban_flow.cfg.main_group]
+E       assert [] == [0]
+E         
+E         Right contains one more item: 0
+E         
+E         Full diff: (-: missing in left side, +: extra in left side)
+E         + []
+E         - [
+E         -     0,
+E         - ]
+
+tests/test_ban_scope_origin.py:38: AssertionError
+_________________ test_the_connected_groups_stay_in_the_scope __________________
+[gw1] linux -- Python 3.14.10 /home/runner/work/tcbot/tcbot/.venv/bin/python
+
+    def test_the_connected_groups_stay_in_the_scope() -> None:
+        """The connected groups keep their place in the scope."""
+        groups = [{"chat_id": 10, "title": "A"}, {"chat_id": 20, "title": "B"}]
+        scope = _scope(groups, -1001)
+        assert 10 in scope
+        assert 20 in scope
+        assert -1001 in scope
+>       assert ban_flow.cfg.main_group in scope
+E       AssertionError: assert 0 in [10, 20, -1001]
+E        +  where 0 = Configs(bot_token='000000:dummy-token-for-ci00000000000000000', initial_owner_id=1, database_url='postgresql://tcbot:t...l='https://t.me/TranssionCoreFederationAppeals', api_id=0, api_hash='', mtproto_session='tcbot_mtproto', sentry_dsn='').main_group
+E        +    where Configs(bot_token='000000:dummy-token-for-ci00000000000000000', initial_owner_id=1, database_url='postgresql://tcbot:t...l='https://t.me/TranssionCoreFederationAppeals', api_id=0, api_hash='', mtproto_session='tcbot_mtproto', sentry_dsn='') = ban_flow.cfg
+
+tests/test_ban_scope_origin.py:48: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_ban_scope_origin.py::test_a_private_origin_never_joins_the_scope - assert [] == [0]
+  
+  Right contains one more item: 0
+  
+  Full diff: (-: missing in left side, +: extra in left side)
+  + []
+  - [
+  -     0,
+  - ]
+FAILED tests/test_ban_scope_origin.py::test_the_connected_groups_stay_in_the_scope - AssertionError: assert 0 in [10, 20, -1001]
+ +  where 0 = Configs(bot_token='000000:dummy-token-for-ci00000000000000000', initial_owner_id=1, database_url='postgresql://tcbot:t...l='https://t.me/TranssionCoreFederationAppeals', api_id=0, api_hash='', mtproto_session='tcbot_mtproto', sentry_dsn='').main_group
+ +    where Configs(bot_token='000000:dummy-token-for-ci00000000000000000', initial_owner_id=1, database_url='postgresql://tcbot:t...l='https://t.me/TranssionCoreFederationAppeals', api_id=0, api_hash='', mtproto_session='tcbot_mtproto', sentry_dsn='') = ban_flow.cfg
+2 failed, 753 passed, 172 skipped in 17.31s
