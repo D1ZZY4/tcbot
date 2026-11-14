@@ -524,7 +524,7 @@ def main() -> None:
             asyncio.run(_run_webhook_mode(app), loop_factory=loop_factory())
         else:
             log.warning(
-                "No WEBHOOK_URL or REPLIT_DEV_DOMAIN found. "
+                "No public webhook URL is available for this process. "
                 "Falling back to long-polling (local development only)."
             )
             log.info("Starting long-polling...")

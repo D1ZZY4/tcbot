@@ -53,6 +53,23 @@ _DEFAULT_COMMUNITY_GROUP_URL: str = "https://t.me/TranssionCoreFederationGroup"
 _DEFAULT_COMMUNITY_LOGS_URL: str = "https://t.me/TranssionCoreFederationLogs"
 _DEFAULT_COMMUNITY_APPEAL_URL: str = "https://t.me/TranssionCoreFederationAppeals"
 _DEFAULT_COMMUNITY_TRAVEL_URL: str = "https://t.me/+S2C_ppFvHlAwMzNl"
+# * The Replit dev domain is only usable when this process is the one the
+# * Replit platform exposes. The variable is also set in a workspace shell
+# * that starts the bot by hand, and the dev domain there points at the
+# * Replit workflow, not at the shell. Registering it from the shell moves
+# * every update to another process, so the bot answers nothing while it
+# * looks perfectly healthy.
+# *
+# * These variables exist only in the Replit runtime, so one of them proves
+# * the process is the app. An operator who runs the bot somewhere else and
+# * wants the webhook anyway sets ``WEBHOOK_URL`` explicitly.
+_REPLIT_RUNTIME_MARKERS: tuple[str, ...] = (
+    "REPLIT_SLUG",
+    "REPLIT_OWNER",
+    "REPLIT_APP_NAME",
+    "REPLIT_IDENTITY",
+    "REPLIT_DEPLOYMENT",
+)
 
 # * Numeric levels for ``cfg.log_level`` (stdlib-compatible ints consumed by
 # * ``utils.logger.setup``); WARN and FATAL are kept as aliases.
@@ -187,8 +204,19 @@ def _parse_log_level(raw: str) -> int:
     return _LOG_LEVELS["INFO"]
 
 
+def _on_replit() -> bool:
+    """Return True when this process runs as the Replit application.
+
+    The check looks for a variable the Replit runtime sets and nothing
+    else sets. A workspace shell inherits the dev domain but none of these,
+    so a bot started by hand there is not the process the platform
+    exposes.
+    """
+    return any(os.getenv(marker, "").strip() for marker in _REPLIT_RUNTIME_MARKERS)
+
+
 def _auto_webhook_url() -> str:
-    """Build the webhook base URL: WEBHOOK_URL, Replit domain, else empty."""
+    """Build the webhook base URL: WEBHOOK_URL, the Replit dev domain, else empty."""
     explicit = os.getenv("WEBHOOK_URL", "").strip()
     if explicit:
         if (
@@ -202,7 +230,21 @@ def _auto_webhook_url() -> str:
             )
         return explicit.rstrip("/")
     replit_domain = os.getenv(_REPLIT_DEV_DOMAIN_VAR, "").strip()
-    return f"https://{replit_domain}" if replit_domain else ""
+    if not replit_domain:
+        return ""
+    if not _on_replit():
+        # * The dev domain belongs to the Replit workflow, not to this
+        # * process. Registering it here would hand every update to another
+        # * process, so the bot would look healthy and answer nothing.
+        # * Polling is the local fallback and reaches the same bot.
+        log.warning(
+            "%s is set but this process is not the Replit application; "
+            "falling back to polling. Set WEBHOOK_URL to use a webhook "
+            "anyway.",
+            _REPLIT_DEV_DOMAIN_VAR,
+        )
+        return ""
+    return f"https://{replit_domain}"
 
 
 def _resolve_webhook_secret() -> str:

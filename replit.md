@@ -72,6 +72,8 @@ Production Replit deployments should use webhook mode:
 2. Set `WEBHOOK_SECRET` to a random string for request validation.
 3. The bot registers the webhook with Telegram on startup.
 
+The dev domain is only used when the bot runs as the Replit application itself. A workspace shell that starts the bot by hand inherits `REPLIT_DEV_DOMAIN`, but that domain points at the Replit workflow, so the shell polls instead of registering a webhook it would never receive.
+
 Local development without a public URL falls back to polling automatically.
 
 ### Nix Configuration
@@ -107,7 +109,7 @@ The `uv.lock` file ensures reproducible installs on Replit. Do not commit
 - [ ] `OWNER_ID` set in Replit Secrets.
 - [ ] `API_ID` set in Replit Secrets.
 - [ ] `API_HASH` set in Replit Secrets.
-- [ ] `WEBHOOK_URL` set for production webhook mode (optional on Replit: `REPLIT_DEV_DOMAIN` is auto-detected).
+- [ ] `WEBHOOK_URL` set for production webhook mode (optional on Replit: `REPLIT_DEV_DOMAIN` is auto-detected when the bot runs as the Replit application).
 - [ ] `WEBHOOK_SECRET` set for webhook validation.
 - [ ] Run command is `uv run python -m tcbot`.
 - [ ] `uv sync --frozen` has been run after dependency changes.

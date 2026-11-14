@@ -122,7 +122,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 
 | Variable | Description |
 |---|---|
-| `WEBHOOK_URL` | Public HTTPS base URL for webhook transport; empty falls back to polling. Auto-detected from `REPLIT_DEV_DOMAIN` on Replit. |
+| `WEBHOOK_URL` | Public HTTPS base URL for webhook transport; empty falls back to polling. Auto-detected from `REPLIT_DEV_DOMAIN` only when the bot runs as the Replit application. |
 | `WEBHOOK_SECRET` | Used as-is when set, auto-generated per restart when empty; required on Vercel. |
 | `CRON_SECRET` | Bearer token for `/api/cron`; empty refuses every request (fail closed). |
 | `API_ID` | Required: Telegram API ID for MTProto identity lookups; boot refuses without it. |

@@ -198,3 +198,66 @@ def test_unknown_log_level_falls_back_to_info(
     """An unusable LOG_LEVEL never silences the bot entirely."""
     loaded = _load(monkeypatch, LOG_LEVEL="LOUD")
     assert loaded.log_level == 20
+
+
+# ───────────────────────── Webhook transport ──────────────────────── #
+# * The Replit dev domain is only usable when this process is the one the
+# * platform exposes. A workspace shell inherits the variable, and a
+# * webhook registered from there hands every update to another process.
+
+
+def _clear_transport_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove every variable the transport decision reads."""
+    for key in (
+        "WEBHOOK_URL",
+        "REPLIT_DEV_DOMAIN",
+        "REPLIT_SLUG",
+        "REPLIT_OWNER",
+        "REPLIT_APP_NAME",
+        "REPLIT_IDENTITY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_explicit_webhook_url_wins(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An explicit URL is the operator's choice and is always honoured."""
+    _clear_transport_env(monkeypatch)
+    monkeypatch.setenv("WEBHOOK_URL", "https://bot.example.com/")
+    monkeypatch.setenv("REPLIT_DEV_DOMAIN", "dev.replit.dev")
+    loaded = _load(monkeypatch, WEBHOOK_URL="https://bot.example.com/")
+    assert loaded.webhook_url == "https://bot.example.com"
+    assert loaded.is_webhook_mode is True
+
+
+def test_replit_dev_domain_is_used_on_replit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Replit runtime marks the app process, and the dev domain is used."""
+    _clear_transport_env(monkeypatch)
+    monkeypatch.setenv("REPLIT_DEV_DOMAIN", "dev.replit.dev")
+    monkeypatch.setenv("REPLIT_SLUG", "my-project")
+    loaded = _load(monkeypatch)
+    assert loaded.webhook_url == "https://dev.replit.dev"
+    assert loaded.is_webhook_mode is True
+
+
+def test_replit_dev_domain_is_ignored_outside_replit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A workspace shell is not the exposed process, so it polls instead.
+
+    The dev domain points at the Replit workflow, so a webhook registered
+    from the shell would move every update away from the bot the operator
+    is talking to.
+    """
+    _clear_transport_env(monkeypatch)
+    monkeypatch.setenv("REPLIT_DEV_DOMAIN", "dev.replit.dev")
+    loaded = _load(monkeypatch)
+    assert loaded.webhook_url == ""
+    assert loaded.is_webhook_mode is False
+
+
+def test_no_public_url_falls_back_to_polling(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without a public URL the bot polls, which is the local-dev path."""
+    _clear_transport_env(monkeypatch)
+    loaded = _load(monkeypatch)
+    assert loaded.webhook_url == ""
+    assert loaded.is_webhook_mode is False

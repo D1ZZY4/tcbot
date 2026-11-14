@@ -103,7 +103,7 @@ flowchart TD
     CommandModules --> Utils[tcbot.utils]
 ```
 
-Runtime starts with `uv run python -m tcbot`. The entry point loads configuration, starts the Flask health endpoint, builds the Telegram application, connects PostgreSQL, applies the schema migrations, seeds the initial owner, dynamically loads handlers, and starts webhook transport when `WEBHOOK_URL` or `REPLIT_DEV_DOMAIN` is available. Local development without a public URL falls back to polling.
+Runtime starts with `uv run python -m tcbot`. The entry point loads configuration, starts the Flask health endpoint, builds the Telegram application, connects PostgreSQL, applies the schema migrations, seeds the initial owner, dynamically loads handlers, and starts webhook transport when a public URL is available: an explicit `WEBHOOK_URL`, or the `REPLIT_DEV_DOMAIN` of the Replit application. Local development without a public URL falls back to polling.
 
 ## Core rules
 

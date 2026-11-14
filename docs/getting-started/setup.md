@@ -146,7 +146,7 @@ PROOFS="-1001234567890"
 | `DB_MAX_OVERFLOW` | No | integer >= 0 | Extra connections the pool may open beyond `DB_POOL_SIZE` under load. Default `5`. These connections are closed again once the load drops. |
 | `DB_SCHEMA` | No | PostgreSQL identifier | The schema the bot reads and writes. Default `public`. The project uses three schemas and no more: `public` for the deployment, `test` for the integration tests, and `development` for a developer working against a shared server. A schema that does not exist yet is created at startup. |
 | `SENTRY_DSN` | No | DSN string | Error monitoring via Sentry (observability extra: install `tcbot[observability]`). When empty, monitoring is disabled. |
-| `WEBHOOK_URL` | No | URL | Base URL for webhook transport, e.g. `https://yourdomain.example.com`. An explicit value takes precedence over the automatically detected `REPLIT_DEV_DOMAIN`; when neither is available, the bot falls back to polling for local development. |
+| `WEBHOOK_URL` | No | URL | Base URL for webhook transport, e.g. `https://yourdomain.example.com`. An explicit value takes precedence over the automatically detected `REPLIT_DEV_DOMAIN`; when neither is available, the bot falls back to polling for local development. The dev domain is only used when the bot runs as the Replit application, so a workspace shell that starts the bot by hand polls instead of registering a webhook another process would receive. |
 | `WEBHOOK_SECRET` | No | random string | Secret token sent in the `X-Telegram-Bot-Api-Secret-Token` header by Telegram on every webhook POST. Auto-generated with `secrets.token_hex(32)` if absent. Set it explicitly for a stable deployment token. |
 | `CRON_SECRET` | Yes on Vercel | random string | Bearer token for the serverless warn-expiry cron endpoint. Requests without a matching token fail closed (`401`/`503`). |
 | `WARN_LIMIT` | No | integer >= 1 | Per-group warning threshold that triggers automatic federation ban. Default `3`. When a user's warn count in one group reaches or exceeds this value, they are federation-banned and their group warns cleared (on success). |
@@ -190,7 +190,7 @@ offline over this dead key.
 5. `tcbot.modules.get_handlers()` imports active modules and stops startup if an enabled module fails to import.
 6. Signal handlers (`SIGTERM`, `SIGINT`) are registered immediately before the PTB lifecycle begins.
 7. `_post_init()` connects PostgreSQL (applying the pending schema migrations first), seeds the initial owner, connects the optional Redis cache, starts the APScheduler, connects MTProto (bot-token session; missing `API_ID`/`API_HASH` aborts boot), and attaches the error reporter.
-8. **Webhook mode** (when `WEBHOOK_URL` or `REPLIT_DEV_DOMAIN` resolves to a URL): `bot.set_webhook()` registers the URL, `register_webhook()` wires Flask's `POST /webhook` to PTB's update queue, and the bot waits for `SIGTERM`/`SIGINT`.
+8. **Webhook mode** (when `WEBHOOK_URL` is set, or `REPLIT_DEV_DOMAIN` resolves to a URL and this process is the Replit application): `bot.set_webhook()` registers the URL, `register_webhook()` wires Flask's `POST /webhook` to PTB's update queue, and the bot waits for `SIGTERM`/`SIGINT`.
 9. **Polling mode** (when no webhook URL is available): `run_polling()` starts with `drop_pending_updates=True`. A `WARNING` log identifies this local-development fallback.
 
 ## Troubleshooting
