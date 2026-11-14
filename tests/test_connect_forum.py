@@ -1,0 +1,165 @@
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Ave Labs
+
+"""Forum connect prompt behaviour when the bot is added anonymously."""
+
+from __future__ import annotations
+
+import inspect
+from types import SimpleNamespace
+
+import pytest
+from telegram.constants import ChatMemberStatus
+
+from tcbot.modules import connect as connect_module
+from tcbot.modules.helper.pipelines import connected_flow
+
+
+class _FakeBot:
+    """Record outbound messages without touching Telegram."""
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[int, object]] = []
+
+    async def send_message(
+        self, chat_id: int, text: str, reply_markup: object | None = None
+    ) -> SimpleNamespace:
+        self.sent.append((chat_id, reply_markup))
+        return SimpleNamespace(message_id=77)
+
+
+class _FakeMessage:
+    """Capture the reply of a command that refuses before doing any work."""
+
+    def __init__(self, chat_type: str) -> None:
+        self.chat = SimpleNamespace(id=-1001234567890, type=chat_type, title="Chat")
+        self.text = "/tcconnect"
+        self.replies: list[str] = []
+
+    async def reply_text(self, text: str, parse_mode: str | None = None) -> None:
+        self.replies.append(text)
+
+
+def _forum_update(adder: object | None) -> SimpleNamespace:
+    """Build the MY_CHAT_MEMBER update for a forum supergroup."""
+    chat = SimpleNamespace(
+        id=-1001234567890,
+        type="supergroup",
+        title="Community Forum",
+        is_forum=True,
+    )
+    cmc = SimpleNamespace(
+        chat=chat,
+        new_chat_member=SimpleNamespace(status=ChatMemberStatus.MEMBER),
+        old_chat_member=SimpleNamespace(status=ChatMemberStatus.LEFT),
+        from_user=adder,
+    )
+    return SimpleNamespace(my_chat_member=cmc)
+
+
+@pytest.mark.asyncio
+async def test_forum_prompt_is_sent_without_an_attributed_adder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An anonymous forum admin must not suppress the owner's prompt."""
+    bot = _FakeBot()
+    ctx = SimpleNamespace(bot=bot)
+    recorded: list[tuple[int, str, int, int]] = []
+
+    async def _get_pending(_chat_id: int) -> None:
+        return None
+
+    async def _is_connected(_chat_id: int, *, fresh: bool = False) -> bool:
+        return False
+
+    async def _add_pending(
+        chat_id: int, title: str, owner_id: int, message_id: int
+    ) -> None:
+        recorded.append((chat_id, title, owner_id, message_id))
+
+    async def _locale(_update: object) -> str:
+        return "en-US"
+
+    monkeypatch.setattr(
+        connected_flow,
+        "cfg",
+        SimpleNamespace(is_primary_group=lambda _chat_id: False),
+    )
+    monkeypatch.setattr(connected_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(connected_flow.db.groups_db, "get_pending", _get_pending)
+    monkeypatch.setattr(connected_flow.db.groups_db, "is_connected", _is_connected)
+    monkeypatch.setattr(connected_flow.db.groups_db, "add_pending", _add_pending)
+
+    await connected_flow.connection.on_bot_added(
+        _forum_update(None),  # type: ignore[arg-type]
+        ctx,  # type: ignore[arg-type]
+    )
+
+    assert len(bot.sent) == 1
+    assert recorded == [(-1001234567890, "Community Forum", 0, 77)]
+
+
+@pytest.mark.asyncio
+async def test_forum_prompt_records_the_adder_when_known(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real admin who adds the bot is still recorded as the requester."""
+    bot = _FakeBot()
+    ctx = SimpleNamespace(bot=bot)
+    recorded: list[tuple[int, str, int, int]] = []
+
+    async def _get_pending(_chat_id: int) -> None:
+        return None
+
+    async def _is_connected(_chat_id: int, *, fresh: bool = False) -> bool:
+        return False
+
+    async def _add_pending(
+        chat_id: int, title: str, owner_id: int, message_id: int
+    ) -> None:
+        recorded.append((chat_id, title, owner_id, message_id))
+
+    async def _locale(_update: object) -> str:
+        return "en-US"
+
+    monkeypatch.setattr(
+        connected_flow,
+        "cfg",
+        SimpleNamespace(is_primary_group=lambda _chat_id: False),
+    )
+    monkeypatch.setattr(connected_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(connected_flow.db.groups_db, "get_pending", _get_pending)
+    monkeypatch.setattr(connected_flow.db.groups_db, "is_connected", _is_connected)
+    monkeypatch.setattr(connected_flow.db.groups_db, "add_pending", _add_pending)
+
+    await connected_flow.connection.on_bot_added(
+        _forum_update(SimpleNamespace(id=4242)),  # type: ignore[arg-type]
+        ctx,  # type: ignore[arg-type]
+    )
+
+    assert recorded == [(-1001234567890, "Community Forum", 4242, 77)]
+
+
+@pytest.mark.asyncio
+async def test_channel_is_refused_before_any_telegram_or_db_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A channel has no member list; /tcconnect must refuse it, not store it."""
+    message = _FakeMessage("channel")
+    update = SimpleNamespace(
+        effective_chat=message.chat,
+        effective_user=SimpleNamespace(id=1, first_name="Admin", is_bot=False),
+        effective_message=message,
+    )
+    ctx = SimpleNamespace(bot=_FakeBot())
+
+    async def _locale(_update: object) -> str:
+        return "en-US"
+
+    monkeypatch.setattr(connect_module, "locale_for_update", _locale)
+
+    await inspect.unwrap(connect_module.cmd_tcconnect)(update, ctx)
+
+    assert len(message.replies) == 1
+    assert "group" in message.replies[0].lower()

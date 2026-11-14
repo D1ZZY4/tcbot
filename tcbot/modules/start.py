@@ -82,7 +82,8 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     botname = ctx.bot.first_name or ""
     locale = await locale_for_update(update)
 
-    if chat.type in ("group", "supergroup", "forum"):
+    # * A forum is a supergroup in Telegram; "forum" is not a chat type.
+    if chat.type in ("group", "supergroup"):
         bot_username = ctx.bot.username or ""
         await safe_reply(
             msg,

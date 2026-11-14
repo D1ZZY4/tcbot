@@ -21,7 +21,7 @@ from telegram.constants import ChatMemberStatus
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import messages
+from tcbot.modules.helper import identity, messages
 from tcbot.modules.helper.keyboards import connect_join_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_alert, cb_error_edit, send_log
@@ -231,7 +231,14 @@ class ConnectionAddedMixin:
                     is_already_connected,
                 )
                 return
-            if pending and new_status == ChatMemberStatus.ADMINISTRATOR:
+            if (
+                pending
+                and new_status == ChatMemberStatus.ADMINISTRATOR
+                and pending.get("owner_id")
+            ):
+                # * A pending row with no attributable owner (anonymous add)
+                # * stays for the creator's Connect tap, which carries a real
+                # * account id; auto-completing it would write owner 0.
                 if self.check_perms(cmc.new_chat_member):
                     owner_fname = await db.users_cache.get_first_name(
                         pending.get("owner_id", 0), "Owner"
@@ -280,12 +287,21 @@ class ConnectionAddedMixin:
                 return
             if pending:
                 return
-            if not by_user:
+            # * A forum admin commonly adds the bot while posting as the
+            # * group, so the update names no attributable account. The
+            # * prompt is still useful: the Connect button is restricted
+            # * to the group creator, who can decide without the adder.
+            owner_id = (
+                by_user.id
+                if by_user is not None and not identity.is_anon_admin(by_user)
+                else 0
+            )
+            if owner_id == 0:
                 log.info(
-                    "Bot added to %d by anonymous admin; skipping join prompt",
+                    "Bot added to %d without an attributable admin; "
+                    "prompting the group creator",
                     chat.id,
                 )
-                return
             try:
                 prompt = await ctx.bot.send_message(
                     chat.id,
@@ -295,7 +311,7 @@ class ConnectionAddedMixin:
                 await db.groups_db.add_pending(
                     chat.id,
                     chat.title or "",
-                    by_user.id,
+                    owner_id,
                     prompt.message_id,
                 )
             except Exception:

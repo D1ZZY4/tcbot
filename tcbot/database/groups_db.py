@@ -331,7 +331,13 @@ async def set_group_locale(chat_id: int, locale: str | None) -> bool:
 
 
 async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) -> None:
-    """Record the join request of a group."""
+    """Record the join request of a group.
+
+    ``owner_id`` is the account that added the bot when Telegram names one.
+    An anonymous admin add names no real account, so the caller passes ``0``
+    and the row stores ``NULL`` instead of violating the user foreign key.
+    The group creator still decides from the prompt.
+    """
     now = utc_now()
 
     async def _work(sess: AsyncSession) -> None:
@@ -353,7 +359,7 @@ async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) 
             pg_insert(join_requests)
             .values(
                 chat_id=chat_id,
-                owner_user_id=owner_id,
+                owner_user_id=owner_id if owner_id > 0 else None,
                 request_message_id=message_id,
                 status="pending",
                 requested_at=now,

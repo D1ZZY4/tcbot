@@ -91,7 +91,10 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if chat is None or user is None or msg is None:
         return
 
-    if chat.type == "private":
+    # * A connected destination is a group or a supergroup (a forum is a
+    # * supergroup). A channel has no member list to moderate, so it is
+    # * refused before any Telegram or database work.
+    if chat.type not in ("group", "supergroup"):
         await safe_reply(
             msg,
             replies.err_group_only(locale, plain=True),
@@ -104,9 +107,13 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * real federation account, so refuse the connection request up front
     # * instead of submitting one under the placeholder ID.
     if is_anon_admin(user):
+        # * A forum admin often posts as the group. The placeholder names
+        # * no real account, so the request cannot be attributed; tell the
+        # * admin how to send it from their own account instead of calling
+        # * them a non-admin.
         await safe_reply(
             msg,
-            t("connecting.state.admin_required", locale, plain=True),
+            t("connecting.state.anon_admin", locale, plain=True),
             log_label="cmd_tctc anon-admin",
             parse_mode=None,
         )
