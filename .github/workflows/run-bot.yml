@@ -64,6 +64,8 @@ jobs:
       APPEALS:                 ${{ secrets.APPEALS }}
       LOG_LEVEL:               ${{ secrets.LOG_LEVEL }}
       PORT:                    ${{ secrets.PORT }}
+      BIND_HOST:               ${{ secrets.BIND_HOST }}
+      PG_CRON_ENABLED:         ${{ secrets.PG_CRON_ENABLED }}
       REDIS_URL:               ${{ secrets.REDIS_URL }}
       DB_POOL_SIZE:            ${{ secrets.DB_POOL_SIZE }}
       DB_MAX_OVERFLOW:         ${{ secrets.DB_MAX_OVERFLOW }}

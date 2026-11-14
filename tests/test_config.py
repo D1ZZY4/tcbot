@@ -28,10 +28,11 @@ def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
         "APPEALS",
         "PROOFS",
         "PORT",
+        "BIND_HOST",
+        "PG_CRON_ENABLED",
         "PREFIXES",
         "WEBHOOK_URL",
         "WEBHOOK_SECRET",
-        "CRON_SECRET",
         "REDIS_URL",
         "COMMUNITY_NAME",
         "MTPROTO_SESSION",
@@ -168,21 +169,36 @@ def test_optional_secrets_stay_empty_when_unset(
     """Unset optional credentials stay empty instead of becoming truthy."""
     loaded = _load(monkeypatch)
     assert loaded.redis_url is None
-    assert loaded.cron_secret == ""
     assert loaded.sentry_dsn == ""
     assert loaded.api_hash == ""
+    assert loaded.bind_host == "0.0.0.0"
+    assert loaded.pg_cron_enabled is False
 
 
-def test_explicit_webhook_secret_is_kept_separately(
+def test_bind_host_and_pg_cron_are_configurable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The serverless receiver compares against the explicit secret only."""
+    """The listener host and the optional database scheduler are settings."""
+    loaded = _load(
+        monkeypatch,
+        BIND_HOST="127.0.0.1",
+        PG_CRON_ENABLED="true",
+    )
+    assert loaded.bind_host == "127.0.0.1"
+    assert loaded.pg_cron_enabled is True
+    invalid = _load(monkeypatch, PG_CRON_ENABLED="maybe")
+    assert invalid.pg_cron_enabled is False
+
+
+def test_webhook_secret_is_explicit_or_generated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit secret is kept; an unset one is generated for this boot."""
     loaded = _load(monkeypatch, WEBHOOK_SECRET="s3cret")
     assert loaded.webhook_secret == "s3cret"
-    assert loaded.webhook_secret_explicit == "s3cret"
     generated = _load(monkeypatch)
-    assert generated.webhook_secret_explicit == ""
     assert generated.webhook_secret
+    assert generated.webhook_secret != "s3cret"
 
 
 def test_mtproto_session_defaults_when_blank(

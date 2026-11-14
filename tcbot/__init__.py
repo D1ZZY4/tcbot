@@ -28,6 +28,10 @@ log = get_logger(__name__)
 # ─────────────────────────────── Env parsing ─────────────────────────────── #
 
 _DEFAULT_PORT: int = 5000
+# * The keep-alive and webhook listener binds every interface by default so
+# * a container or hosted process is reachable. An operator behind a local
+# * reverse proxy can set BIND_HOST=127.0.0.1.
+_DEFAULT_BIND_HOST: str = "0.0.0.0"
 _DEFAULT_PROOFS: str = "-1003997518221"
 _ERR_OWNER_ID: str = "OWNER_ID is required and must be a positive integer."
 # * The connection pool of the database. The size has to fit the number
@@ -319,6 +323,7 @@ class Configs:
     community_name: str
     prefixes: tuple[str, ...]
     port: int
+    bind_host: str
     main_group: int
     logs: tuple[int, int | None]
     logs_errors: tuple[int, int | None]
@@ -388,6 +393,7 @@ class Configs:
             community_name=os.getenv("COMMUNITY_NAME", "Bot").strip() or "Bot",
             prefixes=prefixes,
             port=parse_port(os.getenv("PORT", str(_DEFAULT_PORT)).strip()),
+            bind_host=_env_or("BIND_HOST", _DEFAULT_BIND_HOST),
             main_group=_chat_id_from_env("MAIN_GROUP"),
             logs=parse_chat_id(os.getenv("LOGS", "").strip()),
             logs_errors=parse_chat_id(os.getenv("LOGS_ERRORS", "").strip()),

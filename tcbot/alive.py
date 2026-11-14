@@ -272,7 +272,7 @@ def _run() -> None:
     # * One process, many request threads: the update queue and the event
     # * loop stay in the main thread, so the threads only do the HTTP work.
     _app.run(
-        host="0.0.0.0",
+        host=cfg.bind_host,
         port=cfg.port,
         debug=False,
         use_reloader=False,
@@ -290,7 +290,7 @@ def start_keepalive() -> None:
     """
     probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        probe.bind(("0.0.0.0", cfg.port))
+        probe.bind((cfg.bind_host, cfg.port))
     except OSError as exc:
         raise RuntimeError(f"Keep-alive port {cfg.port} is unavailable: {exc}") from exc
     finally:
@@ -301,4 +301,4 @@ def start_keepalive() -> None:
         daemon=True,
     )
     t.start()
-    log.info("Keep-alive server started on 0.0.0.0:%d", cfg.port)
+    log.info("Keep-alive server started on %s:%d", cfg.bind_host, cfg.port)
