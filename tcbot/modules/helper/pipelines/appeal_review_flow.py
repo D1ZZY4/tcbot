@@ -359,21 +359,52 @@ class RejectMixin:
         admin: User,
         lc: int,
         update: Update,
+        approver_role: str | None,
     ) -> bool:
         """Reject the appeal; return True when the rejection was recorded.
 
         The rejection marker is the decision, so a failure to write it
         means no decision was reached and the caller hands the review
-        slot back.
+        slot back. The target is read fresh and checked against the
+        reviewer first, so rejecting follows the same executor-versus-target
+        rule as approving and /tcunban.
         """
-        set_r, name_r = await asyncio.gather(
-            db.bans_db.set_rejected_by(ban_id, admin.id, admin.first_name),
+        role_r, name_r = await asyncio.gather(
+            db.users_roles.get_effective_role(target_id, fresh=True),
             db.users_cache.get_first_name(target_id, str(target_id)),
             return_exceptions=True,
         )
-        throw_if_cancelled((set_r, name_r))
+        throw_if_cancelled((role_r, name_r))
         staff_locale = await locale_for_update(update)
-        if isinstance(set_r, BaseException):
+        if isinstance(role_r, BaseException):
+            log.warning(
+                "reject_appeal role lookup failed for user=%d: %s",
+                target_id,
+                role_r,
+            )
+            await _answer_review(q, staff_locale, "appeals.review.db_retry")
+            return False
+        if not guards.outranks(approver_role, role_r):
+            log.warning(
+                "reject_appeal refused: approver %d (role=%s) does not outrank "
+                "target %d (role=%s)",
+                admin.id,
+                approver_role,
+                target_id,
+                role_r,
+            )
+            await _answer_review(
+                q,
+                staff_locale,
+                "common.refuse.outranked",
+                role=db.users_roles.role_label(role_r),
+            )
+            return False
+        try:
+            await db.bans_db.set_rejected_by(ban_id, admin.id, admin.first_name)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
             log.exception("reject_appeal set_rejected_by failed for ban %s", ban_id)
             await _answer_review(q, staff_locale, "appeals.review.db_retry")
             return False
@@ -469,10 +500,35 @@ class AppealReviewMixin(AppealVerdictsMixin):
             return
         if data.startswith("appeal_approve_"):
             action = "approve"
-            ban_id = data[len("appeal_approve_") :]
+            payload = data[len("appeal_approve_") :]
         else:
             action = "reject"
-            ban_id = data[len("appeal_reject_") :]
+            payload = data[len("appeal_reject_") :]
+        # * The trailing segment names the review card the button belongs to.
+        # * A card left over from an earlier appeal carries its old id, so the
+        # * live review id check below refuses it. A card posted before this
+        # * payload shape existed carries no id; its own message id is the
+        # * card it belongs to, so a live legacy card keeps working while a
+        # * replaced one is still refused.
+        ban_id, separator, raw_review_id = payload.rpartition("_")
+        if separator and ban_id and raw_review_id.isdigit():
+            tapped_review_id = int(raw_review_id)
+        else:
+            ban_id = payload
+            message = q.message
+            tapped_review_id = (
+                int(getattr(message, "message_id", 0) or 0) if message else 0
+            )
+        if not ban_id:
+            log.warning("Appeal decision payload malformed: %r", data)
+            try:
+                await q.answer(
+                    t("appeals.review.stale_card", locale, plain=True),
+                    show_alert=True,
+                )
+            except Exception as exc:
+                log.debug("Appeal malformed-payload answer failed: %s", exc)
+            return
         role_result, ban_result, answer_r = await asyncio.gather(
             db.users_roles.get_effective_role(admin.id, fresh=True),
             db.bans_db.get_ban(ban_id),
@@ -554,6 +610,24 @@ class AppealReviewMixin(AppealVerdictsMixin):
             except Exception as exc:
                 log.debug("Appeal already-resolved answer failed: %s", exc)
             return
+        expected_review_id = int(ban.get("review_message_id") or 0)
+        if tapped_review_id != expected_review_id:
+            # ! CRITICAL: a stale card must never decide a newer appeal. The
+            # ! payload is bound to the card it was rendered on, and the live
+            # ! review id lives on the ban record.
+            log.info(
+                "Appeal review refused for ban %s: card %d is not the live review %d",
+                ban_id,
+                tapped_review_id,
+                expected_review_id,
+            )
+            await cb_error_edit(
+                q,
+                t("appeals.review.stale_card", locale, plain=True),
+                log_label="Appeal stale-card",
+                parse_mode=None,
+            )
+            return
         review_ts = ban.get("review_timestamp")
         if review_ts and reviewer_locked_out(
             review_ts, ban.get("actor_user_id") or 0, admin.id
@@ -633,7 +707,15 @@ class AppealReviewMixin(AppealVerdictsMixin):
                 )
             else:
                 decided = await self._reject_appeal(
-                    ctx.bot, q, ban, ban_id, target_id, admin, lc, update
+                    ctx.bot,
+                    q,
+                    ban,
+                    ban_id,
+                    target_id,
+                    admin,
+                    lc,
+                    update,
+                    approver_role=role_result,
                 )
         except asyncio.CancelledError:
             # * A cancelled decision reaches no verdict either, so the

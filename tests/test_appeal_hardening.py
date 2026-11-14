@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -18,8 +19,11 @@ from tcbot.utils.i18n import t
 
 
 class _FakeQuery:
-    def __init__(self, data: str) -> None:
+    def __init__(self, data: str, message_id: int | None = None) -> None:
         self.data = data
+        self.message = (
+            SimpleNamespace(message_id=message_id) if message_id is not None else None
+        )
         self.answers: list[tuple[str, bool]] = []
         self.edits: list[str] = []
 
@@ -77,7 +81,7 @@ def test_self_review_is_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.bans_db, "get_ban", _ban)
     monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale)
-    query = _FakeQuery("appeal_approve_abc")
+    query = _FakeQuery("appeal_approve_abc_1")
     asyncio.run(
         appeal_review_flow.AppealReviewMixin().on_decision(
             _fake_update(query, 7),  # type: ignore[arg-type]
@@ -179,7 +183,7 @@ def test_approve_demotes_staff_before_deactivate(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
 
-    query = _FakeQuery("appeal_approve_abc")
+    query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query)
 
     assert record["demoted"] == [(9, "admin")]
@@ -206,7 +210,7 @@ def test_approve_blocks_when_demote_is_a_noop_and_the_role_survives(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
 
-    query = _FakeQuery("appeal_approve_abc")
+    query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query)
 
     assert record["demoted"] == [(9, "admin")]
@@ -232,7 +236,7 @@ def test_approve_blocks_when_the_demote_raises(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
 
-    query = _FakeQuery("appeal_approve_abc")
+    query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query)
 
     assert record["deactivated"] == []
@@ -264,7 +268,7 @@ def test_approve_blocks_when_the_approver_does_not_outrank_the_target(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
 
-    query = _FakeQuery("appeal_approve_abc")
+    query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query, approver_role="admin")
 
     assert record["demoted"] == []
@@ -291,7 +295,7 @@ def test_approve_proceeds_when_the_approver_outranks_the_target(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
 
-    query = _FakeQuery("appeal_approve_abc")
+    query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query, approver_role="founder")
 
     assert record["demoted"] == [(9, "admin")]
@@ -318,7 +322,154 @@ def test_approve_proceeds_when_the_role_is_already_gone(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
 
-    query = _FakeQuery("appeal_approve_abc")
+    query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query)
 
     assert record["deactivated"] == [9]
+
+
+def test_stale_review_card_cannot_decide_a_newer_appeal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A card from an earlier appeal must not decide the live one."""
+    record = _wire_approve(monkeypatch)
+    claimed: list[tuple[str, int]] = []
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "founder"
+
+    async def _ban(ban_id: str) -> dict[str, Any]:
+        return {
+            "ban_id": ban_id,
+            "is_active": True,
+            "review_message_id": 2,
+            "review_timestamp": datetime.now(UTC),
+            "actor_user_id": 1,
+            "target_user_id": 9,
+            "rejected_at": None,
+        }
+
+    async def _claim(ban_id: str, review_msg_id: int) -> bool:
+        claimed.append((ban_id, review_msg_id))
+        return True
+
+    async def _locale(update: Any) -> str:
+        return "en-US"
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.bans_db, "get_ban", _ban)
+    monkeypatch.setattr(db.bans_db, "claim_appeal_decision", _claim)
+    monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale)
+
+    query = _FakeQuery("appeal_approve_abc_1")
+    asyncio.run(
+        appeal_review_flow.AppealReviewMixin().on_decision(
+            _fake_update(query, 1),  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+        )
+    )
+
+    assert claimed == []
+    assert record["deactivated"] == []
+    assert query.edits[-1] == t("appeals.review.stale_card", "en-US", plain=True)
+
+
+def test_a_live_legacy_card_is_still_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A card posted before the payload token keeps working while it is live."""
+    _wire_approve(monkeypatch)
+    claimed: list[tuple[str, int]] = []
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "founder"
+
+    async def _ban(ban_id: str) -> dict[str, Any]:
+        return {
+            "ban_id": ban_id,
+            "is_active": True,
+            "review_message_id": 1,
+            "review_timestamp": datetime.now(UTC),
+            "actor_user_id": 1,
+            "target_user_id": 9,
+            "rejected_at": None,
+        }
+
+    async def _claim(ban_id: str, review_msg_id: int) -> bool:
+        claimed.append((ban_id, review_msg_id))
+        return False
+
+    async def _locale(update: Any) -> str:
+        return "en-US"
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.bans_db, "get_ban", _ban)
+    monkeypatch.setattr(db.bans_db, "claim_appeal_decision", _claim)
+    monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale)
+
+    query = _FakeQuery("appeal_approve_abc", message_id=1)
+    asyncio.run(
+        appeal_review_flow.AppealReviewMixin().on_decision(
+            _fake_update(query, 1),  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+        )
+    )
+
+    assert claimed == [("abc", 1)]
+
+
+def test_reject_refuses_a_target_the_reviewer_does_not_outrank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rejecting follows the same executor-versus-target rule as approving."""
+    record: dict[str, list[Any]] = {"rejected": []}
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "admin"
+
+    async def _set_rejected(*a: Any, **k: Any) -> None:
+        record["rejected"].append(list(a))
+
+    async def _fname(user_id: int, fallback: str = "") -> str:
+        return fallback
+
+    async def _locale(update: Any) -> str:
+        return "en-US"
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.bans_db, "set_rejected_by", _set_rejected)
+    monkeypatch.setattr(db.users_cache, "get_first_name", _fname)
+    monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale)
+
+    ban: dict[str, Any] = {
+        "ban_id": "abc",
+        "is_active": True,
+        "review_message_id": 1,
+        "review_timestamp": datetime.now(UTC),
+        "actor_user_id": 7,
+        "target_user_id": 9,
+        "rejected_at": None,
+    }
+    admin = type("Admin", (), {"id": 1, "first_name": "Admin"})()
+    query = _FakeQuery("appeal_reject_abc_1")
+    mixin = appeal_review_flow.AppealVerdictsMixin()
+    mixin.community_name = "Test"
+    asyncio.run(
+        mixin._reject_appeal(
+            _FakeBot(),  # type: ignore[arg-type]
+            query,  # type: ignore[arg-type]
+            ban,  # type: ignore[arg-type]
+            "abc",
+            9,
+            admin,  # type: ignore[arg-type]
+            0,
+            _fake_update(query, 1),  # type: ignore[arg-type]
+            approver_role="admin",
+        )
+    )
+
+    assert record["rejected"] == []
+    assert query.answers[-1] == (
+        t("common.refuse.outranked", "en-US", role="Admin", plain=True),
+        True,
+    )

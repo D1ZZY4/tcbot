@@ -655,24 +655,38 @@ async def accept_appeal(ban_id: str, reviewer_id: int, note: str = "") -> bool:
     return affected > 0
 
 
-async def release_stale_review(ban_id: str) -> bool:
-    """Withdraw the open appeal of a decision and free its review slot.
+async def release_stale_review(ban_id: str, review_message_id: int) -> bool:
+    """Withdraw the stale appeal of a decision and free its review slot.
 
     A review card that nobody answered for a long time is stale. The
     user is then allowed to appeal again, but the open appeal of the
     stale card still occupies the slot of the decision, so it has to be
     withdrawn first. Both writes land in one transaction: a withdrawn
     appeal without a free slot would leave the decision unappealable.
+
+    The release only matches the slot that was judged stale. A newer
+    appeal can replace the slot between the caller's read and this write,
+    and that card must stay decidable.
     """
     withdrawn = False
 
     async def _work(sess: AsyncSession) -> None:
         nonlocal withdrawn
-        # * Both writes run on the session of this transaction: a separate
-        # * session would commit the withdrawal on its own, so a failure
-        # * of the slot release would leave the appeal closed and the
-        # * slot still claimed.
+        # * The slot condition is checked first: only the decision that still
+        # * holds the stale card may be released, and only then is the appeal
+        # * it belongs to withdrawn.
         result = await sess.execute(
+            moderation_actions.update()
+            .where(
+                moderation_actions.c.external_ref == ban_id,
+                moderation_actions.c.action_type == "ban",
+                _slot_holds(review_message_id),
+            )
+            .values(metadata=_drop_review_keys())
+        )
+        if cast("CursorResult", result).rowcount == 0:
+            return
+        appeal_result = await sess.execute(
             moderation_appeals.update()
             .where(
                 moderation_appeals.c.action_id
@@ -683,15 +697,7 @@ async def release_stale_review(ban_id: str) -> bool:
             )
             .values(status="withdrawn", resolved_at=utc_now())
         )
-        withdrawn = cast("CursorResult", result).rowcount > 0
-        await sess.execute(
-            moderation_actions.update()
-            .where(
-                moderation_actions.c.external_ref == ban_id,
-                moderation_actions.c.action_type == "ban",
-            )
-            .values(metadata=_drop_review_keys())
-        )
+        withdrawn = cast("CursorResult", appeal_result).rowcount > 0
 
     await run_transaction(_work)
     return withdrawn

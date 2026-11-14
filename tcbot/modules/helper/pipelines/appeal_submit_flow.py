@@ -268,7 +268,9 @@ class SubmitMessageMixin:
                     # * The stale card is released together with the
                     # * appeal it belongs to, so the open appeal does
                     # * not keep the decision occupied.
-                    await db.bans_db.release_stale_review(ban_id)
+                    await db.bans_db.release_stale_review(
+                        ban_id, int(fresh_ban.get("review_message_id") or 0)
+                    )
                 except Exception:
                     _who = update.effective_user
                     log.exception(
@@ -364,42 +366,72 @@ async def post_appeal(
     review_text = messages.appeal_received_log(
         uid, user.first_name, ban_id, appeal_link
     )
-    rv, rv_appeals, sent_log = await asyncio.gather(
-        ctx.bot.send_message(
-            cfg.main_group,
-            review_text,
-            parse_mode="MarkdownV2",
-            reply_markup=appeal_review_kb(ban_id),
-        ),
-        ctx.bot.send_message(
-            appeal_chat,
-            review_text,
-            parse_mode="MarkdownV2",
-            message_thread_id=appeal_thread,
-            reply_markup=appeal_review_kb(ban_id),
-        ),
-        send_log(
-            ctx.bot,
-            messages.appeal_submitted_log(uid, user.first_name, ban_id, appeal_link),
-        ),
-        return_exceptions=True,
-    )
-    throw_if_cancelled((rv, rv_appeals, sent_log))
-    review_msg_id: int | None = (
-        rv.message_id if not isinstance(rv, BaseException) else None
-    )
-    if isinstance(rv, BaseException):
-        log.error("Appeal review post failed: %s", rv)
-    appeals_review_id: int | None = (
-        rv_appeals.message_id if not isinstance(rv_appeals, BaseException) else None
-    )
-    if isinstance(rv_appeals, BaseException):
-        log.error("Appeal review copy to APPEALS failed: %s", rv_appeals)
-    appeal_log_sent_id: int | None = (
-        sent_log.message_id if not isinstance(sent_log, BaseException) else None
-    )
-    if isinstance(sent_log, BaseException):
-        log.error("Appeal log failed: %s", sent_log)
+    # * The review card id is the decision token, so the main card is posted
+    # * first and its keyboard is attached once the id is known. A card left
+    # * behind by an earlier appeal then carries a stale token and cannot
+    # * decide the appeal that replaced it.
+    try:
+        rv = await ctx.bot.send_message(
+            cfg.main_group, review_text, parse_mode="MarkdownV2"
+        )
+    except Exception:
+        log.exception("Appeal review post failed")
+        rv = None
+    review_msg_id: int | None = rv.message_id if rv is not None else None
+    appeals_review_id: int | None = None
+    appeal_log_sent_id: int | None = None
+    if review_msg_id is not None:
+        review_kb = appeal_review_kb(ban_id, review_msg_id)
+        rv_appeals, sent_log, markup = await asyncio.gather(
+            ctx.bot.send_message(
+                appeal_chat,
+                review_text,
+                parse_mode="MarkdownV2",
+                message_thread_id=appeal_thread,
+                reply_markup=review_kb,
+            ),
+            send_log(
+                ctx.bot,
+                messages.appeal_submitted_log(
+                    uid, user.first_name, ban_id, appeal_link
+                ),
+            ),
+            ctx.bot.edit_message_reply_markup(
+                chat_id=cfg.main_group,
+                message_id=review_msg_id,
+                reply_markup=review_kb,
+            ),
+            return_exceptions=True,
+        )
+        throw_if_cancelled((rv_appeals, sent_log, markup))
+        if isinstance(sent_log, BaseException):
+            log.error("Appeal log failed: %s", sent_log)
+        else:
+            appeal_log_sent_id = sent_log.message_id
+        if isinstance(rv_appeals, BaseException):
+            log.error("Appeal review copy to APPEALS failed: %s", rv_appeals)
+        else:
+            appeals_review_id = rv_appeals.message_id
+        if isinstance(markup, BaseException):
+            # * A main card without buttons cannot be decided. Treat the post
+            # * as failed instead of recording an unreviewable appeal.
+            log.error("Appeal review keyboard attach failed: %s", markup)
+            for chat_id, message_id in (
+                (cfg.main_group, review_msg_id),
+                (appeal_chat, appeals_review_id),
+            ):
+                if message_id is None:
+                    continue
+                try:
+                    await ctx.bot.delete_message(chat_id=chat_id, message_id=message_id)
+                except Exception as exc:
+                    log.debug(
+                        "Appeal undecidable-card delete failed for %s: %s",
+                        ban_id,
+                        exc,
+                    )
+            review_msg_id = None
+            appeals_review_id = None
     claimed = False
     if review_msg_id:
         # * Atomic claim and appeal record: the two writes land in one
@@ -580,7 +612,9 @@ class AppealSubmitMixin(SubmitMessageMixin):
                     # * The stale card is released together with the
                     # * appeal it belongs to, so the open appeal does
                     # * not keep the decision occupied.
-                    await db.bans_db.release_stale_review(ban_id)
+                    await db.bans_db.release_stale_review(
+                        ban_id, int(ban.get("review_message_id") or 0)
+                    )
                 except Exception:
                     log.exception(
                         "Appeal _start: failed to clear stale review for ban_id=%s user=%d",

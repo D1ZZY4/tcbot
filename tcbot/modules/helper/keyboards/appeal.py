@@ -32,20 +32,27 @@ def appeal_cancel_kb(
     )
 
 
-def appeal_review_kb(ban_id: str, locale: str | None = None) -> InlineKeyboardMarkup:
-    """Approve / Reject keyboard on the staff review card."""
+def appeal_review_kb(
+    ban_id: str, review_message_id: int, locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """Approve / Reject keyboard bound to the review card it belongs to.
+
+    The card id rides in the callback payload so a card left behind by an
+    earlier appeal cannot decide the appeal that replaced it.
+    """
     # * Underscore separators match the review handler pattern.
+    suffix = f"{ban_id}_{review_message_id}"
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(
                     t("button.approve", locale, plain=True),
-                    callback_data=f"appeal_approve_{ban_id}",
+                    callback_data=f"appeal_approve_{suffix}",
                     style=KeyboardButtonStyle.SUCCESS,
                 ),
                 InlineKeyboardButton(
                     t("button.reject", locale, plain=True),
-                    callback_data=f"appeal_reject_{ban_id}",
+                    callback_data=f"appeal_reject_{suffix}",
                     style=KeyboardButtonStyle.DANGER,
                 ),
             ]

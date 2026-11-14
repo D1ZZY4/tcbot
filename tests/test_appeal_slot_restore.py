@@ -177,7 +177,7 @@ def test_a_refused_tap_gives_the_review_slot_back(
     """
     record = _wire(monkeypatch)
 
-    query = _FakeQuery(f"appeal_approve_{_BAN_REF}")
+    query = _FakeQuery(f"appeal_approve_{_BAN_REF}_1")
     _run_decision(query)
 
     assert record["deactivated"] == []
@@ -190,7 +190,7 @@ def test_a_lost_claim_does_not_restore_the_slot(
     """The reviewer who lost the race must not put the slot back."""
     record = _wire(monkeypatch, claimed=False)
 
-    query = _FakeQuery(f"appeal_approve_{_BAN_REF}")
+    query = _FakeQuery(f"appeal_approve_{_BAN_REF}_1")
     _run_decision(query)
 
     assert record["restored"] == []

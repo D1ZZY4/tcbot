@@ -232,7 +232,7 @@ async def test_the_stale_release_withdraws_the_appeal(ban_db: str) -> None:
     await _seed_ban()
     await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
 
-    withdrawn = await db.bans_db.release_stale_review(_BAN_REF)
+    withdrawn = await db.bans_db.release_stale_review(_BAN_REF, 77)
 
     assert withdrawn is True
     rows = await _appeals()
@@ -246,7 +246,7 @@ async def test_the_stale_release_lets_a_new_appeal_in(ban_db: str) -> None:
     """A withdrawn appeal does not occupy the decision any more."""
     await _seed_ban()
     await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
-    await db.bans_db.release_stale_review(_BAN_REF)
+    await db.bans_db.release_stale_review(_BAN_REF, 77)
 
     claimed = await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "again please", 78)
 
@@ -254,6 +254,23 @@ async def test_the_stale_release_lets_a_new_appeal_in(ban_db: str) -> None:
     rows = await _appeals()
     assert len(rows) == 2
     assert rows[1]["status"] == "pending"
+
+
+async def test_the_stale_release_leaves_a_newer_review_untouched(
+    ban_db: str,
+) -> None:
+    """A stale release must match the card it judged, not whatever is live."""
+    await _seed_ban()
+    await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
+
+    withdrawn = await db.bans_db.release_stale_review(_BAN_REF, 76)
+
+    assert withdrawn is False
+    ban = await db.bans_db.get_ban(_BAN_REF)
+    assert ban is not None
+    assert ban.get("review_message_id") == 77
+    rows = await _appeals()
+    assert rows[0]["status"] == "pending"
 
 
 async def test_only_the_banned_user_may_appeal(ban_db: str) -> None:

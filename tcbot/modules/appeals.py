@@ -84,6 +84,8 @@ async def on_group_appeal(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
 __handlers__ = [
     appeal.build_handler(_APPEAL_START_CMDS),
+    # * Legacy cards carry no review id; the handler accepts them only when
+    # * the tapped message is the live review card.
     CallbackQueryHandler(on_appeal_decision, pattern=r"^appeal_(approve|reject)_\S+$"),
     # * #appeal in the main group is a valid submission path alongside the
     # * DM deep link; the handler itself gates the chat. The filter keeps
