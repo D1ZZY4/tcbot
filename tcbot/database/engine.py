@@ -357,8 +357,8 @@ async def connect() -> None:
         )
     except BaseException:
         # * The engine is not published yet, so close() can never reclaim
-        # * it. Leaking it would keep a pool and its sockets alive per
-        # * failed attempt, which accumulates on the serverless path.
+        # * it. Leaking it would keep a pool and its sockets alive for
+        # * every failed connect attempt.
         await _dispose()
         raise
     log.info("PostgreSQL connected")

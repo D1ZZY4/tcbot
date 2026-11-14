@@ -343,8 +343,6 @@ class Configs:
     warn_limit: int
     webhook_url: str
     webhook_secret: str
-    webhook_secret_explicit: str
-    cron_secret: str
     community_channel_url: str
     community_group_url: str
     community_logs_url: str
@@ -417,8 +415,6 @@ class Configs:
             warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),
             webhook_url=_auto_webhook_url(),
             webhook_secret=_resolve_webhook_secret(),
-            webhook_secret_explicit=os.getenv("WEBHOOK_SECRET", "").strip(),
-            cron_secret=os.getenv("CRON_SECRET", "").strip(),
             community_channel_url=_env_or(
                 "COMMUNITY_CHANNEL_URL", _DEFAULT_COMMUNITY_CHANNEL_URL
             ),

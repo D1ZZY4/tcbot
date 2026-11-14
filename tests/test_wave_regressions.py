@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Wave regression coverage: harvest budget, flood handling, scrub, config, sync order, cron."""
+"""Wave regression coverage: harvest budget, flood handling, scrub, and config."""
 
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ from typing import Any
 
 import pytest
 
-import api.cron as cron_mod
 from tcbot import _env_list, cfg, error_reporter, parse_chat_id
 from tcbot.database import mtproto
 
@@ -115,7 +114,6 @@ def test_scrub_secrets_redacts_exact_configured_values(
             database_url="SENTINEL-DATABASE-xyz",
             api_hash="SENTINEL-APIHASH-xyz",
             webhook_secret="SENTINEL-WEBHOOK-xyz",
-            cron_secret="SENTINEL-CRON-xyz",
             redis_url="SENTINEL-REDIS-xyz",
         ),
     )
@@ -124,7 +122,6 @@ def test_scrub_secrets_redacts_exact_configured_values(
         "SENTINEL-DATABASE-xyz",
         "SENTINEL-APIHASH-xyz",
         "SENTINEL-WEBHOOK-xyz",
-        "SENTINEL-CRON-xyz",
         "SENTINEL-REDIS-xyz",
     ):
         text = error_reporter._scrub_secrets(f"leak>>{value}<<done")
@@ -165,13 +162,3 @@ def test_cfg_prefixes_is_immutable() -> None:
     with pytest.raises(AttributeError):
         first.append("__mutant__")  # type: ignore[attr-defined]
     assert "__mutant__" not in cfg.prefixes
-
-
-def test_cron_do_post_answers_405() -> None:
-    # * BaseHTTPRequestHandler init needs a live socket, so build the handler
-    # * without it and stub the reply sink; do_POST only logs plus replies.
-    inst = object.__new__(cron_mod.handler)
-    captured: dict[str, Any] = {}
-    inst._reply = lambda status, body: captured.update(status=status, body=body)  # type: ignore[attr-defined]
-    inst.do_POST()
-    assert captured == {"status": 405, "body": "Method not allowed"}

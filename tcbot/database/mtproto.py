@@ -97,8 +97,8 @@ async def start() -> bool:
     Returns True when the client connected, False when another live
     instance holds the lease, the claim failed, or Telegram rejects the
     stored key as duplicated/invalidated (Bot-API-only degraded mode:
-    every resolver returns None exactly like the serverless path, and
-    moderation is unaffected). A degraded False is NOT an error: aborting
+    every resolver returns None, and moderation is unaffected). A degraded
+    False is NOT an error: aborting
     boot over MTProto would take federation enforcement offline for a
     lookup enhancement, which is the worse trade.
 
@@ -358,8 +358,8 @@ async def _fetch_user(target_id: int) -> User | None:
 async def resolve_user(target_id: int) -> tuple[str, str | None, str | None] | None:
     """Resolve (first_name, username, last_name) for a user ID via MTProto.
 
-    Returns None when the client is not running (serverless paths), when it
-    drops mid-run, or when the peer is unknown, rate-limited, or nameless:
+    Returns None when the client is not running (not started or stopped),
+    when it drops mid-run, or when the peer is unknown, rate-limited, or nameless:
     every case just means "fall through to the next resolution source".
     Cancellation always propagates.
     """

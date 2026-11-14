@@ -332,37 +332,28 @@ async def _warm_hot_caches() -> None:
         log.debug("Cache warm-up failed (non-fatal): %s", exc)
 
 
-async def init_shared_subsystems(bot: Bot, *, start_mtproto: bool) -> None:
-    """Connect PostgreSQL/Redis and attach the error reporter (both transports)."""
+async def init_shared_subsystems(bot: Bot) -> None:
+    """Connect PostgreSQL/Redis, start MTProto, and attach the error reporter."""
     _ensure_loaded()
     log.info("Connecting to PostgreSQL...")
     await connect()
-    log.info("Running parallel setup (owner seed, Redis)...")
-    if start_mtproto:
-        owner_r, _, _mtproto_r = await asyncio.gather(
-            db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
-            redis_client.connect_if_configured(),
-            mtproto_mod.start(),
-            return_exceptions=True,
-        )
-    else:
-        owner_r, _ = await asyncio.gather(
-            db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
-            redis_client.connect_if_configured(),
-            return_exceptions=True,
-        )
-        _mtproto_r = True
-    throw_if_cancelled((owner_r, _mtproto_r))
+    log.info("Running parallel setup (owner seed, Redis, MTProto)...")
+    owner_r, _, mtproto_r = await asyncio.gather(
+        db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
+        redis_client.connect_if_configured(),
+        mtproto_mod.start(),
+        return_exceptions=True,
+    )
+    throw_if_cancelled((owner_r, mtproto_r))
     if isinstance(owner_r, BaseException):
         log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
-    if start_mtproto:
-        if isinstance(_mtproto_r, BaseException):
-            raise _mtproto_r
-        if _mtproto_r is False:
-            log.warning(
-                "MTProto degraded: another live instance owns the shared "
-                "session. Identity lookups run Bot-API-only."
-            )
+    if isinstance(mtproto_r, BaseException):
+        raise mtproto_r
+    if mtproto_r is False:
+        log.warning(
+            "MTProto degraded: another live instance owns the shared "
+            "session. Identity lookups run Bot-API-only."
+        )
     lec, let = cfg.logs_errors
     error_reporter.attach(bot, lec, let, owner_id=cfg.initial_owner_id)
 
@@ -373,7 +364,7 @@ async def _post_init(app: Application) -> None:
         raise RuntimeError(
             "API_ID/API_HASH are required for MTProto identity resolution; refusing to boot degraded."
         )
-    await init_shared_subsystems(app.bot, start_mtproto=True)
+    await init_shared_subsystems(app.bot)
     configure_enforcement_worker(app.bot)
     pg_cron_active = await pg_cron.sync_schedules()
     await sched_mod.start(cfg.database_url, database_jobs_in_pg_cron=pg_cron_active)

@@ -407,7 +407,6 @@ def _scrub_secrets(text: str) -> str:
         cfg.database_url,
         cfg.api_hash,
         cfg.webhook_secret,
-        cfg.cron_secret,
         cfg.redis_url,
     ):
         if secret and secret in text:

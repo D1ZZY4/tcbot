@@ -89,8 +89,7 @@ async def expire_due_decisions() -> None:
     expiry at query time, so the history stays readable and the sweep
     never has to rewrite it.
 
-    Called daily by APScheduler, and on demand by the serverless cron
-    endpoint (``api/cron.py``) which cannot run a persistent scheduler.
+    Called daily by APScheduler.
     """
     try:
         # * The budget belongs to the transaction itself: the run-level
@@ -106,8 +105,8 @@ async def expire_due_decisions() -> None:
             _EXPIRE_OP_TIMEOUT_S,
         )
         # * A hung expiry must fail the run, not report success: returning
-        # * normally would make the serverless cron endpoint answer 200
-        # * while the decisions were never expired.
+        # * normally would report a completed expiry while the decisions
+        # * were never expired.
         raise RuntimeError(
             "Expiry sweep timed out: no records expired; see errors above."
         ) from None
@@ -169,8 +168,7 @@ async def expire_stale_records() -> None:
     account the user deleted on Telegram is anonymized even when the
     scheduler was down.
 
-    Called daily by APScheduler, and on demand by the serverless cron
-    endpoint (``api/cron.py`` which cannot run a persistent scheduler.
+    Called daily by APScheduler.
     """
     profile_cutoff = utc_now() - timedelta(days=_MEMBER_CACHE_EXPIRE_DAYS)
     try:

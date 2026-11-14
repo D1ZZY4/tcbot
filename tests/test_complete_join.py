@@ -108,8 +108,7 @@ def test_complete_join_stops_at_the_replay_budget(
     """The replay must not run past its time budget.
 
     Telegram paces same-chat requests at 20 a minute, so an unbounded
-    replay kept the connect handler running for a quarter of an hour and
-    never finished inside a serverless request window.
+    replay kept the connect handler running for a quarter of an hour.
     """
     monkeypatch.setattr(connected_flow, "_REPLAY_BUDGET_S", 0.0)
     _install_world(monkeypatch, ban_uids=[11, 22, 33])
