@@ -164,8 +164,8 @@ All callbacks re-check the tapper's current effective role (Founder/Admin) befor
 ### Approval path
 
 1. `queues_db.resolve(request_id, "approved", admin.id)` marks the request resolved. The claim is atomic, so a concurrent approve and reject cannot both win; the loser finds the request already resolved and stops.
-2. `users_roles.add_admin(target_id, admin.id)` grants the admin role.
-3. Best-effort cleanup mirrors the direct Founder path: `users_roles.remove_role(target_id)` clears any stale Developer/Tester row (otherwise it resurrects on the next demote) and `users_cache.upsert_user(...)` refreshes the display name. Failures only log; the promotion already committed.
+2. `users_roles.add_admin(target_id, admin.id)` grants the admin role. The assignment revokes the role the target held before it in the same transaction, so a stale Developer or Tester row cannot survive the promotion.
+3. `users_cache.upsert_user(...)` refreshes the display name. Failures only log; the promotion already committed.
 4. `messages.promote_approved_log(...)` is sent to `cfg.logs`.
 5. Target is DM'd a welcome notification.
 6. The review message is edited to append `- Approved by <admin name>` and the keyboard is removed.

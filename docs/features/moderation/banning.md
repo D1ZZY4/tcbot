@@ -137,7 +137,7 @@ If `bot.username` is unavailable (e.g. before bot initialization completes), the
 
 ## Updating an existing active ban
 
-If the target already has an active ban, the bot first shows a confirmation card (existing Ban ID and reason, the new reason, plus `View Log` / `View Proof` links and `Cancel` / `Continue` buttons) instead of updating silently. Only `Continue` proceeds to proof collection; `Cancel` aborts with no ban. The confirmation lives in the `WAITING_UPDATE_CONFIRM` conversation state; a lookup outage degrades to the old straight-to-proof path.
+If the target already has an active ban, the bot first shows a confirmation card (existing Ban ID and reason, the new reason, plus `View Log` / `View Proof` links and `Cancel` / `Continue` buttons) instead of updating silently. Only `Continue` proceeds to proof collection; `Cancel` aborts with no ban. The confirmation lives in the `WAITING_UPDATE_CONFIRM` conversation state. A lookup outage replies with the database retry notice and clears the flow state, so the moderator retries instead of starting a proof round that the executor would abort.
 
 The update flow (after `Continue`):
 

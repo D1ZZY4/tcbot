@@ -353,8 +353,8 @@ it never identifies anybody.
   `COUNT(*)` over the whole table.
 - `all_users_page(*, skip: int = 0, limit: int = 200, sort_by: str = "first_name") -> list[UserDoc]`
   One server-side page. `sort_by` is validated against `_USER_SORT_FIELDS`
-  (`user_id`, `username`, `first_name`, `last_seen_at`), falling back to
-  `first_name`; `last_seen_at` sorts descending, everything else ascending.
+  (`user_id`, `username`, `first_name`, `last_updated`), falling back to
+  `first_name`; `last_updated` sorts descending, everything else ascending.
   Every accepted key maps to an indexed field and carries a `user_id`
   tie-break so the page order stays stable. The name sorts use the
   default-opclass `(first_name_lower, user_id)` and
@@ -941,8 +941,11 @@ minimum 1). A second federation-wide threshold `cfg.fed_warn_limit` (env
 
 - `add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int`
   Writes the warning decision and returns the new warning count for the
-  pair. The decision and its case land in one transaction. The count is
-  derived from the history, so it cannot disagree with it.
+  pair. The decision, its case, and the count read land in one transaction,
+  and a transaction-scoped advisory lock orders a burst of warnings for the
+  same group and user, so the count cannot lag the history or skip the
+  threshold. The count is derived from the history, so it cannot disagree
+  with it.
 - `clear_warns(user_id: int, chat_id: int) -> int`
   Revokes the active warnings of one group and returns how many were
   revoked. The history stays: the decision is revoked, never deleted.
@@ -1236,7 +1239,7 @@ Pool parameters: `decode_responses=True`, `max_connections=20`,
 
 ## Scheduler (`scheduler.py`)
 
-`start(database_url: str, warn_expiry_days: int) -> None`
+`start(database_url: str) -> None`
 spawns the `tcbot.scheduler` background asyncio task and waits (bounded by
 the same 10 s grace window as `stop()`) for the scheduler to become ready,
 so a constructor error or a hung job-store handshake reports a startup
@@ -1309,12 +1312,16 @@ Recurring jobs:
 
 | Job ID | Trigger | Purpose |
 |---|---|---|
-| `tcbot.warn_expiry_daily` | `IntervalTrigger(hours=24)`, args `[warn_expiry_days]` | Calls `expire_old_warns(warn_expiry_days)`: expires the warning decisions whose expiry has passed. The expiry is read at query time by the `warn_counts` view, so the sweep only makes the stored state match what the view already reports. Registered only when `WARN_EXPIRY_DAYS > 0`; otherwise the schedule is removed. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs expiry once, never dropping a day. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
-| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: expires the timed mutes that have passed their expiry and sweeps the stale runtime state. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. |
+| `tcbot.expiry_daily` | `IntervalTrigger(hours=24)` | Calls `expire_due_decisions()`: moves the ban, mute, and role-assignment rows whose deadline passed to `expired` and queues the revoke runs that lift the restrictions on Telegram. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs the sweep once. On Vercel the same function runs on demand through the cron endpoint because no persistent scheduler exists there (see [`../operations/vercel.md`](../operations/vercel.md)). |
+| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. |
 
-| `tcbot.db_cleanup_weekly` (legacy) | removed on every startup | Legacy weekly member-cache cleanup schedule. Retired; the removal runs against the `postgres` store after the scheduler started (a removal issued before `start()` only searches the pending-job list and would leave the persisted row firing). `_cleanup_old_records()` stays importable as a no-op shim so a persisted record that still points at it can deserialize without `AttributeError`. |
+Retired schedules are removed on every startup:
 
-| `tcbot.enforcement_sync` (retired) | removed on every startup | The enforcement sweep that the `/tcsync` command drove. The command and the sweep were removed, so the schedule is removed on every startup and can no longer fire. |
+| Job ID | Purpose |
+|---|---|
+| `tcbot.warn_expiry_daily` | The old warn-expiry job patched warnings that had no deadline, which the community schema forbids. The removal runs against the `postgres` store after the scheduler started. |
+| `tcbot.db_cleanup_weekly` | Legacy weekly member-cache cleanup. `_cleanup_old_records()` stays importable as a no-op shim so a persisted record that still points at it can deserialize without `AttributeError`. |
+| `tcbot.enforcement_sync` | The enforcement sweep that the retired `/tcsync` command drove. The command and the sweep were removed, so the schedule can no longer fire. |
 
 Persistent per-ban unban jobs: there are NONE in the current code. The
 scheduler registers only the periodic jobs above (plus the legacy
