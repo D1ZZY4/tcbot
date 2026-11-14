@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import functools
 import math
 import os
 import ssl
@@ -26,8 +27,8 @@ from tcbot.modules.helper.messages import replies, safe_edit
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import build_prefixed_filters
-from tcbot.utils.time_and_date import elapsed_ms, monotonic
+from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
+from tcbot.utils.time_and_date import elapsed_ms, monotonic, utc_now
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -38,6 +39,8 @@ log = get_logger(__name__)
 # * download + upload). Slow links finish well under this; the handler
 # * bounds the whole run so a hung route cannot stall moderation traffic.
 _SPEEDTEST_TIMEOUT: int = 180
+# * A full run moves a larger sample, so it gets its own ceiling.
+_SPEEDTEST_TIMEOUT_FULL: int = 300
 
 _SPEEDTEST_CONFIG_URL: str = "https://www.speedtest.net/speedtest-config.php"
 _SPEEDTEST_SERVERS_URL: str = "https://www.speedtest.net/speedtest-servers-static.php"
@@ -52,7 +55,16 @@ _DOWNLOAD_SIZES: list[int] = [250, 500]
 _UPLOAD_SIZES: list[int] = [131_072, 262_144]
 _DOWNLOAD_THREADS: int = 2
 _UPLOAD_THREADS: int = 2
-_CLOSEST_SERVERS: int = 5
+# * The full mode trades bandwidth for a sample large enough that TLS and
+# * TCP slow start no longer dominate the result. It stays opt-in because
+# * the bot shares the host link with Telegram traffic.
+_FULL_DOWNLOAD_SIZES: list[int] = [1000, 2000, 4000]
+_FULL_UPLOAD_SIZES: list[int] = [1_048_576, 2_097_152]
+_FULL_THREADS: int = 4
+# * Pinging ten candidates costs one parallel round trip, and a wider set
+# * keeps a distant route from winning only because the nearby list was
+# * too short.
+_CLOSEST_SERVERS: int = 10
 _PING_SAMPLES: int = 2
 
 # * Per-request ceilings inside the executor: the whole-run timeout above
@@ -281,8 +293,18 @@ def _closest_servers(
         origin = (float(client["lat"]), float(client["lon"]))
     except (KeyError, ValueError, TypeError) as exc:
         raise RuntimeError("speedtest client location unknown") from exc
+    country = str(client.get("country", "")).strip().upper()
+    same_country = [
+        server
+        for server in servers
+        if str(server.get("cc", "")).strip().upper() == country
+    ]
+    # * Prefer the client's own country when it has enough servers; a
+    # * cross-country route can win a latency race only when the local list
+    # * is too short to offer a real choice.
+    pool = same_country if len(same_country) >= _CLOSEST_SERVERS else servers
     scored: list[tuple[float, dict[str, str]]] = []
-    for server in servers:
+    for server in pool:
         try:
             dest = (float(server["lat"]), float(server["lon"]))
         except KeyError, ValueError, TypeError:
@@ -359,12 +381,16 @@ def _pick_best(
     return server, ping_ms, base
 
 
-def _download(base: str, cancel: threading.Event | None = None) -> tuple[float, int]:
+def _download(
+    base: str, cancel: threading.Event | None = None, *, full: bool = False
+) -> tuple[float, int]:
     """Concurrent download over the bounded size subset; returns (bps, bytes)."""
     _check_cancel(cancel)
+    sizes = _FULL_DOWNLOAD_SIZES if full else _DOWNLOAD_SIZES
+    threads = _FULL_THREADS if full else _DOWNLOAD_THREADS
     urls: list[str] = []
-    for size in _DOWNLOAD_SIZES:
-        for _ in range(_DOWNLOAD_THREADS):
+    for size in sizes:
+        for _ in range(threads):
             stamp = int(monotonic() * 1000)
             urls.append(f"{base}/random{size}x{size}.jpg?r={stamp}")
 
@@ -374,7 +400,7 @@ def _download(base: str, cancel: threading.Event | None = None) -> tuple[float, 
 
     start = monotonic()
     total = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=_DOWNLOAD_THREADS) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as pool:
         futures = [pool.submit(_fetch, url) for url in urls]
         for fut in concurrent.futures.as_completed(futures):
             try:
@@ -387,12 +413,16 @@ def _download(base: str, cancel: threading.Event | None = None) -> tuple[float, 
     return total / elapsed_s * 8.0, total
 
 
-def _upload(base: str, cancel: threading.Event | None = None) -> tuple[float, int]:
+def _upload(
+    base: str, cancel: threading.Event | None = None, *, full: bool = False
+) -> tuple[float, int]:
     """Concurrent upload over the bounded size subset; returns (bps, bytes)."""
     _check_cancel(cancel)
+    sizes = _FULL_UPLOAD_SIZES if full else _UPLOAD_SIZES
+    threads = _FULL_THREADS if full else _UPLOAD_THREADS
     tasks: list[int] = []
-    for size in _UPLOAD_SIZES:
-        tasks.extend([size] * _UPLOAD_THREADS)
+    for size in sizes:
+        tasks.extend([size] * threads)
 
     def _post(size: int) -> int:
         body = os.urandom(size)
@@ -406,7 +436,7 @@ def _upload(base: str, cancel: threading.Event | None = None) -> tuple[float, in
 
     start = monotonic()
     total = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=_UPLOAD_THREADS) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as pool:
         futures = [pool.submit(_post, size) for size in tasks]
         for fut in concurrent.futures.as_completed(futures):
             try:
@@ -419,7 +449,9 @@ def _upload(base: str, cancel: threading.Event | None = None) -> tuple[float, in
     return total / elapsed_s * 8.0, total
 
 
-def _run_speedtest_locked(cancel: threading.Event | None = None) -> dict:
+def _run_speedtest_locked(
+    cancel: threading.Event | None = None, *, full: bool = False
+) -> dict:
     """Run the measurement and release the one-run lock when it ends.
 
     The lock belongs to the worker, not to the handler: a timed-out run
@@ -428,12 +460,14 @@ def _run_speedtest_locked(cancel: threading.Event | None = None) -> dict:
     the first one still owns the host's bandwidth.
     """
     try:
-        return _run_speedtest(cancel)
+        return _run_speedtest(cancel, full=full)
     finally:
         _run_lock.release()
 
 
-def _run_speedtest(cancel: threading.Event | None = None) -> dict:
+def _run_speedtest(
+    cancel: threading.Event | None = None, *, full: bool = False
+) -> dict:
     """Run a full test synchronously; intended for thread-executor use only.
 
     No provider dependency remains: config, server list, latency,
@@ -454,13 +488,15 @@ def _run_speedtest(cancel: threading.Event | None = None) -> dict:
     if not closest:
         raise RuntimeError("speedtest no usable servers")
     server, ping_ms, base = _pick_best(closest, cancel)
-    download_bps, bytes_received = _download(base, cancel)
-    upload_bps, bytes_sent = _upload(base, cancel)
+    download_bps, bytes_received = _download(base, cancel, full=full)
+    upload_bps, bytes_sent = _upload(base, cancel, full=full)
+    rounded_ping = round(ping_ms, 1)
     return {
         "download": download_bps,
         "upload": upload_bps,
-        "ping": ping_ms,
-        "timestamp": str(int(monotonic())),
+        "ping": rounded_ping,
+        # * A real epoch timestamp, not monotonic seconds since boot.
+        "timestamp": str(int(utc_now().timestamp())),
         "bytes_sent": bytes_sent,
         "bytes_received": bytes_received,
         "client": {
@@ -474,7 +510,7 @@ def _run_speedtest(cancel: threading.Event | None = None) -> dict:
         "server": {
             "name": server.get("name", "N/A"),
             "sponsor": server.get("sponsor", "N/A"),
-            "latency": ping_ms,
+            "latency": rounded_ping,
             "country": server.get("country", "N/A"),
             "cc": server.get("cc", "N/A"),
             "lat": server.get("lat", "N/A"),
@@ -525,8 +561,10 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None:
         return
     locale = await locale_for_update(update)
+    full = any(arg.lower() == "full" for arg in parse_cmd_args(msg.text))
+    status_key = "netspeed.status.running_full" if full else "netspeed.status.running"
     try:
-        notice = await msg.reply_text(t("netspeed.status.running", locale, plain=True))
+        notice = await msg.reply_text(t(status_key, locale, plain=True))
     except Exception as exc:
         log.debug("cmd_speedtest initial reply failed: %s", exc)
         return
@@ -544,6 +582,7 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     cancel = threading.Event()
     submitted = False
+    timeout_s = _SPEEDTEST_TIMEOUT_FULL if full else _SPEEDTEST_TIMEOUT
     try:
         loop = asyncio.get_running_loop()
         # * A bad route can hang the measurement for minutes; bound the
@@ -551,15 +590,16 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * releases the worker too: the cancel flag stops it at the next
         # * request boundary, so the host's bandwidth is freed instead of
         # * staying saturated by a run nobody is waiting for.
-        async with asyncio.timeout(_SPEEDTEST_TIMEOUT):
+        async with asyncio.timeout(timeout_s):
             future = loop.run_in_executor(
-                _speedtest_executor(), _run_speedtest_locked, cancel
+                _speedtest_executor(),
+                functools.partial(_run_speedtest_locked, cancel, full=full),
             )
             submitted = True
             result: dict = await future
     except TimeoutError:
         cancel.set()
-        log.warning("Speedtest timed out after %ds", _SPEEDTEST_TIMEOUT)
+        log.warning("Speedtest timed out after %ds", timeout_s)
         await safe_edit(
             notice,
             t("netspeed.status.timeout", locale, plain=True),

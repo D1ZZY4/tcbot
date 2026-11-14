@@ -88,7 +88,21 @@ def test_run_speedtest_shape_feeds_renderer(monkeypatch: pytest.MonkeyPatch) -> 
     assert result["share"] is None
     assert result["bytes_sent"] == uploads
     assert result["bytes_received"] == downloads * 1000
-    assert int(result["timestamp"]) > 0
+    # * Epoch seconds, not the monotonic uptime counter.
+    assert int(result["timestamp"]) > 1_700_000_000
+
+
+def test_full_mode_moves_a_larger_sample(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The full mode must not reuse the tiny quick-mode payload."""
+    _patch_fetch(monkeypatch)
+
+    result = netspeed._run_speedtest(full=True)
+
+    downloads = len(netspeed._FULL_DOWNLOAD_SIZES) * netspeed._FULL_THREADS
+    uploads = sum(netspeed._FULL_UPLOAD_SIZES) * netspeed._FULL_THREADS
+    assert result["bytes_received"] == downloads * 1000
+    assert result["bytes_sent"] == uploads
+    assert result["server"]["latency"] == result["ping"]
 
 
 def test_run_speedtest_upload_independent_of_download(
@@ -111,6 +125,35 @@ def test_distance_orders_closest_first() -> None:
     near = netspeed._distance_km(origin, (-7.24, 112.74))
     far = netspeed._distance_km(origin, (0.0, 0.0))
     assert near < far
+
+
+def test_country_preference_keeps_cross_border_servers_out() -> None:
+    """A full local list is preferred over a slightly closer foreign server."""
+    client = {"lat": "40.0", "lon": "-75.0", "country": "US"}
+    servers = [
+        {
+            "id": str(index),
+            "url": "http://x/upload.php",
+            "lat": "41.0",
+            "lon": "-75.0",
+            "cc": "US",
+        }
+        for index in range(10)
+    ]
+    servers.append(
+        {
+            "id": "far",
+            "url": "http://y/upload.php",
+            "lat": "40.1",
+            "lon": "-75.0",
+            "cc": "CA",
+        }
+    )
+
+    closest = netspeed._closest_servers(servers, client)
+
+    assert closest
+    assert all(server["cc"] == "US" for server in closest)
 
 
 def test_fetch_config_ignores_bad_ids(monkeypatch: pytest.MonkeyPatch) -> None:

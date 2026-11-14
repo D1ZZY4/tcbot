@@ -20,7 +20,8 @@ body = """
 `/ping`
 `/p`
 `/speedtest`
-`/st`"""
+`/st`
+`/st full`"""
 
 # Runtime strings for /ping and /speedtest.
 # [status] entries send without parse_mode: plain=True at the call site.
@@ -30,6 +31,7 @@ body = """
 [status]
 pinging = "Ping..."
 running = "Tes kecepatan berjalan, tunggu sebentar..."
+running_full = "Tes kecepatan penuh berjalan. Ini memindahkan lebih banyak data dan bisa sesaat memakai jalur jaringan host."
 timeout = "Tes kecepatan habis waktu. Coba lagi nanti."
 busy = "Tes kecepatan sudah berjalan. Tunggu sampai selesai."
 failed = "Tes kecepatan gagal. Coba lagi nanti."
