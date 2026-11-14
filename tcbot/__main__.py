@@ -552,7 +552,12 @@ def main() -> None:
             app.run_polling(
                 drop_pending_updates=True,
                 allowed_updates=Update.ALL_TYPES,
-                bootstrap_retries=5,
+                # * A transient Telegram/proxy outage at boot must not kill
+                # * the process: the 24/7 runner counts every exit as a
+                # * crash and can give up after five of them in ten minutes.
+                # * Retry the bootstrap until the network recovers instead.
+                # * An invalid token still aborts, because PTB re-raises it.
+                bootstrap_retries=-1,
             )
     except SystemExit:
         raise
