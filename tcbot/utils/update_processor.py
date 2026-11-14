@@ -10,7 +10,6 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from telegram import Update
 from telegram.ext import BaseUpdateProcessor
 
 if TYPE_CHECKING:
@@ -38,15 +37,18 @@ def conversation_key(update: object) -> tuple[int, int] | None:
     The key matches the ``per_chat=True, per_user=True`` conversations the
     project registers: one conversation per (chat, user) pair. An update
     without a chat or a user cannot belong to a conversation, so it is
-    processed without a lock.
+    processed without a lock. The read is duck-typed so the flow scope can
+    reuse the same rule without constructing a ``telegram.Update``.
     """
-    if not isinstance(update, Update):
-        return None
-    chat = update.effective_chat
-    user = update.effective_user
+    chat = getattr(update, "effective_chat", None)
+    user = getattr(update, "effective_user", None)
     if chat is None or user is None:
         return None
-    return (chat.id, user.id)
+    chat_id = getattr(chat, "id", None)
+    user_id = getattr(user, "id", None)
+    if not isinstance(chat_id, int) or not isinstance(user_id, int):
+        return None
+    return (chat_id, user_id)
 
 
 class KeyedUpdateProcessor(BaseUpdateProcessor):

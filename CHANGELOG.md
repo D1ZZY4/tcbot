@@ -21,6 +21,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **Shared rules have one owner** (`tcbot/database/moderation_db.py`, `tcbot/database/mutes_db.py`, `tcbot/database/bans_db/_writes.py`, `tcbot/utils/update_processor.py`, `tcbot/modules/helper/scope.py`, `tcbot/database/documents.py`, `tcbot/database/schema/loader.py`): the remaining-lifetime calculation and the conversation key were implemented twice, and the schema loader and documents module carried an unused statement builder and a stale role vocabulary that contradicted `users_roles.RoleName`. Each rule now has one implementation, and the unreferenced copies are gone. Behavior changes: none.
+
 - **The membership cache is written during MTProto harvest** (`tcbot/database/users_cache.py`, `tcbot/database/mtproto.py`): `chat_members` had readers, a retention sweep, and a view but no writer, so the community directory was always empty. The member harvest now records the group membership alongside the identity. Behavior changes: the daily stale-membership cleanup has rows to remove.
 
 - **Every moderation decision owns a case that closes with it** (`tcbot/database/moderation_db.py`, `tcbot/database/bans_db/_writes.py`, `tcbot/database/warns_db.py`, `tcbot/database/mutes_db.py`, `tcbot/database/kicks_db.py`): the investigation that holds a decision was opened with the decision and never closed, so the next decision about the same user reused it and the history of the community collapsed into one case per user. The case now closes with the decision that opened it, every incident owns one case, and a re-ban opens its own. Behavior changes: the case of a decision is `resolved` once the decision is filed, and each incident has its own case.
@@ -119,8 +121,6 @@ All notable changes to this project are documented here. For workflow details, s
 - **Speedtest probes servers concurrently** (`tcbot/modules/netspeed.py`): best-server latency probes now run in parallel instead of one server after another. Behavior changes: server selection is faster on far routes; results keep the same fields.
 
 - **The default keep-alive port is published on Replit** (`.replit`, `replit.md`): the port list now carries the application default port 5000 next to the 8080 mapping the webhook uses, so the keep-alive server has a published path on the port it listens on when `PORT` is left at the default. The webhook still requires `PORT=8080`. Behavior changes: the keep-alive and health endpoints are reachable on port 5000; webhook delivery is unchanged.
-
-### Changed
 
 - **The startup path has one shape** (`tcbot/__main__.py`): `init_shared_subsystems` carried a flag that only the removed serverless transport used to skip MTProto and to build a different exit contract. The function now always starts the owner seed, Redis, and MTProto through one branch, so a long-lived transport cannot be booted with a partial subsystem set by mistake. Behavior changes: none; webhook and polling boot exactly as before.
 

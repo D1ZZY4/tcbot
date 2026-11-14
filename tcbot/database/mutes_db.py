@@ -156,7 +156,9 @@ async def record_mute(
                         target_user_id=user_id,
                         actor_user_id=admin_id,
                         reason=reason,
-                        duration_seconds=_duration_seconds(expires_at, now),
+                        duration_seconds=moderation_db.remaining_seconds(
+                            expires_at, now
+                        ),
                         created_at=now,
                         expires_at=expires_at,
                         status="active",
@@ -192,22 +194,6 @@ async def record_mute(
             user_id,
         )
         return await run_transaction(_work)
-
-
-def _duration_seconds(until: datetime | None, now: datetime) -> int | None:
-    """Return the remaining lifetime of a decision in whole seconds.
-
-    ``now`` is the moment the decision was created, taken once by the
-    caller so ``created_at`` and the duration describe the same instant.
-    A deadline that passed while the write was waiting is a bad request:
-    the schema refuses an expiry that is not after creation.
-    """
-    if until is None:
-        return None
-    remaining = int((until - now).total_seconds())
-    if remaining < 0:
-        raise ValueError("until must be in the future")
-    return remaining
 
 
 async def _open_case(

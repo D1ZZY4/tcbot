@@ -24,11 +24,29 @@ from tcbot.database.users_cache import ensure_users
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 # * The statuses of a case that still holds an investigation. A case in
 # * one of them can carry another decision about the same subject.
 OPEN_CASE_STATUSES: tuple[str, ...] = ("open", "collecting_evidence", "under_review")
+
+
+def remaining_seconds(deadline: datetime | None, now: datetime) -> int | None:
+    """Return the remaining lifetime of a decision in whole seconds.
+
+    ``now`` is the moment the decision was created, taken once by the
+    caller so ``created_at`` and the duration describe the same instant.
+    A deadline that passed while the write was waiting is a bad request:
+    the schema refuses an expiry that is not after creation.
+    """
+    if deadline is None:
+        return None
+    remaining = int((deadline - now).total_seconds())
+    if remaining < 0:
+        raise ValueError("a decision expiry must be in the future")
+    return remaining
 
 
 async def open_case(

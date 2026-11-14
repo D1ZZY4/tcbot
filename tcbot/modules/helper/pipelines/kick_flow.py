@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# * Per-action BuildReason and BuildProof instances; imported by kicking.py
+# * Per-action BuildReason and BuildProof instances; imported by kick.py
 reason = BuildReason("kick")
 proof = BuildProof("kick")
 

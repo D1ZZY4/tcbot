@@ -20,6 +20,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+# * The conversation key has one owner: the update processor that serialises
+# * the updates of one (chat, user) pair. The flow scope uses the same key,
+# * so a payload can never belong to a different pair than the one the
+# * conversation runs under.
+from tcbot.utils.update_processor import conversation_key
+
 if TYPE_CHECKING:
     from collections.abc import Collection
 
@@ -29,21 +35,6 @@ if TYPE_CHECKING:
 # * Key holding the per-user map of conversation scopes inside
 # * ``ctx.user_data``.
 _SCOPES_KEY = "tc_flow_scopes"
-
-
-def conversation_key(update: Update) -> tuple[int, int] | None:
-    """Return the (chat id, user id) key of the conversation owning ``update``.
-
-    This mirrors the key python-telegram-bot builds for a conversation
-    registered with ``per_chat=True, per_user=True``. ``None`` when the
-    update carries no chat or no user, which means it cannot belong to a
-    conversation.
-    """
-    chat = update.effective_chat
-    user = update.effective_user
-    if chat is None or user is None:
-        return None
-    return (chat.id, user.id)
 
 
 def flow_scope(ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> dict[str, Any]:

@@ -89,22 +89,6 @@ async def _open_case(
     )
 
 
-def _duration_seconds(until_date: datetime | None, now: datetime) -> int | None:
-    """Return the remaining lifetime of a decision in whole seconds.
-
-    ``now`` is the moment the decision was created, taken once by the
-    caller so ``created_at`` and the duration describe the same instant.
-    A deadline that passed while the write was waiting is a bad request:
-    the schema refuses an expiry that is not after creation.
-    """
-    if until_date is None:
-        return None
-    remaining = int((until_date - now).total_seconds())
-    if remaining < 0:
-        raise ValueError("until_date must be in the future")
-    return remaining
-
-
 async def _reuse_existing(
     target_id: int, error: Exception, ban_id: str, *, auto_id: bool
 ) -> BanDoc:
@@ -185,7 +169,9 @@ async def create_ban(
                         target_user_id=target_id,
                         actor_user_id=admin_id,
                         reason=reason,
-                        duration_seconds=_duration_seconds(until_date, now),
+                        duration_seconds=moderation_db.remaining_seconds(
+                            until_date, now
+                        ),
                         created_at=now,
                         expires_at=until_date,
                         status="active",
@@ -325,7 +311,9 @@ async def update_ban(
                         target_user_id=target_id,
                         actor_user_id=admin_id,
                         reason=reason,
-                        duration_seconds=_duration_seconds(until_date, now),
+                        duration_seconds=moderation_db.remaining_seconds(
+                            until_date, now
+                        ),
                         created_at=now,
                         expires_at=until_date,
                         status="active",

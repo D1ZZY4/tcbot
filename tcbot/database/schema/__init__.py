@@ -29,7 +29,6 @@ from .loader import (
     execute_statements,
     file_statements,
     read_schema_file,
-    schema_statements,
 )
 
 if TYPE_CHECKING:
@@ -53,7 +52,6 @@ __all__ = [
     "apply_schema",
     "drop_schema",
     "read_schema_file",
-    "schema_statements",
     "seed_statements",
 ]
 

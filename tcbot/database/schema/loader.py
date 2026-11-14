@@ -48,14 +48,6 @@ def file_statements(name: str, schema: str) -> list[str]:
     return split_statements(raw)
 
 
-def schema_statements(schema: str) -> list[str]:
-    """Return every statement of the schema, in the order they apply."""
-    statements: list[str] = []
-    for name in SCHEMA_FILES:
-        statements.extend(file_statements(name, schema))
-    return statements
-
-
 def split_statements(sql: str) -> list[str]:
     """Return the statements of one SQL text.
 
