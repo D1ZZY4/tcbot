@@ -232,7 +232,7 @@ The trigger uses `>=` for per-group (retry-safe after total enforcement failure)
 6. The warning slate is cleared only where the ban landed. A complete enforcement (no transient failure) calls `warns_db.clear_all_warns(target_id)` so a later unban does not re-ban on stale counts. A partial enforcement calls `warns_db.clear_warns_for_chats(target_id, landed_chats)` instead: the groups where the ban failed keep their warnings, so their threshold can fire again. Clearing everything after a partial enforcement would leave those groups with no warning and no ban.
 7. The originating group receives a reply that the user hit the warn limit and has been federation-banned, including the applied-to summary.
 8. If the user already holds an active federation ban, a new ban document is not created; `fan_out()` still runs to ensure enforcement in any newly connected groups.
-9. A newly created ban record converges on one canonical active ban: `deactivate_extra_active_bans` suppresses a duplicate created by a concurrent threshold ban, so `/check` and the appeal deep link always agree on the same record.
+9. A newly created ban record is the only active ban of the target: a partial unique index refuses a second one, so `/check` and the appeal deep link always agree on the same record.
 
 Both auto-ban branches behave as follows:
 

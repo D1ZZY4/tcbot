@@ -88,6 +88,7 @@ tcbot/
 │   │   ├── _queries.py         Reads: active ban, ban by reference, per-user history
 │   │   ├── _writes.py          Writes: create, update, review slot, appeal, decision
 │   │   └── _compose.py         Joins a decision with its messages and appeals
+│   ├── moderation_db.py     Shared write path of the decisions: case, proof, closing
 │   ├── groups_db.py        Connected groups, group configuration, join requests
 │   ├── users_cache.py      Telegram identity cache operations
 │   ├── users_roles.py      Role assignments, effective-role resolution, the permission catalog

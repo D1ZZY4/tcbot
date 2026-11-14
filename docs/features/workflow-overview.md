@@ -91,7 +91,7 @@ Clarification: explanation of the situation
 Agreement: commitment to follow community rules
 ```
 
-The original banning admin has a 12-hour priority review window. During that window only the banning admin (`admin_user_id` on the ban) can act; other reviewers see the pending-review card. After the window, any Founder or Admin (effective role) can review the appeal. When the ban record carries no usable banning admin (missing or zero `admin_user_id`), the window does not apply. A review card left pending for more than 72 hours is cleared so the user can submit a fresh appeal, and a rejected appeal cannot be re-submitted for 24 hours.
+The original banning admin has a 12-hour priority review window. During that window only the banning admin (`actor_user_id` on the ban) can act; other reviewers see the pending-review card. After the window, any Founder or Admin (effective role) can review the appeal. When the ban record carries no usable banning admin (missing or zero `actor_user_id`), the window does not apply. A review card left pending for more than 72 hours is cleared so the user can submit a fresh appeal, and a rejected appeal cannot be re-submitted for 24 hours.
 
 ## Group connection flow
 

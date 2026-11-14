@@ -516,8 +516,7 @@ privilege.
 
 - `is_admin(user_id: int) -> bool`: existence check on an active `admin` assignment.
 - `is_staff(user_id: int, *, fresh: bool = False) -> bool`: `get_effective_role(user_id, fresh=fresh) in ("founder", "admin")`. Keeps the historical fail-open-to-`False` contract: lookup failures log at WARNING and return `False`; cancellation still propagates. Callers that need a retry hint on outage use `get_effective_role` directly (like the appeal-review path and decorators). Enforcement callers (disconnect, group-language write) use `fresh=True` so a demotion is never hidden for the 60 s TTL; display-only callers keep the cached path.
-- `add_admin(user_id: int, promoted_by: int) -> None`: grants the admin role. Invalidates the target's effective role cache.
-- `remove_admin(user_id: int) -> bool`: revokes the admin role; returns whether an assignment was revoked.
+- `add_admin(user_id: int, promoted_by: int) -> None`: grants the admin role. It revokes the role the target held before it in the same transaction, so the assignment that follows the grant is the only active one. Invalidates the target's effective role cache.
 - `all_admins() -> list[AdminDoc]`: all active admin assignments.
 - `admin_count() -> int`: `COUNT(*)`.
 - `set_role(user_id: int, role: str, assigned_by: int) -> None`: grants a developer or tester role. A role outside `VALID_ROLES` raises, so a stored "admin" or "founder" can never be written through this path.
@@ -529,7 +528,9 @@ privilege.
 
 Granting and revoking are one transaction: the revocation and the
 assignment land together, so a user never holds two active roles and the
-database guard sees a single change.
+database guard sees a single change. A caller must not revoke the roles
+again after the grant: the second revocation would also revoke the role
+that was just written.
 
 ### Permissions
 
@@ -605,6 +606,32 @@ a subject, a status (`open`, `collecting_evidence`, `evidence_failed`,
 opener, an assignee, and a closer. `requires_evidence` tells the decision
 whether a proof is mandatory.
 
+A case opens with its decision and closes with it: the case, the archived
+proof, and the decision land in one transaction, and the case moves to
+`resolved` with the actor that filed it. Every incident therefore owns one
+case, and the next decision about the same subject opens a new one. A case
+that stayed open would be picked up by the next decision, and the history
+of the community would collapse into one case per user.
+
+The evidence policy of a case is immutable. A decision that may stand on
+its own (an automated threshold ban) only reuses a case that does not
+demand evidence: the database refuses a decision that promises proof it
+does not carry, so inheriting an unrelated evidence requirement would
+make the decision fail instead of being filed.
+
+### The shared write path (`moderation_db.py`)
+
+Every decision belongs to a case, and a manual ban cites an archived proof.
+The helpers that write those three rows together live in
+`moderation_db.py`, so the ban, mute, warning, and kick paths cannot drift
+apart on the case lifecycle or on the evidence batch.
+
+| Function | Purpose |
+|---|---|
+| `open_case(sess, subject_user_id, actor_user_id, *, title, summary, severity, requires_evidence) -> int` | Returns the open case of the subject, or opens one for the decision. |
+| `archive_proof(sess, case_id, uploader_user_id, proof_message_id, destination_chat_id) -> int \| None` | Archives one proof message and returns the batch id. The batch walks `queued`, `uploading`, `completed`. |
+| `close_case(sess, case_id, actor_user_id) -> None` | Closes the case of a decision that was filed. A case that was closed by somebody else keeps its own closing actor and moment. |
+
 ### Appeals and message references
 
 `moderation_appeals` is one appeal against one ban. The composite foreign
@@ -626,9 +653,9 @@ reader sees one document.
 | Field | Type | Meaning |
 |---|---|---|
 | `ban_id` | `BanId` (str) | The public reference (`external_ref`) of the decision. |
-| `banned_user_id` | `UserId` | Target Telegram user ID. |
+| `target_user_id` | `UserId` | Target Telegram user ID. |
 | `reason` | `str` | Moderation reason. |
-| `admin_user_id` | `UserId` | Who created or last updated the decision. |
+| `actor_user_id` | `UserId` | Who created or last updated the decision. |
 | `proof_message_id` | `int` | Uploaded proof message ID in the proof destination. |
 | `log_message_id` | `int` | Audit log message ID. |
 | `previous_proof_message_id` | `int \| None` | Prior proof ID when an active ban was updated. |
@@ -665,7 +692,7 @@ reader sees one document.
 
 ### Mutations
 
-- `create_ban(target_id: int, reason: str, admin_id: int, proof_msg_id: int, log_msg_id: int, ban_id: str | None = None, *, until_date: datetime | None = None, duration_str: str | None = None) -> BanDoc`
+- `create_ban(target_id: int, reason: str, admin_id: int, proof_msg_id: int, log_msg_id: int, ban_id: str | None = None, *, until_date: datetime | None = None, duration_str: str | None = None, action_origin: str = "manual") -> BanDoc`
   Inserts a new active ban and returns the stored row, so the caller sees
   exactly what a later read would return. If `ban_id` is `None`, one is
   generated. A violation of the one-active-ban-per-user constraint is
@@ -674,20 +701,20 @@ reader sees one document.
   constraint on a generated id is retried once with a fresh id, because
   the caller never chose that id. The same violation on an id the caller
   supplied is never swallowed, because the caller reuses the id for the
-  appeal link and the log patch.
+  appeal link and the log patch. An `automated` origin may stand without
+  archived proof; a `manual` one may not.
 - `update_ban(ban_id: str, reason: str, admin_id: int, new_proof_id: int, new_log_id: int = 0, old_proof_id: int = 0, old_log_id: int = 0, *, until_date: datetime | None = None, duration_str: str | None = None) -> BanDoc | None`
-  One `UPDATE ... RETURNING`: updates reason, actor, proof/log IDs (moving
-  the old ones to `previous_*`), timestamps and the expiry, and increments
-  `update_count`.
+  Files a re-ban: a new decision that supersedes the active one, with the
+  new reason, the new proof, and its own case. The superseded decision
+  keeps its reason, its actor, and its timestamps, so the history of the
+  incident stays readable.
 - `set_log_message_id(ban_id: str, log_msg_id: int) -> None`
   Patches only the audit log message ID (used when the ban log is edited).
 - `deactivate_all_active_bans(user_id: int) -> int`
-  Revokes every active ban for a user in one statement; returns the
-  count. Used by unban and appeal-approval flows to clear any duplicate
-  active records.
-- `deactivate_extra_active_bans(user_id: int, keep_ban_id: str) -> int`
-  Revokes all active bans except the canonical `keep_ban_id`
-  (ban-update cleanup); returns the count.
+  Revokes the active ban of a user in one statement; returns the count.
+  This is the single authoritative write of an unban: if it fails, the user
+  is still banned in the database while the chats say otherwise, and the
+  join path would ban the user again on the next membership event.
 - `submit_appeal(ban_id: str, appellant_user_id: int, appeal_text: str, review_message_id: int) -> bool`
   Records the appeal and claims the review slot in one transaction. The
   claim is a conditional update on the decision, so the database decides
@@ -892,9 +919,9 @@ issued in and it never reaches another group.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `user_id` | `UserId` | Warned user. |
+| `target_user_id` | `UserId` | Warned user. |
 | `reason` | `str` | Warning reason. |
-| `admin_id` | `UserId` | Admin who warned. |
+| `actor_user_id` | `UserId` | Moderator who warned. |
 | `chat_id` | `ChatId` | Group where the warning was issued. |
 | `timestamp` | `datetime` | Warning time. |
 
@@ -972,10 +999,10 @@ federation-wide action.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `user_id` | `UserId` | Kicked user. |
+| `target_user_id` | `UserId` | Kicked user. |
 | `chat_id` | `ChatId` | Group where the kick happened. |
 | `reason` | `str` | Kick reason. |
-| `admin_id` | `UserId` | Admin who kicked. |
+| `actor_user_id` | `UserId` | Moderator who kicked. |
 | `timestamp` | `datetime` | Kick time. |
 
 - `log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> None`
@@ -996,10 +1023,10 @@ the community.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `user_id` | `UserId` | Muted user. |
+| `target_user_id` | `UserId` | Muted user. |
 | `chat_id` | `ChatId \| None` | Always `None`: a mute is community-scoped. |
 | `reason` | `str` | Mute reason. |
-| `admin_id` | `UserId` | Admin who muted. |
+| `actor_user_id` | `UserId` | Moderator who muted. |
 | `timestamp` | `datetime` | Mute time. |
 | `duration_secs` | `int \| None` | Set for timed mutes, `NULL` for permanent mutes. |
 
@@ -1019,7 +1046,7 @@ out `restrict_chat_member` for every active mute when a new group connects.
 
 ### Mutations
 
-- `record_mute(user_id: int, reason: str, admin_id: int, *, until_date: datetime | None = None, duration_str: str | None = None) -> int`
+- `record_mute(user_id: int, chat_id: int, reason: str, admin_id: int, *, until: datetime | None = None) -> int`
   Writes the community-scoped mute decision and returns its row ID. The
   decision and its case land in one transaction. A violation of the
   one-active-mute-per-user constraint is treated as a lost race: the
@@ -1040,8 +1067,12 @@ out `restrict_chat_member` for every active mute when a new group connects.
   full list.
 - `user_mute_count(user_id: int) -> int`
   Total mute audit records for a user.
-- `migrate_records(old_chat_id: int, new_chat_id: int) -> bool`
-  Chat-migration repoint for the chat-scoped records of a group.
+
+A basic group that becomes a supergroup keeps its history under the new
+chat id. The repoint is one transaction in the database
+(`groups_db.migrate_group`): the registry, the configuration, the
+membership, the open request, and the decisions of the group move
+together, and the origin chat of a decision moves with it.
 
 ## Promotion requests (`queues_db.py`, table `promotion_requests`)
 
@@ -1253,9 +1284,17 @@ bot for seconds, not for the main engine's timeout.
 The `apscheduler_jobs` table is the library's own schema, so the
 application migrations do not mirror it. It is created on the scheduler
 worker thread when the store is built, and the store subclass makes the
-library's own creation call a no-op: `scheduler.start()` runs on the event
+library's own table creation a no-op: `scheduler.start()` runs on the event
 loop and its blocking `CREATE TABLE` would stall the loop for the whole
 connect timeout while the database is unreachable.
+
+The subclass keeps the rest of the library's start sequence. A job that is
+read back from the store carries the scheduler of the store, and the
+scheduler is what turns the next run time of a due job into a real date.
+A store that is not bound makes every job that is overdue when the bot
+starts raise inside the scheduler, the new run time is never written back,
+and the job fires again on every tick. Only the table creation stays off
+the event loop.
 
 The remaining store calls are inherently blocking, because APScheduler 3.x
 calls them synchronously from the event loop. Their timeouts bound the

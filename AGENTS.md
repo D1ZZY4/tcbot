@@ -131,18 +131,18 @@ Current stack:
 │   ├── database/             PostgreSQL helpers, one package per table/domain
 │   │   ├── users_cache.py    Member profile cache operations
 │   │   ├── users_roles.py    Role system: owners/admins/roles
-│   │   ├── bans_db.py        Federation bans
+│   │   ├── bans_db/          Federation ban decisions and their appeal lifecycle
+│   │   ├── moderation_db.py  Shared moderation write path: case, proof, closing
 │   │   ├── groups_db.py      Connected and pending groups
 │   │   ├── warns_db.py       Warnings
 │   │   ├── kicks_db.py       Kicks
 │   │   ├── mutes_db.py       Mutes
-│   │   ├── event_history.py  Shared shape of the per-user kick/mute event histories
 │   │   ├── queues_db.py      Promotion requests
 │   │   ├── cache/            TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
 │   │   ├── scheduler.py      APScheduler background task + SQLAlchemyJobStore
 │   │   ├── engine.py         Async engine, session boundary, circuit-breaker guard
-│   │   ├── base.py           Table, column, constraint, and index definitions
+│   │   ├── base/             Table, column, constraint, and index definitions
 │   │   ├── migrations.py     Alembic wiring: applies the pending revisions at startup
 │   │   ├── documents.py      Typed document shapes
 │   │   ├── types.py          Domain primitive types

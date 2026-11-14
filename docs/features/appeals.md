@@ -50,7 +50,7 @@ When the appeal link is opened, the bot validates the ban record before starting
 
 1. The `ban_id` must exist in the `bans` table.
 2. The ban must still be active (`is_active: True`).
-3. The Telegram user opening the link must match `banned_user_id` on the ban record.
+3. The Telegram user opening the link must match `target_user_id` on the ban record.
 4. The ban must not already have a stored `review_message_id` that is still fresh. If it does and was set within the last 72 hours, the user is told their appeal is still under review. If the `review_timestamp` is older than 72 hours (or missing), the stale review is cleared automatically and the user may submit a new appeal.
 
 Invalid, expired, or wrong-account links end the conversation without changing the database.
@@ -146,7 +146,7 @@ The following fields are read or updated on ban documents:
 | Field | Used for |
 |---|---|
 | `ban_id` | Deep-link and callback identifier. |
-| `banned_user_id` | Confirms the appeal belongs to the current user. |
+| `target_user_id` | Confirms the appeal belongs to the current user. |
 | `is_active` | Blocks appeals for inactive/resolved bans. |
 | `log_message_id` | Validates that the user referenced the correct ban log. |
 | `review_message_id` | Marks a pending staff review and blocks duplicate appeals. |
@@ -190,10 +190,10 @@ and updates the card to the already-resolved text.
 
 The original banning admin gets a 12-hour priority window after the appeal review timestamp is set:
 
-- During the first 12 hours, only the `admin_user_id` stored on the ban can approve or reject.
+- During the first 12 hours, only the `actor_user_id` stored on the ban can approve or reject.
 - The original banning admin is always allowed during that window.
 - After 12 hours, any Founder/Admin reviewer can decide.
-- If `review_timestamp` is missing, or `admin_user_id` is missing or zero (legacy record), the lock does not apply.
+- If `review_timestamp` is missing, or `actor_user_id` is missing or zero (legacy record), the lock does not apply.
 
 The callback handler always answers the callback query before continuing once it has parsed a valid decision action.
 
@@ -261,7 +261,7 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 ## Edge cases
 
 - Non-banned users cannot submit because they cannot pass the active-ban lookup.
-- A user cannot appeal someone else's ban; the `banned_user_id` must match the Telegram account opening the link.
+- A user cannot appeal someone else's ban; the `target_user_id` must match the Telegram account opening the link.
 - A user can have only one pending appeal when `review_message_id` was stored successfully.
 - Case-insensitive `#appeal` tags are accepted.
 - The log-link validation is number-based, not URL-domain-based; it checks for the stored log message ID as a standalone integer token.
@@ -312,7 +312,7 @@ Important appeal behaviors to keep in mind:
 6. The 12-hour reviewer lock blocks a different admin inside the window.
 7. The original banning admin is allowed inside the 12-hour window.
 8. Any staff reviewer is allowed after 12 hours.
-9. Missing `review_timestamp` or missing/zero `admin_user_id` disables the reviewer lock.
+9. Missing `review_timestamp` or missing/zero `actor_user_id` disables the reviewer lock.
 10. Uppercase `#APPEAL` reaches the expired-session branch when conversation state is missing.
 11. The module-level appeal builder derives its log handle from the public logs link.
 12. After rejection, a 24-hour cooldown applies before the user can start a new appeal.

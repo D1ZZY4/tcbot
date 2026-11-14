@@ -172,8 +172,10 @@ Key behavior:
 
 Database impact: `users_cache.harvest_user_identity` (opportunistic, skips
 the write on unchanged identity), reads `bans_db.get_active_ban` and
-`mutes_db.get_active_mute`, and on migration `groups_db.migrate_group` plus
-`warns_db.migrate_records`.
+`mutes_db.get_active_mute`, and on migration `groups_db.migrate_group`, which
+moves the whole group in one transaction: the registry, the configuration,
+the membership, the open request, and the decisions of the group, including
+the origin chat of a decision.
 
 ## Maintenance: `maintenance.py`
 
