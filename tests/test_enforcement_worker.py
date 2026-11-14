@@ -164,6 +164,58 @@ def test_a_run_for_an_active_action_is_cancelled(
     assert cancelled == [1]
 
 
+def test_one_failed_run_does_not_stop_the_next(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A broken run must not leave the rest of the claimed batch unprocessed."""
+    loaded: list[int] = []
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [
+            {"id": 1, "action_id": 2, "operation": "revoke"},
+            {"id": 2, "action_id": 3, "operation": "revoke"},
+        ]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        loaded.append(run_id)
+        if run_id == 1:
+            raise RuntimeError("the first run is broken")
+        return {
+            "target_user_id": 9,
+            "action_type": "ban",
+            "action_status": "expired",
+            "operation": "revoke",
+        }
+
+    async def _targets(run_id: int, limit: int = 100) -> list[dict[str, object]]:
+        return [{"id": 3, "chat_id": -100, "attempt_count": 0}]
+
+    completed: list[int] = []
+
+    async def _complete(target_id: int, **kwargs: Any) -> None:
+        completed.append(target_id)
+
+    async def _fan_out(coros: Any) -> list[object]:
+        for coro in coros:
+            await coro
+        return [None]
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
+    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+
+    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+
+    assert loaded == [1, 2]
+    assert completed == [3]
+
+
 async def _async_value(value: Any) -> Any:
     return value
 

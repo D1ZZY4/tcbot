@@ -73,11 +73,24 @@ async def run() -> None:
 
 
 async def run_once(bot: Bot) -> None:
-    """Claim and process the queued enforcement runs."""
+    """Claim and process the queued enforcement runs.
+
+    A run that fails is logged and left for the stale-run requeue; the
+    remaining claimed runs still execute, so one bad decision cannot
+    starve every other expiry in the same tick.
+    """
     await db.enforcement_db.requeue_stale_runs()
     runs = await db.enforcement_db.claim_runs(_MAX_RUNS_PER_TICK)
     for run in runs:
-        await _process_run(bot, run)
+        try:
+            await _process_run(bot, run)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception(
+                "Enforcement run %s failed; continuing with the next run.",
+                run.get("id"),
+            )
 
 
 async def _process_run(bot: Bot, run: dict[str, object]) -> None:
