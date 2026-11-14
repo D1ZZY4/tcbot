@@ -504,6 +504,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **A role grant cannot replace the Founder** (`tcbot/database/users_roles.py`, `tests/test_set_owner_cleanup.py`): the grant revoked every active assignment of the target before inserting the new role, including the owner row, so `add_admin` or `set_role` aimed at the owner left the community without a Founder while the owner cache still named them. The grant now leaves the owner assignment to `set_owner`; a conflicting grant fails the one-active-role rule and rolls back. Behavior changes: a grant that targets the current owner is refused instead of corrupting ownership.
 
+- **A concurrent mute supersedes the committed decision** (`tcbot/database/mutes_db.py`, `tests/test_mute_expiry.py`): two mutes that both read the same active decision inserted the same supersede target, and the trigger rejected the loser with an error the unique-constraint retry never caught. The write now takes a per-user advisory lock, so the loser re-reads the committed decision and supersedes it. Behavior changes: simultaneous mutes of one user record instead of surfacing a database error.
+
 
 - **A failed migration releases its engine** (`alembic/env.py`): the migration engine was disposed only on the success path, so a revision that raised left its pool behind and every retried boot leaked another one. The engine is now disposed in a finally block. Behavior changes: none; a failed boot still fails loudly.
 

@@ -104,6 +104,28 @@ async def test_timed_mute_never_shortens_an_expiry(mute_db: str) -> None:
     assert await _stored_until(42) == later + timedelta(hours=1)
 
 
+async def test_concurrent_supersede_of_an_active_mute_keeps_the_later_deadline(
+    mute_db: str,
+) -> None:
+    """Two mutes superseding the same active decision must not collide.
+
+    Both writers read the existing mute, so the second supersede used to
+    hit the trigger instead of the unique-constraint retry. The per-user
+    advisory lock makes the second writer read the committed decision.
+    """
+    await mutes_db.record_mute(42, -1001, "spam", 7, until=_now() + timedelta(hours=1))
+    later = _now() + timedelta(hours=5)
+
+    await asyncio.gather(
+        mutes_db.record_mute(42, -1001, "spam", 7, until=later),
+        mutes_db.record_mute(
+            42, -1001, "spam again", 7, until=later + timedelta(hours=1)
+        ),
+    )
+
+    assert await _stored_until(42) == later + timedelta(hours=1)
+
+
 async def test_concurrent_mutes_keep_the_later_deadline(mute_db: str) -> None:
     """Two mutes racing for one user must not lose the later deadline.
 

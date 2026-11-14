@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database import moderation_db
@@ -99,6 +99,14 @@ async def record_mute(
     now = utc_now()
 
     async def _work(sess: AsyncSession) -> int:
+        # * Serialise the read-supersede-insert sequence per user. Without
+        # * the lock both concurrent writers read the same active mute and
+        # * the trigger rejects the second supersede with a raw error that
+        # * is not the unique-constraint retry the caller knows.
+        await sess.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
+            {"scope": f"mute:{user_id}"},
+        )
         case_id = await _open_case(sess, user_id, admin_id, reason)
         previous = (
             (
