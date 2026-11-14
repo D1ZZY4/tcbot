@@ -169,6 +169,23 @@ async def test_the_group_locale_round_trips(postgres: str) -> None:
     assert await groups_db.get_group_locale(-1001) is None
 
 
+async def test_an_anonymous_join_request_stores_no_owner(postgres: str) -> None:
+    """An anonymous add records a null owner instead of a bad user id."""
+    await groups_db.add_pending(-1001, "Test Group", 0, 55)
+
+    pending = await groups_db.get_pending(-1001)
+    assert pending is not None
+    assert pending.get("owner_id") == 0
+    stored = await engine_module.fetch_one(
+        text(
+            "SELECT owner_user_id FROM join_requests "
+            "WHERE chat_id = -1001 AND status = 'pending'"
+        )
+    )
+    assert stored is not None
+    assert stored["owner_user_id"] is None
+
+
 async def test_a_profile_write_refreshes_last_seen(postgres: str) -> None:
     """Every profile write advances the last-sighting timestamp."""
     await users_cache.upsert_user(7, "Alice_1", "Alice", "Smith")
