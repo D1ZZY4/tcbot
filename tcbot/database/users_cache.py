@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -16,6 +16,9 @@ from tcbot.database.cache import CACHE_MISS, user_mention_cache
 from tcbot.database.documents import UserDoc
 from tcbot.database.engine import db_call, fetch_all, fetch_one, fetch_value, run
 from tcbot.utils.time_and_date import utc_now
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 # ──────────────────────────── Table ────────────────────────────── #
 # * The stored columns are the ones the profile carries. The lowercase
@@ -351,6 +354,25 @@ async def search_by_name(needle: str, limit: int = 5) -> list[UserDoc]:
 
 
 # ────────────────────────────── Writes ───────────────────────────── #
+
+
+async def ensure_users(sess: AsyncSession, *user_ids: int) -> None:
+    """Create the identity rows other tables reference when they are missing.
+
+    The member cache only learns a profile from an observed Telegram
+    update, so a moderator acting on an account the bot has never seen
+    would otherwise fail the ``telegram_users`` foreign key and lose the
+    write. The insert is idempotent and joins the caller's transaction, so
+    the identity rows and the dependent write land together.
+    """
+    unique_ids = list(dict.fromkeys(uid for uid in user_ids if uid > 0))
+    if not unique_ids:
+        return
+    await sess.execute(
+        pg_insert(telegram_users)
+        .values([{"user_id": uid} for uid in unique_ids])
+        .on_conflict_do_nothing(index_elements=["user_id"])
+    )
 
 
 async def upsert_user(

@@ -21,7 +21,7 @@ from sqlalchemy import select
 from tcbot import cfg
 from tcbot.database import bans_db, warns_db
 from tcbot.database import engine as engine_module
-from tcbot.database.base import moderation_actions, moderation_cases
+from tcbot.database.base import moderation_actions, moderation_cases, telegram_users
 from tests.postgres_support import (
     reset_community,
     seed_case,
@@ -73,6 +73,28 @@ async def _cases_of(target_user_id: int) -> list[dict[str, object]]:
         .where(moderation_cases.c.subject_user_id == target_user_id)
         .order_by(moderation_cases.c.id)
     )
+
+
+async def test_a_decision_files_for_an_uncached_target(postgres_db: str) -> None:
+    """A decision creates the identity rows its foreign keys reference.
+
+    The member cache only learns a user from an observed update, so a
+    moderator acting on an account the bot has never seen used to fail the
+    decision on a foreign key. The target row is created with the decision.
+    """
+    await reset_community()
+    try:
+        await seed_users(7)
+        await seed_chats(-1001, cfg.proofs[0])
+
+        await warns_db.add_warn(42, "spam", 7, -1001)
+
+        row = await engine_module.fetch_one(
+            select(telegram_users.c.user_id).where(telegram_users.c.user_id == 42)
+        )
+        assert row == {"user_id": 42}
+    finally:
+        await reset_community()
 
 
 async def test_a_filed_decision_closes_its_case(community_db: str) -> None:

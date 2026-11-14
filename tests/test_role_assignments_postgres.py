@@ -19,7 +19,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from tcbot.database import engine as engine_module
-from tcbot.database import users_roles
+from tcbot.database import users_cache, users_roles
 from tcbot.database.base import role_assignments
 from tcbot.modules.helper.pipelines import promote_flow
 from tests.postgres_support import reset_community, seed_users
@@ -58,6 +58,17 @@ async def test_a_promotion_replaces_the_previous_role(roles_db: str) -> None:
     assert await users_roles.get_effective_role(42, fresh=True) == "admin"
     assert await users_roles.role_count("developer") == 0
     assert await users_roles.role_count("admin") == 1
+
+
+async def test_a_role_assignment_creates_missing_identity_rows(
+    roles_db: str,
+) -> None:
+    """An uncached target and granter do not fail a role assignment."""
+    await users_roles.set_role(77, "developer", 88)
+
+    assert await users_roles.get_effective_role(77, fresh=True) == "developer"
+    assert await users_cache.get_user(77) is not None
+    assert await users_cache.get_user(88) is not None
 
 
 async def test_the_admin_promotion_keeps_the_granted_role(

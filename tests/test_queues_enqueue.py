@@ -70,6 +70,15 @@ async def test_collision_retries_once_then_succeeds(
     assert stored.get("target_user_id") == 7
 
 
+async def test_an_enqueue_creates_missing_identity_rows(queue_db: str) -> None:
+    """A requester and target the member cache has never seen can queue."""
+    result = await queues_db.enqueue(77, "new_user", "New User", 88)
+
+    stored = await queues_db.get_request_by_id(result)
+    assert stored is not None
+    assert stored.get("target_user_id") == 77
+
+
 async def test_pending_violation_short_circuits_without_retry(
     queue_db: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

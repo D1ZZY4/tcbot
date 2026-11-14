@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import moderation_cases, moderation_evidence_items
 from tcbot.database.base import moderation_evidence_uploads as evidence_uploads
+from tcbot.database.users_cache import ensure_users
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -52,6 +53,9 @@ async def open_case(
     decision have to land together, so a decision whose case cannot be
     written leaves no case behind.
     """
+    # * The case and the decision reference both accounts. A target or an
+    # * actor the member cache has never seen must not fail the decision.
+    await ensure_users(sess, subject_user_id, actor_user_id)
     # * Decisions about one subject can arrive from different groups at the
     # * same time, and the select-then-insert would otherwise open two cases.
     await sess.execute(

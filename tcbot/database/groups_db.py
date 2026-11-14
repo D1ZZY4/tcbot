@@ -33,6 +33,7 @@ from tcbot.database.engine import (
     run_transaction,
 )
 from tcbot.database.types import ChatId, GroupId, UserId
+from tcbot.database.users_cache import ensure_users
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
@@ -158,6 +159,10 @@ async def add_group(chat_id: int, title: str, added_by: int) -> None:
     now = utc_now()
 
     async def _work(sess: AsyncSession) -> None:
+        # * The registry references the account that connected the group.
+        # * The owner may be connecting a group before the member cache has
+        # * seen them, so the identity row is created with the connection.
+        await ensure_users(sess, added_by)
         await sess.execute(
             pg_insert(telegram_chats)
             .values(
@@ -341,6 +346,9 @@ async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) 
     now = utc_now()
 
     async def _work(sess: AsyncSession) -> None:
+        # * The request references the account that asked to connect. An
+        # * anonymous add passes 0, which names no account and stays NULL.
+        await ensure_users(sess, owner_id)
         await sess.execute(
             pg_insert(telegram_chats)
             .values(

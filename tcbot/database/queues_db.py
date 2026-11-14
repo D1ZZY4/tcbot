@@ -21,13 +21,17 @@ from tcbot.database.engine import (
     fetch_count,
     fetch_one,
     run,
+    run_transaction,
 )
 from tcbot.database.types import UserId, make_short_id
+from tcbot.database.users_cache import ensure_users
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from datetime import datetime
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
 
@@ -150,8 +154,12 @@ async def enqueue(
     """
 
     async def _insert(request_id: str) -> None:
-        await db_call(
-            lambda: run(
+        async def _work(sess: AsyncSession) -> None:
+            # * Both accounts are foreign keys of the request. The member
+            # * cache may not have seen either one yet, so the identity rows
+            # * are created with the request in one transaction.
+            await ensure_users(sess, user_id, promoted_by)
+            await sess.execute(
                 pg_insert(promotion_requests).values(
                     request_id=request_id,
                     target_user_id=user_id,
@@ -164,7 +172,8 @@ async def enqueue(
                     metadata={"username": username, "first_name": first_name},
                 )
             )
-        )
+
+        await run_transaction(_work)
 
     request_id = make_short_id()
     try:

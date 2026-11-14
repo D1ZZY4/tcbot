@@ -33,6 +33,7 @@ from tcbot.database.engine import (
     run,
     run_transaction,
 )
+from tcbot.database.users_cache import ensure_users
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
@@ -500,6 +501,9 @@ async def _assign_role(user_id: int, role: str, assigned_by: int) -> None:
     """
 
     async def _work(sess: AsyncSession) -> None:
+        # * The assignment references both accounts. A target the member
+        # * cache has never seen must not fail the promotion on a foreign key.
+        await ensure_users(sess, user_id, assigned_by)
         # ! CRITICAL: never revoke the owner assignment here. Only
         # ! set_owner replaces the Founder; a grant that targeted the owner
         # ! must fail the active-user uniqueness rule instead of leaving the
