@@ -507,7 +507,7 @@ def _import_ban(bind, row: Mapping[str, Any], now: datetime) -> None:
             "external_ref": (
                 legacy_id
                 if _PUBLIC_REF_PATTERN.fullmatch(legacy_id)
-                else hashlib.md5(legacy_id.encode()).hexdigest()[:16]
+                else hashlib.sha256(legacy_id.encode()).hexdigest()[:16]
             ),
             "metadata": msgspec.json.encode(
                 {
@@ -633,7 +633,7 @@ def _import_mute(bind, row: Mapping[str, Any], now: datetime) -> None:
             "duration": row["duration_secs"],
             "created_at": created_at,
             "expires_at": expires_at,
-            "external_ref": hashlib.md5(
+            "external_ref": hashlib.sha256(
                 f"mute:{row['id']}:{row['user_id']}".encode()
             ).hexdigest()[:16],
             "metadata": msgspec.json.encode(
@@ -911,7 +911,19 @@ def _import_moderation_history(
                     )
                 END,
                 'completed',
-                substr(md5('warn:' || w.id || ':' || w.user_id), 1, 16),
+                substr(
+                    encode(
+                        sha256(
+                            convert_to(
+                                'warn:' || w.id || ':' || w.user_id,
+                                'UTF8'
+                            )
+                        ),
+                        'hex'
+                    ),
+                    1,
+                    16
+                ),
                 jsonb_build_object(
                     'legacy_table', 'warns',
                     'legacy_id', w.id || '-' || w.user_id || '-' || w.chat_id || '-' || w.timestamp
@@ -961,7 +973,19 @@ def _import_moderation_history(
                 k.reason,
                 k.timestamp,
                 'completed',
-                substr(md5('kick:' || k.id || ':' || k.user_id), 1, 16),
+                substr(
+                    encode(
+                        sha256(
+                            convert_to(
+                                'kick:' || k.id || ':' || k.user_id,
+                                'UTF8'
+                            )
+                        ),
+                        'hex'
+                    ),
+                    1,
+                    16
+                ),
                 jsonb_build_object(
                     'legacy_table', 'kicks',
                     'legacy_id', k.id || '-' || k.user_id || '-' || k.chat_id || '-' || k.timestamp
