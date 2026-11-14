@@ -406,8 +406,8 @@ class PeopleViews:
         last_name = u.get("last_name") or "-"
         if identity_needs_refresh(u):
             launch_identity_refresh(bot, uid)
-        commit = date_or_unknown(u.get("commit_date"), locale)
-        seen = date_or_unknown(u.get("last_updated"), locale)
+        commit = date_or_unknown(u.get("first_seen_at"), locale)
+        seen = date_or_unknown(u.get("last_seen_at"), locale)
         username_line = (
             t("stats.user_detail.username", locale, name=uname)
             if uname

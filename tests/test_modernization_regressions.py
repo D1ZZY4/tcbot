@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -19,10 +20,11 @@ from tcbot import database as db
 from tcbot.database import users_cache
 from tcbot.modules import netspeed
 from tcbot.modules.helper import guards
+from tcbot.modules.helper.extraction import refresh as refresh_mod
 from tcbot.modules.helper.pipelines import mute_flow, proof_flow, stats_flow
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitBreaker, CircuitState
-from tcbot.utils.time_and_date import parse_duration
+from tcbot.utils.time_and_date import parse_duration, utc_now
 
 
 async def _gather_bounded(coros: list[Any]) -> list[Any]:
@@ -257,3 +259,80 @@ def test_pick_best_probes_concurrently(monkeypatch: pytest.MonkeyPatch) -> None:
     elapsed = time.monotonic() - start
     assert ping == 10.0
     assert elapsed < 0.4  # parallel ~0.05s, sequential would be ~0.25s+overhead
+
+
+def test_identity_needs_refresh_reads_the_stored_updated_at() -> None:
+    """The freshness check reads the column the profile row actually carries.
+
+    The helper used to read ``last_updated``, a name the community schema
+    does not have, so every complete profile counted as stale and every
+    user card launched a live identity refresh.
+    """
+    fresh = {
+        "first_name": "Ada",
+        "username": "ada",
+        "updated_at": utc_now(),
+    }
+    assert refresh_mod.identity_needs_refresh(fresh) is False
+
+    stale = {
+        "first_name": "Ada",
+        "username": "ada",
+        "updated_at": utc_now() - timedelta(days=30),
+    }
+    assert refresh_mod.identity_needs_refresh(stale) is True
+
+
+def test_sync_user_identity_trusts_a_fresh_complete_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fresh complete profile must not pay for a live Telegram lookup."""
+    cached = {
+        "first_name": "Ada",
+        "username": "ada",
+        "last_name": None,
+        "updated_at": utc_now(),
+    }
+    live = AsyncMock(side_effect=AssertionError("live lookup must not run"))
+    monkeypatch.setattr(db.users_cache, "get_user", AsyncMock(return_value=cached))
+    monkeypatch.setattr(refresh_mod, "_fetch_live_identity", live)
+
+    result = asyncio.run(refresh_mod.sync_user_identity(MagicMock(), 42))  # type: ignore[arg-type]
+
+    assert result == ("Ada", "ada", None)
+    live.assert_not_awaited()
+
+
+def test_user_detail_renders_the_stored_profile_timestamps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The card reads ``first_seen_at`` and ``last_seen_at``, not old field names.
+
+    The user card used to read ``commit_date`` and ``last_updated``, so both
+    dates always rendered as the unknown fallback.
+    """
+    first_seen = utc_now() - timedelta(days=30)
+    last_seen = utc_now()
+    page = [
+        {
+            "user_id": 42,
+            "first_name": "Ada",
+            "username": "ada",
+            "last_name": None,
+            "first_seen_at": first_seen,
+            "last_seen_at": last_seen,
+        }
+    ]
+    rendered: list[object] = []
+
+    def _date(value: object, _locale: str | None = None) -> str:
+        rendered.append(value)
+        return "RENDERED"
+
+    monkeypatch.setattr(db.users_cache, "all_users_page", AsyncMock(return_value=page))
+    monkeypatch.setattr(stats_flow, "identity_needs_refresh", lambda _doc: False)
+    monkeypatch.setattr(stats_flow, "date_or_unknown", _date)
+
+    asyncio.run(stats_flow.Stats.user_detail(MagicMock(), 0, 0, locale="en-US"))  # type: ignore[arg-type]
+
+    assert rendered == [first_seen, last_seen]

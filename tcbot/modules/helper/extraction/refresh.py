@@ -161,7 +161,7 @@ async def sync_user_identity(
        fresher than ``max_age_seconds``.
     3. Otherwise fetch live via :func:`_fetch_live_identity`.
     4. If live is unreachable, return the cached values (stale beats absent).
-    5. Persist the live triple (bumping ``last_updated`` even when equal,
+    5. Persist the live triple (bumping ``updated_at`` even when equal,
        so the next view skips re-verification for another full window)
        and return it.
 
@@ -183,7 +183,7 @@ async def sync_user_identity(
     if have[0] and have[1]:
         age: float | None = None
         try:
-            updated_at = cached.get("last_updated") if cached else None
+            updated_at = cached.get("updated_at") if cached else None
             if updated_at is not None:
                 age = (utc_now() - to_utc(updated_at)).total_seconds()
         except Exception as exc:
@@ -226,7 +226,7 @@ def identity_needs_refresh(doc: Mapping[str, object] | None) -> bool:
     if not (fname and uname):
         return True
     try:
-        updated_at = doc.get("last_updated")
+        updated_at = doc.get("updated_at")
         if not isinstance(updated_at, datetime):
             return True
         age = (utc_now() - to_utc(updated_at)).total_seconds()
