@@ -22,9 +22,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
 from tcbot import cfg
-from tcbot.database import bans_db, groups_db, users_cache, warns_db
+from tcbot.database import bans_db, erasure_db, groups_db, users_cache, warns_db
 from tcbot.database import engine as engine_module
-from tcbot.database.base import moderation_actions, moderation_cases
+from tcbot.database.base import (
+    moderation_actions,
+    moderation_cases,
+    telegram_users,
+)
 from tcbot.utils.time_and_date import utc_now
 from tests.postgres_support import reset_community, seed_action, seed_chats, seed_users
 
@@ -162,6 +166,24 @@ async def test_the_group_locale_round_trips(postgres: str) -> None:
 
     assert await groups_db.set_group_locale(-1001, None) is True
     assert await groups_db.get_group_locale(-1001) is None
+
+
+async def test_an_erasure_request_is_swept(postgres: str) -> None:
+    """The queued erasure anonymises the profile through the SQL function."""
+    await users_cache.upsert_user(7, "Alice_1", "Alice", "Smith")
+
+    request_id = await erasure_db.request_erasure(7, "account deletion")
+    assert request_id > 0
+
+    await engine_module.db_call(
+        lambda: engine_module.run(text("SELECT sweep_pending_user_erasures(25)"))
+    )
+
+    row = await engine_module.fetch_one(
+        telegram_users.select().where(telegram_users.c.user_id == 7)
+    )
+    assert row is not None
+    assert row["erased_at"] is not None
 
 
 async def test_the_member_cache_name_search_finds_the_user(postgres: str) -> None:

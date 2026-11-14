@@ -22,7 +22,7 @@ from tcbot.utils.dispatch import fan_out, gather_bounded, throw_if_cancelled
 from tcbot.utils.formatter import bold, code
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import build_prefixed_filters
+from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
@@ -47,12 +47,14 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
         commands=t("maintenance.help.commands.body", locale),
         who=(
             f"{bold('/leaveall')}: {replies.perm_founder_only(locale, plain=False)}\n"
-            f"{bold('/cleanup')}: {replies.perm_staff_only(locale, plain=False)}"
+            f"{bold('/cleanup')}: {replies.perm_staff_only(locale, plain=False)}\n"
+            f"{bold('/tcforget')}: {replies.perm_founder_only(locale, plain=False)}"
         ),
         where=replies.context_bot_or_group(locale),
         details=[
             ("/leaveall", t("maintenance.help.leaveall.body", locale)),
             ("/cleanup", t("maintenance.help.cleanup.body", locale)),
+            ("/tcforget", t("maintenance.help.forget.body", locale)),
         ],
         target=False,
         examples=t("maintenance.help.examples.body", locale),
@@ -349,6 +351,63 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+# ────────────────── Command Forget </tcforget> ────────────────── #
+
+
+@decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
+@decorators.owner_only
+@decorators.log_execution
+async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Queue one Telegram-account erasure for the next cleanup sweep."""
+    msg = update.effective_message
+    if msg is None:
+        return
+    locale = await locale_for_update(update)
+    args = parse_cmd_args(msg.text)
+    if len(args) < 2:
+        await safe_reply(
+            msg,
+            t("maintenance.forget.usage", locale, plain=True),
+            log_label="tcforget usage",
+            parse_mode=None,
+        )
+        return
+    try:
+        user_id = int(args[0])
+    except ValueError:
+        user_id = 0
+    reason = " ".join(args[1:]).strip()
+    if user_id <= 0 or not reason:
+        await safe_reply(
+            msg,
+            t("maintenance.forget.usage", locale, plain=True),
+            log_label="tcforget invalid",
+            parse_mode=None,
+        )
+        return
+    try:
+        request_id = await db.erasure_db.request_erasure(user_id, reason)
+    except Exception:
+        log.exception("tcforget request failed for user=%d", user_id)
+        await safe_reply(
+            msg,
+            t("maintenance.forget.failed", locale, plain=True),
+            log_label="tcforget failed",
+            parse_mode=None,
+        )
+        return
+    await safe_reply(
+        msg,
+        t(
+            "maintenance.forget.queued",
+            locale,
+            user=Safe(code(str(user_id))),
+            request=Safe(code(str(request_id))),
+        ),
+        log_label=f"tcforget queued for {user_id}",
+    )
+
+
 # ──────────────────────────── Handlers ──────────────────────────── #
 
 _LEAVEALL_CMDS = (
@@ -361,9 +420,11 @@ _CLEANUP_CMDS = (
     | build_prefixed_filters("tcclean")
     | build_prefixed_filters("tcc")
 )
+_FORGET_CMDS = build_prefixed_filters("tcforget") | build_prefixed_filters("tcf")
 
 
 __handlers__ = [
     MessageHandler(_LEAVEALL_CMDS, cmd_leaveall),
     MessageHandler(_CLEANUP_CMDS, cmd_cleanup),
+    MessageHandler(_FORGET_CMDS, cmd_forget),
 ]

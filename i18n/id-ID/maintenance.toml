@@ -8,7 +8,8 @@ overview = "Mengelola grup terhubung: bersihkan yang tidak bisa diakses, atau ke
 [help.commands]
 body = """
 `/leaveall` (aliases: `/exitall`, `/tcleave`)
-`/cleanup` (aliases: `/tcclean`, `/tcc`)"""
+`/cleanup` (aliases: `/tcclean`, `/tcc`)
+`/tcforget` (alias: `/tcf`) <user_id> <reason>"""
 
 [help.leaveall]
 body = "Membuat bot keluar dari semua grup terhubung sekaligus, menandai semuanya terputus di database, dan mengirim entri log per grup. Ini tidak bisa dibatalkan, tiap grup harus dihubungkan ulang manual dengan `/tcconnect`. Pakai hanya dalam darurat."
@@ -16,10 +17,14 @@ body = "Membuat bot keluar dari semua grup terhubung sekaligus, menandai semuany
 [help.cleanup]
 body = "Memindai semua grup di database dan mencoba memastikan bot masih punya akses. Grup mana pun yang botnya di-kick, dihapus, atau sudah tidak terjangkau ditandai terputus dan dikeluarkan dari daftar aktif. Jalankan berkala agar daftar grup tetap akurat."
 
+[help.forget]
+body = "Mengantrekan permintaan penghapusan untuk satu akun Telegram. Sapuan pembersihan berikutnya menganonimkan profil, mencabut role dan tindakan moderasi yang aktif, lalu menghapus baris pribadi. Alasan wajib diisi dan dicatat di audit trail."
+
 [help.examples]
 body = """
 `/cleanup`: hapus grup basi atau yang tidak bisa diakses.
-`/leaveall`: keluar darurat dari semua grup terhubung."""
+`/leaveall`: keluar darurat dari semua grup terhubung.
+`/tcforget 123456789 akun tidak aktif`: antrekan penghapusan akun."""
 
 # Runtime strings (maintenance.py). All render as MarkdownV2.
 # Placeholders: counts as pre-formatted code, {detail} prebuilt suffix,
@@ -35,3 +40,8 @@ done = "Keluar dari {ok} grup. Gagal: {failed}.{detail}"
 
 [cleanup]
 done = "Membersihkan {n} grup yang tidak bisa diakses."
+
+[forget]
+usage = "Gunakan: /tcforget <user_id> <alasan>"
+queued = "Permintaan penghapusan {request} diantrekan untuk user {user}. Sapuan pembersihan berikutnya menganonimkan akun tersebut."
+failed = "Tidak bisa mengantrekan permintaan penghapusan. Periksa user ID dan log."

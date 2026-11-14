@@ -22,6 +22,7 @@ from sqlalchemy import create_engine, text
 
 from tcbot import cfg, enforcement_worker
 from tcbot.database.base import chat_members
+from tcbot.database.cache import effective_role_cache, user_mention_cache
 from tcbot.database.connection_options import schema_options
 from tcbot.database.engine import db_call, run, run_transaction
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -223,7 +224,19 @@ async def expire_stale_records() -> None:
 
 async def _sweep_erasures(sess: AsyncSession) -> int:
     """Process the erasure queue of the deleted Telegram accounts."""
+    pending = await sess.execute(
+        text(
+            "SELECT user_id FROM telegram_user_erasures "
+            "WHERE status = 'pending' LIMIT 25"
+        )
+    )
+    erased_ids = [int(row[0]) for row in pending]
     result = await sess.execute(text("SELECT sweep_pending_user_erasures(25)"))
+    # * The anonymised name and the revoked role must not keep rendering
+    # * from a cache that the database cannot see.
+    for user_id in erased_ids:
+        user_mention_cache.invalidate(user_id)
+        effective_role_cache.invalidate(user_id)
     return int(result.scalar() or 0)
 
 

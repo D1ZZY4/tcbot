@@ -8,7 +8,8 @@ overview = "Manage connected groups: clean up inaccessible ones, or leave all gr
 [help.commands]
 body = """
 `/leaveall` (aliases: `/exitall`, `/tcleave`)
-`/cleanup` (aliases: `/tcclean`, `/tcc`)"""
+`/cleanup` (aliases: `/tcclean`, `/tcc`)
+`/tcforget` (alias: `/tcf`) <user_id> <reason>"""
 
 [help.leaveall]
 body = "Makes the bot leave every connected group simultaneously, marks them all as disconnected in the database, and posts a log entry for each group. This is irreversible - each group must be manually reconnected with `/tcconnect`. Use only in emergencies."
@@ -16,10 +17,14 @@ body = "Makes the bot leave every connected group simultaneously, marks them all
 [help.cleanup]
 body = "Scans all groups in the database and attempts to verify the bot still has access. Any group where the bot was kicked, removed, or can no longer reach is marked as disconnected and removed from the active list. Run this periodically to keep the group list accurate."
 
+[help.forget]
+body = "Queues an erasure request for one Telegram account. The next cleanup sweep anonymises the profile, revokes live roles and moderation actions, and removes the personal rows. The reason is required and recorded in the audit trail."
+
 [help.examples]
 body = """
 `/cleanup`: remove stale or inaccessible groups.
-`/leaveall`: emergency withdrawal from all connected groups."""
+`/leaveall`: emergency withdrawal from all connected groups.
+`/tcforget 123456789 inactive account`: queue an account erasure."""
 
 # Runtime strings (maintenance.py). All render as MarkdownV2.
 # Placeholders: counts as pre-formatted code, {detail} prebuilt suffix,
@@ -35,3 +40,8 @@ done = "Left {ok} groups. Failed: {failed}.{detail}"
 
 [cleanup]
 done = "Cleaned up {n} inaccessible group(s)."
+
+[forget]
+usage = "Usage: /tcforget <user_id> <reason>"
+queued = "Erasure request {request} queued for user {user}. The next cleanup sweep anonymises the account."
+failed = "Could not queue the erasure request. Check the user ID and the logs."
