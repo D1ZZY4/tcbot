@@ -13,7 +13,7 @@ flowchart TD
     Permission -->|denied| End1[Reject]
     Permission -->|allowed| Reason[WAITING_REASON]
     Reason --> Proof[WAITING_PROOF]
-    Proof --> AddWarn[warns_db.add_warn<br/>atomic counter]
+    Proof --> AddWarn[warns_db.add_warn<br/>decision + case]
     AddWarn --> CheckPerGroup{count >= cfg.warn_limit?}
     CheckPerGroup -->|yes| RoleCheck{target holds federation role?}
     RoleCheck -->|yes| Exempt[Auto-demote target, exempt from auto-ban]
@@ -33,7 +33,7 @@ Warnings are per-group moderation records. Each warn is keyed by `(user_id, chat
 1. **Per-group threshold** (`cfg.warn_limit`, env var `WARN_LIMIT`, default 3, minimum 1): fires when a user's warn count in the current group reaches or exceeds `cfg.warn_limit`. Uses `>=` so a retry after a total enforcement failure still fires: warns are cleared only after successful enforcement, so a 0/N fan-out leaves the count at the limit and the next warn must re-drive the ban instead of wedging above the threshold. The `already_banned` guard skips re-creation when the ban record already exists.
 2. **Federation-wide threshold** (`FED_WARN_LIMIT`, env var, default 0 = disabled): fires when the user's total warns across all groups reaches or exceeds the configured value, even if no single group has reached its per-group limit. Uses `>=` because the cross-group aggregate is a separate DB read with no atomicity guarantee. Set to a positive integer to close the evasion path of spreading warns thinly across many groups.
 
-In both cases a non-staff user is issued a **federation-wide ban** across all active connected groups, a ban row is created in the `bans` table (appealable), and the warnings of the groups where the ban landed are cleared (`clear_all_warns` on complete enforcement, `clear_warns_for_chats` on partial enforcement). A target holding a federation role is auto-demoted and exempted from the auto-ban instead (staff are never auto-banned via warnings); the threshold warn itself is still recorded.
+In both cases a non-staff user is issued a **federation-wide ban** across all active connected groups, a ban decision is created in `moderation_actions` (appealable), and the warnings of the groups where the ban landed are revoked (`clear_all_warns` on complete enforcement, `clear_warns_for_chats` on partial enforcement). A target holding a federation role is auto-demoted and exempted from the auto-ban instead (staff are never auto-banned via warnings); the threshold warn itself is still recorded.
 
 The per-group limit is read from the `WARN_LIMIT` environment variable (default 3, minimum 1) and exposed as `cfg.warn_limit`.
 
@@ -117,7 +117,7 @@ Proof options:
 - Tap `Skip` to warn without proof.
 - Tap `Cancel` to stop the operation.
 
-When proof is provided, `execute_warn` starts the upload to the proof channel (`cfg.proofs`) using `upload_proof()` before the warn write and runs it concurrently with `warns_db.add_warn`, so the warn never waits for the proof-channel round trip; a warn-write failure cancels the in-flight upload and replies with a retry notice. The resulting URL is attached as a `keyboards.action_proof_kb()` inline keyboard button to all outgoing messages (the warning reply, the warning log, and, if the warn triggers an auto-ban, the auto-ban log and auto-ban notice). If upload fails, outgoing messages still send without a proof button. When proof is skipped, no upload is attempted and no proof button is shown. No proof message ID is stored in the warning row (`warns` table).
+When proof is provided, `execute_warn` starts the upload to the proof channel (`cfg.proofs`) using `upload_proof()` before the warn write and runs it concurrently with `warns_db.add_warn`, so the warn never waits for the proof-channel round trip; a warn-write failure cancels the in-flight upload and replies with a retry notice. The resulting URL is attached as a `keyboards.action_proof_kb()` inline keyboard button to all outgoing messages (the warning reply, the warning log, and, if the warn triggers an auto-ban, the auto-ban log and auto-ban notice). If upload fails, outgoing messages still send without a proof button. When proof is skipped, no upload is attempted and no proof button is shown. The proof message ID is not stored on the warning decision; the button carries the resolved link.
 
 ## Role hierarchy and target protection
 
@@ -265,11 +265,14 @@ Flow:
 
 1. Resolve target.
 2. If unresolved, ask for a target.
-3. Fetch all warnings with `warns_db.get_warns(target_id, chat_id)` sorted oldest first.
+3. Fetch the 50 most recent warnings with
+   `warns_db.get_warns(target_id, chat_id, newest_first=True, limit=50)`.
 4. If none exist, reply that the target has no warnings in this group.
-5. Otherwise, reply with count and numbered reason list.
+5. Otherwise, reply with the total count from `warns_db.warn_count(...)` and
+   a numbered reason list of the newest warnings first.
 
-The displayed count is the length of fetched warning history, not a separate read from the `warn_counts` view.
+The header count is the derived `warn_counts` total, so a history longer than
+the rendered page still reports the real number of warnings in force.
 
 ## `/resetwarns` behavior
 
@@ -280,9 +283,10 @@ Flow:
 1. Resolve target.
 2. Reject unresolved target.
 3. Handle bot/Founder/staff messages as described above.
-4. Delete all matching warning history and the counter with `warns_db.clear_warns(...)`.
-5. If nothing was removed, reply that there are no warnings to clear.
-6. Otherwise, send an audit log to the federation log channel and reply with how many warning documents were cleared. Both actions run in parallel via `asyncio.gather`.
+4. Revoke the matching warning decisions with `warns_db.clear_warns(...)`; the
+   count view drops them without deleting the history.
+5. If nothing was revoked, reply that there are no warnings to clear.
+6. Otherwise, send an audit log to the federation log channel and reply with how many warning decisions were revoked. Both actions run in parallel via `asyncio.gather`.
 
 ## Logs
 
@@ -365,14 +369,14 @@ Key warning behaviors to keep in mind:
 3. `/tcwarn` with inline reason skips the reason prompt and asks for proof.
 4. `/tcwarn` without inline reason asks for a reason and does not offer `Skip` for reason.
 5. Proof step offers `Skip`, `Done`, and `Cancel`.
-6. Warning count increments per `(user_id, chat_id)`.
-7. Warning counts are stored per group but two auto-ban thresholds exist: `cfg.warn_limit` (env var `WARN_LIMIT`, per-group, default 3, minimum 1, uses `>=` so a post-failure retry still fires) and `FED_WARN_LIMIT` (federation-wide, default 0 = disabled, uses `>=` because the cross-group aggregate is not atomic).
-8. `/warns` lists reasons oldest first.
-9. `/tcunwarn` removes the newest warning and decrements the counter.
-10. `/resetwarns` clears history and counter without banning.
+6. The warning count is derived per `(user_id, chat_id)` from the warning decisions still in force.
+7. Warning counts are per group, but two auto-ban thresholds exist: `cfg.warn_limit` (env var `WARN_LIMIT`, per-group, default 3, minimum 1, uses `>=` so a post-failure retry still fires) and `FED_WARN_LIMIT` (federation-wide, default 0 = disabled, uses `>=` because the cross-group aggregate is not atomic).
+8. `/warns` lists the newest reasons first, capped at 50 entries.
+9. `/tcunwarn` revokes the newest warning; the count view reflects the lower number.
+10. `/resetwarns` revokes every active warning in the group without banning.
 11. At `cfg.warn_limit` per-group, successful federation-wide auto-ban clears warnings across all groups.
 12. At `cfg.warn_limit`, failed auto-ban (all groups) keeps warnings and tells moderators to ban manually; the next warn re-fires the auto-ban.
 13. When `FED_WARN_LIMIT > 0`: if `federation_warn_count(target_id)` reaches or exceeds the limit (but the per-group limit was not hit), the same federation-wide auto-ban fires via the `"fed_global"` trigger path.
 14. Equal/higher staff targets are protected from `/tcwarn`.
-15. Lower-ranked staff targets can be warned by higher-ranked executors. A single warning below the limit does not auto-demote them. At the warn limit, if the target holds a federation role, they are auto-demoted (`trigger="ban"`) and exempted from the auto-ban; the warn itself is still recorded.
+15. Lower-ranked staff targets can be warned by higher-ranked executors. A single warning below the limit does not auto-demote them. At the warn limit, if the target holds a federation role, they are auto-demoted (`trigger="warn"`) and exempted from the auto-ban; the warn itself is still recorded.
 16. Warning log send failures do not roll back the warning record.

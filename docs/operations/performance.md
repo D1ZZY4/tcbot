@@ -29,9 +29,12 @@ The bot currently uses:
   `gather_bounded()` from the same module bounds pure database bursts
   (for example bulk deactivations during cleanup) without touching the
   Telegram circuit breaker;
-- cached auth reads (`owner_only` via the cached owner ID, `staff_only` via
-  the cached effective role) so repeated permission checks cost no database
-  round trip on cache hits;
+- bounded identity resolution: a fresh stored profile is used when available,
+  and an unknown user is resolved with a bounded probe set (see below);
+- cached rate-limit reads (`_is_exempt` and the command-bucket tier read the
+  owner and effective-role caches) while authorization gates for commands and
+  enforcement read the role tables directly (`fresh=True`), so a demotion or
+  transfer in another process is never hidden behind a TTL;
 - circuit breakers around PostgreSQL and Telegram operations.
 
 The webhook receiver and polling fallback affect transport latency, but neither
@@ -130,10 +133,10 @@ acknowledgement and read together, but errors must still be handled explicitly.
 
 ### Bounded identity resolution
 
-Unknown-user resolution (`extraction._fetch_live_identity`) tries one bounded
-`get_chat`, then probes connected groups with `get_chat_member`. Probes run
-concurrently under a semaphore (10, matching the `fan_out` Telegram cap) with
-an overall 15 s deadline; the first hit in group order wins. Probes never
+Unknown-user resolution (`extraction/refresh._fetch_live_identity`) tries one
+bounded `get_chat`, then probes connected groups with `get_chat_member`. Probes
+run concurrently under a semaphore (10, matching the `fan_out` Telegram cap)
+with an overall 15 s deadline; the first hit in group order wins. Probes never
 touch the Telegram circuit breaker: a timeout is only an identity miss, not
 congestion evidence. Callers that can tolerate staleness should render from
 cache first and refresh in the background via `launch_identity_refresh`.
@@ -178,10 +181,13 @@ connection count stays bounded regardless of how many groups are connected.
 
 Database calls are asynchronous: the driver awaits the server on the event
 loop, so no worker thread is involved and no default-executor slot can be
-starved by a slow query. The pool is sized explicitly in
-`tcbot/database/engine.py`: 20 pooled connections plus 10 overflow, a 10 s
-pool timeout, and a 30-minute recycle so a proxy never hands out a dropped
-connection.
+starved by a slow query. The pool is sized from configuration
+(`DB_POOL_SIZE`, default 5, plus `DB_MAX_OVERFLOW`, default 5) in
+`tcbot/database/engine.py`, with a 10 s pool timeout and a 30-minute recycle
+so a proxy never hands out a dropped connection. Keep the total within the
+connection limit the database grants this user; a pool larger than that limit
+fails later as a refused connection, which the circuit breaker reads as an
+outage.
 
 Every call is also bounded by default. `db_call(op, timeout=...)` defaults to
 20 s and raises `TimeoutError` when the operation does not answer in time. A
@@ -204,18 +210,19 @@ deployment schema over a network link, a single-row lookup costs about
 0.86 ms without the pre-ping and about 1.08 ms with it, against 1.08 ms
 for the transactional form.
 
-Operations that are legitimately long carry their own budget. The
-warn-history and counter deletes pass `timeout=None`, because a
-federation-wide clear removes every warning row of one user across every
-group. The daily warn-expiry sweep runs its two bulk deletes in one
-transaction with a 60 s budget, because a bulk delete over a large
-history can run long and the sweep reports the deadline it used.
+The daily stale-record sweep passes `timeout=None` for its two bulk deletes
+(membership cache and erasure queue), because a delete over a large history
+can run long; the run as a whole is bounded by a 60 s deadline. The expiry
+sweep moves the due decisions and role assignments and queues the revoke runs
+in one transaction with the same 60 s budget, so a decision can never expire
+without the job that lifts the restriction.
 
-A warning is written without a scan of the history. The counter row
-normally exists and the upsert increments it, so the history count is
-only needed when the row is missing. The statement makes the database
-evaluate just the branch it needs, so the common path never counts the
-history and the slow path only runs on a counter that was lost.
+A warning does not maintain a counter row. The per-group and federation counts
+are read from the `warn_counts` view over the decision history, so the count
+cannot fall behind the warnings that produced it and there is no repair path.
+The count that the threshold reads filters on the decision status and its
+expiry, so a revoked or lapsed warning stops counting without rewriting
+history.
 
 ## Redis reconnect
 

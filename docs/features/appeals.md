@@ -42,16 +42,16 @@ The registered `/start` entry filter only accepts private-chat messages matching
 
 The deep-link flow itself is DM-only. If the link is opened outside a private chat, the bot asks the user to open it in private messages.
 
-A second entry point is the main group (`MAIN_GROUP`). There, a banned user sends a `#appeal` message (with the log reference, and optionally the ban id); the bot looks up their active ban by sender and runs the same submission gates and posting as the DM path. Outside `MAIN_GROUP` the tag stays silent.
+A second entry point is the main group (`MAIN_GROUP`). There, a banned user sends a `#appeal` message (with the log reference, and optionally the ban id); the bot looks up their active ban by sender and runs the same submission gates and posting as the DM path. Outside `MAIN_GROUP` the tag stays silent. Repeated `#appeal` messages from one user are rate-limited before the lookup runs.
 
 ## Eligibility checks
 
-When the appeal link is opened, the bot validates the ban record before starting the conversation:
+When the appeal link is opened, the bot validates the ban decision before starting the conversation:
 
-1. The `ban_id` must exist in the `bans` table.
-2. The ban must still be active (`is_active: True`).
-3. The Telegram user opening the link must match `target_user_id` on the ban record.
-4. The ban must not already have a stored `review_message_id` that is still fresh. If it does and was set within the last 72 hours, the user is told their appeal is still under review. If the `review_timestamp` is older than 72 hours (or missing), the stale review is cleared automatically and the user may submit a new appeal.
+1. The `ban_id` must exist as `moderation_actions.external_ref` for a ban decision.
+2. The decision must still be active (`status = 'active'` and inside its deadline).
+3. The Telegram user opening the link must match `target_user_id` on the decision.
+4. The decision must not already carry a fresh review slot. If it does and the slot was claimed within the last 72 hours, the user is told their appeal is still under review. If the slot is older than 72 hours (or missing), the stale review is cleared automatically and the user may submit a new appeal.
 
 Invalid, expired, or wrong-account links end the conversation without changing the database.
 
@@ -139,21 +139,27 @@ Cancel clears the in-memory conversation keys and edits the instruction message 
 
 ## Database impact
 
-Appeals reuse the existing `bans` table. No separate appeal table is used.
+Appeals live in the community decision tables, not in a separate legacy `bans` table:
 
-The following fields are read or updated on ban documents:
+| Table | Holds |
+|---|---|
+| `moderation_actions` | the ban decision: `external_ref` (the public `ban_id`), `target_user_id`, `status`, `expires_at`, `metadata`, and the case link |
+| `moderation_appeals` | one row per submitted appeal: `action_id`, `appellant_user_id`, `appeal_text`, `status`, `submitted_at`, `resolved_at`, `reviewed_by_user_id`, `decision_note` |
+| `moderation_messages` | the stored Telegram message references of a decision, including the federation log (`log`) and the appeal log (`appeal_log`) |
+| `moderation_evidence_uploads` / `moderation_evidence_items` | the archived proof batch and its message id |
+
+The composed `BanDoc` exposes the fields the flow reads:
 
 | Field | Used for |
 |---|---|
-| `ban_id` | Deep-link and callback identifier. |
+| `ban_id` | Deep-link and callback identifier (`moderation_actions.external_ref`). |
 | `target_user_id` | Confirms the appeal belongs to the current user. |
-| `is_active` | Blocks appeals for inactive/resolved bans. |
-| `log_message_id` | Validates that the user referenced the correct ban log. |
-| `review_message_id` | Marks a pending staff review and blocks duplicate appeals. |
-| `review_timestamp` | Starts the 12-hour original-admin review priority window. |
-| `appeal_log_msg_id` | Lets the bot edit the submitted-appeal log after approval/rejection. |
-| `appeal_submitted_at` | Displayed in final appeal log edits. |
-| `appeal_link` | Link to the forwarded appeal message. |
+| `is_active` | Blocks appeals for revoked, superseded, expired, or missing decisions. |
+| `log_message_id` | Validates that the user referenced the correct ban log (`moderation_messages`, kind `log`). |
+| `review_message_id` / `review_timestamp` | The review slot stored in the decision metadata; blocks duplicate appeals and starts the 12-hour original-admin priority window. |
+| `appeal_log_msg_id` | Lets the bot edit the submitted-appeal log after approval or rejection (`moderation_messages`, kind `appeal_log`). |
+| `appeal_submitted_at` | The `moderation_appeals.submitted_at` value, displayed in final appeal log edits. |
+| `appeal_link` | The forwarded appeal message link stored in the decision metadata. |
 
 The update helpers involved are:
 
@@ -162,13 +168,15 @@ The update helpers involved are:
 - `bans_db.deactivate_all_active_bans(user_id)` on approval (clears all active records atomically)
 - `bans_db.claim_appeal_decision(ban_id, review_msg_id)` (atomic decision claim; consumes the review slot)
 - `bans_db.restore_review(ban_id, review_msg_id, review_timestamp)` (hands the slot back when a tap reached no decision)
+- `bans_db.accept_appeal(...)` / `bans_db.reject_appeal(...)` (close the appeal row with the reviewer and note)
+- `bans_db.clear_review(ban_id)` (releases the slot after a rejection)
 - `users_cache.upsert_user(...)` after submission
 
-If the review post fails, `review_message_id` is not stored. If the appeal-log post fails, `appeal_log_msg_id` is not stored. The implementation logs those failures and continues where possible.
+If the review post fails, no review slot is stored. If the appeal-log post fails, no `appeal_log` message reference is stored. The implementation logs those failures and continues where possible.
 
 ## Staff review rules
 
-Appeal decisions are handled by `appeal.on_decision` and are registered outside the conversation handler. Only Founder or Admin reviewers (effective role `founder`/`admin` via `users_roles.get_effective_role`) may use the review buttons. In this codebase that matches `is_staff` semantics; Developer and Tester custom roles are not included.
+Appeal decisions are handled by `appeal.on_decision` and are registered outside the conversation handler. The entry is wrapped in a per-user staff throttle before the handler runs. Only Founder or Admin reviewers (effective role `founder`/`admin` via `users_roles.get_effective_role`) may use the review buttons. In this codebase that matches `is_staff` semantics; Developer and Tester custom roles are not included.
 
 A role-lookup outage fails closed with a retry alert instead of an authorization verdict, so a transient database blip is never misreported as "not authorized".
 
