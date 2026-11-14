@@ -175,6 +175,19 @@ async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if scope != _chat_scope(chat.type):
         await q.answer()
         return
+    if scope == "group" and not await can_manage_group(
+        ctx.bot, chat.id, user.id, fresh=True
+    ):
+        # * Re-rendering the group panel is a group-management action, so
+        # * the same check the save path applies guards the Back target.
+        denied_locale = await effective_locale(chat.type, user.id, chat.id)
+        try:
+            await q.answer(
+                t("language.denied", denied_locale, plain=True), show_alert=True
+            )
+        except Exception as exc:
+            log.debug("language denied answer failed: %s", exc)
+        return
     await q.answer()
     locale = await effective_locale(chat.type, user.id, chat.id)
     back_callback = "back_to_start" if scope == "user" else None
