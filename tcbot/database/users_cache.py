@@ -11,7 +11,7 @@ from typing import cast
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tcbot.database.base import telegram_users
+from tcbot.database.base import chat_members, telegram_users
 from tcbot.database.cache import CACHE_MISS, user_mention_cache
 from tcbot.database.documents import UserDoc
 from tcbot.database.engine import db_call, fetch_all, fetch_one, fetch_value, run
