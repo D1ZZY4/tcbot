@@ -41,10 +41,6 @@ coverage.xml
 .cache/
 .ruff_cache/
 
-# Local operator state (one-shot migration resume file)
-proof_migration_state.json
-proof_migration_state.json.tmp
-
 # Build outputs
 dist/
 build/
