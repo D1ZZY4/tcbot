@@ -711,8 +711,8 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
         )
         if skipped_bans or skipped_mutes:
             # * The replay stopped at the budget, so the new group is not
-            # * fully enforced yet. The operator is told to re-sync, and
-            # * the enforcement sweep repairs the remainder.
+            # * fully enforced yet. The operator is told to re-add the bot,
+            # * and the connect replay runs again on the next join.
             log.warning(
                 "Connect replay for chat %d stopped at the time budget: "
                 "%d ban(s) and %d mute(s) not applied.",

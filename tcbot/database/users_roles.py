@@ -24,7 +24,7 @@ from tcbot.database.cache import (
     effective_role_cache,
     owner_id_cache,
 )
-from tcbot.database.documents import AdminDoc, RoleDoc, RoleRefDoc
+from tcbot.database.documents import AdminDoc, RoleRefDoc
 from tcbot.database.engine import (
     db_call,
     fetch_all,
@@ -418,21 +418,6 @@ async def remove_role(user_id: int) -> bool:
     return revoked
 
 
-async def get_role(user_id: int) -> str | None:
-    """Return the role the user currently holds."""
-    row = await db_call(
-        lambda: fetch_one(
-            select(role_assignments.c.role_key).where(
-                role_assignments.c.user_id == user_id,
-                *_active_assignment(),
-            )
-        )
-    )
-    if row is None:
-        return None
-    return APP_ROLE_BY_ROLE_KEY.get(str(row["role_key"]))
-
-
 async def all_by_role(role: str) -> list[RoleRefDoc]:
     """Get all users with a specific role."""
     rows = await db_call(
@@ -659,20 +644,3 @@ async def role_catalog() -> list[dict[str, object]]:
             ).order_by(role_definitions.c.priority.desc())
         )
     )
-
-
-# * The document shape of an active role assignment.
-_ROLE_COLUMNS = (
-    role_assignments.c.user_id,
-    role_assignments.c.role_key,
-    role_assignments.c.assigned_by_user_id,
-    role_assignments.c.assigned_at,
-)
-
-
-async def active_assignments() -> list[RoleDoc]:
-    """Return every active role assignment."""
-    rows = await db_call(
-        lambda: fetch_all(select(*_ROLE_COLUMNS).where(*_active_assignment()))
-    )
-    return cast("list[RoleDoc]", rows)

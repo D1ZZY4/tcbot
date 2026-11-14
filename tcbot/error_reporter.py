@@ -567,11 +567,3 @@ async def report_exc(exc: BaseException, context: str | None = None) -> None:
         await send_to_owner(text)
     else:
         await send_to_log_errors(text)
-
-
-async def report_record(record: logging.LogRecord) -> None:
-    """Report a LogRecord; deduped and noise-filtered."""
-    if not _approved(record):
-        return
-    exc = record.exc_info[1] if record.exc_info else None
-    await _deliver(exc, record)

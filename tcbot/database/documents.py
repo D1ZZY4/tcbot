@@ -94,17 +94,6 @@ class PendingGroupDoc(TypedDict, total=False):
     status: RequestStatus
 
 
-class RoleDoc(TypedDict, total=False):
-    """Row shape of a user's role assignment."""
-
-    user_id: UserId
-    role_key: str
-    assigned_by: UserId
-    assigned_at: datetime
-    status: str
-    expires_at: datetime | None
-
-
 class RoleRefDoc(TypedDict, total=False):
     """Minimal reference document storing only a user ID for role index lookups."""
 
@@ -188,14 +177,6 @@ class WarnDoc(TypedDict, total=False):
     actor_user_id: UserId
     chat_id: ChatId
     timestamp: datetime
-
-
-class WarnCountDoc(TypedDict, total=False):
-    """Row shape of the running warning total for a user in a chat."""
-
-    user_id: UserId
-    chat_id: ChatId
-    count: int
 
 
 class ChatSettingsDoc(TypedDict, total=False):

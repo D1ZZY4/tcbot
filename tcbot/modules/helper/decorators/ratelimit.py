@@ -72,8 +72,6 @@ THROTTLE_FEDERATION = Throttle(limit=3, period=60.0)
 THROTTLE_BULK = Throttle(limit=3, period=300.0)
 # * A single destructive operation per window (leave-all).
 THROTTLE_CRITICAL = Throttle(limit=1, period=300.0)
-# * The scheduled federation sweep.
-THROTTLE_SWEEP = Throttle(limit=2, period=300.0)
 
 
 # ────────────── Per-user sliding-window rate limiter ────────────── #

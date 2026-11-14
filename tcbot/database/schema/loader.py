@@ -136,12 +136,6 @@ def _is_dollar_tag(text_body: str) -> bool:
     return all(char.isalnum() or char == "_" for char in text_body)
 
 
-def apply_sql_file(conn, name: str, schema: str) -> None:
-    """Apply one schema file to the connection."""
-    raw = read_schema_file(name).replace(SCHEMA_PLACEHOLDER, schema)
-    execute_statements(conn, split_statements(raw))
-
-
 def execute_statements(conn, statements: list[str]) -> None:
     """Run the statements of the schema on the connection.
 

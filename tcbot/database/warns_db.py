@@ -20,7 +20,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from tcbot import cfg
 from tcbot.database import moderation_db
 from tcbot.database.base import moderation_actions
-from tcbot.database.documents import WarnCountDoc, WarnDoc
+from tcbot.database.documents import WarnDoc
 from tcbot.database.engine import (
     db_call,
     fetch_all,
@@ -363,19 +363,6 @@ async def user_warn_groups(user_id: int) -> list[tuple[int, int]]:
         )
     )
     return [(int(d["chat_id"]), int(d["count"])) for d in rows]
-
-
-async def warn_count_doc(user_id: int, chat_id: int) -> WarnCountDoc | None:
-    """Return the counter row of one user in one group."""
-    row = await db_call(
-        lambda: fetch_one(
-            text(
-                "SELECT chat_id, user_id, count FROM warn_counts "
-                "WHERE chat_id = :chat_id AND user_id = :user_id"
-            ).bindparams(chat_id=chat_id, user_id=user_id)
-        )
-    )
-    return cast("WarnCountDoc | None", row)
 
 
 # ───────────────────────────── Migration ─────────────────────────── #

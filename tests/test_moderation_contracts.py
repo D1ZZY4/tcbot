@@ -90,7 +90,6 @@ def test_the_throttle_tiers_keep_their_budgets() -> None:
         "THROTTLE_FEDERATION": (3, 60.0),
         "THROTTLE_BULK": (3, 300.0),
         "THROTTLE_CRITICAL": (1, 300.0),
-        "THROTTLE_SWEEP": (2, 300.0),
     }
     actual = {
         name: (getattr(ratelimit, name).limit, getattr(ratelimit, name).period)
