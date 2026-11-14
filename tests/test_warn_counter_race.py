@@ -86,6 +86,21 @@ async def test_concurrent_warnings_keep_every_increment(warn_db: str) -> None:
     assert await warns_db.warn_count(42, 5) == 5
 
 
+async def test_concurrent_warnings_return_every_count(warn_db: str) -> None:
+    """A warning burst must see every count that precedes it.
+
+    The caller decides the automatic ban from the returned count, so two
+    concurrent warnings that both read the same stale count could skip the
+    threshold. The per-user advisory lock orders the writes, so a burst of
+    five returns one through five.
+    """
+    counts = await asyncio.gather(
+        *(warns_db.add_warn(42, "spam", 1, 5) for _ in range(5)),
+    )
+
+    assert sorted(counts) == [1, 2, 3, 4, 5]
+
+
 async def test_a_failed_decision_leaves_no_orphan_case(
     warn_db: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

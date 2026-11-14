@@ -115,7 +115,15 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
     lifetime = timedelta(days=cfg.warn_expiry_days)
     expires_at = now + lifetime if cfg.warn_expiry_days > 0 else None
 
-    async def _work(sess: AsyncSession) -> None:
+    async def _work(sess: AsyncSession) -> int:
+        # * A burst of warnings for the same group and user has to reach the
+        # * threshold in order: the count below sees every warning that
+        # * committed before it, so two moderators warning at once cannot
+        # * both read a count below the limit and skip the automatic ban.
+        await sess.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
+            {"scope": f"warn:{chat_id}:{user_id}"},
+        )
         case_id = await _open_case(sess, user_id, admin_id, reason, chat_id)
         await sess.execute(
             pg_insert(moderation_actions).values(
@@ -143,9 +151,18 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
         # * picked up by the next decision about the same user, so the
         # * history would collapse into one case per user.
         await moderation_db.close_case(sess, case_id, admin_id)
+        # * The count is read in the transaction that wrote the warning, so
+        # * the returned value always agrees with the row and a transient
+        # * read failure cannot report a stored warning as a failed write.
+        total = await sess.scalar(
+            text(
+                "SELECT count FROM warn_counts "
+                "WHERE chat_id = :chat_id AND user_id = :user_id"
+            ).bindparams(chat_id=chat_id, user_id=user_id)
+        )
+        return int(total or 0)
 
-    await run_transaction(_work)
-    return await warn_count(user_id, chat_id)
+    return int(await run_transaction(_work))
 
 
 async def clear_warns(user_id: int, chat_id: int) -> int:
