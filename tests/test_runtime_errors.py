@@ -13,6 +13,7 @@ from typing import Any
 
 from pyrogram.session.session import AuthKeyNotFound
 from sqlalchemy.exc import OperationalError
+from telegram.error import Conflict
 
 from tcbot import __main__ as runtime_errors
 from tcbot import error_reporter
@@ -298,3 +299,26 @@ def test_error_handler_suppresses_circuit_open(monkeypatch: Any, caplog: Any) ->
         asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]
     assert reported == []
     assert "Unhandled exception for update" not in caplog.text
+
+
+def test_error_handler_names_the_poll_conflict(monkeypatch: Any, caplog: Any) -> None:
+    """A second polling instance is an operator situation, not a defect.
+
+    The handler used to log the conflict as an unhandled exception with a
+    traceback every few seconds, which buried the rest of the log. The
+    conflict now gets one actionable warning line, and the owner still
+    hears about it through the reporter.
+    """
+    reported: list[Any] = []
+
+    async def _fake_report(exc: BaseException, context: Any = None) -> None:
+        reported.append(exc)
+
+    monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
+
+    ctx = SimpleNamespace(error=Conflict("terminated by other getUpdates request"))
+    with caplog.at_level(logging.DEBUG, logger="tcbot.__main__"):
+        asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]
+    assert "another instance is polling this bot" in caplog.text
+    assert "Unhandled exception for update" not in caplog.text
+    assert len(reported) == 1 and isinstance(reported[0], Conflict)

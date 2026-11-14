@@ -161,6 +161,17 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     if db_engine.is_pool_timeout(exc):
         log.warning("Database pool saturated (not reported): %s", exc)
         return
+    if isinstance(exc, te.Conflict):
+        # * Another instance is polling this bot. It is an operator
+        # * situation rather than a defect, so the traceback stays out of
+        # * the log. The reporter routes a conflict to the owner DM, which
+        # * is where the operator reads it.
+        log.warning(
+            "Telegram refused the poll: another instance is polling this "
+            "bot. Stop the other instance or give each one its own token."
+        )
+        await error_reporter.report_exc(exc)
+        return
     if isinstance(exc, (te.NetworkError, te.TimedOut, te.RetryAfter)):
         log.warning("Transient Telegram error (not reported): %s", exc)
         return
@@ -251,6 +262,11 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
         )
         if isinstance(exc, (te.NetworkError, te.TimedOut, te.RetryAfter)):
             log.debug("[asyncio] transient (not reported): %s", exc)
+            return
+        if isinstance(exc, te.Conflict):
+            # * Another instance is polling this bot. The PTB error handler
+            # * reports it to the owner, so the asyncio path only notes it.
+            log.debug("[asyncio] poll conflict (not reported): %s", exc)
             return
         if exc is not None and (
             db_engine.is_connection_error(exc) or isinstance(exc, CircuitOpenError)
