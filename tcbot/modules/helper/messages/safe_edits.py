@@ -172,6 +172,19 @@ async def clear_markup_cb(q: CallbackQuery) -> None:
         log.warning("clear markup failed: %s", e)
 
 
+async def answer_alert(q: CallbackQuery, text: str) -> None:
+    """Answer a callback query with a plain alert; never raises.
+
+    The alert leaves the message and its keyboard untouched, so a refused
+    tap on a shared card cannot destroy it for the user who may act.
+    Callback alerts are never parsed, so ``text`` is always plain.
+    """
+    try:
+        await q.answer(text, show_alert=True)
+    except Exception as exc:
+        log.debug("callback alert answer failed: %s", exc)
+
+
 async def answer_and_edit(q: CallbackQuery, text: str, **kwargs: Any) -> None:
     """Answer a callback query and edit its message in parallel.
 

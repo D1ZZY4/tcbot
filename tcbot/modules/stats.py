@@ -20,6 +20,7 @@ from tcbot.modules.helper import decorators, guards
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ack_and_render,
+    answer_alert,
     answer_and_edit,
     callback_args_optional,
     callback_numbers,
@@ -76,14 +77,6 @@ __help__: replies.HelpEntry = get_help()
 # ────────────────────────── Command entry ────────────────────────── #
 
 
-async def _alert(q: CallbackQuery, text: str) -> None:
-    """Answer the callback query with an alert, ignoring a failed answer."""
-    try:
-        await q.answer(text, show_alert=True)
-    except Exception as exc:
-        log.debug("stats pane deny-answer failed: %s", exc)
-
-
 async def _pane_access(
     q: CallbackQuery,
     user_id: int | None,
@@ -102,10 +95,10 @@ async def _pane_access(
     """
     access = await guards.staff_access(user_id, min_role=min_role)
     if access is guards.StaffAccess.LOOKUP_FAILED:
-        await _alert(q, t("stats.error.access_retry", locale, plain=True))
+        await answer_alert(q, t("stats.error.access_retry", locale, plain=True))
         return False
     if access is not guards.StaffAccess.ALLOWED:
-        await _alert(q, denial)
+        await answer_alert(q, denial)
         return False
     return True
 

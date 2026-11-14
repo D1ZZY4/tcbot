@@ -24,7 +24,7 @@ from tcbot import database as db
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.keyboards import connect_join_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import cb_error_edit, send_log
+from tcbot.modules.helper.messages import answer_alert, cb_error_edit, send_log
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
@@ -383,25 +383,18 @@ class ConnectionDecisionMixin:
             return_exceptions=True,
         )
         throw_if_cancelled((member_res, ans_res))
-        msg = update.effective_message
+        # * The prompt is one shared message, so a refusal must not remove
+        # * its keyboard: any member can see it and would otherwise be able
+        # * to destroy the owner's only Connect button. An alert keeps the
+        # * prompt live for the owner.
         if isinstance(member_res, BaseException):
             log.debug("Join decision role check failed: %s", member_res)
-            coros: list = [q.edit_message_reply_markup(None)]
-            if msg:
-                coros.append(
-                    msg.reply_text(
-                        t("connecting.state.role_check_failed", locale, plain=True)
-                    )
-                )
-            await asyncio.gather(*coros, return_exceptions=True)
+            await answer_alert(
+                q, t("connecting.state.role_check_failed", locale, plain=True)
+            )
             return
         if member_res.status != ChatMemberStatus.OWNER:
-            coros = [q.edit_message_reply_markup(None)]
-            if msg:
-                coros.append(
-                    msg.reply_text(t("connecting.state.owner_only", locale, plain=True))
-                )
-            await asyncio.gather(*coros, return_exceptions=True)
+            await answer_alert(q, t("connecting.state.owner_only", locale, plain=True))
             return
         action = q.data
         if action == self.join_callback:

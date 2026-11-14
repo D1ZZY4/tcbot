@@ -16,6 +16,7 @@ from tcbot import database as db
 from tcbot.modules.helper.guards import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
+    answer_alert,
     cb_error_edit,
     promote_approved_log,
     promote_rejected_log,
@@ -79,20 +80,14 @@ async def execute_promo_decision(
         log.debug("on_promo_decision answer failed: %s", answer_r)
     if isinstance(is_owner, BaseException):
         log.warning("on_promo_decision owner check failed: %s", is_owner)
-        await cb_error_edit(
-            q,
-            t("admins.error.role_lookup_failed", locale, plain=True),
-            log_label="on_promo_decision lookup-fail",
-            parse_mode=None,
-        )
+        # * The card is shared (the Founder DM, or the log channel when the
+        # * DM fails), so a refused tap must leave its buttons in place. An
+        # * edit here would let any reader of the card destroy the Founder's
+        # * only decision surface.
+        await answer_alert(q, t("admins.error.role_lookup_failed", locale, plain=True))
         return
     if not is_owner:
-        await cb_error_edit(
-            q,
-            replies.perm_founder_only(locale, plain=True),
-            parse_mode=None,
-            log_label="on_promo_decision perm-denied",
-        )
+        await answer_alert(q, replies.perm_founder_only(locale, plain=True))
         return
     if isinstance(req_result, BaseException):
         log.error("get_request_by_id failed for %s: %s", request_id, req_result)
