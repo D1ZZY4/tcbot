@@ -14,7 +14,7 @@ from datetime import UTC, timedelta
 from typing import TYPE_CHECKING, Any
 
 from apscheduler.job import Job
-from apscheduler.jobstores.base import JobLookupError
+from apscheduler.jobstores.base import BaseJobStore, JobLookupError
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -226,14 +226,15 @@ async def _sweep_erasures(sess: AsyncSession) -> int:
 
 
 async def _cleanup_old_records() -> None:
-    """No-op shim for the retired weekly member_cache cleanup job.
+    """No-op shim for the retired weekly membership-cache cleanup job.
 
-    member_cache cleanup is now handled by the daily :func:`expire_stale_records`
-    job, because PostgreSQL has no TTL index.  The legacy schedule is removed
-    on startup in ``_reconcile_schedules``; this function stays importable so
-    that the job store can still deserialize a record that points at it.
-    Without the symbol, loading such a record raises ``AttributeError`` and
-    the whole reconciliation fails, leaving the new schedule unregistered.
+    The cleanup of the stale memberships is now handled by the daily
+    :func:`expire_stale_records` job, because PostgreSQL has no TTL index.
+    The legacy schedule is removed on startup in ``_reconcile_schedules``;
+    this function stays importable so that the job store can still
+    deserialize a record that points at it. Without the symbol, loading
+    such a record raises ``AttributeError`` and the whole reconciliation
+    fails, leaving the new schedule unregistered.
     """
     log.info(
         "DB cleanup job called but is now a no-op; "
@@ -255,7 +256,7 @@ _EXPIRY_SCHEDULE_ID: str = "tcbot.expiry_daily"
 _LEGACY_WARN_EXPIRY_SCHEDULE_ID: str = "tcbot.warn_expiry_daily"
 # * ID of the live stale-record cleanup job.
 _CLEANUP_SCHEDULE_ID: str = "tcbot.stale_cleanup_daily"
-# * ID of the retired weekly member_cache cleanup job. The schedule is
+# * ID of the retired weekly membership-cache cleanup job. The schedule is
 # * removed on every startup so it cannot fire; the id stays here so the
 # * removal keeps working on a job store written by an older version.
 _LEGACY_CLEANUP_SCHEDULE_ID: str = "tcbot.db_cleanup_weekly"
@@ -290,16 +291,24 @@ _SCHEDULER_TIMEZONE: tzinfo = UTC
 class _PreparedJobStore(SQLAlchemyJobStore):
     """Job store whose table already exists when the scheduler starts.
 
-    ``SQLAlchemyJobStore.start()`` creates the job table with a blocking
+    ``SQLAlchemyJobStore.start()`` does two things: it binds the store
+    to its scheduler, and it creates the job table with a blocking
     ``CREATE TABLE`` and a catalog read. The scheduler starts on the event
     loop, so that DDL would stall the loop for the whole connect timeout
     while the database is unreachable. The table is created on the worker
     thread instead, and this subclass makes the library's own creation
     call a no-op.
+
+    The binding is kept: a job that is read back from the store carries
+    the scheduler, and the scheduler is what turns the next run time of
+    a due job into a real date. Without it, every job that is overdue
+    when the bot starts raises inside the scheduler, its next run time
+    is never written back, and the job fires again on every tick.
     """
 
     def start(self, scheduler: Any, alias: str) -> None:
-        """Skip the library's table creation; it already happened."""
+        """Bind the store to its scheduler without running the library's DDL."""
+        BaseJobStore.start(self, scheduler, alias)
 
 
 def _build_job_store(database_url: str) -> SQLAlchemyJobStore:
@@ -555,7 +564,7 @@ def _reconcile_schedules(
     )
     log.info("Scheduled stale record cleanup: every 24h.")
     # * The retired weekly cleanup job must not fire: it pointed at a
-    # * member_cache sweep the daily job replaced.
+    # * membership sweep the daily job replaced.
     _remove_job(scheduler, _LEGACY_CLEANUP_SCHEDULE_ID, "Legacy DB cleanup")
 
     # * The retired enforcement-sweep job must not fire either: the sweep
