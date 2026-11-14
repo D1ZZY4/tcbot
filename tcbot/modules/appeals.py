@@ -6,14 +6,20 @@
 
 from __future__ import annotations
 
-from telegram.ext import CallbackQueryHandler, MessageHandler, filters
+from typing import TYPE_CHECKING
 
+from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
+
+from tcbot.modules.helper import decorators
 from tcbot.modules.helper.messages import replies
 from tcbot.modules.helper.pipelines.appeal_review_flow import LOCK_HOURS
 from tcbot.modules.helper.pipelines.appeal_submit_flow import appeal
 from tcbot.utils.formatter import bold, pre
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
+
+if TYPE_CHECKING:
+    from telegram import Update
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -59,13 +65,31 @@ _APPEAL_START_CMDS = filters.ChatType.PRIVATE & filters.Regex(
     r"^/start\s+appeal_[a-z0-9]{10}$"
 )
 
+
+# * The review decision is an irreversible federation unban plus a possible
+# * demote, and the #appeal message path is reachable by any group member.
+# * Neither entry is covered by the prefixed-command flood ceiling, so each
+# * gets its own per-user budget before the shared flow runs.
+@decorators.ratelimiter(decorators.THROTTLE_STAFF)
+async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Rate-limit an appeal review decision before delegating to the flow."""
+    await appeal.on_decision(update, ctx)
+
+
+@decorators.ratelimiter(decorators.THROTTLE_MODERATION)
+async def on_group_appeal(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Rate-limit a member's #appeal entry before the submission gate runs."""
+    await appeal.on_group_appeal(update, ctx)
+
+
 __handlers__ = [
     appeal.build_handler(_APPEAL_START_CMDS),
-    CallbackQueryHandler(appeal.on_decision, pattern=r"^appeal_(approve|reject)_\S+$"),
+    CallbackQueryHandler(on_appeal_decision, pattern=r"^appeal_(approve|reject)_\S+$"),
     # * #appeal in the main group is a valid submission path alongside the
-    # * DM deep link; the handler itself gates the chat and the tag.
+    # * DM deep link; the handler itself gates the chat. The filter keeps
+    # * ordinary chat messages out of the per-user throttle and the flow.
     MessageHandler(
-        filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
-        appeal.on_group_appeal,
+        filters.TEXT & ~ALL_PREFIXES_CMD_FILTER & filters.Regex(r"(?i)^\s*#appeal"),
+        on_group_appeal,
     ),
 ]
