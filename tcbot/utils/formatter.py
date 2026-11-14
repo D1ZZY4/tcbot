@@ -90,7 +90,12 @@ def user_ref(user_id: int, name: str, username: str | None = None) -> str:
     never used: they can change, be reused, or be missing, while the
     numeric ID always resolves. The ``username`` parameter is accepted for
     backward compatibility and ignored.
+
+    A non-positive ID names no account (an anonymous admin is attributed
+    with ``0``), so it renders as bold text instead of a dead profile link.
     """
     _ = username
     label = str(name) or str(user_id)
+    if user_id <= 0:
+        return bold(label)
     return f"[{esc(label)}](tg://user?id={user_id})"

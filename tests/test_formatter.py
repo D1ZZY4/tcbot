@@ -61,6 +61,11 @@ def test_user_ref_uses_id_link_and_ignores_username() -> None:
     assert user_ref(123, "Ann") == user_ref(123, "Ann")
 
 
+def test_user_ref_without_an_account_renders_bold_text() -> None:
+    """An anonymous admin is attributed with ID 0, which has no profile."""
+    assert user_ref(0, "anonymous admin") == "*anonymous admin*"
+
+
 def test_safe_username_shape() -> None:
     assert safe_username("valid_name123") == "valid_name123"
     assert safe_username("ab") is None
