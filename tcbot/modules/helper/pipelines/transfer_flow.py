@@ -179,6 +179,23 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
     # * Point infra error DMs at the new owner from here on.
     error_reporter.set_owner(target_id)
+    # * A promotion request filed before the transfer would now target the
+    # * Founder. It is cancelled so the card cannot be approved later; a
+    # * failure is non-fatal because the approval path refuses the Founder
+    # * role on its own.
+    try:
+        cancelled = await db.queues_db.cancel_pending_for_user(
+            target_id, current_owner.id
+        )
+    except Exception:
+        log.exception("cmd_transfer cancel pending request failed for %d", target_id)
+    else:
+        if cancelled:
+            log.info(
+                "cmd_transfer cancelled %d pending promotion request(s) for new owner %d",
+                cancelled,
+                target_id,
+            )
     # * Non-fatal but never silent: set_owner already committed, so flag a
     # * failed add_admin in the reply instead of claiming full success.
     prev_owner_admin_ok = True

@@ -122,6 +122,40 @@ def test_promo_owner_lookup_failure_keeps_the_decision_card(
     assert query.answers[-1][1] is True
 
 
+def test_promo_approve_refuses_the_current_founder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stale request for the new owner must not rewrite the owner role."""
+    _install_promo_common(monkeypatch, is_owner=True, request=_request(42))
+    resolved: list[str] = []
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "founder"
+
+    async def _resolve(request_id: str, status: str, resolved_by: int) -> bool:
+        _ = (status, resolved_by)
+        resolved.append(request_id)
+        return True
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.queues_db, "resolve", _resolve)
+    query = _FakeQuery("promo_approve:req-1")
+
+    asyncio.run(
+        promo_decision_flow.execute_promo_decision(
+            _promo_update(query, 1),  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+        )
+    )
+
+    assert resolved == []
+    assert query.edits == []
+    assert query.answers[-1] == (
+        t("admins.promote.target_is_founder", "en-US", plain=True),
+        True,
+    )
+
+
 class _JoinBot:
     """Bot double: one membership answer, optionally raising."""
 

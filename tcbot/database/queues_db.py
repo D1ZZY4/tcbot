@@ -266,6 +266,31 @@ async def pending_count() -> int:
     )
 
 
+async def cancel_pending_for_user(user_id: int, resolved_by: int) -> int:
+    """Cancel the pending promotion request of *user_id*; return rows closed.
+
+    An ownership transfer makes a queued promotion moot: the new owner
+    already holds the Founder role, and approving the stale request would
+    overwrite that role. The request is closed as ``cancelled`` so the
+    history keeps the submission without leaving a card that can still be
+    approved.
+    """
+    return await db_call(
+        lambda: run(
+            promotion_requests.update()
+            .where(
+                promotion_requests.c.target_user_id == user_id,
+                promotion_requests.c.status == "pending",
+            )
+            .values(
+                status="cancelled",
+                resolved_at=utc_now(),
+                resolved_by_user_id=resolved_by,
+            )
+        )
+    )
+
+
 async def resolve(request_id: str, status: RequestStatus, resolved_by: int) -> bool:
     """Mark a pending promotion request as resolved.
 

@@ -126,6 +126,25 @@ async def execute_promo_decision(
     target_fname = req.get("first_name", str(target_id))
 
     if action == "promo_approve":
+        # * A request can outlive an ownership transfer. Approving it would
+        # * rewrite the owner assignment as an Admin, leaving the federation
+        # * without a Founder, so the Founder role is refused here. The
+        # * request stays pending; the transfer cancels it separately.
+        try:
+            target_role = await db.users_roles.get_effective_role(target_id, fresh=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("promo_approve target role lookup failed for %d", target_id)
+            await answer_alert(
+                q, t("admins.error.role_lookup_failed", locale, plain=True)
+            )
+            return
+        if target_role == "founder":
+            await answer_alert(
+                q, t("admins.promote.target_is_founder", locale, plain=True)
+            )
+            return
         # * A banned target must not gain rank through a queued request:
         # * the request may have been filed before the ban landed, and the
         # * Founder's tap must not override the ban.

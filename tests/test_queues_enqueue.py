@@ -114,3 +114,18 @@ async def test_a_resolved_request_does_not_block_a_new_one(
     result = await queues_db.enqueue(7, None, "Target", 1)
 
     assert result == "new"
+
+
+async def test_cancel_pending_for_user_closes_the_pending_request(
+    queue_db: str,
+) -> None:
+    """A transferred owner must not keep an approvable promotion card."""
+    await _seed("stale", 7)
+
+    closed = await queues_db.cancel_pending_for_user(7, 1)
+
+    assert closed == 1
+    stored = await queues_db.get_request_by_id("stale")
+    assert stored is not None
+    assert stored.get("status") == "cancelled"
+    assert await queues_db.get_request(7) is None
