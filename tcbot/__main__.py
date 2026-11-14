@@ -345,7 +345,9 @@ async def init_shared_subsystems(bot: Bot) -> None:
         mtproto_mod.start(),
         return_exceptions=True,
     )
-    throw_if_cancelled((owner_r, mtproto_r))
+    # * A cancelled subsystem read is a shutdown, not a startup verdict: the
+    # * cancellation must propagate instead of being left in the result list.
+    throw_if_cancelled((owner_r, primary_r, redis_r, mtproto_r))
     if isinstance(owner_r, BaseException):
         log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
     if isinstance(primary_r, BaseException):

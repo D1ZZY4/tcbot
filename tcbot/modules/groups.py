@@ -21,6 +21,7 @@ from tcbot.modules.helper import decorators
 from tcbot.modules.helper.keyboards import tcgroups_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import render_groups, replies, safe_edit, safe_reply
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -111,9 +112,10 @@ async def _toggle(
     # * (30 s), so every toggle reads the shared cache instead of a
     # * per-user copy with its own divergent TTL.
     # * q.answer() and active_groups() are independent; run in parallel.
-    _, groups_r = await asyncio.gather(
+    answer_r, groups_r = await asyncio.gather(
         q.answer(), db.groups_db.active_groups(), return_exceptions=True
     )
+    throw_if_cancelled((answer_r, groups_r))
     if isinstance(groups_r, BaseException):
         # * Never render an empty list from a failed read: during an
         # * outage that would claim "Count: 0" for a healthy federation.

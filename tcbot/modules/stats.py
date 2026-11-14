@@ -35,6 +35,7 @@ from tcbot.modules.helper.pipelines.stats_flow import (
     SEARCH_KEY,
     Stats,
 )
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
@@ -249,11 +250,12 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         return
     query = (msg.text or "").strip()
 
-    results, _ = await asyncio.gather(
+    results, _deleted = await asyncio.gather(
         Stats.search_run(query),
         msg.delete(),
         return_exceptions=True,
     )
+    throw_if_cancelled((results, _deleted))
     if isinstance(results, BaseException):
         # * An outage must not render as "no bans match this query": the
         # * operator would read a failed search as a clean result.

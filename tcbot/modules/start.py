@@ -23,6 +23,7 @@ from tcbot.modules.helper.messages import (
     safe_edit_cb,
     safe_reply,
 )
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -135,9 +136,10 @@ async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> N
     """Shared renderer for all group-menu callbacks."""
     locale = await locale_for_update(update)
     # * q.answer() and active_groups() are independent; run in parallel.
-    _, groups_r = await asyncio.gather(
+    answer_r, groups_r = await asyncio.gather(
         q.answer(), db.groups_db.active_groups(), return_exceptions=True
     )
+    throw_if_cancelled((answer_r, groups_r))
     if isinstance(groups_r, BaseException):
         # * Never render an empty list from a failed read: during an outage
         # * that would claim no groups are connected. Keep the back keyboard
