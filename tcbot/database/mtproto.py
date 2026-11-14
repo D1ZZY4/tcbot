@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import secrets
 import socket
@@ -456,13 +457,22 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
         nonlocal count
         if not pending:
             return
-        results = await gather_bounded(list(pending))
+        batch = list(pending)
+        try:
+            results = await gather_bounded(batch)
+        finally:
+            # * Cancellation while the batch is awaited leaves the coroutines
+            # * that never started unawaited. Close them so no write object
+            # * is leaked with a "never awaited" warning.
+            for coro in batch:
+                if inspect.getcoroutinestate(coro) == inspect.CORO_CREATED:
+                    coro.close()
+            pending.clear()
         for result in results:
             if isinstance(result, BaseException):
                 log.debug("Member harvest write failed: %s", result)
             else:
                 count += 1
-        pending.clear()
 
     async def _harvest_member(
         group_id: int,
@@ -521,3 +531,9 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
                 log.debug("Member harvest partial flush failed: %s", flush_exc)
             return count
         raise
+    finally:
+        # * A cancelled scan leaves the coroutines that were collected since
+        # * the last flush unawaited; close them instead of leaking them.
+        for coro in pending:
+            if inspect.getcoroutinestate(coro) == inspect.CORO_CREATED:
+                coro.close()
