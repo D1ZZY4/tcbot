@@ -215,14 +215,16 @@ def _bridge_to_stdlib(message: Any) -> None:
 
 
 def setup(level: int = logging.INFO) -> None:
-    """Initialize and configure the bot logging system (Loguru)."""
+    """Initialize and configure the bot logging system (Loguru).
+
+    Loguru owns the API and the stdlib handlers own the output: every
+    record is bridged once and rendered by ``BotLogFormatter``. A second
+    Loguru console sink would print the same record twice.
+    """
     logger.remove()
-    level_name = logging.getLevelName(level)
-    logger.add(
-        lambda m: print(_render_loguru(m)),
-        level=level_name,
-        colorize=True,
-    )
+    # * The bridge stays at DEBUG so caplog can lower the level of one
+    # * logger; ``_bridge_to_stdlib`` applies the stdlib level discipline
+    # * before the record reaches any handler.
     logger.add(_bridge_to_stdlib, level="DEBUG")
     root = logging.getLogger()
     root.setLevel(level)
@@ -239,26 +241,6 @@ def setup(level: int = logging.INFO) -> None:
         root.addHandler(TelegramErrorHandler())
     for lib in ("httpx", "telegram", "sqlalchemy", "apscheduler"):
         logging.getLogger(lib).setLevel(logging.WARNING)
-
-
-def _render_loguru(message: Any) -> str:
-    record = message.record
-    hhmm, ddmmyy = _safe_time_parts(record["time"].timestamp())
-    level_map = {
-        "DEBUG": ("\033[38;5;246m", "DEBUG"),
-        "INFO": ("\033[38;5;114m", "INFO"),
-        "WARNING": ("\033[38;5;178m", "WARN"),
-        "ERROR": ("\033[38;5;203m", "ERROR"),
-        "CRITICAL": ("\033[38;5;177m", "CRIT"),
-    }
-    color, label = level_map.get(record["level"].name, ("\033[0m", "???"))
-    raw_name = record["name"] or record["extra"].get("module", "?")
-    module = raw_name.split(".")[-1]
-    return (
-        f"[<f2>{hhmm}</f2>] [<f2>{ddmmyy}</f2>] "
-        f"[<{color}>{label}</>] [<f4>{module}:{record['line']}</>]"
-        f"{_context_segment()} <f2>→</f2> {record['message']}"
-    )
 
 
 # ─────────────────── Public Loguru API ────────────────────────── #

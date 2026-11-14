@@ -2,18 +2,34 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Logger hygiene: percent formatting and time conversion never raise."""
+"""Logger hygiene: percent formatting, single emission, and safe time conversion."""
 
 from __future__ import annotations
 
 import logging
+
+from loguru import logger as loguru_logger
 
 from tcbot.utils.logger import (
     BotLogFormatter,
     _format_percent,
     _safe_time_parts,
     get_logger,
+    setup,
 )
+
+
+def test_setup_registers_one_loguru_sink() -> None:
+    """Loguru forwards every record exactly once.
+
+    The bridge hands the record to the stdlib handlers, which own the
+    console format and the Telegram shipping. A second Loguru console
+    sink printed every line twice, once as Loguru markup and once as the
+    bracket format.
+    """
+    setup()
+    handlers = loguru_logger._core.handlers  # type: ignore[reportAttributeAccessIssue]
+    assert len(handlers) == 1
 
 
 def test_format_percent_happy_path() -> None:
