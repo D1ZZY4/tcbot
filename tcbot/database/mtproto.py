@@ -464,6 +464,23 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
                 count += 1
         pending.clear()
 
+    async def _harvest_member(
+        group_id: int,
+        user_id: int,
+        username: str | None,
+        first_name: str,
+        last_name: str | None,
+    ) -> bool:
+        """Write the identity and its group membership in one batch item."""
+        harvested = await users_cache.harvest_user_identity(
+            user_id, username, first_name, last_name
+        )
+        try:
+            await users_cache.touch_chat_member(group_id, user_id)
+        except Exception as exc:
+            log.debug("Membership harvest write failed for %d: %s", user_id, exc)
+        return harvested
+
     try:
         async for member in c.get_chat_members(chat_id, limit=limit):
             if monotonic() >= deadline:
@@ -479,7 +496,8 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
             if user is None or getattr(user, "is_bot", False) or not fname:
                 continue
             pending.append(
-                users_cache.harvest_user_identity(
+                _harvest_member(
+                    chat_id,
                     user.id,
                     getattr(user, "username", None),
                     fname,

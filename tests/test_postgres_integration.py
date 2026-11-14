@@ -25,6 +25,7 @@ from tcbot import cfg
 from tcbot.database import bans_db, erasure_db, groups_db, users_cache, warns_db
 from tcbot.database import engine as engine_module
 from tcbot.database.base import (
+    chat_members,
     moderation_actions,
     moderation_cases,
     telegram_users,
@@ -166,6 +167,22 @@ async def test_the_group_locale_round_trips(postgres: str) -> None:
 
     assert await groups_db.set_group_locale(-1001, None) is True
     assert await groups_db.get_group_locale(-1001) is None
+
+
+async def test_a_membership_harvest_records_the_group(postgres: str) -> None:
+    """The membership cache is written for the retention sweep and directory."""
+    await users_cache.upsert_user(7, "Alice_1", "Alice", "Smith")
+
+    await users_cache.touch_chat_member(-1001, 7)
+
+    row = await engine_module.fetch_one(
+        chat_members.select().where(
+            chat_members.c.chat_id == -1001, chat_members.c.user_id == 7
+        )
+    )
+    assert row is not None
+    assert row["status"] == "member"
+    assert row["last_seen_at"] is not None
 
 
 async def test_an_erasure_request_is_swept(postgres: str) -> None:

@@ -411,6 +411,37 @@ async def upsert_user(
         user_mention_cache.invalidate(user_id)
 
 
+async def touch_chat_member(chat_id: int, user_id: int) -> None:
+    """Record that a user was seen in a group.
+
+    The membership cache feeds the community directory and the retention
+    sweep. It is written from the MTProto harvest, which already holds the
+    group and the member list, and a failure is non-fatal for the harvest.
+    """
+    now = utc_now()
+    await db_call(
+        lambda: run(
+            pg_insert(chat_members)
+            .values(
+                chat_id=chat_id,
+                user_id=user_id,
+                status="member",
+                joined_at=now,
+                last_seen_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=["chat_id", "user_id"],
+                set_={
+                    "status": "member",
+                    "last_seen_at": now,
+                    "updated_at": now,
+                },
+            )
+        )
+    )
+
+
 async def upsert_user_if_changed(
     user_id: int,
     username: str | None,

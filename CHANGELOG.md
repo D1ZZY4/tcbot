@@ -118,6 +118,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **The membership cache is written during MTProto harvest** (`tcbot/database/users_cache.py`, `tcbot/database/mtproto.py`): `chat_members` had readers, a retention sweep, and a view but no writer, so the community directory was always empty. The member harvest now records the group membership alongside the identity. Behavior changes: the daily stale-membership cleanup has rows to remove.
+
 - **The promotion request document carries the schema vocabulary** (`tcbot/database/documents.py`, `tcbot/database/queues_db.py`, `tcbot/modules/admins.py`, `tcbot/modules/helper/pipelines/promo_decision_flow.py`, `tests/test_queues_enqueue.py`, `tests/test_promo_queue_cap.py`): `target_id`, `promoted_by`, `requested_date`, `resolved_date`, and `resolved_by` named columns the table calls `target_user_id`, `requested_by_user_id`, `requested_at`, `resolved_at`, and `resolved_by_user_id`. The document and its readers now use the stored names, like the moderation documents. Behavior changes: none; the stored requests are unchanged.
 
 - **The moderation documents name the target and the actor the way the schema does** (`tcbot/database/documents.py`, `tcbot/database/bans_db/_compose.py`, `tcbot/database/warns_db.py`, `tcbot/database/mutes_db.py`, `tcbot/database/kicks_db.py`): the ban, warning, mute, and kick documents carried three different vocabularies for the same two columns, so a reader had to know which document used which name. Every moderation document now uses `target_user_id` and `actor_user_id`, the names the decision table gives them. Behavior changes: none; the stored decisions are unchanged.
