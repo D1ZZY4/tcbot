@@ -456,15 +456,13 @@ async def _run_webhook_mode(app: Application) -> None:
         loop.add_signal_handler(signal.SIGINT, shutdown_event.set)
     async with app:
         try:
+            # * The whole lifecycle sits in one try/finally. PTB's
+            # * shutdown() does not run post_shutdown, so a failure after
+            # * connect(), including a failed app.start(), must still
+            # * release the database pool, the Redis pool, the MTProto
+            # * client, and the scheduler.
             await _post_init(app)
-        except BaseException:
-            # * PTB's shutdown() does not run post_shutdown, so a boot
-            # * failure after connect() would leave the database pool, the
-            # * Redis pool, the MTProto client and the scheduler running.
-            await _post_shutdown(app)
-            raise
-        await app.start()
-        try:
+            await app.start()
             log.info("Registering webhook at %s ...", full_url)
             await app.bot.set_webhook(
                 url=full_url,
@@ -494,7 +492,13 @@ async def _run_webhook_mode(app: Application) -> None:
                 await app.bot.delete_webhook(drop_pending_updates=False)
             except Exception as exc:
                 log.debug("delete_webhook failed during shutdown (non-fatal): %s", exc)
-            await app.stop()
+            # * stop() refuses an application that never started, which is
+            # * exactly the failed-start path this finally exists for.
+            if app.running:
+                try:
+                    await app.stop()
+                except Exception as exc:
+                    log.warning("PTB application stop failed (non-fatal): %s", exc)
             await _post_shutdown(app)
     log.info("Bot shutdown complete.")
 
