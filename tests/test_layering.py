@@ -272,3 +272,27 @@ def test_no_module_exceeds_the_file_budget() -> None:
                 f"{path.relative_to(_TCBOT_ROOT.parent)}: {line_count} lines"
             )
     assert not oversized, "modules over the file budget:" + _report(oversized)
+
+
+def test_every_python_file_starts_with_the_project_header() -> None:
+    """Every Python file carries the copyright header before its docstring.
+
+    The rule is repository-wide: the runtime package, the operator
+    scripts, the tests, and the Alembic environment all start with the
+    same three lines. A file without them appeared only because nothing
+    checked it.
+    """
+    project_root = _TCBOT_ROOT.parent
+    roots = (
+        _TCBOT_ROOT,
+        project_root / "scripts",
+        project_root / "tests",
+        project_root / "alembic",
+    )
+    missing: list[str] = []
+    for root in roots:
+        for path in sorted(root.rglob("*.py")):
+            head = path.read_text(encoding="utf-8").splitlines()[:4]
+            if not any(line.startswith("# © Copyright") for line in head):
+                missing.append(str(path.relative_to(project_root)))
+    assert not missing, "files without the project header:" + _report(missing)
