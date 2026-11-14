@@ -20,7 +20,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import create_engine, text
 
-from tcbot import cfg
+from tcbot import cfg, enforcement_worker
 from tcbot.database.base import chat_members
 from tcbot.database.connection_options import schema_options
 from tcbot.database.engine import db_call, run, run_transaction
@@ -251,6 +251,7 @@ async def _cleanup_old_records() -> None:
 # * (replace_existing=True updates the trigger without creating duplicates)
 
 _EXPIRY_SCHEDULE_ID: str = "tcbot.expiry_daily"
+_ENFORCEMENT_WORKER_SCHEDULE_ID: str = "tcbot.enforcement_worker"
 # * ID of the retired warn-expiry job. It patched the warnings that had no
 # * deadline, which the community schema forbids. The schedule is removed
 # * on every startup so it cannot fire; the id stays here so the removal
@@ -568,6 +569,19 @@ def _reconcile_schedules(
         misfire_grace_time=86400,
     )
     log.info("Scheduled stale record cleanup: every 24h.")
+
+    # * The expiry sweep only queues the per-group revokes. This worker is
+    # * the consumer that actually lifts the restriction on Telegram.
+    _ensure_job(
+        scheduler,
+        store,
+        job_id=_ENFORCEMENT_WORKER_SCHEDULE_ID,
+        func=enforcement_worker.run,
+        trigger=IntervalTrigger(minutes=5, timezone=_SCHEDULER_TIMEZONE),
+        args=(),
+        misfire_grace_time=300,
+    )
+    log.info("Scheduled enforcement worker: every 5 minutes.")
     # * The retired weekly cleanup job must not fire: it pointed at a
     # * membership sweep the daily job replaced.
     _remove_job(scheduler, _LEGACY_CLEANUP_SCHEDULE_ID, "Legacy DB cleanup")

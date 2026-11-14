@@ -35,6 +35,7 @@ from tcbot.database import scheduler as sched_mod
 from tcbot.database.cache import drain_redis_mutations
 from tcbot.database.engine import close as close_database
 from tcbot.database.engine import connect
+from tcbot.enforcement_worker import configure as configure_enforcement_worker
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.modules.helper.extraction import refresh as identity_refresh
@@ -373,6 +374,7 @@ async def _post_init(app: Application) -> None:
             "API_ID/API_HASH are required for MTProto identity resolution; refusing to boot degraded."
         )
     await init_shared_subsystems(app.bot, start_mtproto=True)
+    configure_enforcement_worker(app.bot)
     await sched_mod.start(cfg.database_url)
     _startup_tasks.spawn(_warm_hot_caches())
     asyncio.get_running_loop().set_exception_handler(_make_asyncio_exc_handler())

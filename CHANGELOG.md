@@ -9,6 +9,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Added
 
+- **Expiry revokes now have a consumer** (`tcbot/enforcement_worker.py`, `tcbot/database/enforcement_db.py`, `tcbot/database/scheduler.py`): the expiry sweep queued a revoke run for every managed group but no code read the queue, so an expired restriction stayed in Telegram. The worker claims queued runs, lifts the ban or mute, records each attempt, and retries a failed target up to three times. Behavior changes: an expired decision is enforced on Telegram without a manual unban.
+
 - **Every moderation decision owns a case that closes with it** (`tcbot/database/moderation_db.py`, `tcbot/database/bans_db/_writes.py`, `tcbot/database/warns_db.py`, `tcbot/database/mutes_db.py`, `tcbot/database/kicks_db.py`): the investigation that holds a decision was opened with the decision and never closed, so the next decision about the same user reused it and the history of the community collapsed into one case per user. The case now closes with the decision that opened it, every incident owns one case, and a re-ban opens its own. Behavior changes: the case of a decision is `resolved` once the decision is filed, and each incident has its own case.
 
 - **The shared write path of the moderation decisions has one owner** (`tcbot/database/moderation_db.py`): opening the case, archiving the proof of the decision, and closing the case were written four times, once per decision kind, and the copies had already drifted. The three steps now live in one module, so the ban, mute, warning, and kick paths cannot disagree about the case lifecycle or the evidence batch. Behavior changes: none; the decisions themselves are unchanged.
