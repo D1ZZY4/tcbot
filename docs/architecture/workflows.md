@@ -30,9 +30,10 @@ Conversation and multi-step logic lives in `tcbot/modules/helper/pipelines/`. Ea
 | `BuildProof.step_prompt(...)` | Prompt after an in-conversation reason. |
 | `BuildProof.noted_prompt(...)` | Prompt when a reason was provided inline. |
 | `upload_proof(bot, msgs, caption, proof_chat, proof_thread)` | Uploads proof media and returns the first uploaded message ID. Photos and videos travel as one media group (caption on the first item); GIFs and files are sent individually after the gallery. Returns `None` fast without Telegram I/O on empty input or a batch with no usable item; a failed gallery falls through to the document loop, and a failed document is logged and skipped. |
-| `upload_proof_media(bot, msgs, caption)` | Single owner for the "upload the proof and remember where it landed" step. Reads the destination from the configured proof channel, returns a `ProofUpload` (`message_id`, `link`), and never raises: a proof that could not be stored must not void the moderation action. |
+| `upload_proof_items(bot, msgs, caption, proof_chat, proof_thread)` | Uploads proof media and returns `(landed_items, expected_item_count)`. Each landed item keeps its media type, archive message id, order, and file metadata, so a lost file is distinguishable from a completed gallery. |
+| `upload_proof_media(bot, msgs, caption)` | Single owner for the "upload the proof and remember where it landed" step. Reads the destination from the configured proof channel, returns a `ProofUpload` (`message_id`, `link`, `items`, `expected_item_count`), and never raises: a proof that could not be stored must not void the moderation action. |
 | `upload_proof_for_action(bot, msgs, target_id, admin_id, admin_fname)` | The same, with the standard caption that names the target, the acting staff member, and the time. Used by the kick, mute, and warn executors. |
-| `ProofUpload.landed` | True when at least one proof message reached the channel. The ban executor requires a proof and checks this before writing the ban record. |
+| `ProofUpload.landed` | True when at least one proof message reached the channel. The ban executor requires a complete upload for a manual ban and checks the item count before writing the record. |
 
 ## Shared reason factory: `reason_flow.py`
 
@@ -100,7 +101,7 @@ Ban differs from the shared reason flow:
 - Proof is required by UI (`skip_allowed=False`).
 - An active ban triggers a confirmation card (`WAITING_UPDATE_CONFIRM` with `View Log` / `View Proof` URLs and `Cancel` / `Continue`) before proof collection.
 - Proof media accumulate in one session keyed by `(chat_id, user_id)` and flush on `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap; the flush claim is a synchronous check-and-set so Done and the timer can never double-execute.
-- `_execute_ban()` uploads proof, then writes the ban decision and posts the audit log (`_execute_ban_record` returns `(log_msg_id, db_ok, canonical_ban_id)`). The record is written before the log is rendered, so a concurrent ban for the same target that wins the insert race hands back the canonical ban id and the log, its appeal link, and the target's appeal button all name the record that exists. When the database write fails the flow aborts before `fan_out()` so no group is touched. Only after the record lands does it fan out bans to active groups with `fan_out()`, then edit the prompt summary and DM the appeal link.
+- `_execute_ban()` uploads proof, then writes the ban decision and posts the audit log (`_execute_ban_record` returns `(log_msg_id, db_ok, canonical_ban_id, enforcement_run_id)`). The decision and its `apply` run land together; a failed group is retried by the enforcement worker. When the database write fails the flow aborts before any run is delivered so no group is touched. Only after the record lands does it deliver the run, edit the prompt summary, and DM the appeal link.
 
 ```mermaid
 flowchart TD
@@ -123,7 +124,7 @@ flowchart TD
 | Module instances | `reason = BuildReason("kick")`, `proof = BuildProof("kick")` |
 | Executor | `execute_kick(update, ctx, target_id, target_name, reason_text, proof_msgs=None, prompt_chat=None, prompt_id=None)` |
 
-Kick is current-group-only. It bans the user from the current chat and immediately unbans them so the action behaves as a kick rather than a permanent group ban. If `proof_msgs` is provided, the proof upload starts before enforcement and runs concurrently with `ban_chat_member`, so the kick never waits for the proof-channel round trip; the resulting link is shown as an inline keyboard button on the reply and log messages. A ban failure cancels the in-flight upload and replies with a permissions/retry hint.
+Kick is current-group-only. It bans the user from the current chat and immediately unbans them so the action behaves as a kick rather than a permanent group ban. Optional proof is uploaded before the audit row so its landed items can be archived with the decision; a failed upload degrades to a kick without evidence. The resulting link is shown as an inline keyboard button on the reply and log messages. A ban failure cancels any in-flight upload and replies with a permissions/retry hint.
 
 ## Mute: `mute_flow.py`
 
@@ -147,7 +148,7 @@ Duration tokens are parsed before entering the conversation.
 | `mo` | months (30 days) | `3mo` |
 | `ye` | years (365 days) | `1ye` |
 
-Mute applies restrictions across all connected groups with `fan_out()`. The mute is also persisted to the `active_mutes` table so it can be re-applied automatically when:
+Mute applies restrictions across all connected groups through the decision's durable `apply` run. The mute is also persisted to the `active_mutes` table so it can be re-applied automatically when:
 
 - A muted user joins any connected group (`greeting._handle_member` fetches `get_active_mute` in parallel with `get_active_ban` and calls `restrict_chat_member` if an active mute is found).
 - A new group connects to the federation (`connected_flow.complete_join` fetches `active_mute_docs()` and fans out `restrict_chat_member` for every active mute, mirroring the existing ban replay).
@@ -182,11 +183,11 @@ flowchart TD
 | Limit | `cfg.warn_limit` (env var `WARN_LIMIT`, default 3, minimum 1) |
 | Executors | `execute_warn(update, ctx, target_id, target_name, reason_text, proof_msgs=None)`, `execute_unwarn`, `execute_warnlist`, `execute_resetwarns` |
 
-Warns are tracked per `(user_id, chat_id)`. At `cfg.warn_limit` (per-group) or `cfg.fed_warn_limit` (federation-wide), the flow issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups, creates a ban decision in `moderation_actions`, and then clears warnings across all groups with `clear_all_warns` (only after at least one group ban succeeds). If `proof_msgs` is provided, the proof upload starts before the warn write and runs concurrently with `warns_db.add_warn`, so the warn never waits for the proof-channel round trip; the resulting link is attached as an inline keyboard button to all outgoing messages (auto-ban log, replies, non-auto-ban log). A warn-write failure cancels the in-flight upload and replies with a retry notice.
+Warns are tracked per `(user_id, chat_id)`. At `cfg.warn_limit` (per-group) or `cfg.fed_warn_limit` (federation-wide), the flow issues a **federation-wide ban** through a durable `apply` run to all active connected groups plus primary groups, creates a ban decision in `moderation_actions`, and then clears warnings across all groups with `clear_all_warns` (only after at least one group ban succeeds). Optional proof is uploaded before the warn write so its landed items can be archived with the decision; the resulting link is attached as an inline keyboard button to all outgoing messages (auto-ban log, replies, non-auto-ban log). A warn-write failure replies with a retry notice.
 
 ## Unban: `unban_flow.py`
 
-`execute_unban(update, ctx, target_id, target_fname, *, pre_ban=None)` is a direct executor, not a `ConversationHandler`. It finds the active ban (or uses a caller-supplied `pre_ban` record to skip the DB round-trip), deactivates it, unbans the user from all active groups with `fan_out()`, and posts an audit log.
+`execute_unban(update, ctx, target_id, target_fname, *, pre_ban=None)` is a direct executor, not a `ConversationHandler`. It finds the active ban (or uses a caller-supplied `pre_ban` record to skip the DB round-trip), revokes it and queues a durable `revoke` run in one transaction, delivers the run, and posts an audit log from the per-group result.
 
 ## Appeal: `appeal_submit_flow.py` + `appeal_review_flow.py`
 
@@ -209,9 +210,9 @@ Appeal flow requirements:
 - The user must have an active ban matching the deep-link ban ID.
 - The appeal text must start with `#appeal` (case-insensitive); when the ban carries a `log_message_id`, the text must also reference that ID as a standalone number. Section labels (`Log link:`, `Clarification:`, `Agreement:`) are requested by the instructions but not parsed semantically.
 - Submit revalidates pending-review and rejection-cooldown state, then records the appeal and claims the review slot in one transaction (`submit_appeal`). Both the claim and the review decision apply the canonical in-force predicate, so a timed ban whose deadline passed is not appealable or decidable.
-- A staff `/tcunban` withdraws a pending appeal in the same transaction as the ban revocation; the appeal-approval path passes `withdraw_pending_appeals=False` so it can accept that appeal instead.
+- A staff `/tcunban` withdraws a pending appeal and releases the review slot in the same transaction as the ban revocation; the appeal-approval path uses `approve_appeal_and_queue_unban` so the acceptance and the revocation are one decision.
 - A review card is posted to `MAIN_GROUP` (general) with a copy in the appeals destination.
-- Approve runs an inline deactivate-plus-fan-out sequence mirroring `execute_unban` and notifies the user; a cancelled deactivation propagates with the card untouched instead of rendering a DB-fail edit. A failed ban read answers the `appeals.review.db_retry` popup with the card untouched for a re-tap. Reject records the rejector (display-name read in parallel), then runs the DM, card edit, and review clear in parallel.
+- Approve accepts the appeal, revokes the ban, releases the review slot, and queues the unban run in one transaction, then delivers the run and notifies the user. A failed atomic write leaves the card actionable. Reject records the rejector (display-name read in parallel), then runs the DM, card edit, and review clear in parallel.
 - Non-deciding taps (including ban-read outages) answer with a popup and never edit the shared card.
 
 ```mermaid
@@ -223,7 +224,7 @@ flowchart TD
     Wait -->|cancel or timeout| End[ConversationHandler.END]
     Post --> End
     Post --> Review[Staff reviewer sees card]
-    Review -->|Approve| Unban[Inline deactivate + fan-out mirroring execute_unban + DM user]
+    Review -->|Approve| Unban[Atomic accept + revoke + durable unban run + DM user]
     Review -->|Reject| Reject[set_rejected_by, then mark reviewed + DM user]
     Unban --> LogChat[Post audit log]
     Reject --> LogChat

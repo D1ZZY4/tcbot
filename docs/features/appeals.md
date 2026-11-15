@@ -171,8 +171,8 @@ The update helpers involved are:
 
 - `bans_db.set_review_if_absent(ban_id, review_msg_id)` (atomic claim; returns whether this submit won the review slot)
 - `bans_db.set_appeal_log_msg(ban_id, appeal_log_msg_id, appeal_link=...)`
-- `bans_db.deactivate_all_active_bans(user_id, *, withdraw_pending_appeals=False)` on approval (revokes all active records atomically; the approval path opts out of the pending-appeal withdrawal because it accepts that appeal immediately afterwards)
 - `bans_db.claim_appeal_decision(ban_id, review_msg_id)` (atomic decision claim; consumes the review slot)
+- `bans_db.approve_appeal_and_queue_unban(ban_id, reviewer_id, reviewer_name, requested_by, chat_ids)` on approval (accepts the appeal, revokes the ban, releases the review slot, and queues the unban run in one transaction)
 - `bans_db.restore_review(ban_id, review_msg_id, review_timestamp)` (hands the slot back when a tap reached no decision)
 - `bans_db.accept_appeal(...)` / `bans_db.reject_appeal(...)` (close the appeal row with the reviewer and note)
 - `bans_db.clear_review(ban_id)` (releases the slot after a rejection)
@@ -226,17 +226,17 @@ When a staff member approves an appeal:
 1. The approver's effective role is read fresh and must outrank the target's current role. Approving strips the target's federation role (the ban lift requires it) and lifts the ban everywhere, which is the same irreversible action as `/tcunban`, and that command path refuses an equal-rank target. An Admin therefore cannot approve an appeal against a peer Admin; the tap is refused with the shared outrank notice and nothing is changed.
 2. Active connected groups are fetched from `groups_db.active_groups()`, with the primary group (`cfg.main_group`) appended when absent. If the fetch fails, approval aborts before deactivation with the review card untouched (a re-tap retries the full sequence); deactivating first would leave chats unbanned-nowhere with no record to re-drive.
 3. If the banned user currently holds a federation staff role, that role is demoted before deactivation, mirroring `/tcunban`. A role-lookup outage or a demote failure aborts with the review card untouched and a retry alert.
-4. All active bans for the user are deactivated with `bans_db.deactivate_all_active_bans(user_id, withdraw_pending_appeals=False)`. The partial unique index keeps at most one active ban, and the statement still revokes every active row in one atomic operation. The approval path opts out of the default pending-appeal withdrawal so the appeal can be accepted in the next step. If this write fails, approval aborts before any group is touched (mirroring `execute_unban`): unbanning chats while the database still marks the user banned would split-brain and re-ban them on next join. The review card stays actionable and the tapper gets a retry alert, so a re-tap retries the full sequence.
-5. The review marker is cleared with `bans_db.clear_review(ban_id)` so a concurrent second decision sees no live review and stands down.
-6. The user is unbanned from every group with `unban_chat_member(..., only_if_banned=True)` through bounded fan-out. Partial transient failures are logged at error level.
+4. `bans_db.approve_appeal_and_queue_unban(ban_id, reviewer_id, reviewer_name, requested_by, chat_ids)` is the decision. One transaction accepts the pending appeal, revokes the active ban, releases the review slot, and queues a `revoke` enforcement run with one target per group. A failure rolls the whole unit back, so an accepted appeal cannot sit on an active ban, and a revoked ban cannot sit beside a pending appeal. The review card stays actionable and the tapper gets a retry alert.
+5. The queued run is delivered immediately with `enforcement_worker.deliver_queued_run`. If another worker already owns it, the approval is still committed and the scheduled worker finishes the delivery.
+6. `db.enforcement_db.run_report(run_id)` supplies the per-group outcome. Failed targets stay in the run with a retry deadline, and the operator sees the failure count in the logs.
 7. The user receives a DM telling them the appeal was approved.
-8. The review message is edited to show who approved it and the inline keyboard is removed.
+8. The review message is edited to show who approved it and the inline keyboard is removed. If that edit fails, a durable `moderation_notification_tasks` row is queued and the scheduler retries it, so the card cannot stay live over a settled appeal.
 9. The submitted-appeal log message is edited to an approved version when possible.
 10. A separate `Unban (via Appeal)` log is sent to the federation logs channel.
 
 Each notification in steps 7-10 is inspected separately and logged (warning for the user DM, card edit, and appeal-log update; error for the unban log), so a silent Telegram failure is visible to operators.
 
-Approval is a federation unban. It removes the Telegram ban across all connected groups and deactivates the persistent ban record. It runs its own inline deactivate-plus-fan-out sequence that mirrors `execute_unban`; it does not call `execute_unban` directly.
+Approval is a federation unban. It removes the Telegram ban across all connected groups and revokes the persistent ban record. The decision and its enforcement run are one transaction; the Telegram delivery is retried by the scheduled enforcement worker, so a crash after the commit does not lose a group.
 
 ## Rejection behavior
 
@@ -285,8 +285,8 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 - The log-link validation is number-based, not URL-domain-based; it checks for the stored log message ID as a standalone integer token.
 - If the forwarded appeal message cannot be linked, the review/log text uses `N/A` for the appeal link but still posts the review/log when possible.
 - If user DM notification fails during approval or rejection, the review/log operations still proceed because those calls use `asyncio.gather(..., return_exceptions=True)`.
-- If a ban was already deactivated before a decision, a tap on a stale card (live review marker left by a manual unban) clears the marker and updates the card; any other already-decided tap only shows a popup so the recorded verdict is preserved.
-- Two staff decisions racing each other are serialized only by the pre-decision guard (active ban, live review, no prior rejection); a true simultaneous double-tap can still double-notify. The database writes themselves stay idempotent.
+- If a ban was already revoked before a decision, a tap on the stale card sees the inactive decision, releases any leftover review marker, and updates the card without recording a new verdict.
+- Two staff decisions racing each other are serialized by `claim_appeal_decision`: only the tap that still owns the live review slot reaches the atomic approval or rejection write, and the loser is told the appeal is already resolved.
 
 ## Rejection cooldown
 

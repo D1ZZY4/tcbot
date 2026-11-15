@@ -109,7 +109,7 @@ separate community would be a separate deployment.
 | Configuration | `community_settings`, `chat_settings`, `user_settings` |
 | Access | `role_definitions`, `permission_definitions`, `role_permissions`, `role_assignments`, `promotion_requests` |
 | Rules | `rule_sets`, `rule_set_versions`, `rule_items`, `rule_acknowledgements` |
-| Moderation | `moderation_cases`, `moderation_case_rules`, `moderation_actions`, `moderation_appeals`, `moderation_messages`, `moderation_evidence_uploads`, `moderation_evidence_items` |
+| Moderation | `moderation_cases`, `moderation_case_rules`, `moderation_actions`, `moderation_appeals`, `moderation_messages`, `moderation_evidence_uploads`, `moderation_evidence_items`, `moderation_notification_tasks` |
 | Enforcement | `moderation_enforcement_runs`, `moderation_enforcement_targets`, `moderation_enforcement_attempts` |
 | Automation | `automation_policies`, `automation_policy_versions`, `automation_events`, `automation_runs`, `automation_run_steps`, `automation_run_step_attempts` |
 | Broadcast | `broadcast_campaigns`, `broadcast_targets`, `broadcast_attempts` |
@@ -259,10 +259,11 @@ database error.
 | `kicks_db.py` | `moderation_actions` (kick scope), `moderation_cases` | Kick decisions and their per-user history. |
 | `mutes_db.py` | `moderation_actions` (mute scope), `moderation_cases` | Mute decisions, the live active-mute view, and the per-user history. |
 | `queues_db.py` | `promotion_requests` | Queued staff promotion requests and their resolution status. |
-| `enforcement_db.py` | `moderation_enforcement_runs`, `moderation_enforcement_targets`, `moderation_enforcement_attempts` | Claim queued expiry revokes, record per-group outcomes, and requeue abandoned runs. |
+| `enforcement_db.py` | `moderation_enforcement_runs`, `moderation_enforcement_targets`, `moderation_enforcement_attempts` | Queue one run for a decision, claim runs and targets, record per-group outcomes and attempts, report the result, and requeue abandoned runs. Apply runs cover ban and mute; revoke runs cover expiry, manual unban, and appeal approval; reconcile runs repair a stranded kick. |
+| `notifications_db.py` | `moderation_notification_tasks` | Durable retry queue for review-card edits whose direct Telegram update failed. |
 | `erasure_db.py` | `telegram_user_erasures` | Queue one account erasure through the database function. |
 | `pg_cron.py` | `cron.job` (optional) | Register or remove the database-only maintenance jobs when pg_cron is enabled. |
-| `settings_db.py` | `user_settings` | Per-user locale and timezone preferences. |
+| `settings_db.py` | `user_settings` | Per-user locale and timezone preferences; the locale read uses the shared two-level cache. |
 | `cache/` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with five public singletons. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton with pool management and liveness tracking. |
 | `scheduler.py` | PostgreSQL (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `SQLAlchemyJobStore`. |
@@ -641,7 +642,7 @@ apart on the case lifecycle or on the evidence batch.
 | Function | Purpose |
 |---|---|
 | `open_case(sess, subject_user_id, actor_user_id, *, title, summary, severity, requires_evidence) -> int` | Ensures the subject and actor identity rows exist, then returns the open case of the subject or opens one for the decision. The identity insert is idempotent and joins the same transaction, because the case and the decision reference `telegram_users` for both accounts. |
-| `archive_proof(sess, case_id, uploader_user_id, proof_message_id, destination_chat_id) -> int \| None` | Archives one proof message and returns the batch id. The batch walks `queued`, `uploading`, `completed`. |
+| `archive_proof(sess, case_id, uploader_user_id, proof_message_id, destination_chat_id, *, items=None, expected_item_count=None, destination_thread_id=None) -> int \| None` | Archives the proof messages that landed and returns the batch id. Each item keeps its real media type, archive message id, order, and file metadata. The batch is `completed` when every expected item landed and `partial` when at least one was lost. A legacy caller that only has one message id keeps the single-photo shape. |
 | `close_case(sess, case_id, actor_user_id) -> None` | Closes the case of a decision that was filed. A case that was closed by somebody else keeps its own closing actor and moment. |
 
 The shared write path also guarantees the identity rows a dependent write
@@ -665,6 +666,49 @@ decided appeal stays in the history and a later appeal is a new row.
 `moderation_messages` records the Telegram messages that belong to a
 decision: the log, the review card, the appeal notice. It is a reference
 list, not the evidence archive.
+
+### Enforcement runs, targets, and attempts
+
+A moderation decision and its Telegram delivery are separate facts.
+`moderation_enforcement_runs` records the work item: one action, one
+operation (`apply`, `revoke`, or `reconcile`), an idempotency key, and a
+status. `moderation_enforcement_targets` records one chat per run, and
+`moderation_enforcement_attempts` records each delivery attempt.
+
+The write path that changes a decision also queues the run. A ban or mute
+files an `apply` run with its decision; a manual unban and an approved
+appeal revoke the ban, settle the appeal, release the review slot, and
+insert a `revoke` run with its targets, all in one transaction, so the
+database never holds a revoked ban with no way to reach a group. The
+delivery itself runs after the commit. A target that fails stays in the
+ledger with a retry deadline; the scheduled worker claims it again, so a
+process restart does not lose the remaining groups. A kick whose post-ban
+unban still fails queues a `reconcile` run with its one chat.
+
+The ledger is the recovery contract for external effects. The decision
+status (`active`, `revoked`, `expired`) describes the domain state; the run
+status (`queued`, `running`, `completed`, `partial`, `failed`, `cancelled`)
+and the per-target status describe delivery. A caller must not treat a
+revoked decision as proof that every group was reached, and a run must not
+re-apply a decision that the domain state no longer holds.
+
+### Review-card outbox
+
+`moderation_notification_tasks` records a review-card edit whose direct
+Telegram update failed. The task keeps the action, the destination chat,
+the card message id, its state, its attempt count, and its next retry
+deadline. The scheduler retries it, so a settled appeal or a manual unban
+cannot leave a live-looking card behind. A card that Telegram reports as
+gone is marked `skipped`; a transient failure is retried up to five times.
+
+### Promotion request expiry
+
+`promotion_requests.expires_at` is an absolute deadline. The one-pending
+index only releases the target when the stale row is marked `expired`, so
+the hourly scheduler sweep does that work and `queues_db.enqueue` also
+expires the target's stale row before a fresh insert. The status check
+keeps the `expired` state in the same vocabulary as approved, rejected,
+and cancelled.
 
 ### Row shape: `BanDoc`
 
@@ -735,12 +779,20 @@ reader sees one document.
   orders by row id and exposes the newest reference as `log_message_id`.
 - `deactivate_all_active_bans(user_id: int, *, withdraw_pending_appeals: bool = True) -> int`
   Revokes the active ban of a user and, by default, withdraws any pending
-  appeal in the same transaction; returns the count. This is the single
-  authoritative write of an unban: if it fails, the user is still banned in
-  the database while the chats say otherwise, and the join path would ban the
-  user again on the next membership event. The appeal-approval path passes
-  `withdraw_pending_appeals=False` so it can accept the pending appeal in the
-  next step.
+  appeal in the same transaction; returns the count. The unban command and
+  the appeal-approval path use the queueing variants below, which add the
+  durable delivery run to the same transaction. This helper stays for
+  callers that only need the domain write.
+- `revoke_ban_and_queue_unban(user_id: int, requested_by_user_id: int | None, chat_ids: Sequence[int]) -> tuple[int, int | None]`
+  Revokes every active ban, withdraws pending appeals, releases the review
+  slot, and queues one `revoke` enforcement run with a target per chat in one
+  transaction. Returns `(revoked_count, run_id)`. A revocation without the
+  run would lose the groups that failed the fan-out.
+- `approve_appeal_and_queue_unban(ban_id: str, reviewer_id: int, reviewer_name: str, requested_by_user_id: int | None, chat_ids: Sequence[int]) -> tuple[bool, int | None]`
+  Accepts the pending appeal, revokes the ban, releases the review slot, and
+  queues the unban run in one transaction. A former split could accept an
+  appeal while its ban stayed active, or revoke the ban while the appeal
+  stayed pending.
 - `submit_appeal(ban_id: str, appellant_user_id: int, appeal_text: str, review_message_id: int) -> bool`
   Records the appeal and claims the review slot in one transaction. The
   claim is a conditional update on a decision that is active and still in
@@ -1370,7 +1422,9 @@ Recurring jobs:
 |---|---|---|
 | `tcbot.expiry_daily` | `IntervalTrigger(hours=24)` | Calls `expire_due_decisions()`: moves the ban, mute, and role-assignment rows whose deadline passed to `expired` and queues the matching revoke enforcement runs. A mute already carries its Telegram `until_date`, so its restriction lifts natively. Registered only when pg_cron does not own expiry. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs the sweep once. The sweep takes a transaction advisory lock, so two bot instances cannot expire the same records. |
 | `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. Each branch takes its own transaction advisory lock. |
-| `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued revoke runs and lifts the expired ban or mute across the recorded groups. A failed run is logged and left for the stale-run requeue while the remaining claimed runs still execute. A failed target is recorded as `failed` with a due retry deadline and retried up to three times, five minutes apart; the run is re-queued when the deadline arrives. Always registered. |
+| `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued `apply`, `revoke`, and `reconcile` runs and applies the decision across the recorded groups. Ban and mute apply, expiry lifts, manual unbans, approved appeals, and kick unban repair all use this worker. A failed target is recorded as `failed` with a due retry deadline and retried up to three times, five minutes apart. Always registered. |
+| `tcbot.promotion_expiry_hourly` | `IntervalTrigger(hours=1)` | Calls `expire_promotion_requests()`: marks pending requests past `PROMOTION_REQUEST_TTL_DAYS` as `expired`, releasing the one-pending-per-target slot. The write is idempotent and the enqueue path also expires a stale target row lazily. |
+| `tcbot.notification_worker` | `IntervalTrigger(minutes=5)` | Calls `notification_worker.run()`: retries review-card edits whose direct Telegram update failed, marks a deleted card `skipped`, and keeps a transient failure for a bounded retry. |
 
 When `PG_CRON_ENABLED` is true and the database has the `pg_cron`
 extension, `pg_cron.sync_schedules()` registers the registry jobs

@@ -84,7 +84,7 @@ _DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
 | `mo` | months (30 days) |
 | `ye` | years (365 days) |
 
-`parse_duration("3d")` returns `timedelta(days=3)`. A token that fails the regex never matches the duration guard and stays in the reason text. A regex-valid but unparsable token (timedelta overflow or above the 100-year `_MAX_DURATION_DAYS=36500` cap) makes `parse_duration` return `None`, and the token is kept as reason text as well: it is popped from the arg list only after a successful parse, so moderator input is never silently dropped.
+`parse_duration("3d")` returns `timedelta(days=3)`. A token that fails the regex never matches the duration guard and stays in the reason text. A regex-valid but unparsable token (timedelta overflow or above the 100-year `_MAX_DURATION_DAYS=36500` cap) makes `parse_duration` return `None`, and the token is kept as reason text as well: it is popped from the arg list only after a successful parse, so moderator input is never silently dropped. The requested duration is stored as decision metadata beside the remaining lifetime, so a superseding mute cannot erase what the moderator originally asked for. The mute drill-down in `/check` renders both values (`Requested` and `Stored`) for each record.
 
 `fmt_duration(td, locale)` renders:
 
@@ -159,13 +159,13 @@ Execution order:
 3. Persist `db.mutes_db.record_mute(...)` first. A failing write aborts with a retry notice and no group is touched (fail-closed, mirroring the ban flow and the warn auto-ban): enforcing chats without a stored decision would leave a restriction that `/tcunmute` refuses to lift.
 4. Build the restriction `ChatPermissions(can_send_messages=False)` and the `until_date` value (`utc_now() + duration` or `None` for permanent).
 5. Remove the target's effective role via `demote_before_enforcement(..., trigger="mute")` (best-effort; the mute proceeds even if the demote fails).
-6. Fan `restrict_chat_member` across the group list with `fan_out(...)` while uploading proof to `cfg.proofs` concurrently (caption `messages.proof_caption_new`). Failed calls are counted with `count_transient_errors(results)`; an upload failure degrades to no proof link.
+6. Fan `restrict_chat_member` across the group list through the decision's durable `apply` run while uploading proof to `cfg.proofs` concurrently (caption `messages.proof_caption_new`). Failed targets are counted and retried by the enforcement worker; an upload failure degrades to no proof link.
 7. Run two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
     - `bot.send_message(cfg.logs, mute_log, ..., reply_markup=proof_kb)`.
     - `bot.edit_message_text(summary, chat_id=prompt_chat, message_id=prompt_id, ..., reply_markup=proof_kb)` so the moderator sees the result inline.
 8. If the prompt edit fails, a fallback `msg.reply_text(summary, ..., reply_markup=proof_kb)` is issued.
 
-The summary text reads `<user> has been muted <duration>. Reason: <reason>. Applied to <ok>/<total> groups.`
+The summary text reads `<user> has been muted <duration>. Reason: <reason>. Applied to <ok>/<total> groups.` A partial mute appends `WARNING: the mute did not land in <n> group(s): <titles>`, naming up to five failed groups, so a partial enforcement is not read as a total one.
 
 The fan-out errors are counted but do not roll back the DB mute record; group connect replay will retry missing restrictions on the next reconnect.
 

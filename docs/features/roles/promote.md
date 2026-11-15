@@ -143,7 +143,11 @@ Admins cannot directly assign Admin. `Promote.execute` detects this and delegate
 5. Falls back to posting in `cfg.logs` when the Founder DM fails.
 6. Returns `Submitted - the Founder has been notified and will review it shortly.`
 
-Only one pending request per target is allowed.
+Only one pending request per target is allowed. A pending request carries
+`expires_at`; once `PROMOTION_REQUEST_TTL_DAYS` (default 7) passes, the
+hourly sweep marks it `expired`, and the next enqueue expires a stale
+target row before inserting. An expired row keeps its history but releases
+the target for a fresh request and can no longer be approved.
 
 ## `/tcpromoterequests` behavior
 

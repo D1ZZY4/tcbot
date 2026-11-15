@@ -25,7 +25,7 @@ flowchart TD
 
 ## Purpose
 
-A federation ban marks a user as banned in the persistent `moderation_actions` decision table (as a `ban` decision) and applies the Telegram ban across all active connected groups. The ban workflow requires a moderator reason and proof media, records proof/log message IDs, and exposes an appeal deep link for the banned user.
+A federation ban marks a user as banned in the persistent `moderation_actions` decision table (as a `ban` decision) and applies the Telegram ban across all active connected groups. The ban workflow requires a moderator reason and proof media, archives every uploaded proof item with its real media type, records the proof/log message IDs, and exposes an appeal deep link for the banned user.
 
 ## Commands and aliases
 
@@ -53,7 +53,7 @@ The ban command is a `ConversationHandler` with two states: `WAITING_PROOF` (pro
 7. The bot checks the target role and enforces hierarchy rules.
 8. The bot prompts for proof media.
 9. The moderator sends one or more photos/videos.
-10. The bot uploads proof, writes or updates the ban record, posts logs, enforces the ban across connected groups, and edits the prompt with a summary.
+10. The bot uploads proof, archives every landed item, writes or updates the ban record, posts logs, enforces the ban across connected groups, and edits the prompt with a summary.
 
 ## Target resolution and reason parsing
 
@@ -102,6 +102,19 @@ That means the proof keyboard provides `Done` and `Cancel`; there is no `Skip` b
 - Mixed collection: every item sent before the flush lands in one proof session (album parts and sequential sends alike). Photos and videos travel together with `send_media_group` (caption on the first item); GIFs and files are sent individually after the gallery.
 - The session flushes when the moderator taps `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap. Both enforcement paths re-check that the moderator still meets Developer rank at execution time: the `Done` tap re-checks in `on_done_proof`, and the silence-window background flush re-checks before calling the executor. A moderator demoted during proof collection, or a role-lookup outage at flush time, aborts the flush without enforcing and clears the session.
 
+The uploader returns one `ProofItem` per landed message. The archive stores each item
+with its media type (`photo`, `video`, `animation`, `document`), archive message id,
+item order, file metadata, and source reference. A gallery that loses one file is an
+incomplete upload; a manual ban is not filed with incomplete proof, so the moderator
+resends the evidence instead of leaving an audit record that claims media it does not
+have. A partial batch is only accepted for an automated threshold ban, whose evidence
+is optional by policy.
+
+The configured proof, log, and appeal destinations are registered in
+`telegram_chats` at startup. Evidence uploads and enforcement targets reference that
+table, so a fresh deployment no longer fails its first ban on an unregistered proof
+channel.
+
 If the moderator cancels, the bot edits the prompt to the localized `banning.state.cancelled` notice (English default: `Cancelled. No ban was issued.`) and ends the conversation.
 
 If the proof wait times out or a recognized command is sent as a fallback, the bot replies the localized `banning.state.timeout` notice (English default: `Timed out waiting for proof. No ban was issued.`) and ends the conversation.
@@ -111,9 +124,9 @@ If the proof wait times out or a recognized command is sent as a fallback, the b
 When the target has no active ban:
 
 1. A new short `ban_id` is generated with `bans_db.make_ban_id()`.
-2. Proof is uploaded to `cfg.proofs` with a `proof_caption_new` caption.
+2. Proof is uploaded to `cfg.proofs` with a `proof_caption_new` caption. Every landed item is archived in `moderation_evidence_uploads` and `moderation_evidence_items`; a partial upload aborts the manual ban before any record is written.
 3. A new ban log is built with `messages.ban_log`.
-4. The ban record is inserted with `bans_db.create_ban(...)`.
+4. The ban record is inserted with `bans_db.create_ban(...)`; the case, the evidence batch, and the decision land in one transaction.
 5. Only after the insert succeeds is the ban log sent to `cfg.logs` with a keyboard containing:
    - `Proof <target_id>` URL button.
    - `Submit Appeal` URL button.
@@ -123,7 +136,7 @@ When the target has no active ban:
    them could leave a phantom ban card in the log channel (dead appeal link,
    `/check` miss) when the write failed.
 6. The sent log message ID is saved with `bans_db.set_log_message_id(...)` in parallel with the pre-fetched `active_groups()` result.
-7. The target is banned in every active connected group returned by `groups_db.active_groups()`, plus the primary groups (`cfg.main_group`) when they are not already in the connected-groups list.
+7. The target is banned by the decision's `apply` run in every active connected group returned by `groups_db.active_groups()`, plus the primary groups (`cfg.main_group`) when they are not already in the connected-groups list. A group that fails is recorded per target and retried by the enforcement worker.
 8. The target user is cached with `users_cache.upsert_user(...)`.
 9. The original proof prompt is edited with an applied-groups summary.
 
@@ -154,7 +167,7 @@ A second active ban for the same target cannot exist: a partial unique index all
 
 ## Connected-group enforcement
 
-Federation enforcement uses `groups_db.active_groups()` (connected groups from the `connected_chats` table) and then appends the primary groups (`cfg.main_group`) when they are not already in the list. It calls `ban_chat_member` for each group through `fan_out(...)`. `fan_out` caps concurrency and returns exceptions instead of raising them.
+Federation enforcement uses `groups_db.active_groups()` (connected groups from the `connected_chats` table) and then appends the primary groups (`cfg.main_group`) when they are not already in the list. The decision queues an `apply` run with one target per group; the worker calls `ban_chat_member`, records each target, and retries a failed group.
 
 The user-facing summary reports how many groups succeeded:
 
@@ -212,7 +225,7 @@ ban flow writes:
 | `scope_type` | `community`: a ban applies to every active group. |
 | `origin_chat_id` | The group the command came from, when it came from one. |
 | `case_id` | The moderation case the decision belongs to. |
-| `evidence_upload_id` | The archived proof the decision cites. |
+| `evidence_upload_id` | The archived proof batch the decision cites; the batch owns one row per landed media item. |
 | `action_origin` | `manual` for a ban a moderator issued. |
 | `metadata` | The annotation of the decision: the review slot, the appeal link, the update counter, and the previous proof reference. |
 
@@ -310,10 +323,10 @@ Flow:
 3. The bot rejects attempts to unban itself.
 4. Founder and staff targets are treated as not federation-bannable and no unban is attempted.
 5. `bans_db.get_active_ban(target_id)` must return a record.
-6. All active bans for the target are revoked atomically with `bans_db.deactivate_all_active_bans(target_id)` and any pending appeal is withdrawn in the same transaction; the one-active-ban index keeps the ban revocation to the single decision in force.
-7. The target is unbanned from all active connected groups with `only_if_banned=True`.
+6. All active bans for the target are revoked with `bans_db.revoke_ban_and_queue_unban`, which also withdraws any pending appeal, releases the review slot, and queues the unban run in the same transaction; the one-active-ban index keeps the revocation to the decision in force.
+7. The target is unbanned from all active connected groups by the durable run with `only_if_banned=True`; a group that fails is retried by the scheduled worker.
 8. An unban log is sent to `cfg.logs`.
-9. The command reply reports the success count.
+9. The command reply reports the per-group run outcome and names failed groups.
 
 Manual unban does not edit a pending appeal review card. It records the appeal as withdrawn, revokes the ban, and posts the unban log.
 
@@ -348,5 +361,5 @@ Key behaviors to keep in mind:
 12. Failed group bans are counted in the final summary but do not roll back the DB record.
 13. `/checkme` on an active ban shows `Details`, optional `Proof`, and `Appeal` buttons.
 14. `/check` on a user shows full federation profile with bans/warns/kicks/mutes/appeals drill-down.
-15. `/tcunban` deactivates the active ban and unbans across all connected groups.
+15. `/tcunban` revokes the active ban, queues its durable unban run, and reports the per-group outcome.
 16. Active-ban reads use the same expiry condition as the `active_bans` view, and the partial unique index keeps at most one active ban per target.

@@ -17,7 +17,7 @@ flowchart TD
     AddWarn --> CheckPerGroup{count >= cfg.warn_limit?}
     CheckPerGroup -->|yes| RoleCheck{target holds federation role?}
     RoleCheck -->|yes| Exempt[Auto-demote target, exempt from auto-ban]
-    RoleCheck -->|no| AutoBan[Federation-wide auto-ban via fan_out]
+    RoleCheck -->|no| AutoBan[Federation-wide auto-ban via durable apply run]
     CheckPerGroup -->|no| CheckFed{FED_WARN_LIMIT > 0<br/>and fed_count >= limit?}
     CheckFed -->|yes| RoleCheck
     CheckFed -->|no| Notify[Send warn notice]
@@ -58,7 +58,7 @@ This means:
 
 - Warning count is calculated per group (current chat only) for the per-group `cfg.warn_limit` threshold.
 - When `FED_WARN_LIMIT > 0`, the bot also checks the user's total warns across all connected groups after each `/tcwarn`; reaching that limit triggers the same federation-wide auto-ban regardless of any single group's count.
-- Auto-ban at either threshold issues a **federation-wide ban** via `fan_out()` to all active connected groups plus primary groups.
+- Auto-ban at either threshold issues a **federation-wide ban** through a durable `apply` run to all active connected groups plus primary groups.
 - `/tcunwarn`, `/warns`, and `/resetwarns` operate on the current group only.
 
 ## `/tcwarn` flow
@@ -226,12 +226,12 @@ The trigger uses `>=` for per-group (retry-safe after total enforcement failure)
 1. The target role is re-read for the auto-ban decision. A role-lookup failure aborts the auto-ban with a retry reply instead of proceeding as non-staff; the persisted warn count re-fires the `>=` threshold on the next warn.
 2. Active federation groups, any existing active ban, and the audit log are fetched/sent in parallel via `asyncio.gather`.
 3. If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban decision in `moderation_actions` (the same record used by `/tcban`), reusing the warn proof upload as the ban `proof_message_id` when one was collected so `/check` shows View Proof. This makes the ban appealable via the standard appeal flow. If the write fails, the auto-ban aborts before any group is touched (fail-closed, mirroring `execute_unban`): the threshold warn stays recorded and the admin is told to ban manually with `/tcban` once the database recovers.
-4. `fan_out()` propagates `ban_chat_member` to all active connected groups plus MAIN_GROUP.
+4. The ban decision's `apply` run delivers `ban_chat_member` to all active connected groups plus MAIN_GROUP; failed targets are retried by the enforcement worker.
 5. Per-group failures are logged at WARNING level with group title, chat_id, and exception.
 6. An applied-to summary is computed: "Applied to X/Y groups", "Applied to X/Y groups (Z failed: ...)", or "WARNING: ban not enforced in any group" when all fail. When the group-list fetch itself fails, the reply gains a reduced-scope WARNING suffix (and an error is logged) instead of reporting full success over the reachable subset.
 7. The warning slate is cleared only where the ban landed. A complete enforcement (no transient failure) calls `warns_db.clear_all_warns(target_id)` so a later unban does not re-ban on stale counts. A partial enforcement calls `warns_db.clear_warns_for_chats(target_id, landed_chats)` instead: the groups where the ban failed keep their warnings, so their threshold can fire again. Clearing everything after a partial enforcement would leave those groups with no warning and no ban.
 8. The originating group receives a reply that the user hit the warn limit and has been federation-banned, including the applied-to summary.
-9. If the user already holds an active federation ban, a new ban decision is not created; `fan_out()` still runs to ensure enforcement in any newly connected groups.
+9. If the user already holds an active federation ban, a new ban decision is not created; the existing decision's apply scope is re-driven to ensure enforcement in any newly connected groups.
 10. A newly created ban decision is the only active ban of the target: a partial unique index refuses a second one, so `/check` and the appeal deep link always agree on the same record.
 
 Both auto-ban branches behave as follows:
@@ -352,7 +352,7 @@ Cancel edits the prompt to say no action was taken.
 ## Edge cases
 
 - Warning proof is optional and attached as a button on the outgoing messages; when the warn triggers an auto-ban, the uploaded proof id is stored as the ban `proof_message_id`.
-- Warning auto-ban creates a federation ban record via `bans_db.create_ban()` (same as `/tcban`), making it appealable through the standard appeal flow. If the user already holds an active federation ban, the record creation is skipped but `fan_out()` still runs.
+- Warning auto-ban creates a federation ban record via `bans_db.create_ban()` (same as `/tcban`), making it appealable through the standard appeal flow. If the user already holds an active federation ban, the record creation is skipped but the durable apply run still covers newly connected groups.
 - If auto-ban fails at 3 warnings, warning history is deliberately kept so moderators can retry or investigate.
 - If sending the warning log fails, the warning action still completes and the error is logged.
 - If clearing warnings after a successful auto-ban fails, the error is logged; the user has still been banned across the federation.

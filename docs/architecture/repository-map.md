@@ -61,7 +61,8 @@ tcbot/
 ├── __main__.py             App lifecycle, builder, errors, and main startup
 ├── error_reporter.py       Telegram error classification and shipping to LOGS_ERRORS
 ├── alive.py                Flask health endpoint and webhook receiver
-├── enforcement_worker.py   Claims queued expiry revokes and lifts restrictions on Telegram
+├── enforcement_worker.py   Claims queued enforcement runs and delivers their per-group effects
+├── notification_worker.py  Retries review-card edits through the durable outbox
 ├── database/
 │   ├── base/               Table, column, constraint, and index definitions (schema source of truth)
 │   │   ├── identity.py       Telegram users, chats, membership, connected groups, join requests
@@ -89,7 +90,8 @@ tcbot/
 │   │   ├── _writes.py          Writes: create, update, review slot, appeal, decision
 │   │   └── _compose.py         Joins a decision with its messages and appeals
 │   ├── moderation_db.py     Shared write path of the decisions: case, proof, closing
-│   ├── enforcement_db.py   Claim and record the queued expiry revokes
+│   ├── enforcement_db.py   Queue, claim, report, and requeue the enforcement runs
+│   ├── notifications_db.py Durable review-card edit outbox
 │   ├── erasure_db.py       Queue a Telegram-account erasure
 │   ├── groups_db.py        Connected groups, group configuration, join requests
 │   ├── pg_cron.py          Optional pg_cron ownership of database-only jobs
@@ -134,6 +136,7 @@ tcbot/
     ├── formatter.py        MarkdownV2 escaping and formatting (single source of truth)
     ├── i18n.py             TOML locale catalogs, lookup, and interpolation
     ├── logger.py           Console formatter and error log handler
+    ├── metrics.py          Optional Prometheus cache and Redis counters
     ├── pagination.py       Shared clamp_page() page arithmetic
     ├── prefixes.py         Prefix parsing and command filters
     ├── secrets.py          Constant-time secret comparison for inbound credentials

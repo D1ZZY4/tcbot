@@ -1,6 +1,6 @@
 # Unbanning
 
-This document describes the current federation unban behavior implemented by `tcbot/modules/unban.py` (the `/tcunban` entry point) and `tcbot/modules/helper/pipelines/unban_flow.py` (the `execute_unban` executor). Persistent ban state lives in `tcbot/database/bans_db/`; only the unban-relevant helpers are documented here.
+This document describes the current federation unban behavior implemented by `tcbot/modules/unban.py` (the `/tcunban` entry point), `tcbot/modules/helper/pipelines/unban_flow.py` (the `execute_unban` executor), and `tcbot/database/enforcement_db.py` (the durable delivery run). Persistent ban state lives in `tcbot/database/bans_db/`; only the unban-relevant helpers are documented here.
 
 For the ban flow that creates the records this command clears, see
 [`banning.md`](banning.md). For the appeal flow that can also trigger an unban,
@@ -19,15 +19,18 @@ flowchart TD
     Ident -->|allowed| Parallel[Parallel: pre-fetch active ban]
     Parallel -->|no active ban| NoBan[Reply: no active ban]
     Parallel -->|active ban| Groups[active_groups; abort untouched on failure]
-    Groups --> Deactivate[deactivate_all_active_bans]
-    Deactivate --> Unban[unban_chat_member across groups]
-    Unban --> Log[Post unban log to cfg.logs]
-    Unban --> Reply[Reply: removed from N/M groups]
+    Groups --> Decision[Transaction: revoke ban, withdraw appeal, queue revoke run]
+    Decision --> Deliver[Deliver the queued run now]
+    Deliver --> Retry{All groups settled?}
+    Retry -->|no| Queue[Run stays queued; scheduled worker retries]
+    Retry -->|yes| Reply[Reply from the per-group run report]
+    Queue --> Reply
+    Reply --> Log[Post unban log to cfg.logs]
 ```
 
 ## Purpose
 
-`/tcunban` clears an active federation ban by revoking the underlying `moderation_actions` ban decisions and unbanning the target across every active connected group plus the primary groups (`cfg.main_group`). The appeal-approve path runs its own inline sequence that mirrors `execute_unban` (deactivate, primary-group backfill, fan-out, logs); it does not call `execute_unban` directly.
+`/tcunban` clears an active federation ban by revoking the underlying `moderation_actions` ban decisions and unbanning the target across every active connected group plus the primary groups (`cfg.main_group`). The revocation and the delivery intent land in one transaction, and the queued enforcement run owns the per-group work. The appeal-approve path uses the same run model through `bans_db.approve_appeal_and_queue_unban`.
 
 The Developer minimum rank (instead of Tester) is enforced because unban is irreversible at the database level and a low-rank moderator could otherwise quietly undo a Founder ban.
 
@@ -35,7 +38,7 @@ The Developer minimum rank (instead of Tester) is enforced because unban is irre
 
 | Command | Alias | Purpose | Access |
 |---|---|---|---|
-| `/tcunban` | `/tcunb` | Deactivate an active federation ban and unban across connected groups. | Developer and above via `mod_only`. |
+| `/tcunban` | `/tcunb` | Revoke an active federation ban and unban across connected groups. | Developer and above via `mod_only`. |
 
 Commands use the project's configured prefixes; slash commands are examples.
 
@@ -49,7 +52,8 @@ Commands use the project's configured prefixes; slash commands are examples.
 4. The target must resolve to a Telegram user ID.
 5. The bot rejects attempts to unban itself via `identity.refuse_message`.
 6. The bot speculatively pre-fetches the active ban record in parallel with `identity.classify` and `resolve_and_check` so that `execute_unban` skips a redundant DB round-trip when the refusal check passes.
-7. `execute_unban` fetches active groups first (aborting with the ban record intact when the list cannot be loaded, so a retry re-drives the full fan-out), then deactivates all active bans for the target, fans `unban_chat_member` across every connected group plus the primary groups, posts the unban log, and replies with the success count.
+7. `execute_unban` fetches active groups first, aborts with the ban record intact when the list cannot be loaded, then revokes the ban, withdraws its pending appeal, and queues a `revoke` enforcement run in one transaction.
+8. The run is delivered immediately. If the process dies or Telegram fails, the scheduled enforcement worker still owns every target.
 
 ## Target resolution
 
@@ -74,7 +78,7 @@ ident, pre_ban, role_result = await asyncio.gather(
 )
 ```
 
-When the refusal check passes, the pre-fetched `pre_ban` is passed straight to `execute_unban(..., pre_ban=pre_ban)`. The `pre_ban` argument is optional; callers without a pre-fetch get the default `None` and `execute_unban` performs its own `get_active_ban`. (The appeal-approve path never calls `execute_unban`; it inlines a mirroring deactivate-plus-fan-out sequence.)
+When the refusal check passes, the pre-fetched `pre_ban` is passed straight to `execute_unban(..., pre_ban=pre_ban)`. The `pre_ban` argument is optional; callers without a pre-fetch get the default `None` and `execute_unban` performs its own `get_active_ban`.
 
 The Developer minimum is intentional: unbanning a higher-ranked target would silently invert the role-vs-state invariant because unban also clears all active bans for the user, which is irreversible.
 
@@ -83,30 +87,29 @@ The Developer minimum is intentional: unbanning a higher-ranked target would sil
 `execute_unban(update, ctx, target_id, target_fname, *, pre_ban=None)` lives in `tcbot/modules/helper/pipelines/unban_flow.py`. The executor:
 
 1. Uses the caller-supplied `pre_ban` when present, otherwise falls back to `db.bans_db.get_active_ban(target_id)`.
-2. If no active ban is found, replies `<user> has no active federation ban.` and stops. This guard prevents a misleading "removed from N/M groups" reply for a no-op.
+2. If no active ban is found, replies `<user> has no active federation ban.` and stops.
 3. Reads `ban_id` from the record for the federation log.
-4. Fetches active groups with `db.groups_db.active_groups()` **sequentially** before any mutation: a fetch outage aborts with the ban record intact, so a retry re-drives the full fan-out cleanly instead of unbanning "blind" against a stale list.
-5. Runs the active-ban deactivation via `db.bans_db.deactivate_all_active_bans(target_id)` - revokes every active ban for the target and withdraws any pending appeal in the same transaction.
-6. Adds primary groups (`cfg.main_group`) to the list when they are not already present.
-7. Fans `ctx.bot.unban_chat_member(grp.chat_id, target_id, only_if_banned=True)` across the resulting list with `fan_out(...)`.
-8. Builds an `unban_log` via `messages.unban_log`.
-9. Runs two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
-   - `bot.send_message(cfg.logs, log_text, parse_mode="MarkdownV2", message_thread_id=lt)`.
-   - `msg.reply_text("<user> has been unbanned - removed from <ok>/<total> groups.")`, plus a `WARNING: still banned in: <titles>` suffix naming up to 5 missed groups when the fan-out had transient failures (a re-run of `/tcunban` would report "no active ban" since the record is gone; only a targeted re-drive reaches those chats).
+4. Fetches active groups with `db.groups_db.active_groups()` **sequentially** before any mutation: a fetch outage aborts with the ban record intact, so a retry re-drives the full scope.
+5. Adds primary groups (`cfg.main_group`) to the list when they are not already present.
+6. Calls `db.bans_db.revoke_ban_and_queue_unban(target_id, requested_by, chat_ids)`. One transaction revokes every active ban, withdraws pending appeals, releases review slots, and queues a `revoke` run with one target per chat.
+7. Delivers the queued run with `enforcement_worker.deliver_queued_run(ctx.bot, run_id)`. A scheduled worker may already own it; that is not an error.
+8. Reads `db.enforcement_db.run_report(run_id)`. The reply reports the per-group outcome: full success, the names of failed groups, or a queued notice when the run is still pending.
+9. Posts the unban log and replies with the run outcome. A review card left behind by the revoked ban is queued for a durable edit, so a failed direct edit cannot leave a live-looking card.
 
-The reply does not include an appeal-resolution message; the pending appeal (if any) is recorded as `withdrawn` with the ban, and the appeal-approve path handles its own decision separately.
+The reply does not include an appeal-resolution message; a pending appeal is recorded as `withdrawn` with the ban inside the same transaction.
 
 ## Database impact
 
-Unban uses three `bans_db` helpers:
+Unban uses these helpers:
 
 | Helper | Purpose |
 |---|---|
 | `get_active_ban(user_id)` | Returns the active ban document that is still in force. Used by the manual command path and revalidated by the appeal flow. |
-| `deactivate_all_active_bans(user_id, *, withdraw_pending_appeals=True)` | Revokes every active ban decision for the user and, by default, withdraws any pending appeal in the same transaction. Returns the number of decisions revoked. The appeal-approval path passes `withdraw_pending_appeals=False` because it accepts that appeal immediately afterwards. |
+| `revoke_ban_and_queue_unban(user_id, requested_by, chat_ids)` | Revokes every active ban, withdraws pending appeals, releases review slots, and queues the durable unban run in one transaction. Returns `(revoked_count, run_id)`. |
+| `approve_appeal_and_queue_unban(ban_id, reviewer_id, reviewer_name, requested_by, chat_ids)` | Accepts the pending appeal, revokes the ban, releases the review slot, and queues the same run in one transaction. |
 | `make_ban_id()` | Not used here; only listed because the helper file is shared. |
 
-Manual unban has no scheduler interaction: neither `bans_db` nor `unban_flow` creates a scheduled job. Bans created by the bot are not time-limited, so no per-ban `unban.<ban_id>` job exists. The scheduled expiry sweep still records an expired decision and queues a revoke run, and `enforcement_worker.py` lifts any restriction left by a decision that did carry a deadline. Mutes already expire natively in Telegram through `until_date`.
+`moderation_enforcement_runs`, `moderation_enforcement_targets`, and `moderation_enforcement_attempts` hold the durable delivery. A run that cannot finish stays queued (or failed with a due retry), and the scheduled worker claims it again. The ban record is already `revoked`; the run is the recovery path, so `/tcunban` does not need a second command to repair a partial group.
 
 ## Logs
 
@@ -125,21 +128,17 @@ The unban log includes:
 - The deactivated `ban_id`.
 - Date.
 
-There is no appeal-resolution field on the manual unban log. When `/tcunban` is used to clear a ban that had a pending appeal, the appeal is recorded as `withdrawn` in the same transaction; the appeal review card is not edited.
-
 ## Edge cases
 
-- An unban attempt with no active ban record replies `<user> has no active federation ban.` and does not fan `unban_chat_member` calls.
-- `deactivate_all_active_bans` revokes every active ban decision for the target and withdraws its pending appeal. The partial unique index keeps at most one active ban, so the write normally closes one row; the statement still handles every active row in one operation. Withdrawing the appeal keeps it from blocking a later appeal forever.
+- An unban attempt with no active ban record replies `<user> has no active federation ban.` and queues nothing.
+- A concurrent unban that loses the race sees `revoked == 0` and returns the same idempotent no-record reply instead of claiming a new change.
 - `unban_chat_member` is called with `only_if_banned=True`, so it is a no-op in groups where the user is not currently banned.
-- The pre-fetch in `cmd_unban` can fail (DB error); the executor falls back to its own `get_active_ban` call. If that re-fetch also fails, the command replies with a retry notice instead of crashing out with no operator feedback.
+- A failed Telegram delivery leaves the run queued. The scheduled worker retries the target up to three times with a five-minute delay.
 - The Developer rank minimum (`mod_only`) prevents a Tester from unbanning a Founder or Admin; the rank check fires before the active-ban pre-fetch.
-- The unban command does not edit the appeal review card; the pending appeal is withdrawn with the ban record.
-- Federation log send failure does not roll back the DB deactivation; the ban is still cleared even if the log channel is unavailable.
+- A staff target re-promoted while banned is demoted first through `demote_before_unban(..., trigger="unban")`; a failed demote blocks the unban.
+- Federation log send failure does not roll back the decision or the run.
 
 ## Behavior reference
-
-Key behaviors to keep in mind:
 
 1. `/tcunban` requires Developer rank.
 2. `/tcunban` without a target is rejected with `replies.err_cannot_resolve(locale)`.
@@ -147,13 +146,12 @@ Key behaviors to keep in mind:
 4. Self-unban and bot-unban attempts are rejected by `identity.refuse_message`.
 5. Founder is always treated as not federation-bannable, so unban is a no-op for Founder targets.
 6. The active ban pre-fetch runs in parallel with `identity.classify` and `resolve_and_check`.
-7. `pre_ban` is passed straight to `execute_unban` so the manual path skips a redundant `get_active_ban` call.
-8. `execute_unban` refuses to fan `unban_chat_member` calls when no active ban record exists.
-9. `deactivate_all_active_bans` revokes every active ban for the target, not just the one returned by `get_active_ban`, and withdraws any pending appeal in the same write.
-10. The unban fan-out uses `only_if_banned=True`; missing chat memberships are silent no-ops.
-11. The reply reads `<user> has been unbanned - removed from <ok>/<total> groups.`, with a `WARNING: still banned in: <up-to-5 titles>` suffix when transient failures remain.
-12. The unban log is sent to `cfg.logs` with `messages.unban_log`.
-13. `/tcunban` does not edit any pending appeal review card.
-14. Federation log send failure does not roll back the ban deactivation.
-15. The appeal-approve path mirrors `execute_unban` inline (deactivate, primary-group backfill, fan-out, logs) instead of calling it; both abort the fan-out when the database deactivation fails.
-16. A staff target (Admin/Developer/Tester) with an active ban (re-promoted while banned) is demoted first (`Demote.execute(trigger=None)`) so the stale ban can be cleared; without an active ban the staff refusal stands, and a failed ban re-read keeps the refusal.
+7. `execute_unban` refuses to queue an unban when no active ban record exists.
+8. The decision and the unban run are written together; a failed write leaves the ban active.
+9. `unban_chat_member` is called with `only_if_banned=True`.
+10. The reply reports the per-group run outcome and names failed groups.
+11. A run another worker already claimed is reported as queued.
+12. The scheduled enforcement worker retries unfinished targets without a new moderation decision.
+13. The unban log is sent to `cfg.logs` with `messages.unban_log`.
+14. The appeal-approve path uses the same atomic decision plus run model.
+15. A staff target with an active ban is demoted before the decision; a failed demote blocks the unban.

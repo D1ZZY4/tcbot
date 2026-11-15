@@ -116,7 +116,7 @@ The demote runs at enforcement time because the reason and proof steps are still
 
 Execution order:
 
-1. Write the audit row with `db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id)` first. A failed write aborts with a retry reply and no group is touched, so an enforced kick is never missing from `/check` history.
+1. Write the audit row with `db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id)` first; it returns the decision id used by the repair run. A failed write aborts with a retry reply and no group is touched, so an enforced kick is never missing from `/check` history.
 2. When `proof_msgs` is non-empty, start the proof upload to `cfg.proofs` as a background task (caption `messages.proof_caption_new`). If upload fails, the kick still proceeds with no proof link.
 3. Remove the target's effective role via `demote_before_enforcement(..., trigger="kick")` (best-effort; the kick proceeds even if the demote fails). The demote runs before the ban so a role-holding target never keeps federation rank while the ban is live.
 4. Call `ctx.bot.ban_chat_member(chat_id, target_id)` to remove the user immediately, without waiting for the proof-channel round trip. On ban failure the in-flight upload is cancelled and the executor replies with a permissions/retry hint.
@@ -124,7 +124,7 @@ Execution order:
 6. Fan two independent side-effects in parallel with `asyncio.gather(..., return_exceptions=True)`:
    - `unban_chat_member(chat_id, target_id, only_if_banned=True)` - the "user can rejoin" step.
    - `ctx.bot.send_message(cfg.logs, kick_log, ..., reply_markup=proof_kb)` - federation log post. The audit write already landed before enforcement, so a failure here can never leave an unaudited kick.
-7. If the unban call raises, the reply text is appended with a `WARNING:` line so the moderator is told the user is still banned in this chat.
+7. If the unban call raises, one bounded retry runs. If that also fails, the executor queues `enforcement_db.queue_kick_unban_repair(kick_action_id, chat_id, admin_id)`, a durable `reconcile` run that keeps retrying the unban, and appends a `WARNING:` line so the moderator knows the user is still banned in this chat.
 8. Edit the proof prompt in place with the kick summary (same pattern as the mute executor), falling back to a fresh reply when the prompt is gone. No more double message.
 9. The reply reads `<user> has been kicked. Reason: <reason>. They can rejoin via invite link.` plus the optional `WARNING:` line. The kicked user's ID is a Telegram deep-link for quick re-ban; the text is rendered from the localized `kicking.summary.body` / `kicking.warn.unban` / `kicking.rejoin.body` blocks in the moderator's locale.
 
@@ -165,7 +165,7 @@ The reply and federation log use `keyboards.action_proof_kb(target_id, proof_lin
 - Proof upload failures are caught and logged; the kick still proceeds.
 - A DB `log_kick` failure aborts the kick with a retry reply before any group is touched, so an enforced kick is never missing from `/check` history.
 - Federation log send failure does not stop the kick reply.
-- If the post-ban `unban_chat_member` fails, the user is effectively banned in this chat. The reply now appends a `WARNING:` line explaining this and recommending a manual chat-member unban (previously the failure was a silent false success).
+- If the post-ban `unban_chat_member` fails after one retry, the user is effectively banned in this chat. A durable reconcile run is queued and the reply appends a `WARNING:` line; the scheduled enforcement worker retries the unban without a new kick decision.
 - A demote failure is logged loudly and the kick still proceeds; the target's rank is repaired by a later join-time enforcement pass.
 - The reason and proof conversation is per-chat and per-user, so simultaneous kick flows are isolated.
 - The kick command is **group-only**: the entry rejects a private chat with the localized `replies.err_group_only(locale)` notice (English default: `Use this command in a group.`) before any role or target I/O, and `execute_kick` acts on the current chat (`ban_chat_member` then `unban_chat_member` in `effective_chat.id`). Rank gating is Tester or above via `basic_mod_only`; the decorator itself performs no group-membership check beyond the entry's private-chat guard.
@@ -182,12 +182,12 @@ Key behaviors to keep in mind:
 5. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
 6. Role-holding targets are auto-demoted when the kick is enforced.
 7. Reason is skippable; skipped reason records as the localized `replies.no_reason(locale)` text.
-8. Proof is skippable; skipped proof records nothing.
+8. Proof is optional for a kick. When supplied, the landed items are archived with the decision as a non-required evidence batch, so the audit record points at the real media instead of only a channel message.
 9. The `WAITING_PROOF` step accepts photos, videos, GIFs, and files; other messages bounce with a friendly prompt.
 10. Proof items accumulate until the moderator taps `Done` (an empty `Done` answers with a retry alert); the executor then runs once with everything collected.
 11. The proof prompt edits in place across the reason-to-proof transition when a prompt ID is stashed in `ctx.user_data`.
 12. `execute_kick` runs `ban_chat_member` then `unban_chat_member(..., only_if_banned=True)` so the user can rejoin via invite link.
 13. The DB `log_kick` audit write runs first and aborts the kick on failure; the federation log post then runs in parallel with the post-ban unban, so partial failures are logged but the kick still completes.
-14. A failed post-ban unban adds a `WARNING:` line to the reply; the user is still banned in this chat.
+14. A failed post-ban unban adds a `WARNING:` line to the reply and queues a durable reconcile run; the scheduled worker keeps retrying the unban.
 15. `/tcban` and `/tckick` are distinct: only `/tcban` creates a federation-wide ban record and appeal path.
 16. The reply always reads `They can rejoin via invite link.` because the post-ban unban is part of the contract.

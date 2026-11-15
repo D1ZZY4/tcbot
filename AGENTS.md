@@ -298,6 +298,7 @@ Important non-secret/runtime variables include:
 - `DB_MAX_OVERFLOW`: extra connections the pool may open under load; default `5`.
 - `DB_SCHEMA`: PostgreSQL schema the bot reads and writes; default `public`. See [Database Schemas](#database-schemas).
 - `PG_CRON_ENABLED`: optional pg_cron ownership of the pure-database expiry, role-expiry, and reconciliation jobs; default `false`.
+- `PROMOTION_REQUEST_TTL_DAYS`: days a pending promotion request stays open before it is marked `expired`; default `7`, `0` disables expiry.
 - `WARN_LIMIT`: per-group warn threshold that triggers auto-ban; default `3`.
 - `WARN_EXPIRY_DAYS`: days after which warn records expire; default `0` (disabled).
 - `FED_WARN_LIMIT`: federation-wide warn threshold that triggers auto-ban; default `0` (disabled).

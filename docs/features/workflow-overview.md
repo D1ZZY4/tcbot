@@ -8,10 +8,10 @@ factories, and callback details, see
 
 | Flow | Entry commands | Permission | Scope | Notes |
 |---|---|---|---|---|
-| Ban | `/tcban`, `/tcb` | Developer+ | All connected groups | Requires inline reason and proof media; updates existing active ban instead of duplicating. |
-| Unban | `/tcunban`, `/tcunb` | Developer+ | All connected groups | Direct command; resolves an active ban and removes it federation-wide. |
-| Kick | `/tckick`, `/tck` | Tester+ | Current group only | Conversation asks for reason/proof; auto-demotes role holders when the kick is enforced. |
-| Mute | `/tcmute`, `/tcm` | Tester+ | All connected groups | Optional duration token before reason, for example `7d`. |
+| Ban | `/tcban`, `/tcb` | Developer+ | All connected groups | Requires inline reason and proof media; the decision queues a durable apply run per group. |
+| Unban | `/tcunban`, `/tcunb` | Developer+ | All connected groups | Resolves an active ban, revokes it and queues a durable per-group unban run. |
+| Kick | `/tckick`, `/tck` | Tester+ | Current group only | Conversation asks for reason/proof; auto-demotes role holders and queues a durable unban repair if the second step fails. |
+| Mute | `/tcmute`, `/tcm` | Tester+ | All connected groups | Optional duration token before reason; the decision queues a durable apply run per group. |
 | Unmute | `/tcunmute`, `/tcunm`, `/tcum` | Tester+ | All connected groups | Direct command; restores send permissions. |
 | Warn | `/tcwarn`, `/tcw` | Tester+ | Current group warning history | Reason required; auto-ban at `WARN_LIMIT` (default 3) per group or when `FED_WARN_LIMIT` (env, default disabled) is crossed across all groups. |
 | Unwarn | `/tcunwarn`, `/tcunw` | Tester+ | Current group warning history | Removes the newest warning. |
@@ -39,7 +39,7 @@ flowchart TD
     M --> N[Edit prompt summary + DM appeal link]
 ```
 
-Ban proof supports Telegram media albums as well as sequential sends: photos, videos, GIFs, and files accumulate in one proof session flushed by `Done`, `ALBUM_DEBOUNCE_SECONDS` of silence, or a 60 s cap.
+Ban proof supports Telegram media albums as well as sequential sends: photos, videos, GIFs, and files accumulate in one proof session flushed by `Done`, `ALBUM_DEBOUNCE_SECONDS` of silence, or a 60 s cap. Every landed item is archived with its real media type; a manual ban is not filed from a partial gallery.
 
 ## Reason + proof flows
 

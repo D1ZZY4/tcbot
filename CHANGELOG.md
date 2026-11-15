@@ -9,6 +9,28 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Added
 
+- **Ban, mute, and warn application now has a durable per-group ledger** (`tcbot/database/bans_db/_writes.py`, `tcbot/database/mutes_db.py`, `tcbot/database/enforcement_db.py`, `tcbot/enforcement_worker.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `mute_flow.py`, `warn_flow.py`): a manual or automatic ban and a mute queue an `apply` run with their decision, and Telegram delivery is recorded per group. A failed group is retried by the scheduled worker instead of disappearing with the one-shot fan-out. Behavior changes: the ban and mute summaries report the per-group run outcome, and a failed delivery is retried automatically.
+
+- **Promotion requests expire** (`tcbot/database/base/rbac.py`, `tcbot/database/queues_db.py`, `tcbot/database/scheduler.py`, `alembic/versions/0005_promotion_request_expiry.py`): a pending request now carries an absolute expiry (`PROMOTION_REQUEST_TTL_DAYS`, default 7), is marked `expired` by the hourly sweep or lazily when a new request is filed, and no longer blocks a fresh request for the same target. Behavior changes: a request nobody decides within the TTL becomes terminal.
+
+- **The user locale cache is shared across processes** (`tcbot/database/cache/singletons.py`, `tcbot/database/settings_db.py`): locale reads use the two-level cache with the generation guard, so a language change in one process invalidates the value in every other process instead of waiting for a process-local TTL.
+
+- **Cache activity has metrics** (`tcbot/utils/metrics.py`, `tcbot/database/cache/twolevel.py`, `tcbot/database/cache/redis_io.py`): L1/L2 hits, misses, invalidations, dropped mutations, queue depth, and Redis availability are exposed through the optional Prometheus endpoint, and the same counters are available in-process for diagnostics.
+
+- **MTProto member harvest resumes** (`tcbot/database/mtproto.py`): the cursor is stored under the shared session namespace, a slice stops at the time budget or a flood wait with the cursor intact, and the next slice continues from that position instead of restarting the group.
+
+- **Proof optional for kick, mute, and warn is archived** (`tcbot/database/moderation_db.py`, `kicks_db.py`, `mutes_db.py`, `warns_db.py`, the kick/mute/warn flows): the landed items are linked to the decision as a non-required evidence batch, so an optional proof is not only a channel message.
+
+- **Review-card edits have a durable outbox** (`tcbot/database/base/moderation.py`, `tcbot/database/notifications_db.py`, `tcbot/notification_worker.py`, `tcbot/database/scheduler.py`): a card edit that fails during an appeal approval or a manual unban is retried by the scheduler, so a settled card cannot keep looking decidable.
+
+- **A mute keeps the duration the moderator requested** (`tcbot/database/mutes_db.py`, `documents.py`): the requested duration is stored beside the remaining lifetime, so the history can distinguish the request from a later supersede.
+
+- **Durable unban, appeal, and kick-repair delivery** (`tcbot/database/enforcement_db.py`, `tcbot/database/bans_db/_writes.py`, `tcbot/enforcement_worker.py`, `tcbot/modules/helper/pipelines/unban_flow.py`, `tcbot/modules/helper/pipelines/appeal_review_flow.py`, `tcbot/modules/helper/pipelines/kick_flow.py`): a manual unban and an approved appeal now record the decision and its per-group delivery run in one transaction, and a kick whose post-ban unban still fails queues a reconcile run. The scheduled worker retries unfinished targets, so a partial delivery no longer disappears with the revoked ban record. Behavior changes: a partial unban reports the failed groups and is retried automatically; a stranded kick is repaired without a new kick.
+
+- **Every proof item is archived with its real media type** (`tcbot/modules/helper/pipelines/proof_flow.py`, `tcbot/database/moderation_db.py`, `tcbot/database/bans_db/_writes.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `tcbot/modules/helper/pipelines/warn_flow.py`): the uploader returns one result per landed message, and the evidence batch stores the item order, media type, archive message id, and file metadata. A gallery that lost a file is a partial batch instead of a single photo. Behavior changes: a manual ban is not filed from an incomplete proof upload, so the moderator resends the evidence; an automated threshold ban may still stand on partial optional evidence.
+
+- **Configured destinations are registered at startup** (`tcbot/database/groups_db.py`, `tcbot/__main__.py`): the proof, log, and appeal destinations now get a `telegram_chats` identity row when they do not have one. Evidence uploads and enforcement targets reference that table, so a fresh deployment no longer fails its first ban on an unregistered proof channel.
+
 - **Expiry revokes now have a consumer** (`tcbot/enforcement_worker.py`, `tcbot/database/enforcement_db.py`, `tcbot/database/scheduler.py`): the expiry sweep queued a revoke run for every managed group but no code read the queue, so an expired restriction stayed in Telegram. The worker claims queued runs, lifts the ban or mute, records each attempt, and retries a failed target up to three times. Behavior changes: an expired decision is enforced on Telegram without a manual unban.
 
 - **pg_cron can own the database-only maintenance** (`tcbot/database/pg_cron.py`, `tcbot/database/scheduler.py`, `config.env.example`): when `PG_CRON_ENABLED` is true and the extension exists, PostgreSQL runs moderation expiry, role expiry, and stuck-enforcement reconciliation every 5 or 10 minutes. APScheduler drops its expiry schedule, so only one owner runs it, and keeps the jobs that need Python or Telegram. Without the extension the bot logs a warning and keeps APScheduler. Behavior changes: expiry survives a dead bot process when pg_cron is enabled.
@@ -20,6 +42,16 @@ All notable changes to this project are documented here. For workflow details, s
 - **Speedtest has a full mode** (`tcbot/modules/netspeed.py`, `i18n/*/netspeed.toml`): `/speedtest full` moves a larger sample over four connections per direction and gets a 300 s ceiling. The quick mode keeps its small payload so it does not starve Telegram traffic. Behavior changes: the full mode reports a more representative throughput at the cost of bandwidth.
 
 ### Changed
+
+- **Appeal approval is one database decision** (`tcbot/database/bans_db/_writes.py`, `tcbot/modules/helper/pipelines/appeal_review_flow.py`): accepting the appeal, revoking the ban, releasing the review slot, and queueing the unban run now commit together. A former split could leave an accepted appeal beside an active ban, or a revoked ban beside a pending appeal.
+
+- **Unban reports names of failed groups** (`tcbot/modules/helper/pipelines/unban_flow.py`): the summary reads the per-group run report instead of counting a one-shot fan-out. A group that is still being retried is reported as queued rather than as a completed unban.
+
+- **Mute summary names the groups that missed the restriction** (`tcbot/modules/helper/pipelines/mute_flow.py`): a partial mute now appends the failed group titles instead of only showing `done/total`.
+
+- **Appeal deep links accept the full reference range** (`tcbot/modules/appeals.py`, `tcbot/modules/helper/pipelines/appeal_submit_flow.py`): the start filter uses the same 10-to-32 character pattern as the parser, so a legacy reference no longer produces a dead link.
+
+- **Demote messages name the unban and appeal context** (`tcbot/modules/helper/pipelines/demote_flow.py`): a staff member demoted before a manual unban or an approved appeal now receives wording for that decision instead of the generic manual-demote text.
 
 - **Migration runs are serialised across instances** (`tcbot/database/migrations.py`): two instances that boot together could apply the same revision concurrently and the loser crash-looped on a duplicate-object error. The upgrade now runs under a PostgreSQL advisory lock with a bounded connect timeout, so the second instance finds the schema at head.
 

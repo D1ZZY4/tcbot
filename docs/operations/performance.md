@@ -164,6 +164,12 @@ Use the cache layer already associated with the database helper:
   short-lived tombstone before the Redis delete. A reader in another
   process that misses L1 pays one extra EXISTS on the tombstone, and skips
   the old L2 value while the delete is in flight.
+- `tcbot_cache_hits_total{layer}`, `tcbot_cache_misses_total`,
+  `tcbot_cache_invalidations_total`, `tcbot_cache_invalidation_drops_total{prefix}`,
+  `tcbot_cache_queue_depth{prefix}`, and `tcbot_redis_available` are exposed on
+  `/metrics` when the observability extra is installed. The same counters are
+  available in-process through `tcbot.utils.metrics.snapshot()` for tests and
+  diagnostics.
 
 Do not add a second cache namespace or bypass the cache with a direct Redis
 operation. An L2 write can never fail the fetch it follows: after a database
@@ -223,8 +229,9 @@ sweep moves the due decisions and role assignments and queues the revoke runs
 in one transaction with the same 60 s budget, so a decision can never expire
 without the job that lifts the restriction. Both sweeps take a transaction
 advisory lock, so overlapping bot instances cannot duplicate the work. The
-five-minute enforcement worker consumes the queue and lifts the restriction
-on Telegram. A retryable delivery failure is recorded as `failed` with a due
+five-minute enforcement worker consumes the queue and applies the decision on
+Telegram; ban and mute application, manual unbans, approved appeals, and kick
+unban repair use the same ledger. A retryable delivery failure is recorded as `failed` with a due
 deadline (the only transition the target trigger accepts), and the run is
 re-queued when that deadline arrives; a target is tried at most three times.
 
