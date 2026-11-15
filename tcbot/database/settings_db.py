@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import cachetools as _cachetools
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import telegram_users, user_settings
+from tcbot.database.cache.singletons import user_locale_cache
 from tcbot.database.engine import db_call, fetch_one, run_transaction
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
@@ -22,10 +22,10 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# * L1 for locale reads: resolution runs on every command and callback,
-# * so hits must cost no I/O. Writes invalidate; TTL bounds staleness
-# * when another process changes the row. Unset (None) caches too.
-_LOCALE_L1: _cachetools.TTLCache = _cachetools.TTLCache(maxsize=4096, ttl=300)
+# * The two-level cache keeps a language change visible across processes:
+# * a write invalidates the Redis entry with a generation guard, so a read
+# * that started before the write cannot publish the old value into L1.
+# * Unset (None) is cached too, so a repeated miss costs no I/O.
 
 # ─────────────────────── User Locale Preferences ───────────────────── #
 # * Stored apart from the user profile on purpose: locale rows must never
@@ -36,26 +36,23 @@ _LOCALE_L1: _cachetools.TTLCache = _cachetools.TTLCache(maxsize=4096, ttl=300)
 
 async def get_user_locale(user_id: int) -> str | None:
     """Return the stored locale code for a user, or None when unset."""
-    try:
-        return _LOCALE_L1[user_id]
-    except KeyError:
-        pass
-    row = await db_call(
-        lambda: fetch_one(
-            select(user_settings.c.locale).where(user_settings.c.user_id == user_id)
+
+    async def _fetch() -> str | None:
+        row = await db_call(
+            lambda: fetch_one(
+                select(user_settings.c.locale).where(user_settings.c.user_id == user_id)
+            )
         )
-    )
-    if row is None:
-        _LOCALE_L1[user_id] = None
-        return None
-    locale = row.get("locale")
-    value = locale if isinstance(locale, str) and locale else None
-    if locale == "":
-        # * An empty stored code resolves to no locale while the row
-        # * lingers: surface it so the mismatch is visible.
-        log.warning("Stored locale for user %d is empty", user_id)
-    _LOCALE_L1[user_id] = value
-    return value
+        if row is None:
+            return None
+        locale = row.get("locale")
+        if locale == "":
+            # * An empty stored code resolves to no locale while the row
+            # * lingers: surface it so the mismatch is visible.
+            log.warning("Stored locale for user %d is empty", user_id)
+        return locale if isinstance(locale, str) and locale else None
+
+    return await user_locale_cache.get_or_fetch(user_id, _fetch)
 
 
 async def set_user_locale(user_id: int, locale: str | None) -> None:
@@ -85,4 +82,4 @@ async def set_user_locale(user_id: int, locale: str | None) -> None:
         )
 
     await run_transaction(_work)
-    _LOCALE_L1.pop(user_id, None)
+    user_locale_cache.invalidate(user_id)

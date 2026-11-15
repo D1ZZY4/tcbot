@@ -23,6 +23,7 @@ from tcbot import cfg
 from tcbot.database import engine as engine_module
 from tcbot.database import groups_db, settings_db, users_roles
 from tcbot.database.base import user_settings
+from tcbot.database.cache import singletons
 from tcbot.modules import (
     admins,
     appeals,
@@ -412,11 +413,11 @@ async def locale_db(postgres_db: str) -> AsyncIterator[str]:
     """Start from empty user-settings and group tables."""
     await reset_community()
     await seed_users(1, 2)
-    settings_db._LOCALE_L1.clear()
+    singletons.user_locale_cache.clear()
     groups_db._GROUP_LOCALE_L1.clear()
     yield postgres_db
     await reset_community()
-    settings_db._LOCALE_L1.clear()
+    singletons.user_locale_cache.clear()
     groups_db._GROUP_LOCALE_L1.clear()
 
 

@@ -30,6 +30,9 @@ _OWNER_REDIS_TTL_S: float = 360.0
 _USER_MENTION_CACHE_TTL_S: float = 300.0
 _USER_MENTION_REDIS_TTL_S: float = 600.0
 
+_USER_LOCALE_CACHE_TTL_S: float = 300.0
+_USER_LOCALE_REDIS_TTL_S: float = 600.0
+
 # Populated by users_roles.get_effective_role; invalidated on every role write.
 effective_role_cache: TwoLevelCache[str | None] = TwoLevelCache(
     memory_ttl=_ROLE_CACHE_TTL_S,
@@ -70,5 +73,15 @@ user_mention_cache: TwoLevelCache[list[str | None]] = TwoLevelCache(
     memory_ttl=_USER_MENTION_CACHE_TTL_S,
     redis_ttl=_USER_MENTION_REDIS_TTL_S,
     redis_prefix="umention",
+    maxsize=_USER_MENTION_CACHE_MAXSIZE,
+)
+
+# Populated by settings_db.get_user_locale; invalidated on set_user_locale.
+# A language change in one process must reach every other process, so this
+# cache is two-level instead of the old process-local TTL map.
+user_locale_cache: TwoLevelCache[str | None] = TwoLevelCache(
+    memory_ttl=_USER_LOCALE_CACHE_TTL_S,
+    redis_ttl=_USER_LOCALE_REDIS_TTL_S,
+    redis_prefix="ulocale",
     maxsize=_USER_MENTION_CACHE_MAXSIZE,
 )
