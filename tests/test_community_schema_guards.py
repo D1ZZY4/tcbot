@@ -508,6 +508,57 @@ async def test_the_run_status_follows_its_targets(community: str) -> None:
     assert status == "failed"
 
 
+async def test_reconciliation_releases_a_target_that_never_attempted(
+    community: str,
+) -> None:
+    """A worker that claimed a target and died before the attempt is recovered.
+
+    The target has no ``last_attempt_at`` yet, so the recovery window has to
+    fall back to the claim moment. Reading only ``last_attempt_at`` leaves
+    that target in progress forever.
+    """
+    action_id = await _open_ban(2, external_ref="ban00000011")
+    run_row = await engine_module.fetch_one(
+        text(
+            "INSERT INTO moderation_enforcement_runs "
+            "(action_id, operation, idempotency_key) "
+            "VALUES (:action, 'apply', 'run-00000005') RETURNING id"
+        ).bindparams(action=action_id)
+    )
+    assert run_row is not None
+    run_id = int(run_row["id"])
+    target_row = await engine_module.fetch_one(
+        text(
+            "INSERT INTO moderation_enforcement_targets (run_id, chat_id) "
+            "VALUES (:run, -1001) RETURNING id"
+        ).bindparams(run=run_id)
+    )
+    assert target_row is not None
+    target_id = int(target_row["id"])
+
+    await _run(
+        "UPDATE moderation_enforcement_targets "
+        "SET status = 'in_progress' WHERE id = :id",
+        id=target_id,
+    )
+
+    recovered = await _fetch_one(
+        "SELECT reconcile_stuck_enforcement_targets('0 seconds')"
+    )
+
+    assert recovered == 1
+    row = await engine_module.fetch_one(
+        text(
+            "SELECT status, next_retry_at, last_error_kind "
+            "FROM moderation_enforcement_targets WHERE id = :id"
+        ).bindparams(id=target_id)
+    )
+    assert row is not None
+    assert row["status"] == "failed"
+    assert row["next_retry_at"] is not None
+    assert row["last_error_kind"] == "worker_timeout"
+
+
 # ───────────────────────── The audit trail ───────────────────────── #
 
 

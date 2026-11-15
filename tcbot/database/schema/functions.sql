@@ -2542,7 +2542,7 @@ BEGIN
                last_error_kind = 'worker_timeout',
                last_error_detail = 'Target stayed in progress beyond the stale window and was released for retry'
          WHERE t.status = 'in_progress'
-           AND t.last_attempt_at < clock_timestamp() - p_stale_after
+           AND COALESCE(t.last_attempt_at, t.updated_at) < clock_timestamp() - p_stale_after
            AND EXISTS (
                SELECT 1 FROM %SCHEMA%.moderation_enforcement_runs AS r
                WHERE r.id = t.run_id AND r.status IN ('queued', 'running')
