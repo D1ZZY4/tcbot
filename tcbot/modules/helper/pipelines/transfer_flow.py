@@ -39,12 +39,11 @@ log = get_logger(__name__)
 async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Transfer federation ownership to another user.
 
-    Resolves the new owner target, runs identity checks, then replaces the
-    owner record via ``set_owner`` first and keeps the previous Founder as
-    Admin via ``add_admin`` second. ``set_owner`` first keeps the federation
-    from ever going ownerless on a mid-flight failure; a failed ``add_admin``
-    stays visible as a WARNING line in the reply. Logs and confirmation
-    reply run in parallel afterward.
+    Resolves the new owner target and runs the identity checks, then swaps
+    the owner and grants the previous Founder the Admin role in one
+    transaction. A failed transaction leaves both roles untouched instead of
+    leaving the federation ownerless or the former Founder without a role.
+    Logs and the confirmation reply run in parallel afterward.
     """
     locale = await locale_for_update(update)
     current_owner = update.effective_user

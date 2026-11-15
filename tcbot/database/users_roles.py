@@ -305,7 +305,13 @@ async def ensure_initial_owner(initial_id: int) -> None:
 
 
 async def set_owner(user_id: int) -> None:
-    """Replace the current owner with user_id; clears the role cache."""
+    """Replace the current owner with user_id; clears the role cache.
+
+    Low-level assignment primitive for seeding and invariant tests. The
+    ownership command must use :func:`transfer_ownership`, which also grants
+    the previous Founder the Admin role in the same transaction. Calling
+    this helper directly would leave the previous Founder without a role.
+    """
 
     # * The transfer runs in one transaction: the new assignment and the
     # * revocation of the old one commit together, so a crash between
