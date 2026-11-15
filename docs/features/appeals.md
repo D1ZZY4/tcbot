@@ -174,8 +174,8 @@ The update helpers involved are:
 - `bans_db.claim_appeal_decision(ban_id, review_msg_id)` (atomic decision claim; consumes the review slot)
 - `bans_db.approve_appeal_and_queue_unban(ban_id, reviewer_id, reviewer_name, requested_by, chat_ids)` on approval (accepts the appeal, revokes the ban, releases the review slot, and queues the unban run in one transaction)
 - `bans_db.restore_review(ban_id, review_msg_id, review_timestamp)` (hands the slot back when a tap reached no decision)
-- `bans_db.accept_appeal(...)` / `bans_db.reject_appeal(...)` (close the appeal row with the reviewer and note)
-- `bans_db.clear_review(ban_id)` (releases the slot after a rejection)
+- `bans_db.reject_appeal(ban_id, reviewer_id, reviewer_name)` (closes the appeal as rejected and releases the review slot in one transaction)
+- `bans_db.clear_review(ban_id)` (releases the slot of a card found stale)
 - `users_cache.upsert_user(...)` after submission
 
 If the review post fails, no review slot is stored. If the appeal-log post fails, no `appeal_log` message reference is stored. The implementation logs those failures and continues where possible.
@@ -243,15 +243,15 @@ Approval is a federation unban. It removes the Telegram ban across all connected
 When a staff member rejects an appeal:
 
 1. The target's effective role is read fresh and the reviewer must outrank it, exactly like approval and `/tcunban`. A role-lookup outage fails closed with a retry alert, and a peer (equal rank) target is refused with the shared outrank notice before anything is written.
-2. `bans_db.set_rejected_by(ban_id, admin.id, admin.first_name)` records the rejector's identity (`rejected_by_id`, `rejected_by_name`, `rejected_at`). If this write fails, rejection aborts with the review card untouched and the tapper gets a retry alert, so a re-tap retries the full sequence.
+2. `bans_db.reject_appeal(ban_id, admin.id, admin.first_name)` records the rejector's identity (`rejected_by_id`, `rejected_by_name`, `rejected_at`) and releases `review_message_id` and `review_timestamp` in the same transaction. If this write fails, rejection aborts with the review card untouched and the tapper gets a retry alert, so a re-tap retries the full sequence. A rejection that cannot free its slot is not a recorded decision.
 3. The ban remains active.
-4. The review message is edited to show who rejected it and the inline keyboard is removed. The edit runs before the review marker is cleared so a successful edit removes live buttons before the DB slot frees.
-5. The user receives a DM telling them the appeal was reviewed and not approved, and `bans_db.clear_review(ban_id)` clears `review_message_id` and `review_timestamp` so the user can submit a new appeal after the cooldown. These two run together so a DM failure does not block the DB write.
+4. The review message is edited to show who rejected it and the inline keyboard is removed. If that edit fails, a durable `moderation_notification_tasks` row retries it even though the ban remains active.
+5. The user receives a DM telling them the appeal was reviewed and not approved.
 6. The submitted-appeal log message is edited to a rejected version when possible.
 
-A failed card edit still proceeds to the DM plus clear step with a warning log (matching the approve path): the decision is already committed in `rejected_at`, so keeping the marker would block the user past the 24-hour cooldown until the 72-hour stale window. Each side effect is inspected: a failed DM logs at warning level, a failed card edit at warning level, and a failed `clear_review` at error level (the pending review would still be in the database).
+A failed card edit still proceeds to the DM with a warning log: the decision and the slot release are already committed, so the user is not blocked past the cooldown. A failed DM is logged at warning level; neither notification failure reopens the decision.
 
-Rejection does not deactivate the ban. The `review_message_id` and `review_timestamp` fields **are cleared** on rejection so the user may submit a subsequent appeal without being locked out.
+Rejection does not deactivate the ban. The `review_message_id` and `review_timestamp` fields **are cleared atomically with the rejection** so the user may submit a subsequent appeal without being locked out.
 
 ## Logs
 

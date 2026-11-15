@@ -53,11 +53,12 @@ to `en-US`; resolution never raises.
 
 Handlers resolve once per update via `helper.locale.locale_for_update`
 (PM reads the sender, groups read the group row); direct messages use
-`locale_for_user`, updateless event paths use `locale_for_chat`. The user
-locale read uses the shared two-level cache with the generation guard, so a
-language change in one process invalidates the value in every other process;
-the L1 TTL is 300 s and the Redis TTL is 600 s. Flows carry the moderator
-locale in conversation state and resolve the target locale fresh for user DMs.
+`locale_for_user`, updateless event paths use `locale_for_chat`. Both the
+user locale and the group locale read through a shared two-level cache with
+the generation guard, so a language change in one process invalidates the
+value in every other process; the L1 TTL is 300 s and the Redis TTL is
+600 s for both. Flows carry the moderator locale in conversation state and
+resolve the target locale fresh for user DMs.
 
 ## Coverage
 

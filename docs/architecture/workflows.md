@@ -148,12 +148,12 @@ Duration tokens are parsed before entering the conversation.
 | `mo` | months (30 days) | `3mo` |
 | `ye` | years (365 days) | `1ye` |
 
-Mute applies restrictions across all connected groups through the decision's durable `apply` run. The mute is also persisted to the `active_mutes` table so it can be re-applied automatically when:
+Mute applies restrictions across all connected groups through the decision's durable `apply` run. The active decision is read through the `active_mutes` view, so it can be re-applied automatically when:
 
 - A muted user joins any connected group (`greeting._handle_member` fetches `get_active_mute` in parallel with `get_active_ban` and calls `restrict_chat_member` if an active mute is found).
 - A new group connects to the federation (`connected_flow.complete_join` fetches `active_mute_docs()` and fans out `restrict_chat_member` for every active mute, mirroring the existing ban replay). The replay is bounded by a time budget and a list cap; users it does not reach are queued as `apply` enforcement runs for the new chat, so the remainder is retried instead of disappearing with the connect handler.
 
-`execute_unmute` clears the `active_mutes` record via `clear_active_mute` before announcing, and aborts with a retry reply when the clear fails, so a failed clear never reports success.
+`execute_unmute` restores the groups first and clears the active mute decision via `clear_active_mute` only when every group succeeded. A partial restore keeps the decision so a later `/tcunmute` can retry the failed groups; a clear failure after a full restore aborts with a retry reply, so a failed clear never reports success.
 
 ```mermaid
 flowchart TD
@@ -165,8 +165,8 @@ flowchart TD
     Proof -->|media, then Done| Exec[_execute_mute]
     Proof -->|skip| Exec
     Proof -->|cancel| End
-    Exec -->|persist record first, abort on DB failure| Stored[record_mute]
-    Stored -->|fan_out restrict + upload proof concurrently| Groups[Active connected groups]
+    Exec -->|persist decision + apply run, abort on DB failure| Stored[record_mute]
+    Stored -->|deliver queued run, upload proof concurrently| Groups[Active connected groups]
     Groups -->|post audit log| LogChat[Log channel]
     Groups -->|edit prompt summary| Summary[Moderator summary]
     Stored -->|re-applied on join| Join[greeting._handle_member]
@@ -183,7 +183,7 @@ flowchart TD
 | Limit | `cfg.warn_limit` (env var `WARN_LIMIT`, default 3, minimum 1) |
 | Executors | `execute_warn(update, ctx, target_id, target_name, reason_text, proof_msgs=None)`, `execute_unwarn`, `execute_warnlist`, `execute_resetwarns` |
 
-Warns are tracked per `(user_id, chat_id)`. At `cfg.warn_limit` (per-group) or `cfg.fed_warn_limit` (federation-wide), the flow issues a **federation-wide ban** through a durable `apply` run to all active connected groups plus primary groups, creates a ban decision in `moderation_actions`, and then clears warnings across all groups with `clear_all_warns` (only after at least one group ban succeeds). Optional proof is uploaded before the warn write so its landed items can be archived with the decision; the resulting link is attached as an inline keyboard button to all outgoing messages (auto-ban log, replies, non-auto-ban log). A warn-write failure replies with a retry notice.
+Warns are tracked per `(user_id, chat_id)`. At `cfg.warn_limit` (per-group) or `cfg.fed_warn_limit` (federation-wide), the flow issues a **federation-wide ban** through a durable `apply` run to all active connected groups plus primary groups and creates a ban decision in `moderation_actions`. Warnings are cleared only in the groups where the ban landed: a partial enforcement calls `clear_warns_for_chats`, while a complete enforcement calls `clear_all_warns`, so a failed group keeps its threshold. Optional proof is uploaded before the warn write so its landed items can be archived with the decision; the resulting link is attached as an inline keyboard button to all outgoing messages (auto-ban log, replies, non-auto-ban log). A warn-write failure replies with a retry notice.
 
 ## Unban: `unban_flow.py`
 
@@ -212,7 +212,7 @@ Appeal flow requirements:
 - Submit revalidates pending-review and rejection-cooldown state, then records the appeal and claims the review slot in one transaction (`submit_appeal`). Both the claim and the review decision apply the canonical in-force predicate, so a timed ban whose deadline passed is not appealable or decidable.
 - A staff `/tcunban` withdraws a pending appeal and releases the review slot in the same transaction as the ban revocation; the appeal-approval path uses `approve_appeal_and_queue_unban` so the acceptance and the revocation are one decision.
 - A review card is posted to `MAIN_GROUP` (general) with a copy in the appeals destination.
-- Approve accepts the appeal, revokes the ban, releases the review slot, and queues the unban run in one transaction, then delivers the run and notifies the user. A failed atomic write leaves the card actionable. Reject records the rejector (display-name read in parallel), then runs the DM, card edit, and review clear in parallel.
+- Approve accepts the appeal, revokes the ban, releases the review slot, and queues the unban run in one transaction, then delivers the run and notifies the user. A failed atomic write leaves the card actionable. Reject records the rejection and releases the review slot in one transaction (`reject_appeal`), then edits the card and sends the DM.
 - Non-deciding taps (including ban-read outages) answer with a popup and never edit the shared card.
 
 ```mermaid
@@ -225,7 +225,7 @@ flowchart TD
     Post --> End
     Post --> Review[Staff reviewer sees card]
     Review -->|Approve| Unban[Atomic accept + revoke + durable unban run + DM user]
-    Review -->|Reject| Reject[set_rejected_by, then mark reviewed + DM user]
+    Review -->|Reject| Reject[Atomic reject + slot release, then card edit + DM user]
     Unban --> LogChat[Post audit log]
     Reject --> LogChat
 ```

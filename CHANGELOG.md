@@ -47,6 +47,14 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **Appeal rejection is one database decision** (`tcbot/database/bans_db/_lifecycle.py`, `tcbot/modules/helper/pipelines/appeal_review_flow.py`): recording the rejection and releasing the review slot now commit together. A former split could record the rejection while the card kept the slot, so the user could not appeal again until the stale window passed. Behavior changes: a rejection that cannot free its slot is not recorded, and a failed card edit is queued for the notification worker.
+
+- **An expired ban withdraws its pending appeal** (`tcbot/database/schema/functions.sql`): automatic expiry now withdraws the pending appeal and drops the review slot in the same statement as the ban status change. A pending appeal left behind can never be decided, because a decision requires an active ban, and it kept a review card alive for a question that no longer exists. Behavior changes: an expired ban leaves no pending appeal or live review slot.
+
+- **A group language change reaches every process** (`tcbot/database/groups_db.py`, `tcbot/database/cache/singletons.py`): the group locale read now uses the shared two-level cache with the generation guard, like the user locale. Behavior changes: a group language change in one process is visible in every other process at once instead of after a process-local TTL of up to 300 s.
+
+- **An enforcement retry skips a disconnected chat** (`tcbot/database/enforcement_db.py`): a failed target whose chat is no longer active is not claimed for another attempt. The database refuses a retry against an inactive chat, so the old claim turned one stale target into a repeating worker failure. Behavior changes: such a target stays failed for operator review instead of being retried forever.
+
 - **Appeal approval is one database decision** (`tcbot/database/bans_db/_writes.py`, `tcbot/modules/helper/pipelines/appeal_review_flow.py`): accepting the appeal, revoking the ban, releasing the review slot, and queueing the unban run now commit together. A former split could leave an accepted appeal beside an active ban, or a revoked ban beside a pending appeal.
 
 - **A manual unban queues its review-card edit atomically** (`tcbot/database/bans_db/_lifecycle.py`, `tcbot/modules/helper/pipelines/unban_flow.py`): the edit is part of the revocation transaction, so a crash after the commit cannot leave a live-looking appeal card over a revoked ban. Behavior changes: the card is closed by the notification worker even when the process stops before the direct edit.
@@ -538,6 +546,10 @@ All notable changes to this project are documented here. For workflow details, s
 - **Join notices await directly** (`tcbot/modules/greeting.py`): the single banned-joiner notice now awaits its reply directly instead of gathering a zero-or-one item list, keeping the same debug log and cancellation propagation with one less indirection. Behavior changes: none; replies and logs are unchanged.
 
 ### Fixed
+
+- **A rejected appeal's card edit is retried** (`tcbot/notification_worker.py`, `tcbot/database/notifications_db.py`, `tests/test_notification_worker.py`): the outbox skipped every task whose decision was still active, which is exactly the state of a rejection. It now skips only a card that is still the live review of an active decision with a pending appeal, so a queued rejection edit closes the card instead of being discarded. Behavior changes: a failed rejection card edit is retried instead of leaving live buttons on a settled appeal.
+
+- **A database stopped at revision 0005 boots through the owner column** (`alembic/versions/0006_notification_tasks.py`, `tests/test_schema_migration.py`): revision 0006 reapplied the current registry seed, which already names `scheduled_jobs.job_owner`, before revision 0007 added the column. An existing deployment that stopped at 0005 therefore crashed on every boot with `UndefinedColumn`. Revision 0006 now adds the missing column before it applies the schema, and a migration test reproduces the 0005 state and upgrades it to head. Behavior changes: a deployment at 0005 upgrades successfully instead of restart-looping.
 
 - **Callback alerts are delivered again** (`tcbot/modules/helper/pipelines/appeal_review_flow.py`, `promo_decision_flow.py`, `connected_flow.py`, `tcbot/modules/check.py`, `tcbot/modules/language.py`, `tcbot/modules/helper/messages/safe_edits.py`): several callback handlers answered the query up front for the spinner and then tried to show a refusal alert. Telegram accepts exactly one answer per query, so the second call was rejected and the alert never appeared: a non-owner tapping a promotion card or the connect prompt, an outranked reviewer, and a denied language save all looked like dead buttons. Each branch now answers exactly once, and `answer_ack` owns the plain acknowledgement of the branches that proceed. Behavior changes: refusal alerts that were silently swallowed now appear, and a denied tap no longer looks like a dead button.
 
@@ -1035,6 +1047,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Removed
 
+- **The partial appeal state mutators are gone** (`tcbot/database/bans_db/_writes.py`): `accept_appeal` and `set_rejected_by` were test-only writes that closed an appeal without touching the ban or the review slot. The atomic approval and rejection helpers are now the only decision paths. Behavior changes: none for operators.
+
 - **The Vercel serverless deployment is gone** (`api/`, `tcbot/serverless.py`, `vercel.json`, `docs/operations/vercel.md`, `tests/test_cron.py`, `tcbot/__init__.py`, `config.env.example`, `README.md`, `AGENTS.md`): the repository no longer carries a serverless transport, its webhook and cron endpoints, the package manifest that declared them, or the `CRON_SECRET` value that protected the cron route. The long-lived webhook and polling transports are the only deployment paths, and the scheduler owns expiry. Behavior changes: `/api/webhook` and `/api/cron` no longer exist, and `CRON_SECRET` is ignored. Migration: remove `CRON_SECRET` from the environment and repository secrets, delete the Vercel project, and deploy with `uv run python -m tcbot` on a long-lived host.
 
 - **The obsolete proof migration tool is gone** (`scripts/migrate_proofs.py`, `tests/test_proof_migration.py`, `docs/operations/proof-migration.md`, `docs/README.md`, `AGENTS.md`, `.gitignore`): the one-shot script still read and updated a legacy `bans` table that the community migration drops, so the documented runbook could only fail. The community migration already moves the stored proof ids into `moderation_evidence_items`, and the tool has no runtime callers; the script, its tests, its runbook, and the resume-state ignore entries are removed. Behavior changes: the proof migration runbook is no longer available; a future proof-channel move needs a new tool against the current schema.
@@ -1094,6 +1108,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **Unused ban helpers removed** (`tcbot/database/bans_db/`, `docs/architecture/database.md`): `deactivate_ban` and `set_review` had no callers; `deactivate_all_active_bans`, `deactivate_extra_active_bans`, and `set_review_if_absent` are the live helpers. Behavior changes: none.
 
 ### Documentation
+
+- **The database guide covers the reporting views and both locale caches** (`docs/architecture/database.md`, `docs/architecture/workflows.md`, `docs/features/appeals.md`, `docs/features/language.md`): `community_members` and `community_member_stats` are documented as operator reporting views that no bot command reads, including the current limit of `has_telegram_admin_membership`; the cache table now names `user_locale_cache` and `group_locale_cache`; and the mute, warn, and appeal sections describe the landed-group warning cleanup, the kept mute decision on a partial restore, and the atomic appeal rejection. Behavior changes: none, docs only.
 
 - **The guides match the retention, connect, and locale contracts** (`docs/architecture/database.md`, `docs/architecture/workflows.md`, `docs/features/language.md`, `docs/features/moderation/banning.md`): the pages now describe the daily retention sweep, the durable remainder of a bounded connect replay, the transactional review-card edit of a manual unban, the explicit pg_cron owner marker, the two-level user-locale cache, the row-preserving locale reset, and the fact that `effective_chat_settings` is a SQL convenience rather than the render path. Behavior changes: none, docs only.
 

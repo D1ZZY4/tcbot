@@ -69,6 +69,13 @@ the pending revisions before the
 engine is published, so a fresh deployment boots against an empty database
 and an existing one is upgraded in place.
 
+The schema files applied by a revision are the current files, not a snapshot
+of that revision. Revision 0006 therefore adds `scheduled_jobs.job_owner`
+before it reapplies the schema: the current registry seed already names that
+column, which revision 0007 introduces, and a database stopped at 0005 would
+otherwise fail before reaching 0007. `tests/test_schema_migration.py`
+reproduces that state and upgrades it to head.
+
 ```bash
 # Apply the migrations by hand (the bot does this at startup).
 uv run alembic upgrade head
@@ -121,12 +128,30 @@ Two rules hold everywhere:
   are all rows of `moderation_actions`. A group connection is a row of
   `connected_chats`; its configuration is a row of `chat_settings`. The
   views (`active_bans`, `active_mutes`, `warn_counts`, `community_members`,
-  `effective_chat_settings`, `moderation_timeline`, `role_permission_matrix`)
+  `community_member_stats`, `effective_chat_settings`, `moderation_timeline`,
+  `role_permission_matrix`)
   are derived, never a second copy of the facts.
 - **The scope is explicit.** A ban and a mute use `scope_type = 'community'`
   and carry no `chat_id`. A warning and a kick use `scope_type = 'chat'`
   and carry the group they belong to. The scope is never inferred from
   `origin_chat_id`.
+
+### Reporting views
+
+`community_members` and `community_member_stats` are read-only reporting views
+over `chat_members`, `connected_chats`, and `telegram_users`. They are not
+read by any bot command: they answer operator queries about the community
+directory and its size. `community_members` returns one row per user with the
+first join, the last sighting, the number of active connected groups, and
+whether the user is a Telegram administrator somewhere. `community_member_stats`
+returns the unique member count, the active membership count, and the active
+connected group count. Their data is only as complete as the MTProto member
+harvest, which records `chat_members` in resumable slices, and the retention
+sweep removes stale memberships. A deployment that does not run the harvest
+sees an empty directory. The harvest records every observed membership with
+status `member`, so `has_telegram_admin_membership` stays false until a
+harvest records an administrator status; never use that reporting flag for
+authorization.
 
 ## Connection manager
 
@@ -704,10 +729,11 @@ re-apply a decision that the domain state no longer holds.
 Telegram update failed, and the manual-unban revocation queues its card
 edit in the same transaction as the decision. The task keeps the action,
 the destination chat, the card message id, its state, its attempt count,
-and its next retry deadline. The scheduler retries it, so a settled appeal
-or a manual unban cannot leave a live-looking card behind. A card that
-Telegram reports as gone is marked `skipped`; a transient failure is
-retried up to five times.
+and its next retry deadline. The scheduler retries it, so a settled appeal,
+a rejection, or a manual unban cannot leave a live-looking card behind. A
+task is skipped only while its card is still the live review of an active
+decision with a pending appeal. A card that Telegram reports as gone is
+marked `skipped`; a transient failure is retried up to five times.
 
 ### Promotion request expiry
 
@@ -826,18 +852,21 @@ reader sees one document.
   conditional on an active, in-force decision whose slot is free and that
   carries no decided appeal, so it cannot resurrect a review that another
   reviewer already closed.
-- `accept_appeal(ban_id: str, reviewer_id: int, note: str = "") -> bool`
-  Closes the open appeal as accepted and names the reviewer. Returns
-  `False` when no appeal was pending.
-- `set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None`
-  Closes the open appeal as rejected and names the reviewer, so the audit
-  trail survives log-channel loss.
+- `reject_appeal(ban_id: str, reviewer_id: int, reviewer_name: str) -> bool`
+  Closes the open appeal as rejected, names the reviewer, and releases the
+  review slot in one transaction. Returns `False` when no appeal was
+  pending. A split write could record the rejection while the card kept
+  the slot, blocking the next appeal until the stale window passed.
+- `approve_appeal_and_queue_unban(ban_id: str, reviewer_id: int, reviewer_name: str, requested_by_user_id: int | None, chat_ids: Sequence[int]) -> tuple[bool, int | None]`
+  Accepts the pending appeal, revokes the ban, releases the review slot, and
+  queues the unban run in one transaction.
 - `release_stale_review(ban_id: str, review_message_id: int) -> bool`
   Withdraws the open appeal of a decision and frees its review slot in one
   transaction. A review card nobody answered for a long time is stale, and
   the withdrawn appeal must not keep occupying the decision.
 - `clear_review(ban_id: str) -> None`
-  Clears the review slot so a rejected user can submit a new appeal.
+  Clears the review slot of a decision whose card was found stale. A normal
+  rejection releases the slot inside `reject_appeal`.
 - `set_appeal_log_msg(ban_id: str, msg_id: int, submitted_at: datetime | None = None, appeal_link: str = "") -> None`
   Stores the appeal metadata and the message reference in one transaction.
 
@@ -993,12 +1022,13 @@ group never lacks a place for its configuration.
 
 - `get_group_locale(chat_id: int) -> str | None`
   Reads the stored group locale for the shared-audience resolution path
-  (`helper/locale.py`). Unset (`None`) is cached too. Backed by a bare
-  `cachetools` L1 `_GROUP_LOCALE_L1` (maxsize 1024, ttl 300 s), not a
-  Redis-backed `TwoLevelCache`.
+  (`helper/locale.py`). Unset (`None`) is cached too. Backed by the shared
+  `group_locale_cache` (`TwoLevelCache`, Redis prefix `glocale`), so a
+  group language change in one process invalidates the value in every
+  other process.
 - `set_group_locale(chat_id: int, locale: str | None) -> bool`
   Stores the locale verbatim, or clears it when `None`. Returns `True` when
-  a group row matched; pops the L1 entry and invalidates the active-groups
+  a group row matched; invalidates the locale entry and the active-groups
   list cache (whose rows carry the locale, so a change would otherwise
   linger for the groups-list TTL). Validity against the translation
   catalog is enforced by the caller and at resolution time.
@@ -1238,12 +1268,14 @@ or appear in user listings.
 
 - `get_user_locale(user_id: int) -> str | None`
   Returns a user's stored locale for the private-chat resolution path, or
-  `None` when unset. Unset (`None`) is cached too. Backed by a bare
-  `cachetools` L1 `_LOCALE_L1` (maxsize 4096, ttl 300 s), not a
-  Redis-backed `TwoLevelCache`.
+  `None` when unset. Unset (`None`) is cached too. Backed by the shared
+  `user_locale_cache` (`TwoLevelCache`, Redis prefix `ulocale`), so a
+  language change in one process invalidates the value in every other
+  process.
 - `set_user_locale(user_id: int, locale: str | None) -> None`
   Upserts the locale of the user and keeps the row when `locale` is `None`,
-  so the other preferences survive a reset. Pops the L1 entry on write.
+  so the other preferences survive a reset. Invalidates the locale cache
+  on write.
 
 ## Caching (`cache/`, `redis_client.py`)
 
@@ -1305,14 +1337,16 @@ because `None` is a valid cached value (for example, a user with no role).
 | `active_groups_cache` | `TwoLevelCache[list[GroupDoc]]` | 30 s | 45 s | 4 | `groups` | `__all__` | `groups_db.active_groups()`; invalidated on group changes |
 | `owner_id_cache` | `TwoLevelCache[int \| None]` | 300 s | 360 s | 4 | `owner` | `__owner__` | `users_roles.get_owner_id()`; refreshed on `set_owner`/`ensure_initial_owner` |
 | `user_mention_cache` | `TwoLevelCache[list[str \| None]]` | 300 s | 600 s | 4096 | `umention` | `user_id` | `users_cache` mention readers; invalidated by `upsert_user` |
+| `user_locale_cache` | `TwoLevelCache[str \| None]` | 300 s | 600 s | 4096 | `ulocale` | `user_id` | `settings_db.get_user_locale()`; invalidated by `set_user_locale` |
+| `group_locale_cache` | `TwoLevelCache[str \| None]` | 300 s | 600 s | 512 | `glocale` | `chat_id` | `groups_db.get_group_locale()`; invalidated by `set_group_locale` and a chat move |
 
 L1 mention-cache entries are `[first_name, username, last_name]` triples;
 readers use indexes 0 and 1, index 2 exists so change detection notices
 last-name-only updates. The all-`None` triple is the not-found sentinel.
 
-Bare `cachetools` L1 caches (no Redis, no L2): `groups_db._GROUP_LOCALE_L1`
-(maxsize 1024, ttl 300 s) and `settings_db._LOCALE_L1` (maxsize 4096, ttl
-300 s).
+The two locale caches share the same shape and TTLs, so a language change in
+one process reaches every other process through the ordered invalidation and
+the per-key generation guard. Neither cache is a source of authorization.
 
 ### Redis client (`redis_client.py`)
 
@@ -1435,12 +1469,12 @@ Recurring jobs:
 
 | Job ID | Trigger | Purpose |
 |---|---|---|
-| `tcbot.expiry_daily` | `IntervalTrigger(hours=24)` | Calls `expire_due_decisions()`: moves the ban, mute, and role-assignment rows whose deadline passed to `expired` and queues the matching revoke enforcement runs. A mute already carries its Telegram `until_date`, so its restriction lifts natively. Registered only when pg_cron does not own expiry. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs the sweep once. The sweep takes a transaction advisory lock, so two bot instances cannot expire the same records. |
+| `tcbot.expiry_daily` | `IntervalTrigger(hours=24)` | Calls `expire_due_decisions()`: moves the ban, mute, and role-assignment rows whose deadline passed to `expired`, withdraws any pending appeal of an expired ban with its review slot, and queues the matching revoke enforcement runs. A mute already carries its Telegram `until_date`, so its restriction lifts natively. Registered only when pg_cron does not own expiry. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs the sweep once. The sweep takes a transaction advisory lock, so two bot instances cannot expire the same records. |
 | `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. Each branch takes its own transaction advisory lock. |
 | `tcbot.retention_daily` | `IntervalTrigger(hours=24)` | Calls `sweep_retention()`: runs the `retention.sweep` registry job, which applies the `retention_policies` windows to runtime telemetry, prunes expired MTProto session state, and records the run in `scheduled_job_runs`. Always registered; the day-scoped run key keeps the sweep to one per UTC day across instances. Uses `misfire_grace_time=86400` and `coalesce=True`. |
 | `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued `apply`, `revoke`, and `reconcile` runs and applies the decision across the recorded groups. Ban and mute apply, expiry lifts, manual unbans, approved appeals, and kick unban repair all use this worker. A failed target is recorded as `failed` with a due retry deadline and retried up to three times, five minutes apart. Always registered. |
 | `tcbot.promotion_expiry_hourly` | `IntervalTrigger(hours=1)` | Calls `expire_promotion_requests()`: marks pending requests past `PROMOTION_REQUEST_TTL_DAYS` as `expired`, releasing the one-pending-per-target slot. The write is idempotent and the enqueue path also expires a stale target row lazily. |
-| `tcbot.notification_worker` | `IntervalTrigger(minutes=5)` | Calls `notification_worker.run()`: retries review-card edits whose direct Telegram update failed, marks a deleted card `skipped`, and keeps a transient failure for a bounded retry. |
+| `tcbot.notification_worker` | `IntervalTrigger(minutes=5)` | Calls `notification_worker.run()`: retries review-card edits whose direct Telegram update failed, closes a rejected appeal's card even while its ban stays active, leaves a still-decidable live review untouched, marks a deleted card `skipped`, and keeps a transient failure for a bounded retry. |
 
 When `PG_CRON_ENABLED` is true and the database has the `pg_cron`
 extension, `pg_cron.sync_schedules()` registers the jobs whose
