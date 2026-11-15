@@ -148,6 +148,25 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
             ),
         )
         return
+    if operation == "revoke" and bool(action.get("newer_active")):
+        # * A later decision of the same type is in force. Lifting the
+        # * restriction here would undo the newer ban or mute, which is
+        # * exactly what a retried revoke after a re-ban must not do.
+        await db.enforcement_db.cancel_run(
+            run_id,
+            error_detail=(
+                "a newer active decision of the same type supersedes this revoke"
+            ),
+        )
+        return
+    if operation == "reconcile" and bool(action.get("active_ban")):
+        # * A kick converts a ban into a rejoin, but a federation ban now
+        # * holds the target. The repair unban would lift that ban.
+        await db.enforcement_db.cancel_run(
+            run_id,
+            error_detail="an active federation ban supersedes the kick repair",
+        )
+        return
     target_user_id = _as_int(action.get("target_user_id"))
     if target_user_id <= 0:
         await db.enforcement_db.cancel_run(

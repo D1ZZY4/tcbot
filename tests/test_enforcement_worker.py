@@ -223,6 +223,83 @@ def test_a_transient_failure_gets_a_bounded_retry(
     assert status["retry_after"] is not None
 
 
+def test_a_revoke_with_a_newer_active_decision_is_cancelled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A retried revoke must not lift a restriction that was reinstated.
+
+    The ban was revoked, the unban run was queued, and a new ban landed
+    before the worker retried the old delivery. Applying the stale revoke
+    would unban the target while the new decision is active.
+    """
+    cancelled: list[int] = []
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [{"id": 1, "action_id": 2, "operation": "revoke"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "ban",
+            "action_status": "revoked",
+            "operation": "revoke",
+            "newer_active": True,
+        }
+
+    async def _cancel(run_id: int, **kwargs: Any) -> None:
+        cancelled.append(run_id)
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "cancel_run", _cancel)
+    bot = _FakeBot()
+
+    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert cancelled == [1]
+    assert bot.unbanned == []
+
+
+def test_a_kick_repair_is_cancelled_when_a_ban_is_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repairing a stranded kick must not lift a federation ban."""
+    cancelled: list[int] = []
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [{"id": 5, "action_id": 6, "operation": "reconcile"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "kick",
+            "action_status": "completed",
+            "operation": "reconcile",
+            "active_ban": True,
+        }
+
+    async def _cancel(run_id: int, **kwargs: Any) -> None:
+        cancelled.append(run_id)
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "cancel_run", _cancel)
+    bot = _FakeBot()
+
+    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert cancelled == [5]
+    assert bot.unbanned == []
+
+
 def test_the_requeue_uses_legal_target_transitions() -> None:
     """Stale targets are released as failed, never back to pending.
 

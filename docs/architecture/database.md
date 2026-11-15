@@ -723,6 +723,13 @@ and the per-target status describe delivery. A caller must not treat a
 revoked decision as proof that every group was reached, and a run must not
 re-apply a decision that the domain state no longer holds.
 
+A `revoke` run is additionally cancelled when a later decision of the same
+type and target is in force, and a kick `reconcile` run is cancelled when a
+federation ban now holds the target. `load_run_action` evaluates both
+conditions in the same query as the run state, so a retried unban after a
+re-ban, or a delayed kick repair during a ban, cannot lift the newer
+restriction.
+
 ### Review-card outbox
 
 `moderation_notification_tasks` records a review-card edit whose direct

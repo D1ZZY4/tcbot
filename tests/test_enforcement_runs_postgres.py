@@ -139,6 +139,44 @@ async def test_unban_revokes_and_queues_the_delivery(run_db: str) -> None:
     assert again == (0, None)
 
 
+async def test_a_revoke_run_sees_a_newer_active_decision(run_db: str) -> None:
+    """A re-ban after an unban marks the old revoke as superseded.
+
+    The worker has to know that the target is restricted again, so an old
+    retried revoke cannot lift the newer ban.
+    """
+    await bans_db.create_ban(
+        42,
+        "first",
+        7,
+        501,
+        0,
+        "liferun0101",
+        destination_chat_id=cfg.proofs[0],
+        proof_items=_proof(),
+        proof_expected_count=1,
+    )
+    _, run_id = await bans_db.revoke_ban_and_queue_unban(42, 8, [-1001])
+    assert run_id is not None
+
+    await bans_db.create_ban(
+        42,
+        "second",
+        7,
+        502,
+        0,
+        "liferun0102",
+        destination_chat_id=cfg.proofs[0],
+        proof_items=_proof(),
+        proof_expected_count=1,
+    )
+
+    action = await enforcement_db.load_run_action(run_id)
+    assert action is not None
+    assert action["newer_active"] is True
+    assert action["active_ban"] is True
+
+
 async def test_appeal_approval_is_one_decision(run_db: str) -> None:
     await bans_db.create_ban(
         42,

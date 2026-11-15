@@ -165,7 +165,7 @@ The reply and federation log use `keyboards.action_proof_kb(target_id, proof_lin
 - Proof upload failures are caught and logged; the kick still proceeds.
 - A DB `log_kick` failure aborts the kick with a retry reply before any group is touched, so an enforced kick is never missing from `/check` history.
 - Federation log send failure does not stop the kick reply.
-- If the post-ban `unban_chat_member` fails after one retry, the user is effectively banned in this chat. A durable reconcile run is queued and the reply appends a `WARNING:` line; the scheduled enforcement worker retries the unban without a new kick decision.
+- If the post-ban `unban_chat_member` fails after one retry, the user is effectively banned in this chat. A durable reconcile run is queued and the reply appends a `WARNING:` line; the scheduled enforcement worker retries the unban without a new kick decision. The repair is cancelled when a federation ban now holds the target, so it cannot lift the newer ban.
 - A demote failure is logged loudly and the kick still proceeds; the target's rank is repaired by a later join-time enforcement pass.
 - The reason and proof conversation is per-chat and per-user, so simultaneous kick flows are isolated.
 - The kick command is **group-only**: the entry rejects a private chat with the localized `replies.err_group_only(locale)` notice (English default: `Use this command in a group.`) before any role or target I/O, and `execute_kick` acts on the current chat (`ban_chat_member` then `unban_chat_member` in `effective_chat.id`). Rank gating is Tester or above via `basic_mod_only`; the decorator itself performs no group-membership check beyond the entry's private-chat guard.

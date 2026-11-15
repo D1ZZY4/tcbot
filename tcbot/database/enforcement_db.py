@@ -102,7 +102,22 @@ _RUN_ACTION = text(
            a.action_type,
            a.status AS action_status,
            a.expires_at,
-           r.operation
+           r.operation,
+           EXISTS (
+               SELECT 1
+                 FROM moderation_actions AS n
+                WHERE n.target_user_id = a.target_user_id
+                  AND n.action_type = a.action_type
+                  AND n.status = 'active'
+                  AND n.id > a.id
+           ) AS newer_active,
+           EXISTS (
+               SELECT 1
+                 FROM moderation_actions AS b
+                WHERE b.target_user_id = a.target_user_id
+                  AND b.action_type = 'ban'
+                  AND b.status = 'active'
+           ) AS active_ban
       FROM moderation_enforcement_runs AS r
       JOIN moderation_actions AS a ON a.id = r.action_id
      WHERE r.id = :run_id
@@ -480,7 +495,14 @@ async def requeue_stale_runs(stale_after: timedelta = timedelta(minutes=30)) -> 
 
 
 async def load_run_action(run_id: int) -> dict[str, object] | None:
-    """Return the action a claimed run belongs to."""
+    """Return the action of a claimed run, with its conflicting decisions.
+
+    ``newer_active`` is true when a later decision of the same type and
+    target is in force; a revoke run must not lift a restriction that a
+    newer decision reinstated after this run was queued. ``active_ban`` is
+    true when any ban on the target is in force; a kick repair must not
+    unban a target that a federation ban now holds.
+    """
 
     async def _work(sess: AsyncSession) -> dict[str, object] | None:
         result = await sess.execute(_RUN_ACTION, {"run_id": run_id})
