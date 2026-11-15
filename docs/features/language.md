@@ -76,7 +76,8 @@ text; only the surrounding prose translates.
 ## Database impact
 
 - `user_settings` table (`user_id`, unique): one row per user with an
-  explicit preference. Clearing deletes the row. Never touches
+  explicit preference. Clearing sets `locale` to `NULL` and keeps the row,
+  so the other preferences of the user survive. Never touches
   `telegram_users`, so preference-only users cannot inflate user counts
   or appear in listings. The unique index on `user_id` is declared in
   `tcbot/database/base/settings.py` and shipped with an Alembic revision.

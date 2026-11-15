@@ -91,10 +91,10 @@ The Developer minimum is intentional: unbanning a higher-ranked target would sil
 3. Reads `ban_id` from the record for the federation log.
 4. Fetches active groups with `db.groups_db.active_groups()` **sequentially** before any mutation: a fetch outage aborts with the ban record intact, so a retry re-drives the full scope.
 5. Adds primary groups (`cfg.main_group`) to the list when they are not already present.
-6. Calls `db.bans_db.revoke_ban_and_queue_unban(target_id, requested_by, chat_ids)`. One transaction revokes every active ban, withdraws pending appeals, releases review slots, and queues a `revoke` run with one target per chat.
+6. Calls `db.bans_db.revoke_ban_and_queue_unban(target_id, requested_by, chat_ids, review_chat_id=..., review_message_id=...)`. One transaction revokes every active ban, withdraws pending appeals, releases review slots, queues a `revoke` run with one target per chat, and queues the review-card edit when the ban carried one.
 7. Delivers the queued run with `enforcement_worker.deliver_queued_run(ctx.bot, run_id)`. A scheduled worker may already own it; that is not an error.
 8. Reads `db.enforcement_db.run_report(run_id)`. The reply reports the per-group outcome: full success, the names of failed groups, or a queued notice when the run is still pending.
-9. Posts the unban log and replies with the run outcome. A review card left behind by the revoked ban is queued for a durable edit, so a failed direct edit cannot leave a live-looking card.
+9. Posts the unban log and replies with the run outcome. The review-card edit was queued inside the revocation transaction, so the notification worker closes the card even when the process stops before a direct edit.
 
 The reply does not include an appeal-resolution message; a pending appeal is recorded as `withdrawn` with the ban inside the same transaction.
 
@@ -105,7 +105,7 @@ Unban uses these helpers:
 | Helper | Purpose |
 |---|---|
 | `get_active_ban(user_id)` | Returns the active ban document that is still in force. Used by the manual command path and revalidated by the appeal flow. |
-| `revoke_ban_and_queue_unban(user_id, requested_by, chat_ids)` | Revokes every active ban, withdraws pending appeals, releases review slots, and queues the durable unban run in one transaction. Returns `(revoked_count, run_id)`. |
+| `revoke_ban_and_queue_unban(user_id, requested_by, chat_ids, *, review_chat_id=None, review_message_id=None)` | Revokes every active ban, withdraws pending appeals, releases review slots, queues the durable unban run, and queues the review-card edit in one transaction. Returns `(revoked_count, run_id)`. |
 | `approve_appeal_and_queue_unban(ban_id, reviewer_id, reviewer_name, requested_by, chat_ids)` | Accepts the pending appeal, revokes the ban, releases the review slot, and queues the same run in one transaction. |
 | `make_ban_id()` | Not used here; only listed because the helper file is shared. |
 

@@ -151,7 +151,7 @@ Duration tokens are parsed before entering the conversation.
 Mute applies restrictions across all connected groups through the decision's durable `apply` run. The mute is also persisted to the `active_mutes` table so it can be re-applied automatically when:
 
 - A muted user joins any connected group (`greeting._handle_member` fetches `get_active_mute` in parallel with `get_active_ban` and calls `restrict_chat_member` if an active mute is found).
-- A new group connects to the federation (`connected_flow.complete_join` fetches `active_mute_docs()` and fans out `restrict_chat_member` for every active mute, mirroring the existing ban replay).
+- A new group connects to the federation (`connected_flow.complete_join` fetches `active_mute_docs()` and fans out `restrict_chat_member` for every active mute, mirroring the existing ban replay). The replay is bounded by a time budget and a list cap; users it does not reach are queued as `apply` enforcement runs for the new chat, so the remainder is retried instead of disappearing with the connect handler.
 
 `execute_unmute` clears the `active_mutes` record via `clear_active_mute` before announcing, and aborts with a retry reply when the clear fails, so a failed clear never reports success.
 

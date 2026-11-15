@@ -526,6 +526,12 @@ privilege.
   `effective_role_cache.clear_all()` so no process keeps a stale
   `"founder"` role after the transfer. A failed transfer rolls back, fails
   closed, and logs operator guidance.
+- `transfer_ownership(previous_owner_id: int, new_owner_id: int) -> None`
+  The atomic transfer used by `/transferowner`: it verifies the current
+  owner under the advisory lock, swaps the owner assignment, and grants the
+  previous Founder the Admin role in the same transaction. A stale prompt
+  raises instead of demoting a newer owner, and a failure leaves both roles
+  untouched.
 
 ### Admin and custom role CRUD
 
@@ -535,7 +541,7 @@ privilege.
 - `all_admins() -> list[AdminDoc]`: all active admin assignments.
 - `admin_count() -> int`: `COUNT(*)`.
 - `set_role(user_id: int, role: str, assigned_by: int) -> None`: grants a developer or tester role. A role outside `VALID_ROLES` raises, so a stored "admin" or "founder" can never be written through this path.
-- `remove_role(user_id: int) -> bool`: revokes the active assignment of the user, whatever role it holds.
+- `remove_role(user_id: int) -> bool`: revokes the active assignment of the user except the owner assignment, which only `set_owner` or `transfer_ownership` replaces.
 - `all_by_role(role: str) -> list[RoleRefDoc]`: all users holding a specific role.
 - `role_count(role: str) -> int`: `COUNT(*)` on the role filter.
 
@@ -695,11 +701,13 @@ re-apply a decision that the domain state no longer holds.
 ### Review-card outbox
 
 `moderation_notification_tasks` records a review-card edit whose direct
-Telegram update failed. The task keeps the action, the destination chat,
-the card message id, its state, its attempt count, and its next retry
-deadline. The scheduler retries it, so a settled appeal or a manual unban
-cannot leave a live-looking card behind. A card that Telegram reports as
-gone is marked `skipped`; a transient failure is retried up to five times.
+Telegram update failed, and the manual-unban revocation queues its card
+edit in the same transaction as the decision. The task keeps the action,
+the destination chat, the card message id, its state, its attempt count,
+and its next retry deadline. The scheduler retries it, so a settled appeal
+or a manual unban cannot leave a live-looking card behind. A card that
+Telegram reports as gone is marked `skipped`; a transient failure is
+retried up to five times.
 
 ### Promotion request expiry
 
@@ -783,11 +791,13 @@ reader sees one document.
   the appeal-approval path use the queueing variants below, which add the
   durable delivery run to the same transaction. This helper stays for
   callers that only need the domain write.
-- `revoke_ban_and_queue_unban(user_id: int, requested_by_user_id: int | None, chat_ids: Sequence[int]) -> tuple[int, int | None]`
+- `revoke_ban_and_queue_unban(user_id: int, requested_by_user_id: int | None, chat_ids: Sequence[int], *, review_chat_id: int | None = None, review_message_id: int | None = None) -> tuple[int, int | None]`
   Revokes every active ban, withdraws pending appeals, releases the review
-  slot, and queues one `revoke` enforcement run with a target per chat in one
-  transaction. Returns `(revoked_count, run_id)`. A revocation without the
-  run would lose the groups that failed the fan-out.
+  slot, queues one `revoke` enforcement run with a target per chat, and
+  queues the review-card edit in one transaction. Returns
+  `(revoked_count, run_id)`. A revocation without the run would lose the
+  groups that failed the fan-out, and a card queued after the commit could
+  survive a crash between the two.
 - `approve_appeal_and_queue_unban(ban_id: str, reviewer_id: int, reviewer_name: str, requested_by_user_id: int | None, chat_ids: Sequence[int]) -> tuple[bool, int | None]`
   Accepts the pending appeal, revokes the ban, releases the review slot, and
   queues the unban run in one transaction. A former split could accept an
@@ -998,6 +1008,11 @@ an active group: the group locale, then the community default; the group
 timezone, then the community default; and the global settings merged with
 the group settings. The merge is a shallow merge at the top level of the
 object, so a nested object needs an explicit rule at the application level.
+The view is a SQL convenience for operators and reporting; the render path
+is owned by `helper/locale.py`, which reads `chat_settings.locale` and
+`user_settings.locale` and falls back to `en-US`. `community_settings.default_locale`
+is not consulted by the Python resolver, so changing it does not change the
+language of bot messages.
 
 **Error behavior:** every access uses `db_call()`.
 
@@ -1422,16 +1437,22 @@ Recurring jobs:
 |---|---|---|
 | `tcbot.expiry_daily` | `IntervalTrigger(hours=24)` | Calls `expire_due_decisions()`: moves the ban, mute, and role-assignment rows whose deadline passed to `expired` and queues the matching revoke enforcement runs. A mute already carries its Telegram `until_date`, so its restriction lifts natively. Registered only when pg_cron does not own expiry. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs the sweep once. The sweep takes a transaction advisory lock, so two bot instances cannot expire the same records. |
 | `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. Each branch takes its own transaction advisory lock. |
+| `tcbot.retention_daily` | `IntervalTrigger(hours=24)` | Calls `sweep_retention()`: runs the `retention.sweep` registry job, which applies the `retention_policies` windows to runtime telemetry, prunes expired MTProto session state, and records the run in `scheduled_job_runs`. Always registered; the day-scoped run key keeps the sweep to one per UTC day across instances. Uses `misfire_grace_time=86400` and `coalesce=True`. |
 | `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued `apply`, `revoke`, and `reconcile` runs and applies the decision across the recorded groups. Ban and mute apply, expiry lifts, manual unbans, approved appeals, and kick unban repair all use this worker. A failed target is recorded as `failed` with a due retry deadline and retried up to three times, five minutes apart. Always registered. |
 | `tcbot.promotion_expiry_hourly` | `IntervalTrigger(hours=1)` | Calls `expire_promotion_requests()`: marks pending requests past `PROMOTION_REQUEST_TTL_DAYS` as `expired`, releasing the one-pending-per-target slot. The write is idempotent and the enqueue path also expires a stale target row lazily. |
 | `tcbot.notification_worker` | `IntervalTrigger(minutes=5)` | Calls `notification_worker.run()`: retries review-card edits whose direct Telegram update failed, marks a deleted card `skipped`, and keeps a transient failure for a bounded retry. |
 
 When `PG_CRON_ENABLED` is true and the database has the `pg_cron`
-extension, `pg_cron.sync_schedules()` registers the registry jobs
-`moderation.expire`, `role.expire`, and `enforcement.reconcile`, and
-APScheduler removes its own expiry job. If the extension is missing or a
-registration fails, the bot logs a warning and keeps APScheduler as the
-single owner.
+extension, `pg_cron.sync_schedules()` registers the jobs whose
+`scheduled_jobs.job_owner` is `pg_cron` (`moderation.expire`,
+`role.expire`, `enforcement.reconcile`, `scheduler.drift`), and APScheduler
+removes its own expiry job. Application-owned jobs
+(`retention.sweep`, `user.erasure`) stay with the bot because they also
+invalidate the in-process caches or need the Telegram client. The drift
+report compares only the `pg_cron` rows with `cron.job`, so an
+application-owned row is never reported as missing. If the extension is
+missing or a registration fails, the bot logs a warning and keeps
+APScheduler as the single owner.
 
 Retired schedules are removed on every startup:
 

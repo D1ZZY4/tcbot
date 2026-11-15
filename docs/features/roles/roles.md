@@ -124,7 +124,7 @@ A change to either side has to be a change to both.
 
 A demotion revokes the assignment row, it never deletes it, so the history of who held which role stays readable. Indexes are ensured for one active assignment per user, at most one active owner, and the role and status filters. `promotion_requests` carries a unique `request_id`, a status index and a target index that serve the pending-list filters, and a partial unique index on `target_user_id` restricted to `status = 'pending'` so each user has at most one open request (the dedup guard both `cmd_promote_request` and the Admin request path rely on).
 
-Role and owner/admin writes invalidate relevant cache entries so permission checks see updated state. Effective-role and owner reads are cached: the per-user effective role serves from an L1 cache with a 60 s TTL and the owner ID from one with a 300 s TTL, so repeated authorization checks (auth decorators, `is_staff`, rate-limit tiering, promotion-request guards) cost zero database round trips on a hit. `set_owner` clears the entire effective-role cache because the previous owner's key is unknown.
+Role and owner/admin writes invalidate relevant cache entries so permission checks see updated state. Effective-role and owner reads are cached: the per-user effective role serves from an L1 cache with a 60 s TTL and the owner ID from one with a 300 s TTL, so repeated authorization checks (auth decorators, `is_staff`, rate-limit tiering, promotion-request guards) cost zero database round trips on a hit. `set_owner` and `transfer_ownership` clear the entire effective-role cache because the previous owner's key may be unknown to the caller.
 
 ## `/tcpromote` behavior
 
@@ -329,13 +329,12 @@ Flow:
 2. Identity refusal rejects self-transfer, the bot, Telegram, other bots, anonymous-admin, and Founder targets.
 3. `resolve_and_check(..., min_role="developer")` refuses transferring to a staff target of equal or higher rank, the current Founder included.
 4. The current owner is re-read fresh before the mutation. A concurrent transfer or a demotion that happened while the target was classified refuses the command, so an in-flight transfer cannot overwrite a newer owner.
-5. Any non-Founder role the target already holds is cleared first via `Demote.remove_role`, so the post-transfer state holds exactly one Founder with no residual Admin/Developer/Tester assignment.
-6. `users_roles.set_owner(target_id)` swaps the owner in one transaction: the active assignments of the new owner and of the old owner are revoked and the new owner assignment is inserted, all under an advisory lock, so a crash between them cannot leave the community without a Founder.
+5. Any non-Founder role the target already holds is cleared first via `Demote.remove_role`.
+6. `users_roles.transfer_ownership(current_owner.id, target_id)` swaps the owner and grants the previous Founder the Admin role in one transaction, all under an advisory lock. The transaction re-reads the current owner, so a stale prompt cannot replace a newer owner. A failure leaves both roles untouched instead of committing the swap without the Admin grant.
 7. The in-process error-reporter owner is refreshed to the new owner.
-8. The previous Founder is kept as Admin via `users_roles.add_admin(...)`; a failure here stays visible as a WARNING line telling the operator to grant Admin manually.
-9. The owner cache is updated and the effective-role cache is cleared entirely.
-10. An `ownership_transferred` log is sent to `cfg.logs` in parallel with the reply.
-11. The command replies with the new owner mention.
+8. The owner cache is updated and the effective-role cache is cleared entirely.
+9. An `ownership_transferred` log is sent to `cfg.logs` in parallel with the reply.
+10. The command replies with the new owner mention.
 
 After transfer, the previous Founder becomes Admin and the new target becomes Founder.
 

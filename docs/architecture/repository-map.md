@@ -88,6 +88,7 @@ tcbot/
 │   ├── bans_db/             Federation ban decisions and their appeal lifecycle
 │   │   ├── _queries.py         Reads: active ban, ban by reference, per-user history
 │   │   ├── _writes.py          Writes: create, update, review slot, appeal, decision
+│   │   ├── _lifecycle.py       Revoke and appeal approval with their delivery run
 │   │   └── _compose.py         Joins a decision with its messages and appeals
 │   ├── moderation_db.py     Shared write path of the decisions: case, proof, closing
 │   ├── enforcement_db.py   Queue, claim, report, and requeue the enforcement runs

@@ -11,6 +11,10 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Ban, mute, and warn application now has a durable per-group ledger** (`tcbot/database/bans_db/_writes.py`, `tcbot/database/mutes_db.py`, `tcbot/database/enforcement_db.py`, `tcbot/enforcement_worker.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `mute_flow.py`, `warn_flow.py`): a manual or automatic ban and a mute queue an `apply` run with their decision, and Telegram delivery is recorded per group. A failed group is retried by the scheduled worker instead of disappearing with the one-shot fan-out. Behavior changes: the ban and mute summaries report the per-group run outcome, and a failed delivery is retried automatically.
 
+- **The retention contract now runs** (`tcbot/database/scheduler.py`, `tcbot/database/base/jobs.py`, `tcbot/database/schema/seed.sql`, `alembic/versions/0007_scheduled_job_owner.py`): the `retention.sweep` registry job had no caller, so runtime telemetry past its window was never removed. A daily `tcbot.retention_daily` sweep applies the `retention_policies` windows, prunes expired MTProto session state, and records the run in `scheduled_job_runs`.
+
+- **A truncated connect replay is durable** (`tcbot/database/enforcement_db.py`, `tcbot/modules/helper/pipelines/connected_flow.py`, `i18n/en-US/connecting.toml`, `i18n/id-ID/connecting.toml`): a new group whose active ban or mute replay stops at the time budget or list cap now queues an `apply` run for each unreached decision. The worker finishes the enforcement instead of leaving existing members unrestricted until a later join. Behavior changes: the connect warning says the bot retries the remaining restrictions automatically instead of asking for the bot to be re-added.
+
 - **Promotion requests expire** (`tcbot/database/base/rbac.py`, `tcbot/database/queues_db.py`, `tcbot/database/scheduler.py`, `alembic/versions/0005_promotion_request_expiry.py`): a pending request now carries an absolute expiry (`PROMOTION_REQUEST_TTL_DAYS`, default 7), is marked `expired` by the hourly sweep or lazily when a new request is filed, and no longer blocks a fresh request for the same target. Behavior changes: a request nobody decides within the TTL becomes terminal.
 
 - **The user locale cache is shared across processes** (`tcbot/database/cache/singletons.py`, `tcbot/database/settings_db.py`): locale reads use the two-level cache with the generation guard, so a language change in one process invalidates the value in every other process instead of waiting for a process-local TTL.
@@ -44,6 +48,14 @@ All notable changes to this project are documented here. For workflow details, s
 ### Changed
 
 - **Appeal approval is one database decision** (`tcbot/database/bans_db/_writes.py`, `tcbot/modules/helper/pipelines/appeal_review_flow.py`): accepting the appeal, revoking the ban, releasing the review slot, and queueing the unban run now commit together. A former split could leave an accepted appeal beside an active ban, or a revoked ban beside a pending appeal.
+
+- **A manual unban queues its review-card edit atomically** (`tcbot/database/bans_db/_lifecycle.py`, `tcbot/modules/helper/pipelines/unban_flow.py`): the edit is part of the revocation transaction, so a crash after the commit cannot leave a live-looking appeal card over a revoked ban. Behavior changes: the card is closed by the notification worker even when the process stops before the direct edit.
+
+- **Scheduled job ownership is explicit** (`tcbot/database/base/jobs.py`, `tcbot/database/pg_cron.py`, `tcbot/database/schema/functions.sql`, `alembic/versions/0007_scheduled_job_owner.py`): the drift report compared every registry row with `cron.job`, so application-owned jobs were reported as missing when pg_cron was active. `scheduled_jobs.job_owner` separates the pg_cron rows, and the drift audit now runs under pg_cron.
+
+- **Ownership transfer is one atomic decision** (`tcbot/database/users_roles.py`, `tcbot/modules/helper/pipelines/transfer_flow.py`, `i18n/en-US/admins.toml`, `i18n/id-ID/admins.toml`): the owner swap and the previous Founder's Admin grant now commit together under the transfer lock, and the helper re-reads the current owner so a stale prompt cannot replace a newer one. A failed grant no longer leaves the previous Founder without a role; the partial-success warning is gone with the split.
+
+- **The schema splitter handles PostgreSQL escape syntax** (`tcbot/database/schema/loader.py`): quoted strings, `E'...'` backslash escapes, and nested block comments no longer break the statement boundary. Behavior changes: none for the current schema; a future definition using those forms is applied correctly.
 
 - **Unban reports names of failed groups** (`tcbot/modules/helper/pipelines/unban_flow.py`): the summary reads the per-group run report instead of counting a one-shot fan-out. A group that is still being retried is reported as queued rather than as a completed unban.
 
@@ -1082,6 +1094,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **Unused ban helpers removed** (`tcbot/database/bans_db/`, `docs/architecture/database.md`): `deactivate_ban` and `set_review` had no callers; `deactivate_all_active_bans`, `deactivate_extra_active_bans`, and `set_review_if_absent` are the live helpers. Behavior changes: none.
 
 ### Documentation
+
+- **The guides match the retention, connect, and locale contracts** (`docs/architecture/database.md`, `docs/architecture/workflows.md`, `docs/features/language.md`, `docs/features/moderation/banning.md`): the pages now describe the daily retention sweep, the durable remainder of a bounded connect replay, the transactional review-card edit of a manual unban, the explicit pg_cron owner marker, the two-level user-locale cache, the row-preserving locale reset, and the fact that `effective_chat_settings` is a SQL convenience rather than the render path. Behavior changes: none, docs only.
 
 - **The guides match the callback, retry, and appeal lifecycle fixes** (`docs/architecture/database.md`, `docs/architecture/utilities.md`, `docs/architecture/workflows.md`, `docs/architecture/repository-map.md`, `docs/operations/performance.md`, `docs/features/appeals.md`, `docs/features/moderation/banning.md`, `docs/features/moderation/unbanning.md`): the pages now document the single-answer callback contract, the enforcement retry as a failed attempt with a due deadline, the run re-queue, the in-force predicate on appeal claims, the pending-appeal withdrawal on staff unban, the cache-wide epoch around `clear_all`, the worker-thread error delivery, the migration advisory lock, the whitespace rule in the command filter, UTC formatting, and the pre-registration order of the webhook receiver. Behavior changes: none, docs only.
 

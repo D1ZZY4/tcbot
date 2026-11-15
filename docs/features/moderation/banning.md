@@ -328,7 +328,7 @@ Flow:
 8. An unban log is sent to `cfg.logs`.
 9. The command reply reports the per-group run outcome and names failed groups.
 
-Manual unban does not edit a pending appeal review card. It records the appeal as withdrawn, revokes the ban, and posts the unban log.
+The same transaction queues the edit that closes a pending appeal review card, so a crash after the commit cannot leave a live-looking card over a revoked decision. The notification worker performs the edit; a failed edit is retried.
 
 ## Edge cases
 
