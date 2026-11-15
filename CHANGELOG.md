@@ -51,6 +51,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **An animated proof stays an animation** (`tcbot/modules/helper/pipelines/proof_flow.py`): a GIF was classified as a document and uploaded with `send_document`, while the evidence row recorded `animation`, so the archive and the stored media disagreed. Animations now upload with `send_animation`, and a gallery keeps the animation beside its photos and videos. Behavior changes: a GIF proof lands as an animation message instead of a file attachment.
 
+- **A re-ban keeps the whole previous evidence batch** (`tcbot/database/moderation_db.py`, `tcbot/database/bans_db/_writes.py`): a re-ban without a newly landed proof re-archived only the first previous message as one photo, dropping the other items and their media types. The update now copies every archived item with its expected count, and a partial previous batch stays partial instead of being recorded as complete. Behavior changes: a manual re-ban cannot attach an incomplete inherited proof, so the moderator supplies a complete one.
+
 ### Changed
 
 - **The proof destination is deployment configuration** (`tcbot/__init__.py`, `config.env.example`, `README.md`, `docs/getting-started/setup.md`): the loader carried a community channel ID as the fallback for `PROOFS`, so a fresh clone would upload evidence to a chat it did not own. `PROOFS` is required now and boot refuses a missing or invalid value with a clear error. Behavior changes: a deployment that relied on the removed default must set `PROOFS` to its own proof chat before upgrading.

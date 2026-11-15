@@ -682,6 +682,7 @@ apart on the case lifecycle or on the evidence batch.
 |---|---|
 | `open_case(sess, subject_user_id, actor_user_id, *, title, summary, severity, requires_evidence) -> int` | Ensures the subject and actor identity rows exist, then returns the open case of the subject or opens one for the decision. The identity insert is idempotent and joins the same transaction, because the case and the decision reference `telegram_users` for both accounts. |
 | `archive_proof(sess, case_id, uploader_user_id, proof_message_id, destination_chat_id, *, items=None, expected_item_count=None, destination_thread_id=None) -> int \| None` | Archives the proof messages that landed and returns the batch id. Each item keeps its real media type, archive message id, order, and file metadata. The batch is `completed` when every expected item landed and `partial` when at least one was lost. A legacy caller that only has one message id keeps the single-photo shape. |
+| `read_evidence_batch(sess, upload_id) -> tuple[list[EvidenceItemDoc], int]` | Returns the archived items of a prior evidence batch and its expected count. A re-ban with no newly landed proof uses it to carry the whole previous batch, so every media type and the partial/complete state survive instead of collapsing to one photo placeholder. |
 | `close_case(sess, case_id, actor_user_id) -> None` | Closes the case of a decision that was filed. A case that was closed by somebody else keeps its own closing actor and moment. |
 
 The shared write path also guarantees the identity rows a dependent write

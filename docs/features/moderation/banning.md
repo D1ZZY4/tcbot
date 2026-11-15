@@ -158,7 +158,7 @@ The update flow (after `Continue`):
 1. Reuses the existing `ban_id`.
 2. Builds an update proof caption with `proof_caption_update`.
 3. Preserves previous proof/log IDs as `previous_proof_message_id` and `previous_log_message_id`.
-4. Files a new decision through `bans_db.update_ban(...)`: it supersedes the active ban, carries the new reason and the new proof, and opens its own case, because a re-ban is a new incident. The superseded decision keeps its reason, its actor, and its timestamps.
+4. Files a new decision through `bans_db.update_ban(...)`: it supersedes the active ban, carries the new reason and the new proof, and opens its own case, because a re-ban is a new incident. The superseded decision keeps its reason, its actor, and its timestamps. When the update has no newly landed proof, the new decision copies the previous evidence batch item by item, keeping every media type and the expected item count; a partial prior batch stays partial and cannot be attached to a manual re-ban.
 5. Posts an update log with `messages.ban_update_log`.
 6. The sent log message ID is saved with `bans_db.set_log_message_id(...)` when available (same pattern as new-ban step 6).
 7. Uses a keyboard with current proof, previous proof, and submit-appeal buttons when both proof links exist.

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import ProgrammingError
 
 from tcbot import cfg
 from tcbot.database import bans_db, kicks_db, mutes_db, warns_db
@@ -191,6 +192,86 @@ async def test_a_gallery_is_archived_as_every_item(archive_db: str) -> None:
     ]
     assert [item["archive_message_id"] for item in items] == [501, 502, 503]
     assert items[2]["file_name"] == "evidence.pdf"
+
+
+async def test_a_reban_carries_every_previous_proof_item(archive_db: str) -> None:
+    """A re-ban that keeps the old proof keeps its batch and media types."""
+    await bans_db.create_ban(
+        42,
+        "spam",
+        7,
+        501,
+        0,
+        "proofban003",
+        destination_chat_id=cfg.proofs[0],
+        proof_items=[
+            {"media_type": "photo", "archive_message_id": 501},
+            {"media_type": "video", "archive_message_id": 502, "width": 1280},
+        ],
+        proof_expected_count=2,
+    )
+    current = await bans_db.get_ban("proofban003")
+    assert current is not None
+    old_proof = current.get("proof_message_id")
+    assert old_proof
+
+    updated = await bans_db.update_ban(
+        "proofban003",
+        "spam again",
+        7,
+        0,
+        0,
+        int(old_proof),
+        0,
+        destination_chat_id=cfg.proofs[0],
+    )
+
+    assert updated is not None
+    new_ban_id = updated.get("ban_id")
+    assert isinstance(new_ban_id, str)
+    upload, items = await _archive_of(new_ban_id)
+    assert upload["status"] == "completed"
+    assert upload["expected_item_count"] == 2
+    assert [item["media_type"] for item in items] == ["photo", "video"]
+    assert [item["archive_message_id"] for item in items] == [501, 502]
+
+
+async def test_a_reban_cannot_launder_a_partial_batch(archive_db: str) -> None:
+    """A re-ban must not turn an incomplete proof into a completed batch."""
+    await bans_db.create_ban(
+        42,
+        "spam",
+        7,
+        601,
+        0,
+        "proofban004",
+        destination_chat_id=cfg.proofs[0],
+        action_origin="automated",
+        proof_items=[
+            {"media_type": "photo", "archive_message_id": 601},
+            {"media_type": "video", "archive_message_id": 602},
+        ],
+        proof_expected_count=3,
+    )
+    current = await bans_db.get_ban("proofban004")
+    assert current is not None
+    old_proof = current.get("proof_message_id")
+    assert old_proof
+
+    # * The manual re-ban keeps the partial batch and the schema refuses it:
+    # * a manual decision may not stand on incomplete evidence. The error is
+    # * the guarantee; silently recording the two items as complete is not.
+    with pytest.raises(ProgrammingError, match="completed upload marked as required"):
+        await bans_db.update_ban(
+            "proofban004",
+            "spam again",
+            7,
+            0,
+            0,
+            int(old_proof),
+            0,
+            destination_chat_id=cfg.proofs[0],
+        )
 
 
 async def test_a_lost_media_item_is_a_partial_upload(archive_db: str) -> None:

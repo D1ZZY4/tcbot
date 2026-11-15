@@ -331,14 +331,27 @@ async def update_ban(
         case_id = await _open_case(
             sess, target_id, admin_id, reason, requires_evidence=True
         )
+        # * A re-ban that keeps the previous proof must carry the whole
+        # * batch, not just its first message: read the archived items so
+        # * the new action keeps the real media types and item count.
+        carried_items: Sequence[EvidenceItemDoc] | None = None
+        carried_expected = 0
+        if not new_proof_id:
+            carried_items, carried_expected = await moderation_db.read_evidence_batch(
+                sess, current.get("evidence_upload_id")
+            )
         upload_id = await moderation_db.archive_proof(
             sess,
             case_id,
             admin_id,
             proof_id,
             archive_chat,
-            items=proof_items if new_proof_id else None,
-            expected_item_count=proof_expected_count if new_proof_id else 1,
+            items=proof_items if new_proof_id else carried_items,
+            expected_item_count=(
+                proof_expected_count
+                if new_proof_id
+                else max(carried_expected, len(carried_items or []))
+            ),
             destination_thread_id=archive_thread,
         )
         row = (

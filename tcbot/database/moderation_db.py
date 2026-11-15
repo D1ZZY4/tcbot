@@ -13,7 +13,7 @@ per-action modules own their own reads and their own decisions.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from tcbot.database.documents import EvidenceItemDoc
+
 
 # * The statuses of a case that still holds an investigation. A case in
 # * one of them can carry another decision about the same subject.
@@ -137,6 +138,54 @@ async def open_case(
     if created is None:
         raise RuntimeError("the moderation case was not written")
     return int(created["id"])
+
+
+async def read_evidence_batch(
+    sess: AsyncSession, upload_id: int | None
+) -> tuple[list[EvidenceItemDoc], int]:
+    """Return the archived items of a prior batch and its expected count.
+
+    A re-ban that keeps the previous proof needs to carry every item and
+    its real media type into the new evidence batch. Reading only the
+    first message id would turn a gallery or a video into one photo
+    placeholder, so the caller receives the full batch shape instead.
+    """
+    if not upload_id or upload_id <= 0:
+        return [], 0
+    expected = await sess.scalar(
+        select(evidence_uploads.c.expected_item_count).where(
+            evidence_uploads.c.id == upload_id
+        )
+    )
+    if expected is None:
+        return [], 0
+    rows = (
+        (
+            await sess.execute(
+                select(
+                    moderation_evidence_items.c.archive_message_id,
+                    moderation_evidence_items.c.media_type,
+                    moderation_evidence_items.c.media_group_id,
+                    moderation_evidence_items.c.file_unique_id,
+                    moderation_evidence_items.c.mime_type,
+                    moderation_evidence_items.c.file_size_bytes,
+                    moderation_evidence_items.c.duration_seconds,
+                    moderation_evidence_items.c.width,
+                    moderation_evidence_items.c.height,
+                    moderation_evidence_items.c.file_name,
+                    moderation_evidence_items.c.source_chat_id,
+                    moderation_evidence_items.c.source_message_id,
+                    moderation_evidence_items.c.caption_text,
+                )
+                .where(moderation_evidence_items.c.upload_id == upload_id)
+                .order_by(moderation_evidence_items.c.item_order)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    items: list[EvidenceItemDoc] = [cast("EvidenceItemDoc", dict(row)) for row in rows]
+    return items, max(int(expected), 0)
 
 
 async def archive_proof(
