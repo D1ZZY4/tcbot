@@ -469,7 +469,11 @@ async def deactivate_all_active_bans(
                 moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
             )
-            .values(status="revoked", revoked_at=utc_now())
+            .values(
+                status="revoked",
+                revoked_at=utc_now(),
+                metadata=_drop_review_keys(),
+            )
         )
         return cast("CursorResult", result).rowcount
 
@@ -695,37 +699,6 @@ async def submit_appeal(
     return await run_transaction(_work)
 
 
-async def accept_appeal(ban_id: str, reviewer_id: int, note: str = "") -> bool:
-    """Accept the pending appeal of a decision; return True when it was pending.
-
-    The rejection counterpart is :func:`set_rejected_by`. Both close the
-    appeal, so the history says who decided and when, and the partial
-    index that limits one open appeal per decision releases the decision
-    for a later appeal.
-    """
-    affected = await db_call(
-        lambda: run(
-            moderation_appeals.update()
-            .where(
-                moderation_appeals.c.action_id
-                == select(moderation_actions.c.id)
-                .where(moderation_actions.c.external_ref == ban_id)
-                .scalar_subquery(),
-                moderation_appeals.c.status == "pending",
-            )
-            .values(
-                status="accepted",
-                resolved_at=utc_now(),
-                reviewed_by_user_id=reviewer_id,
-                decision_note=note,
-            )
-        )
-    )
-    if affected == 0:
-        log.warning("Appeal acceptance found no pending appeal for ban_id=%s", ban_id)
-    return affected > 0
-
-
 async def release_stale_review(ban_id: str, review_message_id: int) -> bool:
     """Withdraw the stale appeal of a decision and free its review slot.
 
@@ -772,37 +745,6 @@ async def release_stale_review(ban_id: str, review_message_id: int) -> bool:
 
     await run_transaction(_work)
     return withdrawn
-
-
-async def set_rejected_by(ban_id: str, admin_id: int, admin_name: str) -> None:
-    """Persist the rejector identity and rejection timestamp on a ban document.
-
-    Called on appeal reject so the audit trail is preserved even if the log
-    message is later deleted or the log channel is unavailable.
-    """
-    affected = await db_call(
-        lambda: run(
-            moderation_appeals.update()
-            .where(
-                moderation_appeals.c.action_id
-                == select(moderation_actions.c.id)
-                .where(moderation_actions.c.external_ref == ban_id)
-                .scalar_subquery(),
-                moderation_appeals.c.status == "pending",
-            )
-            .values(
-                status="rejected",
-                resolved_at=utc_now(),
-                reviewed_by_user_id=admin_id,
-                decision_note=admin_name,
-            )
-        )
-    )
-    if affected == 0:
-        # * The appeal was already decided or the decision was never
-        # * filed. The reviewer believes the rejection was persisted, so
-        # * the mismatch has to be visible.
-        log.warning("Appeal rejection found no pending appeal for ban_id=%s", ban_id)
 
 
 async def set_appeal_log_msg(

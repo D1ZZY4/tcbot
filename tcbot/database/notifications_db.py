@@ -47,7 +47,16 @@ _CLAIM_DUE = text(
 
 _TASK_ACTION = text(
     """
-    SELECT a.external_ref, a.target_user_id, a.status
+    SELECT a.external_ref,
+           a.target_user_id,
+           a.status,
+           a.metadata->>'review_message_id' AS review_message_id,
+           EXISTS (
+               SELECT 1
+                 FROM moderation_appeals AS ap
+                WHERE ap.action_id = a.id
+                  AND ap.status = 'pending'
+           ) AS has_pending_appeal
       FROM moderation_notification_tasks AS t
       JOIN moderation_actions AS a ON a.id = t.action_id
      WHERE t.id = :task_id

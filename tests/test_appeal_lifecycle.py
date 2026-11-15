@@ -17,14 +17,18 @@ may receive an appeal, and one decision carries one open appeal.
 
 from __future__ import annotations
 
+import asyncio
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot import database as db
 from tcbot.database import engine as engine_module
 from tcbot.database.base import moderation_actions, moderation_appeals, moderation_cases
+from tcbot.utils.time_and_date import utc_now
 from tests.postgres_support import reset_community, seed_chats, seed_users
 
 if TYPE_CHECKING:
@@ -51,12 +55,19 @@ async def ban_db(postgres_db: str) -> AsyncIterator[str]:
     await reset_community()
 
 
-async def _store_ban(sess: AsyncSession, *, active: bool = True) -> int:
+async def _store_ban(
+    sess: AsyncSession,
+    *,
+    active: bool = True,
+    expires_in: float | None = None,
+) -> int:
     """Store one active ban and return its action id.
 
     A decision is created in its initial status, so a ban that must not
     receive an appeal is created active and revoked afterwards: the
     insert guard refuses a decision that starts in a terminal state.
+    ``expires_in`` gives a timed ban a near-future deadline; the insert
+    guard refuses an expiry that is not after creation.
     """
     case = (
         (
@@ -77,24 +88,27 @@ async def _store_ban(sess: AsyncSession, *, active: bool = True) -> int:
         .first()
     )
     assert case is not None
+    values: dict[str, Any] = {
+        "action_type": "ban",
+        "scope_type": "community",
+        "target_user_id": _TARGET_ID,
+        "actor_user_id": _REVIEWER_ID,
+        "reason": "spam",
+        "status": "active",
+        "external_ref": _BAN_REF,
+        "case_id": case["id"],
+        "metadata": {},
+        # * The automated origin needs no archived proof, so the test can
+        # * file the decision without one.
+        "action_origin": "automated",
+    }
+    if expires_in is not None:
+        values["expires_at"] = utc_now() + timedelta(seconds=expires_in)
     action = (
         (
             await sess.execute(
                 pg_insert(moderation_actions)
-                .values(
-                    action_type="ban",
-                    scope_type="community",
-                    target_user_id=_TARGET_ID,
-                    actor_user_id=_REVIEWER_ID,
-                    reason="spam",
-                    status="active",
-                    external_ref=_BAN_REF,
-                    case_id=case["id"],
-                    metadata={},
-                    # * The automated origin needs no archived proof, so
-                    # * the test can file the decision without one.
-                    action_origin="automated",
-                )
+                .values(**values)
                 .returning(moderation_actions.c.id)
             )
         )
@@ -118,11 +132,15 @@ async def _appeals() -> list[dict[str, Any]]:
     )
 
 
-async def _seed_ban(active: bool = True) -> int:  # noqa: FBT001, FBT002
+async def _seed_ban(
+    active: bool = True,  # noqa: FBT001, FBT002
+    *,
+    expires_in: float | None = None,
+) -> int:
     """Store the decision under test in its own transaction."""
 
     async def _work(sess: AsyncSession) -> int:
-        return await _store_ban(sess, active=active)
+        return await _store_ban(sess, active=active, expires_in=expires_in)
 
     return await engine_module.run_transaction(_work)
 
@@ -176,9 +194,12 @@ async def test_the_acceptance_closes_the_appeal(ban_db: str) -> None:
     await _seed_ban()
     await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
 
-    accepted = await db.bans_db.accept_appeal(_BAN_REF, _REVIEWER_ID, "Admin")
+    accepted, run_id = await db.bans_db.approve_appeal_and_queue_unban(
+        _BAN_REF, _REVIEWER_ID, "Admin", _REVIEWER_ID, ()
+    )
 
     assert accepted is True
+    assert run_id is not None
     rows = await _appeals()
     assert rows[0]["status"] == "accepted"
     assert rows[0]["reviewed_by_user_id"] == _REVIEWER_ID
@@ -190,33 +211,40 @@ async def test_the_acceptance_shows_up_on_the_decision(ban_db: str) -> None:
     await _seed_ban()
     await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
 
-    await db.bans_db.accept_appeal(_BAN_REF, _REVIEWER_ID, "Admin")
+    await db.bans_db.approve_appeal_and_queue_unban(
+        _BAN_REF, _REVIEWER_ID, "Admin", _REVIEWER_ID, ()
+    )
 
     ban = await db.bans_db.get_ban(_BAN_REF)
     assert ban is not None
     assert ban.get("rejected_by_id") == _REVIEWER_ID
     assert ban.get("rejected_at") is not None
+    assert ban.get("is_active") is False
 
 
-async def test_the_rejection_closes_the_appeal(ban_db: str) -> None:
-    """A rejected appeal names the reviewer."""
+async def test_the_rejection_closes_the_appeal_and_frees_the_slot(
+    ban_db: str,
+) -> None:
+    """A rejected appeal names the reviewer and releases the review slot."""
     await _seed_ban()
     await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
 
-    await db.bans_db.set_rejected_by(_BAN_REF, _REVIEWER_ID, "Admin")
+    assert await db.bans_db.reject_appeal(_BAN_REF, _REVIEWER_ID, "Admin") is True
 
     rows = await _appeals()
     assert rows[0]["status"] == "rejected"
     assert rows[0]["reviewed_by_user_id"] == _REVIEWER_ID
     assert rows[0]["resolved_at"] is not None
+    ban = await db.bans_db.get_ban(_BAN_REF)
+    assert ban is not None
+    assert ban.get("review_message_id") is None
 
 
 async def test_a_rejected_decision_takes_a_new_appeal(ban_db: str) -> None:
     """A closed appeal releases the decision for a later appeal."""
     await _seed_ban()
     await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
-    await db.bans_db.set_rejected_by(_BAN_REF, _REVIEWER_ID, "Admin")
-    await db.bans_db.clear_review(_BAN_REF)
+    assert await db.bans_db.reject_appeal(_BAN_REF, _REVIEWER_ID, "Admin") is True
 
     claimed = await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "again please", 78)
 
@@ -339,9 +367,12 @@ async def test_a_staff_unban_withdraws_the_pending_appeal(ban_db: str) -> None:
     await _seed_ban()
     assert await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
 
-    revoked = await db.bans_db.deactivate_all_active_bans(_TARGET_ID)
+    revoked, run_id = await db.bans_db.revoke_ban_and_queue_unban(
+        _TARGET_ID, _REVIEWER_ID, (-1001,)
+    )
 
     assert revoked == 1
+    assert run_id is not None
     rows = await _appeals()
     assert [row["status"] for row in rows] == ["withdrawn"]
     ban = await db.bans_db.get_ban(_BAN_REF)
@@ -349,20 +380,71 @@ async def test_a_staff_unban_withdraws_the_pending_appeal(ban_db: str) -> None:
     assert ban.get("is_active") is False
 
 
-async def test_the_approval_path_keeps_the_appeal_it_is_about_to_accept(
+async def test_the_approval_path_accepts_and_revokes_in_one_transaction(
     ban_db: str,
 ) -> None:
-    """The approval opt-out leaves the pending appeal for ``accept_appeal``."""
+    """The approval decision cannot leave an accepted appeal on an active ban."""
     await _seed_ban()
     assert await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
 
-    await db.bans_db.deactivate_all_active_bans(
-        _TARGET_ID, withdraw_pending_appeals=False
+    accepted, run_id = await db.bans_db.approve_appeal_and_queue_unban(
+        _BAN_REF, _REVIEWER_ID, "Admin", _REVIEWER_ID, ()
     )
 
     rows = await _appeals()
-    assert [row["status"] for row in rows] == ["pending"]
-    assert await db.bans_db.accept_appeal(_BAN_REF, _REVIEWER_ID) is True
+    assert accepted is True
+    assert run_id is not None
+    assert [row["status"] for row in rows] == ["accepted"]
+    ban = await db.bans_db.get_ban(_BAN_REF)
+    assert ban is not None
+    assert ban.get("is_active") is False
+
+
+async def test_the_card_outbox_sees_a_settled_rejection(ban_db: str) -> None:
+    """The outbox must close a rejected card although the ban stays active."""
+    await _seed_ban()
+    assert await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
+    ban = await db.bans_db.get_ban(_BAN_REF)
+    assert ban is not None
+    action_id = ban.get("id")
+    assert action_id is not None
+    await db.notifications_db.enqueue_review_card_edit(action_id, -1001, 77)
+    tasks = await db.notifications_db.claim_due_tasks(
+        10, retry_after=timedelta(minutes=5)
+    )
+    task = next(task for task in tasks if int(str(task["action_id"])) == action_id)
+
+    before = await db.notifications_db.load_task_action(int(str(task["id"])))
+    assert before is not None
+    assert before["status"] == "active"
+    assert before["has_pending_appeal"] is True
+    assert before["review_message_id"] == "77"
+
+    assert await db.bans_db.reject_appeal(_BAN_REF, _REVIEWER_ID, "Admin") is True
+
+    after = await db.notifications_db.load_task_action(int(str(task["id"])))
+    assert after is not None
+    assert after["has_pending_appeal"] is False
+    assert after["review_message_id"] is None
+
+
+async def test_an_expired_ban_withdraws_its_pending_appeal(ban_db: str) -> None:
+    """Automatic expiry must not leave an appeal that no reviewer can decide."""
+    await _seed_ban(expires_in=2.0)
+    assert await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
+    await asyncio.sleep(2.2)
+
+    expired = await engine_module.db_call(
+        lambda: engine_module.fetch_value(select(func.expire_due_moderation_actions()))
+    )
+
+    assert expired == 1
+    rows = await _appeals()
+    assert [row["status"] for row in rows] == ["withdrawn"]
+    ban = await db.bans_db.get_ban(_BAN_REF)
+    assert ban is not None
+    assert ban.get("is_active") is False
+    assert ban.get("review_message_id") is None
 
 
 async def test_the_appeal_count_follows_the_records(ban_db: str) -> None:

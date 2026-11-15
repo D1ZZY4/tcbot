@@ -181,3 +181,49 @@ async def approve_appeal_and_queue_unban(
         return True, run_id
 
     return await run_transaction(_work)
+
+
+async def reject_appeal(ban_id: str, reviewer_id: int, reviewer_name: str) -> bool:
+    """Reject the pending appeal and release its review slot in one transaction.
+
+    The rejection is the decision and the slot release is part of it. A
+    split write could record the rejection while the card still holds the
+    slot, so the next tap finds a decided appeal and the decision cannot be
+    appealed again until the stale window passes.
+    """
+
+    async def _work(sess: AsyncSession) -> bool:
+        action_id = await sess.scalar(
+            select(moderation_actions.c.id)
+            .where(
+                moderation_actions.c.external_ref == ban_id,
+                moderation_actions.c.action_type == "ban",
+            )
+            .with_for_update()
+        )
+        if action_id is None:
+            return False
+        await ensure_users(sess, reviewer_id)
+        rejected = await sess.execute(
+            moderation_appeals.update()
+            .where(
+                moderation_appeals.c.action_id == action_id,
+                moderation_appeals.c.status == "pending",
+            )
+            .values(
+                status="rejected",
+                resolved_at=utc_now(),
+                reviewed_by_user_id=reviewer_id,
+                decision_note=reviewer_name,
+            )
+        )
+        if cast("CursorResult", rejected).rowcount == 0:
+            return False
+        await sess.execute(
+            moderation_actions.update()
+            .where(moderation_actions.c.id == action_id)
+            .values(metadata=_drop_review_keys())
+        )
+        return True
+
+    return await run_transaction(_work)

@@ -77,6 +77,21 @@ def _as_int(value: object) -> int:
     return 0
 
 
+def _card_is_still_decidable(action: dict[str, object], message_id: int) -> bool:
+    """Return True when the card still belongs to a live review.
+
+    A queued edit is normally written after a decision, so the card must be
+    closed. The one exception is a card that is still the live review of an
+    active decision with a pending appeal: closing it would remove the only
+    way to decide that appeal.
+    """
+    return (
+        str(action.get("status") or "") == "active"
+        and action.get("has_pending_appeal") is True
+        and _as_int(action.get("review_message_id")) == message_id
+    )
+
+
 async def _group_locale(chat_id: int) -> str:
     """Resolve the locale of the card destination."""
     try:
@@ -102,7 +117,7 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
     if task_id <= 0 or action_id <= 0 or chat_id == 0 or message_id <= 0:
         return
     action = await db.notifications_db.load_task_action(task_id)
-    if action is None or action.get("status") == "active":
+    if action is None or _card_is_still_decidable(action, message_id):
         await db.notifications_db.complete_task(task_id, state="skipped")
         return
     locale = await _group_locale(chat_id)

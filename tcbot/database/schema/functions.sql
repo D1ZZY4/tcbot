@@ -390,14 +390,36 @@ CREATE OR REPLACE FUNCTION %SCHEMA%.expire_due_moderation_actions() RETURNS bigi
 DECLARE
   v_expired_count bigint;
 BEGIN
-  UPDATE %SCHEMA%.moderation_actions
-     SET status = 'expired'
-   WHERE action_type IN ('ban', 'mute')
-     AND status = 'active'
-     AND expires_at IS NOT NULL
-     AND expires_at <= now();
+  -- * An expired ban closes its pending appeal in the same statement. A
+  -- * pending appeal left behind can never be decided, because a decision
+  -- * requires an active ban, and it keeps a review card alive for a
+  -- * question that no longer exists. The review slot of the decision is
+  -- * released for the same reason.
+  WITH expired AS (
+      UPDATE %SCHEMA%.moderation_actions
+         SET status = 'expired',
+             metadata = metadata - 'review_message_id' - 'review_timestamp'
+       WHERE action_type IN ('ban', 'mute')
+         AND status = 'active'
+         AND expires_at IS NOT NULL
+         AND expires_at <= now()
+      RETURNING id
+  ), withdrawn AS (
+      UPDATE %SCHEMA%.moderation_appeals AS a
+         SET status = 'withdrawn',
+             resolved_at = now(),
+             decision_note = 'Ban expired'
+        FROM expired
+       WHERE a.action_id = expired.id
+         AND a.status = 'pending'
+      RETURNING a.id
+  )
+  -- * The final projection references both CTEs, so the two updates are
+  -- * one atomic statement.
+  SELECT count(*), (SELECT count(*) FROM withdrawn)
+    INTO v_expired_count
+    FROM expired;
 
-  GET DIAGNOSTICS v_expired_count = ROW_COUNT;
   RETURN v_expired_count;
 END;
 $$;

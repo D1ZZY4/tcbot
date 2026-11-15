@@ -16,6 +16,7 @@ from __future__ import annotations
 from ._compose import compose_row, compose_rows
 from ._lifecycle import (
     approve_appeal_and_queue_unban,
+    reject_appeal,
     revoke_ban_and_queue_unban,
 )
 from ._queries import (
@@ -33,7 +34,6 @@ from ._queries import (
 )
 from ._shared import CONSTRAINT_ACTIVE_USER, CONSTRAINT_EXTERNAL_REF
 from ._writes import (
-    accept_appeal,
     claim_appeal_decision,
     clear_review,
     create_ban,
@@ -43,7 +43,6 @@ from ._writes import (
     restore_review,
     set_appeal_log_msg,
     set_log_message_id,
-    set_rejected_by,
     set_review_if_absent,
     submit_appeal,
     update_ban,
@@ -52,7 +51,6 @@ from ._writes import (
 __all__ = [
     "CONSTRAINT_ACTIVE_USER",
     "CONSTRAINT_EXTERNAL_REF",
-    "accept_appeal",
     "action_by_ref",
     "active_ban_count",
     "active_ban_user_ids",
@@ -68,12 +66,12 @@ __all__ = [
     "get_active_ban",
     "get_ban",
     "make_ban_id",
+    "reject_appeal",
     "release_stale_review",
     "restore_review",
     "revoke_ban_and_queue_unban",
     "set_appeal_log_msg",
     "set_log_message_id",
-    "set_rejected_by",
     "set_review_if_absent",
     "submit_appeal",
     "update_ban",

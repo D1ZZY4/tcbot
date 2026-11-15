@@ -38,7 +38,11 @@ def _task() -> dict[str, object]:
 
 
 def _wire(
-    monkeypatch: pytest.MonkeyPatch, *, action_status: str = "revoked"
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    action_status: str = "revoked",
+    has_pending_appeal: bool = False,
+    review_message_id: int | None = None,
 ) -> list[dict[str, Any]]:
     completed: list[dict[str, Any]] = []
 
@@ -46,7 +50,15 @@ def _wire(
         return [_task()]
 
     async def _load(task_id: int) -> dict[str, object]:
-        return {"external_ref": "ref", "target_user_id": 42, "status": action_status}
+        return {
+            "external_ref": "ref",
+            "target_user_id": 42,
+            "status": action_status,
+            "has_pending_appeal": has_pending_appeal,
+            "review_message_id": (
+                str(review_message_id) if review_message_id is not None else None
+            ),
+        }
 
     async def _locale(chat_id: int) -> str:
         return "en-US"
@@ -81,13 +93,31 @@ def test_a_deleted_card_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     assert completed[0]["state"] == "skipped"
 
 
-def test_an_active_decision_leaves_the_card_alone(
+def test_a_live_review_leaves_the_card_alone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    completed = _wire(monkeypatch, action_status="active")
+    completed = _wire(
+        monkeypatch,
+        action_status="active",
+        has_pending_appeal=True,
+        review_message_id=900,
+    )
     bot = _Bot()
 
     asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
 
     assert bot.edits == []
     assert completed[0]["state"] == "skipped"
+
+
+def test_a_rejected_appeal_closes_its_still_active_ban_card(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rejected appeal keeps the ban active but the card is settled."""
+    completed = _wire(monkeypatch, action_status="active", has_pending_appeal=False)
+    bot = _Bot()
+
+    asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert len(bot.edits) == 1
+    assert completed[0]["state"] == "sent"

@@ -442,8 +442,9 @@ def test_reject_refuses_a_target_the_reviewer_does_not_outrank(
     async def _role(user_id: int, *, fresh: bool = False) -> str:
         return "admin"
 
-    async def _set_rejected(*a: Any, **k: Any) -> None:
+    async def _reject(*a: Any, **k: Any) -> bool:
         record["rejected"].append(list(a))
+        return True
 
     async def _fname(user_id: int, fallback: str = "") -> str:
         return fallback
@@ -452,7 +453,7 @@ def test_reject_refuses_a_target_the_reviewer_does_not_outrank(
         return "en-US"
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(db.bans_db, "set_rejected_by", _set_rejected)
+    monkeypatch.setattr(db.bans_db, "reject_appeal", _reject)
     monkeypatch.setattr(db.users_cache, "get_first_name", _fname)
     monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale)
 

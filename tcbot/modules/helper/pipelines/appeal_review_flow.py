@@ -409,14 +409,21 @@ class RejectMixin:
             )
             return False
         try:
-            await db.bans_db.set_rejected_by(ban_id, admin.id, admin.first_name)
+            rejected = await db.bans_db.reject_appeal(
+                ban_id, admin.id, admin.first_name
+            )
         except asyncio.CancelledError:
             raise
         except Exception:
-            log.exception("reject_appeal set_rejected_by failed for ban %s", ban_id)
+            log.exception("reject_appeal failed for ban %s", ban_id)
             await _answer_review(q, staff_locale, "appeals.review.db_retry")
             return False
-        # * The rejection is recorded; ack before the card edit and DMs.
+        if not rejected:
+            log.warning("reject_appeal: no pending appeal found for ban %s", ban_id)
+            await _answer_review(q, staff_locale, "appeals.review.already_resolved")
+            return False
+        # * The rejection and the slot release are recorded; ack before the
+        # * card edit and DMs.
         await answer_ack(q)
         target_fname: str = (
             name_r if isinstance(name_r, str) and name_r else str(target_id)
@@ -426,18 +433,30 @@ class RejectMixin:
         ):
             log.debug("reject_appeal name fetch failed: %s", name_r)
         target_locale = await locale_for_user(target_id)
-        await cb_error_edit(
-            q,
-            t(
-                "appeals.decision.reject_card",
-                staff_locale,
-                admin=Safe(user_ref(admin.id, admin.first_name)),
-            ),
-            log_label="reject_appeal review-card",
-            log_level="warning",
-        )
-        results = await asyncio.gather(
-            bot.send_message(
+        try:
+            await q.edit_message_text(
+                t(
+                    "appeals.decision.reject_card",
+                    staff_locale,
+                    admin=Safe(user_ref(admin.id, admin.first_name)),
+                ),
+                parse_mode="MarkdownV2",
+                reply_markup=None,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning(
+                "reject_appeal review-card edit failed for ban %s: %s", ban_id, exc
+            )
+            action_id = int(ban.get("id") or 0)
+            review_id = int(ban.get("review_message_id") or 0)
+            if action_id and review_id and cfg.main_group:
+                await db.notifications_db.enqueue_review_card_edit(
+                    action_id, cfg.main_group, review_id
+                )
+        try:
+            await bot.send_message(
                 target_id,
                 t(
                     "appeals.decision.reject_dm",
@@ -445,20 +464,11 @@ class RejectMixin:
                     ban_id=Safe(code(ban_id)),
                 ),
                 parse_mode="MarkdownV2",
-            ),
-            db.bans_db.clear_review(ban_id),
-            return_exceptions=True,
-        )
-        throw_if_cancelled(results)
-        if isinstance(results[0], BaseException):
-            log.warning("reject_appeal DM to %d failed: %s", target_id, results[0])
-        if isinstance(results[1], BaseException):
-            log.error(
-                "reject_appeal clear_review failed for ban %s: user %d may "
-                "re-appeal within the 72-hour window",
-                ban_id,
-                target_id,
             )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning("reject_appeal DM to %d failed: %s", target_id, exc)
         await _update_or_send_log(
             bot,
             lc,
@@ -590,13 +600,15 @@ class AppealReviewMixin(AppealVerdictsMixin):
             return
         ban: BanDoc = ban_result
         if not ban.get("is_active"):
-            if ban.get("review_message_id"):
+            review_id = int(ban.get("review_message_id") or 0)
+            if review_id:
                 try:
-                    await db.bans_db.clear_review(ban_id)
+                    # * A settled decision also settles the appeal behind the
+                    # * card: leaving it pending would keep a question alive
+                    # * that no reviewer can decide.
+                    await db.bans_db.release_stale_review(ban_id, review_id)
                 except Exception:
-                    log.exception(
-                        "Appeal stale-card clear_review failed for ban %s", ban_id
-                    )
+                    log.exception("Appeal stale-card release failed for ban %s", ban_id)
                 await answer_ack(q)
                 await cb_error_edit(
                     q,
