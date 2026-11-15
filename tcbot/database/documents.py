@@ -14,7 +14,9 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 RequestStatus = Literal["pending", "approved", "rejected", "cancelled", "expired"]
-ActionStatus = Literal["active", "completed", "revoked", "expired", "superseded"]
+ActionStatus = Literal[
+    "active", "completed", "revoked", "expired", "superseded", "failed"
+]
 ScopeType = Literal["community", "chat"]
 EvidenceMediaType = Literal[
     "photo",
@@ -159,6 +161,7 @@ class KickDoc(TypedDict, total=False):
     reason: str
     actor_user_id: UserId
     timestamp: datetime
+    status: ActionStatus
 
 
 class MuteDoc(TypedDict, total=False):

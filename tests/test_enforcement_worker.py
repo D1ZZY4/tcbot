@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 from telegram.error import BadRequest
 
+from tcbot import database as db
 from tcbot import enforcement_worker
 from tcbot.database import enforcement_db
 
@@ -328,6 +329,7 @@ def test_a_kick_repair_run_lifts_the_second_step(
 ) -> None:
     """A reconcile run for a kick unbans the chat the kick could not release."""
     completed: list[tuple[int, dict[str, Any]]] = []
+    restored: list[int] = []
 
     async def _requeue(*args: Any, **kwargs: Any) -> None:
         return None
@@ -337,9 +339,10 @@ def test_a_kick_repair_run_lifts_the_second_step(
 
     async def _load(run_id: int) -> dict[str, object]:
         return {
+            "action_id": 6,
             "target_user_id": 9,
             "action_type": "kick",
-            "action_status": "completed",
+            "action_status": "failed",
             "operation": "reconcile",
         }
 
@@ -348,6 +351,10 @@ def test_a_kick_repair_run_lifts_the_second_step(
 
     async def _complete(target_id: int, **kwargs: Any) -> None:
         completed.append((target_id, kwargs))
+
+    async def _restore(action_id: int) -> bool:
+        restored.append(action_id)
+        return True
 
     async def _fan_out(coros: Any) -> list[object]:
         for coro in coros:
@@ -359,6 +366,7 @@ def test_a_kick_repair_run_lifts_the_second_step(
     monkeypatch.setattr(enforcement_db, "load_run_action", _load)
     monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
     monkeypatch.setattr(enforcement_db, "complete_target", _complete)
+    monkeypatch.setattr(db.kicks_db, "mark_kick_completed", _restore)
     monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
     bot = _FakeBot()
 
@@ -366,6 +374,7 @@ def test_a_kick_repair_run_lifts_the_second_step(
 
     assert bot.unbanned == [(-100, 9)]
     assert completed == [(7, {"status": "succeeded", "outcome": "succeeded"})]
+    assert restored == [6]
 
 
 def test_a_reconcile_run_for_another_action_is_cancelled(

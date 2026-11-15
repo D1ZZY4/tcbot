@@ -621,7 +621,7 @@ not in their storage.
 | `duration_seconds` | `int \| None` | The intended duration; `None` means permanent. |
 | `created_at` | `datetime` | When the decision was taken. |
 | `expires_at` | `datetime \| None` | The absolute expiry; `NULL` means permanent. |
-| `status` | `ActionStatus` | `active`, `completed`, `revoked`, `expired`, or `superseded`. |
+| `status` | `ActionStatus` | `active`, `completed`, `revoked`, `expired`, `superseded`, or `failed`. |
 | `external_ref` | `str` | The public reference carried by the appeal deep link: 10 to 32 lowercase alphanumerics, unique, and immutable once written. |
 | `case_id` | `int` | The case the decision belongs to. |
 | `evidence_upload_id` | `int \| None` | The evidence batch the decision cites. |
@@ -641,6 +641,14 @@ A ban and a mute start `active`; a warning and a kick start `completed`,
 because they are one-shot records. A partial unique index allows one
 active ban and one active mute per target, so a re-ban supersedes the
 previous decision instead of duplicating it.
+
+A kick is the only one-shot decision with a second delivery step: the ban
+lands, then the unban converts it into a rejoin. When the ban fails, or the
+unban still fails after its retry, the record moves to `failed`; the
+durable reconcile run moves it back to `completed` once the unban lands.
+The guard accepts those transitions for a kick and refuses `failed` on
+every other action type, so history can distinguish a delivered kick from
+one that never happened.
 
 ### Cases
 

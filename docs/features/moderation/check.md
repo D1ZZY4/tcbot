@@ -131,7 +131,7 @@ Bans, appeals, per-chat warns, kicks, and mutes lists append the shared `checkin
 
 ### Kicks (`check_kicks:<target_id>:<page>`)
 
-`Check.kicks_list` paginates every kick record (`kicks_db.user_kicks`). Each line shows timestamp, group title, reason snippet, and admin.
+`Check.kicks_list` paginates every kick record (`kicks_db.user_kicks`). Each line shows timestamp, group title, reason snippet, and admin. A kick whose ban or rejoin step did not land carries the `failed` status and an explanatory line, while a repair that succeeds restores `completed`.
 
 ### Mutes (`check_mutes:<target_id>:<page>`)
 

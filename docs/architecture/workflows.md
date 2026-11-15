@@ -124,7 +124,7 @@ flowchart TD
 | Module instances | `reason = BuildReason("kick")`, `proof = BuildProof("kick")` |
 | Executor | `execute_kick(update, ctx, target_id, target_name, reason_text, proof_msgs=None, prompt_chat=None, prompt_id=None)` |
 
-Kick is current-group-only. It bans the user from the current chat and immediately unbans them so the action behaves as a kick rather than a permanent group ban. Optional proof is uploaded before the audit row so its landed items can be archived with the decision; a failed upload degrades to a kick without evidence. The resulting link is shown as an inline keyboard button on the reply and log messages. A ban failure cancels any in-flight upload and replies with a permissions/retry hint.
+Kick is current-group-only. It bans the user from the current chat and immediately unbans them so the action behaves as a kick rather than a permanent group ban. Optional proof is uploaded before the audit row so its landed items can be archived with the decision; a failed upload degrades to a kick without evidence. The resulting link is shown as an inline keyboard button on the reply and log messages. A ban failure cancels any in-flight upload, marks the decision `failed`, and replies with a permissions/retry hint. A rejoin failure marks it `failed` too and queues a durable reconcile run; the worker restores `completed` when the unban lands.
 
 ## Mute: `mute_flow.py`
 

@@ -105,6 +105,39 @@ def test_ban_list_render_count_fail_falls_back(
     assert "2 total" in text
 
 
+def test_kick_list_marks_a_failed_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A kick that is still stranded is not rendered as a normal record."""
+    rows = [
+        {
+            "timestamp": None,
+            "actor_user_id": 7,
+            "reason": "spam",
+            "chat_id": 22,
+            "status": "failed",
+        }
+    ]
+
+    async def _fetch(
+        user_id: int, *, skip: int = 0, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        return rows
+
+    async def _count(user_id: int) -> int:
+        return 1
+
+    monkeypatch.setattr(check_flow, "_name", _fake_name)
+    monkeypatch.setattr(db.kicks_db, "user_kicks", _fetch)
+    monkeypatch.setattr(db.kicks_db, "user_kick_count", _count)
+    monkeypatch.setattr(db.groups_db, "get_group_titles", _group_titles)
+    monkeypatch.setattr(db.users_cache, "get_first_names_batch", _no_names)
+
+    text, _markup = asyncio.run(check_flow.Check.kicks_list(42, 0, None))
+
+    assert "did not complete" in text
+
+
 def test_warns_in_group_uses_server_side_page(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -98,7 +98,8 @@ _REQUEUE_TARGETS = text(
 
 _RUN_ACTION = text(
     """
-    SELECT a.target_user_id,
+    SELECT a.id AS action_id,
+           a.target_user_id,
            a.action_type,
            a.status AS action_status,
            a.expires_at,
@@ -341,9 +342,10 @@ async def queue_kick_unban_repair(
 ) -> int | None:
     """Queue a durable unban for a kick whose second step failed.
 
-    The kick decision stays ``completed`` because the ban landed. The
-    reconcile run is the repair task: the worker unbans the one chat and
-    keeps retrying until Telegram accepts it or the attempt budget ends.
+    The kick decision is marked ``failed`` because the rejoin did not land.
+    The reconcile run is the repair task: the worker unbans the one chat,
+    keeps retrying until Telegram accepts it, and moves the record back to
+    ``completed`` only when the repair succeeds.
     """
     if action_id <= 0 or chat_id == 0:
         return None

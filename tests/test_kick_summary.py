@@ -137,6 +137,7 @@ def test_a_stranded_kick_queues_its_unban_repair(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     queued: list[tuple[int, int, int | None]] = []
+    failed: list[int] = []
 
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
         return "tester" if user_id == 11 else None
@@ -148,16 +149,53 @@ def test_a_stranded_kick_queues_its_unban_repair(
         queued.append((action_id, chat_id, requested_by))
         return 99
 
+    async def _mark_failed(action_id: int) -> bool:
+        failed.append(action_id)
+        return True
+
     class _FailUnbanBot(_FakeBot):
         async def unban_chat_member(self, *args: Any, **kwargs: Any) -> bool:
             raise RuntimeError("still banned")
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
+    monkeypatch.setattr(db.kicks_db, "mark_kick_failed", _mark_failed)
     monkeypatch.setattr(db.enforcement_db, "queue_kick_unban_repair", _repair)
 
     bot = _run(_FailUnbanBot(), prompt_chat=22, prompt_id=44)
 
     assert queued == [(55, 22, 11)]
+    assert failed == [55]
     assert bot.edits
     assert "WARNING" in bot.edits[0]["args"][0]
+
+
+def test_a_failed_ban_marks_the_kick_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A kick whose ban never landed is not reported as a completed kick."""
+    failed: list[int] = []
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        return "tester" if user_id == 11 else None
+
+    async def _logged(*args: Any, **kwargs: Any) -> int:
+        return 55
+
+    async def _mark_failed(action_id: int) -> bool:
+        failed.append(action_id)
+        return True
+
+    class _FailBanBot(_FakeBot):
+        async def ban_chat_member(self, *args: Any, **kwargs: Any) -> bool:
+            raise RuntimeError("not enough rights")
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
+    monkeypatch.setattr(db.kicks_db, "mark_kick_failed", _mark_failed)
+
+    bot = _run(_FailBanBot())
+
+    assert failed == [55]
+    assert len(bot.replies) == 1
+    assert "Couldn't kick" in bot.replies[0]["args"][0]

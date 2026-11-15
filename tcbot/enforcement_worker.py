@@ -135,7 +135,7 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
         )
         or (
             operation == "reconcile"
-            and action_status == "completed"
+            and action_status in ("completed", "failed")
             and action_type == "kick"
         )
     )
@@ -176,6 +176,8 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
 
     targets = await db.enforcement_db.claim_targets(run_id, _MAX_TARGETS_PER_RUN)
     if not targets:
+        # * A repair with no claimable target is not a successful unban: the
+        # * chat may be disconnected, so the record stays failed and visible.
         await db.enforcement_db.complete_empty_run(run_id)
         return
 
@@ -200,9 +202,20 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
         for target, result in zip(targets, results, strict=True)
     ]
     settled = await gather_bounded(updates, max_concurrent=10)
+    update_failed = False
     for result in settled:
         if isinstance(result, BaseException):
+            update_failed = True
             log.error("Enforcement target update failed: %s", result)
+    if operation == "reconcile" and not update_failed:
+        remaining = [
+            result
+            for result in results
+            if isinstance(result, BaseException)
+            and not is_benign_telegram_error(result)
+        ]
+        if not remaining:
+            await _close_repaired_kick(_as_int(action.get("action_id")))
 
 
 async def _deliver(
@@ -234,6 +247,18 @@ async def _deliver(
             await bot.restrict_chat_member(
                 chat_id, user_id, permissions=ChatPermissions.all_permissions()
             )
+
+
+async def _close_repaired_kick(action_id: int) -> None:
+    """Mark a repaired kick completed once its unban has landed."""
+    if action_id <= 0:
+        return
+    try:
+        await db.kicks_db.mark_kick_completed(action_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("Kick status restore failed for action=%s", action_id)
 
 
 async def _record_target(target: dict[str, object], result: object) -> None:

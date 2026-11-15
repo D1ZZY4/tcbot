@@ -152,6 +152,58 @@ async def test_a_re_ban_can_be_revoked_afterwards(community: str) -> None:
     assert status == "revoked"
 
 
+async def test_a_kick_can_record_a_failed_delivery_and_its_repair(
+    community: str,
+) -> None:
+    """A kick that never completed is distinguishable from a delivered one."""
+    case_id = await _open_case(2)
+    row = await engine_module.fetch_one(
+        text(
+            "INSERT INTO moderation_actions "
+            "(action_type, scope_type, chat_id, origin_chat_id, target_user_id, "
+            " actor_user_id, reason, status, external_ref, case_id, action_origin, "
+            " created_at) "
+            "VALUES ('kick', 'chat', -1001, -1001, 2, 1, 'reason', 'completed', "
+            " 'kick00000001', :case_id, 'automated', now()) RETURNING id"
+        ).bindparams(case_id=case_id)
+    )
+    assert row is not None
+    action_id = int(row["id"])
+
+    await _run(
+        "UPDATE moderation_actions SET status = 'failed' WHERE id = :id",
+        id=action_id,
+    )
+    assert (
+        await _fetch_one(
+            "SELECT status FROM moderation_actions WHERE id = :id", id=action_id
+        )
+        == "failed"
+    )
+
+    await _run(
+        "UPDATE moderation_actions SET status = 'completed' WHERE id = :id",
+        id=action_id,
+    )
+    assert (
+        await _fetch_one(
+            "SELECT status FROM moderation_actions WHERE id = :id", id=action_id
+        )
+        == "completed"
+    )
+
+
+async def test_a_ban_cannot_carry_the_kick_failure_status(community: str) -> None:
+    """The failed status belongs to the one-shot kick lifecycle only."""
+    action_id = await _open_ban(2)
+
+    with pytest.raises(Exception, match="Only a kick can carry the failed status"):
+        await _run(
+            "UPDATE moderation_actions SET status = 'failed' WHERE id = :id",
+            id=action_id,
+        )
+
+
 async def test_an_expired_decision_can_still_be_updated(community: str) -> None:
     """Touching a decision that ran out does not fail with a database error."""
     case_id = await _open_case(2)

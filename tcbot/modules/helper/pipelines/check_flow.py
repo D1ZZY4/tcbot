@@ -644,6 +644,7 @@ class CheckEventsMixin:
             db_call=db.kicks_db.user_kicks,
             count_call=db.kicks_db.user_kick_count,
             cb_prefix=f"check_kicks:{target_id}",
+            show_status=True,
             locale=locale,
         )
 
@@ -673,6 +674,7 @@ async def _per_chat_event_list(
     count_call: Callable[[int], Awaitable[int]],
     cb_prefix: str,
     show_duration: bool = False,
+    show_status: bool = False,
     locale: str | None = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Shared renderer for kicks/mutes lists."""
@@ -767,17 +769,18 @@ async def _per_chat_event_list(
                 )
             )
         else:
-            lines.append(
-                t(
-                    "checking.events.item",
-                    locale,
-                    i=base_idx + i,
-                    ts=Safe(ts),
-                    title=title,
-                    reason=Safe(italic(reason_short)),
-                    admin=Safe(user_ref(admin_id, admin_name)),
-                )
+            line = t(
+                "checking.events.item",
+                locale,
+                i=base_idx + i,
+                ts=Safe(ts),
+                title=title,
+                reason=Safe(italic(reason_short)),
+                admin=Safe(user_ref(admin_id, admin_name)),
             )
+            if show_status and rec.get("status") == "failed":
+                line += "\n   " + t("checking.events.kick_failed", locale)
+            lines.append(line)
     nav = nav_row(page, total_pages, cb_prefix, locale)
     return _maybe_caveat(
         "\n".join(lines), locale, failed=count_failed

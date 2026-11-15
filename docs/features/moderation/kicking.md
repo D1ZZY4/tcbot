@@ -124,11 +124,11 @@ Execution order:
 6. Fan two independent side-effects in parallel with `asyncio.gather(..., return_exceptions=True)`:
    - `unban_chat_member(chat_id, target_id, only_if_banned=True)` - the "user can rejoin" step.
    - `ctx.bot.send_message(cfg.logs, kick_log, ..., reply_markup=proof_kb)` - federation log post. The audit write already landed before enforcement, so a failure here can never leave an unaudited kick.
-7. If the unban call raises, one bounded retry runs. If that also fails, the executor queues `enforcement_db.queue_kick_unban_repair(kick_action_id, chat_id, admin_id)`, a durable `reconcile` run that keeps retrying the unban, and appends a `WARNING:` line so the moderator knows the user is still banned in this chat.
+7. If the unban call raises, one bounded retry runs. If that also fails, the decision moves to `failed` and the executor queues `enforcement_db.queue_kick_unban_repair(kick_action_id, chat_id, admin_id)`, a durable `reconcile` run that keeps retrying the unban. The reply appends a `WARNING:` line so the moderator knows the user is still banned in this chat. When the repair lands, the worker moves the decision back to `completed`.
 8. Edit the proof prompt in place with the kick summary (same pattern as the mute executor), falling back to a fresh reply when the prompt is gone. No more double message.
 9. The reply reads `<user> has been kicked. Reason: <reason>. They can rejoin via invite link.` plus the optional `WARNING:` line. The kicked user's ID is a Telegram deep-link for quick re-ban; the text is rendered from the localized `kicking.summary.body` / `kicking.warn.unban` / `kicking.rejoin.body` blocks in the moderator's locale.
 
-If `ban_chat_member` itself raises (the chat-level exception, not the parallelized children), `execute_kick` catches it, logs the full traceback, and replies with a generic permissions/retry hint (raw error text is never echoed to the chat).
+If `ban_chat_member` itself raises (the chat-level exception, not the parallelized children), `execute_kick` catches it, marks the decision `failed`, logs the full traceback, and replies with a generic permissions/retry hint (raw error text is never echoed to the chat).
 
 ## Database impact
 
@@ -141,8 +141,9 @@ Kick audit decisions are stored in `moderation_actions` with `action_type = 'kic
 | `reason` | Moderator-provided reason or localized `replies.no_reason(locale)` text when skipped. |
 | `actor_user_id` | Telegram user ID of the moderator who issued the kick. |
 | `created_at` | UTC kick creation time. |
+| `status` | `completed` for a delivered kick, `failed` while the ban or rejoin step did not land. A durable repair moves failed back to completed. |
 
-`kicks_db.log_kick` is the only insert path. `kicks_db.user_kicks` and `kicks_db.user_kick_count` power the `/check` profile drill-down.
+`kicks_db.log_kick` is the only insert path. `kicks_db.mark_kick_failed` and `kicks_db.mark_kick_completed` record the delivery outcome, and the schema guard accepts only those kick transitions. `kicks_db.user_kicks` and `kicks_db.user_kick_count` power the `/check` profile drill-down.
 
 Indexes are ensured for:
 
@@ -165,7 +166,7 @@ The reply and federation log use `keyboards.action_proof_kb(target_id, proof_lin
 - Proof upload failures are caught and logged; the kick still proceeds.
 - A DB `log_kick` failure aborts the kick with a retry reply before any group is touched, so an enforced kick is never missing from `/check` history.
 - Federation log send failure does not stop the kick reply.
-- If the post-ban `unban_chat_member` fails after one retry, the user is effectively banned in this chat. A durable reconcile run is queued and the reply appends a `WARNING:` line; the scheduled enforcement worker retries the unban without a new kick decision. The repair is cancelled when a federation ban now holds the target, so it cannot lift the newer ban.
+- If the post-ban `unban_chat_member` fails after one retry, the user is effectively banned in this chat. The decision becomes `failed`, a durable reconcile run is queued, and the reply appends a `WARNING:` line; the scheduled enforcement worker retries the unban without a new kick decision and restores `completed` when it lands. The repair is cancelled when a federation ban now holds the target, so it cannot lift the newer ban.
 - A demote failure is logged loudly and the kick still proceeds; the target's rank is repaired by a later join-time enforcement pass.
 - The reason and proof conversation is per-chat and per-user, so simultaneous kick flows are isolated.
 - The kick command is **group-only**: the entry rejects a private chat with the localized `replies.err_group_only(locale)` notice (English default: `Use this command in a group.`) before any role or target I/O, and `execute_kick` acts on the current chat (`ban_chat_member` then `unban_chat_member` in `effective_chat.id`). Rank gating is Tester or above via `basic_mod_only`; the decorator itself performs no group-membership check beyond the entry's private-chat guard.
@@ -187,7 +188,7 @@ Key behaviors to keep in mind:
 10. Proof items accumulate until the moderator taps `Done` (an empty `Done` answers with a retry alert); the executor then runs once with everything collected.
 11. The proof prompt edits in place across the reason-to-proof transition when a prompt ID is stashed in `ctx.user_data`.
 12. `execute_kick` runs `ban_chat_member` then `unban_chat_member(..., only_if_banned=True)` so the user can rejoin via invite link.
-13. The DB `log_kick` audit write runs first and aborts the kick on failure; the federation log post then runs in parallel with the post-ban unban, so partial failures are logged but the kick still completes.
-14. A failed post-ban unban adds a `WARNING:` line to the reply and queues a durable reconcile run; the scheduled worker keeps retrying the unban.
+13. The DB `log_kick` audit write runs first and aborts the kick on failure; the federation log post then runs in parallel with the post-ban unban, so partial failures are logged but the kick still completes. A failed ban or rejoin marks the decision `failed` so history never reports a delivered kick.
+14. A failed post-ban unban adds a `WARNING:` line to the reply and queues a durable reconcile run; the scheduled worker keeps retrying the unban and moves the decision back to `completed`.
 15. `/tcban` and `/tckick` are distinct: only `/tcban` creates a federation-wide ban record and appeal path.
 16. The reply always reads `They can rejoin via invite link.` because the post-ban unban is part of the contract.

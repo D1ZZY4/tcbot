@@ -26,6 +26,7 @@ import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 
 from alembic import command
@@ -169,7 +170,9 @@ def test_a_database_stopped_before_the_owner_column_upgrades() -> None:
         finally:
             engine.dispose()
         assert "job_owner" in columns
-        assert version == "0007_scheduled_job_owner"
+        # * The test cares that the database reached the head, not which
+        # * revision happens to be current, so a new revision needs no edit.
+        assert version == ScriptDirectory.from_config(config).get_current_head()
     finally:
         if previous_options is None:
             os.environ.pop("PGOPTIONS", None)

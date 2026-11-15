@@ -362,6 +362,24 @@ async def test_a_kick_can_queue_its_unban_repair(run_db: str) -> None:
     assert run == {"chat_id": -1001}
 
 
+async def test_a_kick_status_follows_its_delivery(run_db: str) -> None:
+    """A failed kick is distinguishable, and its repair restores completed."""
+    await seed_users(44)
+    kick_id = await kicks_db.log_kick(44, -1001, "spam", 7)
+
+    assert await kicks_db.mark_kick_failed(kick_id) is True
+    status = await engine_module.fetch_value(
+        select(moderation_actions.c.status).where(moderation_actions.c.id == kick_id)
+    )
+    assert status == "failed"
+
+    assert await kicks_db.mark_kick_completed(kick_id) is True
+    status = await engine_module.fetch_value(
+        select(moderation_actions.c.status).where(moderation_actions.c.id == kick_id)
+    )
+    assert status == "completed"
+
+
 async def test_a_destination_is_registered_without_rewriting_a_group(
     run_db: str,
 ) -> None:

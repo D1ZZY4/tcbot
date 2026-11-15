@@ -99,6 +99,7 @@ db_fail = "Could not load warning groups. The database is unreachable, try again
 empty = "{heading}\n\nNo {lower} records for {user}."
 header = "{heading}: {n} total, page {page}/{pages}"
 item = "{i}. {ts}\n   Group: {title}\n   {reason}\n   By {admin}"
+kick_failed = "This kick did not complete: the rejoin step is still pending."
 mute_item = "{i}. {ts}\n   Group: {title}\n   Requested: {requested} | Stored: {stored}\n   {reason}\n   By {admin}"
 no_reason = "(no reason)"
 

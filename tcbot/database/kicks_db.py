@@ -17,8 +17,14 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database import moderation_db
 from tcbot.database.base import moderation_actions
-from tcbot.database.documents import KickDoc
-from tcbot.database.engine import db_call, fetch_all, fetch_value, run_transaction
+from tcbot.database.documents import ActionStatus, KickDoc
+from tcbot.database.engine import (
+    db_call,
+    fetch_all,
+    fetch_value,
+    run,
+    run_transaction,
+)
 from tcbot.database.types import ChatId, UserId
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
@@ -121,6 +127,49 @@ async def log_kick(
     return await run_transaction(_work)
 
 
+async def mark_kick_failed(action_id: int) -> bool:
+    """Record that a kick decision did not complete its ban or rejoin step.
+
+    The audit row is written before enforcement so an applied kick can never
+    be unaudited. The trade-off is that the row starts ``completed``; this
+    update moves it to ``failed`` when the ban or its follow-up unban does
+    not land, so the history does not report a kick that never happened.
+    Returns True when the transition was applied.
+    """
+    if action_id <= 0:
+        return False
+    affected = await db_call(
+        lambda: run(
+            moderation_actions.update()
+            .where(
+                moderation_actions.c.id == action_id,
+                moderation_actions.c.action_type == "kick",
+                moderation_actions.c.status == "completed",
+            )
+            .values(status="failed")
+        )
+    )
+    return affected > 0
+
+
+async def mark_kick_completed(action_id: int) -> bool:
+    """Close a failed kick once its durable unban repair lands."""
+    if action_id <= 0:
+        return False
+    affected = await db_call(
+        lambda: run(
+            moderation_actions.update()
+            .where(
+                moderation_actions.c.id == action_id,
+                moderation_actions.c.action_type == "kick",
+                moderation_actions.c.status == "failed",
+            )
+            .values(status="completed")
+        )
+    )
+    return affected > 0
+
+
 async def _open_case(
     sess: AsyncSession, target_id: int, admin_id: int, reason: str, chat_id: int
 ) -> int:
@@ -165,6 +214,7 @@ async def user_kicks(
             reason=str(row["reason"]),
             actor_user_id=UserId(int(row["actor_user_id"])),
             timestamp=cast("datetime", row["created_at"]),
+            status=cast("ActionStatus", row["status"]),
         )
         for row in rows
     ]

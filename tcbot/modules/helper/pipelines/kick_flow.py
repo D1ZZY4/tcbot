@@ -112,6 +112,8 @@ async def execute_kick(
     # * Audit first: the DB kick record must exist before enforcement.
     # * A failed write aborts with a retry reply instead of leaving an
     # * enforced but unaudited kick that /check can never see.
+    kick_action_id: int | None = None
+    kick_delivered = False
     try:
         kick_action_id = await db.kicks_db.log_kick(
             target_id,
@@ -206,6 +208,17 @@ async def execute_kick(
                     unban_result,
                 )
                 if kick_action_id and not is_benign_telegram_error(unban_result):
+                    # * The record started completed when the ban landed, but
+                    # * the rejoin step did not. Mark it failed before the
+                    # * repair queue so history never claims a finished kick
+                    # * while the target is still banned.
+                    try:
+                        await db.kicks_db.mark_kick_failed(kick_action_id)
+                    except Exception:
+                        log.exception(
+                            "Kick status update failed for action=%s",
+                            kick_action_id,
+                        )
                     # * A kick is a ban followed by an unban. If the second
                     # * step still fails, the user is banned with no active
                     # * ban record to repair from. The reconcile run keeps
@@ -227,6 +240,7 @@ async def execute_kick(
                                 chat_id,
                                 repair_run,
                             )
+        kick_delivered = not isinstance(unban_result, BaseException)
         if isinstance(log_send_result, BaseException):
             log.error("Kick log send failed: %s", log_send_result)
         unban_warning = (
@@ -271,6 +285,11 @@ async def execute_kick(
             proof_task.cancel()
             await asyncio.gather(proof_task, return_exceptions=True)
         log.exception("Kick failed for %s in %s", target_id, chat_id)
+        if kick_action_id is not None and not kick_delivered:
+            try:
+                await db.kicks_db.mark_kick_failed(kick_action_id)
+            except Exception:
+                log.exception("Kick status update failed for action=%s", kick_action_id)
         await safe_reply(
             msg,
             t(

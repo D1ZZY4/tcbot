@@ -1156,6 +1156,9 @@ BEGIN
      OR NEW.supersedes_action_id IS DISTINCT FROM OLD.supersedes_action_id THEN
     RAISE EXCEPTION 'Moderation action facts are immutable; create a new action instead';
   END IF;
+  IF NEW.status = 'failed' AND NEW.action_type <> 'kick' THEN
+    RAISE EXCEPTION 'Only a kick can carry the failed status';
+  END IF;
   IF OLD.status IN ('revoked', 'expired', 'superseded')
      AND NEW.status IS DISTINCT FROM OLD.status THEN
     RAISE EXCEPTION 'Terminal moderation action status cannot be changed';
@@ -1164,7 +1167,18 @@ BEGIN
      AND NEW.status NOT IN ('active', 'revoked', 'expired', 'superseded') THEN
     RAISE EXCEPTION 'Invalid moderation action transition: % -> %', OLD.status, NEW.status;
   END IF;
-  IF OLD.status = 'completed' AND NEW.status NOT IN ('completed', 'revoked') THEN
+  IF OLD.status = 'completed'
+     AND NEW.status NOT IN ('completed', 'revoked')
+     AND NOT (NEW.action_type = 'kick' AND NEW.status = 'failed') THEN
+    RAISE EXCEPTION 'Invalid moderation action transition: % -> %', OLD.status, NEW.status;
+  END IF;
+  -- * A kick is the only one-shot decision with a second delivery step:
+  -- * the ban lands, then the unban converts it into a rejoin. If either
+  -- * step fails, the record moves to failed so history does not claim a
+  -- * completed kick; the repair run moves it back once the unban lands.
+  IF OLD.status = 'failed'
+     AND NEW.status IS DISTINCT FROM OLD.status
+     AND NOT (NEW.action_type = 'kick' AND NEW.status = 'completed') THEN
     RAISE EXCEPTION 'Invalid moderation action transition: % -> %', OLD.status, NEW.status;
   END IF;
   IF NEW.status = 'revoked' THEN

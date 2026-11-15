@@ -429,6 +429,7 @@ moderation_actions = Table(
         "revoked",
         "expired",
         "superseded",
+        "failed",
     ),
     CheckConstraint(
         "external_ref ~ '^[a-z0-9]{10,32}$'", name="ck_moderation_actions_external_ref"
