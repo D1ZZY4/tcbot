@@ -39,6 +39,8 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from tcbot.database.documents import EvidenceItemDoc
+
 log = get_logger(__name__)
 
 
@@ -99,7 +101,17 @@ async def _open_case(
 # ────────────────────────────── Records ──────────────────────────── #
 
 
-async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int:
+async def add_warn(
+    user_id: int,
+    reason: str,
+    admin_id: int,
+    chat_id: int,
+    *,
+    proof_items: Sequence[EvidenceItemDoc] | None = None,
+    proof_expected_count: int = 0,
+    destination_chat_id: int = 0,
+    destination_thread_id: int | None = None,
+) -> int:
     """Add a new warning to a user in a specific chat.
 
     Returns the number of warnings the user now holds in that group. The
@@ -125,6 +137,19 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
             {"scope": f"warn:{chat_id}:{user_id}"},
         )
         case_id = await _open_case(sess, user_id, admin_id, reason, chat_id)
+        upload_id = None
+        if proof_items and destination_chat_id:
+            upload_id = await moderation_db.archive_proof(
+                sess,
+                case_id,
+                admin_id,
+                0,
+                destination_chat_id,
+                items=proof_items,
+                expected_item_count=proof_expected_count,
+                destination_thread_id=destination_thread_id,
+                is_required=False,
+            )
         await sess.execute(
             pg_insert(moderation_actions).values(
                 action_type="warn",
@@ -144,6 +169,7 @@ async def add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> in
                 expires_at=expires_at,
                 status="completed",
                 case_id=case_id,
+                evidence_upload_id=upload_id,
                 action_origin="manual",
             )
         )

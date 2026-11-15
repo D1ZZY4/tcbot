@@ -24,9 +24,12 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import datetime
 
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    from tcbot.database.documents import EvidenceItemDoc
 
 log = get_logger(__name__)
 
@@ -49,33 +52,73 @@ _KICK_COLUMNS = (
 # * Used exclusively for audit logging of moderation actions
 
 
-async def log_kick(user_id: int, chat_id: int, reason: str, admin_id: int) -> None:
-    """Log a kick event to the database for audit purposes."""
+async def log_kick(
+    user_id: int,
+    chat_id: int,
+    reason: str,
+    admin_id: int,
+    *,
+    proof_items: Sequence[EvidenceItemDoc] | None = None,
+    proof_expected_count: int = 0,
+    destination_chat_id: int = 0,
+    destination_thread_id: int | None = None,
+) -> int:
+    """Log a kick event and return its decision id.
+
+    Proof is optional for a kick. When the moderator supplied it, the
+    landed items are archived with the decision so the audit record points
+    at the real media rather than only at a channel message.
+    """
     now = utc_now()
 
-    async def _work(sess: AsyncSession) -> None:
+    async def _work(sess: AsyncSession) -> int:
         case_id = await _open_case(sess, user_id, admin_id, reason, chat_id)
-        await sess.execute(
-            pg_insert(moderation_actions).values(
-                action_type="kick",
-                scope_type="chat",
-                chat_id=chat_id,
-                origin_chat_id=chat_id,
-                target_user_id=user_id,
-                actor_user_id=admin_id,
-                reason=reason,
-                created_at=now,
-                status="completed",
-                case_id=case_id,
-                action_origin="manual",
+        upload_id = None
+        if proof_items and destination_chat_id:
+            upload_id = await moderation_db.archive_proof(
+                sess,
+                case_id,
+                admin_id,
+                0,
+                destination_chat_id,
+                items=proof_items,
+                expected_item_count=proof_expected_count,
+                destination_thread_id=destination_thread_id,
+                is_required=False,
             )
+        row = (
+            (
+                await sess.execute(
+                    pg_insert(moderation_actions)
+                    .values(
+                        action_type="kick",
+                        scope_type="chat",
+                        chat_id=chat_id,
+                        origin_chat_id=chat_id,
+                        target_user_id=user_id,
+                        actor_user_id=admin_id,
+                        reason=reason,
+                        created_at=now,
+                        status="completed",
+                        case_id=case_id,
+                        evidence_upload_id=upload_id,
+                        action_origin="manual",
+                    )
+                    .returning(moderation_actions.c.id)
+                )
+            )
+            .mappings()
+            .first()
         )
+        if row is None:
+            raise RuntimeError("the kick decision was not written")
         # * The investigation ends with its decision: an open case is
         # * picked up by the next decision about the same user, so the
         # * history would collapse into one case per user.
         await moderation_db.close_case(sess, case_id, admin_id)
+        return int(row["id"])
 
-    await run_transaction(_work)
+    return await run_transaction(_work)
 
 
 async def _open_case(

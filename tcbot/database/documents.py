@@ -13,9 +13,19 @@ from tcbot.database.types import BanId, ChatId, GroupId, UserId
 if TYPE_CHECKING:
     from datetime import datetime
 
-RequestStatus = Literal["pending", "approved", "rejected", "cancelled"]
+RequestStatus = Literal["pending", "approved", "rejected", "cancelled", "expired"]
 ActionStatus = Literal["active", "completed", "revoked", "expired", "superseded"]
 ScopeType = Literal["community", "chat"]
+EvidenceMediaType = Literal[
+    "photo",
+    "video",
+    "animation",
+    "document",
+    "audio",
+    "voice",
+    "video_note",
+    "sticker",
+]
 
 
 class AdminDoc(TypedDict, total=False):
@@ -63,10 +73,35 @@ class BanDoc(TypedDict, total=False):
     rejected_at: datetime | None
     case_id: int
     evidence_upload_id: int | None
+    enforcement_run_id: int | None
     action_origin: str
     scope_type: ScopeType
     origin_chat_id: int | None
     metadata: dict[str, object]
+
+
+class EvidenceItemDoc(TypedDict, total=False):
+    """Row shape of one archived proof item.
+
+    One row describes one Telegram message that actually landed in the
+    evidence destination, so a gallery is recorded as its individual
+    photos, videos, or files instead of a single ``photo`` placeholder.
+    """
+
+    media_type: EvidenceMediaType
+    archive_message_id: int
+    item_order: int
+    media_group_id: str | None
+    file_unique_id: str | None
+    mime_type: str | None
+    file_size_bytes: int | None
+    duration_seconds: int | None
+    width: int | None
+    height: int | None
+    file_name: str | None
+    source_chat_id: int | None
+    source_message_id: int | None
+    caption_text: str | None
 
 
 class GroupDoc(TypedDict, total=False):
@@ -139,6 +174,7 @@ class MuteDoc(TypedDict, total=False):
     actor_user_id: UserId
     timestamp: datetime
     duration_secs: int | None
+    requested_duration_secs: int | None
 
 
 class ActiveMuteDoc(TypedDict, total=False):
@@ -179,6 +215,7 @@ class PromotionRequestDoc(TypedDict, total=False):
     requested_by_user_id: UserId
     status: RequestStatus
     requested_at: datetime
+    expires_at: datetime | None
     resolved_at: datetime | None
     resolved_by_user_id: UserId | None
     decision_note: str | None

@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import timedelta
+from typing import TYPE_CHECKING, cast
 
 from telegram import (
     Bot,
@@ -26,6 +28,9 @@ from tcbot.utils.formatter import bold
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
+
+if TYPE_CHECKING:
+    from tcbot.database.documents import EvidenceItemDoc, EvidenceMediaType
 
 log = get_logger(__name__)
 
@@ -124,6 +129,283 @@ class BuildProof:
 # ───────────────────────── Channel upload ───────────────────────── #
 
 
+@dataclass(frozen=True)
+class ProofItem:
+    """One proof message that landed in the evidence destination."""
+
+    media_type: str
+    archive_message_id: int
+    item_order: int
+    file_unique_id: str | None = None
+    mime_type: str | None = None
+    file_size_bytes: int | None = None
+    media_group_id: str | None = None
+    duration_seconds: int | None = None
+    width: int | None = None
+    height: int | None = None
+    file_name: str | None = None
+    source_chat_id: int | None = None
+    source_message_id: int | None = None
+    caption_text: str | None = None
+
+    def to_document(self) -> EvidenceItemDoc:
+        """Return the row shape the evidence archive stores."""
+        return {
+            "media_type": cast("EvidenceMediaType", self.media_type),
+            "archive_message_id": self.archive_message_id,
+            "item_order": self.item_order,
+            "media_group_id": self.media_group_id,
+            "file_unique_id": self.file_unique_id,
+            "mime_type": self.mime_type,
+            "file_size_bytes": self.file_size_bytes,
+            "duration_seconds": self.duration_seconds,
+            "width": self.width,
+            "height": self.height,
+            "file_name": self.file_name,
+            "source_chat_id": self.source_chat_id,
+            "source_message_id": self.source_message_id,
+            "caption_text": self.caption_text,
+        }
+
+
+@dataclass(frozen=True)
+class _SourceMedia:
+    """A source message classified for upload and archive."""
+
+    media_type: str
+    send_kind: str
+    file_id: str
+    file_unique_id: str | None = None
+    mime_type: str | None = None
+    file_size_bytes: int | None = None
+    duration_seconds: int | None = None
+    width: int | None = None
+    height: int | None = None
+    file_name: str | None = None
+    source_chat_id: int | None = None
+    source_message_id: int | None = None
+    caption_text: str | None = None
+
+
+def _duration_seconds(value: int | timedelta | None) -> int | None:
+    """Normalize a PTB media duration to whole seconds."""
+    if isinstance(value, timedelta):
+        return int(value.total_seconds())
+    return value
+
+
+def _source_media(message: Message) -> _SourceMedia | None:
+    """Classify one proof message into the media it carries."""
+    chat = getattr(message, "chat", None)
+    source_chat_id = int(getattr(chat, "id", 0) or 0) or None
+    source_message_id = int(getattr(message, "message_id", 0) or 0) or None
+    caption = getattr(message, "caption", None)
+    if message.photo:
+        photo = message.photo[-1]
+        return _SourceMedia(
+            media_type="photo",
+            send_kind="photo",
+            file_id=photo.file_id,
+            file_unique_id=photo.file_unique_id,
+            file_size_bytes=photo.file_size,
+            width=photo.width,
+            height=photo.height,
+            source_chat_id=source_chat_id,
+            source_message_id=source_message_id,
+            caption_text=caption,
+        )
+    if message.video:
+        video = message.video
+        return _SourceMedia(
+            media_type="video",
+            send_kind="video",
+            file_id=video.file_id,
+            file_unique_id=video.file_unique_id,
+            mime_type=video.mime_type,
+            file_size_bytes=video.file_size,
+            duration_seconds=_duration_seconds(video.duration),
+            width=video.width,
+            height=video.height,
+            file_name=video.file_name,
+            source_chat_id=source_chat_id,
+            source_message_id=source_message_id,
+            caption_text=caption,
+        )
+    if message.animation:
+        animation = message.animation
+        return _SourceMedia(
+            media_type="animation",
+            send_kind="document",
+            file_id=animation.file_id,
+            file_unique_id=animation.file_unique_id,
+            mime_type=animation.mime_type,
+            file_size_bytes=animation.file_size,
+            duration_seconds=_duration_seconds(animation.duration),
+            width=animation.width,
+            height=animation.height,
+            file_name=animation.file_name,
+            source_chat_id=source_chat_id,
+            source_message_id=source_message_id,
+            caption_text=caption,
+        )
+    if message.document:
+        document = message.document
+        return _SourceMedia(
+            media_type="document",
+            send_kind="document",
+            file_id=document.file_id,
+            file_unique_id=document.file_unique_id,
+            mime_type=document.mime_type,
+            file_size_bytes=document.file_size,
+            file_name=document.file_name,
+            source_chat_id=source_chat_id,
+            source_message_id=source_message_id,
+            caption_text=caption,
+        )
+    return None
+
+
+def _landed_item(message: Message, source: _SourceMedia, order: int) -> ProofItem:
+    """Describe one sent proof message with the metadata of its source."""
+    return ProofItem(
+        media_type=source.media_type,
+        archive_message_id=int(message.message_id),
+        item_order=order,
+        file_unique_id=source.file_unique_id,
+        mime_type=source.mime_type,
+        file_size_bytes=source.file_size_bytes,
+        media_group_id=getattr(message, "media_group_id", None),
+        duration_seconds=source.duration_seconds,
+        width=source.width,
+        height=source.height,
+        file_name=source.file_name,
+        source_chat_id=source.source_chat_id,
+        source_message_id=source.source_message_id,
+        caption_text=source.caption_text,
+    )
+
+
+async def upload_proof_items(
+    bot: Bot,
+    msgs: list[Message],
+    caption: str,
+    proof_chat: int,
+    proof_thread: int | None,
+) -> tuple[list[ProofItem], int]:
+    """Upload proof media and return the landed items plus the source count.
+
+    Photos and videos travel together in one media group (caption on the
+    first item, per the Telegram API); animations and documents cannot join
+    a media group, so each is sent individually after the gallery. The
+    source count includes a file whose send failed, so the archive can mark
+    a partial batch instead of claiming that a lost file landed. A failed
+    gallery chunk is logged and skipped; a failed document is logged and
+    skipped so one bad file cannot void a good gallery.
+    """
+    sources = [source for msg in msgs if (source := _source_media(msg)) is not None]
+    if not sources:
+        return [], 0
+    gallery = [source for source in sources if source.send_kind in ("photo", "video")]
+    documents = [source for source in sources if source.send_kind == "document"]
+    landed: list[ProofItem] = []
+
+    async def _send_single(source: _SourceMedia, cap: str | None) -> Message:
+        if source.send_kind == "photo":
+            return await bot.send_photo(
+                proof_chat,
+                source.file_id,
+                caption=cap,
+                parse_mode="MarkdownV2",
+                message_thread_id=proof_thread,
+            )
+        if source.send_kind == "video":
+            return await bot.send_video(
+                proof_chat,
+                source.file_id,
+                caption=cap,
+                parse_mode="MarkdownV2",
+                message_thread_id=proof_thread,
+            )
+        return await bot.send_document(
+            proof_chat,
+            source.file_id,
+            caption=cap,
+            parse_mode="MarkdownV2",
+            message_thread_id=proof_thread,
+        )
+
+    try:
+        if gallery:
+            if len(gallery) == 1:
+                sent = await _send_single(gallery[0], caption)
+                landed.append(_landed_item(sent, gallery[0], len(landed)))
+                log.info(
+                    "Proof media uploaded: message_id=%s",
+                    landed[0].archive_message_id,
+                )
+                if not documents:
+                    return landed, len(sources)
+            else:
+                # * Telegram caps a media group at 10 items; larger albums
+                # * must be split or the whole gallery send is rejected.
+                for chunk_start in range(0, len(gallery), 10):
+                    chunk = gallery[chunk_start : chunk_start + 10]
+                    media: list[InputMediaPhoto | InputMediaVideo] = [
+                        InputMediaPhoto(
+                            source.file_id,
+                            caption=caption
+                            if chunk_start == 0 and index == 0
+                            else None,
+                            parse_mode="MarkdownV2",
+                        )
+                        if source.send_kind == "photo"
+                        else InputMediaVideo(
+                            source.file_id,
+                            caption=caption
+                            if chunk_start == 0 and index == 0
+                            else None,
+                            parse_mode="MarkdownV2",
+                        )
+                        for index, source in enumerate(chunk)
+                    ]
+                    try:
+                        sent_group = await bot.send_media_group(
+                            proof_chat, media, message_thread_id=proof_thread
+                        )
+                    except Exception:
+                        log.exception("Proof gallery chunk upload failed")
+                        continue
+                    for sent, source in zip(sent_group, chunk, strict=False):
+                        landed.append(_landed_item(sent, source, len(landed)))
+                    if sent_group:
+                        log.info(
+                            "Proof gallery uploaded: %d items, message_id=%s",
+                            len(sent_group),
+                            landed[0].archive_message_id,
+                        )
+                if landed and not documents:
+                    return landed, len(sources)
+    except Exception:
+        # * A gallery failure must not discard document evidence: fall
+        # * through to the document loop below.
+        log.exception("Proof gallery upload failed; trying documents")
+    for index, source in enumerate(documents):
+        try:
+            sent = await _send_single(
+                source, caption if not landed and index == 0 else None
+            )
+        except Exception:
+            log.exception("Proof document upload failed; continuing with the rest")
+            continue
+        landed.append(_landed_item(sent, source, len(landed)))
+    if landed and documents:
+        log.info(
+            "Proof documents uploaded alongside message_id=%s",
+            landed[0].archive_message_id,
+        )
+    return landed, len(sources)
+
+
 async def upload_proof(
     bot: Bot,
     msgs: list[Message],
@@ -131,139 +413,11 @@ async def upload_proof(
     proof_chat: int,
     proof_thread: int | None,
 ) -> int | None:
-    """Upload proof media to the proof channel. Returns proof_message_id or None.
-
-    Photos and videos travel together in one media group (caption on the
-    first item, per the Telegram API); animations and documents cannot join
-    a media group, so each is sent individually after the gallery. The
-    returned ID is the first message that landed, or None when nothing did.
-    Gallery failures stay all-or-nothing like before; a failed document
-    is logged and skipped so one bad file cannot void a good gallery.
-    """
-    # * Fast fail without Telegram I/O: empty input or a batch with no
-    # * photo/video/animation/document item cannot produce an upload.
-    # * Callers already guard on truthy proof_msgs, so this only bites on
-    # * programming errors.
-    if not msgs:
-        return None
-    # * Classify in arrival order; the caption always lands on the first
-    # * message actually sent (gallery first, documents after), matching
-    # * the old first-usable-item rule for every previously supported case.
-    kinds: list[tuple[str, str]] = []
-    for m in msgs:
-        if m.photo:
-            kinds.append(("photo", m.photo[-1].file_id))
-        elif m.video:
-            kinds.append(("video", m.video.file_id))
-        elif m.animation:
-            kinds.append(("document", m.animation.file_id))
-        elif m.document:
-            kinds.append(("document", m.document.file_id))
-    if not kinds:
-        return None
-    gallery = [(k, f) for k, f in kinds if k in ("photo", "video")]
-    docs = [f for k, f in kinds if k == "document"]
-
-    async def _send_single(kind: str, file_id: str, cap: str | None) -> int:
-        if kind == "photo":
-            sent = await bot.send_photo(
-                proof_chat,
-                file_id,
-                caption=cap,
-                parse_mode="MarkdownV2",
-                message_thread_id=proof_thread,
-            )
-        elif kind == "video":
-            sent = await bot.send_video(
-                proof_chat,
-                file_id,
-                caption=cap,
-                parse_mode="MarkdownV2",
-                message_thread_id=proof_thread,
-            )
-        else:
-            sent = await bot.send_document(
-                proof_chat,
-                file_id,
-                caption=cap,
-                parse_mode="MarkdownV2",
-                message_thread_id=proof_thread,
-            )
-        return sent.message_id
-
-    first_id: int | None = None
-    try:
-        if gallery:
-            if len(gallery) == 1:
-                # * Unchanged single-photo/video send: a media group
-                # * requires 2-10 items, so one item keeps its direct send.
-                # * The gallery always goes first, so it owns the caption.
-                kind, file_id = gallery[0]
-                first_id = await _send_single(kind, file_id, caption)
-                log.info("Proof photo uploaded: message_id=%s", first_id)
-                if not docs:
-                    return first_id
-            else:
-                # * Telegram caps a media group at 10 items; larger albums
-                # * must be split or the whole gallery send is rejected,
-                # * which previously produced a proof-less ban.
-                for chunk_start in range(0, len(gallery), 10):
-                    chunk = gallery[chunk_start : chunk_start + 10]
-                    media: list[InputMediaPhoto | InputMediaVideo] = [
-                        InputMediaPhoto(
-                            file_id,
-                            caption=caption if chunk_start == 0 and idx == 0 else None,
-                            parse_mode="MarkdownV2",
-                        )
-                        if kind == "photo"
-                        else InputMediaVideo(
-                            file_id,
-                            caption=caption if chunk_start == 0 and idx == 0 else None,
-                            parse_mode="MarkdownV2",
-                        )
-                        for idx, (kind, file_id) in enumerate(chunk)
-                    ]
-                    try:
-                        sent = await bot.send_media_group(
-                            proof_chat, media, message_thread_id=proof_thread
-                        )
-                    except Exception:
-                        # * A failed later chunk must not lose earlier
-                        # * landed proof; log and keep first_id as set.
-                        log.exception("Proof gallery chunk upload failed")
-                        if first_id is None and not docs:
-                            return None
-                        continue
-                    if sent:
-                        if first_id is None:
-                            first_id = sent[0].message_id
-                        log.info(
-                            "Proof gallery uploaded: %d items, message_id=%s",
-                            len(sent),
-                            first_id,
-                        )
-                    elif not docs and first_id is None:
-                        return None
-                if first_id is not None and not docs:
-                    return first_id
-    except Exception:
-        # * A gallery failure must not discard document evidence: fall
-        # * through to the docs loop below (first_id stays None, so the
-        # * first document carries the caption exactly as it would have).
-        log.exception("Proof gallery upload failed; trying documents")
-    for idx, file_id in enumerate(docs):
-        try:
-            cap = caption if first_id is None and idx == 0 else None
-            one_id = await _send_single("document", file_id, cap)
-            if first_id is None:
-                first_id = one_id
-        except Exception:
-            log.exception("Proof document upload failed; continuing with the rest")
-    if first_id is None:
-        return None
-    if docs:
-        log.info("Proof documents uploaded alongside message_id=%s", first_id)
-    return first_id
+    """Upload proof media and return the first message that landed, or None."""
+    landed, _expected = await upload_proof_items(
+        bot, msgs, caption, proof_chat, proof_thread
+    )
+    return landed[0].archive_message_id if landed else None
 
 
 # ─────────────────────── Proof upload owner ──────────────────────── #
@@ -271,20 +425,27 @@ async def upload_proof(
 
 @dataclass(frozen=True)
 class ProofUpload:
-    """One uploaded proof: its message id and its deep link.
+    """One uploaded proof: the landed items, the first id, and its link.
 
-    ``message_id`` is the id of the first proof message that landed, and
-    ``link`` is the deep link to it. Both are None when the upload
-    produced nothing.
+    ``items`` carries every message that actually reached the destination,
+    in send order. ``expected_item_count`` is the number of source media the
+    uploader tried to send, so a caller can archive a partial gallery
+    honestly instead of treating the first message as the whole proof.
     """
 
     message_id: int | None = None
     link: str | None = None
+    items: tuple[ProofItem, ...] = ()
+    expected_item_count: int = 0
 
     @property
     def landed(self) -> bool:
         """True when at least one proof message reached the channel."""
         return self.message_id is not None
+
+    def documents(self) -> list[EvidenceItemDoc]:
+        """Return the archived item rows for this upload."""
+        return [item.to_document() for item in self.items]
 
 
 async def upload_proof_media(
@@ -308,15 +469,20 @@ async def upload_proof_media(
         return ProofUpload()
     proof_chat, proof_thread = cfg.proofs
     try:
-        message_id = await upload_proof(bot, msgs, caption, proof_chat, proof_thread)
+        items, expected = await upload_proof_items(
+            bot, msgs, caption, proof_chat, proof_thread
+        )
     except Exception:
         log.exception("Proof upload failed")
         return ProofUpload()
-    if message_id is None:
-        return ProofUpload()
+    if not items:
+        return ProofUpload(expected_item_count=expected)
+    first = items[0]
     return ProofUpload(
-        message_id=message_id,
-        link=message_link(proof_chat, message_id, proof_thread),
+        message_id=first.archive_message_id,
+        link=message_link(proof_chat, first.archive_message_id, proof_thread),
+        items=tuple(items),
+        expected_item_count=expected,
     )
 
 

@@ -12,7 +12,7 @@ body = "`/tcban` (alias: `/tcb`)"
 body = """
 Issues a *federation-wide ban* on the target, applied across all connected groups automatically. A reason is required - provide it directly after the target.
 
-After the command, the bot walks you through the proof step: send photos, videos, GIFs, or files as evidence in one album or one by one, then tap Done. Proof is required and is logged with the ban record to the federation logs channel.
+After the command, the bot walks you through the proof step: send photos, videos, GIFs, or files as evidence in one album or one by one, then tap Done. Proof is required and is logged with the ban record to the federation logs channel. Every uploaded item is archived with its real media type; if any item fails to land, the ban is not filed and you can resend the proof.
 
 If the user already has an active ban, the bot first asks for confirmation (with View Log and View Proof links) instead of updating silently; only Continue leads to proof collection, and the existing record is then updated with the new reason and proof rather than creating a duplicate.
 If the target holds a federation role (Tester / Developer / Admin), that role is demoted and they are notified by DM before the ban is enforced."""
@@ -45,7 +45,7 @@ empty = "Send a photo, video, GIF, or file first, then tap Done."
 body = "{user} could not be banned: the federation ban record could not be written to the database, so no groups were touched. Check the logs and retry with /tcban once the database recovers."
 
 [proof_fail]
-body = "{user} could not be banned: the proof media could not be uploaded, so no groups were touched. Resend the proof and retry with /tcban."
+body = "{user} could not be banned: the proof media could not be uploaded completely, so no groups were touched. Resend the proof and retry with /tcban."
 
 [applied]
 empty = "No connected groups configured."

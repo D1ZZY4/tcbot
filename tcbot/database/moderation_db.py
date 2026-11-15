@@ -24,13 +24,35 @@ from tcbot.database.users_cache import ensure_users
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import datetime
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from tcbot.database.documents import EvidenceItemDoc
+
 # * The statuses of a case that still holds an investigation. A case in
 # * one of them can carry another decision about the same subject.
 OPEN_CASE_STATUSES: tuple[str, ...] = ("open", "collecting_evidence", "under_review")
+
+# * The evidence item columns an uploader may fill. Identity and ordering
+# * are owned by this module so an item cannot name another batch.
+_EVIDENCE_ITEM_FIELDS: frozenset[str] = frozenset(
+    {
+        "media_type",
+        "file_unique_id",
+        "mime_type",
+        "file_size_bytes",
+        "duration_seconds",
+        "width",
+        "height",
+        "file_name",
+        "source_chat_id",
+        "source_message_id",
+        "caption_text",
+        "media_group_id",
+    }
+)
 
 
 def remaining_seconds(deadline: datetime | None, now: datetime) -> int | None:
@@ -123,15 +145,33 @@ async def archive_proof(
     uploader_user_id: int,
     proof_message_id: int,
     destination_chat_id: int,
+    *,
+    items: Sequence[EvidenceItemDoc] | None = None,
+    expected_item_count: int | None = None,
+    destination_thread_id: int | None = None,
+    is_required: bool = True,
 ) -> int | None:
-    """Archive one proof message and return the batch id.
+    """Archive the proof messages that actually landed and return the batch id.
 
-    The batch walks the lifecycle of the table: it is queued when it is
-    written, the worker claims it, the archived item lands, and the batch
-    closes as completed once its items are in place.
+    One upload owns its landed items. A gallery that lost one file is a
+    ``partial`` batch, not a ``completed`` photo: the schema trigger checks
+    the item count against the expected count, so the caller has to say how
+    many source items it tried to send. A caller that only has the first
+    message id keeps the legacy single-photo shape.
     """
-    if not proof_message_id or not destination_chat_id:
+    if not destination_chat_id:
         return None
+    landed = [
+        item for item in (items or []) if int(item.get("archive_message_id") or 0) > 0
+    ]
+    expected = max(len(landed), int(expected_item_count or 0))
+    if not landed:
+        if not proof_message_id:
+            return None
+        landed = [{"archive_message_id": proof_message_id, "media_type": "photo"}]
+        expected = 1
+    if expected < 1:
+        expected = len(landed)
 
     upload_id = (
         (
@@ -141,8 +181,9 @@ async def archive_proof(
                     case_id=case_id,
                     uploaded_by_user_id=uploader_user_id,
                     destination_chat_id=destination_chat_id,
-                    expected_item_count=1,
-                    is_required=True,
+                    destination_thread_id=destination_thread_id,
+                    expected_item_count=expected,
+                    is_required=is_required,
                     status="queued",
                 )
                 .returning(evidence_uploads.c.id)
@@ -160,19 +201,36 @@ async def archive_proof(
         .where(evidence_uploads.c.id == batch_id)
         .values(status="uploading")
     )
-    await sess.execute(
-        pg_insert(moderation_evidence_items).values(
+    item_values: list[dict[str, object]] = []
+    for order, item in enumerate(landed):
+        # * Every row carries every optional column. A multi-row insert
+        # * takes its column list from the first row, so a metadata field
+        # * present only on a later item would be dropped silently.
+        values: dict[str, object] = {}
+        for field_name in _EVIDENCE_ITEM_FIELDS:
+            values[field_name] = None
+        values.update(
+            {key: value for key, value in item.items() if key in _EVIDENCE_ITEM_FIELDS}
+        )
+        values.update(
             upload_id=batch_id,
             destination_chat_id=destination_chat_id,
-            archive_message_id=proof_message_id,
-            media_type="photo",
-            item_order=0,
+            archive_message_id=int(item.get("archive_message_id") or 0),
+            item_order=order,
         )
-    )
+        values["media_type"] = item.get("media_type") or "photo"
+        item_values.append(values)
+    # * One statement for the whole batch: a gallery can carry ten items,
+    # * and one insert per item would add ten round trips to the ban write.
+    await sess.execute(pg_insert(moderation_evidence_items).values(item_values))
+    status = "completed" if len(landed) == expected else "partial"
     await sess.execute(
         evidence_uploads.update()
         .where(evidence_uploads.c.id == batch_id)
-        .values(status="completed", primary_message_id=proof_message_id)
+        .values(
+            status=status,
+            primary_message_id=int(landed[0].get("archive_message_id") or 0),
+        )
     )
     return batch_id
 
