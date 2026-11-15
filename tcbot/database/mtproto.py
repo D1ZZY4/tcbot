@@ -11,13 +11,20 @@ import inspect
 import os
 import secrets
 import socket
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import msgspec
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
 from tcbot import cfg
+from tcbot.database.base import mtproto_state
+from tcbot.database.engine import fetch_one, run
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.dispatch import gather_bounded
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import monotonic
+from tcbot.utils.time_and_date import monotonic, utc_now
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
@@ -469,17 +476,80 @@ async def is_bot_user(target_id: int) -> bool | None:
 # ──────────────────────── Member harvest ────────────────────────── #
 
 
-async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
-    """Cache every member of *chat_id* the session can see; return harvested count.
+@dataclass(frozen=True)
+class HarvestResult:
+    """Outcome of one resumable member-harvest slice."""
 
-    One-shot backfill for silent members no Bot API call ever observed: each
-    seen identity lands in the identity table, so later bans and checks resolve by
-    name. Stops early on FloodWait or when the timeslice budget runs out
-    (returns the count so far); peer hashes persist in shared storage as a
-    side effect for future direct resolves.
+    harvested: int
+    scanned: int
+    complete: bool
+    next_offset: int
+
+
+def _harvest_state_id(chat_id: int) -> str:
+    """Return the durable state key of one group's harvest cursor."""
+    return f"{cfg.mtproto_session}:harvest:{chat_id}"
+
+
+async def _load_harvest_offset(chat_id: int) -> int:
+    """Return the member position where the last slice stopped."""
+    try:
+        row = await fetch_one(
+            select(mtproto_state.c.value).where(
+                mtproto_state.c.id == _harvest_state_id(chat_id)
+            )
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("Member harvest state read failed for %d: %s", chat_id, exc)
+        return 0
+    raw = row.get("value") if row else None
+    if not isinstance(raw, bytes | bytearray):
+        return 0
+    try:
+        payload = msgspec.json.decode(bytes(raw))
+    except Exception:
+        return 0
+    if not isinstance(payload, dict) or payload.get("complete") is True:
+        return 0
+    offset = payload.get("offset")
+    return int(offset) if isinstance(offset, int) and offset > 0 else 0
+
+
+async def _save_harvest_state(chat_id: int, offset: int, *, complete: bool) -> None:
+    """Persist the harvest cursor; a failed write only loses resume progress."""
+    payload = msgspec.json.encode({"offset": max(0, offset), "complete": complete})
+    try:
+        await run(
+            pg_insert(mtproto_state)
+            .values(
+                id=_harvest_state_id(chat_id),
+                value=payload,
+                updated_on=int(utc_now().timestamp()),
+            )
+            .on_conflict_do_update(
+                index_elements=["id"],
+                set_={"value": payload, "updated_on": int(utc_now().timestamp())},
+            )
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("Member harvest state write failed for %d: %s", chat_id, exc)
+
+
+async def harvest_group_members_result(
+    chat_id: int, *, limit: int = 1000
+) -> HarvestResult:
+    """Cache a resumable slice of *chat_id*'s members.
+
+    The scan resumes at the offset the previous slice stored, so a group
+    larger than one time budget is covered by successive runs instead of
+    always restarting at the first member. A slice that reaches the end of
+    the member list resets the cursor; a slice that stops on the budget or
+    a flood wait keeps it for the next run.
     """
-    # * The member scan itself stays sequential (Telegram order); the DB
-    # * writes batch instead of awaiting one at a time.
     from tcbot.database import users_cache  # noqa: PLC0415 (avoid import cycle)
 
     c = _client
@@ -487,15 +557,16 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
         raise RuntimeError("MTProto session invalidated; refusing to harvest.")
     if c is None or not c.is_connected:
         raise RuntimeError("MTProto client is not connected.")
-    # * A 1000-member scan is up to 1000 sequential DB writes on the event
-    # * loop; cap wall time so one backfill cannot stall moderation traffic.
+    offset = await _load_harvest_offset(chat_id)
+    requested_limit = offset + limit
+    if offset:
+        log.info("Member harvest for %d resumes at position %d.", chat_id, offset)
     deadline = monotonic() + _HARVEST_BUDGET_S
-    # * Valid identities batch into bounded flushes (mirrors the connected
-    # * admin harvest) so writes overlap instead of awaiting each one. The
-    # * batch stays small: at most _HARVEST_BATCH pending writes at a time.
     _HARVEST_BATCH: int = 50
     pending: list = []
     count = 0
+    position = 0
+    scanned = 0
 
     async def _flush() -> None:
         nonlocal count
@@ -505,9 +576,6 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
         try:
             results = await gather_bounded(batch)
         finally:
-            # * Cancellation while the batch is awaited leaves the coroutines
-            # * that never started unawaited. Close them so no write object
-            # * is leaked with a "never awaited" warning.
             for coro in batch:
                 if inspect.getcoroutinestate(coro) == inspect.CORO_CREATED:
                     coro.close()
@@ -536,19 +604,28 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
         return harvested
 
     try:
-        async for member in c.get_chat_members(chat_id, limit=limit):
+        async for member in c.get_chat_members(chat_id, limit=requested_limit):
+            position += 1
+            if position <= offset:
+                continue
             if monotonic() >= deadline:
                 await _flush()
+                await _save_harvest_state(chat_id, position - 1, complete=False)
                 log.warning(
-                    "Member harvest stopped on timeslice in %d (%ds budget).",
+                    "Member harvest stopped on timeslice in %d at position %d "
+                    "(%ds budget); the next run resumes there.",
                     chat_id,
+                    position - 1,
                     int(_HARVEST_BUDGET_S),
                 )
-                return count
+                return HarvestResult(
+                    count, scanned, complete=False, next_offset=position - 1
+                )
             user = getattr(member, "user", None)
             fname = getattr(user, "first_name", None) if user is not None else None
             if user is None or getattr(user, "is_bot", False) or not fname:
                 continue
+            scanned += 1
             pending.append(
                 _harvest_member(
                     chat_id,
@@ -560,25 +637,36 @@ async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
             )
             if len(pending) >= _HARVEST_BATCH:
                 await _flush()
+                await _save_harvest_state(chat_id, position, complete=False)
         await _flush()
-        return count
+        # * A full requested slice may have more members behind it. Only a
+        # * short slice proves the end of the list.
+        if position < requested_limit:
+            await _save_harvest_state(chat_id, 0, complete=True)
+            return HarvestResult(count, scanned, complete=True, next_offset=0)
+        await _save_harvest_state(chat_id, position, complete=False)
+        return HarvestResult(count, scanned, complete=False, next_offset=position)
     except Exception as exc:
         if getattr(exc, "value", None) is not None:  # FloodWait-likes carry .value
             log.warning("Member harvest stopped early in %d: %s", chat_id, exc)
-            # * Flush what was collected before the flood so partial progress
-            # * survives; the count so far is returned either way.
             try:
                 await _flush()
             except asyncio.CancelledError:
                 raise
             except Exception as flush_exc:
                 log.debug("Member harvest partial flush failed: %s", flush_exc)
-            return count
+            await _save_harvest_state(chat_id, position, complete=False)
+            return HarvestResult(count, scanned, complete=False, next_offset=position)
+        await _save_harvest_state(chat_id, position, complete=False)
         await _park_on_auth_failure(exc)
         raise
     finally:
-        # * A cancelled scan leaves the coroutines that were collected since
-        # * the last flush unawaited; close them instead of leaking them.
         for coro in pending:
             if inspect.getcoroutinestate(coro) == inspect.CORO_CREATED:
                 coro.close()
+
+
+async def harvest_group_members(chat_id: int, *, limit: int = 1000) -> int:
+    """Cache one member-harvest slice and return the identities harvested."""
+    result = await harvest_group_members_result(chat_id, limit=limit)
+    return result.harvested

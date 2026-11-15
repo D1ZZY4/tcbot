@@ -338,6 +338,41 @@ def test_harvest_group_members_stops_early_on_flood(
     assert harvested == [1]
 
 
+def test_harvest_resumes_at_the_stored_offset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A slice after the stored cursor skips the members already covered."""
+    harvested: list[int] = []
+    saved: list[tuple[int, bool]] = []
+
+    async def _harvest(
+        uid: int, uname: str | None, fname: str, lname: str | None = None
+    ) -> bool:
+        harvested.append(uid)
+        return True
+
+    async def _load(chat_id: int) -> int:
+        return 1
+
+    async def _save(chat_id: int, offset: int, *, complete: bool) -> None:
+        saved.append((offset, complete))
+
+    members = [_FakeMember(i, f"M{i}") for i in range(1, 5)]
+    monkeypatch.setattr(mtproto, "_client", _HarvestClient(members))
+    monkeypatch.setattr("tcbot.database.users_cache.harvest_user_identity", _harvest)
+    monkeypatch.setattr(mtproto, "_load_harvest_offset", _load)
+    monkeypatch.setattr(mtproto, "_save_harvest_state", _save)
+
+    result = asyncio.run(mtproto.harvest_group_members_result(-1001, limit=2))
+
+    assert harvested == [2, 3]
+    assert result.harvested == 2
+    assert result.scanned == 2
+    assert result.complete is False
+    assert result.next_offset == 3
+    assert saved == [(3, False)]
+
+
 def _resolved_peer(*users: Any) -> Any:
     return SimpleNamespace(users=list(users))
 
