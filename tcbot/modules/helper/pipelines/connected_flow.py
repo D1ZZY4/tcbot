@@ -24,7 +24,12 @@ from tcbot import database as db
 from tcbot.modules.helper import identity, messages
 from tcbot.modules.helper.keyboards import connect_join_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import answer_alert, cb_error_edit, send_log
+from tcbot.modules.helper.messages import (
+    answer_ack,
+    answer_alert,
+    cb_error_edit,
+    send_log,
+)
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
@@ -400,28 +405,29 @@ class ConnectionDecisionMixin:
                 log.debug("Join decision primary-group answer failed: %s", exc)
             return
         locale = await locale_for_update(update)
-        member_res, ans_res = await asyncio.gather(
-            asyncio.wait_for(
+        try:
+            membership = await asyncio.wait_for(
                 ctx.bot.get_chat_member(chat.id, user.id),
                 timeout=TELEGRAM_LOOKUP_TIMEOUT,
-            ),
-            q.answer(),
-            return_exceptions=True,
-        )
-        throw_if_cancelled((member_res, ans_res))
-        # * The prompt is one shared message, so a refusal must not remove
-        # * its keyboard: any member can see it and would otherwise be able
-        # * to destroy the owner's only Connect button. An alert keeps the
-        # * prompt live for the owner.
-        if isinstance(member_res, BaseException):
-            log.debug("Join decision role check failed: %s", member_res)
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug("Join decision role check failed: %s", exc)
             await answer_alert(
                 q, t("connecting.state.role_check_failed", locale, plain=True)
             )
             return
-        if member_res.status != ChatMemberStatus.OWNER:
+        # * The prompt is one shared message, so a refusal must not remove
+        # * its keyboard: any member can see it and would otherwise be able
+        # * to destroy the owner's only Connect button. An alert keeps the
+        # * prompt live for the owner. The query is answered per branch:
+        # * Telegram accepts one answer, so an early ack would swallow the
+        # * refusal alert.
+        if membership.status != ChatMemberStatus.OWNER:
             await answer_alert(q, t("connecting.state.owner_only", locale, plain=True))
             return
+        await answer_ack(q)
         action = q.data
         if action == self.join_callback:
             try:

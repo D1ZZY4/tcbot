@@ -24,6 +24,9 @@ class _Query:
         self.answers: list[tuple[str | None, dict[str, Any]]] = []
 
     async def answer(self, text: str | None = None, **kwargs: Any) -> None:
+        # * One answer per query, like Telegram itself.
+        if self.answers:
+            raise RuntimeError("callback query answered twice")
         self.answers.append((text, kwargs))
 
 
@@ -100,3 +103,27 @@ def test_group_list_renders_for_a_manager(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert update.callback_query.answers
     assert update.callback_query.answers[0][1].get("show_alert") is not True
+
+
+def test_group_save_denial_alerts_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The denied save must show its alert; a second answer would swallow it."""
+
+    async def _denied(*args: Any, **kwargs: Any) -> bool:
+        _ = (args, kwargs)
+        return False
+
+    async def _locale(*args: Any, **kwargs: Any) -> str:
+        _ = (args, kwargs)
+        return "en-US"
+
+    monkeypatch.setattr(language, "can_manage_group", _denied)
+    monkeypatch.setattr(language, "effective_locale", _locale)
+
+    update = _update("lang:set:group:en-US")
+    update.effective_message = SimpleNamespace()
+    asyncio.run(language.on_lang_set(update, SimpleNamespace(bot=object())))
+
+    assert len(update.callback_query.answers) == 1
+    text, kwargs = update.callback_query.answers[0]
+    assert text is not None and "group owner or staff" in text
+    assert kwargs.get("show_alert") is True

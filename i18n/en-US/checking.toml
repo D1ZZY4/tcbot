@@ -119,7 +119,6 @@ unknown_date = "Unknown"
 
 [error]
 ban_inactive = "This ban is no longer active."
-ban_not_found = "Ban record not found."
 bot_sender = "Bots and anonymous senders don't hold federation records, so there is nothing to check."
 status_retry = "I couldn't verify your ban status right now. Please try again in a moment."
 

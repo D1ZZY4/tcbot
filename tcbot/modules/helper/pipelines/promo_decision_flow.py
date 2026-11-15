@@ -16,6 +16,7 @@ from tcbot import database as db
 from tcbot.modules.helper.guards import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
+    answer_ack,
     answer_alert,
     cb_error_edit,
     promote_approved_log,
@@ -60,24 +61,22 @@ async def execute_promo_decision(
         await q.answer()
         return
     # * request_id is known from q.data, so the record fetch fires
-    # * speculatively alongside the ownership check and q.answer(). The
-    # * locale resolves in the same batch: every message below renders in
-    # * it, and one resolution per handler keeps the catalog lookup off
-    # * the critical path.
-    locale, is_owner, req_result, answer_r = await asyncio.gather(
+    # * speculatively alongside the ownership check. The locale resolves in
+    # * the same batch: every message below renders in it, and one
+    # * resolution per handler keeps the catalog lookup off the critical
+    # * path. The query is answered per branch, never here: Telegram accepts
+    # * one answer, so an early ack would swallow every alert below.
+    locale, is_owner, req_result = await asyncio.gather(
         locale_for_update(update),
         db.users_roles.is_owner(admin.id, fresh=True),
         db.queues_db.get_request_by_id(request_id),
-        q.answer(),
         return_exceptions=True,
     )
-    throw_if_cancelled((locale, is_owner, req_result, answer_r))
+    throw_if_cancelled((locale, is_owner, req_result))
     if isinstance(locale, BaseException):
         # * Locale resolution never raises; the branch only narrows the type
         # * for the gather that reports every failure as an exception.
         locale = None
-    if isinstance(answer_r, BaseException):
-        log.debug("on_promo_decision answer failed: %s", answer_r)
     if isinstance(is_owner, BaseException):
         log.warning("on_promo_decision owner check failed: %s", is_owner)
         # * The card is shared (the Founder DM, or the log channel when the
@@ -91,6 +90,7 @@ async def execute_promo_decision(
         return
     if isinstance(req_result, BaseException):
         log.error("get_request_by_id failed for %s: %s", request_id, req_result)
+        await answer_ack(q)
         await safe_edit_cb(
             q,
             t("admins.error.request_not_found", locale, plain=True),
@@ -101,6 +101,7 @@ async def execute_promo_decision(
         )
         return
     if not req_result:
+        await answer_ack(q)
         await safe_edit_cb(
             q,
             t("admins.error.request_not_found", locale, plain=True),
@@ -115,6 +116,7 @@ async def execute_promo_decision(
     # * resolve() below is atomic, but refuse early so a stale card never
     # * shows a second success message.
     if req.get("status") != "pending":
+        await answer_ack(q)
         await cb_error_edit(
             q,
             t("admins.error.request_not_found", locale, plain=True),
@@ -154,6 +156,7 @@ async def execute_promo_decision(
             log_label="promo_approve ban-guard",
         )
         if ban_refusal is not None:
+            await answer_ack(q)
             await cb_error_edit(
                 q,
                 ban_refusal,
@@ -171,6 +174,7 @@ async def execute_promo_decision(
             db_resolve_r = await db.queues_db.resolve(request_id, "approved", admin.id)
         except Exception:
             log.exception("resolve(approved) failed for request %s", request_id)
+            await answer_ack(q)
             await cb_error_edit(
                 q,
                 t("admins.decision.approve_fail", locale, plain=True),
@@ -179,6 +183,7 @@ async def execute_promo_decision(
             )
             return
         if db_resolve_r is False:
+            await answer_ack(q)
             await cb_error_edit(
                 q,
                 t("admins.error.request_not_found", locale, plain=True),
@@ -194,6 +199,7 @@ async def execute_promo_decision(
                 target_id,
                 request_id,
             )
+            await answer_ack(q)
             await cb_error_edit(
                 q,
                 t("admins.decision.approve_fail", locale, plain=True),
@@ -201,6 +207,10 @@ async def execute_promo_decision(
                 parse_mode=None,
             )
             return
+        # * The decision is reached and the role is granted; ack now, before
+        # * the notification fan-out, so the spinner stops without a second
+        # * answer on any later branch.
+        await answer_ack(q)
         # * The assignment already revoked the role the target held
         # * before it, in the same transaction. A second revocation
         # * afterwards would also revoke the admin role it had just
@@ -271,6 +281,7 @@ async def execute_promo_decision(
             log.exception("resolve(rejected) failed for request %s", request_id)
             resolved = False
         if not resolved:
+            await answer_ack(q)
             await cb_error_edit(
                 q,
                 t("admins.decision.reject_fail", locale, plain=True),
@@ -278,6 +289,7 @@ async def execute_promo_decision(
                 parse_mode=None,
             )
             return
+        await answer_ack(q)
         log_text = promote_rejected_log(
             target_id,
             target_fname,

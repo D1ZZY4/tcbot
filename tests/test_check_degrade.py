@@ -11,6 +11,7 @@ import asyncio
 import pytest
 
 from tcbot import database as db
+from tcbot.modules import check
 from tcbot.modules.helper.pipelines import check_flow
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
@@ -39,6 +40,47 @@ def test_ban_detail_db_failure_renders_retry_card(
     text, _markup = asyncio.run(check_flow.Check.ban_detail(2, "abc", None))
     assert text == _expected_db_fail("abc")
     assert text != _expected_not_found("abc")
+
+
+class _Query:
+    """Callback-query double that accepts exactly one answer."""
+
+    data = "checkme_detail:abc"
+
+    def __init__(self) -> None:
+        self.answers: list[tuple[str | None, bool]] = []
+
+    async def answer(
+        self, text: str | None = None, *, show_alert: bool = False
+    ) -> None:
+        if self.answers:
+            raise RuntimeError("callback query answered twice")
+        self.answers.append((text, show_alert))
+
+
+def test_a_failed_ban_read_shows_one_retry_alert(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The retry alert must be the single answer, not a swallowed second one."""
+
+    async def _boom(ban_id: str) -> object:
+        raise RuntimeError("db blip")
+
+    monkeypatch.setattr(db.bans_db, "get_ban", _boom)
+    query = _Query()
+
+    result = asyncio.run(
+        check._load_ban_for_callback(
+            query,  # type: ignore[arg-type]
+            "abc",
+            "en-US",
+            log_label="probe",
+        )
+    )
+
+    assert result is None
+    assert len(query.answers) == 1
+    assert query.answers[0][1] is True
 
 
 def test_ban_detail_genuine_miss_same_render(monkeypatch: pytest.MonkeyPatch) -> None:

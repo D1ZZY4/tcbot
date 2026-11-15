@@ -48,6 +48,7 @@ from tcbot.modules.helper.messages.panels import (
 )
 from tcbot.modules.helper.messages.safe_edits import (
     ack_and_render,
+    answer_ack,
     answer_alert,
     answer_and_edit,
     callback_args,
@@ -66,6 +67,7 @@ __all__ = [
     "LogBuilder",
     "about_msg",
     "ack_and_render",
+    "answer_ack",
     "answer_alert",
     "answer_and_edit",
     "appeal_approved_edit",

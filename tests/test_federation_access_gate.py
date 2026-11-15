@@ -41,6 +41,9 @@ class _FakeCallback:
         self.edits: list[str] = []
 
     async def answer(self, text: str = "", *, show_alert: bool = False) -> None:
+        # * One answer per query, like Telegram itself.
+        if self.answers:
+            raise RuntimeError("callback query answered twice")
         self.answers.append((text, show_alert))
 
     async def edit_message_text(self, text: str, **kwargs: Any) -> None:

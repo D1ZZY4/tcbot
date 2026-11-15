@@ -16,7 +16,12 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.identity import can_manage_group
 from tcbot.modules.helper.locale import effective_locale
-from tcbot.modules.helper.messages import replies, safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import (
+    answer_ack,
+    replies,
+    safe_edit_cb,
+    safe_reply,
+)
 from tcbot.utils.i18n import (
     available_locales,
     display_name,
@@ -227,10 +232,11 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if scope != _chat_scope(chat.type):
         await q.answer()
         return
-    await q.answer()
     # * Alerts below render in the tapper's current locale, not the
     # * default: the tapped target may be unknown or denied, but the
-    # * reader's own setting is still resolvable.
+    # * reader's own setting is still resolvable. The query is answered per
+    # * branch: Telegram accepts one answer, so an ack here would make the
+    # * denial alerts impossible to show.
     tapper_locale = await effective_locale(chat.type, user.id, chat.id)
     if not is_known_locale(raw_locale):
         try:
@@ -256,6 +262,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("language is_connected failed for %d: %s", chat.id, exc)
             connected = False
         if not connected:
+            await answer_ack(q)
             if msg is not None:
                 await safe_reply(
                     msg,
@@ -267,6 +274,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             await db.groups_db.set_group_locale(chat.id, locale)
         except Exception:
             log.exception("set_group_locale failed for chat %d", chat.id)
+            await answer_ack(q)
             if msg is not None:
                 await safe_reply(
                     msg,
@@ -279,6 +287,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             await db.settings_db.set_user_locale(user.id, locale)
         except Exception:
             log.exception("set_user_locale failed for user %d", user.id)
+            await answer_ack(q)
             if msg is not None:
                 await safe_reply(
                     msg,
@@ -286,6 +295,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     log_label="language user-save-fail",
                 )
             return
+    await answer_ack(q)
     await safe_edit_cb(
         q,
         _confirmation_text(scope, locale),

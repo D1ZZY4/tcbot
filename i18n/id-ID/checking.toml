@@ -119,7 +119,6 @@ unknown_date = "Tidak diketahui"
 
 [error]
 ban_inactive = "Ban ini sudah tidak aktif."
-ban_not_found = "Catatan ban tidak ditemukan."
 bot_sender = "Bot dan pengirim anonim tidak punya catatan federasi, jadi tidak ada yang bisa dicek."
 status_retry = "Tidak bisa memverifikasi status ban kamu sekarang. Coba lagi sebentar."
 

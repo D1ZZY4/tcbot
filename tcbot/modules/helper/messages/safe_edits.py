@@ -185,6 +185,20 @@ async def answer_alert(q: CallbackQuery, text: str) -> None:
         log.debug("callback alert answer failed: %s", exc)
 
 
+async def answer_ack(q: CallbackQuery) -> None:
+    """Acknowledge a callback query without a message; never raises.
+
+    Telegram accepts exactly one answer per query: a second call is refused
+    as a stale query and its alert never renders. A handler that may still
+    refuse the tap therefore answers only on the branch it takes. This is
+    the plain acknowledgement for the branches that proceed.
+    """
+    try:
+        await q.answer()
+    except Exception as exc:
+        log.debug("callback ack failed: %s", exc)
+
+
 async def answer_and_edit(q: CallbackQuery, text: str, **kwargs: Any) -> None:
     """Answer a callback query and edit its message in parallel.
 

@@ -30,6 +30,10 @@ class _FakeQuery:
     async def answer(
         self, text: str = "", *, show_alert: bool = False, **kwargs: Any
     ) -> None:
+        # * Telegram accepts one answer per query; a second call is rejected
+        # * as a stale query and its alert never renders.
+        if self.answers:
+            raise RuntimeError("callback query answered twice")
         self.answers.append((text, show_alert))
 
     async def edit_message_text(self, text: str, **kwargs: Any) -> None:

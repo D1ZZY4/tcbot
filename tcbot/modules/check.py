@@ -18,6 +18,8 @@ from tcbot.modules.helper.ban_info import build_ban_detail, build_ban_summary
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ack_and_render,
+    answer_ack,
+    answer_alert,
     callback_args,
     callback_numbers,
     cb_error_edit,
@@ -82,25 +84,21 @@ async def _ban_id_from_query(q: CallbackQuery) -> str | None:
 async def _load_ban_for_callback(
     q: CallbackQuery, ban_id: str, locale: str | None, *, log_label: str
 ) -> BanDoc | None:
-    """Answer the query and fetch its ban record in parallel.
+    """Fetch the ban record of a callback, alerting on a failed read.
 
-    Returns the record, or ``None`` after answering with the retry alert
-    when the read failed (the live card stays untouched so the appeal
-    button remains actionable). Cancellation always propagates.
+    Returns the record, or ``None`` after a retry alert when the read failed
+    (the live card stays untouched so the appeal button remains actionable).
+    The caller answers the query before it edits on the success path: an
+    early ack here would make the retry alert impossible to show.
+    Cancellation always propagates.
     """
-    _, ban = await asyncio.gather(
-        q.answer(), db.bans_db.get_ban(ban_id), return_exceptions=True
-    )
-    throw_if_cancelled((_, ban))
-    if isinstance(ban, BaseException):
-        log.warning("%s ban lookup failed for %s: %s", log_label, ban_id, ban)
-        try:
-            await q.answer(
-                t("checking.error.status_retry", locale, plain=True),
-                show_alert=True,
-            )
-        except Exception as exc:
-            log.debug("%s retry answer failed: %s", log_label, exc)
+    try:
+        ban = await db.bans_db.get_ban(ban_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning("%s ban lookup failed for %s: %s", log_label, ban_id, exc)
+        await answer_alert(q, t("checking.error.status_retry", locale, plain=True))
         return None
     return ban
 
@@ -236,8 +234,10 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     # * Crafted taps on another user's card must not render it.
     if ban.get("target_user_id", 0) != q.from_user.id:
         log.debug("checkme_detail ownership mismatch ban=%s", ban_id)
+        await answer_ack(q)
         return
-    if not ban or not ban.get("is_active"):
+    if not ban.get("is_active"):
+        await answer_ack(q)
         await cb_error_edit(
             q,
             t("checking.error.ban_inactive", locale, plain=True),
@@ -249,6 +249,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     text, proof_link = await build_ban_detail(ban, locale=locale)
     # * The detail card is a normal navigation, not a refusal: it keeps the
     # * back keyboard and renders as MarkdownV2 like every other card.
+    await answer_ack(q)
     await safe_edit_cb(
         q,
         text,
@@ -278,14 +279,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         return
     if ban.get("target_user_id", 0) != q.from_user.id:
         log.debug("checkme_back ownership mismatch ban=%s", ban_id)
-        return
-    if not ban:
-        await cb_error_edit(
-            q,
-            t("checking.error.ban_not_found", locale, plain=True),
-            log_label="checkme_back error",
-            parse_mode=None,
-        )
+        await answer_ack(q)
         return
 
     uid = ban.get("target_user_id", 0)
@@ -302,6 +296,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     if isinstance(admin_fname, BaseException):
         admin_fname = admin_fallback
     text, proof_link = await build_ban_summary(ban, uid, fname, admin_fname, locale)
+    await answer_ack(q)
     await safe_edit_cb(
         q,
         text,
