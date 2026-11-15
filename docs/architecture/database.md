@@ -289,7 +289,7 @@ database error.
 | `erasure_db.py` | `telegram_user_erasures` | Queue one account erasure through the database function. |
 | `pg_cron.py` | `cron.job` (optional) | Register or remove the database-only maintenance jobs when pg_cron is enabled. |
 | `settings_db.py` | `user_settings` | Per-user locale and timezone preferences; the locale read uses the shared two-level cache. |
-| `cache/` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with five public singletons. |
+| `cache/` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with eight public singletons. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton with pool management and liveness tracking. |
 | `scheduler.py` | PostgreSQL (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `SQLAlchemyJobStore`. |
 | `mtproto.py` | Telegram MTProto | Bot-token client singleton: user-ID resolution and group member harvest. Claims a single-owner lease before connecting (90 s TTL, 30 s heartbeat); losers and parked sessions degrade to Bot-API-only. |
@@ -1039,10 +1039,12 @@ timezone, then the community default; and the global settings merged with
 the group settings. The merge is a shallow merge at the top level of the
 object, so a nested object needs an explicit rule at the application level.
 The view is a SQL convenience for operators and reporting; the render path
-is owned by `helper/locale.py`, which reads `chat_settings.locale` and
-`user_settings.locale` and falls back to `en-US`. `community_settings.default_locale`
-is not consulted by the Python resolver, so changing it does not change the
-language of bot messages.
+is owned by `helper/locale.py`. Both paths agree on the locale precedence:
+the user locale in a private chat or the group locale in a group, then
+`community_settings.default_locale`, then `en-US`. The community row is a
+singleton and is served from `community_locale_cache` (Redis prefix
+`clocale`), and the render path reads it only when the chat-specific
+preference is absent or unknown.
 
 **Error behavior:** every access uses `db_call()`.
 
@@ -1258,11 +1260,12 @@ promotion flow reads the same vocabulary the table stores.
   atomic: concurrent decisions on the same request resolve exactly once and
   late taps get `False`.
 
-## Per-user settings (`settings_db.py`, table `user_settings`)
+## Settings (`settings_db.py`, tables `user_settings`, `community_settings`)
 
-The table stores one preference row per user. Preference-only rows are kept
-out of `telegram_users` on purpose, so they never inflate cached-user counts
-or appear in user listings.
+`user_settings` stores one preference row per user. Preference-only rows are
+kept out of `telegram_users` on purpose, so they never inflate cached-user
+counts or appear in user listings. `community_settings` is the singleton row
+that carries the community default locale.
 
 ### Helpers
 
@@ -1276,6 +1279,11 @@ or appear in user listings.
   Upserts the locale of the user and keeps the row when `locale` is `None`,
   so the other preferences survive a reset. Invalidates the locale cache
   on write.
+- `get_community_locale() -> str | None`
+  Reads the singleton `community_settings.default_locale` for the last
+  locale tier before `en-US`. The value is cached in
+  `community_locale_cache` (Redis prefix `clocale`). There is no operator
+  command for this setting; a deployment may set the column directly.
 
 ## Caching (`cache/`, `redis_client.py`)
 
@@ -1339,14 +1347,15 @@ because `None` is a valid cached value (for example, a user with no role).
 | `user_mention_cache` | `TwoLevelCache[list[str \| None]]` | 300 s | 600 s | 4096 | `umention` | `user_id` | `users_cache` mention readers; invalidated by `upsert_user` |
 | `user_locale_cache` | `TwoLevelCache[str \| None]` | 300 s | 600 s | 4096 | `ulocale` | `user_id` | `settings_db.get_user_locale()`; invalidated by `set_user_locale` |
 | `group_locale_cache` | `TwoLevelCache[str \| None]` | 300 s | 600 s | 512 | `glocale` | `chat_id` | `groups_db.get_group_locale()`; invalidated by `set_group_locale` and a chat move |
+| `community_locale_cache` | `TwoLevelCache[str \| None]` | 300 s | 600 s | 4 | `clocale` | `__community__` | `settings_db.get_community_locale()`; read only when the chat-specific locale is absent or unknown |
 
 L1 mention-cache entries are `[first_name, username, last_name]` triples;
 readers use indexes 0 and 1, index 2 exists so change detection notices
 last-name-only updates. The all-`None` triple is the not-found sentinel.
 
-The two locale caches share the same shape and TTLs, so a language change in
+The three locale caches share the same shape and TTLs, so a language change in
 one process reaches every other process through the ordered invalidation and
-the per-key generation guard. Neither cache is a source of authorization.
+the per-key generation guard. None of them is a source of authorization.
 
 ### Redis client (`redis_client.py`)
 

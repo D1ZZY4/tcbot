@@ -301,6 +301,7 @@ def resolve_locale(
     chat_type: str = "private",
     user_locale: str | None = None,
     group_locale: str | None = None,
+    community_locale: str | None = None,
     explicit: str | None = None,
     catalog: dict[str, dict[str, str]] | None = None,
 ) -> str:
@@ -308,13 +309,15 @@ def resolve_locale(
 
     ``explicit`` always wins. Otherwise private chats use the user locale
     and group-like chats use the group locale, so a shared audience always
-    reads one language. Unknown or absent values fall through to
-    :data:`DEFAULT_LOCALE`; resolution never raises.
+    reads one language. The community default is the next tier, and
+    :data:`DEFAULT_LOCALE` is the last. Unknown or absent values fall
+    through to the next tier; resolution never raises.
     """
     data = catalog if catalog is not None else _ensure_loaded()
     for candidate in (
         explicit,
         user_locale if chat_type == "private" else group_locale,
+        community_locale,
     ):
         canonical = _canonical_locale(candidate, data)
         if canonical is not None:

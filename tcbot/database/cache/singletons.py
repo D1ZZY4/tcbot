@@ -95,3 +95,14 @@ group_locale_cache: TwoLevelCache[str | None] = TwoLevelCache(
     redis_prefix="glocale",
     maxsize=_CONNECTED_CACHE_MAXSIZE,
 )
+
+# Populated by settings_db.get_community_locale. The community default is
+# the last locale tier before the application default, so it is read only
+# when neither the user nor the group has a usable preference.
+community_locale_cache: TwoLevelCache[str | None] = TwoLevelCache(
+    memory_ttl=_USER_LOCALE_CACHE_TTL_S,
+    redis_ttl=_USER_LOCALE_REDIS_TTL_S,
+    redis_prefix="clocale",
+    maxsize=4,
+)
+_COMMUNITY_LOCALE_KEY: str = "__community__"

@@ -10,7 +10,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from tcbot import database as db
-from tcbot.utils.i18n import DEFAULT_LOCALE, resolve_locale
+from tcbot.utils.i18n import DEFAULT_LOCALE, is_known_locale, resolve_locale
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -19,49 +19,73 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
-async def _user_locale(user_id: int) -> str | None:
-    """Read the stored user locale, or None when it is unavailable."""
+async def _community_locale() -> str | None:
+    """Read the community default locale, or None when it is unavailable."""
     try:
-        locale = await db.settings_db.get_user_locale(user_id)
+        locale = await db.settings_db.get_community_locale()
     except asyncio.CancelledError:
         raise
     except Exception as exc:
-        log.debug("locale user read failed for %d: %s", user_id, exc)
+        log.debug("locale community read failed: %s", exc)
         return None
     return locale if isinstance(locale, str) else None
 
 
-async def _group_locale(chat_id: int, chat_type: str) -> str:
-    """Resolve the locale a group-like chat renders in."""
-    try:
-        locale = await db.groups_db.get_group_locale(chat_id)
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.debug("locale group read failed for %d: %s", chat_id, exc)
-        locale = None
+async def _resolve_preference(
+    chat_type: str,
+    *,
+    user_locale: str | None = None,
+    group_locale: str | None = None,
+) -> str:
+    """Resolve one stored preference, then the community default.
+
+    A stored preference that names a catalog locale wins. The community
+    tier is read only when the preference is absent or unknown, so the
+    ordinary path pays no extra cache read.
+    """
+    specific = user_locale if chat_type == "private" else group_locale
+    if is_known_locale(specific):
+        return resolve_locale(
+            chat_type=chat_type,
+            user_locale=user_locale,
+            group_locale=group_locale,
+        )
     return resolve_locale(
         chat_type=chat_type,
-        group_locale=locale if isinstance(locale, str) else None,
+        user_locale=user_locale,
+        group_locale=group_locale,
+        community_locale=await _community_locale(),
     )
 
 
 async def effective_locale(chat_type: str | None, user_id: int, chat_id: int) -> str:
     """Resolve the locale used to render a message in this chat.
 
-    Only the locale the chat type consumes is read: private chats need the
-    user preference, group-like chats need the group row. The other read
-    would always be discarded by :func:`resolve_locale`, so skipping it
-    halves locale DB reads. Resolution never raises; a failed read falls
-    back to the default locale. Cancellation propagates.
+    Only the preference the chat type consumes is read: private chats need
+    the user preference, group-like chats need the group row. The other
+    read would always be discarded by :func:`resolve_locale`, so skipping
+    it halves locale DB reads. A failed preference read falls back to the
+    default locale; a successful read that finds nothing consults the
+    community default. Resolution never raises. Cancellation propagates.
     """
     effective_type = chat_type or "private"
     if effective_type == "private":
-        return resolve_locale(
-            chat_type="private",
-            user_locale=await _user_locale(user_id),
-        )
-    return await _group_locale(chat_id, effective_type)
+        try:
+            user_locale = await db.settings_db.get_user_locale(user_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug("locale user read failed for %d: %s", user_id, exc)
+            return DEFAULT_LOCALE
+        return await _resolve_preference("private", user_locale=user_locale)
+    try:
+        group_locale = await db.groups_db.get_group_locale(chat_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("locale group read failed for %d: %s", chat_id, exc)
+        return DEFAULT_LOCALE
+    return await _resolve_preference(effective_type, group_locale=group_locale)
 
 
 async def locale_for_update(update: Update) -> str:
@@ -87,25 +111,34 @@ async def locale_for_user(user_id: int) -> str:
     """Resolve the personal locale for a direct message to one user.
 
     Used for PMs where the audience is a single user rather than a chat
-    (ban notices, appeal updates). Falls back to the default locale;
-    resolution never raises.
+    (ban notices, appeal updates). The community default is the next tier;
+    a failed read falls back to the default locale and never raises.
     """
-    return resolve_locale(
-        chat_type="private",
-        user_locale=await _user_locale(user_id),
-    )
+    try:
+        user_locale = await db.settings_db.get_user_locale(user_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("locale user read failed for %d: %s", user_id, exc)
+        return DEFAULT_LOCALE
+    return await _resolve_preference("private", user_locale=user_locale)
 
 
 async def locale_for_chat(chat: object) -> str:
     """Resolve the render locale for a group chat object.
 
     Used where no Update is available (join/leave events carry chat
-    directly). Reads only the group row; falls back to the default
-    locale. Resolution never raises.
+    directly). Reads only the group row and then the community default;
+    falls back to the default locale. Resolution never raises.
     """
     chat_id = getattr(chat, "id", 0)
     chat_type = getattr(chat, "type", None)
-    return await _group_locale(
-        chat_id,
-        chat_type if isinstance(chat_type, str) else "group",
-    )
+    effective_type = chat_type if isinstance(chat_type, str) else "group"
+    try:
+        group_locale = await db.groups_db.get_group_locale(chat_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("locale group read failed for %d: %s", chat_id, exc)
+        return DEFAULT_LOCALE
+    return await _resolve_preference(effective_type, group_locale=group_locale)

@@ -77,6 +77,7 @@ def _cache_key_namespace() -> None:
         singletons.user_mention_cache,
         singletons.user_locale_cache,
         singletons.group_locale_cache,
+        singletons.community_locale_cache,
     ):
         cache._redis_prefix = f"{cache._redis_prefix}{suffix}"
 

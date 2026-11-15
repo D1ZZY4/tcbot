@@ -48,17 +48,20 @@ implementation.
 
 `resolve_locale()` in `tcbot/utils/i18n.py` owns precedence: explicit
 locale first, then the user locale in private chats or the group locale
-in group-like chats, then `en-US`. Unknown or absent values fall through
-to `en-US`; resolution never raises.
+in group-like chats, then the community default
+(`community_settings.default_locale`), then `en-US`. Unknown or absent
+values fall through to the next tier; resolution never raises.
 
 Handlers resolve once per update via `helper.locale.locale_for_update`
 (PM reads the sender, groups read the group row); direct messages use
-`locale_for_user`, updateless event paths use `locale_for_chat`. Both the
-user locale and the group locale read through a shared two-level cache with
-the generation guard, so a language change in one process invalidates the
-value in every other process; the L1 TTL is 300 s and the Redis TTL is
-600 s for both. Flows carry the moderator locale in conversation state and
-resolve the target locale fresh for user DMs.
+`locale_for_user`, updateless event paths use `locale_for_chat`. The user
+locale, the group locale, and the community default read through shared
+two-level caches with the generation guard, so a language change in one
+process invalidates the value in every other process; the L1 TTL is 300 s
+and the Redis TTL is 600 s. The community default is read only when the
+chat-specific preference is absent or unknown. Flows carry the moderator
+locale in conversation state and resolve the target locale fresh for user
+DMs.
 
 ## Coverage
 

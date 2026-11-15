@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Per-user settings table helpers (locale preferences)."""
+"""Per-user and community settings helpers (locale preferences)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,12 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tcbot.database.base import telegram_users, user_settings
-from tcbot.database.cache.singletons import user_locale_cache
+from tcbot.database.base import community_settings, telegram_users, user_settings
+from tcbot.database.cache.singletons import (
+    _COMMUNITY_LOCALE_KEY,
+    community_locale_cache,
+    user_locale_cache,
+)
 from tcbot.database.engine import db_call, fetch_one, run_transaction
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
@@ -53,6 +57,29 @@ async def get_user_locale(user_id: int) -> str | None:
         return locale if isinstance(locale, str) and locale else None
 
     return await user_locale_cache.get_or_fetch(user_id, _fetch)
+
+
+async def get_community_locale() -> str | None:
+    """Return the community default locale, or None when unset.
+
+    The community row is a singleton, so the cache holds one key. This is
+    the last locale tier before the application default: the render path
+    reads it only when neither the user nor the group has a usable
+    preference.
+    """
+
+    async def _fetch() -> str | None:
+        row = await db_call(
+            lambda: fetch_one(
+                select(community_settings.c.default_locale).where(
+                    community_settings.c.singleton_key == "global"
+                )
+            )
+        )
+        locale = row.get("default_locale") if row is not None else None
+        return locale if isinstance(locale, str) and locale else None
+
+    return await community_locale_cache.get_or_fetch(_COMMUNITY_LOCALE_KEY, _fetch)
 
 
 async def set_user_locale(user_id: int, locale: str | None) -> None:

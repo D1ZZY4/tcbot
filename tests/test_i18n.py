@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 from tcbot import cfg
 from tcbot.database import engine as engine_module
 from tcbot.database import groups_db, settings_db, users_roles
-from tcbot.database.base import user_settings
+from tcbot.database.base import community_settings, user_settings
 from tcbot.database.cache import singletons
 from tcbot.modules import (
     admins,
@@ -398,6 +398,34 @@ def test_resolve_unknown_falls_back() -> None:
     )
 
 
+def test_resolve_uses_the_community_default_before_the_application_one() -> None:
+    assert resolve_locale(chat_type="private", community_locale="id-ID") == "id-ID"
+    assert (
+        resolve_locale(
+            chat_type="group",
+            group_locale=None,
+            community_locale="id-ID",
+        )
+        == "id-ID"
+    )
+    assert (
+        resolve_locale(
+            chat_type="private",
+            user_locale="en-US",
+            community_locale="id-ID",
+        )
+        == "en-US"
+    )
+    assert (
+        resolve_locale(
+            chat_type="private",
+            user_locale=None,
+            community_locale="xx-YY",
+        )
+        == DEFAULT_LOCALE
+    )
+
+
 def test_legacy_id_alias_resolves_to_indonesian() -> None:
     assert resolve_locale(chat_type="private", user_locale="id") == "id-ID"
     assert t("common.refuse.owner_only", "id", plain=True) == t(
@@ -415,10 +443,12 @@ async def locale_db(postgres_db: str) -> AsyncIterator[str]:
     await seed_users(1, 2)
     singletons.user_locale_cache.clear()
     singletons.group_locale_cache.clear()
+    singletons.community_locale_cache.clear()
     yield postgres_db
     await reset_community()
     singletons.user_locale_cache.clear()
     singletons.group_locale_cache.clear()
+    singletons.community_locale_cache.clear()
 
 
 def _count_reads(monkeypatch: pytest.MonkeyPatch, module: Any) -> list[int]:
@@ -455,6 +485,17 @@ async def test_user_locales_isolated(locale_db: str) -> None:
     await settings_db.set_user_locale(1, None)
     assert await settings_db.get_user_locale(1) is None
     assert await settings_db.get_user_locale(2) == "en-US"
+
+
+async def test_community_locale_roundtrip(locale_db: str) -> None:
+    assert await settings_db.get_community_locale() is None
+    await engine_module.run(
+        community_settings.update()
+        .where(community_settings.c.singleton_key == "global")
+        .values(default_locale="id-ID")
+    )
+    singletons.community_locale_cache.invalidate(singletons._COMMUNITY_LOCALE_KEY)
+    assert await settings_db.get_community_locale() == "id-ID"
 
 
 async def test_group_locale_roundtrip(locale_db: str) -> None:
@@ -690,8 +731,12 @@ def _stub_locales(
     async def fake_group_locale(_chat_id: int) -> str | None:
         return group_locale
 
+    async def fake_community_locale() -> str | None:
+        return None
+
     monkeypatch.setattr(settings_db, "get_user_locale", fake_user_locale)
     monkeypatch.setattr(groups_db, "get_group_locale", fake_group_locale)
+    monkeypatch.setattr(settings_db, "get_community_locale", fake_community_locale)
 
 
 def test_locale_for_update_pm_uses_user(monkeypatch: pytest.MonkeyPatch) -> None:
