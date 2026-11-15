@@ -461,6 +461,10 @@ async def _run_webhook_mode(app: Application) -> None:
         loop.add_signal_handler(signal.SIGTERM, shutdown_event.set)
         loop.add_signal_handler(signal.SIGINT, shutdown_event.set)
     async with app:
+        # * Only this process may delete the webhook it registered. A failed
+        # * boot that never reached set_webhook must not unregister a healthy
+        # * instance sharing the same token.
+        webhook_set = False
         try:
             # * The whole lifecycle sits in one try/finally. PTB's
             # * shutdown() does not run post_shutdown, so a failure after
@@ -469,6 +473,10 @@ async def _run_webhook_mode(app: Application) -> None:
             # * client, and the scheduler.
             await _post_init(app)
             await app.start()
+            # * Wire the receiver before Telegram starts posting: the route
+            # * refuses every update until it knows the secret, and a burst
+            # * of 403s would only make Telegram retry the same updates.
+            register_webhook(app.update_queue, loop, secret, app.bot)
             log.info("Registering webhook at %s ...", full_url)
             await app.bot.set_webhook(
                 url=full_url,
@@ -476,6 +484,7 @@ async def _run_webhook_mode(app: Application) -> None:
                 allowed_updates=list(Update.ALL_TYPES),
                 drop_pending_updates=True,
             )
+            webhook_set = True
             info = await app.bot.get_webhook_info()
             if info.url != full_url:
                 raise RuntimeError(
@@ -486,7 +495,6 @@ async def _run_webhook_mode(app: Application) -> None:
                 info.pending_update_count,
                 info.max_connections,
             )
-            register_webhook(app.update_queue, loop, secret, app.bot)
             log.info("Bot running in webhook mode. Waiting for updates...")
             await shutdown_event.wait()
         except asyncio.CancelledError:
@@ -494,10 +502,13 @@ async def _run_webhook_mode(app: Application) -> None:
             raise
         finally:
             log.info("Webhook mode shutting down...")
-            try:
-                await app.bot.delete_webhook(drop_pending_updates=False)
-            except Exception as exc:
-                log.debug("delete_webhook failed during shutdown (non-fatal): %s", exc)
+            if webhook_set:
+                try:
+                    await app.bot.delete_webhook(drop_pending_updates=False)
+                except Exception as exc:
+                    log.debug(
+                        "delete_webhook failed during shutdown (non-fatal): %s", exc
+                    )
             # * stop() refuses an application that never started, which is
             # * exactly the failed-start path this finally exists for.
             if app.running:

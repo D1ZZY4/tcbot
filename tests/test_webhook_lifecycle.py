@@ -45,10 +45,14 @@ class _FakeApp:
 
 
 @pytest.mark.asyncio
-async def test_post_init_failure_still_runs_post_shutdown(
+async def test_post_init_failure_does_not_unregister_another_instance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A failed boot must release the subsystems connected before it."""
+    """A failed boot must release subsystems without deleting the webhook.
+
+    This process never registered a webhook, so deleting one here would
+    unregister a healthy instance that shares the bot token.
+    """
     app = _FakeApp()
     shut_down: list[int] = []
 
@@ -64,12 +68,12 @@ async def test_post_init_failure_still_runs_post_shutdown(
     with pytest.raises(RuntimeError, match="boot failed"):
         await main_module._run_webhook_mode(app)  # type: ignore[arg-type]
 
-    assert app.bot.deleted == 1
+    assert app.bot.deleted == 0
     assert shut_down == [1]
 
 
 @pytest.mark.asyncio
-async def test_start_failure_still_runs_post_shutdown(
+async def test_start_failure_does_not_unregister_another_instance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A failed application start follows the same cleanup contract."""
@@ -88,5 +92,5 @@ async def test_start_failure_still_runs_post_shutdown(
     with pytest.raises(RuntimeError, match="start failed"):
         await main_module._run_webhook_mode(app)  # type: ignore[arg-type]
 
-    assert app.bot.deleted == 1
+    assert app.bot.deleted == 0
     assert shut_down == [1]
