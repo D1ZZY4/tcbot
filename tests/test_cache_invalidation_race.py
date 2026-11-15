@@ -255,3 +255,78 @@ def test_an_invalidation_does_not_break_the_single_flight() -> None:
         assert peak == 1
 
     asyncio.run(_run())
+
+
+def test_a_read_that_overlaps_clear_all_does_not_repopulate_l1() -> None:
+    """A read spanning the Redis sweep must discard its pre-sweep value.
+
+    ``clear_all`` clears L1 before the sweep and again after it. A fetch
+    that starts during the sweep and lands afterwards must not put the old
+    value back: the cache-wide epoch changes on both sides of the sweep, so
+    the publish is discarded. This is the ownership-transfer path, where a
+    stale role would survive for a whole TTL.
+    """
+
+    class _BlockingRedis:
+        """Redis double: scan blocks until the test releases it."""
+
+        def __init__(self) -> None:
+            self.scan_started = asyncio.Event()
+            self.scan_release = asyncio.Event()
+
+        async def scan(self, cursor: int, match: str = "", count: int = 100):
+            _ = (cursor, match, count)
+            self.scan_started.set()
+            await self.scan_release.wait()
+            return 0, []
+
+        async def get(self, key: str) -> None:
+            _ = key
+            return
+
+        async def set(self, *args: Any, **kwargs: Any) -> None:
+            _ = (args, kwargs)
+
+        async def unlink(self, *keys: str) -> int:
+            _ = keys
+            return 0
+
+    fake = _BlockingRedis()
+
+    async def _run() -> None:
+        cache = TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix="role")
+        fetch_started = asyncio.Event()
+        fetch_release = asyncio.Event()
+
+        async def _fetch() -> str:
+            fetch_started.set()
+            await fetch_release.wait()
+            return "stale-founder"
+
+        sweeping = asyncio.create_task(cache.clear_all())
+        await fake.scan_started.wait()
+        reading = asyncio.create_task(cache.get_or_fetch("owner", _fetch))
+        await fetch_started.wait()
+        fake.scan_release.set()
+        await sweeping
+        fetch_release.set()
+        assert await reading == "stale-founder"
+        assert cache.get("owner") is twolevel.CACHE_MISS
+
+    async def _enqueue(
+        prefix: str, factory: Any, *, droppable: bool = False
+    ) -> asyncio.Task[Any]:
+        _ = (prefix, droppable)
+        return asyncio.create_task(factory())
+
+    async def _no_client() -> None:
+        return None
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            twolevel, "cfg", dataclasses.replace(cfg, redis_url="redis://test")
+        )
+        patch.setattr(redis_io, "redis_client", lambda: fake)
+        patch.setattr(redis_io, "acquire_redis_client", _no_client)
+        patch.setattr(redis_io, "enqueue_redis_mutation", _enqueue)
+        asyncio.run(_run())

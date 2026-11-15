@@ -69,7 +69,14 @@ class TwoLevelCache[T]:
     sites.
     """
 
-    __slots__ = ("_is_revocation", "_mem", "_redis_prefix", "_redis_ttl", "_states")
+    __slots__ = (
+        "_epoch",
+        "_is_revocation",
+        "_mem",
+        "_redis_prefix",
+        "_redis_ttl",
+        "_states",
+    )
 
     def __init__(
         self,
@@ -90,6 +97,10 @@ class TwoLevelCache[T]:
         # * L1 + L2 + DB and carries the invalidation counter. The entry is
         # * dropped when the last waiter leaves, so the map stays bounded.
         self._states: dict[Any, _KeyState] = {}
+        # * Cache-wide invalidation counter. ``clear_all`` bumps it on both
+        # * sides of the Redis sweep: a read that overlaps the sweep can no
+        # * longer publish the pre-sweep value into L1 after the sweep ends.
+        self._epoch: int = 0
 
     # ── Sync operations (in-memory layer only) ── #
 
@@ -149,31 +160,40 @@ class TwoLevelCache[T]:
         """
         self._mem.clear()
         # * Advance every known generation so an in-flight fetch discards
-        # * its pre-sweep result.
+        # * its pre-sweep result, and bump the cache-wide epoch so a read
+        # * that starts mid-sweep cannot republish into L1.
+        self._epoch += 1
         for state in self._states.values():
             state.generation += 1
         pattern = f"tcbot:{self._redis_prefix}:v2:*"
 
         async def _clear_redis() -> None:
-            live = await self._client()
-            if live is None:
-                return
-            cursor: int = 0
             try:
-                while True:
-                    cursor, keys = await live.scan(cursor, match=pattern, count=100)
-                    if keys:
-                        await live.unlink(*keys)
-                    if cursor == 0:
-                        break
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                log.debug(
-                    "Redis clear_all failed for prefix %s: %s",
-                    self._redis_prefix,
-                    exc,
-                )
+                live = await self._client()
+                if live is None:
+                    return
+                cursor: int = 0
+                try:
+                    while True:
+                        cursor, keys = await live.scan(cursor, match=pattern, count=100)
+                        if keys:
+                            await live.unlink(*keys)
+                        if cursor == 0:
+                            break
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    log.debug(
+                        "Redis clear_all failed for prefix %s: %s",
+                        self._redis_prefix,
+                        exc,
+                    )
+            finally:
+                # * Close the window: reads that overlapped the sweep are
+                # * discarded by the second epoch bump, and anything they
+                # * already wrote into L1 is cleared here.
+                self._mem.clear()
+                self._epoch += 1
 
         task = redis_io.enqueue_redis_mutation(
             self._redis_prefix, _clear_redis, droppable=False
@@ -219,28 +239,41 @@ class TwoLevelCache[T]:
         if rc is None:
             return CACHE_MISS
         rkey = self._rkey(key)
+        # * Keep the key state alive for the read, so a concurrent write or
+        # * invalidation advances the generation we captured instead of
+        # * dropping the state and letting a stale L2 value back into L1.
+        state = self._state(key)
+        state.waiters += 1
         try:
-            # * No ``wait_for`` here: cancelling a Redis command leaves its
-            # * reply unread on a pooled connection, and the next command
-            # * would read that stale reply. The client's socket timeout
-            # * aborts a stalled op and disconnects the connection cleanly.
-            raw = await rc.get(rkey)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            _redis_mod.mark_op(ok=False)
-            log.debug("Redis peek failed for %s: %s", rkey, exc)
-            return CACHE_MISS
-        _redis_mod.mark_op(ok=True)
-        if raw is None:
-            return CACHE_MISS
-        try:
-            loaded: T = _decode_redis_value(raw)
-        except Exception as exc:
-            log.debug("Redis payload decode failed for %s: %s", rkey, exc)
-            return CACHE_MISS
-        self._mem.put(key, loaded)
-        return loaded
+            generation = state.generation
+            epoch = self._epoch
+            try:
+                # * No ``wait_for`` here: cancelling a Redis command leaves its
+                # * reply unread on a pooled connection, and the next command
+                # * would read that stale reply. The client's socket timeout
+                # * aborts a stalled op and disconnects the connection cleanly.
+                raw = await rc.get(rkey)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                _redis_mod.mark_op(ok=False)
+                log.debug("Redis peek failed for %s: %s", rkey, exc)
+                return CACHE_MISS
+            _redis_mod.mark_op(ok=True)
+            if raw is None:
+                return CACHE_MISS
+            try:
+                loaded: T = _decode_redis_value(raw)
+            except Exception as exc:
+                log.debug("Redis payload decode failed for %s: %s", rkey, exc)
+                return CACHE_MISS
+            # * A value invalidated while the read was in flight must not
+            # * enter L1: it would serve the revoked value for a full TTL.
+            if state.generation == generation and self._epoch == epoch:
+                self._mem.put(key, loaded)
+            return loaded
+        finally:
+            self._release(key, state)
 
     async def peek_many(self, keys: Sequence[Any]) -> dict[Any, T]:
         """Return the cached values for *keys* from L1 or L2.
@@ -273,33 +306,46 @@ class TwoLevelCache[T]:
         # * build one oversized command.
         for start in range(0, len(missing), _MGET_CHUNK_SIZE):
             chunk = missing[start : start + _MGET_CHUNK_SIZE]
+            states = {key: self._state(key) for key in chunk}
+            generations = {key: state.generation for key, state in states.items()}
+            epoch = self._epoch
+            for state in states.values():
+                state.waiters += 1
             try:
-                raws = await rc.mget(*[self._rkey(key) for key in chunk])
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                _redis_mod.mark_op(ok=False)
-                log.debug(
-                    "Redis mget failed for prefix %s: %s",
-                    self._redis_prefix,
-                    exc,
-                )
-                return found
-            _redis_mod.mark_op(ok=True)
-            for key, raw in zip(chunk, raws, strict=False):
-                if raw is None:
-                    continue
                 try:
-                    loaded: T = _decode_redis_value(raw)
+                    raws = await rc.mget(*[self._rkey(key) for key in chunk])
+                except asyncio.CancelledError:
+                    raise
                 except Exception as exc:
+                    _redis_mod.mark_op(ok=False)
                     log.debug(
-                        "Redis payload decode failed for %s: %s",
-                        self._rkey(key),
+                        "Redis mget failed for prefix %s: %s",
+                        self._redis_prefix,
                         exc,
                     )
-                    continue
-                self._mem.put(key, loaded)
-                found[key] = loaded
+                    return found
+                _redis_mod.mark_op(ok=True)
+                for key, raw in zip(chunk, raws, strict=False):
+                    if raw is None:
+                        continue
+                    try:
+                        loaded: T = _decode_redis_value(raw)
+                    except Exception as exc:
+                        log.debug(
+                            "Redis payload decode failed for %s: %s",
+                            self._rkey(key),
+                            exc,
+                        )
+                        continue
+                    if (
+                        states[key].generation == generations[key]
+                        and self._epoch == epoch
+                    ):
+                        self._mem.put(key, loaded)
+                    found[key] = loaded
+            finally:
+                for key, state in states.items():
+                    self._release(key, state)
         return found
 
     async def get_or_fetch(
@@ -334,6 +380,7 @@ class TwoLevelCache[T]:
                 if val is not CACHE_MISS:
                     return cast("T", val)
                 generation = state.generation
+                epoch = self._epoch
 
                 # L2: Redis (bounded: a stalled Redis must not hold the hot path)
                 rc = await self._client()
@@ -363,12 +410,16 @@ class TwoLevelCache[T]:
                                     exc,
                                 )
                             else:
-                                if state.generation != generation:
-                                    # * The key was invalidated while the
-                                    # * Redis read was in flight: the payload
-                                    # * predates the change and must not be
-                                    # * cached, or the revoked value comes
-                                    # * back for a whole TTL.
+                                if (
+                                    state.generation != generation
+                                    or self._epoch != epoch
+                                ):
+                                    # * The key was invalidated (or the whole
+                                    # * cache was swept) while the Redis read
+                                    # * was in flight: the payload predates
+                                    # * the change and must not be cached, or
+                                    # * the revoked value comes back for a
+                                    # * whole TTL.
                                     log.debug(
                                         "Discarding stale Redis hit for "
                                         "invalidated key %s",
@@ -383,12 +434,13 @@ class TwoLevelCache[T]:
                 # * Enqueued unconditionally so a reconnect before the
                 # * write still lands the value.
                 val = await fetch()
-                if state.generation != generation:
+                if state.generation != generation or self._epoch != epoch:
                     # * The key was invalidated or overwritten while the
-                    # * fetch was in flight. The fetched value predates the
-                    # * change, so caching it would resurrect a revoked
-                    # * privilege for the whole L1/L2 TTL. The caller still
-                    # * receives the value it asked for.
+                    # * fetch was in flight (or a cache-wide sweep ran). The
+                    # * fetched value predates the change, so caching it
+                    # * would resurrect a revoked privilege for the whole
+                    # * L1/L2 TTL. The caller still receives the value it
+                    # * asked for.
                     log.debug("Discarding stale fetch for invalidated key %s", key)
                     return cast("T", val)
                 self._publish(key, val)
@@ -410,8 +462,9 @@ class TwoLevelCache[T]:
         try:
             async with state.lock:
                 generation = state.generation
+                epoch = self._epoch
                 val = await fetch()
-                if state.generation != generation:
+                if state.generation != generation or self._epoch != epoch:
                     log.debug("Discarding stale refresh for invalidated key %s", key)
                     return val
                 self._publish(key, val)
