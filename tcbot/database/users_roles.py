@@ -369,26 +369,114 @@ async def set_owner(user_id: int) -> None:
             user_id,
         )
         raise
+    await _publish_owner(user_id, action="set_owner")
+
+
+async def _publish_owner(user_id: int, *, action: str) -> None:
+    """Refresh the caches and verify the single-owner invariant after a swap."""
     owner_id_cache.put(_OWNER_KEY, user_id)
-    # * The transaction above is atomic, so the invariant holds. Verify it
-    # * anyway and log loudly, so a split brain is noticed instead of
-    # * serving nondeterministic owners.
+    # * The transaction is atomic, so the invariant holds. Verify it anyway
+    # * and log loudly, so a split brain is noticed instead of serving
+    # * nondeterministic owners.
     try:
         owner_rows = await _owner_count()
     except Exception:
-        log.exception("set_owner verification read failed for user %d", user_id)
+        log.exception("%s verification read failed for user %d", action, user_id)
     else:
         if owner_rows != 1:
             log.error(
-                "set_owner left %d owner rows for user %d; expected exactly 1.",
+                "%s left %d owner rows for user %d; expected exactly 1.",
+                action,
                 owner_rows,
                 user_id,
             )
-    # * Full two-layer invalidation: old owner's ID is unknown, so we cannot
-    # * call invalidate(old_id).  clear_all() sweeps L1 + all Redis keys with
-    # * the "role" prefix so no process reads a stale "owner" role after the
-    # * transfer completes.
+    # * Full two-layer invalidation: the previous owner's ID may be unknown
+    # * to a caller, so clear_all() sweeps L1 and every Redis key under the
+    # * "role" prefix. No process can read a stale "owner" role afterwards.
     await effective_role_cache.clear_all()
+
+
+async def transfer_ownership(previous_owner_id: int, new_owner_id: int) -> None:
+    """Move ownership and keep the previous Founder as Admin in one transaction.
+
+    The owner swap and the previous Founder's Admin assignment have to land
+    together. A former split committed the swap first and granted the Admin
+    role second, so a failure in the second write left the former Founder
+    with no role at all. The current owner is verified under the transfer
+    lock, so a stale transfer prompt cannot demote the wrong account.
+    """
+    if previous_owner_id == new_owner_id:
+        raise ValueError("A transfer target must differ from the current owner")
+
+    async def _work(sess: AsyncSession) -> None:
+        await sess.execute(
+            text("SELECT pg_advisory_xact_lock(:key)"),
+            {"key": _OWNER_TRANSFER_LOCK_KEY},
+        )
+        current_owner = await sess.scalar(
+            select(role_assignments.c.user_id).where(
+                role_assignments.c.role_key == _OWNER_ROLE,
+                role_assignments.c.status == "active",
+            )
+        )
+        if current_owner != previous_owner_id:
+            raise RuntimeError(
+                "Ownership changed while the transfer prompt was open; "
+                "no role was modified"
+            )
+        await ensure_users(sess, previous_owner_id, new_owner_id)
+        # * A user holds one active role, so the new owner's assignments are
+        # * revoked before the owner row is written.
+        await sess.execute(
+            role_assignments.update()
+            .where(
+                role_assignments.c.user_id == new_owner_id,
+                role_assignments.c.status == "active",
+            )
+            .values(status="revoked", revoked_at=utc_now())
+        )
+        await sess.execute(
+            role_assignments.update()
+            .where(
+                role_assignments.c.role_key == _OWNER_ROLE,
+                role_assignments.c.status == "active",
+            )
+            .values(status="revoked", revoked_at=utc_now())
+        )
+        await sess.execute(
+            pg_insert(role_assignments).values(
+                user_id=new_owner_id,
+                role_key=_OWNER_ROLE,
+                assigned_by_user_id=previous_owner_id,
+                assigned_at=utc_now(),
+                status="active",
+            )
+        )
+        await sess.execute(
+            pg_insert(role_assignments).values(
+                user_id=previous_owner_id,
+                role_key=_ADMIN_ROLE,
+                assigned_by_user_id=previous_owner_id,
+                assigned_at=utc_now(),
+                status="active",
+            )
+        )
+
+    try:
+        await run_transaction(_work)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "transfer_ownership from %d to %d failed; the previous owner keeps "
+            "the role",
+            previous_owner_id,
+            new_owner_id,
+        )
+        raise
+    await _publish_owner(new_owner_id, action="transfer_ownership")
+    effective_role_cache.invalidate(previous_owner_id)
+    effective_role_cache.invalidate(new_owner_id)
 
 
 # ───────────────────────── Admin CRUD ────────────────────────── #

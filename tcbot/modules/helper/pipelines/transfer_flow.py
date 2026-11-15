@@ -188,17 +188,17 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                 exc,
             )
 
-    # * set_owner first in one upsert write (a crash there cannot leave zero
-    # * owners). add_admin runs second and is non-fatal so a transient
-    # * failure there never leaves the federation ownerless.
+    # * The swap and the previous Founder's Admin grant are one transaction,
+    # * so a failure cannot leave the federation ownerless or leave the
+    # * former Founder with no role.
     try:
-        await db.users_roles.set_owner(target_id)
+        await db.users_roles.transfer_ownership(current_owner.id, target_id)
     except Exception:
-        log.exception("cmd_transfer set_owner failed for target %d", target_id)
+        log.exception("cmd_transfer failed for target %d", target_id)
         await safe_reply(
             msg,
             t("admins.transfer.set_owner_fail", locale, plain=True),
-            log_label="cmd_transfer set-owner-failed",
+            log_label="cmd_transfer transfer-failed",
             parse_mode=None,
         )
         return
@@ -221,14 +221,8 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                 cancelled,
                 target_id,
             )
-    # * Non-fatal but never silent: set_owner already committed, so flag a
-    # * failed add_admin in the reply instead of claiming full success.
-    prev_owner_admin_ok = True
-    try:
-        await db.users_roles.add_admin(current_owner.id, current_owner.id)
-    except Exception:
-        prev_owner_admin_ok = False
-        log.exception("cmd_transfer add_admin failed after set_owner")
+    # * The atomic transfer already granted the previous Founder the Admin
+    # * role, so the reply no longer has a partial-success warning.
     log_text = ownership_transferred(
         target_id,
         target_fname or str(target_id),
@@ -240,14 +234,6 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         locale,
         user=Safe(user_ref(target_id, target_fname or str(target_id), target_uname)),
     )
-    if not prev_owner_admin_ok:
-        transfer_note += t(
-            "admins.transfer.admin_warn",
-            locale,
-            user=Safe(
-                user_ref(current_owner.id, current_owner.first_name or "unknown")
-            ),
-        )
     transfer_log_r, transfer_reply_r = await asyncio.gather(
         send_log(
             ctx.bot,

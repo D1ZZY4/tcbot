@@ -103,6 +103,39 @@ async def test_set_owner_leaves_exactly_one_owner(owner_db: str) -> None:
         users_roles.owner_id_cache.invalidate(_OWNER_KEY)
 
 
+async def test_transfer_ownership_swaps_and_grants_in_one_decision(
+    owner_db: str,
+) -> None:
+    """The previous Founder becomes Admin in the same transaction."""
+    await users_roles.set_owner(61001)
+    try:
+        await users_roles.transfer_ownership(61001, 61002)
+        rows = await engine_module.fetch_all(
+            role_assignments.select().where(
+                role_assignments.c.user_id.in_((61001, 61002)),
+                role_assignments.c.status == "active",
+            )
+        )
+        active = {int(row["user_id"]): str(row["role_key"]) for row in rows}
+        assert active == {61001: "admin", 61002: "owner"}
+    finally:
+        users_roles.owner_id_cache.invalidate(_OWNER_KEY)
+
+
+async def test_a_stale_transfer_prompt_cannot_replace_the_owner(
+    owner_db: str,
+) -> None:
+    """A transfer opened by a former owner is refused under the lock."""
+    await users_roles.set_owner(61001)
+    await users_roles.transfer_ownership(61001, 61002)
+    try:
+        with pytest.raises(RuntimeError, match="Ownership changed"):
+            await users_roles.transfer_ownership(61003, 61004)
+        assert await _owner_ids() == [61002]
+    finally:
+        users_roles.owner_id_cache.invalidate(_OWNER_KEY)
+
+
 async def test_a_failed_transfer_keeps_the_previous_owner(
     owner_db: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

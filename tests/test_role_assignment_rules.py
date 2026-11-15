@@ -223,18 +223,15 @@ def _install_transfer(
     """Install the collaborators of the ownership-transfer path."""
     seen: dict[str, Any] = {"owner": [], "admins": [], "roles": []}
 
-    async def _set_owner(user_id: int) -> None:
-        seen["owner"].append(user_id)
+    async def _transfer(previous_owner: int, new_owner: int) -> None:
+        if add_admin_fails:
+            raise RuntimeError("write failed")
+        seen["owner"].append(new_owner)
+        seen["admins"].append(previous_owner)
 
     async def _is_owner(user_id: int, *, fresh: bool = False) -> bool:
         _ = (user_id, fresh)
         return owner_still_current
-
-    async def _add_admin(user_id: int, promoted_by: int) -> None:
-        _ = promoted_by
-        if add_admin_fails:
-            raise RuntimeError("write failed")
-        seen["admins"].append(user_id)
 
     async def _remove_role(user_id: int) -> bool:
         seen["roles"].append(user_id)
@@ -269,9 +266,8 @@ def _install_transfer(
         return 42, "Target"
 
     monkeypatch.setattr(transfer_flow, "extract_target", _extract)
-    monkeypatch.setattr(db.users_roles, "set_owner", _set_owner)
+    monkeypatch.setattr(db.users_roles, "transfer_ownership", _transfer)
     monkeypatch.setattr(db.users_roles, "is_owner", _is_owner)
-    monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
     monkeypatch.setattr(db.users_roles, "remove_role", _remove_role)
     monkeypatch.setattr(transfer_flow, "resolve_and_check", _resolve_and_check)
 
@@ -357,14 +353,14 @@ def test_transfer_refuses_a_bot_target(monkeypatch: pytest.MonkeyPatch) -> None:
     assert seen["owner"] == []
 
 
-def test_transfer_survives_a_failed_previous_owner_promotion(
+def test_a_failed_transfer_keeps_the_current_owner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A failed add_admin never rolls the ownership back."""
+    """The swap and the previous Founder's grant are one atomic decision."""
     seen = _install_transfer(monkeypatch, add_admin_fails=True)
     ctx = SimpleNamespace(bot=_bot())
     asyncio.run(
         transfer_flow.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
     )
-    assert seen["owner"] == [42]
+    assert seen["owner"] == []
     assert seen["admins"] == []
