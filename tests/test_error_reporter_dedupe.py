@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -99,3 +100,37 @@ def test_a_duplicate_record_never_reaches_the_sink(
     error_reporter._schedule_record(record)
 
     assert len(tracker.spawned) == 1
+
+
+def test_a_worker_thread_record_reaches_the_attached_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A log record from the Flask thread must still reach the error channel.
+
+    ``TaskTracker.spawn`` needs a running loop, which a worker thread does
+    not have; the reporter hands that delivery to the attached loop.
+    """
+    delivered: list[str] = []
+
+    async def _ship(record: logging.LogRecord) -> None:
+        delivered.append(record.getMessage())
+
+    async def _run() -> None:
+        error_reporter._loop = asyncio.get_running_loop()
+        monkeypatch.setattr(error_reporter, "_ship_record", _ship)
+        monkeypatch.setattr(error_reporter, "_bot", object())
+        await asyncio.to_thread(error_reporter._schedule_record, _record("thread"))
+        await asyncio.gather(
+            *[
+                asyncio.wrap_future(future)
+                for future in list(error_reporter._cross_thread)
+            ]
+        )
+
+    try:
+        asyncio.run(_run())
+    finally:
+        error_reporter._loop = None
+        error_reporter._cross_thread.clear()
+
+    assert delivered == ["thread"]

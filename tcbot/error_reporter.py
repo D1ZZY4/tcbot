@@ -27,6 +27,7 @@ from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.time_and_date import monotonic, utc_now
 
 if TYPE_CHECKING:
+    import concurrent.futures
     import logging
 
     from telegram import Bot
@@ -177,12 +178,21 @@ _bot: Bot | None = None
 _chat_id: int = 0
 _thread_id: int | None = None
 _owner_id: int = 0
+# * The loop the reporter ships on. A log record can be emitted from the
+# * Flask webhook thread, where spawn() has no running loop; the reporter
+# * hands that delivery to this loop instead of dropping it.
+_loop: asyncio.AbstractEventLoop | None = None
+_cross_thread: set[concurrent.futures.Future[None]] = set()
 
 
 def attach(bot: Bot, chat_id: int, thread_id: int | None, *, owner_id: int = 0) -> None:
     """Inject bot, log channel, and owner DM target; zero chat falls back to owner DM."""
-    global _bot, _chat_id, _thread_id, _owner_id
+    global _bot, _chat_id, _thread_id, _owner_id, _loop
     _bot = bot
+    try:
+        _loop = asyncio.get_running_loop()
+    except RuntimeError:
+        _loop = None
     _owner_id = owner_id
     if chat_id == 0 and owner_id > 0:
         _chat_id = owner_id
@@ -230,12 +240,40 @@ def _schedule_record(record: logging.LogRecord) -> None:
         return
     if not _approved(record):
         return
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # * A log record emitted from a worker thread (the Flask webhook
+        # * receiver) has no running loop here. Hand the delivery to the
+        # * loop the reporter was attached on instead of dropping it.
+        loop = _loop
+        if loop is not None and loop.is_running():
+            try:
+                future = asyncio.run_coroutine_threadsafe(_ship_record(record), loop)
+            except RuntimeError:
+                return
+            _cross_thread.add(future)
+            future.add_done_callback(_cross_thread.discard)
+            return
     _report_tasks.spawn(_ship_record(record))
 
 
 async def drain_pending() -> None:
     """Await the in-flight error deliveries at shutdown (bounded)."""
     await _report_tasks.drain()
+    live = [
+        asyncio.wrap_future(future)
+        for future in list(_cross_thread)
+        if not future.done()
+    ]
+    if not live:
+        return
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(*live, return_exceptions=True), timeout=10
+        )
+    except TimeoutError:
+        log.debug("Cross-thread error deliveries still running; leaving them.")
 
 
 def set_owner(owner_id: int) -> None:
