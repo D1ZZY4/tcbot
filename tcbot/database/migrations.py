@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,8 @@ from alembic import command
 from tcbot.database.base import metadata
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from alembic.config import Config as AlembicConfig
     from alembic.runtime.migration import MigrationContext
     from sqlalchemy.engine import Connection
@@ -26,6 +29,12 @@ if TYPE_CHECKING:
 # * directory. The package lives two levels below it.
 _ROOT = Path(__file__).resolve().parents[2]
 _ALEMBIC_INI = _ROOT / "alembic.ini"
+
+# * Boot serialisation: two instances starting together must not apply the
+# * same revision concurrently. The lock is session-scoped on a dedicated
+# * connection, so it is released on unlock and on a dropped connection.
+_MIGRATION_LOCK_KEY: int = 7_313_919_265_517_002
+_MIGRATION_CONNECT_TIMEOUT_S: int = 10
 
 
 def set_database_url(config: AlembicConfig, database_url: str) -> None:
@@ -86,7 +95,11 @@ def ensure_schema(database_url: str, schema: str) -> None:
     """
     if not schema or schema == "public":
         return
-    engine = create_engine(scoped_url(database_url, schema), pool_pre_ping=True)
+    engine = create_engine(
+        scoped_url(database_url, schema),
+        pool_pre_ping=True,
+        connect_args={"connect_timeout": _MIGRATION_CONNECT_TIMEOUT_S},
+    )
     try:
         with engine.begin() as conn:
             conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
@@ -109,8 +122,39 @@ def scoped_url(database_url: str, schema: str) -> str:
     return parsed.set(query=query).render_as_string(hide_password=False)
 
 
+@contextlib.contextmanager
+def _migration_lock(database_url: str) -> Iterator[None]:
+    """Serialise concurrent migration runs on one PostgreSQL advisory lock.
+
+    The lock is session-scoped on a dedicated connection, so it is released
+    on unlock and on a dropped connection. The second instance waits, then
+    finds the schema at head instead of racing the same DDL.
+    """
+    lock_engine = create_engine(
+        database_url,
+        pool_pre_ping=True,
+        connect_args={"connect_timeout": _MIGRATION_CONNECT_TIMEOUT_S},
+    )
+    try:
+        with lock_engine.connect() as conn:
+            conn.execute(
+                text("SELECT pg_advisory_lock(:key)"), {"key": _MIGRATION_LOCK_KEY}
+            )
+            conn.commit()
+            try:
+                yield
+            finally:
+                conn.execute(
+                    text("SELECT pg_advisory_unlock(:key)"),
+                    {"key": _MIGRATION_LOCK_KEY},
+                )
+                conn.commit()
+    finally:
+        lock_engine.dispose()
+
+
 def upgrade_head(database_url: str) -> None:
-    """Apply every pending migration.
+    """Apply every pending migration under a cross-instance lock.
 
     The URL is passed in rather than read from the environment: the
     application loads its configuration from ``config.env`` as well, so
@@ -118,4 +162,5 @@ def upgrade_head(database_url: str) -> None:
     """
     config = Config(str(_ALEMBIC_INI))
     set_database_url(config, database_url)
-    command.upgrade(config, "head")
+    with _migration_lock(database_url):
+        command.upgrade(config, "head")

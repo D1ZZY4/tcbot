@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import pathlib
 
 import pytest
@@ -68,6 +69,11 @@ def test_the_migration_reaches_the_database_with_a_percent_url(
         captured.append(url)
 
     monkeypatch.setattr(migrations.command, "upgrade", _upgrade)
+    # * The lock connection is out of scope here: this test pins the URL
+    # * handed to Alembic, not the advisory-lock plumbing.
+    monkeypatch.setattr(
+        migrations, "_migration_lock", lambda _url: contextlib.nullcontext()
+    )
 
     migrations.upgrade_head(_PERCENT_URL)
 
