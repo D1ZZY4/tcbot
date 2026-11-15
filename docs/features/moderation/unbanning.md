@@ -86,7 +86,7 @@ The Developer minimum is intentional: unbanning a higher-ranked target would sil
 2. If no active ban is found, replies `<user> has no active federation ban.` and stops. This guard prevents a misleading "removed from N/M groups" reply for a no-op.
 3. Reads `ban_id` from the record for the federation log.
 4. Fetches active groups with `db.groups_db.active_groups()` **sequentially** before any mutation: a fetch outage aborts with the ban record intact, so a retry re-drives the full fan-out cleanly instead of unbanning "blind" against a stale list.
-5. Runs the active-ban deactivation via `db.bans_db.deactivate_all_active_bans(target_id)` - clears every active ban for the target in one write.
+5. Runs the active-ban deactivation via `db.bans_db.deactivate_all_active_bans(target_id)` - revokes every active ban for the target and withdraws any pending appeal in the same transaction.
 6. Adds primary groups (`cfg.main_group`) to the list when they are not already present.
 7. Fans `ctx.bot.unban_chat_member(grp.chat_id, target_id, only_if_banned=True)` across the resulting list with `fan_out(...)`.
 8. Builds an `unban_log` via `messages.unban_log`.
@@ -94,7 +94,7 @@ The Developer minimum is intentional: unbanning a higher-ranked target would sil
    - `bot.send_message(cfg.logs, log_text, parse_mode="MarkdownV2", message_thread_id=lt)`.
    - `msg.reply_text("<user> has been unbanned - removed from <ok>/<total> groups.")`, plus a `WARNING: still banned in: <titles>` suffix naming up to 5 missed groups when the fan-out had transient failures (a re-run of `/tcunban` would report "no active ban" since the record is gone; only a targeted re-drive reaches those chats).
 
-The reply does not include an appeal-resolution message; the appeal-approve path handles that separately.
+The reply does not include an appeal-resolution message; the pending appeal (if any) is recorded as `withdrawn` with the ban, and the appeal-approve path handles its own decision separately.
 
 ## Database impact
 
@@ -103,7 +103,7 @@ Unban uses three `bans_db` helpers:
 | Helper | Purpose |
 |---|---|
 | `get_active_ban(user_id)` | Returns the active ban document that is still in force. Used by the manual command path and revalidated by the appeal flow. |
-| `deactivate_all_active_bans(user_id)` | Revokes every active ban decision for the user in one `UPDATE` statement. Returns the number of decisions revoked. Used by the manual command and mirrored by the appeal-approval inline sequence. |
+| `deactivate_all_active_bans(user_id, *, withdraw_pending_appeals=True)` | Revokes every active ban decision for the user and, by default, withdraws any pending appeal in the same transaction. Returns the number of decisions revoked. The appeal-approval path passes `withdraw_pending_appeals=False` because it accepts that appeal immediately afterwards. |
 | `make_ban_id()` | Not used here; only listed because the helper file is shared. |
 
 Manual unban has no scheduler interaction: neither `bans_db` nor `unban_flow` creates a scheduled job. Bans created by the bot are not time-limited, so no per-ban `unban.<ban_id>` job exists. The scheduled expiry sweep still records an expired decision and queues a revoke run, and `enforcement_worker.py` lifts any restriction left by a decision that did carry a deadline. Mutes already expire natively in Telegram through `until_date`.
@@ -125,16 +125,16 @@ The unban log includes:
 - The deactivated `ban_id`.
 - Date.
 
-There is no appeal-resolution field on the manual unban log. When `/tcunban` is used to clear a ban that had a pending appeal, the appeal review card is not edited; only the ban record is deactivated.
+There is no appeal-resolution field on the manual unban log. When `/tcunban` is used to clear a ban that had a pending appeal, the appeal is recorded as `withdrawn` in the same transaction; the appeal review card is not edited.
 
 ## Edge cases
 
 - An unban attempt with no active ban record replies `<user> has no active federation ban.` and does not fan `unban_chat_member` calls.
-- `deactivate_all_active_bans` revokes every active ban decision for the target. The partial unique index keeps at most one active ban, so the write normally closes one row; the statement still handles every active row in one operation.
+- `deactivate_all_active_bans` revokes every active ban decision for the target and withdraws its pending appeal. The partial unique index keeps at most one active ban, so the write normally closes one row; the statement still handles every active row in one operation. Withdrawing the appeal keeps it from blocking a later appeal forever.
 - `unban_chat_member` is called with `only_if_banned=True`, so it is a no-op in groups where the user is not currently banned.
 - The pre-fetch in `cmd_unban` can fail (DB error); the executor falls back to its own `get_active_ban` call. If that re-fetch also fails, the command replies with a retry notice instead of crashing out with no operator feedback.
 - The Developer rank minimum (`mod_only`) prevents a Tester from unbanning a Founder or Admin; the rank check fires before the active-ban pre-fetch.
-- The unban command does not edit the appeal review card; only the ban record is deactivated.
+- The unban command does not edit the appeal review card; the pending appeal is withdrawn with the ban record.
 - Federation log send failure does not roll back the DB deactivation; the ban is still cleared even if the log channel is unavailable.
 
 ## Behavior reference
@@ -149,7 +149,7 @@ Key behaviors to keep in mind:
 6. The active ban pre-fetch runs in parallel with `identity.classify` and `resolve_and_check`.
 7. `pre_ban` is passed straight to `execute_unban` so the manual path skips a redundant `get_active_ban` call.
 8. `execute_unban` refuses to fan `unban_chat_member` calls when no active ban record exists.
-9. `deactivate_all_active_bans` clears every active ban for the target in one write, not just the one returned by `get_active_ban`.
+9. `deactivate_all_active_bans` revokes every active ban for the target, not just the one returned by `get_active_ban`, and withdraws any pending appeal in the same write.
 10. The unban fan-out uses `only_if_banned=True`; missing chat memberships are silent no-ops.
 11. The reply reads `<user> has been unbanned - removed from <ok>/<total> groups.`, with a `WARNING: still banned in: <up-to-5 titles>` suffix when transient failures remain.
 12. The unban log is sent to `cfg.logs` with `messages.unban_log`.

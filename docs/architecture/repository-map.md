@@ -205,8 +205,8 @@ sequenceDiagram
     Main->>Main: start APScheduler
     Main->>Main: warm hot caches (background task)
     Main->>Main: attach error_reporter + asyncio exception handler
-    Main->>PTB: set_webhook() + get_webhook_info() verify
     Main->>Alive: register_webhook() wire Flask /webhook -> PTB queue
+    Main->>PTB: set_webhook() + get_webhook_info() verify
     PTB->>PTB: await updates from Flask webhook receiver
 ```
 

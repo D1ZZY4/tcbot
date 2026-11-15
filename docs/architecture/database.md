@@ -730,33 +730,40 @@ reader sees one document.
   keeps its reason, its actor, and its timestamps, so the history of the
   incident stays readable.
 - `set_log_message_id(ban_id: str, log_msg_id: int) -> None`
-  Patches only the audit log message ID (used when the ban log is edited).
-- `deactivate_all_active_bans(user_id: int) -> int`
-  Revokes the active ban of a user in one statement; returns the count.
-  This is the single authoritative write of an unban: if it fails, the user
-  is still banned in the database while the chats say otherwise, and the
-  join path would ban the user again on the next membership event.
+  Appends the audit log message reference to the decision history. The
+  table is append-only, so a re-ban adds another `log` row; the compose read
+  orders by row id and exposes the newest reference as `log_message_id`.
+- `deactivate_all_active_bans(user_id: int, *, withdraw_pending_appeals: bool = True) -> int`
+  Revokes the active ban of a user and, by default, withdraws any pending
+  appeal in the same transaction; returns the count. This is the single
+  authoritative write of an unban: if it fails, the user is still banned in
+  the database while the chats say otherwise, and the join path would ban the
+  user again on the next membership event. The appeal-approval path passes
+  `withdraw_pending_appeals=False` so it can accept the pending appeal in the
+  next step.
 - `submit_appeal(ban_id: str, appellant_user_id: int, appeal_text: str, review_message_id: int) -> bool`
   Records the appeal and claims the review slot in one transaction. The
-  claim is a conditional update on the decision, so the database decides
-  the winner: two concurrent submissions cannot both write a row, and the
-  loser leaves the decision untouched. The appeal row and the claim have
-  to land together, because a claim without a row would leave a review
-  card that no decision can close, and a row without a claim would leave a
-  pending appeal that blocks every later appeal for the same decision.
+  claim is a conditional update on a decision that is active and still in
+  force, so the database decides the winner: two concurrent submissions
+  cannot both write a row, and the loser leaves the decision untouched. The
+  appeal row and the claim have to land together, because a claim without a
+  row would leave a review card that no decision can close, and a row without
+  a claim would leave a pending appeal that blocks every later appeal for the
+  same decision.
 - `set_review_if_absent(ban_id: str, msg_id: int) -> bool`
   The review slot claim on its own, for a flow that already filed the
-  appeal. The condition is part of the `UPDATE`, so the database decides
-  the winner.
+  appeal. The condition is part of the `UPDATE` (active and still in force),
+  so the database decides the winner.
 - `claim_appeal_decision(ban_id: str, review_msg_id: int) -> bool`
-  Consumes the review slot for a reviewer, so only one reviewer decides
-  the appeal. A claim that ends without a decision has to hand the slot
-  back with `restore_review`.
+  Consumes the review slot for a reviewer, so only one reviewer decides the
+  appeal. The claim matches only a ban that is active and still in force. A
+  claim that ends without a decision has to hand the slot back with
+  `restore_review`.
 - `restore_review(ban_id: str, review_msg_id: int, review_timestamp: datetime | None = None) -> bool`
   Hands the slot back after a decision was not reached. The restore is
-  conditional on an active decision whose slot is free and that carries no
-  decided appeal, so it cannot resurrect a review that another reviewer
-  already closed.
+  conditional on an active, in-force decision whose slot is free and that
+  carries no decided appeal, so it cannot resurrect a review that another
+  reviewer already closed.
 - `accept_appeal(ban_id: str, reviewer_id: int, note: str = "") -> bool`
   Closes the open appeal as accepted and names the reviewer. Returns
   `False` when no appeal was pending.
@@ -1191,7 +1198,7 @@ Methods:
 
 - `get(key)` / `put(key, val)` / `invalidate(key)`: synchronous, operate on L1; `put` and `invalidate` additionally enqueue an ordered (FIFO) Redis write/delete through the shared mutation chain for the cache's prefix.
 - `clear()`: synchronous, clears L1 only; never touches Redis.
-- `clear_all()`: async, clears L1 and deletes every Redis key matching `tcbot:<prefix>:v2:*` via `SCAN` + `UNLINK` in batches of 100 (never blocking `KEYS`). The whole sweep is bounded by a 10 s wait, and each Redis command relies on the client's socket timeout rather than a `wait_for` wrapper, so a stalled sweep never holds the FIFO mutation tail by cancelling a command mid-flight. Use when the affected key is unknown, for example after an ownership transfer. Not for hot paths.
+- `clear_all()`: async, clears L1 and deletes every Redis key matching `tcbot:<prefix>:v2:*` via `SCAN` + `UNLINK` in batches of 100 (never blocking `KEYS`). The whole sweep is bounded by a 10 s wait, and each Redis command relies on the client's socket timeout rather than a `wait_for` wrapper, so a stalled sweep never holds the FIFO mutation tail by cancelling a command mid-flight. A cache-wide epoch advances on both sides of the sweep and L1 is cleared again when it ends, so a read that overlapped the sweep cannot republish pre-sweep state. Use when the affected key is unknown, for example after an ownership transfer. Not for hot paths.
 - `get_or_fetch(key, fetch)`: async hot path. Layer order:
   1. L1 in-memory (no I/O).
   2. L2 Redis, bounded by the client's 2.0 s socket timeout so a stalled Redis falls through to the database fetch.
@@ -1203,7 +1210,9 @@ arrives after a write still joins the running fetch instead of starting
 its own. The per-key state also carries an invalidation counter that
 advances on every write and every invalidation. A fetch that was already
 in flight compares the counter before it publishes, so a value that
-predates the change is handed to its caller but never cached. The state is
+predates the change is handed to its caller but never cached. The same
+check and the cache-wide epoch guard `refresh`, `peek`, and `peek_many`,
+so an L2 read that races an invalidation cannot repopulate L1. The state is
 dropped once its last waiter leaves, so high-cardinality callers (profile
 lookups) never accumulate stale entries.
 
@@ -1361,7 +1370,7 @@ Recurring jobs:
 |---|---|---|
 | `tcbot.expiry_daily` | `IntervalTrigger(hours=24)` | Calls `expire_due_decisions()`: moves the ban, mute, and role-assignment rows whose deadline passed to `expired` and queues the matching revoke enforcement runs. A mute already carries its Telegram `until_date`, so its restriction lifts natively. Registered only when pg_cron does not own expiry. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs the sweep once. The sweep takes a transaction advisory lock, so two bot instances cannot expire the same records. |
 | `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. Each branch takes its own transaction advisory lock. |
-| `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued revoke runs and lifts the expired ban or mute across the recorded groups. A failed run is logged and left for the stale-run requeue while the remaining claimed runs still execute. Failed targets retry up to three attempts, five minutes apart. Always registered. |
+| `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued revoke runs and lifts the expired ban or mute across the recorded groups. A failed run is logged and left for the stale-run requeue while the remaining claimed runs still execute. A failed target is recorded as `failed` with a due retry deadline and retried up to three times, five minutes apart; the run is re-queued when the deadline arrives. Always registered. |
 
 When `PG_CRON_ENABLED` is true and the database has the `pg_cron`
 extension, `pg_cron.sync_schedules()` registers the registry jobs

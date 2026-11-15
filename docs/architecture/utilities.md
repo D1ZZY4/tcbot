@@ -122,7 +122,7 @@ Command prefix support is centralized here.
 | `parse_cmd_args(text)` | Returns command arguments after the first whitespace. |
 | `ALL_PREFIXES_CMD_FILTER` | Matches any configured prefixed command across all configured prefixes including `/`. Used in `ConversationHandler` fallbacks to catch a new command and cancel the active conversation. |
 
-`PREFIXES` supports a Python-style list such as `["/", "!", "."]` and falls back to common prefixes when unset. Prefix filters are case-sensitive, accept lowercase ASCII command names, and only accept `@BotName` suffixes that target the current bot.
+`PREFIXES` supports a Python-style list such as `["/", "!", "."]` and falls back to common prefixes when unset. Prefix filters are case-sensitive, accept lowercase ASCII command names, only accept `@BotName` suffixes that target the current bot, and reject a prefix separated from the command by whitespace (`/ help` is prose, as Telegram treats it).
 
 ## `logger.py`
 
@@ -154,7 +154,7 @@ layer must not depend on it.
 | `report_exc(exc, context=None)` | Reports an exception. |
 | `drain_pending()` | Await the in-flight error deliveries at shutdown (bounded). |
 
-The reporter classifies expected Telegram errors, trims long tracebacks, escapes MarkdownV2, and avoids raising if the destination is not configured.
+The reporter classifies expected Telegram errors, trims long tracebacks, escapes MarkdownV2, and avoids raising if the destination is not configured. A record emitted from a worker thread with no running loop is handed to the loop the reporter was attached on, so webhook-thread failures still reach the error channel.
 
 `__main__.py` wires error reporting in two places:
 
@@ -170,7 +170,7 @@ handling plus monotonic measurement.
 |---|---|
 | `utc_now()` | Store timestamps and compare elapsed time. |
 | `to_utc(dt)` | Normalize naive or aware datetimes before arithmetic. |
-| `fmt_dt(dt)` | Display datetimes as `DD-MM-YYYY | HH:MM`. |
+| `fmt_dt(dt)` | Display datetimes as `DD-MM-YYYY | HH:MM` in UTC; an aware value in another offset is converted first. |
 | `monotonic()` | Monotonic clock in seconds, for measuring durations. |
 | `elapsed_ms(start)` | Milliseconds since a `monotonic()` reading. |
 | `parse_duration(raw)` | Parse a duration token (`45s`, `30m`, `2h`, `7d`, `1w`, `3mo`, `1ye`) into a `timedelta`, or `None` when invalid. |
@@ -253,7 +253,7 @@ Each TOML file name becomes a dotted key prefix: a key `done` in `banning.toml` 
 
 | Function | Purpose |
 |---|---|
-| `t(key, locale=None, catalog=None, *vargs, plain=False, **kwargs)` | Render `key` for `locale` with safe placeholder interpolation. Templates are stored raw (no manual backslashes): literal segments are auto-escaped in MarkdownV2 mode (`plain=False`) and left verbatim with `plain=True` (callback alerts). Templates support strict mini-markup: `` `code` `` spans and `*bold*` spans (balanced, unnested, no braces). Unknown locales fall back to `DEFAULT_LOCALE`; missing keys are logged and returned as `[key]` (never empty, never an exception into the handler). |
+| `t(key, locale=None, catalog=None, *vargs, plain=False, **kwargs)` | Render `key` for `locale` with safe placeholder interpolation. Templates are stored raw (no manual backslashes): literal segments are auto-escaped in MarkdownV2 mode (`plain=False`) and left verbatim with `plain=True` (callback alerts). Templates support strict mini-markup: `` `code` `` spans and `*bold*` spans (balanced, unnested, no braces). Unknown locales fall back to `DEFAULT_LOCALE`; missing keys are logged and returned as `[key]` (escaped in MarkdownV2 mode, never empty, never an exception into the handler). |
 
 ### Resolution helpers
 

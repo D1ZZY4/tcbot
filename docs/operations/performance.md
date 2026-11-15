@@ -155,7 +155,9 @@ Use the cache layer already associated with the database helper:
 
 - L1-only `clear()` is appropriate when only the current process needs
   invalidation.
-- `clear_all()` is required when the entire Redis prefix must be invalidated.
+- `clear_all()` is required when the entire Redis prefix must be invalidated. It
+  advances a cache-wide epoch on both sides of the sweep and clears L1 again
+  when the sweep ends, so a read that overlapped it cannot republish old state.
 - `invalidate(key)` is preferred when the changed record identifies one key.
 - Redis is optional. Without `REDIS_URL`, the cache remains in-process.
 - Revocation prefixes (`role`, `conn`, `groups`, `owner`) write a
@@ -222,7 +224,9 @@ in one transaction with the same 60 s budget, so a decision can never expire
 without the job that lifts the restriction. Both sweeps take a transaction
 advisory lock, so overlapping bot instances cannot duplicate the work. The
 five-minute enforcement worker consumes the queue and lifts the restriction
-on Telegram.
+on Telegram. A retryable delivery failure is recorded as `failed` with a due
+deadline (the only transition the target trigger accepts), and the run is
+re-queued when that deadline arrives; a target is tried at most three times.
 
 A warning does not maintain a counter row. The per-group and federation counts
 are read from the `warn_counts` view over the decision history, so the count

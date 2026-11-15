@@ -208,7 +208,8 @@ Appeal flow requirements:
 - Entry is `/start appeal_<ban_id>` in private chat.
 - The user must have an active ban matching the deep-link ban ID.
 - The appeal text must start with `#appeal` (case-insensitive); when the ban carries a `log_message_id`, the text must also reference that ID as a standalone number. Section labels (`Log link:`, `Clarification:`, `Agreement:`) are requested by the instructions but not parsed semantically.
-- Submit revalidates pending-review and rejection-cooldown state, then claims the review slot atomically (`set_review_if_absent`).
+- Submit revalidates pending-review and rejection-cooldown state, then records the appeal and claims the review slot in one transaction (`submit_appeal`). Both the claim and the review decision apply the canonical in-force predicate, so a timed ban whose deadline passed is not appealable or decidable.
+- A staff `/tcunban` withdraws a pending appeal in the same transaction as the ban revocation; the appeal-approval path passes `withdraw_pending_appeals=False` so it can accept that appeal instead.
 - A review card is posted to `MAIN_GROUP` (general) with a copy in the appeals destination.
 - Approve runs an inline deactivate-plus-fan-out sequence mirroring `execute_unban` and notifies the user; a cancelled deactivation propagates with the card untouched instead of rendering a DB-fail edit. A failed ban read answers the `appeals.review.db_retry` popup with the card untouched for a re-tap. Reject records the rejector (display-name read in parallel), then runs the DM, card edit, and review clear in parallel.
 - Non-deciding taps (including ban-read outages) answer with a popup and never edit the shared card.

@@ -310,12 +310,12 @@ Flow:
 3. The bot rejects attempts to unban itself.
 4. Founder and staff targets are treated as not federation-bannable and no unban is attempted.
 5. `bans_db.get_active_ban(target_id)` must return a record.
-6. All active bans for the target are revoked atomically with `bans_db.deactivate_all_active_bans(target_id)`; the one-active-ban index keeps the operation to the single decision in force.
+6. All active bans for the target are revoked atomically with `bans_db.deactivate_all_active_bans(target_id)` and any pending appeal is withdrawn in the same transaction; the one-active-ban index keeps the ban revocation to the single decision in force.
 7. The target is unbanned from all active connected groups with `only_if_banned=True`.
 8. An unban log is sent to `cfg.logs`.
 9. The command reply reports the success count.
 
-Manual unban does not currently edit any pending appeal review card. It deactivates the ban and posts the unban log.
+Manual unban does not edit a pending appeal review card. It records the appeal as withdrawn, revokes the ban, and posts the unban log.
 
 ## Edge cases
 

@@ -171,7 +171,7 @@ The update helpers involved are:
 
 - `bans_db.set_review_if_absent(ban_id, review_msg_id)` (atomic claim; returns whether this submit won the review slot)
 - `bans_db.set_appeal_log_msg(ban_id, appeal_log_msg_id, appeal_link=...)`
-- `bans_db.deactivate_all_active_bans(user_id)` on approval (clears all active records atomically)
+- `bans_db.deactivate_all_active_bans(user_id, *, withdraw_pending_appeals=False)` on approval (revokes all active records atomically; the approval path opts out of the pending-appeal withdrawal because it accepts that appeal immediately afterwards)
 - `bans_db.claim_appeal_decision(ban_id, review_msg_id)` (atomic decision claim; consumes the review slot)
 - `bans_db.restore_review(ban_id, review_msg_id, review_timestamp)` (hands the slot back when a tap reached no decision)
 - `bans_db.accept_appeal(...)` / `bans_db.reject_appeal(...)` (close the appeal row with the reviewer and note)
@@ -226,7 +226,7 @@ When a staff member approves an appeal:
 1. The approver's effective role is read fresh and must outrank the target's current role. Approving strips the target's federation role (the ban lift requires it) and lifts the ban everywhere, which is the same irreversible action as `/tcunban`, and that command path refuses an equal-rank target. An Admin therefore cannot approve an appeal against a peer Admin; the tap is refused with the shared outrank notice and nothing is changed.
 2. Active connected groups are fetched from `groups_db.active_groups()`, with the primary group (`cfg.main_group`) appended when absent. If the fetch fails, approval aborts before deactivation with the review card untouched (a re-tap retries the full sequence); deactivating first would leave chats unbanned-nowhere with no record to re-drive.
 3. If the banned user currently holds a federation staff role, that role is demoted before deactivation, mirroring `/tcunban`. A role-lookup outage or a demote failure aborts with the review card untouched and a retry alert.
-4. All active bans for the user are deactivated with `bans_db.deactivate_all_active_bans(user_id)`. The partial unique index keeps at most one active ban, and the statement still revokes every active row in one atomic operation. If this write fails, approval aborts before any group is touched (mirroring `execute_unban`): unbanning chats while the database still marks the user banned would split-brain and re-ban them on next join. The review card stays actionable and the tapper gets a retry alert, so a re-tap retries the full sequence.
+4. All active bans for the user are deactivated with `bans_db.deactivate_all_active_bans(user_id, withdraw_pending_appeals=False)`. The partial unique index keeps at most one active ban, and the statement still revokes every active row in one atomic operation. The approval path opts out of the default pending-appeal withdrawal so the appeal can be accepted in the next step. If this write fails, approval aborts before any group is touched (mirroring `execute_unban`): unbanning chats while the database still marks the user banned would split-brain and re-ban them on next join. The review card stays actionable and the tapper gets a retry alert, so a re-tap retries the full sequence.
 5. The review marker is cleared with `bans_db.clear_review(ban_id)` so a concurrent second decision sees no live review and stands down.
 6. The user is unbanned from every group with `unban_chat_member(..., only_if_banned=True)` through bounded fan-out. Partial transient failures are logged at error level.
 7. The user receives a DM telling them the appeal was approved.
@@ -279,6 +279,8 @@ If editing the existing appeal log fails, the bot attempts to send a new log mes
 - Non-banned users cannot submit because they cannot pass the active-ban lookup.
 - A user cannot appeal someone else's ban; the `target_user_id` must match the Telegram account opening the link.
 - A user can have only one pending appeal when `review_message_id` was stored successfully.
+- A submission or decision only matches a ban that is still in force: a timed ban whose deadline passed is no longer appealable even before the daily sweep marks the row `expired`.
+- A staff `/tcunban` withdraws a pending appeal in the same transaction as the ban revocation, so the appeal cannot block a later submission with no reviewer able to decide it.
 - Case-insensitive `#appeal` tags are accepted.
 - The log-link validation is number-based, not URL-domain-based; it checks for the stored log message ID as a standalone integer token.
 - If the forwarded appeal message cannot be linked, the review/log text uses `N/A` for the appeal link but still posts the review/log when possible.
