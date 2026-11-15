@@ -62,6 +62,7 @@ from .moderation import (
     moderation_evidence_items,
     moderation_evidence_uploads,
     moderation_messages,
+    moderation_notification_tasks,
 )
 from .rbac import (
     permission_definitions,
@@ -107,6 +108,7 @@ SCHEMA_TABLES: tuple[str, ...] = (
     "moderation_actions",
     "moderation_appeals",
     "moderation_messages",
+    "moderation_notification_tasks",
     "audit_events",
     "moderation_enforcement_runs",
     "moderation_enforcement_targets",
@@ -164,6 +166,7 @@ __all__ = [
     "moderation_evidence_items",
     "moderation_evidence_uploads",
     "moderation_messages",
+    "moderation_notification_tasks",
     "mtproto_state",
     "permission_definitions",
     "promotion_requests",

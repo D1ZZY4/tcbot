@@ -19,7 +19,7 @@ from telegram.ext import (
     MessageHandler,
 )
 
-from tcbot import cfg
+from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.modules.helper import guards, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
     from telegram import Bot, InlineKeyboardMarkup
     from telegram.ext.filters import BaseFilter
 
-    from tcbot.database.documents import BanDoc, GroupDoc
+    from tcbot.database.documents import BanDoc, EvidenceItemDoc, GroupDoc
 
 log = get_logger(__name__)
 
@@ -123,13 +123,11 @@ def _cancel_proof_session(scope: dict[str, Any] | None) -> None:
 
 
 async def drain_proof_sessions() -> None:
-    """Let the pending proof flushes finish so no ban is left half-applied.
+    """Let pending proof flushes finish so no ban is left half-applied.
 
-    A flush that is already executing the ban must not be cancelled: the
-    ban record may already be stored while the Telegram fan-out is still
-    running, and cancelling there would leave the federation with a ban
-    nobody was told about. The drain waits for the running flushes and
-    only cancels the ones that are still waiting for their silence window.
+    A running flush already owns its ban record and fan-out, so the drain
+    waits for it and cancels only the sessions still in their silence
+    window.
     """
     pending = [s.flush_task for s in _proof_sessions.values() if s.flush_task]
     if not pending:
@@ -223,17 +221,18 @@ async def _execute_ban_record(
     logs_chat: int,
     logs_thread: int | None,
     proof_chat: int,
-) -> tuple[int, bool, str]:
+    proof_thread: int | None,
+    proof_items: Sequence[EvidenceItemDoc] | None,
+    proof_expected_count: int,
+    enforcement_chat_ids: Sequence[int],
+) -> tuple[int, bool, str, int | None]:
     """Write the ban record and post the federation log.
 
-    One executor for the fresh-ban and the re-ban path: the two differ
-    only in the log template, the keyboard's previous-proof link, and the
-    database write. Returns ``(log_message_id, db_ok, canonical_ban_id)``.
-
-    The record is written before the log is rendered: a concurrent ban for
-    the same target can win the insert race, and the record that survives
-    owns the ban id. The log, its appeal link, and the target's appeal
-    button must all name that record.
+    The fresh-ban and re-ban paths differ only in the log template, the
+    previous-proof link, and the database write. Returns
+    ``(log_message_id, db_ok, canonical_ban_id, enforcement_run_id)``.
+    The record is written first so a concurrent insert race names the
+    surviving record in the log, the appeal link, and the target button.
     """
     target_id: int = meta.get("ban_target_id") or 0
     target_fname: str = meta.get("ban_target_fname", str(target_id))
@@ -268,6 +267,10 @@ async def _execute_ban_record(
                 old_proof_msg_id,
                 old_log_msg_id,
                 destination_chat_id=proof_chat,
+                proof_items=proof_items,
+                proof_expected_count=proof_expected_count,
+                destination_thread_id=proof_thread,
+                enforcement_chat_ids=enforcement_chat_ids,
             )
         else:
             written = await db.bans_db.create_ban(
@@ -278,13 +281,20 @@ async def _execute_ban_record(
                 0,
                 ban_id,
                 destination_chat_id=proof_chat,
+                proof_items=proof_items,
+                proof_expected_count=proof_expected_count,
+                destination_thread_id=proof_thread,
+                enforcement_chat_ids=enforcement_chat_ids,
             )
     except Exception:
         log.exception("Ban record write failed for ban_id=%s", ban_id)
-        return 0, False, ban_id
+        return 0, False, ban_id, None
     # * The canonical id lives on the stored record: a concurrent ban that
     # * won the insert race owns the record now.
     canonical_ban_id = str(written.get("ban_id") or ban_id) if written else ban_id
+    enforcement_run_id = (
+        int(written.get("enforcement_run_id") or 0) if written else 0
+    ) or None
     if canonical_ban_id != ban_id:
         log.warning(
             "Ban %s lost the insert race to %s; logging the canonical record",
@@ -334,10 +344,10 @@ async def _execute_ban_record(
         log_msg = await bot.send_message(logs_chat, log_text, **send_kwargs)
     except Exception:
         log.exception("Ban log send failed for ban_id=%s", canonical_ban_id)
-        return 0, True, canonical_ban_id
+        return 0, True, canonical_ban_id, enforcement_run_id
     log_msg_id = log_msg.message_id
     log.info("Ban log posted: ban_id=%s msg_id=%s", canonical_ban_id, log_msg_id)
-    return log_msg_id, True, canonical_ban_id
+    return log_msg_id, True, canonical_ban_id, enforcement_run_id
 
 
 def _enforcement_scope(
@@ -428,10 +438,20 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         logs_chat, logs_thread = cfg.logs
         # * Proof is required for new bans: a proof-less record would let
         # * /check and audit logs reference evidence that never landed.
+        # * A gallery that lost a file is a partial upload, and the schema
+        # * refuses a manual ban that attaches one: the moderator has to
+        # * retry the evidence instead of filing a ban on incomplete proof.
         # * Updates keep the old proof via the re-ban branch.
-        if not is_update and not upload.landed:
+        proof_incomplete = (
+            upload.expected_item_count > 0
+            and len(upload.items) < upload.expected_item_count
+        )
+        if proof_incomplete or (not is_update and not upload.landed):
             log.error(
-                "Ban aborted for target=%d: proof upload returned None", target_id
+                "Ban aborted for target=%d: proof upload returned %d/%d items",
+                target_id,
+                len(upload.items),
+                upload.expected_item_count,
             )
             _proof_fail_text = t(
                 "banning.proof_fail.body",
@@ -453,7 +473,22 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                 _groups_task.cancel()
             await asyncio.gather(_groups_task, return_exceptions=True)
             return
-        log_msg_id, db_ok, ban_id = await _execute_ban_record(
+        try:
+            groups = await _groups_task
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("active_groups failed during ban of %d", target_id)
+            groups = []
+            groups_fetch_failed = True
+        else:
+            groups_fetch_failed = False
+        # * The origin group joins the scope: a failed connected-group fetch
+        # * must not leave the ban unenforced where the moderator issued it.
+        # * A ban issued from the bot PM has no group origin, so it never
+        # * joins and the scope stays the primary group alone.
+        groups = _enforcement_scope(groups, prompt_chat_id)
+        log_msg_id, db_ok, ban_id, enforcement_run_id = await _execute_ban_record(
             bot,
             meta,
             existing=existing if is_update else None,
@@ -465,6 +500,10 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             logs_chat=logs_chat,
             logs_thread=logs_thread,
             proof_chat=proof_chat,
+            proof_thread=proof_thread,
+            proof_items=upload.documents(),
+            proof_expected_count=upload.expected_item_count,
+            enforcement_chat_ids=[int(grp["chat_id"]) for grp in groups],
         )
     except asyncio.CancelledError:
         if not _groups_task.done():
@@ -506,34 +545,12 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             log.debug("Discarding pre-fetched groups after DB failure: %s", exc)
         return
     if log_msg_id:
-        set_log_result, groups = await asyncio.gather(
-            db.bans_db.set_log_message_id(ban_id, log_msg_id),
-            _groups_task,
-            return_exceptions=True,
-        )
-        if isinstance(set_log_result, BaseException):
-            if isinstance(set_log_result, asyncio.CancelledError):
-                raise set_log_result
-            log.error(
-                "set_log_message_id failed for ban_id=%s: %s", ban_id, set_log_result
-            )
-        if isinstance(groups, asyncio.CancelledError):
-            raise groups
-        if isinstance(groups, BaseException):
-            log.error("active_groups failed during ban of %d: %s", target_id, groups)
-            groups = []
-            groups_fetch_failed = True
-        else:
-            groups_fetch_failed = False
-    else:
         try:
-            groups = await _groups_task
+            await db.bans_db.set_log_message_id(ban_id, log_msg_id)
+        except asyncio.CancelledError:
+            raise
         except Exception:
-            log.exception("active_groups failed during ban of %d", target_id)
-            groups = []
-            groups_fetch_failed = True
-        else:
-            groups_fetch_failed = False
+            log.exception("set_log_message_id failed for ban_id=%s", ban_id)
     await demote_before_enforcement(
         bot,
         target_id,
@@ -542,28 +559,82 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         executor_id=admin_id,
         executor_fname=admin_fname,
     )
-    # * The origin group joins the scope: a failed connected-group fetch
-    # * must not leave the ban unenforced where the moderator issued it.
-    # * A ban issued from the bot PM has no group origin, so it never joins
-    # * and the scope stays the primary group alone.
-    groups = _enforcement_scope(groups, prompt_chat_id)
-    results = await fan_out(
-        [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
-    )
-    outcome = summarize_fanout(groups, results, action="Ban", target_id=target_id)
-    failed = outcome.failed
+    applied = 0
+    total = len(groups)
+    failed = 0
+    transient: list[tuple[dict[str, Any], BaseException]] = []
+    if enforcement_run_id is not None:
+        try:
+            await enforcement_worker.deliver_queued_run(bot, enforcement_run_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception(
+                "Ban delivery failed for run %s; it stays queued", enforcement_run_id
+            )
+        try:
+            report = await db.enforcement_db.run_report(enforcement_run_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Ban run report failed for run %s", enforcement_run_id)
+            report = None
+        failed_targets = db.enforcement_db.failed_report_targets(report)
+        total = db.enforcement_db.report_count(report, "target_count", len(groups))
+        failed = db.enforcement_db.report_count(
+            report, "failed_count", len(failed_targets)
+        )
+        applied = max(0, total - failed)
+        transient = [
+            (
+                {
+                    "chat_id": target.get("chat_id", 0),
+                    "title": target.get("title") or "",
+                },
+                RuntimeError(str(target.get("last_error_detail") or "failed")),
+            )
+            for target in failed_targets
+        ]
+        for group, error in transient:
+            log.warning(
+                "Ban enforcement failed for user=%d in group=%s (%d): %s",
+                target_id,
+                group.get("title", ""),
+                group.get("chat_id", 0),
+                error,
+            )
+        if failed:
+            log.error(
+                "Ban enforcement for user=%d left %d/%d group(s) failed (run %s)",
+                target_id,
+                failed,
+                total,
+                enforcement_run_id,
+            )
+    else:
+        # * Legacy callers that did not queue a run still get the direct
+        # * fan-out, so a database helper used outside the command path
+        # * keeps its previous behaviour.
+        results = await fan_out(
+            [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
+        )
+        outcome = summarize_fanout(groups, results, action="Ban", target_id=target_id)
+        applied = outcome.applied
+        total = outcome.total
+        failed = outcome.failed
+        transient = list(outcome.transient)
     log.info(
         "Ban enforced: target=%d applied=%d/%d",
         target_id,
-        outcome.applied,
-        outcome.total,
+        applied,
+        total,
     )
     applied_line = replies.applied_summary(
         locale,
         "banning.applied",
-        total=outcome.total,
+        total=total,
         failed=failed,
-        transient=outcome.transient,
+        transient=transient,
     )
     if groups_fetch_failed:
         applied_line += t("banning.applied.scope_warn", locale)

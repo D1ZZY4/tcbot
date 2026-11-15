@@ -1,0 +1,93 @@
+# © Copyright 2024 - 2026 Transsion Core
+# © Copyright 2024 - 2026 Dizzy
+# © Copyright 2026 Ave Labs
+
+"""The review-card outbox retries transient edits and closes dead cards."""
+
+from __future__ import annotations
+
+import asyncio
+from typing import Any
+
+import pytest
+from telegram.error import BadRequest
+
+from tcbot import database as db
+from tcbot import notification_worker
+
+
+class _Bot:
+    def __init__(self, error: BaseException | None = None) -> None:
+        self.error = error
+        self.edits: list[dict[str, Any]] = []
+
+    async def edit_message_text(self, text: str, **kwargs: Any) -> None:
+        self.edits.append({"text": text, "kwargs": kwargs})
+        if self.error is not None:
+            raise self.error
+
+
+def _task() -> dict[str, object]:
+    return {
+        "id": 1,
+        "action_id": 2,
+        "chat_id": -1001,
+        "message_id": 900,
+        "attempts": 1,
+    }
+
+
+def _wire(
+    monkeypatch: pytest.MonkeyPatch, *, action_status: str = "revoked"
+) -> list[dict[str, Any]]:
+    completed: list[dict[str, Any]] = []
+
+    async def _claim(limit: int = 10, *, retry_after: Any) -> list[dict[str, object]]:
+        return [_task()]
+
+    async def _load(task_id: int) -> dict[str, object]:
+        return {"external_ref": "ref", "target_user_id": 42, "status": action_status}
+
+    async def _locale(chat_id: int) -> str:
+        return "en-US"
+
+    async def _complete(task_id: int, **kwargs: Any) -> None:
+        completed.append({"task_id": task_id, **kwargs})
+
+    monkeypatch.setattr(db.notifications_db, "claim_due_tasks", _claim)
+    monkeypatch.setattr(db.notifications_db, "load_task_action", _load)
+    monkeypatch.setattr(notification_worker, "_group_locale", _locale)
+    monkeypatch.setattr(db.notifications_db, "complete_task", _complete)
+    return completed
+
+
+def test_a_failed_card_edit_is_retried(monkeypatch: pytest.MonkeyPatch) -> None:
+    completed = _wire(monkeypatch)
+    bot = _Bot(RuntimeError("telegram down"))
+
+    asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert len(bot.edits) == 1
+    assert completed[0]["state"] == "pending"
+    assert completed[0]["retry_after"] is not None
+
+
+def test_a_deleted_card_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    completed = _wire(monkeypatch)
+    bot = _Bot(BadRequest("Message to edit not found"))
+
+    asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert completed[0]["state"] == "skipped"
+
+
+def test_an_active_decision_leaves_the_card_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    completed = _wire(monkeypatch, action_status="active")
+    bot = _Bot()
+
+    asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert bot.edits == []
+    assert completed[0]["state"] == "skipped"

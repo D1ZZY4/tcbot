@@ -48,7 +48,8 @@ Atau balas sebuah pesan lalu jalankan `/tcm`."""
 # [applied] renders the unmute fan-out line; {applied} carries it whole.
 # Placeholders: {user} pre-formatted user reference, {dur} pre-formatted
 # bold duration, {reason} raw reason text, {done}/{total}/{failed} ints,
-# {sample} raw group names, {applied} prebuilt applied line.
+# {sample} raw group names, {applied} prebuilt applied line, {note}
+# prebuilt failure line.
 
 [note]
 groups_fail = "{user} tidak bisa di-mute: daftar grup gagal dimuat dari database, jadi tidak ada grup yang disentuh. Cek log lalu coba lagi dengan /tcmute setelah database pulih."
@@ -64,7 +65,8 @@ partial = "Dipulihkan di {done}/{total} grup ({failed} gagal: {sample}{more}"
 full = "Dipulihkan di {total}/{total} grup."
 
 [summary]
-body = "{user} telah di-mute {dur}.\nAlasan: {reason}\nDiterapkan ke {done}/{total} grup."
+body = "{user} telah di-mute {dur}.\nAlasan: {reason}\nDiterapkan ke {done}/{total} grup.{note}"
+partial = "\nPERINGATAN: mute tidak diterapkan di {failed} grup: {sample}{more}. Catatan mute tetap disimpan agar pembatasan bisa dicoba ulang."
 
 [unmute]
 body = "{user} telah di-unmute.\n{applied}"

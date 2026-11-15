@@ -65,8 +65,14 @@ def _install(
     groups: Any = "default",
     deactivate: Any = "default",
 ) -> dict[str, list[str]]:
-    """Stub locale, cfg, and DB seams; return call ledger."""
+    """Stub locale, cfg, the durable run, and DB seams; return call ledger."""
     calls: dict[str, list[str]] = {"deactivate": []}
+    selected_groups: list[dict[str, Any]] = (
+        [{"chat_id": 1, "title": "Only"}]
+        if groups == "default"
+        else ([] if isinstance(groups, BaseException) else groups)
+    )
+    failed_chats: list[int] = []
 
     async def _locale(update: object) -> str:
         return "en-US"
@@ -81,13 +87,41 @@ def _install(
     async def _active_groups() -> Any:
         if isinstance(groups, BaseException):
             raise groups
-        return groups
+        return selected_groups
 
-    async def _deactivate(user_id: int) -> int:
+    async def _revoke(
+        user_id: int, requested_by: int | None, chat_ids: list[int]
+    ) -> Any:
         calls["deactivate"].append("x")
         if isinstance(deactivate, BaseException):
             raise deactivate
-        return 1
+        return 1, 77
+
+    async def _deliver(bot: _FakeBot, run_id: int) -> bool:
+        for group in selected_groups:
+            try:
+                await bot.unban_chat_member(group["chat_id"], 42, only_if_banned=True)
+            except Exception:
+                failed_chats.append(int(group["chat_id"]))
+        return True
+
+    async def _report(run_id: int) -> dict[str, Any]:
+        return {
+            "target_count": len(selected_groups),
+            "failed_count": len(failed_chats),
+            "targets": [
+                {
+                    "chat_id": group["chat_id"],
+                    "title": group["title"],
+                    "status": (
+                        "failed"
+                        if int(group["chat_id"]) in failed_chats
+                        else "succeeded"
+                    ),
+                }
+                for group in selected_groups
+            ],
+        }
 
     monkeypatch.setattr(unban_flow, "locale_for_update", _locale)
     monkeypatch.setattr(
@@ -96,8 +130,10 @@ def _install(
         SimpleNamespace(main_group=-1, exec_group=-2, logs=(-3, None)),
     )
     monkeypatch.setattr(db.bans_db, "get_active_ban", _get_active_ban)
-    monkeypatch.setattr(db.bans_db, "deactivate_all_active_bans", _deactivate)
+    monkeypatch.setattr(db.bans_db, "revoke_ban_and_queue_unban", _revoke)
     monkeypatch.setattr(db.groups_db, "active_groups", _active_groups)
+    monkeypatch.setattr(unban_flow.enforcement_worker, "deliver_queued_run", _deliver)
+    monkeypatch.setattr(db.enforcement_db, "run_report", _report)
     return calls
 
 
@@ -165,6 +201,33 @@ def test_partial_fanout_names_missed_group(
     msg, bot = _FakeMsg(), _FakeBot(fail_ids={1})
     asyncio.run(unban_flow.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
     assert "Gone" in msg.replies[-1]
+
+
+def test_a_run_another_worker_owns_is_reported_as_queued(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install(monkeypatch, groups=[{"chat_id": 1, "title": "Only"}])
+
+    async def _not_claimed(bot: Any, run_id: int) -> bool:
+        return False
+
+    async def _pending(run_id: int) -> dict[str, Any]:
+        return {
+            "target_count": 1,
+            "failed_count": 0,
+            "targets": [{"chat_id": 1, "title": "Only", "status": "in_progress"}],
+        }
+
+    monkeypatch.setattr(
+        unban_flow.enforcement_worker, "deliver_queued_run", _not_claimed
+    )
+    monkeypatch.setattr(db.enforcement_db, "run_report", _pending)
+
+    msg, bot = _FakeMsg(), _FakeBot()
+    asyncio.run(unban_flow.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+
+    assert "queued" in msg.replies[-1]
+    assert bot.unbanned == []
 
 
 def test_anonymous_admin_log_names_anonymous(

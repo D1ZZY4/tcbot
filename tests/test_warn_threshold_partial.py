@@ -10,7 +10,6 @@ import asyncio
 from typing import Any
 
 import pytest
-from telegram.error import BadRequest
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import warn_flow
@@ -43,7 +42,7 @@ def test_complete_enforcement_clears_the_whole_slate(
 ) -> None:
     """A ban that reached every group clears every warning."""
     calls = _install(monkeypatch)
-    asyncio.run(warn_flow._clear_warns_after_threshold_ban(42, _GROUPS, [None, None]))
+    asyncio.run(warn_flow._clear_warns_after_threshold_ban(42, _GROUPS, [-1001, -1002]))
     assert calls["all"] == [42]
     assert calls["chats"] == []
 
@@ -53,11 +52,7 @@ def test_partial_enforcement_clears_only_the_reached_groups(
 ) -> None:
     """A ban that missed a group must keep that group's warnings."""
     calls = _install(monkeypatch)
-    asyncio.run(
-        warn_flow._clear_warns_after_threshold_ban(
-            42, _GROUPS, [None, RuntimeError("network down")]
-        )
-    )
+    asyncio.run(warn_flow._clear_warns_after_threshold_ban(42, _GROUPS, [-1001]))
     assert calls["all"] == []
     assert calls["chats"] == [(42, [-1001])]
 
@@ -67,12 +62,6 @@ def test_partial_enforcement_ignores_benign_refusals(
 ) -> None:
     """A user-not-in-chat refusal is not a failed enforcement."""
     calls = _install(monkeypatch)
-    benign = _benign_bad_request()
-    asyncio.run(warn_flow._clear_warns_after_threshold_ban(42, _GROUPS, [None, benign]))
+    asyncio.run(warn_flow._clear_warns_after_threshold_ban(42, _GROUPS, [-1001, -1002]))
     assert calls["all"] == [42]
     assert calls["chats"] == []
-
-
-def _benign_bad_request() -> BaseException:
-    """Return a Telegram refusal that counts as benign."""
-    return BadRequest("User not participant")

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from telegram import Bot, ChatPermissions, Update
 
-from tcbot import cfg
+from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.modules.helper import guards, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
@@ -24,6 +24,7 @@ from tcbot.modules.helper.messages import (
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import (
     BuildProof,
+    ProofUpload,
     upload_proof_for_action,
 )
 from tcbot.modules.helper.pipelines.reason_flow import (
@@ -121,17 +122,42 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         )
         return
     groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
+    proof_task: asyncio.Task[ProofUpload] | None = None
+    if proof_msgs:
+        proof_task = asyncio.create_task(
+            upload_proof_for_action(bot, proof_msgs, target_id, admin_id, admin_fname)
+        )
+    proof_upload: ProofUpload | None = None
+    if proof_task is not None:
+        try:
+            proof_upload = await proof_task
+        except asyncio.CancelledError:
+            proof_task.cancel()
+            raise
+        except Exception:
+            log.warning("Mute proof upload skipped for target=%d", target_id)
     # * The decision lands before the fan-out: no group is touched on a
     # * database failure. The decision and the live state are one record,
     # * so the mute and its history cannot disagree.
     record_r: BaseException | None = None
+    run_id: int | None = None
     try:
-        await db.mutes_db.record_mute(
+        _, run_id = await db.mutes_db.record_mute(
             target_id,
             chat_id,
             reason_text,
             admin_id,
             until=until,
+            requested_duration_seconds=(
+                int(duration.total_seconds()) if duration is not None else None
+            ),
+            enforcement_chat_ids=[int(grp.get("chat_id", 0)) for grp in groups],
+            proof_items=proof_upload.documents() if proof_upload else None,
+            proof_expected_count=(
+                proof_upload.expected_item_count if proof_upload else 0
+            ),
+            destination_chat_id=cfg.proofs[0],
+            destination_thread_id=cfg.proofs[1],
         )
     except asyncio.CancelledError:
         raise
@@ -165,42 +191,80 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         executor_id=admin_id,
         executor_fname=admin_fname,
     )
-    restrict_coros = [
-        bot.restrict_chat_member(
-            grp.get("chat_id", 0),
-            target_id,
-            permissions=perms,
-            until_date=until,
+    applied = 0
+    total = len(groups)
+    failed = 0
+    failed_targets: list[dict[str, Any]] = []
+    if run_id is not None:
+        try:
+            await enforcement_worker.deliver_queued_run(bot, run_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Mute delivery failed for run %s; it stays queued", run_id)
+        try:
+            report = await db.enforcement_db.run_report(run_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Mute run report failed for run %s", run_id)
+            report = None
+        failed_targets = db.enforcement_db.failed_report_targets(report)
+        total = db.enforcement_db.report_count(report, "target_count", len(groups))
+        failed = db.enforcement_db.report_count(
+            report, "failed_count", len(failed_targets)
         )
-        for grp in groups
-    ]
-    proof_link: str | None = None
-    if proof_msgs:
-        fanout_results, upload_result = await asyncio.gather(
-            fan_out(restrict_coros),
-            upload_proof_for_action(bot, proof_msgs, target_id, admin_id, admin_fname),
-            return_exceptions=True,
-        )
-        if isinstance(fanout_results, BaseException):
-            raise fanout_results
-        results = fanout_results
-        throw_if_cancelled((upload_result,))
-        if isinstance(upload_result, BaseException):
-            log.warning("Mute proof upload skipped for target=%d", target_id)
-        else:
-            proof_link = upload_result.link
+        applied = max(0, total - failed)
+        for group in failed_targets:
+            log.warning(
+                "Mute enforcement left user=%d restricted nowhere in group=%s (%d)",
+                target_id,
+                group.get("title", ""),
+                group.get("chat_id", 0),
+            )
     else:
+        restrict_coros = [
+            bot.restrict_chat_member(
+                grp.get("chat_id", 0),
+                target_id,
+                permissions=perms,
+                until_date=until,
+            )
+            for grp in groups
+        ]
         results = await fan_out(restrict_coros)
-    outcome = summarize_fanout(groups, results, action="Mute", target_id=target_id)
+        outcome = summarize_fanout(groups, results, action="Mute", target_id=target_id)
+        applied = outcome.applied
+        total = outcome.total
+        failed = outcome.failed
+        failed_targets = [grp for grp, _exc in outcome.transient]
+    proof_link: str | None = proof_upload.link if proof_upload else None
     proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
+    note = (
+        t(
+            "muting.summary.partial",
+            locale,
+            done=applied,
+            total=total,
+            failed=failed,
+            sample=", ".join(
+                str(grp.get("title") or grp.get("chat_id", 0))
+                for grp in failed_targets[:5]
+            ),
+            more=" ..." if failed > 5 else "",
+        )
+        if failed
+        else ""
+    )
     summary = t(
         "muting.summary.body",
         locale,
         user=Safe(user_ref(target_id, target_fname)),
         dur=Safe(bold(dur_str)),
         reason=reason_text,
-        done=outcome.applied,
-        total=outcome.total,
+        done=applied,
+        total=total,
+        note=Safe(note),
     )
     log_text = messages.mute_log(
         target_id,

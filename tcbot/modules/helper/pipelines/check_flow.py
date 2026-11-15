@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from telegram import Bot, InlineKeyboardMarkup
@@ -35,7 +36,7 @@ from tcbot.utils.formatter import bold, code, italic, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page
-from tcbot.utils.time_and_date import date_or_unknown, fmt_dt
+from tcbot.utils.time_and_date import date_or_unknown, fmt_dt, fmt_duration
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -658,6 +659,7 @@ class CheckEventsMixin:
             db_call=db.mutes_db.user_mutes,
             count_call=db.mutes_db.user_mute_count,
             cb_prefix=f"check_mutes:{target_id}",
+            show_duration=True,
             locale=locale,
         )
 
@@ -670,6 +672,7 @@ async def _per_chat_event_list(
     db_call: Callable[..., Awaitable[list[Any]]],
     count_call: Callable[[int], Awaitable[int]],
     cb_prefix: str,
+    show_duration: bool = False,
     locale: str | None = None,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Shared renderer for kicks/mutes lists."""
@@ -735,17 +738,46 @@ async def _per_chat_event_list(
         title = titles.get(chat_id) or str(chat_id)
         admin_id = rec.get("actor_user_id", 0)
         admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
-        lines.append(
-            t(
-                "checking.events.item",
-                locale,
-                i=base_idx + i,
-                ts=Safe(ts),
-                title=title,
-                reason=Safe(italic(reason_short)),
-                admin=Safe(user_ref(admin_id, admin_name)),
+        if show_duration:
+            requested_secs = rec.get("requested_duration_secs")
+            stored_secs = rec.get("duration_secs")
+            requested = (
+                fmt_duration(timedelta(seconds=requested_secs), locale)
+                if isinstance(requested_secs, int)
+                else fmt_duration(timedelta(seconds=stored_secs), locale)
+                if isinstance(stored_secs, int)
+                else t("muting.duration.permanent", locale, plain=True)
             )
-        )
+            stored = (
+                fmt_duration(timedelta(seconds=stored_secs), locale)
+                if isinstance(stored_secs, int)
+                else t("muting.duration.permanent", locale, plain=True)
+            )
+            lines.append(
+                t(
+                    "checking.events.mute_item",
+                    locale,
+                    i=base_idx + i,
+                    ts=Safe(ts),
+                    title=title,
+                    requested=requested,
+                    stored=stored,
+                    reason=Safe(italic(reason_short)),
+                    admin=Safe(user_ref(admin_id, admin_name)),
+                )
+            )
+        else:
+            lines.append(
+                t(
+                    "checking.events.item",
+                    locale,
+                    i=base_idx + i,
+                    ts=Safe(ts),
+                    title=title,
+                    reason=Safe(italic(reason_short)),
+                    admin=Safe(user_ref(admin_id, admin_name)),
+                )
+            )
     nav = nav_row(page, total_pages, cb_prefix, locale)
     return _maybe_caveat(
         "\n".join(lines), locale, failed=count_failed

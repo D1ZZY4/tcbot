@@ -41,6 +41,7 @@ from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.modules.helper.extraction import refresh as identity_refresh
 from tcbot.modules.helper.pipelines import connected_flow, stats_flow
 from tcbot.modules.helper.pipelines.ban_flow import drain_proof_sessions
+from tcbot.notification_worker import configure as configure_notification_worker
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import _ensure_loaded
@@ -340,7 +341,14 @@ async def init_shared_subsystems(bot: Bot) -> None:
     log.info("Connecting to PostgreSQL...")
     await connect()
     log.info("Running parallel setup (owner seed, Redis, MTProto)...")
-    owner_r, primary_r, redis_r, mtproto_r = await asyncio.gather(
+    destinations_r, owner_r, primary_r, redis_r, mtproto_r = await asyncio.gather(
+        db.groups_db.ensure_destinations(
+            (
+                (cfg.proofs[0], cfg.proofs[1] is not None),
+                (cfg.logs[0], cfg.logs[1] is not None),
+                (cfg.appeals[0], cfg.appeals[1] is not None),
+            )
+        ),
         db.users_roles.ensure_initial_owner(cfg.initial_owner_id),
         db.groups_db.ensure_primary_group(cfg.main_group),
         redis_client.connect_if_configured(),
@@ -349,7 +357,9 @@ async def init_shared_subsystems(bot: Bot) -> None:
     )
     # * A cancelled subsystem read is a shutdown, not a startup verdict: the
     # * cancellation must propagate instead of being left in the result list.
-    throw_if_cancelled((owner_r, primary_r, redis_r, mtproto_r))
+    throw_if_cancelled((destinations_r, owner_r, primary_r, redis_r, mtproto_r))
+    if isinstance(destinations_r, BaseException):
+        log.warning("Destination registration failed (non-fatal): %s", destinations_r)
     if isinstance(owner_r, BaseException):
         log.warning("ensure_initial_owner failed (non-fatal): %s", owner_r)
     if isinstance(primary_r, BaseException):
@@ -373,6 +383,7 @@ async def _post_init(app: Application) -> None:
         )
     await init_shared_subsystems(app.bot)
     configure_enforcement_worker(app.bot)
+    configure_notification_worker(app.bot)
     pg_cron_active = await pg_cron.sync_schedules()
     await sched_mod.start(cfg.database_url, database_jobs_in_pg_cron=pg_cron_active)
     _startup_tasks.spawn(_warm_hot_caches())

@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot import cfg
-from tcbot.database import moderation_db
+from tcbot.database import enforcement_db, moderation_db
 from tcbot.database.base import (
     moderation_actions,
     moderation_appeals,
@@ -27,6 +27,7 @@ from tcbot.database.engine import (
     run_transaction,
 )
 from tcbot.database.types import make_short_id
+from tcbot.database.users_cache import ensure_users
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
@@ -51,11 +52,14 @@ from ._shared import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import datetime
 
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.sql.elements import ColumnElement
+
+    from tcbot.database.documents import EvidenceItemDoc
 
 log = get_logger(__name__)
 
@@ -122,23 +126,28 @@ async def create_ban(
     destination_chat_id: int | None = None,
     origin_chat_id: int | None = None,
     action_origin: str = "manual",
+    proof_items: Sequence[EvidenceItemDoc] | None = None,
+    proof_expected_count: int = 0,
+    destination_thread_id: int | None = None,
+    enforcement_chat_ids: Sequence[int] | None = None,
 ) -> BanDoc:
     """Record a new community ban.
 
-    The decision, the case that holds it, and the archived proof land in
-    one transaction: a ban without a case or without its proof is not a
-    state the community may hold.
-
-    ``action_origin`` says who took the decision. A manual ban needs the
-    archived proof; an automated one, such as the ban a warning
-    threshold triggers, may stand on its own as long as the case does
-    not demand the evidence.
+    The decision, its case, its archived proof, and its optional apply run
+    land in one transaction. ``action_origin`` says whether the decision
+    needs the proof: a manual ban does, an automated threshold ban may
+    stand on its own.
     """
     auto_id = ban_id is None
     if auto_id:
         ban_id = make_ban_id()
     archive_chat = (
         destination_chat_id if destination_chat_id is not None else cfg.proofs[0]
+    )
+    archive_thread = (
+        destination_thread_id
+        if destination_thread_id is not None
+        else (cfg.proofs[1] if destination_chat_id is None else None)
     )
     requires_evidence = action_origin != "automated"
     metadata: dict[str, Any] = {
@@ -156,7 +165,14 @@ async def create_ban(
             sess, target_id, admin_id, reason, requires_evidence=requires_evidence
         )
         upload_id = await moderation_db.archive_proof(
-            sess, case_id, admin_id, proof_msg_id, archive_chat
+            sess,
+            case_id,
+            admin_id,
+            proof_msg_id,
+            archive_chat,
+            items=proof_items,
+            expected_item_count=proof_expected_count,
+            destination_thread_id=archive_thread,
         )
         row = (
             (
@@ -190,6 +206,16 @@ async def create_ban(
         )
         if row is None:
             return None
+        row = dict(row)
+        if enforcement_chat_ids is not None:
+            row["enforcement_run_id"] = await enforcement_db.queue_run(
+                sess,
+                action_id=int(row["id"]),
+                operation="apply",
+                idempotency_key=f"moderation:{row['id']}:apply:v1",
+                requested_by_user_id=admin_id,
+                chat_ids=enforcement_chat_ids,
+            )
         if log_msg_id:
             await sess.execute(
                 pg_insert(moderation_messages).values(
@@ -208,11 +234,8 @@ async def create_ban(
         return dict(row)
 
     try:
-        # * run_transaction already runs through the circuit breaker and
-        # * the timeout. Wrapping it in a second db_call would reserve the
-        # * half-open probe twice, so the inner call would be rejected
-        # * without reaching the database and the outer one would close
-        # * the circuit as if the service had answered.
+        # * run_transaction already applies the circuit breaker and timeout.
+        # * A second db_call would reserve the half-open probe twice.
         row = await run_transaction(_work)
     except Exception as insert_error:
         violated = constraint_name(insert_error)
@@ -251,7 +274,11 @@ async def create_ban(
     if row is None:
         raise RuntimeError("the ban record was not written")
     docs = await compose_rows([row])
-    return docs[0]
+    document = docs[0]
+    run_id = row.get("enforcement_run_id")
+    if isinstance(run_id, int):
+        document["enforcement_run_id"] = run_id
+    return document
 
 
 async def update_ban(
@@ -266,20 +293,27 @@ async def update_ban(
     until_date: datetime | None = None,
     duration_str: str | None = None,
     destination_chat_id: int | None = None,
+    proof_items: Sequence[EvidenceItemDoc] | None = None,
+    proof_expected_count: int = 0,
+    destination_thread_id: int | None = None,
+    enforcement_chat_ids: Sequence[int] | None = None,
 ) -> BanDoc | None:
     """Record a re-ban.
 
-    A re-ban is a new decision that supersedes the active one: the old
-    action keeps its reason, actor, and timestamps, so the history of the
-    case stays readable. The new decision carries the new reason and the
-    new proof, and it opens its own case: a re-ban is a new incident, and
-    the case of the ban it replaces is already closed.
+    A re-ban is a new decision that supersedes the active one, carries the
+    new reason and proof, and opens its own case. The superseded decision
+    keeps its reason, actor, and timestamps.
     """
     current = await get_ban(ban_id)
     if current is None:
         return None
     archive_chat = (
         destination_chat_id if destination_chat_id is not None else cfg.proofs[0]
+    )
+    archive_thread = (
+        destination_thread_id
+        if destination_thread_id is not None
+        else (cfg.proofs[1] if destination_chat_id is None else None)
     )
     proof_id = new_proof_id or old_proof_id
     target_id = cast("int", current.get("target_user_id"))
@@ -299,7 +333,14 @@ async def update_ban(
             sess, target_id, admin_id, reason, requires_evidence=True
         )
         upload_id = await moderation_db.archive_proof(
-            sess, case_id, admin_id, proof_id, archive_chat
+            sess,
+            case_id,
+            admin_id,
+            proof_id,
+            archive_chat,
+            items=proof_items if new_proof_id else None,
+            expected_item_count=proof_expected_count if new_proof_id else 1,
+            destination_thread_id=archive_thread,
         )
         row = (
             (
@@ -333,6 +374,16 @@ async def update_ban(
         )
         if row is None:
             return None
+        row = dict(row)
+        if enforcement_chat_ids is not None:
+            row["enforcement_run_id"] = await enforcement_db.queue_run(
+                sess,
+                action_id=int(row["id"]),
+                operation="apply",
+                idempotency_key=f"moderation:{row['id']}:apply:v1",
+                requested_by_user_id=admin_id,
+                chat_ids=enforcement_chat_ids,
+            )
         if new_log_id:
             await sess.execute(
                 pg_insert(moderation_messages).values(
@@ -350,7 +401,11 @@ async def update_ban(
     if row is None:
         return None
     docs = await compose_rows([row])
-    return docs[0]
+    document = docs[0]
+    run_id = row.get("enforcement_run_id")
+    if isinstance(run_id, int):
+        document["enforcement_run_id"] = run_id
+    return document
 
 
 async def set_log_message_id(ban_id: str, log_msg_id: int) -> None:
@@ -381,17 +436,12 @@ async def deactivate_all_active_bans(
     """Revoke the active ban of a user. Returns the number of bans revoked.
 
     The database keeps one active ban per target, so this revokes the one
-    decision that is in force. It is the single authoritative write of an
-    unban: if it fails, the user is still banned in the database while
-    the chats say otherwise, and the join path would ban the user again
-    on the next membership event.
-
-    A staff unban also withdraws any pending appeal in the same
-    transaction. The ban is gone, so no reviewer can decide that appeal
-    any more, and leaving it pending would block every later appeal while
-    /check kept showing an unreachable review. The appeal-approval path
-    passes ``withdraw_pending_appeals=False`` because it accepts the
-    pending appeal right after this call.
+    decision that is in force. It is a domain write only: the unban command
+    and the appeal-approval path use the queueing variants below so the
+    delivery intent lands in the same transaction. A staff unban also
+    withdraws any pending appeal in the same transaction; leaving it pending
+    would block every later appeal while /check kept showing an unreachable
+    review.
     """
 
     async def _work(sess: AsyncSession) -> int:
@@ -423,6 +473,155 @@ async def deactivate_all_active_bans(
             .values(status="revoked", revoked_at=utc_now())
         )
         return cast("CursorResult", result).rowcount
+
+    return await run_transaction(_work)
+
+
+async def revoke_ban_and_queue_unban(
+    user_id: int,
+    requested_by_user_id: int | None,
+    chat_ids: Sequence[int],
+) -> tuple[int, int | None]:
+    """Revoke the active ban and queue its unban delivery in one transaction.
+
+    The revocation is the domain decision; the run is the durable work
+    item. They have to land together: a revoked record without a run loses
+    the groups that failed the fan-out, and a run without a revoked record
+    is cancelled by the worker. Pending appeals are withdrawn in the same
+    transaction, and the review slot is released so a stale card cannot
+    promise a decision that is already gone.
+    """
+
+    async def _work(sess: AsyncSession) -> tuple[int, int | None]:
+        action_ids = list(
+            (
+                await sess.scalars(
+                    select(moderation_actions.c.id)
+                    .where(
+                        moderation_actions.c.target_user_id == user_id,
+                        moderation_actions.c.action_type == "ban",
+                        moderation_actions.c.status == "active",
+                    )
+                    .with_for_update()
+                )
+            ).all()
+        )
+        if not action_ids:
+            return 0, None
+        # * The run references the acting staff member. An account the
+        # * member cache has never seen must not fail the unban on a
+        # * foreign key, so the identity row joins this transaction.
+        await ensure_users(sess, requested_by_user_id or 0)
+        await sess.execute(
+            moderation_appeals.update()
+            .where(
+                moderation_appeals.c.action_id.in_(action_ids),
+                moderation_appeals.c.status == "pending",
+            )
+            .values(
+                status="withdrawn",
+                resolved_at=utc_now(),
+                decision_note="Ban lifted by staff",
+            )
+        )
+        result = await sess.execute(
+            moderation_actions.update()
+            .where(
+                moderation_actions.c.id.in_(action_ids),
+                moderation_actions.c.status == "active",
+            )
+            .values(
+                status="revoked",
+                revoked_at=utc_now(),
+                metadata=_drop_review_keys(),
+            )
+        )
+        revoked = cast("CursorResult", result).rowcount
+        run_id: int | None = None
+        for action_id in action_ids:
+            queued = await enforcement_db.queue_run(
+                sess,
+                action_id=int(action_id),
+                operation="revoke",
+                idempotency_key=f"moderation:{action_id}:revoke:manual:v1",
+                requested_by_user_id=requested_by_user_id,
+                chat_ids=chat_ids,
+            )
+            run_id = run_id or queued
+        return revoked, run_id
+
+    return await run_transaction(_work)
+
+
+async def approve_appeal_and_queue_unban(
+    ban_id: str,
+    reviewer_id: int,
+    reviewer_name: str,
+    requested_by_user_id: int | None,
+    chat_ids: Sequence[int],
+) -> tuple[bool, int | None]:
+    """Accept the pending appeal, revoke its ban, and queue the unban.
+
+    The appeal status, the ban status, the review slot, and the delivery
+    run are one transaction. A former split let the ban lift while the
+    appeal stayed pending, so /check and the review card disagreed about
+    the decision the staff member had just made.
+    """
+
+    async def _work(sess: AsyncSession) -> tuple[bool, int | None]:
+        action_id = await sess.scalar(
+            select(moderation_actions.c.id)
+            .where(
+                moderation_actions.c.external_ref == ban_id,
+                moderation_actions.c.action_type == "ban",
+                moderation_actions.c.status == "active",
+            )
+            .with_for_update()
+        )
+        if action_id is None:
+            return False, None
+        await ensure_users(sess, requested_by_user_id or 0, reviewer_id)
+        accepted = await sess.execute(
+            moderation_appeals.update()
+            .where(
+                moderation_appeals.c.action_id == action_id,
+                moderation_appeals.c.status == "pending",
+            )
+            .values(
+                status="accepted",
+                resolved_at=utc_now(),
+                reviewed_by_user_id=reviewer_id,
+                decision_note=reviewer_name,
+            )
+        )
+        if cast("CursorResult", accepted).rowcount == 0:
+            return False, None
+        revoked = await sess.execute(
+            moderation_actions.update()
+            .where(
+                moderation_actions.c.id == action_id,
+                moderation_actions.c.status == "active",
+            )
+            .values(
+                status="revoked",
+                revoked_at=utc_now(),
+                metadata=_drop_review_keys(),
+            )
+        )
+        if cast("CursorResult", revoked).rowcount == 0:
+            # * The appeal acceptance already ran in this transaction, so
+            # * the whole unit has to roll back instead of committing an
+            # * accepted appeal that still sits on an active ban.
+            raise RuntimeError(f"the ban {ban_id!r} could not be revoked")
+        run_id = await enforcement_db.queue_run(
+            sess,
+            action_id=int(action_id),
+            operation="revoke",
+            idempotency_key=f"moderation:{action_id}:revoke:appeal:v1",
+            requested_by_user_id=requested_by_user_id,
+            chat_ids=chat_ids,
+        )
+        return True, run_id
 
     return await run_transaction(_work)
 

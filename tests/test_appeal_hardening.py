@@ -108,12 +108,21 @@ def _wire_approve(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     async def _fname(user_id: int, fallback: str = "") -> str:
         return fallback
 
-    async def _deactivate(target_id: int, **kwargs: Any) -> int:
-        record["deactivated"].append(target_id)
-        return 1
+    async def _approve(
+        ban_id: str,
+        reviewer_id: int,
+        reviewer_name: str,
+        requested_by: int | None,
+        chat_ids: list[int],
+    ) -> tuple[bool, int | None]:
+        record["deactivated"].append(ban_id)
+        return True, 77
 
-    async def _clear(ban_id: str) -> None:
-        return None
+    async def _deliver(bot: Any, run_id: int) -> bool:
+        return True
+
+    async def _report(run_id: int) -> dict[str, Any]:
+        return {"failed_count": 0, "target_count": 0, "targets": []}
 
     async def _locale_update(update: Any) -> str:
         return "en-US"
@@ -123,8 +132,11 @@ def _wire_approve(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
     monkeypatch.setattr(db.users_cache, "get_first_name", _fname)
-    monkeypatch.setattr(db.bans_db, "deactivate_all_active_bans", _deactivate)
-    monkeypatch.setattr(db.bans_db, "clear_review", _clear)
+    monkeypatch.setattr(db.bans_db, "approve_appeal_and_queue_unban", _approve)
+    monkeypatch.setattr(
+        appeal_review_flow.enforcement_worker, "deliver_queued_run", _deliver
+    )
+    monkeypatch.setattr(db.enforcement_db, "run_report", _report)
     monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale_update)
     monkeypatch.setattr(appeal_review_flow, "locale_for_user", _locale_user)
     return record
@@ -190,7 +202,7 @@ def test_approve_demotes_staff_before_deactivate(
     _run_approve(query)
 
     assert record["demoted"] == [(9, "admin")]
-    assert record["deactivated"] == [9]
+    assert record["deactivated"] == ["abc"]
 
 
 def test_approve_blocks_when_demote_is_a_noop_and_the_role_survives(
@@ -302,7 +314,7 @@ def test_approve_proceeds_when_the_approver_outranks_the_target(
     _run_approve(query, approver_role="founder")
 
     assert record["demoted"] == [(9, "admin")]
-    assert record["deactivated"] == [9]
+    assert record["deactivated"] == ["abc"]
 
 
 def test_approve_proceeds_when_the_role_is_already_gone(
@@ -328,7 +340,7 @@ def test_approve_proceeds_when_the_role_is_already_gone(
     query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query)
 
-    assert record["deactivated"] == [9]
+    assert record["deactivated"] == ["abc"]
 
 
 def test_stale_review_card_cannot_decide_a_newer_appeal(

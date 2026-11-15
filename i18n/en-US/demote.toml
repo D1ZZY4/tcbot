@@ -11,6 +11,8 @@
 manual = "Your {role} role in {community} has been removed by {name}."
 auto = "Your {role} role in {community} has been removed - you were {verb} from the federation."
 warn = "Your {role} role in {community} has been removed - you reached the warning limit, so you were demoted instead of banned."
+unban = "Your {role} role in {community} has been removed by {name}. Your federation ban was lifted at the same time."
+appeal = "Your {role} role in {community} has been removed because {name} approved your appeal and lifted the federation ban."
 
 [abort]
 body = "{user} holds a federation role ({target_role}) and the demote step failed, so the {action} cannot proceed safely. Demote them manually with /tcdemote and retry the {action}."

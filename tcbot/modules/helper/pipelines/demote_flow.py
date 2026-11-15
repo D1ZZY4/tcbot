@@ -57,6 +57,8 @@ class Demote:
       before the actual action.
     * ``execute(trigger="warn")`` runs the warn-threshold exemption, which
       demotes a staff holder instead of banning them.
+    * ``execute(trigger="unban")`` / ``"appeal"`` runs the fail-closed
+      pre-unban gate and names the decision that lifted the ban.
 
     The two enforcement gates around it differ on purpose:
     :func:`demote_before_enforcement` proceeds after a failure, and
@@ -136,6 +138,22 @@ class Demote:
                 target_locale,
                 role=Safe(bold(role_label)),
                 community=cfg.community_name,
+            )
+        elif trigger == "unban":
+            user_msg = t(
+                "demote.dm.unban",
+                target_locale,
+                role=Safe(bold(role_label)),
+                community=cfg.community_name,
+                name=executor_fname,
+            )
+        elif trigger == "appeal":
+            user_msg = t(
+                "demote.dm.appeal",
+                target_locale,
+                role=Safe(bold(role_label)),
+                community=cfg.community_name,
+                name=executor_fname,
             )
         else:
             if trigger == "ban":
@@ -254,6 +272,8 @@ async def demote_before_unban(
     target_role: str,
     executor_id: int,
     executor_fname: str,
+    *,
+    trigger: str = "unban",
 ) -> UnbanGate:
     """Remove a federation role before an unban; fail closed on failure.
 
@@ -261,7 +281,8 @@ async def demote_before_unban(
     :func:`demote_before_enforcement` this gate fails closed: a demote that
     raises, or a demote that cleared no row while the role still resolves,
     blocks the unban so a staff holder never keeps rank after the ban
-    lifts. Single owner for the /tcunban and appeal-approve paths.
+    lifts. Single owner for the /tcunban and appeal-approve paths;
+    ``trigger`` selects the DM wording ("unban" or "appeal").
     """
     try:
         removed = await Demote.execute(
@@ -271,7 +292,7 @@ async def demote_before_unban(
             target_role,
             executor_id,
             executor_fname,
-            trigger=None,
+            trigger=trigger,
         )
     except Exception:
         log.exception(

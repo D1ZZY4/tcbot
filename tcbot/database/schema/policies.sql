@@ -46,6 +46,7 @@ BEGIN
         'moderation_actions',
         'moderation_appeals',
         'moderation_messages',
+        'moderation_notification_tasks',
         'audit_events',
         'moderation_enforcement_runs',
         'moderation_enforcement_targets',

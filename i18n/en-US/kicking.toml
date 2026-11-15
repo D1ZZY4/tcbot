@@ -12,7 +12,9 @@ body = "`/tckick` (alias: `/tck`)"
 body = """
 Removes a user from the *current group only*. This is not a federation-wide action; the user can rejoin via an invite link unless they are separately federation-banned.
 
-If the target holds a federation role (Tester / Developer / Admin), that role is demoted and they are notified by DM. A log entry is posted to the federation logs channel."""
+If the target holds a federation role (Tester / Developer / Admin), that role is demoted and they are notified by DM. A log entry is posted to the federation logs channel.
+
+Telegram has no direct kick, so the bot bans and then unbans the user. If the second step still fails after one retry, a durable repair task keeps retrying the unban."""
 
 [help.flow]
 body = """
@@ -35,7 +37,7 @@ Or reply to a message and run `/tck`."""
 body = "They can rejoin via invite link."
 
 [warn]
-unban = " WARNING: the post-kick unban step failed; the user is still banned in this chat and cannot rejoin. Unban them manually from the chat member list."
+unban = " WARNING: the post-kick unban step failed; the user is still banned in this chat. A repair task retries the unban automatically; if it remains banned, unban them manually from the chat member list."
 
 [summary]
 body = "{user} has been kicked.\nReason: {reason}\n{rejoin}{warning}"

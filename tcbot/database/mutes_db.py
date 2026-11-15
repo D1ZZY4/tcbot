@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tcbot.database import moderation_db
+from tcbot.database import enforcement_db, moderation_db
 from tcbot.database.base import moderation_actions
 from tcbot.database.documents import ActiveMuteDoc, MuteDoc
 from tcbot.database.engine import (
@@ -33,9 +33,12 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from datetime import datetime
 
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    from tcbot.database.documents import EvidenceItemDoc
 
 log = get_logger(__name__)
 
@@ -77,28 +80,32 @@ async def record_mute(
     admin_id: int,
     *,
     until: datetime | None = None,
-) -> int:
-    """Record a community mute and return the decision id.
+    requested_duration_seconds: int | None = None,
+    enforcement_chat_ids: Sequence[int] | None = None,
+    proof_items: Sequence[EvidenceItemDoc] | None = None,
+    proof_expected_count: int = 0,
+    destination_chat_id: int = 0,
+    destination_thread_id: int | None = None,
+) -> tuple[int, int | None]:
+    """Record a community mute and return its decision and delivery run.
 
     The deadline is stored as an absolute expiry, and the duration the
-    decision shows is derived from it, so the two can never disagree. A
-    permanent mute has no expiry and no duration.
+    decision shows is derived from it, so the two can never disagree. The
+    duration the moderator requested is kept as metadata, because the
+    stored duration is the remaining lifetime and a superseding mute can
+    extend it. A permanent mute has no expiry and no duration.
 
-    The decision and the case that holds it land in one transaction, so a
-    mute without an investigation cannot exist.
-
-    A second mute of a user who is already muted is a new decision that
-    supersedes the old one: the history keeps the first mute and its
-    reason, and only the newest decision is in force. The stored deadline
-    never moves backwards, so a timed mute cannot shorten a longer
-    restriction and a permanent mute is never downgraded to a timed one.
+    The decision, the case that holds it, and the optional apply run land
+    in one transaction. A run without a decision would be cancelled, and a
+    decision without the run would lose the groups that failed the first
+    delivery.
     """
     # * One clock reading for the whole decision: the case write may take a
     # * moment, and a later created_at could pass a short deadline, which
     # * the schema refuses as an already-expired row.
     now = utc_now()
 
-    async def _work(sess: AsyncSession) -> int:
+    async def _work(sess: AsyncSession) -> tuple[int, int | None]:
         # * Serialise the read-supersede-insert sequence per user. Without
         # * the lock both concurrent writers read the same active mute and
         # * the trigger rejects the second supersede with a raw error that
@@ -108,6 +115,19 @@ async def record_mute(
             {"scope": f"mute:{user_id}"},
         )
         case_id = await _open_case(sess, user_id, admin_id, reason)
+        upload_id = None
+        if proof_items and destination_chat_id:
+            upload_id = await moderation_db.archive_proof(
+                sess,
+                case_id,
+                admin_id,
+                0,
+                destination_chat_id,
+                items=proof_items,
+                expected_item_count=proof_expected_count,
+                destination_thread_id=destination_thread_id,
+                is_required=False,
+            )
         previous = (
             (
                 await sess.execute(
@@ -163,8 +183,14 @@ async def record_mute(
                         expires_at=expires_at,
                         status="active",
                         case_id=case_id,
+                        evidence_upload_id=upload_id,
                         supersedes_action_id=supersedes,
                         action_origin="manual",
+                        metadata=(
+                            {"requested_duration_seconds": requested_duration_seconds}
+                            if requested_duration_seconds is not None
+                            else {}
+                        ),
                     )
                     .returning(moderation_actions.c.id)
                 )
@@ -174,11 +200,21 @@ async def record_mute(
         )
         if row is None:
             raise RuntimeError("the mute decision was not written")
+        run_id: int | None = None
+        if enforcement_chat_ids is not None:
+            run_id = await enforcement_db.queue_run(
+                sess,
+                action_id=int(row["id"]),
+                operation="apply",
+                idempotency_key=f"moderation:{row['id']}:apply:v1",
+                requested_by_user_id=admin_id,
+                chat_ids=enforcement_chat_ids,
+            )
         # * The investigation ends with its decision: an open case is
         # * picked up by the next decision about the same user, so the
         # * history would collapse into one case per user.
         await moderation_db.close_case(sess, case_id, admin_id)
-        return int(row["id"])
+        return int(row["id"]), run_id
 
     try:
         return await run_transaction(_work)
@@ -334,6 +370,12 @@ async def user_mute_count(user_id: int) -> int:
 def _compose_mute(row: dict[str, Any]) -> MuteDoc:
     """Return the mute document of one decision row."""
     origin = row.get("origin_chat_id")
+    metadata = row.get("metadata")
+    requested = (
+        metadata.get("requested_duration_seconds")
+        if isinstance(metadata, dict)
+        else None
+    )
     return MuteDoc(
         target_user_id=UserId(int(row["target_user_id"])),
         chat_id=ChatId(int(origin)) if origin is not None else None,
@@ -341,4 +383,7 @@ def _compose_mute(row: dict[str, Any]) -> MuteDoc:
         actor_user_id=UserId(int(row["actor_user_id"])),
         timestamp=cast("datetime", row["created_at"]),
         duration_secs=cast("int | None", row.get("duration_seconds")),
+        requested_duration_secs=(
+            int(requested) if isinstance(requested, int | str) else None
+        ),
     )

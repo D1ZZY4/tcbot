@@ -99,6 +99,7 @@ db_fail = "Could not load warning groups. The database is unreachable, try again
 empty = "{heading}\n\nNo {lower} records for {user}."
 header = "{heading}: {n} total, page {page}/{pages}"
 item = "{i}. {ts}\n   Group: {title}\n   {reason}\n   By {admin}"
+mute_item = "{i}. {ts}\n   Group: {title}\n   Requested: {requested} | Stored: {stored}\n   {reason}\n   By {admin}"
 no_reason = "(no reason)"
 
 [ban_info]

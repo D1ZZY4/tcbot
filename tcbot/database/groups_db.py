@@ -201,6 +201,42 @@ async def ensure_primary_group(chat_id: int, title: str | None = None) -> None:
     active_groups_cache.invalidate(_ALL_GROUPS_KEY)
 
 
+async def ensure_destinations(
+    destinations: Iterable[tuple[int, bool]],
+) -> None:
+    """Register the configured log and evidence destinations as chat rows.
+
+    A channel the bot posts to is not a connected group, so nothing else
+    creates its ``telegram_chats`` row. The evidence archive and the run
+    targets reference that table, and a fresh deployment would fail its
+    first ban on an unregistered proof channel. Existing rows keep their
+    type: a destination that is also a managed group is not rewritten.
+    """
+    rows = [
+        {
+            "chat_id": chat_id,
+            "chat_type": "supergroup" if is_forum else "channel",
+            "is_forum": is_forum,
+        }
+        for chat_id, is_forum in dict.fromkeys(
+            (int(chat_id), bool(is_forum))
+            for chat_id, is_forum in destinations
+            if chat_id and int(chat_id) < 0
+        )
+    ]
+    if not rows:
+        return
+
+    async def _work(sess: AsyncSession) -> None:
+        await sess.execute(
+            pg_insert(telegram_chats)
+            .values(rows)
+            .on_conflict_do_nothing(index_elements=["chat_id"])
+        )
+
+    await run_transaction(_work)
+
+
 async def add_group(chat_id: int, title: str, added_by: int) -> None:
     """Connect a group to the community."""
     now = utc_now()

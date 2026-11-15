@@ -581,6 +581,61 @@ Index(
 )
 Index("ix_moderation_messages_recorded_by", moderation_messages.c.recorded_by_user_id)
 
+# * A durable edit of a review card whose direct update failed. The task
+# * survives the handler and retries from the scheduler, so a Telegram
+# * outage cannot leave a card that still looks decidable after the appeal
+# * or ban was settled.
+moderation_notification_tasks = Table(
+    "moderation_notification_tasks",
+    metadata,
+    Column("id", BigInteger, Identity(always=True), nullable=False),
+    Column("action_id", BigInteger, nullable=False),
+    Column("chat_id", BigInteger, nullable=False),
+    Column("message_id", BigInteger, nullable=False),
+    Column("kind", Text, nullable=False, server_default="review_card"),
+    Column("state", Text, nullable=False, server_default="pending"),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("next_retry_at", DateTime(timezone=True), nullable=True),
+    Column("last_error", Text, nullable=True),
+    Column(
+        "created_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
+    ),
+    Column(
+        "updated_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
+    ),
+    PrimaryKeyConstraint("id"),
+    ForeignKeyConstraint(
+        ["action_id"],
+        ["moderation_actions.id"],
+        name="fk_moderation_notification_action",
+    ),
+    ForeignKeyConstraint(
+        ["chat_id"],
+        ["telegram_chats.chat_id"],
+        name="fk_moderation_notification_chat",
+    ),
+    UniqueConstraint(
+        "action_id", "kind", name="uq_moderation_notification_action_kind"
+    ),
+    CheckConstraint("message_id > 0", name="ck_moderation_notification_message"),
+    CheckConstraint("attempts >= 0", name="ck_moderation_notification_attempts"),
+    enum_check("ck_moderation_notification_kind", "kind", "review_card"),
+    enum_check(
+        "ck_moderation_notification_state",
+        "state",
+        "pending",
+        "sent",
+        "failed",
+        "skipped",
+    ),
+)
+
+Index(
+    "ix_moderation_notification_due",
+    moderation_notification_tasks.c.state,
+    moderation_notification_tasks.c.next_retry_at,
+)
+
 # * The append-only trail of every decision and state change.
 audit_events = Table(
     "audit_events",

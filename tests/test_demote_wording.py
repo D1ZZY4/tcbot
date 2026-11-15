@@ -64,7 +64,13 @@ def _wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     ) -> tuple[Any, Any]:
         return guards.EnforcementVerdict.ALLOWED, None
 
-    async def _add_warn(user_id: int, reason: str, admin_id: int, chat_id: int) -> int:
+    async def _add_warn(
+        user_id: int,
+        reason: str,
+        admin_id: int,
+        chat_id: int,
+        **kwargs: Any,
+    ) -> int:
         return cfg.warn_limit
 
     async def _role(user_id: int, *, fresh: bool = False) -> str:

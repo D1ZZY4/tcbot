@@ -131,3 +131,33 @@ def test_summary_falls_back_to_reply_when_edit_fails(
     assert len(bot.edits) == 1
     assert len(bot.replies) == 1
     assert "has been kicked" in bot.replies[0]["args"][0]
+
+
+def test_a_stranded_kick_queues_its_unban_repair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    queued: list[tuple[int, int, int | None]] = []
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        return "tester" if user_id == 11 else None
+
+    async def _logged(*args: Any, **kwargs: Any) -> int:
+        return 55
+
+    async def _repair(action_id: int, chat_id: int, requested_by: int | None) -> int:
+        queued.append((action_id, chat_id, requested_by))
+        return 99
+
+    class _FailUnbanBot(_FakeBot):
+        async def unban_chat_member(self, *args: Any, **kwargs: Any) -> bool:
+            raise RuntimeError("still banned")
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
+    monkeypatch.setattr(db.enforcement_db, "queue_kick_unban_repair", _repair)
+
+    bot = _run(_FailUnbanBot(), prompt_chat=22, prompt_id=44)
+
+    assert queued == [(55, 22, 11)]
+    assert bot.edits
+    assert "WARNING" in bot.edits[0]["args"][0]

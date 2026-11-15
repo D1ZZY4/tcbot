@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -19,7 +20,12 @@ from tcbot.database import enforcement_db
 class _FakeBot:
     def __init__(self) -> None:
         self.unbanned: list[tuple[int, int]] = []
+        self.banned: list[tuple[int, int]] = []
         self.restricted: list[tuple[int, int, Any]] = []
+        self.restrict_until: list[Any] = []
+
+    async def ban_chat_member(self, chat_id: int, user_id: int) -> None:
+        self.banned.append((chat_id, user_id))
 
     async def unban_chat_member(
         self, chat_id: int, user_id: int, *, only_if_banned: bool = False
@@ -27,9 +33,10 @@ class _FakeBot:
         self.unbanned.append((chat_id, user_id))
 
     async def restrict_chat_member(
-        self, chat_id: int, user_id: int, permissions: Any
+        self, chat_id: int, user_id: int, permissions: Any, **kwargs: Any
     ) -> None:
         self.restricted.append((chat_id, user_id, permissions))
+        self.restrict_until.append(kwargs.get("until_date"))
 
 
 def _wire(
@@ -86,6 +93,97 @@ def test_an_expired_ban_is_lifted(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert bot.unbanned == [(-100, 9)]
     assert record["completed"] == [(3, {"status": "succeeded", "outcome": "succeeded"})]
+
+
+def test_an_active_ban_apply_is_delivered(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An apply run bans the target in every claimed chat."""
+    completed: list[tuple[int, dict[str, Any]]] = []
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [{"id": 1, "action_id": 2, "operation": "apply"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "ban",
+            "action_status": "active",
+            "operation": "apply",
+            "expires_at": None,
+        }
+
+    async def _targets(run_id: int, limit: int = 100) -> list[dict[str, object]]:
+        return [{"id": 3, "chat_id": -100, "attempt_count": 0}]
+
+    async def _complete(target_id: int, **kwargs: Any) -> None:
+        completed.append((target_id, kwargs))
+
+    async def _fan_out(coros: Any) -> list[object]:
+        for coro in coros:
+            await coro
+        return [None]
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
+    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    bot = _FakeBot()
+
+    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert bot.banned == [(-100, 9)]
+    assert completed == [(3, {"status": "succeeded", "outcome": "succeeded"})]
+
+
+def test_an_active_mute_apply_keeps_its_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An apply run restricts the chat until the stored decision expiry."""
+    deadline = datetime.now(UTC) + timedelta(hours=1)
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [{"id": 1, "action_id": 2, "operation": "apply"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "mute",
+            "action_status": "active",
+            "operation": "apply",
+            "expires_at": deadline,
+        }
+
+    async def _targets(run_id: int, limit: int = 100) -> list[dict[str, object]]:
+        return [{"id": 3, "chat_id": -100, "attempt_count": 0}]
+
+    async def _complete(target_id: int, **kwargs: Any) -> None:
+        return None
+
+    async def _fan_out(coros: Any) -> list[object]:
+        for coro in coros:
+            await coro
+        return [None]
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
+    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    bot = _FakeBot()
+
+    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert len(bot.restricted) == 1
+    assert bot.restricted[0][2].can_send_messages is False
+    assert bot.restrict_until == [deadline]
 
 
 def test_an_expired_mute_is_restored(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -146,6 +244,96 @@ def test_a_due_retry_requeues_its_run() -> None:
     assert "t.status = 'failed'" in sql
     assert "t.next_retry_at <= now()" in sql
     assert "cc.is_active" in sql
+
+
+def test_a_kick_repair_run_lifts_the_second_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reconcile run for a kick unbans the chat the kick could not release."""
+    completed: list[tuple[int, dict[str, Any]]] = []
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [{"id": 5, "action_id": 6, "operation": "reconcile"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "kick",
+            "action_status": "completed",
+            "operation": "reconcile",
+        }
+
+    async def _targets(run_id: int, limit: int = 100) -> list[dict[str, object]]:
+        return [{"id": 7, "chat_id": -100, "attempt_count": 0}]
+
+    async def _complete(target_id: int, **kwargs: Any) -> None:
+        completed.append((target_id, kwargs))
+
+    async def _fan_out(coros: Any) -> list[object]:
+        for coro in coros:
+            await coro
+        return [None]
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
+    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    bot = _FakeBot()
+
+    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert bot.unbanned == [(-100, 9)]
+    assert completed == [(7, {"status": "succeeded", "outcome": "succeeded"})]
+
+
+def test_a_reconcile_run_for_another_action_is_cancelled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cancelled: list[int] = []
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [{"id": 5, "action_id": 6, "operation": "reconcile"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "ban",
+            "action_status": "active",
+            "operation": "reconcile",
+        }
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(
+        enforcement_db,
+        "cancel_run",
+        lambda run_id, **kwargs: _record(cancelled, run_id),
+    )
+
+    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+
+    assert cancelled == [5]
+
+
+def test_deliver_queued_run_reports_a_lost_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(enforcement_db, "claim_run", lambda run_id: _async_value(None))
+
+    delivered = asyncio.run(
+        enforcement_worker.deliver_queued_run(_FakeBot(), 5)  # type: ignore[arg-type]
+    )
+
+    assert delivered is False
 
 
 def test_a_run_for_an_active_action_is_cancelled(

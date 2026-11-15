@@ -26,6 +26,7 @@ from tcbot.database.cache import effective_role_cache, user_mention_cache
 from tcbot.database.connection_options import schema_options
 from tcbot.database.engine import run_transaction
 from tcbot.database.queues_db import expire_stale_requests
+from tcbot.notification_worker import run as run_notification_worker
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
@@ -316,6 +317,7 @@ async def _cleanup_old_records() -> None:
 _EXPIRY_SCHEDULE_ID: str = "tcbot.expiry_daily"
 _PROMOTION_EXPIRY_SCHEDULE_ID: str = "tcbot.promotion_expiry_hourly"
 _ENFORCEMENT_WORKER_SCHEDULE_ID: str = "tcbot.enforcement_worker"
+_NOTIFICATION_WORKER_SCHEDULE_ID: str = "tcbot.notification_worker"
 # * ID of the retired warn-expiry job. It patched the warnings that had no
 # * deadline, which the community schema forbids. The schedule is removed
 # * on every startup so it cannot fire; the id stays here so the removal
@@ -667,6 +669,19 @@ def _reconcile_schedules(
         misfire_grace_time=300,
     )
     log.info("Scheduled enforcement worker: every 5 minutes.")
+
+    # * A review-card edit that failed in the handler is retried here, so
+    # * a settled appeal cannot leave a live-looking card behind.
+    _ensure_job(
+        scheduler,
+        store,
+        job_id=_NOTIFICATION_WORKER_SCHEDULE_ID,
+        func=run_notification_worker,
+        trigger=IntervalTrigger(minutes=5, timezone=_SCHEDULER_TIMEZONE),
+        args=(),
+        misfire_grace_time=300,
+    )
+    log.info("Scheduled notification worker: every 5 minutes.")
     # * The retired weekly cleanup job must not fire: it pointed at a
     # * membership sweep the daily job replaced.
     _remove_job(scheduler, _LEGACY_CLEANUP_SCHEDULE_ID, "Legacy DB cleanup")

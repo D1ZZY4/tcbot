@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import guards, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
@@ -21,7 +22,7 @@ from tcbot.modules.helper.pipelines.proof_flow import (
 )
 from tcbot.modules.helper.pipelines.reason_flow import BuildReason, build_modaction_conv
 from tcbot.modules.helper.scope import flow_scope
-from tcbot.utils.dispatch import throw_if_cancelled
+from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -88,11 +89,9 @@ async def execute_kick(
         )
         return
 
-    # * Upload proof concurrently with enforcement: the ban below must not wait
-    # * for the proof-channel round trip. The task is awaited after the ban
-    # * lands and before the keyboards are built; on ban failure it is
-    # * cancelled so no orphan upload outlives the executor. An upload failure
-    # * still degrades to no proof link, exactly as before.
+    # * Optional proof is archived with the decision, so it has to land
+    # * before the audit row. The upload starts here and is awaited once;
+    # * a failed upload degrades to a kick without evidence.
     proof_task: asyncio.Task[ProofUpload] | None = None
     if proof_msgs:
         proof_task = asyncio.create_task(
@@ -100,20 +99,34 @@ async def execute_kick(
                 ctx.bot, proof_msgs, target_id, admin_id, admin_fname
             )
         )
+    proof_upload: ProofUpload | None = None
+    if proof_task is not None:
+        try:
+            proof_upload = await proof_task
+        except asyncio.CancelledError:
+            proof_task.cancel()
+            raise
+        except Exception:
+            log.warning("Kick proof upload skipped for target=%d", target_id)
 
     # * Audit first: the DB kick record must exist before enforcement.
     # * A failed write aborts with a retry reply instead of leaving an
     # * enforced but unaudited kick that /check can never see.
     try:
-        await db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id)
+        kick_action_id = await db.kicks_db.log_kick(
+            target_id,
+            chat_id,
+            reason_text,
+            admin_id,
+            proof_items=proof_upload.documents() if proof_upload else None,
+            proof_expected_count=(
+                proof_upload.expected_item_count if proof_upload else 0
+            ),
+            destination_chat_id=cfg.proofs[0],
+            destination_thread_id=cfg.proofs[1],
+        )
     except Exception:
         log.exception("log_kick DB write failed for target=%d", target_id)
-        # * The kick was never recorded, so the proof upload must not
-        # * outlive it: an orphan proof in the proofs channel points at a
-        # * moderation action that does not exist.
-        if proof_task is not None and not proof_task.done():
-            proof_task.cancel()
-            await asyncio.gather(proof_task, return_exceptions=True)
         await safe_reply(
             msg,
             replies.err_db_retry(locale, plain=True),
@@ -139,16 +152,7 @@ async def execute_kick(
             ctx.bot.ban_chat_member(chat_id, target_id),
             timeout=TELEGRAM_LOOKUP_TIMEOUT,
         )
-        proof_link: str | None = None
-        if proof_task is not None:
-            try:
-                proof_link = (await proof_task).link
-            except asyncio.CancelledError:
-                proof_task.cancel()
-                raise
-            except Exception:
-                log.warning("Kick proof upload skipped for target=%d", target_id)
-                proof_link = None
+        proof_link: str | None = proof_upload.link if proof_upload else None
         proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
         chat_title = effective_chat.title or str(chat_id)
         log_text = messages.kick_log(
@@ -201,6 +205,28 @@ async def execute_kick(
                     target_id,
                     unban_result,
                 )
+                if kick_action_id and not is_benign_telegram_error(unban_result):
+                    # * A kick is a ban followed by an unban. If the second
+                    # * step still fails, the user is banned with no active
+                    # * ban record to repair from. The reconcile run keeps
+                    # * the one chat as durable work and retries it.
+                    try:
+                        repair_run = await db.enforcement_db.queue_kick_unban_repair(
+                            kick_action_id, chat_id, admin_id
+                        )
+                    except Exception:
+                        log.exception(
+                            "Kick repair queue failed for action=%s",
+                            kick_action_id,
+                        )
+                    else:
+                        if repair_run is not None:
+                            log.warning(
+                                "Kick left target=%d banned in %d; repair run %s queued",
+                                target_id,
+                                chat_id,
+                                repair_run,
+                            )
         if isinstance(log_send_result, BaseException):
             log.error("Kick log send failed: %s", log_send_result)
         unban_warning = (

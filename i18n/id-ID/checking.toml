@@ -99,6 +99,7 @@ db_fail = "Grup peringatan gagal dimuat. Database tidak terjangkau, coba lagi se
 empty = "{heading}\n\nTidak ada catatan {lower} untuk {user}."
 header = "{heading}: {n} total, halaman {page}/{pages}"
 item = "{i}. {ts}\n   Grup: {title}\n   {reason}\n   Oleh {admin}"
+mute_item = "{i}. {ts}\n   Grup: {title}\n   Diminta: {requested} | Tersimpan: {stored}\n   {reason}\n   Oleh {admin}"
 no_reason = "(tanpa alasan)"
 
 [ban_info]

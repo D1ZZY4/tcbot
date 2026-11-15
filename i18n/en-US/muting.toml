@@ -48,7 +48,8 @@ Or reply to a message and run `/tcm`."""
 # [applied] renders the unmute fan-out line; {applied} carries it whole.
 # Placeholders: {user} pre-formatted user reference, {dur} pre-formatted
 # bold duration, {reason} raw reason text, {done}/{total}/{failed} ints,
-# {sample} raw group names, {applied} prebuilt applied line.
+# {sample} raw group names, {applied} prebuilt applied line, {note}
+# prebuilt failure line.
 
 [note]
 groups_fail = "{user} could not be muted: the group list could not be loaded from the database, so no groups were touched. Check the logs and retry with /tcmute once the database recovers."
@@ -64,7 +65,8 @@ partial = "Restored in {done}/{total} groups ({failed} failed: {sample}{more}"
 full = "Restored in {total}/{total} groups."
 
 [summary]
-body = "{user} has been muted {dur}.\nReason: {reason}\nApplied to {done}/{total} groups."
+body = "{user} has been muted {dur}.\nReason: {reason}\nApplied to {done}/{total} groups.{note}"
+partial = "\nWARNING: the mute did not land in {failed} group(s): {sample}{more}. The record is kept so the restriction can be retried."
 
 [unmute]
 body = "{user} has been unmuted.\n{applied}"

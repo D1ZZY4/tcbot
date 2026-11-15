@@ -2,18 +2,19 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Deliver the queued expiry revokes to Telegram.
+"""Deliver the queued enforcement runs to Telegram.
 
-The database expires a decision and queues one revoke run per managed
-group. This worker claims those runs and lifts the restriction, so the
-queue is not a write-only ledger. The work is idempotent: an expired
-action can be unbanned or unrestricted more than once without harm.
+The database records a decision and queues one run per managed group.
+This worker applies or lifts the decision for each target, records the
+per-group outcome, and retries a transient failure. The work is
+idempotent: a ban, mute, unban, or restore can be delivered more than
+once without harm.
 """
 
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from telegram import ChatPermissions
@@ -93,22 +94,64 @@ async def run_once(bot: Bot) -> None:
             )
 
 
+async def deliver_queued_run(bot: Bot, run_id: int) -> bool:
+    """Deliver one queued run now; return False when another worker owns it.
+
+    The caller has already committed the decision and its run, so failing
+    to claim it is not an error: the scheduled worker delivers it, and the
+    run stays recoverable if this process dies before the claim.
+    """
+    run = await db.enforcement_db.claim_run(run_id)
+    if run is None:
+        return False
+    await _process_run(bot, run)
+    return True
+
+
 async def _process_run(bot: Bot, run: dict[str, object]) -> None:
     """Process one claimed run, one target at a time within the run."""
     run_id = _as_int(run.get("id"))
     if run_id <= 0:
         return
     action = await db.enforcement_db.load_run_action(run_id)
-    if action is None or action.get("action_status") not in ("expired", "revoked"):
+    if action is None:
         await db.enforcement_db.cancel_run(
-            run_id, error_detail="the action is no longer expired or revoked"
+            run_id, error_detail="the action of the run no longer exists"
         )
         return
+    operation = str(action.get("operation") or "")
+    action_status = str(action.get("action_status") or "")
     action_type = str(action.get("action_type") or "")
-    target_user_id = _as_int(action.get("target_user_id"))
-    if action_type not in ("ban", "mute") or target_user_id <= 0:
+    supported = (
+        (
+            operation == "apply"
+            and action_status == "active"
+            and action_type in ("ban", "mute")
+        )
+        or (
+            operation == "revoke"
+            and action_status in ("expired", "revoked")
+            and action_type in ("ban", "mute")
+        )
+        or (
+            operation == "reconcile"
+            and action_status == "completed"
+            and action_type == "kick"
+        )
+    )
+    if not supported:
         await db.enforcement_db.cancel_run(
-            run_id, error_detail=f"unsupported action type {action_type!r}"
+            run_id,
+            error_detail=(
+                f"unsupported {operation!r} run for "
+                f"{action_type!r} action in {action_status!r} state"
+            ),
+        )
+        return
+    target_user_id = _as_int(action.get("target_user_id"))
+    if target_user_id <= 0:
+        await db.enforcement_db.cancel_run(
+            run_id, error_detail="the action carries no target"
         )
         return
 
@@ -117,8 +160,17 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
         await db.enforcement_db.complete_empty_run(run_id)
         return
 
+    expires_at = action.get("expires_at")
+    expiry = expires_at if isinstance(expires_at, datetime) else None
     coros = [
-        _deliver(bot, action_type, _as_int(target.get("chat_id")), target_user_id)
+        _deliver(
+            bot,
+            action_type,
+            _as_int(target.get("chat_id")),
+            target_user_id,
+            operation,
+            expiry,
+        )
         for target in targets
     ]
     results = await fan_out(coros)
@@ -134,12 +186,30 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
             log.error("Enforcement target update failed: %s", result)
 
 
-async def _deliver(bot: Bot, action_type: str, chat_id: int, user_id: int) -> None:
-    """Lift one expired restriction in one chat."""
+async def _deliver(
+    bot: Bot,
+    action_type: str,
+    chat_id: int,
+    user_id: int,
+    operation: str,
+    expires_at: datetime | None = None,
+) -> None:
+    """Apply or lift one decision in one chat."""
     if chat_id == 0:
         return
     async with asyncio.timeout(20):
-        if action_type == "ban":
+        if operation == "apply":
+            if action_type == "ban":
+                await bot.ban_chat_member(chat_id, user_id)
+            else:
+                await bot.restrict_chat_member(
+                    chat_id,
+                    user_id,
+                    permissions=ChatPermissions(can_send_messages=False),
+                    until_date=expires_at,
+                )
+            return
+        if action_type in ("ban", "kick"):
             await bot.unban_chat_member(chat_id, user_id, only_if_banned=True)
         else:
             await bot.restrict_chat_member(

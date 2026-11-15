@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Claim and record the queued enforcement runs of expired decisions."""
+"""Queue, claim, report, and requeue the enforcement runs of decisions."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ from tcbot.database.engine import run_transaction
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
 _RUN_CLAIM = text(
@@ -23,7 +25,7 @@ _RUN_CLAIM = text(
         SELECT id
           FROM moderation_enforcement_runs
          WHERE status = 'queued'
-           AND operation = 'revoke'
+           AND operation IN ('apply', 'revoke', 'reconcile')
          ORDER BY created_at
          FOR UPDATE SKIP LOCKED
          LIMIT :limit
@@ -35,6 +37,17 @@ _RUN_CLAIM = text(
       FROM picked
      WHERE r.id = picked.id
     RETURNING r.id, r.action_id, r.operation
+    """
+)
+
+_CLAIM_ONE_RUN = text(
+    """
+    UPDATE moderation_enforcement_runs
+       SET status = 'running',
+           started_at = COALESCE(started_at, now()),
+           updated_at = now()
+     WHERE id = :run_id AND status = 'queued'
+    RETURNING id, action_id, operation
     """
 )
 
@@ -88,6 +101,7 @@ _RUN_ACTION = text(
     SELECT a.target_user_id,
            a.action_type,
            a.status AS action_status,
+           a.expires_at,
            r.operation
       FROM moderation_enforcement_runs AS r
       JOIN moderation_actions AS a ON a.id = r.action_id
@@ -178,6 +192,66 @@ _CANCEL_RUN = text(
     """
 )
 
+_QUEUE_RUN = text(
+    """
+    INSERT INTO moderation_enforcement_runs (
+        action_id, operation, idempotency_key, requested_by_user_id, status
+    )
+    VALUES (:action_id, :operation, :idempotency_key, :requested_by_user_id, 'queued')
+    ON CONFLICT (idempotency_key) DO NOTHING
+    RETURNING id
+    """
+)
+
+_RUN_BY_KEY = text(
+    """
+    SELECT id FROM moderation_enforcement_runs WHERE idempotency_key = :idempotency_key
+    """
+)
+
+_QUEUE_TARGETS = text(
+    """
+    INSERT INTO moderation_enforcement_targets (run_id, chat_id)
+    SELECT :run_id, cc.chat_id
+      FROM connected_chats AS cc
+     WHERE cc.chat_id = ANY(:chat_ids)
+       AND cc.is_active
+    ON CONFLICT (run_id, chat_id) DO NOTHING
+    """
+)
+
+_RUN_REPORT = text(
+    """
+    SELECT r.id, r.action_id, r.operation, r.status, r.target_count,
+           r.succeeded_count, r.failed_count, r.skipped_count,
+           r.started_at, r.finished_at
+      FROM moderation_enforcement_runs AS r
+     WHERE r.id = :run_id
+    """
+)
+
+_TARGET_REPORT = text(
+    """
+    SELECT t.id, t.chat_id, t.status, t.attempt_count, t.last_error_kind,
+           t.last_error_detail, t.next_retry_at, tc.title
+      FROM moderation_enforcement_targets AS t
+      LEFT JOIN telegram_chats AS tc ON tc.chat_id = t.chat_id
+     WHERE t.run_id = :run_id
+     ORDER BY t.id
+    """
+)
+
+_KICK_ACTION_EXISTS = text(
+    """
+    SELECT 1
+      FROM moderation_actions
+     WHERE id = :action_id
+       AND action_type = 'kick'
+       AND scope_type = 'chat'
+       AND chat_id = :chat_id
+    """
+)
+
 
 async def claim_runs(limit: int = 10) -> list[dict[str, object]]:
     """Claim queued enforcement runs for one worker."""
@@ -187,6 +261,143 @@ async def claim_runs(limit: int = 10) -> list[dict[str, object]]:
         return [dict(row) for row in result.mappings()]
 
     return await run_transaction(_work)
+
+
+async def claim_run(run_id: int) -> dict[str, object] | None:
+    """Claim one specific queued run for immediate delivery."""
+
+    async def _work(sess: AsyncSession) -> dict[str, object] | None:
+        result = await sess.execute(_CLAIM_ONE_RUN, {"run_id": run_id})
+        row = result.mappings().first()
+        return dict(row) if row is not None else None
+
+    return await run_transaction(_work)
+
+
+async def queue_run(
+    sess: AsyncSession,
+    *,
+    action_id: int,
+    operation: str,
+    idempotency_key: str,
+    requested_by_user_id: int | None,
+    chat_ids: Sequence[int],
+) -> int:
+    """Queue one enforcement run and its targets inside the caller's transaction."""
+    result = await sess.execute(
+        _QUEUE_RUN,
+        {
+            "action_id": action_id,
+            "operation": operation,
+            "idempotency_key": idempotency_key,
+            "requested_by_user_id": requested_by_user_id,
+        },
+    )
+    row = result.first()
+    run_id = int(row[0]) if row is not None else None
+    if run_id is None:
+        run_id = await sess.scalar(_RUN_BY_KEY, {"idempotency_key": idempotency_key})
+    if run_id is None:
+        raise RuntimeError(f"the enforcement run {idempotency_key!r} was not written")
+    targets = [chat_id for chat_id in dict.fromkeys(chat_ids) if chat_id]
+    if targets:
+        await sess.execute(_QUEUE_TARGETS, {"run_id": int(run_id), "chat_ids": targets})
+    return int(run_id)
+
+
+async def queue_kick_unban_repair(
+    action_id: int, chat_id: int, requested_by_user_id: int | None
+) -> int | None:
+    """Queue a durable unban for a kick whose second step failed.
+
+    The kick decision stays ``completed`` because the ban landed. The
+    reconcile run is the repair task: the worker unbans the one chat and
+    keeps retrying until Telegram accepts it or the attempt budget ends.
+    """
+    if action_id <= 0 or chat_id == 0:
+        return None
+
+    async def _work(sess: AsyncSession) -> int | None:
+        exists = await sess.scalar(
+            _KICK_ACTION_EXISTS, {"action_id": action_id, "chat_id": chat_id}
+        )
+        if exists is None:
+            return None
+        return await queue_run(
+            sess,
+            action_id=action_id,
+            operation="reconcile",
+            idempotency_key=f"moderation:{action_id}:kick-unban:v1",
+            requested_by_user_id=requested_by_user_id,
+            chat_ids=(chat_id,),
+        )
+
+    return await run_transaction(_work)
+
+
+async def run_report(run_id: int) -> dict[str, object] | None:
+    """Return one run with its per-group targets for an operator summary."""
+
+    async def _work(sess: AsyncSession) -> dict[str, object] | None:
+        run_row = (
+            (await sess.execute(_RUN_REPORT, {"run_id": run_id})).mappings().first()
+        )
+        if run_row is None:
+            return None
+        target_rows = (
+            (await sess.execute(_TARGET_REPORT, {"run_id": run_id})).mappings().all()
+        )
+        report = dict(run_row)
+        report["targets"] = [dict(row) for row in target_rows]
+        return report
+
+    return await run_transaction(_work)
+
+
+def report_count(report: dict[str, object] | None, key: str, default: int = 0) -> int:
+    """Read one integer counter from a run report."""
+    value = (report or {}).get(key)
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+    return default
+
+
+def report_targets(report: dict[str, object] | None) -> list[dict[str, object]]:
+    """Return the target rows of a run report."""
+    raw = (report or {}).get("targets")
+    if not isinstance(raw, list):
+        return []
+    return [row for row in raw if isinstance(row, dict)]
+
+
+def failed_report_targets(
+    report: dict[str, object] | None,
+) -> list[dict[str, object]]:
+    """Return the targets whose delivery ended in failure."""
+    return [
+        target
+        for target in report_targets(report)
+        if str(target.get("status")) == "failed"
+    ]
+
+
+def landed_report_chat_ids(report: dict[str, object] | None) -> list[int]:
+    """Return the chats where the run did not fail."""
+    landed: list[int] = []
+    for target in report_targets(report):
+        if str(target.get("status")) not in ("succeeded", "skipped"):
+            continue
+        chat_id = target.get("chat_id")
+        if isinstance(chat_id, int):
+            landed.append(chat_id)
+    return landed
 
 
 async def requeue_stale_runs(stale_after: timedelta = timedelta(minutes=30)) -> None:

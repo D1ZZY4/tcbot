@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from telegram import Message, Update
 
-from tcbot import cfg
+from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.modules.helper import guards, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
@@ -28,7 +28,6 @@ from tcbot.modules.helper.pipelines.reason_flow import (
 )
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
-    count_transient_errors,
     fan_out,
     summarize_fanout,
     throw_if_cancelled,
@@ -104,12 +103,29 @@ async def execute_warn(
                 ctx.bot, proof_msgs, target_id, admin_id, admin_fname
             )
         )
-    try:
-        count = await db.warns_db.add_warn(target_id, reason_text, admin_id, chat_id)
-    except Exception:
-        if proof_task is not None and not proof_task.done():
+    proof_upload: ProofUpload | None = None
+    if proof_task is not None:
+        try:
+            proof_upload = await proof_task
+        except asyncio.CancelledError:
             proof_task.cancel()
-            await asyncio.gather(proof_task, return_exceptions=True)
+            raise
+        except Exception:
+            log.warning("Warn proof upload skipped for target=%d", target_id)
+    try:
+        count = await db.warns_db.add_warn(
+            target_id,
+            reason_text,
+            admin_id,
+            chat_id,
+            proof_items=proof_upload.documents() if proof_upload else None,
+            proof_expected_count=(
+                proof_upload.expected_item_count if proof_upload else 0
+            ),
+            destination_chat_id=cfg.proofs[0],
+            destination_thread_id=cfg.proofs[1],
+        )
+    except Exception:
         log.exception(
             "add_warn DB write failed for target=%d chat=%d", target_id, chat_id
         )
@@ -120,19 +136,8 @@ async def execute_warn(
             parse_mode=None,
         )
         return
-    proof_link: str | None = None
-    warn_proof_id: int | None = None
-    if proof_task is not None:
-        try:
-            upload = await proof_task
-        except asyncio.CancelledError:
-            proof_task.cancel()
-            raise
-        except Exception:
-            log.warning("Warn proof upload skipped for target=%d", target_id)
-        else:
-            warn_proof_id = upload.message_id
-            proof_link = upload.link
+    proof_link: str | None = proof_upload.link if proof_upload else None
+    warn_proof_id: int | None = proof_upload.message_id if proof_upload else None
     proof_kb = keyboards.action_proof_kb(target_id, proof_link)
     log_text = messages.warn_log(
         target_id,
@@ -250,6 +255,7 @@ async def execute_warn(
         )
         groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,), chat_id)
         ban_id: str | None = None
+        ban_run_id: int | None = None
         if not already_banned:
             try:
                 # * The threshold ban is taken by the bot, not by a
@@ -264,8 +270,14 @@ async def execute_warn(
                     0,
                     action_origin="automated",
                     origin_chat_id=chat_id,
+                    proof_items=proof_upload.documents() if proof_upload else None,
+                    proof_expected_count=(
+                        proof_upload.expected_item_count if proof_upload else 0
+                    ),
+                    enforcement_chat_ids=[int(grp.get("chat_id", 0)) for grp in groups],
                 )
                 ban_id = ban_doc.get("ban_id", "")
+                ban_run_id = ban_doc.get("enforcement_run_id")
             except Exception:
                 log.exception(
                     "Failed to create federation ban record on warn limit for user %d",
@@ -300,14 +312,55 @@ async def execute_warn(
                 raise
             except Exception:
                 log.exception("Warn threshold set_log_message_id failed")
-        ban_results = await fan_out(
-            [ctx.bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
-        )
-        outcome = summarize_fanout(
-            groups, ban_results, action="Warn threshold ban", target_id=target_id
-        )
-        total_groups = outcome.total
-        applied = outcome.applied
+        if ban_run_id is not None:
+            try:
+                await enforcement_worker.deliver_queued_run(ctx.bot, ban_run_id)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception(
+                    "Warn threshold ban delivery failed for run %s; it stays queued",
+                    ban_run_id,
+                )
+            try:
+                report = await db.enforcement_db.run_report(ban_run_id)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("Warn threshold run report failed for %s", ban_run_id)
+                report = None
+            failed_targets = db.enforcement_db.failed_report_targets(report)
+            total_groups = db.enforcement_db.report_count(
+                report, "target_count", len(groups)
+            )
+            failed_count = db.enforcement_db.report_count(
+                report, "failed_count", len(failed_targets)
+            )
+            applied = max(0, total_groups - failed_count)
+            landed_chat_ids = db.enforcement_db.landed_report_chat_ids(report)
+            transient = [
+                (
+                    group,
+                    RuntimeError("delivery failed"),
+                )
+                for group in failed_targets
+            ]
+        else:
+            ban_results = await fan_out(
+                [ctx.bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
+            )
+            outcome = summarize_fanout(
+                groups, ban_results, action="Warn threshold ban", target_id=target_id
+            )
+            total_groups = outcome.total
+            applied = outcome.applied
+            failed_count = outcome.failed
+            transient = list(outcome.transient)
+            landed_chat_ids = [
+                int(grp["chat_id"])
+                for grp, result in zip(groups, ban_results, strict=False)
+                if not isinstance(result, BaseException)
+            ]
         any_ban_ok = applied > 0
         log.info(
             "Warn threshold ban enforced (%s): target=%d applied=%d/%d",
@@ -320,8 +373,8 @@ async def execute_warn(
             locale,
             "warnings.autoban",
             total=total_groups,
-            failed=outcome.failed,
-            transient=outcome.transient,
+            failed=failed_count,
+            transient=transient,
         )
         if groups_fetch_failed:
             applied_line += t("warnings.autoban.scope_warn", locale)
@@ -372,7 +425,7 @@ async def execute_warn(
             # * could never fire again. A complete enforcement clears the
             # * whole slate so a later unban does not re-ban on stale counts.
             clear_result = await _clear_warns_after_threshold_ban(
-                target_id, groups, ban_results
+                target_id, groups, landed_chat_ids
             )
             if isinstance(clear_result, BaseException):
                 log.error(
@@ -420,7 +473,7 @@ async def execute_warn(
 async def _clear_warns_after_threshold_ban(
     target_id: int,
     groups: list[dict[str, Any]],
-    ban_results: list[Any],
+    landed_chat_ids: list[int],
 ) -> Any:
     """Clear the warn slate of the groups the threshold ban reached.
 
@@ -429,22 +482,16 @@ async def _clear_warns_after_threshold_ban(
     where the ban landed: the failed groups keep their warnings so their
     threshold can fire again once the enforcement succeeds.
     """
-    failed = count_transient_errors(ban_results)
-    if failed == 0:
+    if len(landed_chat_ids) >= len(groups):
         return await db.warns_db.clear_all_warns(target_id)
-    landed = [
-        int(grp["chat_id"])
-        for grp, result in zip(groups, ban_results, strict=False)
-        if not isinstance(result, BaseException)
-    ]
     log.warning(
         "Warn threshold ban applied to %d/%d groups for target=%d; "
         "warnings kept in the groups where enforcement failed.",
-        len(landed),
+        len(landed_chat_ids),
         len(groups),
         target_id,
     )
-    return await db.warns_db.clear_warns_for_chats(target_id, landed)
+    return await db.warns_db.clear_warns_for_chats(target_id, landed_chat_ids)
 
 
 async def execute_unwarn(

@@ -30,6 +30,7 @@ from ._queries import (
 from ._shared import CONSTRAINT_ACTIVE_USER, CONSTRAINT_EXTERNAL_REF
 from ._writes import (
     accept_appeal,
+    approve_appeal_and_queue_unban,
     claim_appeal_decision,
     clear_review,
     create_ban,
@@ -37,6 +38,7 @@ from ._writes import (
     make_ban_id,
     release_stale_review,
     restore_review,
+    revoke_ban_and_queue_unban,
     set_appeal_log_msg,
     set_log_message_id,
     set_rejected_by,
@@ -54,6 +56,7 @@ __all__ = [
     "active_ban_user_ids",
     "active_bans_for_users",
     "active_bans_page",
+    "approve_appeal_and_queue_unban",
     "claim_appeal_decision",
     "clear_review",
     "compose_row",
@@ -65,6 +68,7 @@ __all__ = [
     "make_ban_id",
     "release_stale_review",
     "restore_review",
+    "revoke_ban_and_queue_unban",
     "set_appeal_log_msg",
     "set_log_message_id",
     "set_rejected_by",

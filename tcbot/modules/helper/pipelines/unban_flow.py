@@ -9,17 +9,13 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from tcbot import cfg
+from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.database import documents as docs
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply, send_log
-from tcbot.utils.dispatch import (
-    fan_out,
-    summarize_fanout,
-    throw_if_cancelled,
-)
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -42,13 +38,14 @@ async def execute_unban(
     *,
     pre_ban: docs.BanDoc | None = None,
 ) -> None:
-    """Lift a federation ban: deactivate the DB record and unban across all connected groups.
+    """Lift a federation ban through the durable enforcement ledger.
 
     Fetches the active ban (unless ``pre_ban`` is supplied), loads the group
     list first (abort with the record intact when it cannot be loaded, so a
-    retry re-drives the full fan-out), then deactivates and unbans across all
-    connected groups, sends the log and replies concurrently. Replies inline
-    if no active ban is found.
+    retry re-drives the full scope), then revokes the ban and queues its
+    per-group run in one transaction. The run is delivered immediately when
+    this process can claim it; the scheduled worker finishes any target that
+    fails. Replies inline if no active ban is found.
 
     When ``pre_ban`` is provided by the caller the function skips the ``get_active_ban``
     DB round-trip entirely, saving one network hop on the hot path. Pass ``None`` (the
@@ -119,24 +116,29 @@ async def execute_unban(
             )
         return
 
-    # * Deactivate ALL active bans for this user (not only the one found by
-    # * get_active_ban). This is the single authoritative DB write for the unban.
-    # * The DB deactivation is the only authoritative state write for the
-    # * unban. If it fails, the user is still banned in the DB even if
-    # * we proceed to unban from chats. This produces a split-brain state
-    # * that `get_active_ban` will treat as still banned, so the join-auto-
-    # * ban path in `greeting.py` will re-ban the user the next time they
-    # * join. Do not produce a false "unbanned" reply: bail out and tell
-    # * the operator that manual cleanup is needed.
+    # * Revoke the decision and queue the delivery in one transaction.
+    # * The run is the authoritative work item: if the process dies during
+    # * the fan-out, the scheduled worker still has every group to retry,
+    # * even though the ban record is already revoked.
+    # * Include primary groups not already in the connected list
+    # * (single merge owner in groups_db).
+    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
+    chat_ids = [
+        int(grp.get("chat_id", 0)) for grp in groups if int(grp.get("chat_id", 0) or 0)
+    ]
     try:
-        await db.bans_db.deactivate_all_active_bans(target_id)
+        revoked, run_id = await db.bans_db.revoke_ban_and_queue_unban(
+            target_id,
+            admin.id if admin is not None else None,
+            chat_ids,
+        )
     except asyncio.CancelledError:
-        # ! CRITICAL: a cancelled deactivation must propagate instead of being
+        # ! CRITICAL: a cancelled revocation must propagate instead of being
         # ! reported as a DB failure; shutdown must not render as a verdict.
         raise
     except Exception:
         log.exception(
-            "deactivate_all_active_bans failed for user=%d; aborting unban to "
+            "revoke_ban_and_queue_unban failed for user=%d; aborting unban to "
             "avoid split-brain state",
             target_id,
         )
@@ -151,23 +153,83 @@ async def execute_unban(
                 log_label="Unban DB-fail",
             )
         return
-
-    # * Include primary groups not already in the connected list
-    # * (single merge owner in groups_db).
-    groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
-
-    # * unban from all groups - semaphore-bounded for rate safety
-    results = await fan_out(
-        [
-            ctx.bot.unban_chat_member(
-                grp.get("chat_id", 0), target_id, only_if_banned=True
+    if revoked == 0 or run_id is None:
+        # * Another process revoked the ban between the read and the write.
+        # * Reporting "no record" is idempotent and does not claim a new
+        # * change that this call did not make.
+        if msg is not None:
+            await safe_reply(
+                msg,
+                t(
+                    "unbanning.note.no_record",
+                    locale,
+                    user=Safe(user_ref(target_id, target_fname)),
+                ),
+                log_label=f"Unban no-record for user {target_id}",
             )
-            for grp in groups
-        ]
+        return
+
+    # * The review card is outside the unban transaction, so its edit gets
+    # * a durable retry. A failed Telegram edit must not leave a live card
+    # * over a decision that is already revoked.
+    review_id = int(ban.get("review_message_id") or 0)
+    action_id = int(ban.get("id") or 0)
+    if review_id and action_id and cfg.main_group:
+        await db.notifications_db.enqueue_review_card_edit(
+            action_id, cfg.main_group, review_id
+        )
+
+    # * Deliver now on the fast path. A claim failure means the scheduled
+    # * worker already owns the run, so the summary reports it as queued.
+    try:
+        await enforcement_worker.deliver_queued_run(ctx.bot, run_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("Unban delivery failed for run %s; it stays queued", run_id)
+
+    try:
+        report = await db.enforcement_db.run_report(run_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("Unban run report failed for run %s", run_id)
+        report = None
+    targets = db.enforcement_db.report_targets(report)
+    settled = bool(targets) and all(
+        str(target.get("status")) in ("succeeded", "skipped", "failed")
+        for target in targets
     )
-    outcome = summarize_fanout(groups, results, action="Unban", target_id=target_id)
-    failed = outcome.failed
-    transient = outcome.transient
+    failed_targets = db.enforcement_db.failed_report_targets(report)
+    total = (
+        db.enforcement_db.report_count(report, "target_count")
+        or len(targets)
+        or len(groups)
+    )
+    failed = db.enforcement_db.report_count(report, "failed_count") or len(
+        failed_targets
+    )
+    if not settled:
+        unban_note = t(
+            "unbanning.note.queued",
+            locale,
+            user=Safe(user_ref(target_id, target_fname)),
+        )
+    elif failed:
+        sample = ", ".join(
+            str(target.get("title") or target.get("chat_id") or "")
+            for target in failed_targets[:5]
+        )
+        unban_note = t(
+            "unbanning.note.partial",
+            locale,
+            done=max(0, total - failed),
+            total=total,
+            sample=sample,
+            more=" ..." if len(failed_targets) > 5 else "",
+        )
+    else:
+        unban_note = t("unbanning.note.full", locale, total=total)
 
     # * effective_user can be None for anonymous admins; attribute the action
     # * to an anonymous admin rather than to the target, which would read as
@@ -185,25 +247,6 @@ async def execute_unban(
         _log_admin_fname,
         ban_id,
     )
-
-    # * Name missed groups in the reply so the operator can act: the DB
-    # * record is already gone, so only a targeted re-drive reaches these
-    # * chats; plain counts hide them.
-    if failed:
-        sample = ", ".join(
-            grp.get("title") or str(grp.get("chat_id", 0))
-            for grp, _exc in transient[:5]
-        )
-        unban_note = t(
-            "unbanning.note.partial",
-            locale,
-            done=len(groups) - failed,
-            total=len(groups),
-            sample=sample,
-            more=" ..." if len(transient) > 5 else "",
-        )
-    else:
-        unban_note = t("unbanning.note.full", locale, total=len(groups))
 
     # * send log; reply only if we have an effective_message.
     if msg is not None:

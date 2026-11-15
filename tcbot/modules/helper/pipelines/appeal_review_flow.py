@@ -14,17 +14,13 @@ from typing import TYPE_CHECKING
 from telegram import Bot, CallbackQuery, Update, User
 from telegram.ext import ContextTypes
 
-from tcbot import cfg
+from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.modules.helper import guards, messages
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import answer_ack, cb_error_edit, send_log
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
-from tcbot.utils.dispatch import (
-    fan_out,
-    summarize_fanout,
-    throw_if_cancelled,
-)
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
@@ -132,7 +128,7 @@ async def _restore_review_slot(
 
 
 class ApproveMixin:
-    """Approve path: deactivate, unban fan-out, and notifications."""
+    """Approve path: atomic decision, durable unban run, and notifications."""
 
     community_name: str
 
@@ -214,66 +210,67 @@ class ApproveMixin:
                 target_role,
                 admin.id,
                 admin.first_name,
+                trigger="appeal",
             )
             if not gate.may_proceed:
                 await _answer_review(q, locale, "appeals.review.demote_blocked")
                 return False
-        deactivate_result = await db.bans_db.deactivate_all_active_bans(
-            target_id, withdraw_pending_appeals=False
-        )
-        if isinstance(deactivate_result, asyncio.CancelledError):
-            raise deactivate_result
-        if isinstance(deactivate_result, BaseException):
-            log.error(
-                "approve_appeal: deactivate failed for user=%d: %s",
-                target_id,
-                deactivate_result,
+        groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
+        chat_ids = [
+            int(grp.get("chat_id", 0))
+            for grp in groups
+            if int(grp.get("chat_id", 0) or 0)
+        ]
+        # * Decision and delivery intent land together: the appeal is
+        # * accepted, the ban is revoked, the review slot is released, and
+        # * the unban run owns every group. A split here used to leave an
+        # * accepted appeal beside an active ban, or a revoked ban beside a
+        # * pending appeal.
+        try:
+            accepted, run_id = await db.bans_db.approve_appeal_and_queue_unban(
+                ban_id,
+                admin.id,
+                admin.first_name,
+                admin.id,
+                chat_ids,
             )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("approve_appeal: atomic decision failed for ban %s", ban_id)
             await _answer_review(q, locale, "appeals.review.db_retry")
             return False
-        # * The decision is reached; ack before the bookkeeping and the
+        if not accepted or run_id is None:
+            log.warning("approve_appeal: no pending appeal found for ban %s", ban_id)
+            await _answer_review(q, locale, "appeals.review.already_resolved")
+            return False
+        # * The decision is committed; ack before the bookkeeping and the
         # * notification fan-out, none of which answers the query again.
         await answer_ack(q)
-        # * The decision is lifted, so the appeal that asked for it is
-        # * accepted. The record closes here because the appeal is the
-        # * history of the decision: without it the appeal stays open,
-        # * the open-appeal guard keeps blocking a later appeal for the
-        # * same decision, and nobody can see who lifted the ban.
-        # *
-        # * The ban is already lifted at this point, so a failure of the
-        # * bookkeeping must not undo the lift. It is logged loudly
-        # * instead, because a silent gap in the audit trail is worse
-        # * than a visible one.
         try:
-            accepted = await db.bans_db.accept_appeal(
-                ban_id, admin.id, admin.first_name
+            await enforcement_worker.deliver_queued_run(bot, run_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception(
+                "approve_appeal: unban delivery failed for run %s; it stays queued",
+                run_id,
             )
-        except Exception:
-            log.exception("approve_appeal: accept_appeal failed for ban %s", ban_id)
-        else:
-            if not accepted:
-                log.warning(
-                    "approve_appeal: no pending appeal found for ban %s", ban_id
-                )
         try:
-            await db.bans_db.clear_review(ban_id)
+            report = await db.enforcement_db.run_report(run_id)
+        except asyncio.CancelledError:
+            raise
         except Exception:
-            log.exception("approve_appeal: clear_review failed for ban %s", ban_id)
-        groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
-        unban_results = await fan_out(
-            [
-                bot.unban_chat_member(
-                    grp.get("chat_id", 0), target_id, only_if_banned=True
-                )
-                for grp in groups
-            ]
-        )
-        summarize_fanout(
-            groups,
-            unban_results,
-            action="Appeal-approve",
-            target_id=target_id,
-        )
+            log.exception("approve_appeal: run report failed for run %s", run_id)
+            report = None
+        failed = db.enforcement_db.report_count(report, "failed_count")
+        if failed:
+            log.error(
+                "Appeal approve left %d group(s) to retry for ban %s (run %s)",
+                failed,
+                ban_id,
+                run_id,
+            )
         appeal_link = ban.get("appeal_link") or ""
         appeal_submitted_at = ban.get("appeal_submitted_at")
         # * The staff locale is the one resolved at the top of the handler;
@@ -334,6 +331,12 @@ class ApproveMixin:
             log.warning(
                 "approve_appeal review-card edit failed for ban %s: %s", ban_id, card_r
             )
+            action_id = int(ban.get("id") or 0)
+            review_id = int(ban.get("review_message_id") or 0)
+            if action_id and review_id and cfg.main_group:
+                await db.notifications_db.enqueue_review_card_edit(
+                    action_id, cfg.main_group, review_id
+                )
         if isinstance(log_r, BaseException):
             log.warning(
                 "approve_appeal appeal-log update failed for ban %s: %s", ban_id, log_r

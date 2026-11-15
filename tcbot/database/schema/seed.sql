@@ -175,6 +175,7 @@ INSERT INTO %SCHEMA%.retention_policies (target_table, data_class, retention_day
     ('moderation_evidence_items', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
     ('moderation_evidence_uploads', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
     ('moderation_messages', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
+    ('moderation_notification_tasks', 'telemetry', 90, 'updated_at', TRUE, 'Delivery telemetry for review-card edits. Kept for 90 days, then removed in a recorded batch.'),
     ('mtproto_state', 'runtime_state', NULL, NULL, TRUE, 'Runtime session state. Removed when its lease expires, not by age.'),
     ('permission_definitions', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
     ('promotion_requests', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),

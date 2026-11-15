@@ -13,7 +13,8 @@ body = """
 Lifts an active federation ban on the target user. The unban is applied across *all connected groups* simultaneously so they can rejoin freely. A log entry is posted to the federation logs channel.
 
 If the user has no active federation ban, the bot will let you know and take no action.
-A pending appeal review card is left untouched; resolving appeals stays on the appeal flow.
+A pending appeal for the decision is withdrawn when the ban is lifted manually; resolving appeals stays on the appeal flow.
+The unban is recorded as a durable run, so a group that fails the first delivery is retried automatically.
 A staff member re-promoted while banned is demoted first so the stale ban can be cleared."""
 
 [help.examples]
@@ -32,6 +33,7 @@ no_record = "{user} has no active federation ban."
 read_fail = "{user} could not be unbanned: the ban record could not be read from the database, so nothing was changed. Check the logs and retry."
 groups_fail = "{user} could not be unbanned: the group list could not be loaded from the database, so nothing was changed. Check the logs and retry."
 db_fail = "{user} could not be unbanned: the database deactivation failed, so the user is still marked as banned even if they are now unmuted in chats. Check the logs and retry."
+queued = "{user} is no longer marked as banned. The unban was queued and the remaining groups are retried automatically; no second command is needed."
 partial = "removed from {done}/{total} groups. WARNING: still banned in: {sample}{more}"
 full = "removed from {total}/{total} groups."
 
