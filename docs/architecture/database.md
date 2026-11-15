@@ -1397,11 +1397,13 @@ Pool parameters: `decode_responses=True`, `max_connections=20`,
 ## Scheduler (`scheduler.py`)
 
 `start(database_url: str) -> None`
-spawns the `tcbot.scheduler` background asyncio task and waits (bounded by
-the same 10 s grace window as `stop()`) for the scheduler to become ready,
-so a constructor error or a hung job-store handshake reports a startup
-failure instead of hanging boot. On readiness failure it raises
-`RuntimeError` (wrapped from the captured error).
+spawns the `tcbot.scheduler` background asyncio task and waits up to 30 s
+for the scheduler to become ready, so a constructor error or a hung
+job-store handshake reports a startup failure instead of hanging boot.
+The startup budget is larger than the 10 s shutdown budget because every
+job-store call reaches PostgreSQL over the network; a remote pooler answers
+a checked-out round trip in roughly half a second. On readiness failure it
+raises `RuntimeError` (wrapped from the captured error).
 
 `stop() -> None` sets the stop event and waits up to 10 s for graceful
 shutdown, then cancels a stuck task so shutdown never orphans a live
@@ -1464,6 +1466,13 @@ interval. The stored job is therefore left untouched when its interval and
 arguments still match the desired configuration; only a changed
 configuration replaces it. This is what makes `misfire_grace_time` and
 `coalesce` effective after a restart.
+
+Reconciliation reads the stored schedules in one bulk query and compares
+them in memory. It used to issue one lookup and one removal per known
+schedule, and each of those calls checks a connection out of the remote
+job-store pool; nine separate calls pushed a healthy boot past the previous
+readiness window. When the bulk read fails, the reconciliation replaces
+every schedule, which is safe because the add is an upsert.
 
 Recurring jobs:
 

@@ -139,11 +139,63 @@ def test_a_corrupt_stored_schedule_is_replaced(store: _FakeJobStore) -> None:
     assert replaced.args == ()
 
 
+def test_reconcile_reads_the_store_once_instead_of_per_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A boot must not spend one remote round trip per known schedule.
+
+    Every job-store call checks a connection out of a remote pool, and a
+    healthy boot used to issue one lookup and one removal per schedule.
+    That path crossed the readiness window on a slow pooler and turned a
+    working deploy into a restart loop. One bulk read must replace all of
+    them, and an unchanged schedule must cost no write at all.
+    """
+    local_store = _FakeJobStore()
+    monkeypatch.setattr(sched_mod, "_build_job_store", lambda _url: local_store)
+    reads: list[int] = []
+    original_all = local_store.get_all_jobs
+
+    def _get_all() -> list[Any]:
+        reads.append(1)
+        return original_all()
+
+    local_store.get_all_jobs = _get_all  # type: ignore[method-assign]
+    writes: list[str] = []
+    removed: list[str] = []
+
+    async def _run() -> None:
+        await sched_mod.start(_TEST_URL)
+        scheduler = sched_mod._scheduler
+        assert scheduler is not None
+        monkeypatch.setattr(
+            scheduler, "add_job", lambda *a, **k: writes.append(k["id"])
+        )
+        monkeypatch.setattr(
+            scheduler, "remove_job", lambda job_id, **k: removed.append(job_id)
+        )
+        reads.clear()
+        await asyncio.get_running_loop().run_in_executor(
+            None,
+            lambda: sched_mod._reconcile_schedules(
+                scheduler,
+                local_store,  # type: ignore[arg-type]
+                database_jobs_in_pg_cron=False,
+            ),
+        )
+        await sched_mod.stop()
+
+    asyncio.run(_run())
+
+    assert len(reads) == 1
+    assert writes == []
+    assert removed == []
+
+
 def test_startup_failure_is_reported_on_the_module_global(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A scheduler that cannot start must fail the boot, not log and continue."""
-    monkeypatch.setattr(sched_mod, "_STOP_TIMEOUT_S", 2.0)
+    monkeypatch.setattr(sched_mod, "_STARTUP_TIMEOUT_S", 2.0)
 
     def _boom(_url: str) -> _FakeJobStore:
         raise RuntimeError("jobstore handshake failed")
@@ -158,7 +210,7 @@ def test_startup_failure_does_not_leave_a_live_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A failed start must clear the task handle so the next start is clean."""
-    monkeypatch.setattr(sched_mod, "_STOP_TIMEOUT_S", 2.0)
+    monkeypatch.setattr(sched_mod, "_STARTUP_TIMEOUT_S", 2.0)
 
     def _boom(_url: str) -> _FakeJobStore:
         raise RuntimeError("jobstore handshake failed")

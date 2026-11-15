@@ -108,7 +108,7 @@ def test_apscheduler_drops_the_expiry_job_when_pg_cron_owns_it(
     def _ensure(*args: Any, **kwargs: Any) -> None:
         ensured.append(kwargs["job_id"])
 
-    def _remove(*args: Any) -> None:
+    def _remove(*args: Any, **kwargs: Any) -> None:
         removed.append(args[1])
 
     monkeypatch.setattr(sched, "_ensure_job", _ensure)

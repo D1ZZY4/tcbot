@@ -31,7 +31,7 @@ def test_start_raises_runtime_error_when_background_dies_before_try(
     async def _boom(*args: Any, **kwargs: Any) -> None:
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(sched_mod, "_STOP_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(sched_mod, "_STARTUP_TIMEOUT_S", 0.1)
     monkeypatch.setattr(sched_mod, "_scheduler_background", _boom)
 
     with pytest.raises(RuntimeError, match="APScheduler failed to start"):
@@ -44,7 +44,7 @@ def test_start_raises_runtime_error_on_timeout(
     async def _never_ready(*args: Any, **kwargs: Any) -> None:
         await asyncio.sleep(3600)
 
-    monkeypatch.setattr(sched_mod, "_STOP_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(sched_mod, "_STARTUP_TIMEOUT_S", 0.1)
     monkeypatch.setattr(sched_mod, "_scheduler_background", _never_ready)
 
     with pytest.raises(RuntimeError, match="APScheduler failed to start"):
@@ -59,7 +59,7 @@ def test_start_success_path_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
         if sched_mod._sched_ready is not None:
             sched_mod._sched_ready.set()
 
-    monkeypatch.setattr(sched_mod, "_STOP_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(sched_mod, "_STARTUP_TIMEOUT_S", 0.1)
     monkeypatch.setattr(sched_mod, "_scheduler_background", _ready)
 
     asyncio.run(sched_mod.start(_TEST_URL))

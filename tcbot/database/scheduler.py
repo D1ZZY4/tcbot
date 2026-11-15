@@ -52,6 +52,14 @@ _sched_error: BaseException | None = None
 # * before declaring it stuck.  10 s matches the PTB shutdown grace window.
 _STOP_TIMEOUT_S: float = 10.0
 
+# * Maximum seconds to wait for the scheduler to become ready. The job store
+# * reaches PostgreSQL over the network, so a slow or cold pooler (a remote
+# * Supabase instance answers a checkout in roughly half a second) must not
+# * turn an otherwise healthy boot into a crash loop. The work itself is
+# * bounded by the job-store pool timeouts, so this is a safety net rather
+# * than the normal path.
+_STARTUP_TIMEOUT_S: float = 30.0
+
 # * Dedicated worker for the blocking job-store calls. The event loop's
 # * default executor is shared with other blocking work, and a speed test
 # * holds one of its threads for the whole measurement, so the scheduler
@@ -571,15 +579,35 @@ def _schedule_matches(
     return stored_trigger.interval == trigger.interval and tuple(job.args) == args
 
 
+def _stored_jobs(store: SQLAlchemyJobStore) -> dict[str, Job] | None:
+    """Return every persisted job once, keyed by id.
+
+    The schedule reconciliation used to issue one ``lookup_job`` and one
+    ``remove_job`` per known schedule. Every job-store call checks a
+    connection out of a remote pool, and a pooled PostgreSQL checkout costs
+    a round trip of its own, so nine separate calls pushed a healthy boot
+    past the readiness window. One bulk read replaces all of them; ``None``
+    means the read failed and the caller falls back to replacing every
+    schedule.
+    """
+    try:
+        return {job.id: job for job in store.get_all_jobs()}
+    except Exception as exc:
+        log.warning(
+            "Stored schedule read failed (%s); every schedule is replaced.", exc
+        )
+        return None
+
+
 def _ensure_job(
     scheduler: AsyncIOScheduler,
-    store: SQLAlchemyJobStore,
     *,
     job_id: str,
     func: Callable[..., Any],
     trigger: IntervalTrigger,
     args: tuple[Any, ...],
     misfire_grace_time: int,
+    stored: dict[str, Job] | None,
 ) -> None:
     """Register a recurring job without resetting an unchanged schedule.
 
@@ -591,11 +619,7 @@ def _ensure_job(
     fire time, the misfire grace window, and the coalescing behaviour survive
     a restart.
     """
-    try:
-        existing = store.lookup_job(job_id)
-    except Exception as exc:
-        log.warning("Job lookup failed for %s: %s", job_id, exc)
-        existing = None
+    existing = stored.get(job_id) if stored is not None else None
     if existing is not None:
         try:
             matches = _schedule_matches(existing, trigger, args)
@@ -629,13 +653,23 @@ def _ensure_job(
     )
 
 
-def _remove_job(scheduler: AsyncIOScheduler, job_id: str, label: str) -> None:
+def _remove_job(
+    scheduler: AsyncIOScheduler,
+    job_id: str,
+    label: str,
+    *,
+    stored: dict[str, Job] | None,
+) -> None:
     """Remove a persisted job from the job store.
 
     The store is addressed directly: ``scheduler.remove_job`` only reaches
     the stores while the scheduler is running, so a removal issued before
     ``start()`` would silently do nothing and leave a stale schedule firing.
+    A job the bulk read already proved absent skips the delete entirely.
     """
+    if stored is not None and job_id not in stored:
+        log.debug("%s schedule not present, nothing to remove.", label)
+        return
     try:
         scheduler.remove_job(job_id, jobstore=_JOBSTORE_ALIAS)
         log.info("Removed %s schedule.", label)
@@ -655,38 +689,54 @@ def _reconcile_schedules(
     *,
     database_jobs_in_pg_cron: bool,
 ) -> None:
-    """Align the persisted schedules with the current configuration."""
+    """Align the persisted schedules with the current configuration.
+
+    The stored schedules are read once. Each entry is compared in memory,
+    and a job that already runs the desired cadence costs no database
+    round trip at all.
+    """
+    stored = _stored_jobs(store)
     # * The expiry sweep always runs somewhere. pg_cron owns it when the
     # * extension is active, so APScheduler must not run a second copy.
     if database_jobs_in_pg_cron:
-        _remove_job(scheduler, _EXPIRY_SCHEDULE_ID, "Expiry sweep (pg_cron)")
+        _remove_job(
+            scheduler,
+            _EXPIRY_SCHEDULE_ID,
+            "Expiry sweep (pg_cron)",
+            stored=stored,
+        )
     else:
         _ensure_job(
             scheduler,
-            store,
             job_id=_EXPIRY_SCHEDULE_ID,
             func=expire_due_decisions,
             trigger=IntervalTrigger(hours=24, timezone=_SCHEDULER_TIMEZONE),
             args=(),
             misfire_grace_time=86400,
+            stored=stored,
         )
         log.info("Scheduled expiry sweep: every 24h.")
 
     # * The retired warn-expiry job patched the warnings that had no
     # * deadline. The community schema treats the expiry of a decision as
     # * a fact of it, so the schedule is removed instead of replaced.
-    _remove_job(scheduler, _LEGACY_WARN_EXPIRY_SCHEDULE_ID, "Warn expiry")
+    _remove_job(
+        scheduler,
+        _LEGACY_WARN_EXPIRY_SCHEDULE_ID,
+        "Warn expiry",
+        stored=stored,
+    )
 
     # * PostgreSQL has no TTL index, so the daily cleanup job replaces the
     # * one the MongoDB TTL index used to provide.
     _ensure_job(
         scheduler,
-        store,
         job_id=_CLEANUP_SCHEDULE_ID,
         func=expire_stale_records,
         trigger=IntervalTrigger(hours=24, timezone=_SCHEDULER_TIMEZONE),
         args=(),
         misfire_grace_time=86400,
+        stored=stored,
     )
     log.info("Scheduled stale record cleanup: every 24h.")
 
@@ -695,12 +745,12 @@ def _reconcile_schedules(
     # * without bound. The sweep records itself in ``scheduled_job_runs``.
     _ensure_job(
         scheduler,
-        store,
         job_id=_RETENTION_SCHEDULE_ID,
         func=sweep_retention,
         trigger=IntervalTrigger(hours=24, timezone=_SCHEDULER_TIMEZONE),
         args=(),
         misfire_grace_time=86400,
+        stored=stored,
     )
     log.info("Scheduled retention sweep: every 24h.")
 
@@ -709,12 +759,12 @@ def _reconcile_schedules(
     # * the gap while the scheduler is down.
     _ensure_job(
         scheduler,
-        store,
         job_id=_PROMOTION_EXPIRY_SCHEDULE_ID,
         func=expire_promotion_requests,
         trigger=IntervalTrigger(hours=1, timezone=_SCHEDULER_TIMEZONE),
         args=(),
         misfire_grace_time=3600,
+        stored=stored,
     )
     log.info("Scheduled promotion request expiry: every hour.")
 
@@ -722,12 +772,12 @@ def _reconcile_schedules(
     # * the consumer that actually lifts the restriction on Telegram.
     _ensure_job(
         scheduler,
-        store,
         job_id=_ENFORCEMENT_WORKER_SCHEDULE_ID,
         func=enforcement_worker.run,
         trigger=IntervalTrigger(minutes=5, timezone=_SCHEDULER_TIMEZONE),
         args=(),
         misfire_grace_time=300,
+        stored=stored,
     )
     log.info("Scheduled enforcement worker: every 5 minutes.")
 
@@ -735,21 +785,31 @@ def _reconcile_schedules(
     # * a settled appeal cannot leave a live-looking card behind.
     _ensure_job(
         scheduler,
-        store,
         job_id=_NOTIFICATION_WORKER_SCHEDULE_ID,
         func=run_notification_worker,
         trigger=IntervalTrigger(minutes=5, timezone=_SCHEDULER_TIMEZONE),
         args=(),
         misfire_grace_time=300,
+        stored=stored,
     )
     log.info("Scheduled notification worker: every 5 minutes.")
     # * The retired weekly cleanup job must not fire: it pointed at a
     # * membership sweep the daily job replaced.
-    _remove_job(scheduler, _LEGACY_CLEANUP_SCHEDULE_ID, "Legacy DB cleanup")
+    _remove_job(
+        scheduler,
+        _LEGACY_CLEANUP_SCHEDULE_ID,
+        "Legacy DB cleanup",
+        stored=stored,
+    )
 
     # * The retired enforcement-sweep job must not fire either: the sweep
     # * it drove no longer exists.
-    _remove_job(scheduler, _LEGACY_SYNC_SCHEDULE_ID, "Enforcement sync")
+    _remove_job(
+        scheduler,
+        _LEGACY_SYNC_SCHEDULE_ID,
+        "Enforcement sync",
+        stored=stored,
+    )
 
 
 # ──────────────────────────── Lifecycle ──────────────────────────── #
@@ -790,7 +850,7 @@ async def start(
         name="tcbot.scheduler",
     )
     try:
-        await asyncio.wait_for(_sched_ready.wait(), timeout=_STOP_TIMEOUT_S)
+        await asyncio.wait_for(_sched_ready.wait(), timeout=_STARTUP_TIMEOUT_S)
     except asyncio.CancelledError:
         # * Shutdown raced startup: cancel the background task, wait for it
         # * to unwind, clear the globals, then propagate so the next start()
@@ -809,7 +869,7 @@ async def start(
         # * handshake). Cancel it and unwind bounded so a task ignoring
         # * cancellation cannot hang start beyond the outer bound.
         _sched_error = TimeoutError(
-            f"APScheduler did not become ready within {_STOP_TIMEOUT_S:.0f}s."
+            f"APScheduler did not become ready within {_STARTUP_TIMEOUT_S:.0f}s."
         )
         if _sched_task is not None and not _sched_task.done():
             _sched_task.cancel()
