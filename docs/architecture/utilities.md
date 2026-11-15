@@ -65,8 +65,9 @@ The Telegram circuit state (`closed`, `open`, or `half_open`) is exposed in the 
 |---|---|
 | `fan_out(coros, max_concurrent=10)` | Run awaitables concurrently up to `max_concurrent` at once; regular failures return as list elements, `asyncio.CancelledError` always propagates. |
 | `gather_bounded(coros, max_concurrent=10)` | Same result contract as `fan_out` with no circuit interaction. Use it for pure database bursts (for example bulk deactivations during cleanup) where the Telegram breaker must not gate the work. |
-| `is_benign_telegram_error(exc)` | Return True for known-benign Telegram refusals (user not participant, chat gone, bot demoted). |
-| `count_transient_errors(results)` | Count only non-benign failures. Used by moderation fan-outs (ban, unban, mute, warn auto-ban) so benign refusals do not look like failed groups. |
+| `is_benign_telegram_error(exc)` | Return True for a refusal where there was nothing to enforce (user not participant, chat gone, target cannot be acted on). |
+| `is_permanent_telegram_error(exc)` | Return True when a Telegram refusal cannot succeed on retry because the bot lost the rights or membership the operation needs. |
+| `count_transient_errors(results)` | Count the failures that are not benign. Used by moderation fan-outs (ban, unban, mute, warn auto-ban) so a benign refusal does not look like a failed group; a permanent refusal is a real failure. |
 | `failed_groups(groups, results)` | Return the groups whose action raised, with the exception. |
 | `transient_groups(groups, results)` | Return the failed groups whose failure is not a benign refusal. |
 | `first_transient_error(results)` | Return the first non-benign failure, so an error-level log carries the real exception instead of a placeholder. |

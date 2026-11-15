@@ -151,7 +151,9 @@ Duration tokens are parsed before entering the conversation.
 Mute applies restrictions across all connected groups through the decision's durable `apply` run. The active decision is read through the `active_mutes` view, so it can be re-applied automatically when:
 
 - A muted user joins any connected group (`greeting._handle_member` fetches `get_active_mute` in parallel with `get_active_ban` and calls `restrict_chat_member` if an active mute is found).
-- A new group connects to the federation (`connected_flow.complete_join` fetches `active_mute_docs()` and fans out `restrict_chat_member` for every active mute, mirroring the existing ban replay). The replay is bounded by a time budget and a list cap; users it does not reach are queued as `apply` enforcement runs for the new chat, so the remainder is retried instead of disappearing with the connect handler.
+- A new group connects to the federation (`connected_flow.complete_join` fetches `active_mute_docs()` and fans out `restrict_chat_member` for every active mute, mirroring the existing ban replay). The replay is bounded by a time budget and a list cap; users it does not reach, and users whose request did not land, are queued as `apply` enforcement runs for the new chat, so the remainder is retried instead of disappearing with the connect handler.
+
+The mute summary counts only groups whose delivery settled as succeeded or skipped. A group still awaiting delivery is reported as pending and retried by the scheduled worker, and a group that refused because the bot lost its admin rights is a permanent, visible failure.
 
 `execute_unmute` revokes the active mute decision and queues its per-group `revoke` run in one transaction, then delivers the run immediately when this process can claim it. A partial restore keeps the failed groups in the ledger and the scheduled worker retries them, so a failed group cannot strand a user still muted with no repair path. A run that has not settled yet is reported as queued.
 

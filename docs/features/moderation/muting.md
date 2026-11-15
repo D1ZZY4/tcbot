@@ -167,9 +167,9 @@ Execution order:
     - `bot.edit_message_text(summary, chat_id=prompt_chat, message_id=prompt_id, ..., reply_markup=proof_kb)` so the moderator sees the result inline.
 8. If the prompt edit fails, a fallback `msg.reply_text(summary, ..., reply_markup=proof_kb)` is issued.
 
-The summary text reads `<user> has been muted <duration>. Reason: <reason>. Applied to <ok>/<total> groups.` A partial mute appends `WARNING: the mute did not land in <n> group(s): <titles>`, naming up to five failed groups, so a partial enforcement is not read as a total one.
+The summary text reads `<user> has been muted <duration>. Reason: <reason>. Applied to <ok>/<total> groups.` Only a group whose delivery settled as succeeded or skipped counts in `<ok>`; a group still awaiting delivery is reported as pending and retried automatically. A partial mute appends `WARNING: the mute did not land in <n> group(s): <titles>`, naming up to five failed groups, so a partial enforcement is not read as a total one.
 
-The fan-out errors are counted but do not roll back the DB mute record; group connect replay will retry missing restrictions on the next reconnect.
+The fan-out errors are counted but do not roll back the DB mute record; the failed groups remain in the enforcement run and are retried by the scheduled worker. A group that refuses because the bot lost its admin rights is a permanent failure and stays visible instead of being treated as applied.
 
 ## `/tcunmute` flow
 

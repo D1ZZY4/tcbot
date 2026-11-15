@@ -731,6 +731,21 @@ and the per-target status describe delivery. A caller must not treat a
 revoked decision as proof that every group was reached, and a run must not
 re-apply a decision that the domain state no longer holds.
 
+A target ends as `succeeded`, `skipped`, or `failed`. `skipped` means
+Telegram had nothing to do (the user was not in the group, or the chat is
+gone). A refusal caused by missing bot rights or a lost membership is
+`failed` with `error_kind = 'permanent'`: the action did not land, retrying
+cannot fix it, and an operator has to restore access. A transient failure
+carries a retry deadline for up to three attempts. `delivery_outcome()`
+reads the target rows, so a report, a reply, or an operator summary never
+counts a `queued`, `running`, or still-pending target as applied.
+
+The pg_cron reconciliation releases a target stuck in `in_progress` using
+its last attempt moment and falls back to the row's update moment when the
+worker died before recording the attempt. The released target keeps a due
+retry deadline, so the next worker tick claims it again instead of leaving
+the run open forever.
+
 A `revoke` run is additionally cancelled when a later decision of the same
 type and target is in force, and a kick `reconcile` run is cancelled when a
 federation ban now holds the target. `load_run_action` evaluates both
