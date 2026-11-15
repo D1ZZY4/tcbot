@@ -20,6 +20,7 @@ from tcbot.database.cache.codec import (
     _tag_scalars,
 )
 from tcbot.database.cache.memory import CACHE_MISS, TTLCache
+from tcbot.utils import metrics
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -106,7 +107,12 @@ class TwoLevelCache[T]:
 
     def get(self, key: Any) -> T | object:
         """Return the in-memory cached value, or CACHE_MISS."""
-        return self._mem.get(key)
+        val = self._mem.get(key)
+        if val is CACHE_MISS:
+            metrics.record_miss()
+        else:
+            metrics.record_hit("l1")
+        return val
 
     def put(self, key: Any, val: T) -> None:
         """Store in memory and enqueue an ordered Redis write."""
@@ -124,6 +130,7 @@ class TwoLevelCache[T]:
         other processes serving the revoked privilege until the key TTL.
         """
         self._mem.invalidate(key)
+        metrics.record_invalidation()
         # * Advance the key's generation so an in-flight fetch discards its
         # * stale result instead of resurrecting the revoked value.
         self._advance(key)
@@ -159,6 +166,7 @@ class TwoLevelCache[T]:
         pooled connection.
         """
         self._mem.clear()
+        metrics.record_invalidation()
         # * Advance every known generation so an in-flight fetch discards
         # * its pre-sweep result, and bump the cache-wide epoch so a read
         # * that starts mid-sweep cannot republish into L1.
@@ -234,9 +242,11 @@ class TwoLevelCache[T]:
         """
         val = self._mem.get(key)
         if val is not CACHE_MISS:
+            metrics.record_hit("l1")
             return val
         rc = await self._client()
         if rc is None:
+            metrics.record_miss()
             return CACHE_MISS
         rkey = self._rkey(key)
         # * Keep the key state alive for the read, so a concurrent write or
@@ -261,14 +271,17 @@ class TwoLevelCache[T]:
                 return CACHE_MISS
             _redis_mod.mark_op(ok=True)
             if raw is None:
+                metrics.record_miss()
                 return CACHE_MISS
             try:
                 loaded: T = _decode_redis_value(raw)
             except Exception as exc:
                 log.debug("Redis payload decode failed for %s: %s", rkey, exc)
+                metrics.record_miss()
                 return CACHE_MISS
             # * A value invalidated while the read was in flight must not
             # * enter L1: it would serve the revoked value for a full TTL.
+            metrics.record_hit("l2")
             if state.generation == generation and self._epoch == epoch:
                 self._mem.put(key, loaded)
             return loaded
@@ -296,11 +309,14 @@ class TwoLevelCache[T]:
             if val is CACHE_MISS:
                 missing.append(key)
             else:
+                metrics.record_hit("l1")
                 found[key] = cast("T", val)
         if not missing:
             return found
         rc = await self._client()
         if rc is None:
+            for _ in missing:
+                metrics.record_miss()
             return found
         # * The keys are read in bounded chunks, so a large batch cannot
         # * build one oversized command.
@@ -323,11 +339,15 @@ class TwoLevelCache[T]:
                         self._redis_prefix,
                         exc,
                     )
+                    for _ in chunk:
+                        metrics.record_miss()
                     return found
                 _redis_mod.mark_op(ok=True)
                 for key, raw in zip(chunk, raws, strict=False):
                     if raw is None:
+                        metrics.record_miss()
                         continue
+                    metrics.record_hit("l2")
                     try:
                         loaded: T = _decode_redis_value(raw)
                     except Exception as exc:
@@ -369,6 +389,7 @@ class TwoLevelCache[T]:
         """
         val = self._mem.get(key)
         if val is not CACHE_MISS:
+            metrics.record_hit("l1")
             return cast("T", val)
 
         state = self._state(key)
@@ -378,6 +399,7 @@ class TwoLevelCache[T]:
                 # * Re-check L1 inside the lock to catch a winner that just populated it.
                 val = self._mem.get(key)
                 if val is not CACHE_MISS:
+                    metrics.record_hit("l1")
                     return cast("T", val)
                 generation = state.generation
                 epoch = self._epoch
@@ -410,6 +432,7 @@ class TwoLevelCache[T]:
                                     exc,
                                 )
                             else:
+                                metrics.record_hit("l2")
                                 if (
                                     state.generation != generation
                                     or self._epoch != epoch
@@ -433,6 +456,7 @@ class TwoLevelCache[T]:
                 # * later invalidates; L1 already serves this value.
                 # * Enqueued unconditionally so a reconnect before the
                 # * write still lands the value.
+                metrics.record_miss()
                 val = await fetch()
                 if state.generation != generation or self._epoch != epoch:
                     # * The key was invalidated or overwritten while the

@@ -10,6 +10,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 import tcbot.database.redis_client as _redis_mod
+from tcbot.utils import metrics
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -58,7 +59,9 @@ def redis_client() -> Any:
     """
     client = _redis_mod.client()
     if client is None or not _redis_mod.client_is_usable():
+        metrics.set_redis_available(available=False)
         return None
+    metrics.set_redis_available(available=True)
     return client
 
 
@@ -84,8 +87,10 @@ def _release_redis_slot(tail_key: tuple[str, asyncio.AbstractEventLoop]) -> None
     if remaining <= 0:
         _redis_pending.pop(tail_key, None)
         _redis_drop_warned.discard(tail_key)
+        metrics.set_queue_depth(tail_key[0], 0)
     else:
         _redis_pending[tail_key] = remaining
+        metrics.set_queue_depth(tail_key[0], remaining)
 
 
 def _clear_redis_tail(
@@ -146,6 +151,7 @@ def enqueue_redis_mutation(
             prefix,
             depth,
         )
+        metrics.record_drop(prefix)
         return None
     if droppable and depth >= _REDIS_MAX_PENDING:
         if tail_key not in _redis_drop_warned:
@@ -156,8 +162,10 @@ def enqueue_redis_mutation(
                 prefix,
                 depth,
             )
+        metrics.record_drop(prefix)
         return None
     _redis_pending[tail_key] = depth + 1
+    metrics.set_queue_depth(prefix, depth + 1)
     previous = _redis_tails.get(tail_key)
 
     async def _run() -> None:
