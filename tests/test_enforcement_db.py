@@ -147,3 +147,28 @@ async def test_a_failed_target_is_retried_after_its_deadline(
     assert [int(str(run["id"])) for run in again] == [run_id]
     claimed = await enforcement_db.claim_targets(run_id)
     assert [int(str(target["id"])) for target in claimed] == [target_id]
+
+
+async def test_a_connect_replay_remainder_is_queued_for_the_new_chat(
+    enforcement_db_ready: str,
+) -> None:
+    """A bounded replay leaves durable work instead of an unenforced group."""
+    now = utc_now()
+    case_id = await seed_case(9, opened_by_user_id=7)
+    action_id = await seed_action(
+        "ban",
+        9,
+        actor_user_id=7,
+        case_id=case_id,
+        created_at=now - timedelta(hours=2),
+    )
+
+    queued = await enforcement_db.queue_connect_replay(-1001, [9], 7)
+
+    assert queued == 1
+    runs = await enforcement_db.claim_runs(limit=10)
+    assert len(runs) == 1
+    assert int(str(runs[0]["action_id"])) == action_id
+    assert runs[0]["operation"] == "apply"
+    targets = await enforcement_db.claim_targets(int(str(runs[0]["id"])))
+    assert [int(str(target["chat_id"])) for target in targets] == [-1001]

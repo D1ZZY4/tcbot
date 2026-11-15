@@ -252,6 +252,16 @@ _KICK_ACTION_EXISTS = text(
     """
 )
 
+_CONNECT_REPLAY_ACTIONS = text(
+    """
+    SELECT id, target_user_id, action_type
+      FROM moderation_actions
+     WHERE status = 'active'
+       AND action_type IN ('ban', 'mute')
+       AND target_user_id = ANY(:user_ids)
+    """
+)
+
 
 async def claim_runs(limit: int = 10) -> list[dict[str, object]]:
     """Claim queued enforcement runs for one worker."""
@@ -331,6 +341,51 @@ async def queue_kick_unban_repair(
             requested_by_user_id=requested_by_user_id,
             chat_ids=(chat_id,),
         )
+
+    return await run_transaction(_work)
+
+
+async def queue_connect_replay(
+    chat_id: int,
+    user_ids: Sequence[int],
+    requested_by_user_id: int | None,
+) -> int:
+    """Queue one apply run per active ban or mute for a newly connected group.
+
+    The connect replay is bounded by a time budget and a list cap, so a
+    large federation can leave part of the list unenforced. The remainder
+    becomes durable work here instead of disappearing with the connect
+    handler: the worker retries each decision against the one new chat.
+    Returns the number of queued decisions.
+    """
+    targets = [user_id for user_id in dict.fromkeys(user_ids) if user_id > 0]
+    if chat_id == 0 or not targets:
+        return 0
+
+    async def _work(sess: AsyncSession) -> int:
+        rows = (
+            (await sess.execute(_CONNECT_REPLAY_ACTIONS, {"user_ids": targets}))
+            .mappings()
+            .all()
+        )
+        event = utc_now().strftime("%Y%m%dT%H%M%S")
+        queued = 0
+        for row in rows:
+            action_id = int(row["id"])
+            action_type = str(row["action_type"])
+            await queue_run(
+                sess,
+                action_id=action_id,
+                operation="apply",
+                idempotency_key=(
+                    f"moderation:{action_id}:connect-replay:"
+                    f"{chat_id}:{event}:{action_type}:v1"
+                ),
+                requested_by_user_id=requested_by_user_id,
+                chat_ids=(chat_id,),
+            )
+            queued += 1
+        return queued
 
     return await run_transaction(_work)
 

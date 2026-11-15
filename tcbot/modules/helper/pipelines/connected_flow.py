@@ -603,12 +603,13 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
     @staticmethod
     async def _replay_bans(
         bot: Bot, chat_id: int, ban_uids: list[int], deadline: float
-    ) -> tuple[int, int]:
+    ) -> tuple[int, list[int]]:
         """Fan out every active federation ban into the new group.
 
-        Returns ``(applied, skipped)``. The per-chat Telegram limit admits
+        Returns ``(applied, pending)``. The per-chat Telegram limit admits
         20 requests a minute, so a long list cannot be enforced in one
-        pass: the replay stops at *deadline* and reports the remainder.
+        pass: the replay stops at *deadline* and returns the users it did
+        not reach, so the caller can queue them as durable work.
         """
         pending = list(ban_uids)
         applied = 0
@@ -619,15 +620,15 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
             )
             applied += len(results) - count_transient_errors(results)
             pending = pending[len(chunk) :]
-        return applied, len(pending)
+        return applied, pending
 
     @staticmethod
     async def _replay_mutes(
         bot: Bot, chat_id: int, mute_docs: list[ActiveMuteDoc], deadline: float
-    ) -> tuple[int, int]:
+    ) -> tuple[int, list[ActiveMuteDoc]]:
         """Fan out every active federation mute into the new group.
 
-        Returns ``(applied, skipped)``; see :meth:`_replay_bans` for the
+        Returns ``(applied, pending)``; see :meth:`_replay_bans` for the
         deadline contract.
         """
         _mute_perms = ChatPermissions(can_send_messages=False)
@@ -648,7 +649,7 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
             )
             applied += len(results) - count_transient_errors(results)
             pending = pending[len(chunk) :]
-        return applied, len(pending)
+        return applied, pending
 
     async def complete_join(
         self,
@@ -708,6 +709,8 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
             log.error("active_mute_docs failed for new chat %d: %s", chat_id, mute_docs)
             mute_docs = []
             replay_blind = True
+        pending_ban_uids: list[int] = []
+        pending_mute_docs: list[ActiveMuteDoc] = []
         if len(ban_uids) > _REPLAY_CAP:
             log.warning(
                 "Connect replay truncated to %d/%d bans for chat %d",
@@ -715,6 +718,7 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
                 len(ban_uids),
                 chat_id,
             )
+            pending_ban_uids = ban_uids[_REPLAY_CAP:]
             ban_uids = ban_uids[:_REPLAY_CAP]
             replay_blind = True
         if len(mute_docs) > _REPLAY_CAP:
@@ -724,26 +728,58 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
                 len(mute_docs),
                 chat_id,
             )
+            pending_mute_docs = mute_docs[_REPLAY_CAP:]
             mute_docs = mute_docs[:_REPLAY_CAP]
             replay_blind = True
         if not isinstance(admins_result, BaseException) and admins_result:
             harvest_tasks.spawn(_harvest_admin_identities(chat_id, admins_list))
-        applied_bans, skipped_bans = await self._replay_bans(
+        applied_bans, unapplied_bans = await self._replay_bans(
             bot, chat_id, ban_uids, deadline
         )
-        applied_mutes, skipped_mutes = await self._replay_mutes(
+        applied_mutes, unapplied_mutes = await self._replay_mutes(
             bot, chat_id, mute_docs, deadline
         )
-        if skipped_bans or skipped_mutes:
-            # * The replay stopped at the budget, so the new group is not
-            # * fully enforced yet. The operator is told to re-add the bot,
-            # * and the connect replay runs again on the next join.
+        pending_ban_uids.extend(unapplied_bans)
+        pending_mute_docs.extend(unapplied_mutes)
+        # * Whatever the budget, cap, or a stopped replay left unapplied is
+        # * still an active decision. Queue it as bounded, idempotent work
+        # * for the one new chat instead of trusting a join event that may
+        # * never come for an existing member.
+        pending_user_ids = list(
+            dict.fromkeys(
+                pending_ban_uids
+                + [int(doc.get("user_id", 0)) for doc in pending_mute_docs]
+            )
+        )
+        if pending_user_ids:
+            try:
+                queued = await db.enforcement_db.queue_connect_replay(
+                    chat_id, pending_user_ids, owner_id
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception(
+                    "Connect replay queue failed for chat %d (%d user(s))",
+                    chat_id,
+                    len(pending_user_ids),
+                )
+            else:
+                if queued:
+                    log.warning(
+                        "Connect replay for chat %d left %d decision(s); "
+                        "queued %d enforcement run(s) to finish them.",
+                        chat_id,
+                        len(pending_user_ids),
+                        queued,
+                    )
+            replay_blind = True
+        if pending_ban_uids or pending_mute_docs:
             log.warning(
-                "Connect replay for chat %d stopped at the time budget: "
-                "%d ban(s) and %d mute(s) not applied.",
+                "Connect replay for chat %d left %d ban(s) and %d mute(s) unapplied.",
                 chat_id,
-                skipped_bans,
-                skipped_mutes,
+                len(pending_ban_uids),
+                len(pending_mute_docs),
             )
             replay_blind = True
         try:
@@ -764,7 +800,7 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
         )
         if replay_blind:
             log.error(
-                "Group %d connected BLIND: enforcement replay ran without ban/mute data.",
+                "Group %d connected with an incomplete enforcement replay.",
                 chat_id,
             )
         return replay_blind
