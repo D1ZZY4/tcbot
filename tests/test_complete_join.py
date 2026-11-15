@@ -19,10 +19,17 @@ from tcbot.modules.helper.pipelines.connected_flow import _REPLAY_CAP, BuildConn
 
 class _FakeBot:
     def __init__(self) -> None:
+        self.id: int = 999
         self.banned: list[int] = []
         self.restricted: list[int] = []
         self.sent: list[tuple[int, str]] = []
         self.fail_ban: dict[int, BadRequest] = {}
+        self.chat_member_payload: dict[str, Any] = {}
+
+    async def do_api_request(
+        self, endpoint: str, api_kwargs: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        return self.chat_member_payload
 
     async def get_chat(self, chat_id: int) -> Any:
         return type("C", (), {"username": None})()
@@ -166,3 +173,51 @@ def test_a_benign_replay_refusal_is_not_queued(
     blind = asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
     assert blind is False
     assert queued == []
+
+
+def test_a_missing_welcome_permission_is_reported() -> None:
+    """The new Bot API right is surfaced to the owner, not silently ignored."""
+    bot = _FakeBot()
+    bot.chat_member_payload = {"can_send_welcome_messages": False}
+
+    note = asyncio.run(
+        connected_flow._welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
+    )
+
+    assert "Welcome Messages" in note
+
+
+def test_a_granted_welcome_permission_has_no_note() -> None:
+    bot = _FakeBot()
+    bot.chat_member_payload = {"can_send_welcome_messages": True}
+
+    note = asyncio.run(
+        connected_flow._welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
+    )
+
+    assert note == ""
+
+
+def test_an_older_server_without_the_field_has_no_note() -> None:
+    bot = _FakeBot()
+    bot.chat_member_payload = {"status": "administrator"}
+
+    note = asyncio.run(
+        connected_flow._welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
+    )
+
+    assert note == ""
+
+
+def test_a_welcome_permission_probe_failure_has_no_note() -> None:
+    bot = _FakeBot()
+
+    async def _boom(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("telegram down")
+
+    bot.do_api_request = _boom  # type: ignore[method-assign]
+    note = asyncio.run(
+        connected_flow._welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
+    )
+
+    assert note == ""

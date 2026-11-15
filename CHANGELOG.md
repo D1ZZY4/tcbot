@@ -9,6 +9,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Added
 
+- **The connect flow reports the new Welcome Messages admin right** (`tcbot/modules/helper/pipelines/connected_flow.py`, `i18n/en-US/connecting.toml`, `i18n/id-ID/connecting.toml`, `tests/test_complete_join.py`): Bot API 10.3 added `can_send_welcome_messages`, but PTB 22.8 does not expose it and Bot API has no method that sets the native welcome message. The bot reads the grant through the public raw-request escape hatch and appends a note to the connect success message when the grant is explicitly missing. A server that omits the field and a failed probe stay silent. Behavior changes: the permission is audited, never required, and it does not block a connection; the native welcome content still has to be configured manually in the Telegram app.
+
 - **Ban, mute, and warn application now has a durable per-group ledger** (`tcbot/database/bans_db/_writes.py`, `tcbot/database/mutes_db.py`, `tcbot/database/enforcement_db.py`, `tcbot/enforcement_worker.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `mute_flow.py`, `warn_flow.py`): a manual or automatic ban and a mute queue an `apply` run with their decision, and Telegram delivery is recorded per group. A failed group is retried by the scheduled worker instead of disappearing with the one-shot fan-out. Behavior changes: the ban and mute summaries report the per-group run outcome, and a failed delivery is retried automatically.
 
 - **The retention contract now runs** (`tcbot/database/scheduler.py`, `tcbot/database/base/jobs.py`, `tcbot/database/schema/seed.sql`, `alembic/versions/0007_scheduled_job_owner.py`): the `retention.sweep` registry job had no caller, so runtime telemetry past its window was never removed. A daily `tcbot.retention_daily` sweep applies the `retention_policies` windows, prunes expired MTProto session state, and records the run in `scheduled_job_runs`.
@@ -1138,6 +1140,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **Unused ban helpers removed** (`tcbot/database/bans_db/`, `docs/architecture/database.md`): `deactivate_ban` and `set_review` had no callers; `deactivate_all_active_bans`, `deactivate_extra_active_bans`, and `set_review_if_absent` are the live helpers. Behavior changes: none.
 
 ### Documentation
+
+- **The connect guide covers the new Welcome Messages right** (`docs/features/moderation/connecting.md`): the page explains that Bot API 10.3 grants `can_send_welcome_messages` but still has no method to set the native welcome message, that the bot audits the grant after connect, and that a missing or unprobeable field stays silent. Behavior changes: none, docs only.
 
 - **The join-ban guide and keyboard reference match the new notices** (`docs/features/misc-modules.md`, `docs/features/moderation/banning.md`, `docs/architecture/helpers.md`): the pages now describe the identity fields, the group notice, the separate target DM, the `View Log` / `View Proof` row, and the `Submit Appeal` row, including the secondary-group behavior and the dropped button for a missing link. Behavior changes: none, docs only.
 

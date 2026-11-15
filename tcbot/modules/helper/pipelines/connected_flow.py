@@ -61,6 +61,10 @@ _REQUIRED_PERMS: tuple[str, ...] = (
     "can_invite_users",
 )
 _REPLAY_CAP: int = 500
+# * Bot API 10.3 added this right, but PTB 22.8 does not expose it on
+# * ChatMemberAdministrator yet. The capability is read through the public
+# * raw-request escape hatch so an older library does not hide the grant.
+_WELCOME_PERMISSION: str = "can_send_welcome_messages"
 # * Telegram admits 20 requests a minute per group, so a long ban or mute
 # * list cannot be enforced in one pass. The replay runs until this budget
 # * is spent and reports the remainder as not applied; the enforcement
@@ -72,6 +76,32 @@ _REPLAY_BUDGET_S: float = 20.0
 _REPLAY_ROUND: int = 8
 # * Owner of the in-flight admin-identity harvests.
 harvest_tasks = TaskTracker("admin harvest")
+
+
+async def _welcome_permission_note(bot: Bot, chat_id: int, locale: str | None) -> str:
+    """Return an operator note when the bot lacks the new welcome right.
+
+    Bot API 10.3 added ``can_send_welcome_messages`` to the administrator
+    rights, but there is still no Bot API method that sets the native
+    welcome message itself. The bot can therefore audit the grant and tell
+    the owner how to enable it, but it cannot create the message. An older
+    server omits the field, which is not reported as a missing grant.
+    """
+    try:
+        async with asyncio.timeout(TELEGRAM_LOOKUP_TIMEOUT):
+            member = await bot.do_api_request(
+                "getChatMember",
+                {"chat_id": chat_id, "user_id": bot.id},
+            )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("Welcome permission check failed for chat=%d: %s", chat_id, exc)
+        return ""
+    granted = member.get(_WELCOME_PERMISSION) if isinstance(member, dict) else None
+    if granted is False:
+        return "\n\n" + t("connecting.state.welcome_perm_missing", locale, plain=True)
+    return ""
 
 
 async def _harvest_admin_identities(chat_id: int, admins: list[ChatMember]) -> None:
@@ -287,11 +317,17 @@ class ConnectionAddedMixin:
                                 reply_markup=None,
                             )
                         return
+                    welcome_note = await _welcome_permission_note(
+                        ctx.bot, chat.id, locale
+                    )
                     try:
                         await ctx.bot.edit_message_text(
-                            self.connected_blind_message(locale)
-                            if blind
-                            else self.connected_message(locale),
+                            (
+                                self.connected_blind_message(locale)
+                                if blind
+                                else self.connected_message(locale)
+                            )
+                            + welcome_note,
                             chat_id=chat.id,
                             message_id=pending.get("message_id", 0),
                             reply_markup=None,
@@ -504,11 +540,15 @@ class ConnectionDecisionMixin:
                         reply_markup=None,
                     )
                 return
+            welcome_note = await _welcome_permission_note(ctx.bot, chat.id, locale)
             with contextlib.suppress(Exception):
                 await q.edit_message_text(
-                    self.connected_blind_message(locale)
-                    if blind
-                    else self.connected_message(locale),
+                    (
+                        self.connected_blind_message(locale)
+                        if blind
+                        else self.connected_message(locale)
+                    )
+                    + welcome_note,
                     reply_markup=None,
                 )
         elif action == self.cancel_callback:

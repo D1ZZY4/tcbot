@@ -24,7 +24,7 @@ Menghubungkan grupmu ke federasi {community}. Setelah terhubung:
 
 [help.permissions]
 title = "Izin yang Dibutuhkan"
-body = "Sebelum menjalankan perintah, jadikan bot admin grup dengan tiga izin ini: *Delete Messages*, *Ban Users*, dan *Invite Users via Link*."
+body = "Sebelum menjalankan perintah, jadikan bot admin grup dengan tiga izin ini: *Delete Messages*, *Ban Users*, dan *Invite Users via Link*. Untuk memakai Welcome Messages native Telegram, berikan juga izin admin *Welcome Messages* yang baru; bot bisa memeriksa izinnya tetapi belum bisa mengatur isi pesan lewat API."
 
 [help.notes]
 title = "Catatan"
@@ -57,3 +57,4 @@ declined = "Koneksi ditolak. Aku akan keluar dari grup sekarang."
 already_connected = "Grup ini sudah terhubung ke {community}."
 connecting = "Menghubungkan... menerapkan ban dan mute federasi yang ada. Bisa perlu waktu sejenak untuk federasi besar."
 perms_required = "Jadikan bot admin dengan izin yang dibutuhkan (hapus pesan, ban pengguna, undang via tautan) lalu coba lagi."
+welcome_perm_missing = "Catatan: bot belum punya izin admin Welcome Messages yang baru. Berikan izin itu di pengaturan administrator grup jika ingin pesan sambutan native Telegram tersedia."

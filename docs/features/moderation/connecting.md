@@ -127,6 +127,10 @@ The function returns normally only after `add_group` has succeeded. If the `add_
 
 These are defined as `_REQUIRED_PERMS` in `connected_flow.py`. The same tuple is exposed via `connection.perms_required_message()` so the help text matches.
 
+### Native welcome messages
+
+Bot API 10.3 added the `can_send_welcome_messages` administrator right, but it did not add a method that sets the native welcome message. The message itself is still configured by a human in the Telegram app. The bot therefore treats the right as optional: after a successful connect it reads the bot's own chat member through the public raw-request escape hatch, because PTB 22.8 does not expose the field yet, and appends `connecting.state.welcome_perm_missing` to the success message when the grant is explicitly false. A missing field on an older server is not reported as a denial, and the permission never blocks the connection.
+
 ## Database impact
 
 The connection flow touches two tables:

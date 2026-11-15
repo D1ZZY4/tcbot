@@ -24,7 +24,7 @@ Connects your group to the {community} federation. Once connected:
 
 [help.permissions]
 title = "Required permissions"
-body = "Before running the command, make the bot a group admin with these three permissions: *Delete Messages*, *Ban Users*, and *Invite Users via Link*."
+body = "Before running the command, make the bot a group admin with these three permissions: *Delete Messages*, *Ban Users*, and *Invite Users via Link*. To use Telegram's native Welcome Messages, also grant the new *Welcome Messages* admin right; the bot can check the grant but cannot set the message content through the API."
 
 [help.notes]
 title = "Notes"
@@ -57,3 +57,4 @@ declined = "Connection declined. I'll leave the group now."
 already_connected = "This group is already connected to {community}."
 connecting = "Connecting... applying existing federation bans and mutes. This can take a moment for large federations."
 perms_required = "Please make the bot an admin with the required permissions (delete messages, ban users, invite users) and try again."
+welcome_perm_missing = "Note: the bot does not have the new Welcome Messages admin right. Grant it in the group's administrator settings if you want Telegram's native welcome message to be available."
