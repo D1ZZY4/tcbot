@@ -47,6 +47,10 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Cache queue evictions are counted** (`tcbot/utils/metrics.py`, `tcbot/database/cache/redis_io.py`): when a revocation needs room at the hard queue ceiling, the evicted display hint is recorded as `tcbot_cache_queue_evictions_total{prefix}`, so an operator can distinguish that case from a dropped mutation.
 
+### Fixed
+
+- **An animated proof stays an animation** (`tcbot/modules/helper/pipelines/proof_flow.py`): a GIF was classified as a document and uploaded with `send_document`, while the evidence row recorded `animation`, so the archive and the stored media disagreed. Animations now upload with `send_animation`, and a gallery keeps the animation beside its photos and videos. Behavior changes: a GIF proof lands as an animation message instead of a file attachment.
+
 ### Changed
 
 - **The proof destination is deployment configuration** (`tcbot/__init__.py`, `config.env.example`, `README.md`, `docs/getting-started/setup.md`): the loader carried a community channel ID as the fallback for `PROOFS`, so a fresh clone would upload evidence to a chat it did not own. `PROOFS` is required now and boot refuses a missing or invalid value with a clear error. Behavior changes: a deployment that relied on the removed default must set `PROOFS` to its own proof chat before upgrading.

@@ -83,6 +83,30 @@ def _document_message(file_id: str, message_id: int) -> Message:
     )
 
 
+def _animation_message(file_id: str, message_id: int) -> Message:
+    return cast(
+        "Message",
+        SimpleNamespace(
+            photo=None,
+            video=None,
+            animation=SimpleNamespace(
+                file_id=file_id,
+                file_unique_id=f"u-{file_id}",
+                mime_type="video/mp4",
+                file_size=777,
+                duration=3,
+                width=320,
+                height=240,
+                file_name="loop.mp4",
+            ),
+            document=None,
+            caption="gif",
+            chat=SimpleNamespace(id=5),
+            message_id=message_id,
+        ),
+    )
+
+
 def test_a_gallery_and_a_document_are_all_recorded() -> None:
     messages = [
         _photo_message("p1", 1),
@@ -194,3 +218,71 @@ def test_upload_proof_keeps_the_first_message_id(
     )
 
     assert result == 77
+
+
+def test_an_animation_is_sent_as_an_animation() -> None:
+    """A GIF keeps its animation kind instead of becoming a document."""
+    sent: list[tuple[str, str]] = []
+
+    class _Bot:
+        async def send_animation(self, *args: Any, **kwargs: Any) -> Any:
+            sent.append(("animation", str(args[1])))
+            return SimpleNamespace(message_id=61)
+
+        async def send_document(self, *args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("an animation must not be sent as a document")
+
+    items, expected = asyncio.run(
+        proof_flow.upload_proof_items(
+            cast("Bot", _Bot()),
+            [_animation_message("a1", 8)],
+            "cap",
+            -100,
+            None,  # type: ignore[arg-type]
+        )
+    )
+
+    assert sent == [("animation", "a1")]
+    assert expected == 1
+    assert items[0].media_type == "animation"
+    assert items[0].duration_seconds == 3
+    assert items[0].file_name == "loop.mp4"
+
+
+def test_a_gallery_and_an_animation_are_both_archived() -> None:
+    """The gallery fast path must not drop a single media item beside it."""
+    sent: list[tuple[str, str]] = []
+
+    class _Bot:
+        async def send_media_group(self, *args: Any, **kwargs: Any) -> list[Any]:
+            return [
+                SimpleNamespace(message_id=100, media_group_id="g1"),
+                SimpleNamespace(message_id=101, media_group_id="g1"),
+            ]
+
+        async def send_animation(self, *args: Any, **kwargs: Any) -> Any:
+            sent.append(("animation", str(args[1])))
+            return SimpleNamespace(message_id=102)
+
+        async def send_photo(self, *args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("a gallery must not fall back to single sends")
+
+    items, expected = asyncio.run(
+        proof_flow.upload_proof_items(
+            cast("Bot", _Bot()),
+            [
+                _photo_message("p1", 1),
+                _photo_message("p2", 2),
+                _animation_message("a1", 3),
+            ],
+            "cap",
+            -100,
+            None,  # type: ignore[arg-type]
+        )
+    )
+
+    assert sent == [("animation", "a1")]
+    assert expected == 3
+    assert [item.media_type for item in items] == ["photo", "photo", "animation"]
+    assert [item.item_order for item in items] == [0, 1, 2]
+    assert [item.archive_message_id for item in items] == [100, 101, 102]

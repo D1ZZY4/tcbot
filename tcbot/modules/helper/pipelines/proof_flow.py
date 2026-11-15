@@ -235,7 +235,7 @@ def _source_media(message: Message) -> _SourceMedia | None:
         animation = message.animation
         return _SourceMedia(
             media_type="animation",
-            send_kind="document",
+            send_kind="animation",
             file_id=animation.file_id,
             file_unique_id=animation.file_unique_id,
             mime_type=animation.mime_type,
@@ -299,14 +299,16 @@ async def upload_proof_items(
     a media group, so each is sent individually after the gallery. The
     source count includes a file whose send failed, so the archive can mark
     a partial batch instead of claiming that a lost file landed. A failed
-    gallery chunk is logged and skipped; a failed document is logged and
-    skipped so one bad file cannot void a good gallery.
+    gallery chunk is logged and skipped; a failed animation or document is
+    logged and skipped so one bad file cannot void a good gallery.
     """
     sources = [source for msg in msgs if (source := _source_media(msg)) is not None]
     if not sources:
         return [], 0
     gallery = [source for source in sources if source.send_kind in ("photo", "video")]
-    documents = [source for source in sources if source.send_kind == "document"]
+    singles = [
+        source for source in sources if source.send_kind not in ("photo", "video")
+    ]
     landed: list[ProofItem] = []
 
     async def _send_single(source: _SourceMedia, cap: str | None) -> Message:
@@ -320,6 +322,14 @@ async def upload_proof_items(
             )
         if source.send_kind == "video":
             return await bot.send_video(
+                proof_chat,
+                source.file_id,
+                caption=cap,
+                parse_mode="MarkdownV2",
+                message_thread_id=proof_thread,
+            )
+        if source.send_kind == "animation":
+            return await bot.send_animation(
                 proof_chat,
                 source.file_id,
                 caption=cap,
@@ -343,7 +353,7 @@ async def upload_proof_items(
                     "Proof media uploaded: message_id=%s",
                     landed[0].archive_message_id,
                 )
-                if not documents:
+                if not singles:
                     return landed, len(sources)
             else:
                 # * Telegram caps a media group at 10 items; larger albums
@@ -383,24 +393,24 @@ async def upload_proof_items(
                             len(sent_group),
                             landed[0].archive_message_id,
                         )
-                if landed and not documents:
+                if landed and not singles:
                     return landed, len(sources)
     except Exception:
-        # * A gallery failure must not discard document evidence: fall
-        # * through to the document loop below.
-        log.exception("Proof gallery upload failed; trying documents")
-    for index, source in enumerate(documents):
+        # * A gallery failure must not discard single media evidence: fall
+        # * through to the single-item loop below.
+        log.exception("Proof gallery upload failed; trying single media")
+    for index, source in enumerate(singles):
         try:
             sent = await _send_single(
                 source, caption if not landed and index == 0 else None
             )
         except Exception:
-            log.exception("Proof document upload failed; continuing with the rest")
+            log.exception("Proof single media upload failed; continuing")
             continue
         landed.append(_landed_item(sent, source, len(landed)))
-    if landed and documents:
+    if landed and singles:
         log.info(
-            "Proof documents uploaded alongside message_id=%s",
+            "Proof single media uploaded alongside message_id=%s",
             landed[0].archive_message_id,
         )
     return landed, len(sources)
