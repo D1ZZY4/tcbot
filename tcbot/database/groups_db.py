@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 import cachetools as _cachetools
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import (
@@ -115,7 +115,13 @@ async def refresh_group_title(chat_id: int, title: str) -> bool:
             telegram_chats.update()
             .where(
                 telegram_chats.c.chat_id == chat_id,
-                telegram_chats.c.title != title,
+                # * A stored NULL never matches ``!= title``: SQL NULL
+                # * comparisons yield NULL. The primary group is registered
+                # * with no title at boot, so its title must be fillable.
+                or_(
+                    telegram_chats.c.title.is_(None),
+                    telegram_chats.c.title != title,
+                ),
             )
             .values(title=title, updated_at=utc_now())
         )

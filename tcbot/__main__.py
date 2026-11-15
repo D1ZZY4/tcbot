@@ -132,16 +132,17 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     if _member_cache_tasks.pending >= _MEMBER_CACHE_MAX_CONCURRENT:
         # * The harvest is best-effort: dropping the update keeps the
         # * event loop free, but the bot stops tracking that identity.
-        # * The report makes the drop visible without flooding the log.
+        # * Report every hundredth cumulative drop: resetting the counter
+        # * after a report made the next drop look like a new hundred and
+        # * flooded the log once the pool saturated.
         _member_cache_drops += 1
-        if _member_cache_drops % _MEMBER_CACHE_DROP_REPORT_EVERY == 1:
+        if _member_cache_drops % _MEMBER_CACHE_DROP_REPORT_EVERY == 0:
             log.warning(
                 "Member cache harvest saturated (%d in flight): %d identity "
-                "updates dropped since the last report.",
+                "updates dropped since startup.",
                 _MEMBER_CACHE_MAX_CONCURRENT,
                 _member_cache_drops,
             )
-            _member_cache_drops = 0
         return
     _member_cache_tasks.spawn(_do_cache())
 

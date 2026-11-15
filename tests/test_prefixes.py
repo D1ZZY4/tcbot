@@ -63,6 +63,16 @@ def test_bare_prefix_rejected() -> None:
     assert _parse_prefixed_command("/", ("/",), None) is None
 
 
+def test_prefix_separated_by_whitespace_rejected() -> None:
+    """A space after the prefix is prose, not a command.
+
+    Telegram does not treat "/ help" (or "/ warn me") as a command, and
+    executing one would let ordinary chat text trigger a moderation flow.
+    """
+    assert _parse_prefixed_command("/ tcban", ("/",), None) is None
+    assert _parse_prefixed_command("! tckick", ("!",), None) is None
+
+
 def test_short_mention_rejected() -> None:
     assert _parse_prefixed_command("/tcb@ab", ("/",), "ab") is None
 

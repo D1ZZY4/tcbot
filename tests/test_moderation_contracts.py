@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.database import bans_db, mutes_db
+from tcbot.database import bans_db, moderation_db, mutes_db
 from tcbot.database import engine as engine_module
 from tcbot.database.base import moderation_actions, moderation_cases
 from tcbot.modules.helper import guards
@@ -24,6 +24,20 @@ from tests.postgres_support import reset_community, seed_chats, seed_users
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+
+def test_a_deadline_that_passed_by_a_fraction_of_a_second_is_refused() -> None:
+    """Truncating first turned a tiny past deadline into a valid zero.
+
+    The schema requires an expiry after creation, so the boundary has to be
+    refused here instead of surfacing as a raw constraint error.
+    """
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    with pytest.raises(ValueError):
+        moderation_db.remaining_seconds(now - timedelta(milliseconds=400), now)
+    with pytest.raises(ValueError):
+        moderation_db.remaining_seconds(now, now)
+    assert moderation_db.remaining_seconds(now + timedelta(seconds=2), now) == 2
 
 
 @pytest.fixture

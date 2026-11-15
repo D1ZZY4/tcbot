@@ -248,7 +248,10 @@ def test_t_rejects_specs_and_positional() -> None:
 
 
 def test_missing_key_returns_marker() -> None:
-    assert t("no.such.key", "en-US", catalog=_catalog()) == "[no.such.key]"
+    # * The marker is rendered as message text, so MarkdownV2 mode escapes
+    # * the brackets and dots; plain mode (callback alerts) keeps them.
+    assert t("no.such.key", "en-US", catalog=_catalog()) == "\\[no\\.such\\.key\\]"
+    assert t("no.such.key", "en-US", catalog=_catalog(), plain=True) == "[no.such.key]"
 
 
 def test_t_missing_placeholder_raises() -> None:

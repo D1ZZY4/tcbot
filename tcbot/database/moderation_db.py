@@ -43,10 +43,11 @@ def remaining_seconds(deadline: datetime | None, now: datetime) -> int | None:
     """
     if deadline is None:
         return None
-    remaining = int((deadline - now).total_seconds())
-    if remaining < 0:
+    # * Compare before truncating: a deadline 0.4 s in the past truncates to
+    # * 0 and would slip past the guard into a schema constraint failure.
+    if deadline <= now:
         raise ValueError("a decision expiry must be in the future")
-    return remaining
+    return int((deadline - now).total_seconds())
 
 
 async def open_case(

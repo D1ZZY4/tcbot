@@ -33,11 +33,10 @@ def fmt_dt(dt: datetime) -> str:
 
     Every caller embeds the result in a MarkdownV2 message, so the
     ``-`` and ``|`` separators come back pre-escaped from this single
-    source instead of at each call site.
+    source instead of at each call site. An aware value in another offset
+    is converted to UTC first; only the label is guaranteed otherwise.
     """
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return esc(dt.strftime("%d-%m-%Y | %H:%M"))
+    return esc(to_utc(dt).strftime("%d-%m-%Y | %H:%M"))
 
 
 # ──────────────────────── Measurement Helpers ──────────────────────── #

@@ -284,7 +284,10 @@ def t(
     template = data.get(canonical, {}).get(key, data[DEFAULT_LOCALE].get(key))
     if template is None:
         log.error("i18n missing key %r (locale %r)", key, locale)
-        return f"[{key}]"
+        # * The diagnostic is rendered as message text, so it must obey the
+        # * send mode: raw brackets and dots break MarkdownV2 parsing and
+        # * would drop the whole message instead of showing the bad key.
+        return f"[{key}]" if plain else esc(f"[{key}]")
     escape = not plain
     prepared = {
         name: _prepare_value(name, value, escape=escape)

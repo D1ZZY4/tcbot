@@ -78,7 +78,15 @@ def _parse_prefixed_command(
     if prefix is None:
         return None
 
-    _parts = text[len(prefix) :].split(None, 1)
+    remainder = text[len(prefix) :]
+    # * Telegram only treats "<prefix><command>" without a space as a
+    # * command. Accepting "/ help" made ordinary prose such as
+    # * "/ warn me" execute a moderation command, so a leading space is
+    # * refused here like the client refuses it.
+    if not remainder or remainder[0].isspace():
+        return None
+
+    _parts = remainder.split(None, 1)
     if not _parts:
         return None
     # * split() never yields empty strings, so _parts[0] is always non-empty.

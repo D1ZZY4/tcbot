@@ -90,14 +90,22 @@ async def fan_out[T](
         max_concurrent = 1
 
     sem = asyncio.Semaphore(max_concurrent)
+    # * Coroutine identities whose slot actually started the call. A slot
+    # * still waiting on the semaphore never awaited its coroutine, so a
+    # * cancellation of the whole fan-out must close those to avoid
+    # * "coroutine was never awaited" leaks during shutdown.
+    started: set[int] = set()
 
-    async def _slot(thunk: Callable[[], Awaitable[T]]) -> T | BaseException:
+    async def _slot(
+        thunk: Callable[[], Awaitable[T]], coro: Awaitable[T]
+    ) -> T | BaseException:
         async with sem:
             if not _cb.telegram.try_acquire():
                 skipped = thunk()
                 if inspect.iscoroutine(skipped):
                     skipped.close()
                 return _cb.CircuitOpenError("Telegram circuit is OPEN; call skipped.")
+            started.add(id(coro))
             try:
                 result = await thunk()
                 _cb.telegram.record_success()
@@ -134,11 +142,18 @@ async def fan_out[T](
                 )
                 return exc
 
-    results = list(
-        await asyncio.gather(
-            *(_slot(lambda c=c: c) for c in coros), return_exceptions=True
+    try:
+        results = list(
+            await asyncio.gather(
+                *(_slot(lambda c=c: c, c) for c in coros),
+                return_exceptions=True,
+            )
         )
-    )
+    except asyncio.CancelledError:
+        for coro in coros:
+            if id(coro) not in started and inspect.iscoroutine(coro):
+                coro.close()
+        raise
     # ! CRITICAL: gather(return_exceptions=True) captures per-slot
     # ! cancellation as data. A cancelled slot must propagate so shutdown
     # ! is never misreported as per-group failures by the counters below.
