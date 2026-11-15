@@ -18,7 +18,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import guards, messages
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
-from tcbot.modules.helper.messages import cb_error_edit, send_log
+from tcbot.modules.helper.messages import answer_ack, cb_error_edit, send_log
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
 from tcbot.utils.dispatch import (
     fan_out,
@@ -218,7 +218,9 @@ class ApproveMixin:
             if not gate.may_proceed:
                 await _answer_review(q, locale, "appeals.review.demote_blocked")
                 return False
-        deactivate_result = await db.bans_db.deactivate_all_active_bans(target_id)
+        deactivate_result = await db.bans_db.deactivate_all_active_bans(
+            target_id, withdraw_pending_appeals=False
+        )
         if isinstance(deactivate_result, asyncio.CancelledError):
             raise deactivate_result
         if isinstance(deactivate_result, BaseException):
@@ -229,6 +231,9 @@ class ApproveMixin:
             )
             await _answer_review(q, locale, "appeals.review.db_retry")
             return False
+        # * The decision is reached; ack before the bookkeeping and the
+        # * notification fan-out, none of which answers the query again.
+        await answer_ack(q)
         # * The decision is lifted, so the appeal that asked for it is
         # * accepted. The record closes here because the appeal is the
         # * history of the decision: without it the appeal stays open,
@@ -408,6 +413,8 @@ class RejectMixin:
             log.exception("reject_appeal set_rejected_by failed for ban %s", ban_id)
             await _answer_review(q, staff_locale, "appeals.review.db_retry")
             return False
+        # * The rejection is recorded; ack before the card edit and DMs.
+        await answer_ack(q)
         target_fname: str = (
             name_r if isinstance(name_r, str) and name_r else str(target_id)
         )
@@ -529,15 +536,15 @@ class AppealReviewMixin(AppealVerdictsMixin):
             except Exception as exc:
                 log.debug("Appeal malformed-payload answer failed: %s", exc)
             return
-        role_result, ban_result, answer_r = await asyncio.gather(
+        role_result, ban_result = await asyncio.gather(
             db.users_roles.get_effective_role(admin.id, fresh=True),
             db.bans_db.get_ban(ban_id),
-            q.answer(),
             return_exceptions=True,
         )
-        throw_if_cancelled((role_result, ban_result, answer_r))
-        if isinstance(answer_r, BaseException):
-            log.debug("Appeal decision answer failed: %s", answer_r)
+        throw_if_cancelled((role_result, ban_result))
+        # * The query is answered per branch, never up front: Telegram
+        # * accepts one answer, so an early ack would swallow every alert
+        # * below and leave a refused tapper with no feedback at all.
         if isinstance(role_result, BaseException):
             log.warning(
                 "Appeal review role lookup failed for %d: %s", admin.id, role_result
@@ -570,6 +577,7 @@ class AppealReviewMixin(AppealVerdictsMixin):
                 log.debug("Appeal ban-retry answer failed: %s", exc)
             return
         if not ban_result:
+            await answer_ack(q)
             await cb_error_edit(
                 q,
                 t("appeals.review.ban_not_found", locale, plain=True),
@@ -586,6 +594,7 @@ class AppealReviewMixin(AppealVerdictsMixin):
                     log.exception(
                         "Appeal stale-card clear_review failed for ban %s", ban_id
                     )
+                await answer_ack(q)
                 await cb_error_edit(
                     q,
                     t("appeals.review.already_resolved", locale, plain=True),
@@ -621,6 +630,7 @@ class AppealReviewMixin(AppealVerdictsMixin):
                 tapped_review_id,
                 expected_review_id,
             )
+            await answer_ack(q)
             await cb_error_edit(
                 q,
                 t("appeals.review.stale_card", locale, plain=True),

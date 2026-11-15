@@ -130,7 +130,7 @@ def _wire(monkeypatch: pytest.MonkeyPatch, *, claimed: bool = True) -> dict[str,
     async def _groups() -> list[Any]:
         return []
 
-    async def _deactivate(target_id: int) -> int:
+    async def _deactivate(target_id: int, **kwargs: Any) -> int:
         record["deactivated"].append(target_id)
         return 1
 

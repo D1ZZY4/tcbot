@@ -49,12 +49,40 @@ class _Recorder:
         return self.affected
 
 
+class _Result:
+    """Minimal cursor result carrying the recorder's affected-row count."""
+
+    def __init__(self, rowcount: int) -> None:
+        self.rowcount = rowcount
+
+
+class _Session:
+    """Minimal session recording the statements of one transaction."""
+
+    def __init__(self, rec: _Recorder) -> None:
+        self.rec = rec
+
+    async def execute(self, stmt: Any) -> _Result:
+        self.rec.statements.append(stmt)
+        return _Result(self.rec.affected)
+
+    async def scalar(self, stmt: Any) -> Any:
+        self.rec.statements.append(stmt)
+        return self.rec.rows[0] if self.rec.rows else None
+
+
 @pytest.fixture
 def recorder(monkeypatch: pytest.MonkeyPatch) -> _Recorder:
     """Patch the ban helpers so every statement is recorded, not executed."""
     rec = _Recorder()
+
+    async def _run_transaction(op: Any, **kwargs: Any) -> Any:
+        _ = kwargs
+        return await op(_Session(rec))
+
     monkeypatch.setattr(_writes, "db_call", identity_db_call)
     monkeypatch.setattr(_writes, "run", rec.run)
+    monkeypatch.setattr(_writes, "run_transaction", _run_transaction)
     monkeypatch.setattr(_queries, "db_call", identity_db_call)
     monkeypatch.setattr(_queries, "fetch_one", rec.fetch_one)
     monkeypatch.setattr(_queries, "fetch_all", rec.fetch_all)
@@ -121,17 +149,36 @@ def test_the_reacted_constraint_names_exist_in_the_schema() -> None:
 def test_deactivate_all_active_bans_clears_every_active_record(
     recorder: _Recorder,
 ) -> None:
-    """The unban path clears every active ban of the user."""
+    """The unban path clears every active ban and withdraws its appeal."""
     recorder.affected = 3
 
     count = asyncio.run(bans_db.deactivate_all_active_bans(42))
 
     assert count == 3
-    sql = literal_sql(recorder.statements[0])
+    assert len(recorder.statements) == 2
+    # * The pending appeal is withdrawn in the same transaction; leaving it
+    # * pending would block a later appeal with no reviewer able to decide.
+    withdraw = literal_sql(recorder.statements[0])
+    assert "moderation_appeals" in withdraw
+    assert "status = 'pending'" in withdraw
+    assert "status='withdrawn'" in withdraw.replace(" ", "")
+    sql = literal_sql(recorder.statements[-1])
     assert "moderation_actions.target_user_id = 42" in sql
     assert "moderation_actions.action_type = 'ban'" in sql
     assert "moderation_actions.status = 'active'" in sql
     assert "external_ref !=" not in sql
+
+
+def test_the_appeal_approval_path_keeps_its_pending_appeal(
+    recorder: _Recorder,
+) -> None:
+    """Approving an appeal must still be able to accept that appeal."""
+    recorder.affected = 1
+
+    asyncio.run(bans_db.deactivate_all_active_bans(42, withdraw_pending_appeals=False))
+
+    assert len(recorder.statements) == 1
+    assert "moderation_appeals" not in literal_sql(recorder.statements[0])
 
 
 def test_the_active_ban_read_orders_by_the_newest_decision(

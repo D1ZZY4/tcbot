@@ -12,6 +12,7 @@ from sqlalchemy import bindparam, cast
 from sqlalchemy.dialects.postgresql import JSONB
 
 from tcbot.database.base import moderation_actions
+from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ColumnElement
@@ -60,6 +61,19 @@ _METADATA = moderation_actions.c.metadata
 
 # * Name of the bound parameter that carries the JSONB patch.
 _PATCH_BIND = "review_patch"
+
+
+def _in_force() -> ColumnElement[bool]:
+    """Return the condition an active ban has to meet to still be in force.
+
+    A timed ban stops being active at its deadline, even before the daily
+    sweep moves the row to ``expired``. Every active read applies the same
+    condition as the ``active_bans`` view, so a count, a list, an appeal,
+    and a decision cannot disagree about a ban whose deadline passed.
+    """
+    return (moderation_actions.c.expires_at.is_(None)) | (
+        moderation_actions.c.expires_at > utc_now()
+    )
 
 
 def _slot_is_free() -> ColumnElement[bool]:

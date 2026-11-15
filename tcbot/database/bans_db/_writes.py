@@ -44,6 +44,7 @@ from ._shared import (
     META_REVIEW_TIMESTAMP,
     META_UPDATE_COUNT,
     _drop_review_keys,
+    _in_force,
     _merge_metadata,
     _slot_holds,
     _slot_is_free,
@@ -362,19 +363,21 @@ async def set_log_message_id(ban_id: str, log_msg_id: int) -> None:
         return
     await db_call(
         lambda: run(
-            pg_insert(moderation_messages)
-            .values(
+            # * The message table is append-only history, so this always adds
+            # * a row; the compose read orders by id and takes the newest.
+            pg_insert(moderation_messages).values(
                 action_id=int(action["id"]),
                 chat_id=cfg.logs[0],
                 message_id=log_msg_id,
                 message_kind="log",
             )
-            .on_conflict_do_nothing()
         )
     )
 
 
-async def deactivate_all_active_bans(user_id: int) -> int:
+async def deactivate_all_active_bans(
+    user_id: int, *, withdraw_pending_appeals: bool = True
+) -> int:
     """Revoke the active ban of a user. Returns the number of bans revoked.
 
     The database keeps one active ban per target, so this revokes the one
@@ -382,9 +385,35 @@ async def deactivate_all_active_bans(user_id: int) -> int:
     unban: if it fails, the user is still banned in the database while
     the chats say otherwise, and the join path would ban the user again
     on the next membership event.
+
+    A staff unban also withdraws any pending appeal in the same
+    transaction. The ban is gone, so no reviewer can decide that appeal
+    any more, and leaving it pending would block every later appeal while
+    /check kept showing an unreachable review. The appeal-approval path
+    passes ``withdraw_pending_appeals=False`` because it accepts the
+    pending appeal right after this call.
     """
-    return await db_call(
-        lambda: run(
+
+    async def _work(sess: AsyncSession) -> int:
+        action_ids = select(moderation_actions.c.id).where(
+            moderation_actions.c.target_user_id == user_id,
+            moderation_actions.c.action_type == "ban",
+            moderation_actions.c.status == "active",
+        )
+        if withdraw_pending_appeals:
+            await sess.execute(
+                moderation_appeals.update()
+                .where(
+                    moderation_appeals.c.action_id.in_(action_ids),
+                    moderation_appeals.c.status == "pending",
+                )
+                .values(
+                    status="withdrawn",
+                    resolved_at=utc_now(),
+                    decision_note="Ban lifted by staff",
+                )
+            )
+        result = await sess.execute(
             moderation_actions.update()
             .where(
                 moderation_actions.c.target_user_id == user_id,
@@ -393,7 +422,9 @@ async def deactivate_all_active_bans(user_id: int) -> int:
             )
             .values(status="revoked", revoked_at=utc_now())
         )
-    )
+        return cast("CursorResult", result).rowcount
+
+    return await run_transaction(_work)
 
 
 async def set_review_if_absent(ban_id: str, msg_id: int) -> bool:
@@ -457,6 +488,7 @@ async def claim_appeal_decision(ban_id: str, review_msg_id: int) -> bool:
                 moderation_actions.c.external_ref == ban_id,
                 moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
+                _in_force(),
                 _slot_holds(review_msg_id),
             )
             .values(metadata=_drop_review_keys())
@@ -524,6 +556,7 @@ async def restore_review(
                 moderation_actions.c.external_ref == ban_id,
                 moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
+                _in_force(),
                 _slot_is_free(),
                 # * A decided appeal is a decision: its review card must
                 # * not come back, or a second reviewer could decide it
@@ -588,6 +621,7 @@ async def submit_appeal(
             .where(
                 moderation_actions.c.id == action_id,
                 moderation_actions.c.status == "active",
+                _in_force(),
                 _slot_is_free(),
                 ~_open_appeal_exists(action_id, appellant_user_id),
             )
@@ -752,14 +786,13 @@ async def set_appeal_log_msg(
                 .values(metadata=_merge_metadata(patch))
             )
         await sess.execute(
-            pg_insert(moderation_messages)
-            .values(
+            # * Append-only history: every appeal keeps its own log reference.
+            pg_insert(moderation_messages).values(
                 action_id=action,
                 chat_id=cfg.logs[0],
                 message_id=msg_id,
                 message_kind="appeal_log",
             )
-            .on_conflict_do_nothing()
         )
 
     await run_transaction(_work)

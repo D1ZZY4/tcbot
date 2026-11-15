@@ -30,6 +30,9 @@ class _FakeQuery:
     async def answer(
         self, text: str = "", *, show_alert: bool = False, **kwargs: Any
     ) -> None:
+        # * One answer per query, like Telegram itself.
+        if self.answers:
+            raise RuntimeError("callback query answered twice")
         self.answers.append((text, show_alert))
 
     async def edit_message_text(self, text: str, **kwargs: Any) -> None:
@@ -105,7 +108,7 @@ def _wire_approve(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     async def _fname(user_id: int, fallback: str = "") -> str:
         return fallback
 
-    async def _deactivate(target_id: int) -> int:
+    async def _deactivate(target_id: int, **kwargs: Any) -> int:
         record["deactivated"].append(target_id)
         return 1
 

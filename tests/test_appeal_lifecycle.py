@@ -330,6 +330,41 @@ async def test_only_an_active_ban_may_receive_an_appeal(ban_db: str) -> None:
     assert await _appeals() == []
 
 
+async def test_a_staff_unban_withdraws_the_pending_appeal(ban_db: str) -> None:
+    """A ban lifted outside an appeal decision closes that appeal.
+
+    Leaving it pending would block every later appeal with no reviewer able
+    to decide it, because an appeal decision needs an active ban.
+    """
+    await _seed_ban()
+    assert await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
+
+    revoked = await db.bans_db.deactivate_all_active_bans(_TARGET_ID)
+
+    assert revoked == 1
+    rows = await _appeals()
+    assert [row["status"] for row in rows] == ["withdrawn"]
+    ban = await db.bans_db.get_ban(_BAN_REF)
+    assert ban is not None
+    assert ban.get("is_active") is False
+
+
+async def test_the_approval_path_keeps_the_appeal_it_is_about_to_accept(
+    ban_db: str,
+) -> None:
+    """The approval opt-out leaves the pending appeal for ``accept_appeal``."""
+    await _seed_ban()
+    assert await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
+
+    await db.bans_db.deactivate_all_active_bans(
+        _TARGET_ID, withdraw_pending_appeals=False
+    )
+
+    rows = await _appeals()
+    assert [row["status"] for row in rows] == ["pending"]
+    assert await db.bans_db.accept_appeal(_BAN_REF, _REVIEWER_ID) is True
+
+
 async def test_the_appeal_count_follows_the_records(ban_db: str) -> None:
     """The appeal count of a user counts the rows that exist."""
     await _seed_ban()

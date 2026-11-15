@@ -6,33 +6,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from sqlalchemy import func, select
 
 from tcbot.database.base import moderation_actions, moderation_appeals
 from tcbot.database.documents import BanDoc
 from tcbot.database.engine import db_call, fetch_all, fetch_count, fetch_one
-from tcbot.utils.time_and_date import utc_now
 
 from ._compose import compose_rows
-from ._shared import ACTION_COLUMNS
-
-if TYPE_CHECKING:
-    from sqlalchemy.sql.elements import ColumnElement
-
-
-def _in_force() -> ColumnElement[bool]:
-    """Return the condition an active ban has to meet to still be in force.
-
-    A timed ban stops being active at its deadline, even before the daily
-    sweep moves the row to ``expired``. Every active read applies the same
-    condition as the ``active_bans`` view, so a count, a list, and a replay
-    cannot disagree about a ban whose deadline passed.
-    """
-    return (moderation_actions.c.expires_at.is_(None)) | (
-        moderation_actions.c.expires_at > utc_now()
-    )
+from ._shared import ACTION_COLUMNS, _in_force
 
 
 async def action_by_ref(ban_id: str) -> dict[str, Any] | None:
