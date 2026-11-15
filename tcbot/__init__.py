@@ -47,6 +47,10 @@ _DEFAULT_DB_MAX_OVERFLOW: int = 5
 # * "development". Those three are the only schemas this project uses,
 # * so a stray schema cannot hide a migration that never ran.
 _DEFAULT_DB_SCHEMA: str = "public"
+# * A pending promotion request that is not decided within this window is
+# * marked expired, so an old card cannot block a fresh request forever.
+# * Zero disables the expiry and keeps requests pending indefinitely.
+_DEFAULT_PROMOTION_REQUEST_TTL_DAYS: int = 7
 # * A schema name reaches the server as part of a connection option, so
 # * it has to be a plain identifier. Anything else is refused instead of
 # * being quoted into the option string.
@@ -370,6 +374,7 @@ class Configs:
     db_max_overflow: int
     db_schema: str
     pg_cron_enabled: bool
+    promotion_request_ttl_days: int
     warn_expiry_days: int
     fed_warn_limit: int
     warn_limit: int
@@ -442,6 +447,11 @@ class Configs:
             ),
             db_schema=_db_schema_from_env(),
             pg_cron_enabled=_bool_from_env("PG_CRON_ENABLED", default=False),
+            promotion_request_ttl_days=_int_from_env(
+                "PROMOTION_REQUEST_TTL_DAYS",
+                _DEFAULT_PROMOTION_REQUEST_TTL_DAYS,
+                minimum=0,
+            ),
             warn_expiry_days=_int_from_env("WARN_EXPIRY_DAYS", 0, minimum=0),
             fed_warn_limit=_int_from_env("FED_WARN_LIMIT", 0, minimum=0),
             warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),

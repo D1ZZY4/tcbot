@@ -25,6 +25,7 @@ from tcbot.database.base import chat_members
 from tcbot.database.cache import effective_role_cache, user_mention_cache
 from tcbot.database.connection_options import schema_options
 from tcbot.database.engine import run_transaction
+from tcbot.database.queues_db import expire_stale_requests
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
@@ -270,6 +271,25 @@ async def _sweep_erasures(sess: AsyncSession) -> int:
     return int(result.scalar() or 0)
 
 
+async def expire_promotion_requests() -> None:
+    """Mark pending promotion requests past their TTL as expired.
+
+    The update is idempotent, so a second instance running the same tick
+    only sees the rows the first one already moved. The stale request is
+    also expired lazily when a new request is enqueued and when a list is
+    read, but the schedule keeps the history tidy while nobody looks.
+    """
+    try:
+        expired = await expire_stale_requests()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("Promotion request expiry sweep failed.")
+        raise
+    if expired:
+        log.info("Promotion request expiry sweep closed %d request(s).", expired)
+
+
 async def _cleanup_old_records() -> None:
     """No-op shim for the retired weekly membership-cache cleanup job.
 
@@ -294,6 +314,7 @@ async def _cleanup_old_records() -> None:
 # * (replace_existing=True updates the trigger without creating duplicates)
 
 _EXPIRY_SCHEDULE_ID: str = "tcbot.expiry_daily"
+_PROMOTION_EXPIRY_SCHEDULE_ID: str = "tcbot.promotion_expiry_hourly"
 _ENFORCEMENT_WORKER_SCHEDULE_ID: str = "tcbot.enforcement_worker"
 # * ID of the retired warn-expiry job. It patched the warnings that had no
 # * deadline, which the community schema forbids. The schedule is removed
@@ -619,6 +640,20 @@ def _reconcile_schedules(
         misfire_grace_time=86400,
     )
     log.info("Scheduled stale record cleanup: every 24h.")
+
+    # * A promotion request that nobody decides must release its target
+    # * for a fresh request. The sweep is idempotent and lazy reads cover
+    # * the gap while the scheduler is down.
+    _ensure_job(
+        scheduler,
+        store,
+        job_id=_PROMOTION_EXPIRY_SCHEDULE_ID,
+        func=expire_promotion_requests,
+        trigger=IntervalTrigger(hours=1, timezone=_SCHEDULER_TIMEZONE),
+        args=(),
+        misfire_grace_time=3600,
+    )
+    log.info("Scheduled promotion request expiry: every hour.")
 
     # * The expiry sweep only queues the per-group revokes. This worker is
     # * the consumer that actually lifts the restriction on Telegram.

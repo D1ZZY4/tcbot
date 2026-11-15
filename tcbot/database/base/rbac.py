@@ -162,6 +162,7 @@ promotion_requests = Table(
     Column(
         "requested_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
     ),
+    Column("expires_at", DateTime(timezone=True), nullable=True),
     Column("resolved_at", DateTime(timezone=True), nullable=True),
     Column("resolved_by_user_id", BigInteger, nullable=True),
     Column("decision_note", Text, nullable=True),
@@ -189,6 +190,10 @@ promotion_requests = Table(
     ),
     UniqueConstraint("request_id", name="uq_promotion_requests_request_id"),
     CheckConstraint("btrim(request_id) <> ''", name="ck_promotion_requests_request_id"),
+    CheckConstraint(
+        "expires_at IS NULL OR expires_at > requested_at",
+        name="ck_promotion_requests_expiry",
+    ),
     enum_check(
         "ck_promotion_requests_status",
         "status",
@@ -196,11 +201,17 @@ promotion_requests = Table(
         "approved",
         "rejected",
         "cancelled",
+        "expired",
     ),
 )
 
 Index("ix_promotion_requests_status", promotion_requests.c.status)
 Index("ix_promotion_requests_target", promotion_requests.c.target_user_id)
+Index(
+    "ix_promotion_requests_expiry",
+    promotion_requests.c.status,
+    promotion_requests.c.expires_at,
+)
 # * One open request per target: two moderators asking for the same
 # * promotion collapse into one queue entry.
 Index(

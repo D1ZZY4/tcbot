@@ -6,12 +6,14 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
+from tcbot import cfg
 from tcbot.database.base import promotion_requests
 from tcbot.database.documents import PromotionRequestDoc, RequestStatus
 from tcbot.database.engine import (
@@ -32,6 +34,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.sql.elements import ColumnElement
 
 log = get_logger(__name__)
 
@@ -45,6 +48,7 @@ _REQUEST_COLUMNS = [
     promotion_requests.c.requested_by_user_id,
     promotion_requests.c.status,
     promotion_requests.c.requested_at,
+    promotion_requests.c.expires_at,
     promotion_requests.c.resolved_at,
     promotion_requests.c.resolved_by_user_id,
     promotion_requests.c.decision_note,
@@ -118,6 +122,13 @@ def _rebuild(exc: IntegrityError, kind: type[DuplicateKeyError]) -> DuplicateKey
     return kind(exc.statement, exc.params, exc.orig or exc)
 
 
+def _pending_in_force() -> ColumnElement[bool]:
+    """Return the condition that a pending request has not expired."""
+    return (promotion_requests.c.expires_at.is_(None)) | (
+        promotion_requests.c.expires_at > utc_now()
+    )
+
+
 def _compose(row: dict[str, Any]) -> PromotionRequestDoc:
     """Return the request document of one queue row."""
     metadata = row.get("metadata") or {}
@@ -132,6 +143,7 @@ def _compose(row: dict[str, Any]) -> PromotionRequestDoc:
         requested_by_user_id=cast("UserId", int(row["requested_by_user_id"])),
         status=cast("RequestStatus", str(row["status"])),
         requested_at=cast("datetime", row["requested_at"]),
+        expires_at=cast("datetime | None", row.get("expires_at")),
         resolved_at=cast("datetime | None", row.get("resolved_at")),
         resolved_by_user_id=cast("UserId | None", row.get("resolved_by_user_id")),
         decision_note=cast("str | None", row.get("decision_note")),
@@ -152,6 +164,12 @@ async def enqueue(
     (mirrors ``bans_db.create_ban``). A partial-unique pending rejection
     raises AlreadyPendingError at once without burning the retry.
     """
+    now = utc_now()
+    expires_at = (
+        now + timedelta(days=cfg.promotion_request_ttl_days)
+        if cfg.promotion_request_ttl_days > 0
+        else None
+    )
 
     async def _insert(request_id: str) -> None:
         async def _work(sess: AsyncSession) -> None:
@@ -166,7 +184,8 @@ async def enqueue(
                     requested_role_key=role_key,
                     requested_by_user_id=promoted_by,
                     status="pending",
-                    requested_at=utc_now(),
+                    requested_at=now,
+                    expires_at=expires_at,
                     resolved_at=None,
                     resolved_by_user_id=None,
                     metadata={"username": username, "first_name": first_name},
@@ -175,6 +194,10 @@ async def enqueue(
 
         await run_transaction(_work)
 
+    # * A stale pending row still occupies the one-pending-per-target index.
+    # * Expire it before the insert so a new request is not blocked by a
+    # * request nobody decided within the TTL.
+    await expire_stale_requests()
     request_id = make_short_id()
     try:
         await _insert(request_id)
@@ -207,6 +230,30 @@ async def enqueue(
 # * Includes lookups by ID, user, and counts of pending requests
 
 
+async def expire_stale_requests() -> int:
+    """Mark pending requests whose TTL has passed as expired.
+
+    The status change frees the one-pending-per-target index and makes the
+    old card visibly terminal. The request history stays readable; the
+    decision note records that the queue expired it.
+    """
+    return await db_call(
+        lambda: run(
+            promotion_requests.update()
+            .where(
+                promotion_requests.c.status == "pending",
+                promotion_requests.c.expires_at.isnot(None),
+                promotion_requests.c.expires_at <= utc_now(),
+            )
+            .values(
+                status="expired",
+                resolved_at=utc_now(),
+                decision_note="Expired without a decision",
+            )
+        )
+    )
+
+
 async def get_request_by_id(request_id: str) -> PromotionRequestDoc | None:
     """Get a promotion request by its unique request ID."""
     row = await db_call(
@@ -226,6 +273,7 @@ async def get_request(user_id: int) -> PromotionRequestDoc | None:
             select(*_REQUEST_COLUMNS).where(
                 promotion_requests.c.target_user_id == user_id,
                 promotion_requests.c.status == "pending",
+                _pending_in_force(),
             )
         )
     )
@@ -246,7 +294,10 @@ async def all_pending() -> list[PromotionRequestDoc]:
             # * same projection as the single-row readers instead of a second
             # * column list that can drift behind it.
             select(*_REQUEST_COLUMNS)
-            .where(promotion_requests.c.status == "pending")
+            .where(
+                promotion_requests.c.status == "pending",
+                _pending_in_force(),
+            )
             .order_by(promotion_requests.c.requested_at.asc())
             .limit(_PENDING_PAGE_SIZE)
         )
@@ -263,7 +314,10 @@ async def pending_count() -> int:
         lambda: fetch_count(
             select(func.count())
             .select_from(promotion_requests)
-            .where(promotion_requests.c.status == "pending")
+            .where(
+                promotion_requests.c.status == "pending",
+                _pending_in_force(),
+            )
         )
     )
 
@@ -309,6 +363,7 @@ async def resolve(request_id: str, status: RequestStatus, resolved_by: int) -> b
             .where(
                 promotion_requests.c.request_id == request_id,
                 promotion_requests.c.status == "pending",
+                _pending_in_force(),
             )
             .values(
                 status=status,

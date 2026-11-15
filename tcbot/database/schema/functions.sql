@@ -1419,13 +1419,18 @@ BEGIN
     END IF;
     RETURN NEW;
   END IF;
-  IF NEW.status NOT IN ('pending','approved','rejected','cancelled') THEN
+  IF NEW.status NOT IN ('pending','approved','rejected','cancelled','expired') THEN
     RAISE EXCEPTION 'Invalid promotion request transition: % -> %', OLD.status, NEW.status;
   END IF;
   IF NEW.status = 'pending' THEN
     IF NEW.resolved_by_user_id IS NOT NULL OR NEW.resolved_at IS NOT NULL THEN
       RAISE EXCEPTION 'Pending promotion requests cannot have resolution metadata';
     END IF;
+  ELSIF NEW.status = 'expired' THEN
+    IF NEW.expires_at IS NULL OR NEW.expires_at > now() THEN
+      RAISE EXCEPTION 'Only promotion requests whose expiry time has passed can become expired';
+    END IF;
+    NEW.resolved_at := COALESCE(NEW.resolved_at, now());
   ELSE
     NEW.resolved_at := COALESCE(NEW.resolved_at, now());
   END IF;
@@ -2221,6 +2226,10 @@ BEGIN
         RAISE EXCEPTION 'Promotion request % is already %', p_request_id, v_request.status;
     END IF;
 
+    IF v_request.expires_at IS NOT NULL AND v_request.expires_at <= now() THEN
+        RAISE EXCEPTION 'Promotion request % has expired', p_request_id;
+    END IF;
+
     IF NOT %SCHEMA%.actor_has_permission(p_actor_user_id, 'roles.review_promotion_requests') THEN
         RAISE EXCEPTION 'Actor % cannot review promotion requests', p_actor_user_id;
     END IF;
@@ -2285,6 +2294,10 @@ BEGIN
 
     IF v_request.status <> 'pending' THEN
         RAISE EXCEPTION 'Promotion request % is already %', p_request_id, v_request.status;
+    END IF;
+
+    IF v_request.expires_at IS NOT NULL AND v_request.expires_at <= now() THEN
+        RAISE EXCEPTION 'Promotion request % has expired', p_request_id;
     END IF;
 
     IF NOT %SCHEMA%.actor_has_permission(p_actor_user_id, 'roles.review_promotion_requests') THEN
