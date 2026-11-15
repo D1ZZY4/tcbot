@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from tcbot.database import enforcement_db, scheduler
-from tcbot.database.base import moderation_enforcement_runs
+from tcbot.database.base import moderation_enforcement_runs, scheduled_job_runs
 from tcbot.database.engine import fetch_one
 from tcbot.utils.time_and_date import utc_now
 from tests.postgres_support import (
@@ -172,3 +172,18 @@ async def test_a_connect_replay_remainder_is_queued_for_the_new_chat(
     assert runs[0]["operation"] == "apply"
     targets = await enforcement_db.claim_targets(int(str(runs[0]["id"])))
     assert [int(str(target["chat_id"])) for target in targets] == [-1001]
+
+
+async def test_the_retention_sweep_records_a_registry_run(
+    enforcement_db_ready: str,
+) -> None:
+    """The daily sweep reaches the database job dispatcher and records itself."""
+    await scheduler.sweep_retention()
+
+    run = await fetch_one(
+        scheduled_job_runs.select().where(
+            scheduled_job_runs.c.job_key == "retention.sweep"
+        )
+    )
+    assert run is not None
+    assert run["status"] == "success"

@@ -2870,7 +2870,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION %SCHEMA%.run_scheduled_job(p_job_key text) RETURNS jsonb
+CREATE OR REPLACE FUNCTION %SCHEMA%.run_scheduled_job(p_job_key text, p_run_key text DEFAULT NULL) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', '%SCHEMA%'
     AS $$
@@ -2882,7 +2882,7 @@ DECLARE
     v_error_kind  text;
     v_error_detail text;
 BEGIN
-    v_run_id := %SCHEMA%.scheduled_job_claim(p_job_key);
+    v_run_id := %SCHEMA%.scheduled_job_claim(p_job_key, p_run_key);
 
     IF v_run_id IS NULL THEN
         RETURN jsonb_build_object('job_key', p_job_key, 'skipped', true);

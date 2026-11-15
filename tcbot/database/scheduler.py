@@ -74,6 +74,9 @@ def _scheduler_pool() -> concurrent.futures.ThreadPoolExecutor:
 # * Ceiling for one warn-expiry delete batch: a hung database must fail the
 # * run loudly instead of wedging the scheduler worker forever.
 _EXPIRE_OP_TIMEOUT_S: float = 60.0
+# * The registry entry allows 300 s for the retention sweep. The sweep walks
+# * every enabled policy, so the budget has to reach the transaction.
+_RETENTION_OP_TIMEOUT_S: float = 300.0
 # * How long a cached profile is kept before the daily cleanup drops it.
 # * It replaces the TTL pruning the MongoDB deployment did on its own.
 _MEMBER_CACHE_EXPIRE_DAYS: int = 90
@@ -291,6 +294,49 @@ async def expire_promotion_requests() -> None:
         log.info("Promotion request expiry sweep closed %d request(s).", expired)
 
 
+async def sweep_retention() -> None:
+    """Apply the retention policies of the schema through the job registry.
+
+    The policies remove runtime telemetry past its window and prune the
+    expired MTProto session state. The registry claim keeps the sweep from
+    running twice when another owner (pg_cron or another instance) fires at
+    the same time, and the run lands in ``scheduled_job_runs`` so a failed
+    sweep is visible instead of silently leaving the tables to grow.
+    """
+    try:
+        async with asyncio.timeout(_RETENTION_OP_TIMEOUT_S):
+            # * The registry entry allows a 300 s sweep. The default
+            # * transaction bound is 20 s, so the run-level budget is the
+            # * one that applies to a large telemetry backlog.
+            # * The run key is day-scoped: two instances that fire a few
+            # * minutes apart still produce one sweep for the day.
+            run_key = f"retention.sweep:{utc_now().strftime('%Y%m%d')}"
+            report = await run_transaction(
+                lambda sess: sess.scalar(
+                    text("SELECT run_scheduled_job('retention.sweep', :run_key)"),
+                    {"run_key": run_key},
+                ),
+                timeout=None,
+            )
+    except asyncio.CancelledError:
+        raise
+    except TimeoutError:
+        log.exception(
+            "Retention sweep timed out after %ds.",
+            _RETENTION_OP_TIMEOUT_S,
+        )
+        raise RuntimeError("Retention sweep timed out.") from None
+    except Exception:
+        log.exception("Retention sweep failed.")
+        raise
+    removed = 0
+    if isinstance(report, dict):
+        value = report.get("affected")
+        if isinstance(value, int):
+            removed = value
+    log.info("Retention sweep removed %d row(s).", removed)
+
+
 async def _cleanup_old_records() -> None:
     """No-op shim for the retired weekly membership-cache cleanup job.
 
@@ -318,6 +364,7 @@ _EXPIRY_SCHEDULE_ID: str = "tcbot.expiry_daily"
 _PROMOTION_EXPIRY_SCHEDULE_ID: str = "tcbot.promotion_expiry_hourly"
 _ENFORCEMENT_WORKER_SCHEDULE_ID: str = "tcbot.enforcement_worker"
 _NOTIFICATION_WORKER_SCHEDULE_ID: str = "tcbot.notification_worker"
+_RETENTION_SCHEDULE_ID: str = "tcbot.retention_daily"
 # * ID of the retired warn-expiry job. It patched the warnings that had no
 # * deadline, which the community schema forbids. The schedule is removed
 # * on every startup so it cannot fire; the id stays here so the removal
@@ -642,6 +689,20 @@ def _reconcile_schedules(
         misfire_grace_time=86400,
     )
     log.info("Scheduled stale record cleanup: every 24h.")
+
+    # * The registry owns the retention contract of every table. Without a
+    # * caller the telemetry policies stayed unapplied and those tables grew
+    # * without bound. The sweep records itself in ``scheduled_job_runs``.
+    _ensure_job(
+        scheduler,
+        store,
+        job_id=_RETENTION_SCHEDULE_ID,
+        func=sweep_retention,
+        trigger=IntervalTrigger(hours=24, timezone=_SCHEDULER_TIMEZONE),
+        args=(),
+        misfire_grace_time=86400,
+    )
+    log.info("Scheduled retention sweep: every 24h.")
 
     # * A promotion request that nobody decides must release its target
     # * for a fresh request. The sweep is idempotent and lazy reads cover

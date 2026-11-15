@@ -50,3 +50,43 @@ def test_a_failed_sweep_does_not_report_success(
 
     with pytest.raises(RuntimeError, match="rolled back"):
         asyncio.run(scheduler.expire_due_decisions())
+
+
+def test_the_retention_sweep_runs_the_registry_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The telemetry window must be applied through the job registry."""
+    seen: dict[str, Any] = {}
+
+    class _Session:
+        async def scalar(self, statement: Any, params: Any = None) -> dict[str, int]:
+            seen["sql"] = str(statement)
+            seen["params"] = params
+            return {"affected": 4}
+
+    async def _fake_run_transaction(op: Any, **kwargs: Any) -> Any:
+        return await op(_Session())
+
+    monkeypatch.setattr(scheduler, "run_transaction", _fake_run_transaction)
+
+    asyncio.run(scheduler.sweep_retention())
+
+    assert "run_scheduled_job" in seen["sql"]
+    assert "retention.sweep" in seen["sql"]
+    params = seen["params"]
+    assert set(params) == {"run_key"}
+    assert params["run_key"].startswith("retention.sweep:")
+
+
+def test_a_failed_retention_sweep_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A retention failure must reach the scheduler log, not look empty."""
+
+    async def _fake_run_transaction(op: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("db blip")
+
+    monkeypatch.setattr(scheduler, "run_transaction", _fake_run_transaction)
+
+    with pytest.raises(RuntimeError, match="db blip"):
+        asyncio.run(scheduler.sweep_retention())
