@@ -1199,8 +1199,11 @@ out `restrict_chat_member` for every active mute when a new group connects.
   decision and its case land in one transaction. A violation of the
   one-active-mute-per-user constraint is treated as a lost race: the
   existing decision is returned and the mute proceeds.
-- `clear_active_mute(user_id: int) -> None`
-  Revokes the active mute of a user.
+- `revoke_mute_and_queue_unmute(user_id: int, requested_by_user_id: int | None, chat_ids: Sequence[int]) -> tuple[int, int | None]`
+  Revokes the active mute and queues one `revoke` run with a target per
+  chat in the same transaction, then returns `(revoked_count, run_id)`.
+  A partial restore keeps every group it still has to reach even though the
+  record is already revoked, and a repeated call is idempotent.
 
 ### Queries
 

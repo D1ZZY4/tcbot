@@ -29,9 +29,11 @@ flowchart TD
     Unmute[/tcunmute command/] --> ExecU[execute_unmute]
     ExecU --> Guard{get_active_mute present?}
     Guard -->|no| NoMute[Reply: no active mute]
-    Guard -->|yes| Restore[restrict_chat_member full perms]
-    Restore --> Clear[clear_active_mute]
-    Clear --> ReplyU[Reply: restored N/M groups]
+    Guard -->|yes| Fetch[Fetch active groups plus primary]
+    Fetch --> Decide[revoke_mute_and_queue_unmute]
+    Decide --> Run[revoke enforcement run per group]
+    Run --> Deliver[Worker restores the permission]
+    Deliver --> Report[Reply: full, partial, or queued]
 ```
 
 ## Purpose
@@ -182,13 +184,11 @@ The fan-out errors are counted but do not roll back the DB mute record; group co
 `execute_unmute` is the unmute executor:
 
 1. Guard: `db.mutes_db.get_active_mute(target_id)` must return a record. If `None`, reply `<user> has no active federation mute.` and stop. This guard prevents a misleading "restored N/N groups" reply for a no-op. A failed read fails closed with a retry reply instead of refusing a real unmute.
-2. Build the full-perms `ChatPermissions` with all messaging permissions enabled.
-3. Fetch active groups with `db.groups_db.active_groups()`. A fetch outage aborts with a retry reply before anything is touched, so the active record stays and a retry works.
-4. Fan `restrict_chat_member(chat_id, target_id, permissions=full_perms)` across the connected groups plus the primary groups and count transient failures.
-5. Clear the active-mute decision with `db.mutes_db.clear_active_mute(target_id)` before announcing. A clear failure aborts with a retry reply and no success message, so a failed clear never announces a restored user. When any group failed, the decision is kept instead and the failure notice asks for a retry, so a re-run re-drives the full fan-out.
-6. Run two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
-   - `bot.send_message(cfg.logs, unmute_log, ...)`.
-   - `msg.reply_text(reply, ...)`.
+2. Fetch active groups with `db.groups_db.active_groups()`. A fetch outage aborts with a retry reply before anything is touched, so the active record stays and a retry works.
+3. Call `db.mutes_db.revoke_mute_and_queue_unmute(target_id, admin_id, chat_ids)`. The revocation and one `revoke` enforcement run with a target per group commit together, so a partial restore keeps every group it still has to reach even though the record is already revoked. A lost race returns `(0, None)` and replies with the no-active-mute notice.
+4. Deliver the run immediately through `enforcement_worker.deliver_queued_run`. A failed claim only means the scheduled worker owns it; the groups stay in the ledger.
+5. Read `db.enforcement_db.run_report(run_id)` to build the reply: full success, the names of the failed groups, or a queued notice while the run is still pending.
+6. Post the unmute log and reply in parallel via `asyncio.gather(..., return_exceptions=True)`.
 
 The reply reads `<user> has been unmuted.` followed by the applied line, which names how many groups were restored.
 
@@ -197,8 +197,9 @@ The reply reads `<user> has been unmuted.` followed by the applied line, which n
 The fan-out outcome is reported through the shared `replies.applied_summary` helper, the same one the ban and the warn threshold ban use, so the four federation executors report a partial enforcement the same way.
 
 - A complete unmute renders the `muting.applied.full` line: `Restored in <total>/<total> groups.`
-- A partial unmute renders `muting.note.unmute_partial`, which says the user was unmuted in some groups only and names the groups that failed, followed by the `muting.applied.partial` line with the restored and failed counts. The mute decision is kept, so a later `/tcunmute` reaches the groups that failed.
-- A total failure renders `muting.note.unmute_failed` followed by the `muting.applied.none` line, which names every group that refused and points at the bot's admin rights. The mute decision is kept.
+- A partial unmute renders `muting.note.unmute_partial`, which says the user was unmuted in some groups only and names the groups that failed, followed by the `muting.applied.partial` line with the restored and failed counts. The failed groups remain in the run and are retried automatically.
+- A total failure renders `muting.note.unmute_failed` followed by the `muting.applied.none` line, which names every group that refused and points at the bot's admin rights. The run keeps every target for the retry.
+- A run that has not settled yet renders `muting.note.unmute_queued` with the group count, so the moderator does not have to guess whether the request was recorded.
 
 A benign Telegram refusal (the user was never in the chat, the chat is gone) counts as applied: there was nothing to restore there.
 
@@ -250,9 +251,10 @@ The reply and federation log use `keyboards.action_proof_kb(target_id, proof_lin
 
 - A duration token that fails the regex is silently dropped and treated as part of the reason text.
 - A demote failure is logged loudly and the mute still proceeds; the target's rank is repaired by a later join-time enforcement pass.
-- `execute_unmute` with no active mute record replies `<user> has no active federation mute.` and does not fan `restrict_chat_member` across the groups.
+- `execute_unmute` with no active mute record replies `<user> has no active federation mute.` and queues no delivery.
 - A failed active-mute read fails closed with a retry notice instead of being treated as "no active mute".
 - A failed group-list fetch inside `execute_unmute` aborts with the same retry notice before any group is touched, so the active record stays and a retry works; the unmute never ends silently.
+- The revocation and its per-group run are one transaction, so a process crash after the commit still retries the groups the first delivery did not reach.
 - `get_active_mute` filters out expired timed mutes at query time, so a stale `active_mutes` row never produces a misleading "restored N/N groups" success.
 - The `_UNMUTE_CMDS` filter is passed to the mute conversation factory as `escape_filter`, so `/tcunmute` typed during `WAITING_REASON` or `WAITING_PROOF` reaches the unmute handler instead of cancelling the mute conversation.
 - `restrict_chat_member` with `until_date=None` produces a permanent restriction on Telegram's side; the bot does not schedule a timed unban through APScheduler.
@@ -273,7 +275,7 @@ Key behaviors to keep in mind:
 9. The `_UNMUTE_CMDS` filter is excluded from the mute conversation fallback so unmute can interrupt a pending mute conversation.
 10. `execute_mute` restricts across `active_groups()` plus `cfg.main_group`, deduplicated.
 11. `execute_mute` writes the mute decision before it restricts any group, so group connect can replay an active mute.
-12. `execute_unmute` refuses to fan unrestrict calls when no active mute record exists.
+12. `execute_unmute` refuses to queue a restore when no active mute record exists.
 13. The `until_date` value matches the value passed to `restrict_chat_member`; `None` means permanent.
 14. Expired timed mutes are excluded from `get_active_mute` and `active_mute_docs` by query-time filtering, and the daily sweep moves the expired decisions to their expired state.
 15. Federation log send failure does not roll back the mute.

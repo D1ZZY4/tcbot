@@ -55,8 +55,9 @@ Atau balas sebuah pesan lalu jalankan `/tcm`."""
 groups_fail = "{user} tidak bisa di-mute: daftar grup gagal dimuat dari database, jadi tidak ada grup yang disentuh. Cek log lalu coba lagi dengan /tcmute setelah database pulih."
 db_fail = "{user} tidak bisa di-mute: catatan mute gagal ditulis ke database, jadi tidak ada grup yang disentuh. Cek log lalu coba lagi dengan /tcmute setelah database pulih."
 no_mute = "{user} tidak punya mute federasi aktif."
-unmute_failed = "{user} tidak bisa di-unmute. Catatan mute dipertahankan; coba lagi dengan /tcunmute setelah penyebabnya diperbaiki.\n{applied}"
-unmute_partial = "{user} hanya di-unmute di sebagian grup. Catatan mute dipertahankan supaya /tcunmute menjangkau grup yang gagal.\n{applied}"
+unmute_failed = "{user} belum bisa di-unmute. Pengiriman akan dicoba ulang otomatis.\n{applied}"
+unmute_partial = "{user} hanya di-unmute di sebagian grup. Grup sisanya akan dicoba ulang otomatis.\n{applied}"
+unmute_queued = "{user}: unmute sudah dicatat dan pengirimannya diantrekan untuk {total} grup. Grup yang tidak merespons akan dicoba ulang otomatis."
 
 [applied]
 empty = "Belum ada grup terhubung yang dikonfigurasi."

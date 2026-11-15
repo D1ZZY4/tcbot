@@ -309,7 +309,13 @@ async def execute_unmute(
     target_id: int,
     target_name: str,
 ) -> None:
-    """Restore full send permissions across all connected groups."""
+    """Lift a federation mute through the durable enforcement ledger.
+
+    The active mute is revoked and its restore run is queued in one
+    transaction, so the groups that do not answer stay reachable for the
+    worker even though the record is already revoked. A partial restore is
+    reported with the failed group names and retried automatically.
+    """
     msg = update.effective_message
     admin = update.effective_user
     if msg is None or admin is None:
@@ -337,15 +343,9 @@ async def execute_unmute(
             log_label="execute_unmute no-mute",
         )
         return
-    full_perms = ChatPermissions(
-        can_send_messages=True,
-        can_send_polls=True,
-        can_send_other_messages=True,
-        can_add_web_page_previews=True,
-        can_change_info=False,
-        can_invite_users=True,
-        can_pin_messages=False,
-    )
+    # * Fetch the group list before revoking: if it cannot be loaded we
+    # * must abort with the mute record intact so a retry re-drives the
+    # * full scope instead of losing the record to an empty target set.
     try:
         groups = await db.groups_db.active_groups()
     except Exception:
@@ -358,99 +358,146 @@ async def execute_unmute(
         )
         return
     groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
-    results = await fan_out(
-        [
-            ctx.bot.restrict_chat_member(
-                grp.get("chat_id", 0),
-                target_id,
-                permissions=full_perms,
-            )
-            for grp in groups
-        ]
-    )
-    outcome = summarize_fanout(groups, results, action="Unmute", target_id=target_id)
-    failed = outcome.failed
-    if failed > 0:
-        # * The mute record is kept on every failure, so a later re-drive
-        # * reaches the chats that did not answer. Clearing it here would
-        # * strand the user muted in those groups with no repair path.
-        # * The notice names the groups that failed and reports how many
-        # * were restored, so a partial unmute is not read as a total one.
-        applied_line = replies.applied_summary(
-            locale,
-            "muting.applied",
-            total=outcome.total,
-            failed=failed,
-            transient=outcome.transient,
+    chat_ids = [
+        int(grp.get("chat_id", 0)) for grp in groups if int(grp.get("chat_id", 0) or 0)
+    ]
+    try:
+        revoked, run_id = await db.mutes_db.revoke_mute_and_queue_unmute(
+            target_id,
+            admin.id,
+            chat_ids,
         )
-        key = (
-            "muting.note.unmute_failed"
-            if failed >= outcome.total
-            else "muting.note.unmute_partial"
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "revoke_mute_and_queue_unmute failed for user=%d; aborting the "
+            "unmute to avoid a record without its delivery run",
+            target_id,
         )
         await safe_reply(
             msg,
-            t(
-                key,
-                locale,
-                user=Safe(user_ref(target_id, target_name)),
-                applied=Safe(applied_line),
-            ),
-            log_label="execute_unmute fail",
+            replies.err_db_retry(locale, plain=True),
+            log_label="execute_unmute DB-fail",
+            parse_mode=None,
         )
         return
-    logs_chat, _ = cfg.logs
+    if revoked == 0 or run_id is None:
+        # * Another process revoked the mute between the read and the
+        # * write. Reporting "no mute" is idempotent and claims no new
+        # * change that this call did not make.
+        await safe_reply(
+            msg,
+            t(
+                "muting.note.no_mute",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+            ),
+            log_label="execute_unmute no-mute",
+        )
+        return
+    # * The decision is committed; deliver now when this process can claim
+    # * the run. A claim failure only means the scheduled worker owns it.
+    try:
+        await enforcement_worker.deliver_queued_run(ctx.bot, run_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("Unmute delivery failed for run %s; it stays queued", run_id)
+    try:
+        report = await db.enforcement_db.run_report(run_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("Unmute run report failed for run %s", run_id)
+        report = None
+    targets = db.enforcement_db.report_targets(report)
+    settled = bool(targets) and all(
+        str(target.get("status")) in ("succeeded", "skipped", "failed")
+        for target in targets
+    )
+    failed_targets = db.enforcement_db.failed_report_targets(report)
+    total = (
+        db.enforcement_db.report_count(report, "target_count")
+        or len(targets)
+        or len(groups)
+    )
+    failed = db.enforcement_db.report_count(report, "failed_count") or len(
+        failed_targets
+    )
+    transient = [(target, RuntimeError("delivery failed")) for target in failed_targets]
+    applied_line = replies.applied_summary(
+        locale,
+        "muting.applied",
+        total=total,
+        failed=failed,
+        transient=transient,
+    )
+    if report is None:
+        # * The run exists and stays queued; only its report could not be
+        # * read. Reporting a queued delivery is honest about that.
+        note = t(
+            "muting.note.unmute_queued",
+            locale,
+            user=Safe(user_ref(target_id, target_name)),
+            total=total,
+        )
+    elif total == 0:
+        # * No group is connected any more, so there is nothing to
+        # * restore and the run closed empty.
+        note = t(
+            "muting.unmute.body",
+            locale,
+            user=Safe(user_ref(target_id, target_name)),
+            applied=Safe(applied_line),
+        )
+    elif not settled:
+        note = t(
+            "muting.note.unmute_queued",
+            locale,
+            user=Safe(user_ref(target_id, target_name)),
+            total=total,
+        )
+    elif failed >= total:
+        note = t(
+            "muting.note.unmute_failed",
+            locale,
+            user=Safe(user_ref(target_id, target_name)),
+            applied=Safe(applied_line),
+        )
+    elif failed:
+        note = t(
+            "muting.note.unmute_partial",
+            locale,
+            user=Safe(user_ref(target_id, target_name)),
+            applied=Safe(applied_line),
+        )
+    else:
+        note = t(
+            "muting.unmute.body",
+            locale,
+            user=Safe(user_ref(target_id, target_name)),
+            applied=Safe(applied_line),
+        )
     log_text = messages.unmute_log(
         target_id,
         target_name,
         admin.id,
         admin.first_name,
     )
-    # * The same applied line the failure notice carries, so a complete
-    # * unmute and a partial one are reported the same way.
-    applied_line = replies.applied_summary(
-        locale,
-        "muting.applied",
-        total=outcome.total,
-        failed=0,
-        transient=outcome.transient,
+    results = await asyncio.gather(
+        send_log(
+            ctx.bot,
+            log_text,
+        ),
+        msg.reply_text(note, parse_mode="MarkdownV2"),
+        return_exceptions=True,
     )
-    reply = t(
-        "muting.unmute.body",
-        locale,
-        user=Safe(user_ref(target_id, target_name)),
-        applied=Safe(applied_line),
-    )
-    try:
-        await db.mutes_db.clear_active_mute(target_id)
-    except Exception:
-        log.exception("clear_active_mute failed for target=%d", target_id)
-        await safe_reply(
-            msg,
-            replies.err_db_retry(locale, plain=True),
-            log_label="execute_unmute clear-failed",
-            parse_mode=None,
-        )
-        return
-    if logs_chat:
-        results2 = await asyncio.gather(
-            send_log(
-                ctx.bot,
-                log_text,
-            ),
-            msg.reply_text(reply, parse_mode="MarkdownV2"),
-            return_exceptions=True,
-        )
-        throw_if_cancelled(results2)
-        if isinstance(results2[0], BaseException):
-            log.error("Unmute log send failed: %s", results2[0])
-        if isinstance(results2[1], BaseException):
-            log.debug("execute_unmute reply failed: %s", results2[1])
-    else:
-        try:
-            await msg.reply_text(reply, parse_mode="MarkdownV2")
-        except Exception as exc:
-            log.debug("execute_unmute no-log reply failed: %s", exc)
+    throw_if_cancelled(results)
+    if isinstance(results[0], BaseException):
+        log.error("Unmute log send failed: %s", results[0])
+    if isinstance(results[1], BaseException):
+        log.debug("execute_unmute reply failed: %s", results[1])
 
 
 # ──────────────────────── Executor adapter ──────────────────────── #

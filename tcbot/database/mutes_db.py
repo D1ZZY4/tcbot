@@ -25,10 +25,10 @@ from tcbot.database.engine import (
     fetch_all,
     fetch_one,
     fetch_value,
-    run,
     run_transaction,
 )
 from tcbot.database.types import ChatId, UserId
+from tcbot.database.users_cache import ensure_users
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
@@ -255,19 +255,67 @@ async def _open_case(
 # * needed to keep the view honest.
 
 
-async def clear_active_mute(user_id: int) -> None:
-    """Revoke the active mute of a user when they are unmuted."""
-    await db_call(
-        lambda: run(
+async def revoke_mute_and_queue_unmute(
+    user_id: int,
+    requested_by_user_id: int | None,
+    chat_ids: Sequence[int],
+) -> tuple[int, int | None]:
+    """Revoke the active mute and queue its restore in one transaction.
+
+    The revocation is the domain decision; the run is the durable work
+    item. They land together, so a partial restore keeps every group it
+    still has to reach even though the mute record is already revoked.
+    A record revoked without a run would lose the groups that failed the
+    fan-out, and a run without a revoked record would be cancelled by the
+    worker because the action is still in force.
+    """
+    now = utc_now()
+
+    async def _work(sess: AsyncSession) -> tuple[int, int | None]:
+        action_ids = list(
+            (
+                await sess.scalars(
+                    select(moderation_actions.c.id)
+                    .where(
+                        moderation_actions.c.target_user_id == user_id,
+                        moderation_actions.c.action_type == "mute",
+                        moderation_actions.c.status == "active",
+                    )
+                    .with_for_update()
+                )
+            ).all()
+        )
+        if not action_ids:
+            return 0, None
+        # * The run references the acting staff member. An account the
+        # * member cache has never seen must not fail the unmute on a
+        # * foreign key, so the identity row joins this transaction.
+        await ensure_users(sess, requested_by_user_id or 0)
+        result = await sess.execute(
             moderation_actions.update()
             .where(
-                moderation_actions.c.target_user_id == user_id,
-                moderation_actions.c.action_type == "mute",
+                moderation_actions.c.id.in_(action_ids),
                 moderation_actions.c.status == "active",
             )
-            .values(status="revoked", revoked_at=utc_now())
+            .values(status="revoked", revoked_at=now)
         )
-    )
+        revoked = int(getattr(result, "rowcount", 0) or 0)
+        if revoked == 0:
+            return 0, None
+        run_id: int | None = None
+        for action_id in action_ids:
+            queued = await enforcement_db.queue_run(
+                sess,
+                action_id=int(action_id),
+                operation="revoke",
+                idempotency_key=f"moderation:{action_id}:revoke:manual:v1",
+                requested_by_user_id=requested_by_user_id,
+                chat_ids=chat_ids,
+            )
+            run_id = run_id or queued
+        return revoked, run_id
+
+    return await run_transaction(_work)
 
 
 async def get_active_mute(user_id: int) -> ActiveMuteDoc | None:

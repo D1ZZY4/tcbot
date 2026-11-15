@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import timedelta
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -164,7 +165,7 @@ def test_the_decision_write_failure_is_not_reported_as_success(
     assert bot.edits[0]["args"][0] == _expected_db_fail()
 
 
-# ─────────────────── Unmute total-failure keeps record ─────────────────── #
+# ─────────────── Unmute total failure keeps its delivery run ────────────── #
 
 
 class _UnmuteMsg:
@@ -192,12 +193,16 @@ class _UnmuteCtx:
         self.bot = bot
 
 
-class _FailingBot(_FakeBot):
-    async def restrict_chat_member(self, *args: Any, **kwargs: Any) -> bool:
-        raise RuntimeError("telegram down")
+def test_unmute_total_failure_keeps_its_delivery_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The revoked record keeps the failed groups through the run.
 
+    The revocation and the run are one decision, so a delivery that failed
+    everywhere is still retried by the worker instead of leaving the user
+    muted in every group with no record to repair from.
+    """
 
-def test_unmute_total_failure_keeps_record(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _locale(_update: Any) -> str:
         return "en-US"
 
@@ -210,26 +215,50 @@ def test_unmute_total_failure_keeps_record(monkeypatch: pytest.MonkeyPatch) -> N
             {"chat_id": 102, "title": "Group B"},
         ]
 
-    cleared: list[int] = []
+    revoked: list[tuple[int, int, list[int]]] = []
 
-    async def _clear(user_id: int) -> None:
-        cleared.append(user_id)
+    async def _revoke(
+        user_id: int, requested_by: int, chat_ids: list[int]
+    ) -> tuple[int, int]:
+        revoked.append((user_id, requested_by, chat_ids))
+        return 1, 55
+
+    async def _report(run_id: int) -> dict[str, Any]:
+        return {
+            "id": run_id,
+            "target_count": 2,
+            "failed_count": 2,
+            "succeeded_count": 0,
+            "skipped_count": 0,
+            "targets": [
+                {"chat_id": 101, "status": "failed", "title": "Group A"},
+                {"chat_id": 102, "status": "failed", "title": "Group B"},
+            ],
+        }
+
+    async def _deliver(bot: Any, run_id: int) -> bool:
+        return True
 
     monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(
+        mute_flow, "cfg", SimpleNamespace(main_group=-1, logs=(-3, None))
+    )
     monkeypatch.setattr(db.mutes_db, "get_active_mute", _active_mute)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
-    monkeypatch.setattr(db.mutes_db, "clear_active_mute", _clear)
+    monkeypatch.setattr(db.mutes_db, "revoke_mute_and_queue_unmute", _revoke)
+    monkeypatch.setattr(db.enforcement_db, "run_report", _report)
+    monkeypatch.setattr(mute_flow.enforcement_worker, "deliver_queued_run", _deliver)
 
     msg = _UnmuteMsg()
     asyncio.run(
         execute_unmute(
             _UnmuteUpdate(msg),  # type: ignore[arg-type]
-            _UnmuteCtx(_FailingBot()),  # type: ignore[arg-type]
+            _UnmuteCtx(_FakeBot()),  # type: ignore[arg-type]
             33,
             "Target",
         )
     )
 
-    assert cleared == []
+    assert revoked == [(33, 7, [101, 102, -1])]
     assert len(msg.replies) == 1
-    assert "could not be unmuted" in msg.replies[0]
+    assert "could not be unmuted yet" in msg.replies[0]

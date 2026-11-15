@@ -153,7 +153,7 @@ Mute applies restrictions across all connected groups through the decision's dur
 - A muted user joins any connected group (`greeting._handle_member` fetches `get_active_mute` in parallel with `get_active_ban` and calls `restrict_chat_member` if an active mute is found).
 - A new group connects to the federation (`connected_flow.complete_join` fetches `active_mute_docs()` and fans out `restrict_chat_member` for every active mute, mirroring the existing ban replay). The replay is bounded by a time budget and a list cap; users it does not reach are queued as `apply` enforcement runs for the new chat, so the remainder is retried instead of disappearing with the connect handler.
 
-`execute_unmute` restores the groups first and clears the active mute decision via `clear_active_mute` only when every group succeeded. A partial restore keeps the decision so a later `/tcunmute` can retry the failed groups; a clear failure after a full restore aborts with a retry reply, so a failed clear never reports success.
+`execute_unmute` revokes the active mute decision and queues its per-group `revoke` run in one transaction, then delivers the run immediately when this process can claim it. A partial restore keeps the failed groups in the ledger and the scheduled worker retries them, so a failed group cannot strand a user still muted with no repair path. A run that has not settled yet is reported as queued.
 
 ```mermaid
 flowchart TD

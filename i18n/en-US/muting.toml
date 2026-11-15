@@ -55,8 +55,9 @@ Or reply to a message and run `/tcm`."""
 groups_fail = "{user} could not be muted: the group list could not be loaded from the database, so no groups were touched. Check the logs and retry with /tcmute once the database recovers."
 db_fail = "{user} could not be muted: the mute record could not be written to the database, so no groups were touched. Check the logs and retry with /tcmute once the database recovers."
 no_mute = "{user} has no active federation mute."
-unmute_failed = "{user} could not be unmuted. The mute record was kept; retry with /tcunmute once the cause is fixed.\n{applied}"
-unmute_partial = "{user} was unmuted in some groups only. The mute record was kept so /tcunmute reaches the groups that failed.\n{applied}"
+unmute_failed = "{user} could not be unmuted yet. The delivery is retried automatically.\n{applied}"
+unmute_partial = "{user} was unmuted in some groups only. The remaining groups are retried automatically.\n{applied}"
+unmute_queued = "{user}: the unmute was recorded and its delivery is queued for {total} groups. Any group that does not answer is retried automatically."
 
 [applied]
 empty = "No connected groups configured."

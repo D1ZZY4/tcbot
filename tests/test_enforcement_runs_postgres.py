@@ -280,6 +280,42 @@ async def test_a_mute_apply_run_keeps_the_requested_duration(run_db: str) -> Non
     assert action["metadata"]["requested_duration_seconds"] == 3600
 
 
+async def test_an_unmute_revokes_and_queues_the_restore(run_db: str) -> None:
+    action_id, apply_run = await mutes_db.record_mute(
+        43,
+        -1001,
+        "spam",
+        7,
+        enforcement_chat_ids=[-1001],
+    )
+    assert isinstance(apply_run, int)
+
+    revoked, run_id = await mutes_db.revoke_mute_and_queue_unmute(43, 8, [-1001])
+
+    assert revoked == 1
+    assert isinstance(run_id, int)
+    action = await engine_module.fetch_one(
+        select(moderation_actions.c.status).where(moderation_actions.c.id == action_id)
+    )
+    assert action == {"status": "revoked"}
+    run = await engine_module.fetch_one(
+        select(
+            moderation_enforcement_runs.c.operation,
+            moderation_enforcement_runs.c.status,
+        ).where(moderation_enforcement_runs.c.id == run_id)
+    )
+    assert run == {"operation": "revoke", "status": "queued"}
+    target = await engine_module.fetch_one(
+        select(moderation_enforcement_targets.c.chat_id).where(
+            moderation_enforcement_targets.c.run_id == run_id
+        )
+    )
+    assert target == {"chat_id": -1001}
+
+    again = await mutes_db.revoke_mute_and_queue_unmute(43, 8, [-1001])
+    assert again == (0, None)
+
+
 async def test_review_card_outbox_round_trip(run_db: str) -> None:
     ban = await bans_db.create_ban(
         42,

@@ -11,6 +11,7 @@ import logging
 import time
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -111,8 +112,11 @@ def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls == [10, 1]
 
 
-def test_unmute_partial_keeps_active_record(monkeypatch: pytest.MonkeyPatch) -> None:
-    cleared: list[int] = []
+def test_unmute_partial_queues_a_durable_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A partial unmute revokes the record and keeps the failed groups."""
+    revoked: list[tuple[int, int, list[int]]] = []
 
     async def _locale(_u: Any) -> str:
         return "en-US"
@@ -123,10 +127,26 @@ def test_unmute_partial_keeps_active_record(monkeypatch: pytest.MonkeyPatch) -> 
     async def _groups() -> list[dict[str, Any]]:
         return [{"chat_id": 1, "title": "A"}, {"chat_id": 2, "title": "B"}]
 
-    async def _clear(uid: int) -> None:
-        cleared.append(uid)
+    async def _revoke(
+        uid: int, requested_by: int, chat_ids: list[int]
+    ) -> tuple[int, int]:
+        revoked.append((uid, requested_by, chat_ids))
+        return 1, 55
 
-    replies: list[str] = []
+    async def _report(_run_id: int) -> dict[str, Any]:
+        return {
+            "target_count": 2,
+            "failed_count": 1,
+            "succeeded_count": 1,
+            "skipped_count": 0,
+            "targets": [
+                {"chat_id": 1, "status": "succeeded", "title": "A"},
+                {"chat_id": 2, "status": "failed", "title": "B"},
+            ],
+        }
+
+    async def _deliver(_bot: Any, _run_id: int) -> bool:
+        return True
 
     msg = MagicMock()
     msg.reply_text = AsyncMock()
@@ -141,22 +161,21 @@ def test_unmute_partial_keeps_active_record(monkeypatch: pytest.MonkeyPatch) -> 
     update.effective_user = _FakeUser()
 
     ctx = MagicMock()
-    ctx.bot.restrict_chat_member = AsyncMock(side_effect=[None, RuntimeError("flood")])
     ctx.bot.send_message = AsyncMock()
 
     monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(
+        mute_flow, "cfg", SimpleNamespace(main_group=-1, logs=(-3, None))
+    )
     monkeypatch.setattr(db.mutes_db, "get_active_mute", _active)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
-    monkeypatch.setattr(db.mutes_db, "clear_active_mute", _clear)
-
-    async def _safe_reply(m: Any, text: str, **kw: Any) -> None:
-        replies.append(text)
-
-    monkeypatch.setattr(mute_flow, "safe_reply", _safe_reply)
+    monkeypatch.setattr(db.mutes_db, "revoke_mute_and_queue_unmute", _revoke)
+    monkeypatch.setattr(db.enforcement_db, "run_report", _report)
+    monkeypatch.setattr(mute_flow.enforcement_worker, "deliver_queued_run", _deliver)
 
     asyncio.run(mute_flow.execute_unmute(update, ctx, 33, "Target"))  # type: ignore[arg-type]
-    assert cleared == []
-    assert len(replies) == 1
+    assert revoked == [(33, 1, [1, 2, -1])]
+    msg.reply_text.assert_awaited_once()
 
 
 def test_classify_failure_replies(monkeypatch: pytest.MonkeyPatch) -> None:
