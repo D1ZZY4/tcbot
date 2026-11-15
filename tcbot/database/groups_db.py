@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-import cachetools as _cachetools
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -22,6 +21,7 @@ from tcbot.database.cache import (
     _ALL_GROUPS_KEY,
     active_groups_cache,
     connected_cache,
+    group_locale_cache,
 )
 from tcbot.database.documents import GroupDoc, PendingGroupDoc
 from tcbot.database.engine import (
@@ -369,39 +369,24 @@ def with_primary_groups(
 # * The locale lives in the group configuration, not in the registry:
 # * the registry holds the connection, the configuration holds the
 # * settings. Reads filter on the already indexed chat_id.
-# * L1 for locale reads: resolution runs on every group command, so hits
-# * must cost no I/O. Writes invalidate; TTL bounds staleness when
-# * another process changes the row. Unset (None) caches too.
-_GROUP_LOCALE_L1: _cachetools.TTLCache = _cachetools.TTLCache(maxsize=1024, ttl=300)
-# * Generation per chat: a read that started before a locale write must not
-# * put the old value back into L1 after the write invalidated it.
-_GROUP_LOCALE_GEN: _cachetools.TTLCache = _cachetools.TTLCache(maxsize=4096, ttl=3600)
-
-
-def _bump_locale_generation(chat_id: int) -> None:
-    """Advance the locale generation of one chat after a write."""
-    _GROUP_LOCALE_GEN[chat_id] = int(_GROUP_LOCALE_GEN.get(chat_id, 0)) + 1
-
-
 async def get_group_locale(chat_id: int) -> str | None:
-    """Return the stored locale code for a group, or None when unset."""
-    try:
-        return _GROUP_LOCALE_L1[chat_id]
-    except KeyError:
-        pass
-    generation = int(_GROUP_LOCALE_GEN.get(chat_id, 0))
-    row = await db_call(
-        lambda: fetch_one(
-            select(chat_settings.c.locale).where(chat_settings.c.chat_id == chat_id)
+    """Return the stored locale code for a group, or None when unset.
+
+    The read uses the shared two-level cache with the generation guard, so
+    a language change in one process invalidates the value in every other
+    process instead of waiting for a process-local TTL.
+    """
+
+    async def _fetch() -> str | None:
+        row = await db_call(
+            lambda: fetch_one(
+                select(chat_settings.c.locale).where(chat_settings.c.chat_id == chat_id)
+            )
         )
-    )
-    locale = row.get("locale") if row is not None else None
-    value = locale if isinstance(locale, str) and locale else None
-    # * Publish only when no write invalidated the chat while the read was
-    # * in flight; otherwise the stale locale would live for the whole TTL.
-    if int(_GROUP_LOCALE_GEN.get(chat_id, 0)) == generation:
-        _GROUP_LOCALE_L1[chat_id] = value
-    return value
+        locale = row.get("locale") if row is not None else None
+        return locale if isinstance(locale, str) and locale else None
+
+    return await group_locale_cache.get_or_fetch(chat_id, _fetch)
 
 
 async def set_group_locale(chat_id: int, locale: str | None) -> bool:
@@ -417,8 +402,7 @@ async def set_group_locale(chat_id: int, locale: str | None) -> bool:
             .values(locale=locale, updated_at=utc_now())
         )
     )
-    _bump_locale_generation(chat_id)
-    _GROUP_LOCALE_L1.pop(chat_id, None)
+    group_locale_cache.invalidate(chat_id)
     # * active_groups() returns the row including its locale; without this
     # * the new locale stays stale for the groups-list TTL after a change.
     active_groups_cache.invalidate(_ALL_GROUPS_KEY)
@@ -579,8 +563,6 @@ async def migrate_group(old_chat_id: int, new_chat_id: int) -> bool:
     connected_cache.put(new_chat_id, await _group_is_active(new_chat_id))
     active_groups_cache.invalidate(_ALL_GROUPS_KEY)
     # * The locale cache is keyed by chat id; both ids moved.
-    _bump_locale_generation(old_chat_id)
-    _bump_locale_generation(new_chat_id)
-    _GROUP_LOCALE_L1.pop(old_chat_id, None)
-    _GROUP_LOCALE_L1.pop(new_chat_id, None)
+    group_locale_cache.invalidate(old_chat_id)
+    group_locale_cache.invalidate(new_chat_id)
     return moved

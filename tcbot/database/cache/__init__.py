@@ -25,6 +25,7 @@ from tcbot.database.cache.singletons import (
     active_groups_cache,
     connected_cache,
     effective_role_cache,
+    group_locale_cache,
     owner_id_cache,
     user_mention_cache,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "drain_redis_mutations",
     "effective_role_cache",
     "enqueue_redis_mutation",
+    "group_locale_cache",
     "owner_id_cache",
     "redis_client",
     "user_mention_cache",

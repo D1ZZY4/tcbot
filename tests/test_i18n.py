@@ -414,11 +414,11 @@ async def locale_db(postgres_db: str) -> AsyncIterator[str]:
     await reset_community()
     await seed_users(1, 2)
     singletons.user_locale_cache.clear()
-    groups_db._GROUP_LOCALE_L1.clear()
+    singletons.group_locale_cache.clear()
     yield postgres_db
     await reset_community()
     singletons.user_locale_cache.clear()
-    groups_db._GROUP_LOCALE_L1.clear()
+    singletons.group_locale_cache.clear()
 
 
 def _count_reads(monkeypatch: pytest.MonkeyPatch, module: Any) -> list[int]:

@@ -85,3 +85,13 @@ user_locale_cache: TwoLevelCache[str | None] = TwoLevelCache(
     redis_prefix="ulocale",
     maxsize=_USER_MENTION_CACHE_MAXSIZE,
 )
+
+# Populated by groups_db.get_group_locale; invalidated on set_group_locale.
+# A group language change has the same cross-process contract as a personal
+# one, so the two locale reads share the same cache shape.
+group_locale_cache: TwoLevelCache[str | None] = TwoLevelCache(
+    memory_ttl=_USER_LOCALE_CACHE_TTL_S,
+    redis_ttl=_USER_LOCALE_REDIS_TTL_S,
+    redis_prefix="glocale",
+    maxsize=_CONNECTED_CACHE_MAXSIZE,
+)
