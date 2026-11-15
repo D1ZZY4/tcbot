@@ -118,7 +118,13 @@ _TARGET_CLAIM = text(
            AND (
                status = 'pending'
                OR (status = 'failed' AND next_retry_at IS NOT NULL
-                   AND next_retry_at <= now())
+                   AND next_retry_at <= now()
+                   AND EXISTS (
+                       SELECT 1
+                         FROM connected_chats AS cc
+                        WHERE cc.chat_id = moderation_enforcement_targets.chat_id
+                          AND cc.is_active
+                   ))
            )
          ORDER BY id
          FOR UPDATE SKIP LOCKED
