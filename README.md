@@ -53,17 +53,18 @@ Appeals are submitted by the banned user in bot DM through a deep link, or with 
 
 ## Configuration
 
-Only five values are required. Everything else has a working default.
+Only six values are required. Everything else has a working default.
 
 | Variable | Required | Description |
 |---|---:|---|
 | `BOT_TOKEN` | Yes | Bot token from BotFather. |
 | `OWNER_ID` | Yes | Telegram user ID seeded as the initial Founder. |
 | `DATABASE_URL` | Yes | PostgreSQL connection string. The bot applies its schema migrations at startup. |
+| `PROOFS` | Yes | Ban proof media destination; boot refuses without a valid chat ID. |
 | `API_ID` | Yes | Telegram API ID for MTProto identity lookups; boot refuses without it. |
 | `API_HASH` | Yes | Telegram API hash matching `API_ID`; boot refuses without it. |
 
-Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (enables webhook transport, otherwise the bot polls), `PORT` (health server port, default `5000`), and the `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS` log destinations, which each accept a chat ID or a `chat_id/thread_id` pair.
+Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (enables webhook transport, otherwise the bot polls), `PORT` (health server port, default `5000`), and the `LOGS`, `LOGS_ERRORS`, `APPEALS` log destinations, which each accept a chat ID or a `chat_id/thread_id` pair.
 
 > [!IMPORTANT]
 > Never commit real secrets. Keep `BOT_TOKEN`, `DATABASE_URL`, passwords, webhook secrets, and private chat IDs out of the repository; use the platform secret manager on hosted deployments.
@@ -96,7 +97,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 
 | Variable | Required | Description |
 |---|---|---|
-| `PROOFS` | For bans | Ban proof media destination. |
+| `PROOFS` | Yes | Ban proof media destination; boot refuses without a valid chat ID. |
 | `LOGS` | Yes | Audit-log destination for bans, unbans, appeals, and admin actions. |
 | `LOGS_ERRORS` | Recommended | Error-report destination; when empty, reports fall back to the owner DM instead of being dropped. |
 | `APPEALS` | For appeals | Submitted-appeal record destination (channel, group, or forum thread as `chat_id` or `chat_id/thread_id`; also receives a copy of every review card). |

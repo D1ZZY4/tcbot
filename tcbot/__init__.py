@@ -32,8 +32,8 @@ _DEFAULT_PORT: int = 5000
 # * a container or hosted process is reachable. An operator behind a local
 # * reverse proxy can set BIND_HOST=127.0.0.1.
 _DEFAULT_BIND_HOST: str = "0.0.0.0"
-_DEFAULT_PROOFS: str = "-1003997518221"
 _ERR_OWNER_ID: str = "OWNER_ID is required and must be a positive integer."
+_ERR_PROOFS: str = "PROOFS is required and must be a valid chat id."
 # * The connection pool of the database. The size has to fit the number
 # * of connections the database grants this user: a pooler in session or
 # * transaction mode caps it at a small number, and a pool that is larger
@@ -177,6 +177,23 @@ def _required_env(key: str) -> str:
     if not value:
         raise RuntimeError(f"{key} is required but not set.")
     return value
+
+
+def _proofs_from_env() -> tuple[int, int | None]:
+    """Read the required proof destination and refuse an unusable value.
+
+    A ban requires landed evidence, so the destination cannot be optional.
+    The deployment names it; the bot does not carry a community channel id
+    of its own, because that would make every fork write to a chat it does
+    not own.
+    """
+    raw = os.getenv("PROOFS", "").strip()
+    if not raw:
+        raise RuntimeError(_ERR_PROOFS)
+    chat_id, thread_id = parse_chat_id(raw)
+    if chat_id == 0:
+        raise RuntimeError(_ERR_PROOFS)
+    return chat_id, thread_id
 
 
 def _warn_bot_token_fmt(token: str) -> None:
@@ -432,7 +449,7 @@ class Configs:
             main_group=_main_group_from_env(),
             logs=parse_chat_id(os.getenv("LOGS", "").strip()),
             logs_errors=parse_chat_id(os.getenv("LOGS_ERRORS", "").strip()),
-            proofs=parse_chat_id(os.getenv("PROOFS", "").strip() or _DEFAULT_PROOFS),
+            proofs=_proofs_from_env(),
             appeals=parse_chat_id(os.getenv("APPEALS", "").strip()),
             album_debounce=_int_from_env("ALBUM_DEBOUNCE_SECONDS", 4, minimum=1),
             log_level=_parse_log_level(os.getenv("LOG_LEVEL", "INFO")),

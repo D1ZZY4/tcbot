@@ -19,6 +19,7 @@ def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
         "BOT_TOKEN": "000000:dummy-token-for-lint000000000000000",
         "DATABASE_URL": "postgresql://localhost:5432/tcbot",
         "OWNER_ID": "1",
+        "PROOFS": "-1000000000001",
     }
     base.update(env)
     for key in (
@@ -26,7 +27,6 @@ def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
         "LOGS",
         "LOGS_ERRORS",
         "APPEALS",
-        "PROOFS",
         "PORT",
         "BIND_HOST",
         "PG_CRON_ENABLED",
@@ -100,6 +100,14 @@ def test_chat_destinations_parse_into_chat_thread_pairs(
     assert loaded.logs_errors == (-1002222222222, None)
     assert loaded.appeals == (-1003333333333, 9)
     assert loaded.proofs == (-1004444444444, None)
+
+
+def test_proofs_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A ban needs an evidence destination, so boot refuses an empty value."""
+    with pytest.raises(RuntimeError, match="PROOFS is required"):
+        _load(monkeypatch, PROOFS="  ")
+    with pytest.raises(RuntimeError, match="PROOFS is required"):
+        _load(monkeypatch, PROOFS="not-a-chat")
 
 
 def test_invalid_chat_id_falls_back_to_zero(

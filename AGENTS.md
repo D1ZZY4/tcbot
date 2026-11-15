@@ -274,6 +274,7 @@ Never commit real credentials. Required secret values include:
 
 - `BOT_TOKEN`: Telegram bot token from BotFather.
 - `DATABASE_URL`: PostgreSQL connection string. The bot applies its schema migrations at startup.
+- `PROOFS`: ban proof media destination; boot refuses without a valid chat ID because a ban cannot be filed without landed evidence.
 - `API_ID`: Telegram API ID for MTProto identity lookups; boot refuses without it.
 - `API_HASH`: Telegram API hash matching `API_ID`; boot refuses without it.
 
@@ -286,7 +287,7 @@ Important non-secret/runtime variables include:
 - `PORT`: Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
 - `BIND_HOST`: listener interface for the keep-alive and webhook server, default `0.0.0.0`; use `127.0.0.1` behind a local reverse proxy.
 - `MAIN_GROUP`, `COMMUNITY_GROUP_URL`: community chat IDs / links.
-- `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`: log/proof/appeal destinations; values may be `chat_id` or `chat_id/thread_id` (channel, group, or forum thread).
+- `LOGS`, `LOGS_ERRORS`, `APPEALS`: log and appeal destinations; values may be `chat_id` or `chat_id/thread_id` (channel, group, or forum thread). `PROOFS` is required and belongs in the list above.
 - `ALBUM_DEBOUNCE_SECONDS`: proof silence window before the ban executor runs.
 - `LOG_LEVEL`: bot log level.
 - `SENTRY_DSN`: optional Sentry DSN for production error monitoring (observability extra); empty disables monitoring.

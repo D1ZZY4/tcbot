@@ -21,6 +21,9 @@ os.environ.setdefault(
     "DATABASE_URL", "postgresql://tcbot:dummy@127.0.0.1:1/tcbot_placeholder"
 )
 os.environ.setdefault("OWNER_ID", "1")
+# * A ban cannot be filed without an evidence destination, so the suite
+# * supplies a throwaway proof chat like a deployment would.
+os.environ.setdefault("PROOFS", "-1000000000001")
 
 import pytest
 

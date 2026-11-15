@@ -49,6 +49,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **The proof destination is deployment configuration** (`tcbot/__init__.py`, `config.env.example`, `README.md`, `docs/getting-started/setup.md`): the loader carried a community channel ID as the fallback for `PROOFS`, so a fresh clone would upload evidence to a chat it did not own. `PROOFS` is required now and boot refuses a missing or invalid value with a clear error. Behavior changes: a deployment that relied on the removed default must set `PROOFS` to its own proof chat before upgrading.
+
 - **The community default locale reaches the render path** (`tcbot/utils/i18n.py`, `tcbot/modules/helper/locale.py`, `tcbot/database/settings_db.py`, `tcbot/database/cache/singletons.py`): `community_settings.default_locale` was resolved by the SQL settings view but never read by the bot, so changing it had no effect. The resolver now falls back to it after the chat-specific preference and before `en-US`, through a shared two-level cache, and reads it only when the specific preference is absent or unknown. Behavior changes: a deployment that sets the column now renders the default language for chats without their own preference; the shipped `NULL` value leaves the behaviour unchanged.
 
 - **An unmute is one decision with a durable delivery** (`tcbot/database/mutes_db.py`, `tcbot/modules/helper/pipelines/mute_flow.py`, `i18n/en-US/muting.toml`, `i18n/id-ID/muting.toml`): revoking the active mute and queueing its per-group `revoke` run now commit together. A partial restore keeps the groups that did not answer in the ledger, and the scheduled worker retries them instead of asking the moderator to run `/tcunmute` again. A run that has not settled yet is reported as queued. Behavior changes: a partially restored unmute is retried automatically.
@@ -312,8 +314,6 @@ All notable changes to this project are documented here. For workflow details, s
 - **Manifest realigned to grouped dependency sets** (`pyproject.toml`, `uv.lock`): runtime, optional, and development dependencies are organised by responsibility; the test lint ignores narrow to the specific doc rules tests actually skip, and coverage is wired into the test workflow. Behavior changes: none for operators.
 
 - **Speedtest drops its heavy provider dependency** (`tcbot/modules/netspeed.py`, `tests/test_netspeed.py`, `pyproject.toml`): `/speedtest` now measures latency, download, and upload against speedtest.net over the certifi TLS bundle, rendering the same result fields; unavailable geodata shows "N/A". The share image is gone. Behavior changes: results no longer carry a share image.
-
-- **Proofs default to the community proof channel** (`tcbot/__init__.py`, `config.env.example`, `docs/getting-started/setup.md`): an empty `PROOFS` now resolves to `-1003997518221` instead of compiling to no destination. Behavior changes: proof uploads have a destination on a fresh setup.
 
 - **Greeting resolves the chat locale once per batch** (`tcbot/modules/greeting.py`): `on_new_member` resolves the group locale once and passes it down instead of resolving it per member. Behavior changes: none; batch joins make fewer reads.
 
@@ -1202,8 +1202,6 @@ All notable changes to this project are documented here. For workflow details, s
 - **Developer docs match the implementation** (`AGENTS.md`, `.agents/rules/asyncio-gather-rules.md`, `docs/architecture/*.md`, `docs/features/**/*.md`, `docs/operations/*.md`, `docs/reference/*.md`, `README.md`): the configuration model, the scheduler's persistent job store and off-loop startup, the sync rank gate, the promotion ban guard, the warn-threshold clearing rule, the current callback shapes, the shipped locale, and the CI file-size gate are now described as implemented.
 
 - **Env table and module examples match the loader** (`CLAUDE.md`, `config.env.example`, `docs/getting-started/setup.md`, `docs/architecture/repository-map.md`): the required founder identity, the `SENTRY_DSN` option, the live module names, and the `id-ID` catalog location now match the code. Behavior changes: none, docs only.
-
-- **Dependency, proofs, and coverage documentation refreshed** (`docs/getting-started/setup.md`, `docs/operations/ci-cd.md`, `docs/architecture/database.md`, `docs/architecture/utilities.md`, `AGENTS.md`): PyMongo, the `PROOFS` default, the `SENTRY_DSN` option, and the coverage-backed test workflow are aligned with the implementation. Behavior changes: none for operators.
 
 - **Appeal and pool references match the tree** (`docs/features/appeals.md`, `docs/architecture/workflows.md`, `docs/operations/performance.md`): the appeal facade names the `appeal_submit_flow.py` module instead of a directory, the unban section names `unban_flow.py`, and the getUpdates pool size is credited to its lifecycle owner. Behavior changes: none, docs only.
 

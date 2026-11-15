@@ -64,10 +64,12 @@ uv run --frozen python -m tcbot
 
 For Replit or another hosting platform:
 
-1. Store `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `API_ID`, and `API_HASH`
-   in the platform secret manager or its environment configuration.
-2. Store the required destination values (`LOGS`, plus `PROOFS` and `APPEALS`
-   when those features are enabled) as environment variables or secrets.
+1. Store `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `PROOFS`, `API_ID`, and
+   `API_HASH` in the platform secret manager or its environment
+   configuration. A ban needs landed evidence, so boot refuses without
+   `PROOFS`.
+2. Store the other destination values (`LOGS`, and `APPEALS` when the
+   appeal feature is enabled) as environment variables or secrets.
 3. Start the bot with `uv run python -m tcbot`.
 4. Make sure the Flask health endpoint port matches `PORT`.
 
@@ -130,7 +132,7 @@ PROOFS="-1001234567890"
 | `PORT` | No | integer or `auto` | Flask keep-alive port. `auto`, invalid, or out-of-range values resolve to `5000`. |
 | `BIND_HOST` | No | interface address | Listener interface for the keep-alive and webhook server. Default `0.0.0.0`; use `127.0.0.1` behind a local reverse proxy. |
 | `MAIN_GROUP` | Usually | negative integer chat ID | Main community group or forum. A positive value is treated as unset with a warning. |
-| `PROOFS` | Usually | `chat_id` or `chat_id/thread_id` | Destination for ban proof media. Defaults to the community proof channel (`-1003997518221`); override to use a different chat or forum thread. |
+| `PROOFS` | Yes | `chat_id` or `chat_id/thread_id` | Destination for ban proof media. Startup fails when it is missing or invalid, because a ban cannot be filed without landed evidence. |
 | `LOGS` | Yes | `chat_id` or `chat_id/thread_id` | Audit-log destination. |
 | `LOGS_ERRORS` | Recommended | `chat_id` or `chat_id/thread_id` | Error-report destination. When empty, reports fall back to the owner DM instead of being dropped. |
 | `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination (channel, group, or forum thread). Also receives a copy of every review card, so one value covers all appeal surfaces. The appeal instruction handle is derived from the public logs link (`COMMUNITY_LOGS_URL`), so no separate handle variable is needed. |
