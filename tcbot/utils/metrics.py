@@ -22,6 +22,7 @@ class _CacheStats:
     misses: int = 0
     invalidations: int = 0
     drops: int = 0
+    evictions: int = 0
     queue_depth: dict[str, int] = field(default_factory=dict)
     redis_available: bool | None = None
 
@@ -51,6 +52,11 @@ try:
         "Cache mutations dropped by the bounded queue.",
         ["prefix"],
     )
+    _EVICTIONS = Counter(
+        "tcbot_cache_queue_evictions_total",
+        "Droppable cache mutations evicted to queue a revocation.",
+        ["prefix"],
+    )
     _QUEUE_DEPTH = Gauge(
         "tcbot_cache_queue_depth",
         "Queued Redis mutations per cache prefix.",
@@ -61,7 +67,7 @@ try:
         "Whether the Redis client is usable (1) or not (0).",
     )
 except Exception:  # pragma: no cover - exercised only without the extra
-    _HITS = _MISSES = _INVALIDATIONS = _DROPS = None
+    _HITS = _MISSES = _INVALIDATIONS = _DROPS = _EVICTIONS = None
     _QUEUE_DEPTH = _REDIS_AVAILABLE = None
 
 
@@ -93,6 +99,13 @@ def record_drop(prefix: str) -> None:
         _DROPS.labels(prefix).inc()
 
 
+def record_eviction(prefix: str) -> None:
+    """Count one droppable mutation evicted to make room for a revocation."""
+    _STATS.evictions += 1
+    if _EVICTIONS is not None:
+        _EVICTIONS.labels(prefix).inc()
+
+
 def set_queue_depth(prefix: str, depth: int) -> None:
     """Publish the queued mutation depth of one cache prefix."""
     _STATS.queue_depth[prefix] = depth
@@ -114,6 +127,7 @@ def snapshot() -> dict[str, Any]:
         "misses": _STATS.misses,
         "invalidations": _STATS.invalidations,
         "drops": _STATS.drops,
+        "evictions": _STATS.evictions,
         "queue_depth": dict(_STATS.queue_depth),
         "redis_available": _STATS.redis_available,
     }

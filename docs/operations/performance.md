@@ -166,10 +166,10 @@ Use the cache layer already associated with the database helper:
   the old L2 value while the delete is in flight.
 - `tcbot_cache_hits_total{layer}`, `tcbot_cache_misses_total`,
   `tcbot_cache_invalidations_total`, `tcbot_cache_invalidation_drops_total{prefix}`,
-  `tcbot_cache_queue_depth{prefix}`, and `tcbot_redis_available` are exposed on
-  `/metrics` when the observability extra is installed. The same counters are
-  available in-process through `tcbot.utils.metrics.snapshot()` for tests and
-  diagnostics.
+  `tcbot_cache_queue_evictions_total{prefix}`, `tcbot_cache_queue_depth{prefix}`,
+  and `tcbot_redis_available` are exposed on `/metrics` when the observability
+  extra is installed. The same counters are available in-process through
+  `tcbot.utils.metrics.snapshot()` for tests and diagnostics.
 
 Do not add a second cache namespace or bypass the cache with a direct Redis
 operation. An L2 write can never fail the fetch it follows: after a database
@@ -251,11 +251,15 @@ cache operation after a failure asks for a reconnect, rate-limited to one
 attempt per 30 s. The shared cache is optional, so a dead Redis still degrades
 to the in-memory layer without delaying a request.
 
-The mutation queue is bounded at two levels. Droppable operations (the
-display-name hints) are dropped past 200 queued mutations, and even a
-revocation operation is dropped past 1000, with an error-level warning: a
+The mutation queue is bounded at three levels. Droppable operations (the
+display-name hints) are dropped past 200 queued mutations. At the 1000-deep
+hard ceiling a critical mutation first evicts the oldest queued droppable
+mutation that has not started, so a pending revocation is not lost in favour
+of a display hint. Only the 2000-deep absolute ceiling, where every queued
+mutation is critical, drops a revocation with an error-level warning: a
 dropped revocation leaves the revoked state visible until the key TTL, while
-an unbounded queue exhausts the process memory.
+an unbounded queue exhausts the process memory. Evictions, drops, and queue
+depth are exported as cache counters.
 
 The Redis client belongs to the event loop that created it: its sockets are
 bound to that loop. A client that is handed to another running loop would

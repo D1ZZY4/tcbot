@@ -29,9 +29,11 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 # * Revocation prefixes: role, connection, group-list, and owner state must
-# * never be dropped by the mutation-queue bound, or other processes keep
-# * serving revoked privileges until the Redis TTL (90-360 s). Display-name
-# * hints (umention) may drop; the next update refreshes them.
+# * not be dropped by the mutation-queue bound, or other processes keep
+# * serving revoked privileges until the Redis TTL (90-360 s). The queue
+# * evicts a queued display hint before it drops one of these, and only an
+# * absolute ceiling with no droppable op left can discard a revocation.
+# * Display-name hints (umention) may drop; the next update refreshes them.
 _REVOCATION_PREFIXES: frozenset[str] = frozenset({"role", "conn", "groups", "owner"})
 
 # * Keys per Redis MGET in the batch read. The command grows with the

@@ -45,6 +45,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Speedtest has a full mode** (`tcbot/modules/netspeed.py`, `i18n/*/netspeed.toml`): `/speedtest full` moves a larger sample over four connections per direction and gets a 300 s ceiling. The quick mode keeps its small payload so it does not starve Telegram traffic. Behavior changes: the full mode reports a more representative throughput at the cost of bandwidth.
 
+- **Cache queue evictions are counted** (`tcbot/utils/metrics.py`, `tcbot/database/cache/redis_io.py`): when a revocation needs room at the hard queue ceiling, the evicted display hint is recorded as `tcbot_cache_queue_evictions_total{prefix}`, so an operator can distinguish that case from a dropped mutation.
+
 ### Changed
 
 - **Appeal rejection is one database decision** (`tcbot/database/bans_db/_lifecycle.py`, `tcbot/modules/helper/pipelines/appeal_review_flow.py`): recording the rejection and releasing the review slot now commit together. A former split could record the rejection while the card kept the slot, so the user could not appeal again until the stale window passed. Behavior changes: a rejection that cannot free its slot is not recorded, and a failed card edit is queued for the notification worker.
@@ -548,6 +550,8 @@ All notable changes to this project are documented here. For workflow details, s
 ### Fixed
 
 - **Scheduler startup no longer crash-loops a healthy deployment** (`tcbot/database/scheduler.py`, `tests/test_scheduler_jobstore.py`, `tests/test_scheduler_start.py`): reconciling the persisted schedules issued one remote job-store lookup and one removal per known schedule, and every call checks a connection out of the pool. On a remote pooler a healthy boot needed about 7.6 s and crossed the fixed 10 s readiness window under load, so the watchdog restarted a process whose scheduler had actually registered its jobs. The stored schedules are now read in one bulk query and compared in memory, and the readiness budget is 30 s. Behavior changes: a slow but healthy database no longer restarts the bot, and an unchanged schedule costs no write.
+
+- **A queued revocation is not dropped for a display hint** (`tcbot/database/cache/redis_io.py`, `tcbot/utils/metrics.py`, `tests/test_cache_revocation_queue.py`): at the hard mutation-queue ceiling every new operation was dropped, including a role or connection invalidation. The queue now evicts the oldest droppable mutation that has not started, so a pending revocation lands while a display hint simply refreshes later. Only an absolute ceiling with no droppable operation left can drop a revocation, and that case is reported at error level. Behavior changes: a saturated queue can delay a mention-cache write instead of losing a revocation.
 
 - **A rejected appeal's card edit is retried** (`tcbot/notification_worker.py`, `tcbot/database/notifications_db.py`, `tests/test_notification_worker.py`): the outbox skipped every task whose decision was still active, which is exactly the state of a rejection. It now skips only a card that is still the live review of an active decision with a pending appeal, so a queued rejection edit closes the card instead of being discarded. Behavior changes: a failed rejection card edit is retried instead of leaving live buttons on a settled appeal.
 

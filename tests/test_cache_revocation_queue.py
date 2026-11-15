@@ -16,6 +16,7 @@ import tcbot.database.cache as cache_mod
 from tcbot import cfg
 from tcbot.database.cache import redis_io
 from tcbot.database.cache import twolevel as cache_twolevel
+from tcbot.utils import metrics
 
 
 class _FakeOkRedis:
@@ -40,6 +41,8 @@ def _clean_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
     redis_io._redis_tails.clear()
     redis_io._redis_bg_tasks.clear()
     redis_io._redis_drop_warned.clear()
+    redis_io._redis_cancellable.clear()
+    redis_io._redis_running.clear()
 
 
 def _cache(prefix: str) -> cache_mod.TwoLevelCache[Any]:
@@ -90,5 +93,84 @@ def test_role_put_survives_sat_queue() -> None:
         for task in new_tasks:
             task.cancel()
         await asyncio.gather(*new_tasks, return_exceptions=True)
+
+    asyncio.run(_scenario())
+
+
+def test_a_critical_op_at_the_hard_ceiling_evicts_a_droppable_op() -> None:
+    """A pending revocation must win over a queued display hint.
+
+    At the hard ceiling the old path dropped the critical op itself, so a
+    role revocation could be lost while a mention-cache write kept its
+    slot. The hint is cancel-safe only before its Redis call starts, so
+    the eviction targets a not-started task.
+    """
+
+    async def _scenario() -> None:
+        loop = asyncio.get_running_loop()
+        tail = ("role", loop)
+        stale_hint = asyncio.create_task(asyncio.sleep(3600))
+        redis_io._redis_cancellable[tail] = [stale_hint]
+        redis_io._redis_pending[tail] = redis_io._REDIS_HARD_MAX_PENDING
+        before_evictions = metrics.snapshot()["evictions"]
+
+        async def _op() -> None:
+            return None
+
+        task = redis_io.enqueue_redis_mutation("role", _op, droppable=False)
+
+        assert task is not None
+        await asyncio.sleep(0)
+        assert stale_hint.cancelled()
+        assert metrics.snapshot()["evictions"] == before_evictions + 1
+        assert redis_io._redis_pending[tail] == redis_io._REDIS_HARD_MAX_PENDING + 1
+        task.cancel()
+        await asyncio.gather(task, stale_hint, return_exceptions=True)
+
+    asyncio.run(_scenario())
+
+
+def test_a_running_droppable_op_is_not_evicted() -> None:
+    """Cancelling an in-flight Redis call would leave its reply unread."""
+
+    async def _scenario() -> None:
+        loop = asyncio.get_running_loop()
+        tail = ("role", loop)
+        busy = asyncio.create_task(asyncio.sleep(3600))
+        redis_io._redis_cancellable[tail] = [busy]
+        redis_io._redis_running.add(busy)
+        redis_io._redis_pending[tail] = redis_io._REDIS_HARD_MAX_PENDING
+        before_drops = metrics.snapshot()["drops"]
+
+        async def _op() -> None:
+            return None
+
+        task = redis_io.enqueue_redis_mutation("role", _op, droppable=False)
+
+        assert task is None
+        assert not busy.cancelled()
+        assert metrics.snapshot()["drops"] == before_drops + 1
+        busy.cancel()
+        await asyncio.gather(busy, return_exceptions=True)
+
+    asyncio.run(_scenario())
+
+
+def test_the_absolute_ceiling_drops_even_a_revocation() -> None:
+    """A dead Redis cannot grow the process memory without bound."""
+
+    async def _scenario() -> None:
+        loop = asyncio.get_running_loop()
+        tail = ("role", loop)
+        redis_io._redis_pending[tail] = redis_io._REDIS_ABSOLUTE_MAX_PENDING
+        before_drops = metrics.snapshot()["drops"]
+
+        async def _op() -> None:
+            return None
+
+        task = redis_io.enqueue_redis_mutation("role", _op, droppable=False)
+
+        assert task is None
+        assert metrics.snapshot()["drops"] == before_drops + 1
 
     asyncio.run(_scenario())

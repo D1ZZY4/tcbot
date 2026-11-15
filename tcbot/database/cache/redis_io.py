@@ -28,13 +28,28 @@ _redis_tails: dict[tuple[str, asyncio.AbstractEventLoop], asyncio.Task[None]] = 
 _REDIS_MAX_PENDING: int = 200
 # * Hard ceiling for the queue depth, droppable ops included. A dead Redis
 # * would otherwise grow the queue without bound, and an unbounded queue is
-# * a memory leak that outlives the outage. Past this ceiling even a
-# * revocation op is dropped, with an error-level warning: the revoked
-# * state then survives until the key TTL instead of exhausting the
-# * process memory.
+# * a memory leak that outlives the outage. At this ceiling a droppable op
+# * is dropped, and a revocation op first evicts a droppable op that has not
+# * started, so a pending revocation is not discarded in favour of a display
+# * hint. Only when every queued op is critical does the ceiling rise to the
+# * absolute bound below.
 _REDIS_HARD_MAX_PENDING: int = 1000
+# * Absolute ceiling: a run of critical ops with a dead Redis still has to
+# * stop somewhere. Past this depth even a revocation is dropped with an
+# * error-level warning: the revoked state then survives until the key TTL,
+# * which is recoverable, while exhausting the process memory is not.
+_REDIS_ABSOLUTE_MAX_PENDING: int = 2000
 _redis_pending: dict[tuple[str, asyncio.AbstractEventLoop], int] = {}
 _redis_drop_warned: set[tuple[str, asyncio.AbstractEventLoop]] = set()
+# * Droppable mutations that have not started yet, oldest first. A critical
+# * op evicts one of these (a display hint can wait for its next refresh)
+# * instead of being dropped itself.
+_redis_cancellable: dict[
+    tuple[str, asyncio.AbstractEventLoop], list[asyncio.Task[None]]
+] = {}
+# * Tasks currently inside their Redis call. Cancelling one would leave its
+# * reply unread on a pooled connection, so they are never evicted.
+_redis_running: set[asyncio.Task[None]] = set()
 # * Grace window for draining background mutations before the pool closes.
 _DRAIN_TIMEOUT_S: float = 5.0
 # * Ceiling for one clear_all wait; the sweep keeps running past it so a
@@ -108,6 +123,41 @@ def _log_redis_task_error(task: asyncio.Task[None]) -> None:
         log.debug("Redis background task failed: %s", task.exception())
 
 
+def _forget_cancellable(
+    tail_key: tuple[str, asyncio.AbstractEventLoop], task: asyncio.Task[None]
+) -> None:
+    """Done-callback: drop a finished task from the evictable list."""
+    queued = _redis_cancellable.get(tail_key)
+    if queued is None:
+        return
+    try:
+        queued.remove(task)
+    except ValueError:
+        return
+    if not queued:
+        _redis_cancellable.pop(tail_key, None)
+
+
+def _evict_droppable(tail_key: tuple[str, asyncio.AbstractEventLoop]) -> bool:
+    """Cancel the oldest droppable mutation that has not started.
+
+    The successor of the cancelled task awaits it through a shielded
+    handle and continues on cancellation, so removing one link does not
+    break the FIFO tail. A task already inside its Redis call is skipped:
+    cancelling it would leave a reply unread on the pooled connection.
+    """
+    queued = _redis_cancellable.get(tail_key)
+    if not queued:
+        return False
+    while queued:
+        task = queued.pop(0)
+        if task.done() or task in _redis_running:
+            continue
+        task.cancel()
+        return True
+    return False
+
+
 def enqueue_redis_mutation(
     prefix: str,
     operation: Callable[[], Awaitable[None]],
@@ -131,6 +181,11 @@ def enqueue_redis_mutation(
     prefixes (``role``, ``conn``, ``groups``, ``owner``) take the same
     non-droppable path for the same reason; display-name hints
     (``umention``) remain droppable.
+
+    At the hard ceiling a critical op evicts the oldest droppable op that
+    has not started, so a revocation is not discarded in favour of a
+    display hint. Only the absolute ceiling, where every queued op is
+    critical, drops a revocation.
     """
     try:
         loop = asyncio.get_running_loop()
@@ -141,18 +196,34 @@ def enqueue_redis_mutation(
     tail_key = (prefix, loop)
     depth = _redis_pending.get(tail_key, 0)
     if depth >= _REDIS_HARD_MAX_PENDING:
-        # * Hard ceiling: a dead Redis would otherwise grow the queue
-        # * without bound. Dropping a revocation leaves the revoked
-        # * state visible until the key TTL, which is recoverable;
-        # * exhausting the process memory is not.
-        log.error(
-            "Redis mutation queue critically full for prefix %s (%d pending); "
-            "dropping op to keep memory bounded.",
-            prefix,
-            depth,
-        )
-        metrics.record_drop(prefix)
-        return None
+        if (
+            not droppable
+            and depth < _REDIS_ABSOLUTE_MAX_PENDING
+            and _evict_droppable(tail_key)
+        ):
+            # * The evicted task releases its slot on the next loop tick;
+            # * this critical op may sit one past the soft ceiling until
+            # * then, which is bounded.
+            log.warning(
+                "Redis mutation queue full for prefix %s (%d pending); "
+                "evicted a droppable op to queue a revocation.",
+                prefix,
+                depth,
+            )
+            metrics.record_eviction(prefix)
+        else:
+            # * Absolute ceiling: a dead Redis would otherwise grow the
+            # * queue without bound. Dropping a revocation leaves the
+            # * revoked state visible until the key TTL, which is
+            # * recoverable; exhausting the process memory is not.
+            log.error(
+                "Redis mutation queue critically full for prefix %s (%d pending); "
+                "dropping op to keep memory bounded.",
+                prefix,
+                depth,
+            )
+            metrics.record_drop(prefix)
+            return None
     if droppable and depth >= _REDIS_MAX_PENDING:
         if tail_key not in _redis_drop_warned:
             _redis_drop_warned.add(tail_key)
@@ -191,11 +262,23 @@ def enqueue_redis_mutation(
                     prefix,
                     exc,
                 )
-        await operation()
+        task = asyncio.current_task()
+        if task is not None:
+            _redis_running.add(task)
+        try:
+            await operation()
+        finally:
+            if task is not None:
+                _redis_running.discard(task)
 
     task = loop.create_task(_run(), name=f"tcbot.redis.{prefix}")
     _redis_tails[tail_key] = task
     _redis_bg_tasks.add(task)
+    if droppable:
+        _redis_cancellable.setdefault(tail_key, []).append(task)
+        task.add_done_callback(
+            lambda completed: _forget_cancellable(tail_key, completed)
+        )
     task.add_done_callback(_redis_bg_tasks.discard)
     task.add_done_callback(_log_redis_task_error)
     task.add_done_callback(lambda completed: _clear_redis_tail(tail_key, completed))
