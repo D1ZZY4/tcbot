@@ -1,12 +1,11 @@
 # Join/leave event strings (greeting.py). All render as MarkdownV2
-# in the group audience language. Placeholders: {user} pre-formatted
-# mention, {ban} pre-formatted code ban ID, {appeal} pre-formatted link,
-# {community} raw name.
+# in the group or private-chat language. Placeholders: {user} pre-formatted
+# mention, {uid}/{ban} pre-formatted code, {first}/{last}/{username}/{reason}/
+# {group} raw, {community} raw community name.
 
 [notice]
-banned = "{user} di-ban federasi dan telah dikeluarkan."
-ban_id = " ID Ban: {ban}."
-appeal = " {link}"
+banned_group = "Ban federasi diterapkan saat join.\nUser: {user}\nID: {uid}\nNama depan: {first}\nNama belakang: {last}\nUsername: {username}\nID Ban: {ban}\n\nUser di-ban di grup ini. Gunakan Lihat Log dan Lihat Bukti untuk detail, atau Ajukan Banding untuk meminta peninjauan."
+banned_dm = "Kamu di-ban federasi dari {community} dan di-ban di {group}.\n\nID Ban: {ban}\nAlasan: {reason}\n\nGunakan Lihat Log dan Lihat Bukti untuk detail. Jika kamu merasa ini keliru, Ajukan Banding."
 
 [welcome]
 body = "Selamat datang, {user}. Ini grup resmi {community}. Baca aturan grup sebelum ikut serta."

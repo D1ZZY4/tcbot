@@ -139,6 +139,46 @@ def action_proof_kb(
     )
 
 
+def join_ban_kb(
+    log_url: str | None,
+    proof_url: str | None,
+    appeal_url: str | None,
+    locale: str | None = None,
+) -> InlineKeyboardMarkup | None:
+    """Join-ban notice keyboard: log and proof first, appeal below.
+
+    A missing link drops its button instead of leaving a dead URL, and the
+    evidence row is omitted when neither reference exists. The appeal stays
+    on its own row so the destructive action is never adjacent to the
+    evidence links.
+    """
+    rows: list[list[InlineKeyboardButton]] = []
+    evidence: list[InlineKeyboardButton] = []
+    if log_url:
+        evidence.append(
+            InlineKeyboardButton(t("button.view_log", locale, plain=True), url=log_url)
+        )
+    if proof_url:
+        evidence.append(
+            InlineKeyboardButton(
+                t("button.view_proof", locale, plain=True), url=proof_url
+            )
+        )
+    if evidence:
+        rows.append(evidence)
+    if appeal_url:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    t("button.submit_appeal", locale, plain=True),
+                    url=appeal_url,
+                    style=KeyboardButtonStyle.PRIMARY,
+                )
+            ]
+        )
+    return InlineKeyboardMarkup(rows) if rows else None
+
+
 def detail_kb(
     *,
     back_callback: str,

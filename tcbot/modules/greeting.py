@@ -21,18 +21,24 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators
+from tcbot.modules.helper import decorators, keyboards
 from tcbot.modules.helper.locale import locale_for_chat, locale_for_update
-from tcbot.modules.helper.messages import appeal_deep_link, safe_reply
+from tcbot.modules.helper.messages import (
+    appeal_deep_link,
+    message_link,
+    safe_reply,
+)
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import link, user_ref
+from tcbot.utils.formatter import code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Bot, Chat, Message, Update, User
+
+    from tcbot.database.documents import BanDoc
 
 log = get_logger(__name__)
 
@@ -71,6 +77,92 @@ async def _in_federation(chat_id: int, *, action: str) -> bool | None:
         return None
 
 
+async def _send_join_ban_notices(
+    bot: Bot,
+    chat: Chat,
+    member: User,
+    ban: BanDoc,
+    locale: str,
+    *,
+    reply_to: Message | None,
+) -> None:
+    """Send the group notice and the target DM for a ban enforced on join.
+
+    The group notice names the identity and carries the log, proof, and
+    appeal links. The DM carries the community, the group, the reason, and
+    the same links, but it never repeats the group wording. A missing log or
+    proof reference drops only its own button.
+    """
+    proof_id = int(ban.get("proof_message_id") or 0)
+    log_id = int(ban.get("log_message_id") or 0)
+    proof_chat, proof_thread = cfg.proofs
+    logs_chat, logs_thread = cfg.logs
+    log_url = message_link(logs_chat, log_id, logs_thread) if log_id else None
+    proof_url = message_link(proof_chat, proof_id, proof_thread) if proof_id else None
+    ban_id = str(ban.get("ban_id") or "")
+    appeal_url = (
+        appeal_deep_link(bot.username, ban_id) if bot.username and ban_id else None
+    )
+    keyboard = keyboards.join_ban_kb(log_url, proof_url, appeal_url, locale)
+    group_text = t(
+        "greeting.notice.banned_group",
+        locale,
+        user=Safe(user_ref(member.id, member.first_name, member.username)),
+        uid=Safe(code(str(member.id))),
+        first=member.first_name or "-",
+        last=member.last_name or "-",
+        username=f"@{member.username}" if member.username else "-",
+        ban=Safe(code(ban_id)) if ban_id else "-",
+    )
+    if reply_to is not None:
+        group_send = reply_to.reply_text(
+            group_text,
+            parse_mode="MarkdownV2",
+            reply_markup=keyboard,
+        )
+    else:
+        group_send = bot.send_message(
+            chat.id,
+            group_text,
+            parse_mode="MarkdownV2",
+            reply_markup=keyboard,
+        )
+    dm_text = t(
+        "greeting.notice.banned_dm",
+        locale,
+        community=cfg.community_name,
+        group=chat.title or str(chat.id),
+        reason=ban.get("reason") or "-",
+        ban=Safe(code(ban_id)) if ban_id else "-",
+    )
+    dm_send = bot.send_message(
+        member.id,
+        dm_text,
+        parse_mode="MarkdownV2",
+        reply_markup=keyboard,
+    )
+    group_result, dm_result = await asyncio.gather(
+        group_send,
+        dm_send,
+        return_exceptions=True,
+    )
+    throw_if_cancelled((group_result, dm_result))
+    if isinstance(group_result, BaseException):
+        log.warning(
+            "Join ban group notice failed for uid=%d in chat=%d: %s",
+            member.id,
+            chat.id,
+            group_result,
+        )
+    if isinstance(dm_result, BaseException):
+        log.debug(
+            "Join ban DM failed for uid=%d in chat=%d: %s",
+            member.id,
+            chat.id,
+            dm_result,
+        )
+
+
 async def _handle_member(
     member: User,
     msg: Message,
@@ -82,9 +174,10 @@ async def _handle_member(
 ) -> None:
     """Process a single new member: cache, ban-check, then enforce ban or greet.
 
-    When ``greet=False`` (non-primary connected groups) the ban is still enforced
-    silently but no welcome or removal-notice message is posted, avoiding noise
-    in secondary groups. When ``greet=True`` both messages are sent.
+    A banned joiner is removed in every connected group, and both the group
+    and the target receive the join-ban notice. ``greet`` only controls the
+    welcome message for a clean joiner, so the ban notice is never suppressed
+    in a secondary group.
 
     ``locale`` is resolved once by the caller: batch joins share one chat, so
     resolving it per member repeats the same read N times.
@@ -138,37 +231,14 @@ async def _handle_member(
                 chat.id,
             )
             return
-        if greet:
-            notice = t(
-                "greeting.notice.banned",
-                locale,
-                user=Safe(user_ref(member.id, member.first_name, member.username)),
-            )
-            ban_id = ban.get("ban_id", "")
-            if ban_id:
-                notice += t(
-                    "greeting.notice.ban_id",
-                    locale,
-                    ban=str(ban_id),
-                )
-                if bot.username:
-                    appeal_url = appeal_deep_link(bot.username, str(ban_id))
-                    notice += t(
-                        "greeting.notice.appeal",
-                        locale,
-                        link=Safe(
-                            link(
-                                t("button.submit_appeal", locale, plain=True),
-                                appeal_url,
-                            )
-                        ),
-                    )
-            try:
-                await msg.reply_text(notice, parse_mode="MarkdownV2")
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                log.debug("Join ban notice failed for uid=%d: %s", member.id, exc)
+        await _send_join_ban_notices(
+            bot,
+            chat,
+            member,
+            ban,
+            locale,
+            reply_to=msg,
+        )
         return
 
     if mute:
@@ -326,6 +396,16 @@ async def on_join_request_approved(
                 user.id,
                 chat.id,
             )
+            return
+        locale = await locale_for_chat(chat)
+        await _send_join_ban_notices(
+            ctx.bot,
+            chat,
+            user,
+            ban,
+            locale,
+            reply_to=None,
+        )
         return
     if isinstance(mute, BaseException):
         log.warning(

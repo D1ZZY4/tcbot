@@ -264,6 +264,7 @@ Ban log keyboards are defined in `keyboards/`:
 | Function | Buttons |
 |---|---|
 | `ban_log_kb` | `Proof <target_id>`, `Submit Appeal`; with `previous_proof_link`, adds `Previous Proof <target_id>` between them |
+| `join_ban_kb` | `View Log` and `View Proof` on the first row, `Submit Appeal` on the second; a missing link drops only its button |
 | `checkme_ban_kb` | `Details`, optional `Proof`, `Appeal` |
 | `checkme_detail_back_kb` | optional `Proof`, `« Back` |
 

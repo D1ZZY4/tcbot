@@ -55,6 +55,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **A join-time federation ban now reports the full identity and reaches the target** (`tcbot/modules/greeting.py`, `tcbot/modules/helper/keyboards/ban.py`, `i18n/en-US/greeting.toml`, `i18n/id-ID/greeting.toml`): the group notice names the user ID, first name, last name, username, and ban ID, with `View Log` and `View Proof` on the first button row and `Submit Appeal` below. The same links are sent to the banned user as a separate DM with different wording and the ban reason. The notice is posted in every connected group, not only the primary group. Behavior changes: secondary groups receive the ban notice, and a join-time ban now attempts a DM to the target; a user who has blocked the bot or never started it simply receives no DM.
+
 - **The proof destination is deployment configuration** (`tcbot/__init__.py`, `config.env.example`, `README.md`, `docs/getting-started/setup.md`): the loader carried a community channel ID as the fallback for `PROOFS`, so a fresh clone would upload evidence to a chat it did not own. `PROOFS` is required now and boot refuses a missing or invalid value with a clear error. Behavior changes: a deployment that relied on the removed default must set `PROOFS` to its own proof chat before upgrading.
 
 - **A failed kick is recorded as failed, not completed** (`tcbot/database/kicks_db.py`, `tcbot/modules/helper/pipelines/kick_flow.py`, `tcbot/enforcement_worker.py`, `alembic/versions/0008_kick_failed_status.py`): the audit row is written before enforcement, so it started `completed` even when the ban or its follow-up unban never landed. The decision now moves to `failed` on either failure, and the durable reconcile run restores `completed` only after the unban succeeds. Behavior changes: `/check` history marks a stranded kick and the database distinguishes it from a delivered one.
@@ -1136,6 +1138,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **Unused ban helpers removed** (`tcbot/database/bans_db/`, `docs/architecture/database.md`): `deactivate_ban` and `set_review` had no callers; `deactivate_all_active_bans`, `deactivate_extra_active_bans`, and `set_review_if_absent` are the live helpers. Behavior changes: none.
 
 ### Documentation
+
+- **The join-ban guide and keyboard reference match the new notices** (`docs/features/misc-modules.md`, `docs/features/moderation/banning.md`, `docs/architecture/helpers.md`): the pages now describe the identity fields, the group notice, the separate target DM, the `View Log` / `View Proof` row, and the `Submit Appeal` row, including the secondary-group behavior and the dropped button for a missing link. Behavior changes: none, docs only.
 
 - **The enforcement guides match the delivered status contract** (`docs/architecture/database.md`, `docs/architecture/utilities.md`, `docs/architecture/workflows.md`, `docs/getting-started/setup.md`, `docs/features/moderation/banning.md`, `docs/features/moderation/connecting.md`, `docs/features/moderation/muting.md`, `docs/features/moderation/warnings.md`): the pages now describe the permanent refusal class, the pending-versus-applied delivery counts, the queued connect replay failure, and the precise pg_cron ownership split. Behavior changes: none, docs only.
 

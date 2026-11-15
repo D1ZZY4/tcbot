@@ -214,7 +214,9 @@ def test_classify_failure_replies(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_greeting_has_no_hardcoded_submit_appeal() -> None:
     text = Path("tcbot/modules/greeting.py").read_text(encoding="utf-8")
     assert '"Submit Appeal"' not in text
-    assert "button.submit_appeal" in text
+    # * The label belongs to the keyboard owner, so greeting delegates the
+    # * whole join-ban keyboard instead of naming a button itself.
+    assert "keyboards.join_ban_kb" in text
 
 
 def test_staff_roster_resolves_live_on_numeric_fallback(

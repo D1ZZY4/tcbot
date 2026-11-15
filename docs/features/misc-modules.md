@@ -141,7 +141,7 @@ and re-applies enforcement when join requests are approved.
 
 | Handler | Trigger | Behavior |
 |---|---|---|
-| `on_new_member` | `NEW_CHAT_MEMBERS` | Enforces bans/mutes in every connected group; greets only in primary groups. |
+| `on_new_member` | `NEW_CHAT_MEMBERS` | Enforces bans/mutes in every connected group; posts the join-ban notice and target DM everywhere, and welcomes only in primary groups. |
 | `on_join_request` | `ChatJoinRequest` | Declines the request silently when the requester has an active federation ban. |
 | `on_join_request_approved` | chat member update with `via_join_request` | Re-applies active ban or mute when a join request is approved. |
 | `on_left_member` | `LEFT_CHAT_MEMBER` | Announces non-bot member departures in primary groups only. |
@@ -160,14 +160,19 @@ Key behavior:
 - `_handle_member` harvests identity and reads the active ban and mute in
   parallel. On an enforcement-read failure the welcome is skipped (fail
   closed: never greet an unverified user). A banned joiner is auto-demoted
-  (`trigger="ban"`) and banned; a muted joiner is auto-demoted
-  (`trigger="mute"`) and restricted to read-only for `until_date`. Primary
-  groups post the removal notice (with ban ID and appeal deep link where
-  applicable); secondary groups enforce silently.
+  (`trigger="ban"`) and banned in every connected group. The bot then posts a
+  group notice naming the user ID, first name, last name, username, and ban
+  ID, with `View Log` and `View Proof` on the first button row and
+  `Submit Appeal` below, and sends the target a separate DM with the ban
+  reason and the same buttons. A missing log or proof link drops only its
+  button. A muted joiner is auto-demoted (`trigger="mute"`) and restricted to
+  read-only for `until_date`. Only primary groups post the welcome message;
+  the ban notice is not suppressed in secondary groups.
 - `on_join_request_approved` uses `via_join_request` so the same join is
   never double-enforced by `on_new_member`. It also re-checks the ban
   because a ban created after the request decline (or a failed decline) must
-  still be enforced.
+  still be enforced, and it sends the same group notice and target DM after
+  the ban succeeds.
 
 Database impact: `users_cache.harvest_user_identity` (opportunistic, skips
 the write on unchanged identity), reads `bans_db.get_active_ban` and

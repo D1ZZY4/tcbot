@@ -18,6 +18,7 @@ from tcbot.modules.helper.keyboards.ban import (
     ban_log_kb,
     ban_update_confirm_kb,
     detail_kb,
+    join_ban_kb,
 )
 from tcbot.modules.helper.keyboards.check import (
     check_back_markup,
@@ -95,6 +96,7 @@ __all__ = [
     "groups_menu_kb",
     "help_topics_kb",
     "help_topics_menu_kb",
+    "join_ban_kb",
     "language_list_kb",
     "main_menu_kb",
     "module_help_kb",

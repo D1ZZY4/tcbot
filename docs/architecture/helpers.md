@@ -133,7 +133,7 @@ Main groups:
 
 | Factory group | Examples |
 |---|---|
-| Ban/checking | `ban_log_kb(target_id, proof_link, appeal_url, locale=None, *, previous_proof_link=None)` (ban-log proof/appeal buttons, one per row; the update flow adds the previous-proof row), `ban_update_confirm_kb(log_url, proof_url, locale=None)` (re-ban confirmation: View Log / View Proof URL buttons plus Cancel / Continue), `appeal_button_kb`, `checkme_ban_kb`, `checkme_detail_back_kb` |
+| Ban/checking | `ban_log_kb(target_id, proof_link, appeal_url, locale=None, *, previous_proof_link=None)` (ban-log proof/appeal buttons, one per row; the update flow adds the previous-proof row), `ban_update_confirm_kb(log_url, proof_url, locale=None)` (re-ban confirmation: View Log / View Proof URL buttons plus Cancel / Continue), `join_ban_kb(log_url, proof_url, appeal_url, locale=None)` (join-ban notice: View Log / View Proof on one row and Submit Appeal below), `appeal_button_kb`, `checkme_ban_kb`, `checkme_detail_back_kb` |
 | Proof | `action_proof_kb(target_id, proof_link)` - single "Proof {target_id}" URL button; returns `None` when `proof_link` is falsy. Used by mute/kick/warn executors after uploading proof. |
 | Admin roles | `promote_role_kb`, `demote_confirm_kb`, `promo_decision_kb` |
 | Menus/help | `main_menu_kb`, `group_start_kb`, `help_topics_menu_kb`, `help_topics_kb`, `back_to_start_kb`, `back_to_help_kb`, `back_to_help_cmd_kb`, `module_help_kb`, `back_to_module_kb`, `additional_menu_kb` |
