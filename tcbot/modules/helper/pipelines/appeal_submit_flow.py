@@ -61,9 +61,9 @@ _SECONDS_PER_HOUR: int = 3600
 # * was imported from the legacy table carries a longer reference, and a
 # * link that does not parse leaves the banned user without a way to
 # * appeal.
-_REF_PATTERN: str = r"[a-z0-9]{10,32}"
-_ID_RE = re.compile(rf"^/start\s+appeal_({_REF_PATTERN})$")
-_MENTIONED_REF_RE = re.compile(rf"\b({_REF_PATTERN})\b")
+REF_PATTERN: str = r"[a-z0-9]{10,32}"
+_ID_RE = re.compile(rf"^/start\s+appeal_({REF_PATTERN})$")
+_MENTIONED_REF_RE = re.compile(rf"\b({REF_PATTERN})\b")
 _APPEAL_STATE_KEYS: tuple[str, ...] = (
     "appeal_ban_id",
     "appeal_log_msg_id",

@@ -13,7 +13,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, fil
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.messages import replies
 from tcbot.modules.helper.pipelines.appeal_review_flow import LOCK_HOURS
-from tcbot.modules.helper.pipelines.appeal_submit_flow import appeal
+from tcbot.modules.helper.pipelines.appeal_submit_flow import REF_PATTERN, appeal
 from tcbot.utils.formatter import bold, pre
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
@@ -62,7 +62,7 @@ __help__: replies.HelpEntry = get_help()
 # ──────────────────────────── Handlers ──────────────────────────── #
 
 _APPEAL_START_CMDS = filters.ChatType.PRIVATE & filters.Regex(
-    r"^/start\s+appeal_[a-z0-9]{10}$"
+    rf"^/start\s+appeal_{REF_PATTERN}$"
 )
 
 
