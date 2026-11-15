@@ -11,7 +11,7 @@ import inspect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from telegram.error import BadRequest, NetworkError, TimedOut
+from telegram.error import BadRequest, Forbidden, NetworkError, TimedOut
 
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.logger import get_logger
@@ -24,26 +24,36 @@ log = get_logger(__name__)
 # * Telegram allows 30 msg/s globally; 10 concurrent is safe and fast.
 _MAX_CONCURRENT: int = 10
 
-# * Substrings inside `BadRequest` messages that indicate the user was not
-# * actually present in the target chat, the bot was demoted, the chat no
-# * longer exists, or the user had a status that prevents the action. These
-# * are real Telegram API responses (not exceptions we should retry) but they
-# * are not "failures" in the sense the operator cares about -- the user was
-# * never there to begin with, or the chat is gone, or we lack permission.
-# * The list is intentionally conservative: only patterns that have been
-# * observed in production logs. Each entry is stored in upper-case; the
-# * matcher in ``is_benign_telegram_error`` upper-cases the Telegram
+# * Substrings inside Telegram refusals that indicate the action had nothing
+# * to do: the user was not in the target chat, the chat no longer exists, or
+# * the target cannot be acted on. These are real Telegram API responses (not
+# * exceptions we should retry), but they are not "failures" in the sense the
+# * operator cares about. The list is intentionally conservative: only
+# * patterns observed in production logs. Each entry is stored in upper-case;
+# * the matcher in ``is_benign_telegram_error`` upper-cases the Telegram
 # * message before substring search.
 _BENIGN_BAD_REQUEST_SUBSTRINGS: tuple[str, ...] = (
     "USER_NOT_PARTICIPANT",  # user was not in the target group
     "USER_ID_INVALID",  # bad user id at protocol level
-    "CHAT_NOT_FOUND",  # group was deleted or bot lost access
+    "CHAT_NOT_FOUND",  # group was deleted
     "PEER_ID_INVALID",  # user or chat id rejected by Telegram
     "USER_NOT_FOUND",  # Telegram does not know the user
     "USER_IS_A_BOT",  # bot users cannot be banned/muted/etc.
     "USER_IS_ANONYMOUS",  # GroupAnonymousBot placeholder
     "PARTICIPANT_ID_INVALID",  # user not a participant of the chat
-    "CHAT_ADMIN_REQUIRED",  # bot was demoted; not a per-user failure
+)
+
+# * Substrings that mean the action did not land and a retry cannot fix it:
+# * the bot lost the rights or the chat, so an operator has to restore access.
+# * These are permanent failures, distinct from a benign no-op and from a
+# * transient timeout. The enforcement ledger records them as failed with no
+# * retry deadline, so they stay visible instead of being counted as applied.
+_PERMANENT_BAD_REQUEST_SUBSTRINGS: tuple[str, ...] = (
+    "CHAT_ADMIN_REQUIRED",  # bot was demoted or lost its admin rights
+    "CHAT_WRITE_FORBIDDEN",  # bot may not write in the chat
+    "NOT_ENOUGH_RIGHTS",  # bot lacks the right the operation needs
+    "BOT_WAS_KICKED",  # bot is no longer a member of the chat
+    "BOT_IS_NOT_A_MEMBER",  # bot was removed from the chat
 )
 
 
@@ -52,10 +62,13 @@ def _normalize(s: str) -> str:
     return "".join(c for c in s if c.isalnum())
 
 
-# * Precomputed once: the matcher below runs per failure, and rebuilding
+# * Precomputed once: the matchers below run per failure, and rebuilding
 # * these strings on every error is pure waste.
 _BENIGN_NORMALIZED: tuple[str, ...] = tuple(
     _normalize(s) for s in _BENIGN_BAD_REQUEST_SUBSTRINGS
+)
+_PERMANENT_NORMALIZED: tuple[str, ...] = tuple(
+    _normalize(s) for s in _PERMANENT_BAD_REQUEST_SUBSTRINGS
 )
 
 
@@ -224,22 +237,35 @@ def throw_if_cancelled(results: Iterable[object]) -> None:
 def is_benign_telegram_error(exc: BaseException) -> bool:
     """Return True if the exception is a known-benign Telegram API refusal.
 
-    A "benign" refusal is one that does not represent a real failure: the
-    user was never in the chat, the bot was demoted, the chat was
-    deleted, or the request was for a bot/anonymous user. These are real
-    Telegram responses (the API call did fail) but they are not
-    "failures" in the moderation sense -- there was nothing for the bot
-    to do in the first place.
+    A "benign" refusal is one where there was nothing to do: the user was
+    never in the chat, the chat was deleted, or the target cannot be acted
+    on. These are real Telegram responses (the API call did fail), but they
+    are not "failures" in the moderation sense.
 
     Matching uses a "normalized" form where non-alphanumeric characters are
     stripped (so the API code ``USER_NOT_PARTICIPANT`` matches the
-    human-readable ``User not participant`` produced by PTB).
+    human-readable ``User not participant`` produced by PTB). A missing
+    permission is not benign; see :func:`is_permanent_telegram_error`.
     """
     if isinstance(exc, BadRequest):
-        # * Normalize: replace any non-alphanumeric character with empty
-        # * string, so "USER_NOT_PARTICIPANT" matches "USER NOT PARTICIPANT".
         normalized = _normalize(str(exc).upper())
         for target in _BENIGN_NORMALIZED:
+            if target in normalized:
+                return True
+    return False
+
+
+def is_permanent_telegram_error(exc: BaseException) -> bool:
+    """Return True when a Telegram refusal cannot succeed on retry.
+
+    The bot lost the rights or the membership the operation needs. The
+    action did not land, and retrying cannot change that, so the caller
+    records a terminal failure instead of scheduling another attempt. An
+    operator has to restore the bot's access before the delivery can work.
+    """
+    if isinstance(exc, (BadRequest, Forbidden)):
+        normalized = _normalize(str(exc).upper())
+        for target in _PERMANENT_NORMALIZED:
             if target in normalized:
                 return True
     return False

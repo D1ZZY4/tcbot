@@ -24,6 +24,7 @@ from tcbot.utils.dispatch import (
     fan_out,
     gather_bounded,
     is_benign_telegram_error,
+    is_permanent_telegram_error,
     throw_if_cancelled,
 )
 from tcbot.utils.logger import get_logger
@@ -270,6 +271,18 @@ async def _record_target(target: dict[str, object], result: object) -> None:
     if result is None:
         await db.enforcement_db.complete_target(
             target_id, status="succeeded", outcome="succeeded"
+        )
+        return
+    if isinstance(result, BaseException) and is_permanent_telegram_error(result):
+        # * A missing right or a lost membership cannot recover on its own.
+        # * The target is terminal so the failure stays visible to an
+        # * operator; retrying it would only repeat the same refusal.
+        await db.enforcement_db.complete_target(
+            target_id,
+            status="failed",
+            outcome="failed",
+            error_kind="permanent",
+            error_detail=str(result),
         )
         return
     if isinstance(result, BaseException) and is_benign_telegram_error(result):

@@ -17,6 +17,7 @@ from tcbot.utils.dispatch import (
     fan_out,
     gather_bounded,
     is_benign_telegram_error,
+    is_permanent_telegram_error,
     summarize_fanout,
 )
 
@@ -24,7 +25,19 @@ from tcbot.utils.dispatch import (
 def test_benign_patterns_recognized() -> None:
     assert is_benign_telegram_error(BadRequest("USER_NOT_PARTICIPANT")) is True
     assert is_benign_telegram_error(BadRequest("CHAT_NOT_FOUND")) is True
-    assert is_benign_telegram_error(BadRequest("CHAT_ADMIN_REQUIRED")) is True
+
+
+def test_missing_admin_rights_is_not_benign() -> None:
+    """A demoted bot did not enforce anything, so it is not a no-op."""
+    assert is_benign_telegram_error(BadRequest("CHAT_ADMIN_REQUIRED")) is False
+    assert is_permanent_telegram_error(BadRequest("CHAT_ADMIN_REQUIRED")) is True
+
+
+def test_a_lost_membership_is_permanent() -> None:
+    assert is_permanent_telegram_error(Forbidden("Bot was kicked from the group chat"))
+    assert is_permanent_telegram_error(BadRequest("CHAT_WRITE_FORBIDDEN"))
+    assert is_permanent_telegram_error(TimedOut("slow")) is False
+    assert is_permanent_telegram_error(BadRequest("USER_NOT_PARTICIPANT")) is False
 
 
 def test_human_readable_refusal_recognized() -> None:

@@ -209,6 +209,21 @@ def test_a_benign_telegram_refusal_is_skipped(
     assert record["completed"][0][1]["status"] == "skipped"
 
 
+def test_a_missing_admin_right_is_a_terminal_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A demoted bot did not apply the action and retrying cannot fix it."""
+    record = _wire(monkeypatch, result=BadRequest("CHAT_ADMIN_REQUIRED"))
+
+    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+
+    outcome = record["completed"][0][1]
+    assert outcome["status"] == "failed"
+    assert outcome["outcome"] == "failed"
+    assert outcome["error_kind"] == "permanent"
+    assert outcome.get("retry_after") is None
+
+
 def test_a_transient_failure_gets_a_bounded_retry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
