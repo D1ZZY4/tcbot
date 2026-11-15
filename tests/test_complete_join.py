@@ -10,6 +10,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from telegram.error import BadRequest
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import connected_flow
@@ -21,6 +22,7 @@ class _FakeBot:
         self.banned: list[int] = []
         self.restricted: list[int] = []
         self.sent: list[tuple[int, str]] = []
+        self.fail_ban: dict[int, BadRequest] = {}
 
     async def get_chat(self, chat_id: int) -> Any:
         return type("C", (), {"username": None})()
@@ -29,6 +31,9 @@ class _FakeBot:
         return []
 
     async def ban_chat_member(self, chat_id: int, user_id: int) -> None:
+        failure = self.fail_ban.get(user_id)
+        if failure is not None:
+            raise failure
         self.banned.append(user_id)
 
     async def restrict_chat_member(self, *args: Any, **kwargs: Any) -> None:
@@ -131,3 +136,33 @@ def test_complete_join_stops_at_the_replay_budget(
     assert blind is True
     assert bot.banned == []
     assert queued == [(-100, [11, 22, 33], 1)]
+
+
+def test_a_failed_replay_is_queued_not_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refused ban did not land, so the connect must keep it as work.
+
+    The replay used to advance past every request in the chunk, which
+    turned a transient Telegram refusal into a member who stayed
+    unrestricted in the new group.
+    """
+    queued = _install_world(monkeypatch, ban_uids=[11, 22])
+    bot = _FakeBot()
+    bot.fail_ban[22] = BadRequest("CHAT_ADMIN_REQUIRED")
+    blind = asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
+    assert blind is True
+    assert bot.banned == [11]
+    assert queued == [(-100, [22], 1)]
+
+
+def test_a_benign_replay_refusal_is_not_queued(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A user who was never in the chat needs no durable retry."""
+    queued = _install_world(monkeypatch, ban_uids=[11])
+    bot = _FakeBot()
+    bot.fail_ban[11] = BadRequest("USER_NOT_PARTICIPANT")
+    blind = asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
+    assert blind is False
+    assert queued == []

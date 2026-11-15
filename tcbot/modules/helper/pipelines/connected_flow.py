@@ -34,6 +34,7 @@ from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
     gather_bounded,
+    is_benign_telegram_error,
     throw_if_cancelled,
 )
 from tcbot.utils.formatter import bold, code
@@ -609,18 +610,27 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
         Returns ``(applied, pending)``. The per-chat Telegram limit admits
         20 requests a minute, so a long list cannot be enforced in one
         pass: the replay stops at *deadline* and returns the users it did
-        not reach, so the caller can queue them as durable work.
+        not reach, so the caller can queue them as durable work. A request
+        that failed for a reason other than a benign no-op is returned as
+        pending too: the enforcement did not land there either.
         """
         pending = list(ban_uids)
         applied = 0
+        failed: list[int] = []
         while pending and monotonic() < deadline:
             chunk = pending[:_REPLAY_ROUND]
             results = await fan_out(
                 [bot.ban_chat_member(chat_id, uid) for uid in chunk]
             )
             applied += len(results) - count_transient_errors(results)
+            failed.extend(
+                uid
+                for uid, result in zip(chunk, results, strict=True)
+                if isinstance(result, BaseException)
+                and not is_benign_telegram_error(result)
+            )
             pending = pending[len(chunk) :]
-        return applied, pending
+        return applied, pending + failed
 
     @staticmethod
     async def _replay_mutes(
@@ -629,11 +639,12 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
         """Fan out every active federation mute into the new group.
 
         Returns ``(applied, pending)``; see :meth:`_replay_bans` for the
-        deadline contract.
+        deadline and failure contract.
         """
         _mute_perms = ChatPermissions(can_send_messages=False)
         pending = list(mute_docs)
         applied = 0
+        failed: list[ActiveMuteDoc] = []
         while pending and monotonic() < deadline:
             chunk = pending[:_REPLAY_ROUND]
             results = await fan_out(
@@ -648,8 +659,14 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
                 ]
             )
             applied += len(results) - count_transient_errors(results)
+            failed.extend(
+                doc
+                for doc, result in zip(chunk, results, strict=True)
+                if isinstance(result, BaseException)
+                and not is_benign_telegram_error(result)
+            )
             pending = pending[len(chunk) :]
-        return applied, pending
+        return applied, pending + failed
 
     async def complete_join(
         self,
