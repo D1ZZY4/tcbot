@@ -114,6 +114,70 @@ def test_the_migrations_match_the_declared_schema(
     )
 
 
+def test_a_database_stopped_before_the_owner_column_upgrades() -> None:
+    """An existing database at revision 0005 must reach head.
+
+    The schema files are current, so revision 0006 applies the current
+    registry seed before revision 0007 adds ``job_owner``. A database that
+    stopped at 0005 therefore failed the boot on the seed. Revision 0006
+    adds the column first; this test drops the column from a migrated
+    schema to reproduce that state and then upgrades to head.
+    """
+    url = configured_database_url()
+    if url is None:
+        pytest.skip(
+            "TCBOT_TEST_DATABASE_URL is not set; skipping the schema migration check."
+        )
+    schema = worker_schema("tcbot_migration_stepwise")
+    create_empty_schema(url, schema)
+    previous_options = os.environ.get("PGOPTIONS")
+    os.environ["PGOPTIONS"] = f"-c search_path={schema}"
+    try:
+        config = Config(str(_ROOT / "alembic.ini"))
+        config.set_main_option("script_location", str(_ROOT / "alembic"))
+        config.set_main_option("sqlalchemy.url", url)
+        command.upgrade(config, "0005_promotion_request_expiry")
+        engine = create_engine(
+            sync_database_url(url),
+            connect_args={"options": f"-c search_path={schema}"},
+        )
+        try:
+            with engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "ALTER TABLE scheduled_jobs DROP COLUMN job_owner CASCADE"
+                )
+        finally:
+            engine.dispose()
+        command.upgrade(config, "head")
+        engine = create_engine(
+            sync_database_url(url),
+            connect_args={"options": f"-c search_path={schema}"},
+        )
+        try:
+            with engine.connect() as connection:
+                columns = {
+                    row[0]
+                    for row in connection.exec_driver_sql(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = %s AND table_name = 'scheduled_jobs'",
+                        (schema,),
+                    )
+                }
+                version = connection.exec_driver_sql(
+                    "SELECT version_num FROM alembic_version"
+                ).scalar()
+        finally:
+            engine.dispose()
+        assert "job_owner" in columns
+        assert version == "0007_scheduled_job_owner"
+    finally:
+        if previous_options is None:
+            os.environ.pop("PGOPTIONS", None)
+        else:
+            os.environ["PGOPTIONS"] = previous_options
+        drop_schema(url, schema)
+
+
 def test_the_migration_creates_every_declared_table(
     migration_schema: str,
 ) -> None:

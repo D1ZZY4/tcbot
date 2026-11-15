@@ -40,6 +40,15 @@ def upgrade() -> None:
         tables=[moderation_notification_tasks],
         checkfirst=True,
     )
+    # ! CRITICAL: the schema files are current, not the schema of this
+    # ! revision. The registry seed already names job_owner, which revision
+    # ! 0007 adds, so an existing database that stops at 0005 would fail
+    # ! here before reaching 0007. Add the column when it is missing; 0007
+    # ! still owns its check constraint and reapplies the schema.
+    op.execute(
+        "ALTER TABLE scheduled_jobs "
+        "ADD COLUMN IF NOT EXISTS job_owner TEXT NOT NULL DEFAULT 'application'"
+    )
     # * The new table is in the policy list and the retention seed, and the
     # * promotion lifecycle guard changed in revision 0005. Reapplying the
     # * schema objects here covers both on an existing database.
