@@ -104,3 +104,46 @@ async def test_a_stale_running_run_returns_to_the_queue(
 
     again = await enforcement_db.claim_runs(limit=1)
     assert [int(str(run["id"])) for run in again] == [run_id]
+
+
+async def test_a_failed_target_is_retried_after_its_deadline(
+    enforcement_db_ready: str,
+) -> None:
+    """A retryable delivery failure reopens its run when the deadline arrives.
+
+    The target trigger refuses in_progress -> pending, so the failure has
+    to be recorded as failed with a due deadline; the run statement then
+    re-queues the closed run and the next tick claims the target again.
+    """
+    now = utc_now()
+    case_id = await seed_case(9, opened_by_user_id=7)
+    await seed_action(
+        "ban",
+        9,
+        actor_user_id=7,
+        case_id=case_id,
+        created_at=now - timedelta(hours=2),
+        expires_at=now - timedelta(hours=1),
+    )
+    await scheduler.expire_due_decisions()
+
+    runs = await enforcement_db.claim_runs(limit=1)
+    run_id = int(str(runs[0]["id"]))
+    targets = await enforcement_db.claim_targets(run_id)
+    target_id = int(str(targets[0]["id"]))
+
+    await enforcement_db.complete_target(
+        target_id,
+        status="failed",
+        outcome="failed",
+        error_kind="TimedOut",
+        error_detail="network down",
+        retry_after=timedelta(seconds=0),
+    )
+
+    await enforcement_db.requeue_stale_runs(timedelta(seconds=0))
+
+    again = await enforcement_db.claim_runs(limit=1)
+    assert [int(str(run["id"])) for run in again] == [run_id]
+    claimed = await enforcement_db.claim_targets(run_id)
+    assert [int(str(target["id"])) for target in claimed] == [target_id]

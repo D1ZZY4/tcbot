@@ -169,9 +169,13 @@ async def _record_target(target: dict[str, object], result: object) -> None:
         return
     detail = str(result)
     retry = attempts < _MAX_ATTEMPTS
+    # * The target trigger only accepts in_progress -> succeeded|skipped|failed.
+    # * A retry is a failed attempt with a due deadline, not a return to
+    # * pending; writing pending here aborts the attempt insert and strands
+    # * the target in_progress, which keeps its run running forever.
     await db.enforcement_db.complete_target(
         target_id,
-        status="pending" if retry else "failed",
+        status="failed",
         outcome="failed",
         error_kind=type(result).__name__ if isinstance(result, BaseException) else None,
         error_detail=detail,

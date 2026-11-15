@@ -118,9 +118,34 @@ def test_a_transient_failure_gets_a_bounded_retry(
     asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
 
     status = record["completed"][0][1]
-    assert status["status"] == "pending"
+    # * A retry is a failed attempt with a due deadline: the target trigger
+    # * refuses in_progress -> pending, which would strand the target.
+    assert status["status"] == "failed"
     assert status["outcome"] == "failed"
     assert status["retry_after"] is not None
+
+
+def test_the_requeue_uses_legal_target_transitions() -> None:
+    """Stale targets are released as failed, never back to pending.
+
+    The target trigger accepts in_progress -> succeeded|skipped|failed
+    only. Writing pending aborts the whole transaction and leaves the
+    target and its run stuck, so the SQL is pinned here.
+    """
+    assert "status = 'failed'" in enforcement_db._REQUEUE_TARGETS.text
+    assert "status = 'pending'" not in enforcement_db._REQUEUE_TARGETS.text
+
+
+def test_a_due_retry_requeues_its_run() -> None:
+    """A run that closed on a retryable failure must reopen when due.
+
+    The target can only be claimed through a running run, so the run
+    statement has to pick up failed targets whose deadline arrived.
+    """
+    sql = enforcement_db._REQUEUE_RUNS.text
+    assert "t.status = 'failed'" in sql
+    assert "t.next_retry_at <= now()" in sql
+    assert "cc.is_active" in sql
 
 
 def test_a_run_for_an_active_action_is_cancelled(

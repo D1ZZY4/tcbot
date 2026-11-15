@@ -40,21 +40,45 @@ _RUN_CLAIM = text(
 
 _REQUEUE_RUNS = text(
     """
-    UPDATE moderation_enforcement_runs
+    UPDATE moderation_enforcement_runs AS r
        SET status = 'queued', updated_at = now()
-     WHERE status = 'running'
-       AND updated_at < now() - make_interval(secs => :stale_seconds)
-    RETURNING id
+     WHERE (
+               r.status = 'running'
+               AND r.updated_at < now() - make_interval(secs => :stale_seconds)
+           )
+        OR (
+               r.status IN ('failed', 'partial', 'completed')
+               AND EXISTS (
+                   SELECT 1
+                     FROM moderation_enforcement_targets AS t
+                     JOIN connected_chats AS cc ON cc.chat_id = t.chat_id
+                    WHERE t.run_id = r.id
+                      AND t.status = 'failed'
+                      AND t.next_retry_at IS NOT NULL
+                      AND t.next_retry_at <= now()
+                      AND cc.is_active
+               )
+           )
+    RETURNING r.id
     """
 )
 
+# * A target of an abandoned run is released as failed with a due retry
+# * deadline, never as pending: the target trigger only accepts
+# * in_progress -> succeeded|skipped|failed. The run is re-queued below, so
+# * the next tick claims the due target through the failed-retry branch.
 _REQUEUE_TARGETS = text(
     """
     UPDATE moderation_enforcement_targets AS t
-       SET status = 'pending', updated_at = now()
+       SET status = 'failed',
+           next_retry_at = now(),
+           last_error_kind = 'worker_timeout',
+           last_error_detail = 'Target stayed in progress past the stale-run window and was released for retry',
+           updated_at = now()
       FROM moderation_enforcement_runs AS r
      WHERE t.run_id = r.id
-       AND r.status = 'queued'
+       AND r.status = 'running'
+       AND r.updated_at < now() - make_interval(secs => :stale_seconds)
        AND t.status = 'in_progress'
     """
 )
@@ -166,13 +190,19 @@ async def claim_runs(limit: int = 10) -> list[dict[str, object]]:
 
 
 async def requeue_stale_runs(stale_after: timedelta = timedelta(minutes=30)) -> None:
-    """Return runs abandoned by a crashed worker to the queue."""
+    """Return abandoned runs and their in-flight targets to the queue.
+
+    The target release runs first: it moves a stranded ``in_progress``
+    target to ``failed`` with a due retry deadline (the only transition the
+    target trigger accepts), and the run refresh trigger may then close the
+    run. The run statement re-queues both the stale runs and any run that
+    holds a due retry, so the next tick claims the target again.
+    """
 
     async def _work(sess: AsyncSession) -> None:
-        await sess.execute(
-            _REQUEUE_RUNS, {"stale_seconds": int(stale_after.total_seconds())}
-        )
-        await sess.execute(_REQUEUE_TARGETS)
+        params = {"stale_seconds": int(stale_after.total_seconds())}
+        await sess.execute(_REQUEUE_TARGETS, params)
+        await sess.execute(_REQUEUE_RUNS, params)
 
     await run_transaction(_work)
 
