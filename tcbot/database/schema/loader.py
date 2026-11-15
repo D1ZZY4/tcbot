@@ -67,11 +67,15 @@ def split_statements(sql: str) -> list[str]:
             index = length if end == -1 else end
             continue
         if char == "/" and sql.startswith("/*", index):
-            end = sql.find("*/", index + 2)
-            index = length if end == -1 else end + 2
+            index = _end_of_block_comment(sql, index)
             continue
         if char == "'":
-            index = _end_of_quoted(sql, index, "'")
+            index = _end_of_quoted(
+                sql,
+                index,
+                "'",
+                backslash_escapes=_is_escape_string(sql, index),
+            )
             continue
         if char == '"':
             index = _end_of_quoted(sql, index, '"')
@@ -95,20 +99,58 @@ def split_statements(sql: str) -> list[str]:
     return statements
 
 
-def _end_of_quoted(sql: str, start: int, quote: str) -> int:
+def _end_of_quoted(
+    sql: str, start: int, quote: str, *, backslash_escapes: bool = False
+) -> int:
     """Return the index just after the quoted region that starts at *start*.
 
     A doubled quote is the escape of a quote inside the region, so the
-    region ends at the quote that is not doubled.
+    region ends at the quote that is not doubled. An ``E'...'`` string
+    additionally treats a backslash as escaping the next character.
     """
     index = start + 1
     length = len(sql)
     while index < length:
+        if backslash_escapes and sql[index] == "\\":
+            index += 2
+            continue
         if sql[index] == quote:
             if index + 1 < length and sql[index + 1] == quote:
                 index += 2
                 continue
             return index + 1
+        index += 1
+    return length
+
+
+def _is_escape_string(sql: str, quote_index: int) -> bool:
+    """Return True when the quote at *quote_index* opens an ``E'...'`` string."""
+    if quote_index == 0 or sql[quote_index - 1] not in "eE":
+        return False
+    before = sql[quote_index - 2] if quote_index >= 2 else ""
+    return not (before.isalnum() or before in "_$")
+
+
+def _end_of_block_comment(sql: str, start: int) -> int:
+    """Return the index just after the block comment that starts at *start*.
+
+    PostgreSQL block comments nest, so the first ``*/`` does not
+    necessarily close the comment that started the scan.
+    """
+    depth = 0
+    index = start
+    length = len(sql)
+    while index < length:
+        if sql.startswith("/*", index):
+            depth += 1
+            index += 2
+            continue
+        if sql.startswith("*/", index):
+            depth -= 1
+            index += 2
+            if depth == 0:
+                return index
+            continue
         index += 1
     return length
 
