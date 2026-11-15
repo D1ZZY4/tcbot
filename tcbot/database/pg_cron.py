@@ -5,8 +5,9 @@
 """Optional pg_cron ownership of the pure-database maintenance jobs.
 
 pg_cron runs inside PostgreSQL, so the expiry and role-assignment sweeps
-keep running when no bot process is alive. The feature is opt-in because
-the extension is not available on every hosted PostgreSQL plan. When it is
+keep running when no bot process is alive, and the scheduler-drift audit
+runs where it can read ``cron.job``. The feature is opt-in because the
+extension is not available on every hosted PostgreSQL plan. When it is
 disabled or unavailable the caller keeps the APScheduler schedules.
 """
 
@@ -31,11 +32,13 @@ log = get_logger(__name__)
 _MODERATION_EXPIRE_JOB: str = "moderation.expire"
 _ROLE_EXPIRE_JOB: str = "role.expire"
 _ENFORCEMENT_RECONCILE_JOB: str = "enforcement.reconcile"
+_SCHEDULER_DRIFT_JOB: str = "scheduler.drift"
 
 # * The CRON expressions come from the registry seed.
 _MODERATION_EXPIRE_SCHEDULE: str = "*/5 * * * *"
 _ROLE_EXPIRE_SCHEDULE: str = "*/10 * * * *"
 _ENFORCEMENT_RECONCILE_SCHEDULE: str = "*/5 * * * *"
+_SCHEDULER_DRIFT_SCHEDULE: str = "*/15 * * * *"
 
 
 def _qualified(function_name: str) -> str:
@@ -60,6 +63,11 @@ def _jobs() -> tuple[tuple[str, str, str], ...]:
             _ENFORCEMENT_RECONCILE_JOB,
             _ENFORCEMENT_RECONCILE_SCHEDULE,
             f"SELECT {_qualified('reconcile_stuck_enforcement_targets')}();",
+        ),
+        (
+            _SCHEDULER_DRIFT_JOB,
+            _SCHEDULER_DRIFT_SCHEDULE,
+            f"SELECT {_qualified('run_scheduled_job')}('scheduler.drift');",
         ),
     )
 

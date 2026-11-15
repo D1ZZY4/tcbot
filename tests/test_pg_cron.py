@@ -67,10 +67,12 @@ def test_every_registry_job_is_registered(monkeypatch: pytest.MonkeyPatch) -> No
         "moderation.expire",
         "role.expire",
         "enforcement.reconcile",
+        "scheduler.drift",
     ]
     assert "expire_due_moderation_actions_and_queue_revokes" in scheduled[0][2]
     assert "expire_due_role_assignments_and_audit" in scheduled[1][2]
     assert "reconcile_stuck_enforcement_targets" in scheduled[2][2]
+    assert "run_scheduled_job" in scheduled[3][2]
     assert all('"public".' in job[2] for job in scheduled)
 
 

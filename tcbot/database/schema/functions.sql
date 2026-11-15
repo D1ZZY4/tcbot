@@ -3085,6 +3085,7 @@ BEGIN
                c.command AS cron_command
         FROM %SCHEMA%.scheduled_jobs AS j
         LEFT JOIN cron.job AS c ON c.jobname = j.job_key
+        WHERE j.job_owner = 'pg_cron'
         UNION ALL
         SELECT c.jobname AS job_key,
                false AS in_registry,

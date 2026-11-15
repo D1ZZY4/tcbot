@@ -34,6 +34,10 @@ scheduled_jobs = Table(
     Column("job_key", Text, nullable=False),
     Column("job_kind", Text, nullable=False, server_default="maintenance"),
     Column("description", Text, nullable=True),
+    # * Who is expected to fire the job. ``pg_cron`` rows are compared with
+    # * ``cron.job`` by the drift report; ``application`` rows are owned by
+    # * the bot and must not be reported as missing from pg_cron.
+    Column("job_owner", Text, nullable=False, server_default="application"),
     Column("schedule_spec", Text, nullable=False),
     Column("is_enabled", Boolean, nullable=False, server_default=text("true")),
     Column("timeout_seconds", Integer, nullable=False, server_default="60"),
@@ -59,6 +63,7 @@ scheduled_jobs = Table(
     ),
     CheckConstraint("job_key ~ '^[a-z0-9][a-z0-9._-]*$'", name="ck_scheduled_jobs_key"),
     enum_check("ck_scheduled_jobs_kind", "job_kind", "maintenance", "dispatch"),
+    enum_check("ck_scheduled_jobs_owner", "job_owner", "application", "pg_cron"),
     CheckConstraint("btrim(schedule_spec) <> ''", name="ck_scheduled_jobs_schedule"),
     CheckConstraint("timeout_seconds > 0", name="ck_scheduled_jobs_timeout"),
     enum_check(
