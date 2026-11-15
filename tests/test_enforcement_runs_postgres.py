@@ -70,7 +70,13 @@ async def test_unban_revokes_and_queues_the_delivery(run_db: str) -> None:
     )
     await bans_db.submit_appeal("liferun0001", 42, "please", 900)
 
-    revoked, run_id = await bans_db.revoke_ban_and_queue_unban(42, 8, [-1001])
+    revoked, run_id = await bans_db.revoke_ban_and_queue_unban(
+        42,
+        8,
+        [-1001],
+        review_chat_id=-1001,
+        review_message_id=900,
+    )
 
     assert revoked == 1
     assert run_id is not None
@@ -100,6 +106,19 @@ async def test_unban_revokes_and_queues_the_delivery(run_db: str) -> None:
         ).where(moderation_enforcement_targets.c.run_id == run_id)
     )
     assert target == {"chat_id": -1001, "status": "pending"}
+    card = await engine_module.fetch_one(
+        select(
+            moderation_notification_tasks.c.chat_id,
+            moderation_notification_tasks.c.message_id,
+            moderation_notification_tasks.c.state,
+        ).where(
+            moderation_notification_tasks.c.action_id
+            == select(moderation_actions.c.id)
+            .where(moderation_actions.c.external_ref == "liferun0001")
+            .scalar_subquery()
+        )
+    )
+    assert card == {"chat_id": -1001, "message_id": 900, "state": "pending"}
 
     claimed = await enforcement_db.claim_run(run_id)
     assert claimed is not None

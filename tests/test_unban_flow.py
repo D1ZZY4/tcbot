@@ -90,7 +90,10 @@ def _install(
         return selected_groups
 
     async def _revoke(
-        user_id: int, requested_by: int | None, chat_ids: list[int]
+        user_id: int,
+        requested_by: int | None,
+        chat_ids: list[int],
+        **kwargs: Any,
     ) -> Any:
         calls["deactivate"].append("x")
         if isinstance(deactivate, BaseException):

@@ -131,6 +131,8 @@ async def execute_unban(
             target_id,
             admin.id if admin is not None else None,
             chat_ids,
+            review_chat_id=cfg.main_group or None,
+            review_message_id=int(ban.get("review_message_id") or 0) or None,
         )
     except asyncio.CancelledError:
         # ! CRITICAL: a cancelled revocation must propagate instead of being
@@ -169,16 +171,8 @@ async def execute_unban(
             )
         return
 
-    # * The review card is outside the unban transaction, so its edit gets
-    # * a durable retry. A failed Telegram edit must not leave a live card
-    # * over a decision that is already revoked.
-    review_id = int(ban.get("review_message_id") or 0)
-    action_id = int(ban.get("id") or 0)
-    if review_id and action_id and cfg.main_group:
-        await db.notifications_db.enqueue_review_card_edit(
-            action_id, cfg.main_group, review_id
-        )
-
+    # * The card edit was queued inside the revocation transaction, so a
+    # * crash after the commit still closes the card through the worker.
     # * Deliver now on the fast path. A claim failure means the scheduled
     # * worker already owns the run, so the summary reports it as queued.
     try:

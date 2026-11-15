@@ -14,6 +14,10 @@ against it in ``moderation_appeals``.
 from __future__ import annotations
 
 from ._compose import compose_row, compose_rows
+from ._lifecycle import (
+    approve_appeal_and_queue_unban,
+    revoke_ban_and_queue_unban,
+)
 from ._queries import (
     action_by_ref,
     active_ban_count,
@@ -30,7 +34,6 @@ from ._queries import (
 from ._shared import CONSTRAINT_ACTIVE_USER, CONSTRAINT_EXTERNAL_REF
 from ._writes import (
     accept_appeal,
-    approve_appeal_and_queue_unban,
     claim_appeal_decision,
     clear_review,
     create_ban,
@@ -38,7 +41,6 @@ from ._writes import (
     make_ban_id,
     release_stale_review,
     restore_review,
-    revoke_ban_and_queue_unban,
     set_appeal_log_msg,
     set_log_message_id,
     set_rejected_by,
