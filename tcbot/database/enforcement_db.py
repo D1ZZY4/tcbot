@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -476,6 +477,78 @@ def landed_report_chat_ids(report: dict[str, object] | None) -> list[int]:
         if isinstance(chat_id, int):
             landed.append(chat_id)
     return landed
+
+
+def report_landed_count(report: dict[str, object] | None) -> int:
+    """Return the targets Telegram accepted or had nothing to do for."""
+    return report_count(report, "succeeded_count") + report_count(
+        report, "skipped_count"
+    )
+
+
+@dataclass(frozen=True)
+class DeliveryOutcome:
+    """The per-group delivery counts of one enforcement run."""
+
+    total: int
+    applied: int
+    failed: int
+    pending: int
+
+
+def delivery_outcome(
+    report: dict[str, object] | None, fallback_total: int = 0
+) -> DeliveryOutcome:
+    """Summarise a run from its targets, falling back to its counters.
+
+    The target rows are the authoritative per-group results, so they win
+    when present. The run counters and the caller's group count are only a
+    fallback for a report that could not be read: the answer then reports
+    every group as pending instead of claiming a delivery nobody observed.
+    """
+    targets = report_targets(report)
+    if targets:
+        statuses = [str(target.get("status") or "") for target in targets]
+        return DeliveryOutcome(
+            total=len(statuses),
+            applied=sum(status in ("succeeded", "skipped") for status in statuses),
+            failed=sum(status == "failed" for status in statuses),
+            pending=sum(status in ("pending", "in_progress") for status in statuses),
+        )
+    total = report_count(report, "target_count") or fallback_total
+    applied = report_landed_count(report)
+    failed = report_count(report, "failed_count")
+    return DeliveryOutcome(
+        total=total,
+        applied=applied,
+        failed=failed,
+        pending=max(0, total - applied - failed),
+    )
+
+
+def report_settled(report: dict[str, object] | None) -> bool:
+    """Return True when a run reached a terminal delivery status.
+
+    ``failed`` and ``partial`` are terminal for the current attempt: a
+    target that still has a retry deadline reopens the run as ``queued``
+    through the requeue pass, so those two states only describe a run with
+    no in-flight target. A report without a run status is settled only when
+    every target row it carries is terminal.
+    """
+    if report is None:
+        return False
+    if str(report.get("status") or "") in (
+        "completed",
+        "partial",
+        "failed",
+        "cancelled",
+    ):
+        return True
+    targets = report_targets(report)
+    return bool(targets) and all(
+        str(target.get("status") or "") in ("succeeded", "skipped", "failed")
+        for target in targets
+    )
 
 
 async def requeue_stale_runs(stale_after: timedelta = timedelta(minutes=30)) -> None:

@@ -202,15 +202,42 @@ def applied_summary(
     total: int,
     failed: int,
     transient: Sequence[tuple[dict, BaseException]],
+    pending: int = 0,
 ) -> str:
     """Build the fan-out applied-to line shared by ban and warn threshold ban.
 
     Renders the ``.empty`` / ``.none`` / ``.partial`` / ``.full`` templates
     under ``key_prefix`` with a sample of the failing groups so operators
-    can name the missed chats.
+    can name the missed chats. A run with deliveries still in flight renders
+    ``.progress`` or ``.progress_clean``: the line never counts a pending
+    group as applied, because the ledger has not seen the result yet.
     """
     if total == 0:
         return t(f"{key_prefix}.empty", locale)
+    if pending > 0:
+        done = max(0, total - failed - pending)
+        if failed:
+            sample = ", ".join(
+                grp.get("title") or str(grp.get("chat_id", "?"))
+                for grp, _ in transient[:3]
+            )
+            return t(
+                f"{key_prefix}.progress",
+                locale,
+                done=done,
+                total=total,
+                failed=failed,
+                pending=pending,
+                sample=sample,
+                more=")" if len(transient) <= 3 else " ...)",
+            )
+        return t(
+            f"{key_prefix}.progress_clean",
+            locale,
+            done=done,
+            total=total,
+            pending=pending,
+        )
     if failed == total:
         sample = ", ".join(
             grp.get("title") or str(grp.get("chat_id", "?")) for grp, _ in transient[:5]

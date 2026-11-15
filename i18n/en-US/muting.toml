@@ -68,6 +68,7 @@ full = "Restored in {total}/{total} groups."
 [summary]
 body = "{user} has been muted {dur}.\nReason: {reason}\nApplied to {done}/{total} groups.{note}"
 partial = "\nWARNING: the mute did not land in {failed} group(s): {sample}{more}. The record is kept so the restriction can be retried."
+pending = "\n{pending} group(s) are still awaiting delivery and are retried automatically."
 
 [unmute]
 body = "{user} has been unmuted.\n{applied}"

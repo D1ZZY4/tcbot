@@ -312,6 +312,7 @@ async def execute_warn(
                 raise
             except Exception:
                 log.exception("Warn threshold set_log_message_id failed")
+        pending = 0
         if ban_run_id is not None:
             try:
                 await enforcement_worker.deliver_queued_run(ctx.bot, ban_run_id)
@@ -330,13 +331,11 @@ async def execute_warn(
                 log.exception("Warn threshold run report failed for %s", ban_run_id)
                 report = None
             failed_targets = db.enforcement_db.failed_report_targets(report)
-            total_groups = db.enforcement_db.report_count(
-                report, "target_count", len(groups)
-            )
-            failed_count = db.enforcement_db.report_count(
-                report, "failed_count", len(failed_targets)
-            )
-            applied = max(0, total_groups - failed_count)
+            delivery = db.enforcement_db.delivery_outcome(report, len(groups))
+            total_groups = delivery.total
+            applied = delivery.applied
+            failed_count = delivery.failed
+            pending = delivery.pending
             landed_chat_ids = db.enforcement_db.landed_report_chat_ids(report)
             transient = [
                 (
@@ -361,19 +360,24 @@ async def execute_warn(
                 for grp, result in zip(groups, ban_results, strict=True)
                 if not isinstance(result, BaseException)
             ]
-        any_ban_ok = applied > 0
+        # * The decision is recorded once the ban row exists. A delivery
+        # * that is still pending is not a creation failure and must not
+        # * be reported as one.
+        any_ban_ok = bool(ban_id) or applied > 0 or pending > 0
         log.info(
-            "Warn threshold ban enforced (%s): target=%d applied=%d/%d",
+            "Warn threshold ban enforced (%s): target=%d applied=%d/%d pending=%d",
             threshold_trigger,
             target_id,
             applied,
             total_groups,
+            pending,
         )
         applied_line = replies.applied_summary(
             locale,
             "warnings.autoban",
             total=total_groups,
             failed=failed_count,
+            pending=pending,
             transient=transient,
         )
         if groups_fetch_failed:

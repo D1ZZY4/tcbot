@@ -189,20 +189,12 @@ async def execute_unban(
     except Exception:
         log.exception("Unban run report failed for run %s", run_id)
         report = None
-    targets = db.enforcement_db.report_targets(report)
-    settled = bool(targets) and all(
-        str(target.get("status")) in ("succeeded", "skipped", "failed")
-        for target in targets
-    )
+    settled = db.enforcement_db.report_settled(report)
     failed_targets = db.enforcement_db.failed_report_targets(report)
-    total = (
-        db.enforcement_db.report_count(report, "target_count")
-        or len(targets)
-        or len(groups)
-    )
-    failed = db.enforcement_db.report_count(report, "failed_count") or len(
-        failed_targets
-    )
+    delivery = db.enforcement_db.delivery_outcome(report, len(groups))
+    total = delivery.total
+    failed = delivery.failed
+    landed = delivery.applied
     if not settled:
         unban_note = t(
             "unbanning.note.queued",
@@ -217,7 +209,7 @@ async def execute_unban(
         unban_note = t(
             "unbanning.note.partial",
             locale,
-            done=max(0, total - failed),
+            done=landed,
             total=total,
             sample=sample,
             more=" ..." if len(failed_targets) > 5 else "",

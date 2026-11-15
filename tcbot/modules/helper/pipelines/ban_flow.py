@@ -562,6 +562,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     applied = 0
     total = len(groups)
     failed = 0
+    pending = 0
     transient: list[tuple[dict[str, Any], BaseException]] = []
     if enforcement_run_id is not None:
         try:
@@ -580,11 +581,11 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             log.exception("Ban run report failed for run %s", enforcement_run_id)
             report = None
         failed_targets = db.enforcement_db.failed_report_targets(report)
-        total = db.enforcement_db.report_count(report, "target_count", len(groups))
-        failed = db.enforcement_db.report_count(
-            report, "failed_count", len(failed_targets)
-        )
-        applied = max(0, total - failed)
+        delivery = db.enforcement_db.delivery_outcome(report, len(groups))
+        total = delivery.total
+        applied = delivery.applied
+        failed = delivery.failed
+        pending = delivery.pending
         transient = [
             (
                 {
@@ -612,9 +613,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                 enforcement_run_id,
             )
     else:
-        # * Legacy callers that did not queue a run still get the direct
-        # * fan-out, so a database helper used outside the command path
-        # * keeps its previous behaviour.
+        # * Legacy callers without a queued run keep the direct fan-out.
         results = await fan_out(
             [bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]
         )
@@ -624,16 +623,18 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         failed = outcome.failed
         transient = list(outcome.transient)
     log.info(
-        "Ban enforced: target=%d applied=%d/%d",
+        "Ban enforced: target=%d applied=%d/%d pending=%d",
         target_id,
         applied,
         total,
+        pending,
     )
     applied_line = replies.applied_summary(
         locale,
         "banning.applied",
         total=total,
         failed=failed,
+        pending=pending,
         transient=transient,
     )
     if groups_fetch_failed:

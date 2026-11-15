@@ -194,6 +194,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     applied = 0
     total = len(groups)
     failed = 0
+    pending = 0
     failed_targets: list[dict[str, Any]] = []
     if run_id is not None:
         try:
@@ -210,11 +211,11 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             log.exception("Mute run report failed for run %s", run_id)
             report = None
         failed_targets = db.enforcement_db.failed_report_targets(report)
-        total = db.enforcement_db.report_count(report, "target_count", len(groups))
-        failed = db.enforcement_db.report_count(
-            report, "failed_count", len(failed_targets)
-        )
-        applied = max(0, total - failed)
+        delivery = db.enforcement_db.delivery_outcome(report, len(groups))
+        total = delivery.total
+        applied = delivery.applied
+        failed = delivery.failed
+        pending = delivery.pending
         for group in failed_targets:
             log.warning(
                 "Mute enforcement left user=%d restricted nowhere in group=%s (%d)",
@@ -240,22 +241,25 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         failed_targets = [grp for grp, _exc in outcome.transient]
     proof_link: str | None = proof_upload.link if proof_upload else None
     proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
-    note = (
-        t(
-            "muting.summary.partial",
-            locale,
-            done=applied,
-            total=total,
-            failed=failed,
-            sample=", ".join(
-                str(grp.get("title") or grp.get("chat_id", 0))
-                for grp in failed_targets[:5]
-            ),
-            more=" ..." if failed > 5 else "",
+    notes: list[str] = []
+    if failed:
+        notes.append(
+            t(
+                "muting.summary.partial",
+                locale,
+                done=applied,
+                total=total,
+                failed=failed,
+                sample=", ".join(
+                    str(grp.get("title") or grp.get("chat_id", 0))
+                    for grp in failed_targets[:5]
+                ),
+                more=" ..." if failed > 5 else "",
+            )
         )
-        if failed
-        else ""
-    )
+    if pending:
+        notes.append(t("muting.summary.pending", locale, pending=pending))
+    note = "".join(notes)
     summary = t(
         "muting.summary.body",
         locale,
@@ -411,26 +415,19 @@ async def execute_unmute(
     except Exception:
         log.exception("Unmute run report failed for run %s", run_id)
         report = None
-    targets = db.enforcement_db.report_targets(report)
-    settled = bool(targets) and all(
-        str(target.get("status")) in ("succeeded", "skipped", "failed")
-        for target in targets
-    )
+    settled = db.enforcement_db.report_settled(report)
     failed_targets = db.enforcement_db.failed_report_targets(report)
-    total = (
-        db.enforcement_db.report_count(report, "target_count")
-        or len(targets)
-        or len(groups)
-    )
-    failed = db.enforcement_db.report_count(report, "failed_count") or len(
-        failed_targets
-    )
+    delivery = db.enforcement_db.delivery_outcome(report, len(groups))
+    total = delivery.total
+    failed = delivery.failed
+    pending = delivery.pending
     transient = [(target, RuntimeError("delivery failed")) for target in failed_targets]
     applied_line = replies.applied_summary(
         locale,
         "muting.applied",
         total=total,
         failed=failed,
+        pending=pending,
         transient=transient,
     )
     if report is None:

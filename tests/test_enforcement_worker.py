@@ -339,6 +339,39 @@ def test_a_due_retry_requeues_its_run() -> None:
     assert "cc.is_active" in sql
 
 
+def test_a_delivery_outcome_keeps_pending_groups_out_of_applied() -> None:
+    """The target rows decide the result, not the failure subtraction."""
+    report = {
+        "status": "running",
+        "targets": [
+            {"status": "succeeded"},
+            {"status": "failed"},
+            {"status": "in_progress"},
+        ],
+    }
+
+    outcome = enforcement_db.delivery_outcome(report, 9)
+
+    assert (outcome.total, outcome.applied, outcome.failed, outcome.pending) == (
+        3,
+        1,
+        1,
+        1,
+    )
+    assert enforcement_db.report_settled(report) is False
+
+
+def test_an_unreadable_report_is_not_a_successful_delivery() -> None:
+    outcome = enforcement_db.delivery_outcome(None, 4)
+
+    assert (outcome.total, outcome.applied, outcome.failed, outcome.pending) == (
+        4,
+        0,
+        0,
+        4,
+    )
+
+
 def test_a_kick_repair_run_lifts_the_second_step(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

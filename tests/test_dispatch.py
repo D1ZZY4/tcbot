@@ -12,6 +12,7 @@ import logging
 import pytest
 from telegram.error import BadRequest, Forbidden, TimedOut
 
+from tcbot.modules.helper.messages.replies import applied_summary
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
@@ -38,6 +39,21 @@ def test_a_lost_membership_is_permanent() -> None:
     assert is_permanent_telegram_error(BadRequest("CHAT_WRITE_FORBIDDEN"))
     assert is_permanent_telegram_error(TimedOut("slow")) is False
     assert is_permanent_telegram_error(BadRequest("USER_NOT_PARTICIPANT")) is False
+
+
+def test_applied_summary_does_not_count_a_pending_group_as_done() -> None:
+    """A run that has not answered yet is reported as progress, not success."""
+    line = applied_summary(
+        "en-US",
+        "banning.applied",
+        total=2,
+        failed=0,
+        pending=1,
+        transient=(),
+    )
+
+    assert "1/2" in line
+    assert "awaiting delivery" in line
 
 
 def test_human_readable_refusal_recognized() -> None:

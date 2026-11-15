@@ -68,6 +68,7 @@ full = "Dipulihkan di {total}/{total} grup."
 [summary]
 body = "{user} telah di-mute {dur}.\nAlasan: {reason}\nDiterapkan ke {done}/{total} grup.{note}"
 partial = "\nPERINGATAN: mute tidak diterapkan di {failed} grup: {sample}{more}. Catatan mute tetap disimpan agar pembatasan bisa dicoba ulang."
+pending = "\n{pending} grup masih menunggu pengiriman dan dicoba ulang otomatis."
 
 [unmute]
 body = "{user} telah di-unmute.\n{applied}"
