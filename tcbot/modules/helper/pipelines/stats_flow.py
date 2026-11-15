@@ -261,7 +261,7 @@ class OverviewViews:
                     ]
                 )
                 throw_if_cancelled(resolved)
-                for uid, result in zip(missing, resolved, strict=False):
+                for uid, result in zip(missing, resolved, strict=True):
                     if isinstance(result, BaseException):
                         log.debug(
                             "staff roster live identity failed for %d: %s",

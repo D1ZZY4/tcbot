@@ -153,7 +153,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     failed = count_transient_errors(results)
     success = len(results) - failed
 
-    for grp, r in zip(groups, results, strict=False):
+    for grp, r in zip(groups, results, strict=True):
         if isinstance(r, BaseException):
             log.warning("Broadcast failed for %d: %s", grp.get("chat_id", "?"), r)
 

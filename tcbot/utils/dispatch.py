@@ -271,7 +271,7 @@ def failed_groups(
     """
     return [
         (grp, r)
-        for grp, r in zip(groups, results, strict=False)
+        for grp, r in zip(groups, results, strict=True)
         if isinstance(r, BaseException)
     ]
 

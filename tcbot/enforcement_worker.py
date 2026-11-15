@@ -178,7 +178,7 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
 
     updates = [
         _record_target(target, result)
-        for target, result in zip(targets, results, strict=False)
+        for target, result in zip(targets, results, strict=True)
     ]
     settled = await gather_bounded(updates, max_concurrent=10)
     for result in settled:

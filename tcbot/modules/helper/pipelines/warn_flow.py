@@ -358,7 +358,7 @@ async def execute_warn(
             transient = list(outcome.transient)
             landed_chat_ids = [
                 int(grp["chat_id"])
-                for grp, result in zip(groups, ban_results, strict=False)
+                for grp, result in zip(groups, ban_results, strict=True)
                 if not isinstance(result, BaseException)
             ]
         any_ban_ok = applied > 0

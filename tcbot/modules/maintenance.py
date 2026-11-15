@@ -313,7 +313,7 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * Semaphore-bounded to respect Telegram rate limits on large federations.
     checks = await fan_out([_should_remove(ctx.bot, g) for g in groups])
 
-    to_remove = [g for g, remove in zip(groups, checks, strict=False) if remove is True]
+    to_remove = [g for g, remove in zip(groups, checks, strict=True) if remove is True]
 
     if to_remove:
         # * Pure database writes: bounded gather, not fan_out. fan_out wraps
@@ -322,7 +322,7 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             [db.groups_db.deactivate_group(g.get("chat_id", 0)) for g in to_remove]
         )
         deactivated = sum(1 for r in deact_results if r is True)
-        for grp, result in zip(to_remove, deact_results, strict=False):
+        for grp, result in zip(to_remove, deact_results, strict=True):
             if isinstance(result, BaseException):
                 log.error(
                     "cleanup deactivate failed for chat=%s: %s",
