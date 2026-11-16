@@ -160,7 +160,7 @@ The composed `BanDoc` exposes the fields the flow reads:
 |---|---|
 | `ban_id` | Deep-link and callback identifier (`moderation_actions.external_ref`). |
 | `target_user_id` | Confirms the appeal belongs to the current user. |
-| `is_active` | Blocks appeals for revoked, superseded, expired, or missing decisions. |
+| `is_active` | Blocks appeals for revoked, superseded, expired, or missing decisions. The deadline is applied at read time, so a timed ban that has passed its deadline is inactive even before the daily sweep moves the stored status. |
 | `log_message_id` | Validates that the user referenced the correct ban log (`moderation_messages`, kind `log`). |
 | `review_message_id` / `review_timestamp` | The review slot stored in the decision metadata; blocks duplicate appeals and starts the 12-hour original-admin priority window. |
 | `appeal_log_msg_id` | Lets the bot edit the submitted-appeal log after approval or rejection (`moderation_messages`, kind `appeal_log`). |

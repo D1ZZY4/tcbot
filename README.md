@@ -17,7 +17,7 @@ uv sync --frozen
 uv run python -m tcbot
 ```
 
-Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `API_ID`, and `API_HASH` in `config.env` before running. Never commit that file. The full variable list is in [`config.env.example`](config.env.example) and [`docs/getting-started/setup.md`](docs/getting-started/setup.md).
+Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `PROOFS`, `API_ID`, and `API_HASH` in `config.env` before running. A ban needs a destination for its evidence, so boot refuses without `PROOFS`. Never commit that file. The full variable list is in [`config.env.example`](config.env.example) and [`docs/getting-started/setup.md`](docs/getting-started/setup.md).
 
 ## What It Does
 
@@ -61,7 +61,7 @@ Only six values are required. Everything else has a working default.
 | `BOT_TOKEN` | Yes | Bot token from BotFather. |
 | `OWNER_ID` | Yes | Telegram user ID seeded as the initial Founder. |
 | `DATABASE_URL` | Yes | PostgreSQL connection string. The bot applies its schema migrations at startup. |
-| `PROOFS` | Yes | Ban proof media destination; boot refuses without a valid chat ID. |
+| `PROOFS` | Yes | Ban proof media destination; boot refuses without a negative group or channel chat ID. |
 | `API_ID` | Yes | Telegram API ID for MTProto identity lookups; boot refuses without it. |
 | `API_HASH` | Yes | Telegram API hash matching `API_ID`; boot refuses without it. |
 
@@ -98,7 +98,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 
 | Variable | Required | Description |
 |---|---|---|
-| `PROOFS` | Yes | Ban proof media destination; boot refuses without a valid chat ID. |
+| `PROOFS` | Yes | Ban proof media destination; boot refuses without a negative group or channel chat ID. |
 | `LOGS` | Yes | Audit-log destination for bans, unbans, appeals, and admin actions. |
 | `LOGS_ERRORS` | Recommended | Error-report destination; when empty, reports fall back to the owner DM instead of being dropped. |
 | `APPEALS` | For appeals | Submitted-appeal record destination (channel, group, or forum thread as `chat_id` or `chat_id/thread_id`; also receives a copy of every review card). |
@@ -116,6 +116,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | Variable | Default | Description |
 |---|---|---|
 | `ALBUM_DEBOUNCE_SECONDS` | `4` | Proof silence window before the ban executor runs (or tap Done to run at once). |
+| `PROMOTION_REQUEST_TTL_DAYS` | `7` | Days a pending Admin promotion request stays open before it is marked expired; `0` disables expiry. |
 | `REDIS_URL` | empty (L1 only) | Optional Redis URL for the shared L2 cache. Without it the bot uses the in-process cache. |
 | `DB_POOL_SIZE` | `5` | PostgreSQL connection pool size. Keep the total with `DB_MAX_OVERFLOW` within the connection limit the database grants. |
 | `DB_MAX_OVERFLOW` | `5` | Extra connections the pool may open under load. |

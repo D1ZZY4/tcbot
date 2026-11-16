@@ -76,7 +76,6 @@ await Promote.execute(
     admin_fname,
     target_id,
     target_fname,
-    current_role,
     role,
 )  # tuple[ok, reply_text]
 await Promote.request_admin(
@@ -87,7 +86,7 @@ await Promote.request_admin(
 | Member | Purpose |
 |---|---|
 | `Promote.available_roles_for(executor_role)` | Returns the roles an executor with `executor_role` can assign. |
-| `Promote.execute(...)` | Full role-assignment flow used by `/tcpromote` (command + inline button). Re-reads the executor role fresh at the mutation point, so a demotion or ownership transfer during target classification cannot still grant rank. Routes to `assign_admin`, `assign_subrole`, or `request_admin` depending on requested role and executor role. A target with an active ban is refused before any role is written. |
+| `Promote.execute(...)` | Full role-assignment flow used by `/tcpromote` (command + inline button). Re-reads both roles fresh at the mutation point, so a demotion or ownership transfer of the executor, or a promotion or demotion of the target, during target classification cannot still decide the grant on a stale rank. Routes to `assign_admin`, `assign_subrole`, or `request_admin` depending on requested role and executor role. A target with an active ban is refused before any role is written. |
 | `Promote.request_admin(...)` | Enqueues an Admin promotion request and notifies the Founder via DM, with the log channel as a fallback. |
 | `assign_admin(...)` | Founder-only path that grants the admin role, revokes any existing Developer/Tester assignment, sends the promotion log, and DMs the target. |
 | `assign_subrole(...)` | Founder/Admin path for Developer/Tester role; replaces any previous assignment in one transaction via `users_roles.set_role`, sends the promotion log, and DMs the target. |
@@ -100,7 +99,7 @@ await Promote.request_admin(
 | Admin | Developer / Tester | Submits request to Founder |
 | Developer / Tester / no-role | N/A | N/A (no permission) |
 
-The executor's role is enforced by the `@decorators.staff_only` decorator on `cmd_promote`, by the fresh callback re-check on the inline menu, and by the fresh re-read inside `Promote.execute`; the actual decision logic then rejects rank-equal or rank-higher targets. A failed executor-role lookup refuses the grant instead of falling back to the entry-time role.
+The executor's role is enforced by the `@decorators.staff_only` decorator on `cmd_promote`, by the fresh callback re-check on the inline menu, and by the fresh re-read inside `Promote.execute`; the actual decision logic then rejects rank-equal or rank-higher targets against the target's role read in that same fresh pass. A failed executor-role or target-role lookup refuses the grant instead of falling back to an entry-time value.
 
 ## Guardrails
 

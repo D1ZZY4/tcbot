@@ -187,7 +187,7 @@ The fan-out errors are counted but do not roll back the DB mute record; the fail
 2. Fetch active groups with `db.groups_db.active_groups()`. A fetch outage aborts with a retry reply before anything is touched, so the active record stays and a retry works.
 3. Call `db.mutes_db.revoke_mute_and_queue_unmute(target_id, admin_id, chat_ids)`. The revocation and one `revoke` enforcement run with a target per group commit together, so a partial restore keeps every group it still has to reach even though the record is already revoked. A lost race returns `(0, None)` and replies with the no-active-mute notice.
 4. Deliver the run immediately through `enforcement_worker.deliver_queued_run`. A failed claim only means the scheduled worker owns it; the groups stay in the ledger.
-5. Read `db.enforcement_db.run_report(run_id)` to build the reply: full success, the names of the failed groups, or a queued notice while the run is still pending.
+5. Read `db.enforcement_db.run_report(run_id)` to build the reply: full success, the names of the failed groups, or a queued notice while the run is still pending or while a requested group left the federation before its target was queued.
 6. Post the unmute log and reply in parallel via `asyncio.gather(..., return_exceptions=True)`.
 
 The reply reads `<user> has been unmuted.` followed by the applied line, which names how many groups were restored.

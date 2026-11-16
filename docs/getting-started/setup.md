@@ -52,9 +52,10 @@ cp config.env.example .env
 docker compose up --build
 ```
 
-Set `BOT_TOKEN`, `OWNER_ID`, `API_ID`, `API_HASH`, and the destination
-variables required by the features you enable in `.env`. The `bot` service waits
-for both PostgreSQL and Redis health checks before startup. The image runs:
+Set `BOT_TOKEN`, `OWNER_ID`, `PROOFS`, `API_ID`, `API_HASH`, and the other
+destination variables required by the features you enable in `.env`. The `bot`
+service waits for both PostgreSQL and Redis health checks before startup. The
+image runs:
 
 ```bash
 uv run --frozen python -m tcbot
@@ -132,7 +133,7 @@ PROOFS="-1001234567890"
 | `PORT` | No | integer or `auto` | Flask keep-alive port. `auto`, invalid, or out-of-range values resolve to `5000`. |
 | `BIND_HOST` | No | interface address | Listener interface for the keep-alive and webhook server. Default `0.0.0.0`; use `127.0.0.1` behind a local reverse proxy. |
 | `MAIN_GROUP` | Usually | negative integer chat ID | Main community group or forum. A positive value is treated as unset with a warning. |
-| `PROOFS` | Yes | `chat_id` or `chat_id/thread_id` | Destination for ban proof media. Startup fails when it is missing or invalid, because a ban cannot be filed without landed evidence. |
+| `PROOFS` | Yes | negative `chat_id` or `chat_id/thread_id` | Destination for ban proof media. Startup fails when it is missing, names a user, or is otherwise invalid, because a ban cannot be filed without landed evidence. |
 | `LOGS` | Yes | `chat_id` or `chat_id/thread_id` | Audit-log destination. |
 | `LOGS_ERRORS` | Recommended | `chat_id` or `chat_id/thread_id` | Error-report destination. When empty, reports fall back to the owner DM instead of being dropped. |
 | `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination (channel, group, or forum thread). Also receives a copy of every review card, so one value covers all appeal surfaces. The appeal instruction handle is derived from the public logs link (`COMMUNITY_LOGS_URL`), so no separate handle variable is needed. |

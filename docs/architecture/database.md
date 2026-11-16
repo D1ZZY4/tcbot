@@ -62,12 +62,13 @@ flowchart TD
 The schema is versioned with Alembic. `alembic/versions/0001_initial.py`
 creates the first layout, `0002_member_cache_sort_indexes.py` adds the
 sort indexes the paged user list needs, `0003_community_schema.py`
-migrates an existing database to the community model, and
+migrates an existing database to the community model,
 `0004_reapply_schema_objects.py` reapplies the SQL objects after a function
-body changed. Every later revision adds to it; `engine.connect()` applies
-the pending revisions before the
-engine is published, so a fresh deployment boots against an empty database
-and an existing one is upgraded in place.
+body changed, and `0010_schema_hardening.py` reapplies them after the
+definer search paths and the erasure batch order changed. Every later
+revision adds to it; `engine.connect()` applies the pending revisions
+before the engine is published, so a fresh deployment boots against an
+empty database and an existing one is upgraded in place.
 
 The schema files applied by a revision are the current files, not a snapshot
 of that revision. Revision 0006 therefore adds `scheduled_jobs.job_owner`
@@ -75,6 +76,11 @@ before it reapplies the schema: the current registry seed already names that
 column, which revision 0007 introduces, and a database stopped at 0005 would
 otherwise fail before reaching 0007. `tests/test_schema_migration.py`
 reproduces that state and upgrades it to head.
+
+The bot passes its configured schema to `upgrade_head(database_url, schema)`,
+which carries it to the Alembic environment through the config. A hand-run
+`alembic upgrade` reads `DB_SCHEMA` from the environment instead, so both
+paths fill the schema the application reads.
 
 ```bash
 # Apply the migrations by hand (the bot does this at startup).
@@ -95,6 +101,10 @@ The `%SCHEMA%` placeholder in the SQL files stands for the schema the
 objects live in, so the same files apply to the deployment schema and to
 the schema an integration test owns. `tcbot.database.schema.apply_schema()`
 replaces the placeholder with the current schema and applies the files.
+Every `SECURITY DEFINER` function pins its search path to `pg_catalog` and
+its own `%SCHEMA%`, never to `public`, so a function created in the
+development or test schema cannot resolve an object through the deployment
+schema.
 
 The migration must not reconfigure the application logging. Alembic's
 standard recipe calls `fileConfig()`, which removes every handler the bot
@@ -172,7 +182,7 @@ blocking call on the loop.
 | `fetch_all(stmt)` / `fetch_one(stmt)` / `fetch_value(stmt)` / `fetch_count(stmt)` / `count_rows(stmt)` | Read helpers. They run on an autocommit connection, so a read is one round trip. `count_rows` wraps a selection in a counting query so the result is the row count and never the first column. |
 | `run(stmt)` / `run_returning(stmt)` | Write helpers. `run` returns the affected row count, `run_returning` the rows a `RETURNING` clause produced. |
 | `run_script(sql)` | Runs a plain SQL script on the shared session. The script is not parameterised, so the percent signs of `format()` and the colons of the idempotency keys stay literal. |
-| `is_connection_error(exc)` / `is_transient_db_error(exc)` / `is_database_error(exc)` / `is_pool_timeout(exc)` | Error classification used by the circuit breaker and the error handler. `is_pool_timeout` recognises SQLAlchemy's own pool-timeout error, which does not inherit from the builtin `TimeoutError`. |
+| `is_connection_error(exc)` / `is_transient_db_error(exc)` / `is_database_error(exc)` / `is_pool_timeout(exc)` | Error classification used by the circuit breaker and the error handler. `is_pool_timeout` recognises SQLAlchemy's own pool-timeout error, which does not inherit from the builtin `TimeoutError`. A server-side cancellation, lock refusal, serialisation failure, or deadlock (SQLSTATE `57014`, `55P03`, `40001`, `40P01`) arrives as an `OperationalError` but proves the link is healthy, so it does not count as a connection failure. |
 | `constraint_name(exc)` | The name of the constraint an integrity error violated, so a caller can tell a duplicate identifier apart from a duplicate partial index. |
 
 ### Transaction boundary
@@ -292,10 +302,10 @@ database error.
 | `cache/` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with eight public singletons. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton with pool management and liveness tracking. |
 | `scheduler.py` | PostgreSQL (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `SQLAlchemyJobStore`. |
-| `mtproto.py` | Telegram MTProto | Bot-token client singleton: user-ID resolution and group member harvest. Claims a single-owner lease before connecting (90 s TTL, 30 s heartbeat); losers and parked sessions degrade to Bot-API-only. |
+| `mtproto.py` | Telegram MTProto | Bot-token client singleton: user-ID resolution and group member harvest. Claims a single-owner lease before connecting (90 s TTL, 30 s heartbeat); losers and parked sessions degrade to Bot-API-only. The harvest cursor read and write run through the shared `db_call` boundary, so a stalled database fails the slice on the call budget instead of holding it for the driver timeout. |
 | `mtproto_store.py` | `mtproto_state` | PostgreSQL-backed Kurigram storage engine shared by all instances, plus the atomic single-owner lease (`<ns>:lock:mtproto_owner`) with expiry takeover. The peer, name-list and update-state writes go out as one multi-row upsert per bounded chunk, so a session with hundreds of peers costs a handful of transactions instead of one per peer. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
-| `types.py` | type-only | `NewType` primitives: `UserId`, `GroupId`, `ChatId`, `BanId`. |
+| `types.py` | type-only | `NewType` primitives (`UserId`, `GroupId`, `ChatId`, `BanId`), `make_short_id()`, and the shared `as_int()` coercion for database and report values. |
 
 ## Telegram identities (`users_cache.py`, table `telegram_users`)
 
@@ -739,7 +749,11 @@ gone). A refusal caused by missing bot rights or a lost membership is
 cannot fix it, and an operator has to restore access. A transient failure
 carries a retry deadline for up to three attempts. `delivery_outcome()`
 reads the target rows, so a report, a reply, or an operator summary never
-counts a `queued`, `running`, or still-pending target as applied.
+counts a `queued`, `running`, or still-pending target as applied. The
+queue only records an active connected chat, so a group that was requested
+but disconnected before the run was queued leaves no target row; the
+caller's requested scope is the floor of the reported total, and the
+shortfall counts as pending instead of vanishing from the summary.
 
 The pg_cron reconciliation releases a target stuck in `in_progress` using
 its last attempt moment and falls back to the row's update moment when the
@@ -845,10 +859,15 @@ reader sees one document.
   appeal link and the log patch. An `automated` origin may stand without
   archived proof; a `manual` one may not.
 - `update_ban(ban_id: str, reason: str, admin_id: int, new_proof_id: int, new_log_id: int = 0, old_proof_id: int = 0, old_log_id: int = 0, *, until_date: datetime | None = None, duration_str: str | None = None) -> BanDoc | None`
-  Files a re-ban: a new decision that supersedes the active one, with the
-  new reason, the new proof, and its own case. The superseded decision
-  keeps its reason, its actor, and its timestamps, so the history of the
-  incident stays readable.
+  Files a re-ban: a new decision that supersedes the ban that is active
+  when the write commits, with the new reason, the new proof, and its own
+  case. The superseded decision keeps its reason, its actor, and its
+  timestamps, so the history of the incident stays readable. A record that
+  another re-ban superseded while the proof window was open is therefore
+  not a failure: the new decision lands on top of the newer ban instead of
+  trying to supersede the stale row. A record whose deadline passed in that
+  window is expired by the insert itself, and the new decision starts as a
+  fresh active ban.
 - `set_log_message_id(ban_id: str, log_msg_id: int) -> None`
   Appends the audit log message reference to the decision history. The
   table is append-only, so a re-ban adds another `log` row; the compose read
@@ -1374,7 +1393,7 @@ lookups) never accumulate stale entries.
 
 - Key format: `tcbot:<prefix>:v2:<key>` (the `v2` namespace).
 - Redis TTL: `max(1, int(redis_ttl))` seconds, applied with `ex=` on writes.
-- Redis prefixes: `role`, `conn`, `groups`, `owner`, `umention`.
+- Redis prefixes: `role`, `conn`, `groups`, `owner`, `umention`, `ulocale`, `glocale`, `clocale`.
 - FIFO ordering is per `(prefix, event loop)`: each mutation chains after the previous one so a slower write can never complete after a newer delete or prefix-wide clear, including across separate cache objects sharing a prefix. Background task names are `tcbot.redis.<prefix>`.
 - Serialization: tagged JSON via msgspec. `_tag_scalars` tags `datetime` values with `__tcbot_type__` (msgspec would otherwise encode datetimes as bare RFC3339) so a cache hit has the same runtime types as the original row; `_restore_tagged` restores them bottom-up and tolerates untagged legacy values, so payloads written by the retired stdlib codec read identically. Unknown scalar types fall back to strings rather than failing the write.
 
@@ -1400,7 +1419,9 @@ last-name-only updates. The all-`None` triple is the not-found sentinel.
 
 The three locale caches share the same shape and TTLs, so a language change in
 one process reaches every other process through the ordered invalidation and
-the per-key generation guard. None of them is a source of authorization.
+the per-key generation guard. Their invalidations take the non-droppable queue
+path, so a saturated mutation queue cannot leave a superseded language behind
+for the full L2 TTL. None of them is a source of authorization.
 
 ### Redis client (`redis_client.py`)
 
@@ -1444,7 +1465,7 @@ Pool parameters: `decode_responses=True`, `max_connections=20`,
 - A serialization failure degrades the cache to L1-only instead of failing a fetch that just succeeded.
 - Redis writes/deletes are fire-and-forget and logged at DEBUG on failure; the client's socket timeout bounds each command, and background-task errors are surfaced via a done-callback log, never raised into callers. No cache path wraps a Redis command in `asyncio.wait_for`: cancelling one would return the pooled connection with its reply unread.
 - Redis failures after the first are not re-logged per op (transition logging only), and the pool/health state is tracked via `mark_op`.
-- Single-key deletes and writes for revocation prefixes (`role`, `conn`, `groups`, `owner`) are not dropped by the 200-deep mutation-queue bound: a dropped role revocation would leave other processes serving the revoked privilege until the key TTL (90-360 s). At the 1000-deep hard ceiling a critical mutation evicts the oldest queued droppable mutation that has not started, because a display hint can refresh while a revocation must land. Only the 2000-deep absolute ceiling, where every queued mutation is critical, drops a revocation with an error-level warning. Display-name hints (`umention`) remain droppable; the next update refreshes them.
+- Single-key deletes and writes for revocation prefixes (`role`, `conn`, `groups`, `owner`) are not dropped by the 200-deep mutation-queue bound: a dropped role revocation would leave other processes serving the revoked privilege until the key TTL (90-360 s). Locale cache fills remain droppable, but their invalidations take the same non-droppable delete path, so a superseded language cannot survive in another process for up to 600 s. At the 1000-deep hard ceiling a critical mutation evicts the oldest queued droppable mutation that has not started, because a display hint can refresh while a revocation must land. Only the 2000-deep absolute ceiling, where every queued mutation is critical, drops a revocation with an error-level warning. Display-name hints (`umention`) remain droppable; the next update refreshes them.
 - A cancelled predecessor does not drop its successors: each FIFO mutation shields its predecessor and only aborts on its own cancellation, so one cancelled task cannot cascade-cancel the tail.
 - A client that belongs to another event loop is reported as absent by the cache, so a read falls back to the database instead of waiting on a socket that can never answer.
 
@@ -1457,7 +1478,10 @@ job-store handshake reports a startup failure instead of hanging boot.
 The startup budget is larger than the 10 s shutdown budget because every
 job-store call reaches PostgreSQL over the network; a remote pooler answers
 a checked-out round trip in roughly half a second. On readiness failure it
-raises `RuntimeError` (wrapped from the captured error).
+raises `RuntimeError` (wrapped from the captured error). A job-store
+construction failure is captured inside the background task and signals
+readiness at once, so the original exception becomes the cause of the
+reported failure instead of surfacing as a readiness timeout.
 
 `stop() -> None` sets the stop event and waits up to 10 s for graceful
 shutdown, then cancels a stuck task so shutdown never orphans a live
@@ -1533,9 +1557,9 @@ Recurring jobs:
 | Job ID | Trigger | Purpose |
 |---|---|---|
 | `tcbot.expiry_daily` | `IntervalTrigger(hours=24)` | Calls `expire_due_decisions()`: moves the ban, mute, and role-assignment rows whose deadline passed to `expired`, withdraws any pending appeal of an expired ban with its review slot, and queues the matching revoke enforcement runs. A mute already carries its Telegram `until_date`, so its restriction lifts natively. Registered only when pg_cron does not own expiry. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs the sweep once. The sweep takes a transaction advisory lock, so two bot instances cannot expire the same records. |
-| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. Each branch takes its own transaction advisory lock. |
+| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. Each branch takes its own transaction advisory lock. The erasure branch invalidates the name and role caches after its transaction commits, so a concurrent read cannot repopulate the pre-erasure row. |
 | `tcbot.retention_daily` | `IntervalTrigger(hours=24)` | Calls `sweep_retention()`: runs the `retention.sweep` registry job, which applies the `retention_policies` windows to runtime telemetry, prunes expired MTProto session state, and records the run in `scheduled_job_runs`. Always registered; the day-scoped run key keeps the sweep to one per UTC day across instances. Uses `misfire_grace_time=86400` and `coalesce=True`. |
-| `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued `apply`, `revoke`, and `reconcile` runs and applies the decision across the recorded groups. Ban and mute apply, expiry lifts, manual unbans, approved appeals, and kick unban repair all use this worker. A failed target is recorded as `failed` with a due retry deadline and retried up to three times, five minutes apart. Always registered. |
+| `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued `apply`, `revoke`, and `reconcile` runs and applies the decision across the recorded groups. Ban and mute apply, expiry lifts, manual unbans, approved appeals, and kick unban repair all use this worker. An `apply` run whose decision passed its deadline while the run waited is cancelled before any group is touched. A failed target is recorded as `failed` with a due retry deadline and retried up to three times, five minutes apart. Always registered. |
 | `tcbot.promotion_expiry_hourly` | `IntervalTrigger(hours=1)` | Calls `expire_promotion_requests()`: marks pending requests past `PROMOTION_REQUEST_TTL_DAYS` as `expired`, releasing the one-pending-per-target slot. The write is idempotent and the enqueue path also expires a stale target row lazily. |
 | `tcbot.notification_worker` | `IntervalTrigger(minutes=5)` | Calls `notification_worker.run()`: retries review-card edits whose direct Telegram update failed, closes a rejected appeal's card even while its ban stays active, leaves a still-decidable live review untouched, marks a deleted card `skipped`, and keeps a transient failure for a bounded retry. |
 

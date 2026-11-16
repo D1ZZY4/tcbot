@@ -93,7 +93,7 @@ The Developer minimum is intentional: unbanning a higher-ranked target would sil
 5. Adds primary groups (`cfg.main_group`) to the list when they are not already present.
 6. Calls `db.bans_db.revoke_ban_and_queue_unban(target_id, requested_by, chat_ids, review_chat_id=..., review_message_id=...)`. One transaction revokes every active ban, withdraws pending appeals, releases review slots, queues a `revoke` run with one target per chat, and queues the review-card edit when the ban carried one.
 7. Delivers the queued run with `enforcement_worker.deliver_queued_run(ctx.bot, run_id)`. A scheduled worker may already own it; that is not an error.
-8. Reads `db.enforcement_db.run_report(run_id)`. The reply reports the per-group outcome: full success, the names of failed groups, or a queued notice when the run is still pending.
+8. Reads `db.enforcement_db.run_report(run_id)`. The reply reports the per-group outcome: full success, the names of failed groups, or a queued notice when the run is still pending or a requested group left the federation before its target was queued.
 9. Posts the unban log and replies with the run outcome. The review-card edit was queued inside the revocation transaction, so the notification worker closes the card even when the process stops before a direct edit.
 
 The reply does not include an appeal-resolution message; a pending appeal is recorded as `withdrawn` with the ban inside the same transaction.

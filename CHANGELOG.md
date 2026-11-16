@@ -1185,6 +1185,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Documentation
 
+- **The setup reference names every required value** (`README.md`, `docs/architecture/database.md`, `docs/getting-started/setup.md`, `docs/features/appeals.md`, `docs/features/moderation/banning.md`): the README quick start and the Docker notes now list `PROOFS`, the README configuration reference lists `PROMOTION_REQUEST_TTL_DAYS`, the appeal guide states that a ban's deadline is applied at read time, and the re-ban sections describe superseding the ban that is active at write time. Behavior changes: none, docs only.
+
 - **The enforcement repair path is documented** (`README.md`, `docs/architecture/database.md`, `docs/architecture/modules.md`, `docs/features/misc-modules.md`, `docs/features/moderation/banning.md`, `docs/features/moderation/unbanning.md`, `docs/features/workflow-overview.md`): the pages describe `/tcrepair`, its per-group retry scope, and the stored cancellation reason beside the existing ledger contract. Behavior changes: none, docs only.
 
 - **The connect guide covers the new Welcome Messages right** (`docs/features/moderation/connecting.md`): the page explains that Bot API 10.3 grants `can_send_welcome_messages` but still has no method to set the native welcome message, that the bot audits the grant after connect, and that a missing or unprobeable field stays silent. Behavior changes: none, docs only.

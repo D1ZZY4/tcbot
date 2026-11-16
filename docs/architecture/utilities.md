@@ -104,7 +104,9 @@ Use it for multi-group actions such as ban, unban, mute, broadcast, and cleanup.
 `gather_bounded` preserves input order, returns regular exceptions as list
 elements, re-raises `asyncio.CancelledError`, and returns an empty list for
 empty input. It never touches the Telegram circuit, so a cleanup database
-burst stays bounded without being skipped while the circuit is OPEN.
+burst stays bounded without being skipped while the circuit is OPEN. Like
+`fan_out`, a cancelled burst closes the coroutines still waiting for a slot
+instead of leaving them unawaited.
 
 ```python
 results = await fan_out(

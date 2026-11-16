@@ -109,7 +109,7 @@ tcbot/
 │   ├── mtproto_store.py    PostgreSQL-backed Kurigram storage engine
 │   ├── settings_db.py      Per-user settings (locale and timezone preferences)
 │   ├── documents.py        TypedDict document shapes
-│   └── types.py            NewType ID primitives
+│   └── types.py            NewType ID primitives and integer coercion
 ├── modules/
 │   ├── __init__.py         Dynamic module discovery and handler collection
 │   ├── *.py                Command and callback modules

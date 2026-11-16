@@ -128,6 +128,7 @@ Current stack:
 │   ├── error_reporter.py     Error classification, dedup, and shipping to LOGS_ERRORS
 │   ├── alive.py              Flask keep-alive and webhook receiver
 │   ├── enforcement_worker.py Expiry revoke queue consumer and Telegram delivery
+│   ├── notification_worker.py Retry the review-card edits through the durable outbox
 │   ├── database/             PostgreSQL helpers, one package per table/domain
 │   │   ├── users_cache.py    Member profile cache operations
 │   │   ├── users_roles.py    Role system: owners/admins/roles
@@ -274,7 +275,7 @@ Never commit real credentials. Required secret values include:
 
 - `BOT_TOKEN`: Telegram bot token from BotFather.
 - `DATABASE_URL`: PostgreSQL connection string. The bot applies its schema migrations at startup.
-- `PROOFS`: ban proof media destination; boot refuses without a valid chat ID because a ban cannot be filed without landed evidence.
+- `PROOFS`: ban proof media destination; boot refuses without a negative group or channel chat ID because a ban cannot be filed without landed evidence.
 - `API_ID`: Telegram API ID for MTProto identity lookups; boot refuses without it.
 - `API_HASH`: Telegram API hash matching `API_ID`; boot refuses without it.
 
