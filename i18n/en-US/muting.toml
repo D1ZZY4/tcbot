@@ -47,8 +47,8 @@ Or reply to a message and run `/tcm`."""
 # [note] plain sends use plain=True; [summary]/[unmute] render MarkdownV2.
 # [applied] renders the unmute fan-out line; {applied} carries it whole.
 # Placeholders: {user} pre-formatted user reference, {dur} pre-formatted
-# bold duration, {reason} raw reason text, {done}/{total}/{failed} ints,
-# {sample} raw group names, {applied} prebuilt applied line, {note}
+# bold duration, {reason} raw reason text, {done}/{total}/{failed}/{pending}
+# ints, {sample} raw group names, {applied} prebuilt applied line, {note}
 # prebuilt failure line.
 
 [note]
@@ -64,6 +64,8 @@ empty = "No connected groups configured."
 none = "WARNING: not unmuted in any group ({total}/{total} failed). Check bot admin rights in: {sample}{more}"
 partial = "Restored in {done}/{total} groups ({failed} failed: {sample}{more}"
 full = "Restored in {total}/{total} groups."
+progress = "Restored in {done}/{total} groups so far ({failed} failed: {sample}{more}; {pending} still awaiting delivery, retried automatically."
+progress_clean = "Restored in {done}/{total} groups so far; {pending} still awaiting delivery, retried automatically."
 
 [summary]
 body = "{user} has been muted {dur}.\nReason: {reason}\nApplied to {done}/{total} groups.{note}"

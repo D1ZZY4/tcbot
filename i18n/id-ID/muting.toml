@@ -64,6 +64,8 @@ empty = "Belum ada grup terhubung yang dikonfigurasi."
 none = "PERINGATAN: tidak ada grup yang di-unmute ({total}/{total} gagal). Cek hak admin bot di: {sample}{more}"
 partial = "Dipulihkan di {done}/{total} grup ({failed} gagal: {sample}{more}"
 full = "Dipulihkan di {total}/{total} grup."
+progress = "Dipulihkan di {done}/{total} grup sejauh ini ({failed} gagal: {sample}{more}; {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
+progress_clean = "Dipulihkan di {done}/{total} grup sejauh ini; {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
 
 [summary]
 body = "{user} telah di-mute {dur}.\nAlasan: {reason}\nDiterapkan ke {done}/{total} grup.{note}"
