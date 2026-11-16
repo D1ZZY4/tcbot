@@ -147,6 +147,17 @@ async def test_a_failed_target_is_retried_after_its_deadline(
     assert [int(str(run["id"])) for run in again] == [run_id]
     claimed = await enforcement_db.claim_targets(run_id)
     assert [int(str(target["id"])) for target in claimed] == [target_id]
+    # * The run closed when its only target failed. Returning it to the
+    # * queue has to clear the completion stamp, or the next attempt looks
+    # * finished before it starts.
+    row = await fetch_one(
+        moderation_enforcement_runs.select().where(
+            moderation_enforcement_runs.c.id == run_id
+        )
+    )
+    assert row is not None
+    assert row["status"] == "running"
+    assert row["finished_at"] is None
 
 
 async def test_a_connect_replay_remainder_is_queued_for_the_new_chat(

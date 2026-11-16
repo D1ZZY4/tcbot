@@ -56,7 +56,9 @@ _CLAIM_ONE_RUN = text(
 _REQUEUE_RUNS = text(
     """
     UPDATE moderation_enforcement_runs AS r
-       SET status = 'queued', updated_at = now()
+       SET status = 'queued',
+           finished_at = NULL,
+           updated_at = now()
      WHERE (
                r.status = 'running'
                AND r.updated_at < now() - make_interval(secs => :stale_seconds)
