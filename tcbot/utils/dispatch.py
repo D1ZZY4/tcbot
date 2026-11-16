@@ -202,9 +202,15 @@ async def gather_bounded[T](
         max_concurrent = 1
 
     sem = asyncio.Semaphore(max_concurrent)
+    # * Coroutine identities whose slot actually started the call. A slot
+    # * still waiting on the semaphore never awaited its coroutine, so a
+    # * cancellation of the whole burst must close those to avoid
+    # * "coroutine was never awaited" leaks.
+    started: set[int] = set()
 
     async def _slot(coro: Awaitable[T]) -> T | BaseException:
         async with sem:
+            started.add(id(coro))
             try:
                 return await coro
             except asyncio.CancelledError:
@@ -212,9 +218,15 @@ async def gather_bounded[T](
             except Exception as exc:
                 return exc
 
-    results = list(
-        await asyncio.gather(*(_slot(c) for c in coros), return_exceptions=True)
-    )
+    try:
+        results = list(
+            await asyncio.gather(*(_slot(c) for c in coros), return_exceptions=True)
+        )
+    except asyncio.CancelledError:
+        for coro in coros:
+            if id(coro) not in started and inspect.iscoroutine(coro):
+                coro.close()
+        raise
     # ! CRITICAL: same cancellation contract as fan_out: a cancelled slot
     # ! must propagate so shutdown is never misreported as per-item failures.
     throw_if_cancelled(results)

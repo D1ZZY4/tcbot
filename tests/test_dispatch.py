@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 
 import pytest
@@ -172,6 +173,36 @@ def test_gather_bounded_propagates_cancellation() -> None:
 
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(_main())
+
+
+def test_gather_bounded_closes_coroutines_that_never_started() -> None:
+    """A cancelled burst must not leak the coroutines still waiting for a slot.
+
+    The global cap admits one slot at a time, so the coroutines behind it
+    were never awaited. Leaving them open holds whatever they captured and
+    prints "coroutine was never awaited" at collection time.
+    """
+
+    async def _slow() -> int:
+        await asyncio.sleep(5)
+        return 1
+
+    coros = [_slow(), _slow(), _slow()]
+
+    async def _main() -> None:
+        task = asyncio.create_task(gather_bounded(coros, max_concurrent=1))
+        await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(_main())
+
+    assert [inspect.getcoroutinestate(coro) for coro in coros] == [
+        inspect.CORO_CLOSED,
+        inspect.CORO_CLOSED,
+        inspect.CORO_CLOSED,
+    ]
 
 
 def test_gather_bounded_caps_concurrency() -> None:

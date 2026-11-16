@@ -61,6 +61,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **A scheduler job-store failure reports its own cause at boot** (`tcbot/database/scheduler.py`): the store was built before the guarded block, so a missing privilege or an unreachable host raised outside it, left the readiness event unset, and made `start()` wait the full 30 s budget before reporting a generic timeout. The construction now runs inside the guarded block, and the original exception becomes the cause of the reported failure.
 
+- **`gather_bounded` closes the coroutines it never started** (`tcbot/utils/dispatch.py`): cancelling a capped database burst left the queued coroutines unawaited, which holds whatever they captured and prints "coroutine was never awaited". The burst now closes them like `fan_out` does.
+
 - **A server-side SQL refusal does not open the database circuit** (`tcbot/database/engine.py`): psycopg 3 reports a lock timeout, a deadlock, a serialisation failure, or a statement cancellation as an `OperationalError`, and the classifier counted five of them as a link outage, rejecting every database call federation-wide. Those SQLSTATEs prove the link is healthy now and are not counted.
 
 - **The MTProto harvest cursor uses the shared database boundary** (`tcbot/database/mtproto.py`): the cursor read and write bypassed `db_call`, so a stalled database held the harvest for the driver's socket timeout with no circuit accounting. Both run through the shared call budget and breaker now.
