@@ -46,10 +46,17 @@ async def test_a_pending_request_carries_its_expiry(queue_db: str) -> None:
 
 async def test_expiry_frees_the_pending_slot(queue_db: str) -> None:
     first = await queues_db.enqueue(42, "target", "Target", 7)
+    # * A request becomes overdue with the passage of time, not by storing an
+    # * expiry before its submission: the schema keeps expires_at after
+    # * requested_at, so the fixture has to age both columns together.
+    requested_at = utc_now() - timedelta(hours=1)
     await engine_module.run(
         promotion_requests.update()
         .where(promotion_requests.c.request_id == first)
-        .values(expires_at=utc_now() - timedelta(seconds=1))
+        .values(
+            requested_at=requested_at,
+            expires_at=requested_at + timedelta(minutes=30),
+        )
     )
 
     assert await queues_db.get_request(42) is None
