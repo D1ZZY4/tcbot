@@ -77,6 +77,31 @@ def test_role_delete_survives_sat_queue_but_mention_drops() -> None:
     asyncio.run(_scenario())
 
 
+def test_a_locale_delete_survives_sat_queue() -> None:
+    """A language change must reach every process under queue pressure."""
+
+    async def _scenario() -> None:
+        loop = asyncio.get_running_loop()
+        new_tasks: set[asyncio.Task[None]] = set()
+        for prefix in ("ulocale", "glocale", "clocale"):
+            cache = _cache(prefix)
+            redis_io._redis_pending[(prefix, loop)] = redis_io._REDIS_MAX_PENDING
+            before = redis_io._redis_pending[(prefix, loop)]
+            tasks_before = set(redis_io._redis_bg_tasks)
+
+            cache.invalidate(123)
+
+            # * The delete is non-droppable; no tombstone is needed because
+            # * a locale read does not consult one.
+            assert redis_io._redis_pending[(prefix, loop)] == before + 1
+            new_tasks |= set(redis_io._redis_bg_tasks) - tasks_before
+        for task in new_tasks:
+            task.cancel()
+        await asyncio.gather(*new_tasks, return_exceptions=True)
+
+    asyncio.run(_scenario())
+
+
 def test_role_put_survives_sat_queue() -> None:
     async def _scenario() -> None:
         loop = asyncio.get_running_loop()

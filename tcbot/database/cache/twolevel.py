@@ -36,6 +36,12 @@ log = get_logger(__name__)
 # * Display-name hints (umention) may drop; the next update refreshes them.
 _REVOCATION_PREFIXES: frozenset[str] = frozenset({"role", "conn", "groups", "owner"})
 
+# * A locale invalidation is also a revocation: a cached language that
+# * survives another process serves the superseded language for up to
+# * 600 s. The cache fill itself stays droppable because the next render
+# * repopulates it, so only the delete is forced through the queue.
+_LOCALE_PREFIXES: frozenset[str] = frozenset({"ulocale", "glocale", "clocale"})
+
 # * Keys per Redis MGET in the batch read. The command grows with the
 # * key count, so a large batch is split into bounded chunks.
 _MGET_CHUNK_SIZE: int = 500
@@ -73,6 +79,7 @@ class TwoLevelCache[T]:
     """
 
     __slots__ = (
+        "_critical_delete",
         "_epoch",
         "_is_revocation",
         "_mem",
@@ -94,8 +101,12 @@ class TwoLevelCache[T]:
         self._redis_prefix: str = redis_prefix
         # * The revocation decision is taken once, so a caller that
         # * renames the prefix cannot turn a revocation write into a
-        # * droppable one.
+        # * droppable one. The delete class additionally covers the locale
+        # * caches, whose fill is droppable but whose invalidation is not.
         self._is_revocation: bool = redis_prefix in _REVOCATION_PREFIXES
+        self._critical_delete: bool = (
+            self._is_revocation or redis_prefix in _LOCALE_PREFIXES
+        )
         # * Per-key state serialises concurrent fetches for one key across
         # * L1 + L2 + DB and carries the invalidation counter. The entry is
         # * dropped when the last waiter leaves, so the map stays bounded.
@@ -128,8 +139,9 @@ class TwoLevelCache[T]:
         """Remove from memory and enqueue an ordered Redis delete.
 
         Deletes for revocation prefixes (role, connection, group list,
-        owner) are never droppable: a dropped role revocation would leave
-        other processes serving the revoked privilege until the key TTL.
+        owner) and the locale caches are never droppable: a dropped
+        revocation would leave other processes serving the revoked
+        privilege or language until the key TTL.
         """
         self._mem.invalidate(key)
         metrics.record_invalidation()
@@ -138,7 +150,7 @@ class TwoLevelCache[T]:
         self._advance(key)
         if self._is_revocation:
             self._redis_tombstone_background(key)
-        self._redis_del_background(key, droppable=not self._is_revocation)
+        self._redis_del_background(key, droppable=not self._critical_delete)
 
     def clear(self) -> None:
         """Clear the in-memory layer (does not flush Redis keys)."""
