@@ -52,7 +52,7 @@ def captured_engine_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         captured.update(kwargs)
         return _FakeAsyncEngine()
 
-    def _noop_migrations(_url: str) -> None:
+    def _noop_migrations(_url: str, _schema: str | None = None) -> None:
         return None
 
     def _noop_ensure_schema(_url: str, _schema: str) -> None:

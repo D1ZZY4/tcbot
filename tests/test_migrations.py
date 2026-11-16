@@ -53,6 +53,19 @@ def test_a_plain_password_survives_the_config() -> None:
     assert config.get_main_option("sqlalchemy.url") == url
 
 
+def test_ensure_schema_refuses_a_name_it_cannot_quote() -> None:
+    """A schema name that is not an identifier never reaches the SQL.
+
+    The configuration and the Alembic environment already validate the
+    name; the helper keeps its own guard so a future caller that passes a
+    raw value cannot inject a statement through ``CREATE SCHEMA``.
+    """
+    with pytest.raises(ValueError, match="plain PostgreSQL identifier"):
+        migrations.ensure_schema(
+            "postgresql://tcbot@127.0.0.1:1/tcbot", 'bad"; DROP SCHEMA public'
+        )
+
+
 def test_the_migration_reaches_the_database_with_a_percent_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -78,6 +91,31 @@ def test_the_migration_reaches_the_database_with_a_percent_url(
     migrations.upgrade_head(_PERCENT_URL)
 
     assert captured == [_PERCENT_URL]
+
+
+def test_the_schema_travels_to_the_migration_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The migration fills the schema the application will read.
+
+    The bot passes ``cfg.db_schema`` explicitly, so the value cannot drift
+    from the engine when ``DB_SCHEMA`` is absent from the process
+    environment (for example when it came from ``config.env``).
+    """
+    captured: list[str] = []
+
+    def _upgrade(config: Config, revision: str) -> None:
+        _ = revision
+        captured.append(config.get_main_option("db_schema", ""))
+
+    monkeypatch.setattr(migrations.command, "upgrade", _upgrade)
+    monkeypatch.setattr(
+        migrations, "_migration_lock", lambda _url: contextlib.nullcontext()
+    )
+
+    migrations.upgrade_head(_PERCENT_URL, "development")
+
+    assert captured == ["development"]
 
 
 def test_the_bootstrap_generator_refuses_to_overwrite_the_first_revision(

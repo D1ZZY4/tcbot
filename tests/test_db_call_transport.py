@@ -178,7 +178,7 @@ def test_the_engine_is_recreated_after_close(
         built.append(fake)
         return fake
 
-    def _noop_migrations(_url: str) -> None:
+    def _noop_migrations(_url: str, _schema: str | None = None) -> None:
         return None
 
     def _noop_ensure_schema(_url: str, _schema: str) -> None:

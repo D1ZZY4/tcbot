@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import contextlib
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -35,6 +36,11 @@ _ALEMBIC_INI = _ROOT / "alembic.ini"
 # * connection, so it is released on unlock and on a dropped connection.
 _MIGRATION_LOCK_KEY: int = 7_313_919_265_517_002
 _MIGRATION_CONNECT_TIMEOUT_S: int = 10
+# * A schema name reaches the server as part of a connection option and of a
+# * CREATE SCHEMA statement, so the helper refuses anything that is not a
+# * plain PostgreSQL identifier. Every caller validates it as well; this is
+# * the last line of defence for a future caller that does not.
+_SCHEMA_PATTERN: re.Pattern[str] = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 
 def set_database_url(config: AlembicConfig, database_url: str) -> None:
@@ -95,6 +101,11 @@ def ensure_schema(database_url: str, schema: str) -> None:
     """
     if not schema or schema == "public":
         return
+    if not _SCHEMA_PATTERN.fullmatch(schema):
+        raise ValueError(
+            f"Refusing to create a schema named {schema!r}: the name has to be "
+            "a plain PostgreSQL identifier."
+        )
     engine = create_engine(
         scoped_url(database_url, schema),
         pool_pre_ping=True,
@@ -153,14 +164,20 @@ def _migration_lock(database_url: str) -> Iterator[None]:
         lock_engine.dispose()
 
 
-def upgrade_head(database_url: str) -> None:
+def upgrade_head(database_url: str, schema: str | None = None) -> None:
     """Apply every pending migration under a cross-instance lock.
 
     The URL is passed in rather than read from the environment: the
     application loads its configuration from ``config.env`` as well, so
-    the process environment alone is not the single source of truth.
+    the process environment alone is not the single source of truth. The
+    same applies to the schema: when the caller names one, it travels to
+    the Alembic environment through the config, so the migration fills the
+    schema the application will read even when ``DB_SCHEMA`` is not in the
+    process environment.
     """
     config = Config(str(_ALEMBIC_INI))
     set_database_url(config, database_url)
+    if schema:
+        config.set_main_option("db_schema", schema)
     with _migration_lock(database_url):
         command.upgrade(config, "head")

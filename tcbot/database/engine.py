@@ -354,7 +354,7 @@ async def connect() -> None:
     # * current before the first handler query reaches the database. A
     # * fresh deployment therefore boots against an empty database.
     await asyncio.to_thread(migrations.ensure_schema, url, cfg.db_schema)
-    await asyncio.to_thread(migrations.upgrade_head, url)
+    await asyncio.to_thread(migrations.upgrade_head, url, cfg.db_schema)
     _engine = create_async_engine(
         url,
         pool_size=cfg.db_pool_size,

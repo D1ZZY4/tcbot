@@ -130,11 +130,16 @@ def _connection_options(url: str) -> str:
 def _db_schema() -> str:
     """Return the schema the migration fills.
 
-    The application reads the schema named by ``DB_SCHEMA`` and the
-    default schema of the server. The deployment owns ``public``, the
-    integration tests own ``test``, and a developer owns ``development``.
+    The caller passes the application's schema through the Alembic config;
+    the environment is the fallback for a hand-run ``alembic upgrade``.
+    The deployment owns ``public``, the integration tests own ``test``,
+    and a developer owns ``development``.
     """
-    raw = os.environ.get("DB_SCHEMA", "").strip() or "public"
+    raw = (
+        config.get_main_option("db_schema", "").strip()
+        or os.environ.get("DB_SCHEMA", "").strip()
+        or "public"
+    )
     if not re.fullmatch(r"[a-z_][a-z0-9_]*", raw):
         return "public"
     return raw
