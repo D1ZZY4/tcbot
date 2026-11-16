@@ -490,22 +490,23 @@ async def _scheduler_background(
     # * The constructor also performs the blocking DNS lookup, so it runs
     # * on a worker thread instead of stalling the event loop.
     loop = asyncio.get_running_loop()
-    store = await loop.run_in_executor(
-        _scheduler_pool(),
-        _build_job_store,
-        database_url,
-    )
-    # * The loop is bound explicitly so the scheduler can be started from a
-    # * worker thread: APScheduler would otherwise call get_running_loop()
-    # * there and fail.
-    scheduler = AsyncIOScheduler(
-        event_loop=asyncio.get_running_loop(),
-        jobstores={_JOBSTORE_ALIAS: store},
-        timezone=_SCHEDULER_TIMEZONE,
-    )
-    _scheduler = scheduler
+    scheduler: AsyncIOScheduler | None = None
     started = False
     try:
+        store = await loop.run_in_executor(
+            _scheduler_pool(),
+            _build_job_store,
+            database_url,
+        )
+        # * The loop is bound explicitly so the scheduler can be started from
+        # * a worker thread: APScheduler would otherwise call
+        # * get_running_loop() there and fail.
+        scheduler = AsyncIOScheduler(
+            event_loop=asyncio.get_running_loop(),
+            jobstores={_JOBSTORE_ALIAS: store},
+            timezone=_SCHEDULER_TIMEZONE,
+        )
+        _scheduler = scheduler
         # * The scheduler starts on the event loop: it arms its own timer
         # * with loop.call_later, which is not thread-safe. Starting it on
         # * a worker thread would mutate the loop's timer heap while the
@@ -552,7 +553,7 @@ async def _scheduler_background(
         # * A crash or cancellation past start() must still release the
         # * scheduler and its synchronous engine; otherwise the process
         # * leaks both while reporting itself stopped.
-        if started:
+        if started and scheduler is not None:
             with contextlib.suppress(Exception):
                 scheduler.shutdown(wait=False)
         _scheduler = None
@@ -865,9 +866,10 @@ async def start(
         raise
     except TimeoutError:
         # * The background task did not signal readiness within the grace
-        # * window (constructor raise before the try, or a hung jobstore
-        # * handshake). Cancel it and unwind bounded so a task ignoring
-        # * cancellation cannot hang start beyond the outer bound.
+        # * window. A construction or reconcile failure now reports itself
+        # * immediately through ``_sched_error``, so this branch covers a
+        # * hung jobstore handshake. Cancel it and unwind bounded so a task
+        # * ignoring cancellation cannot hang start beyond the outer bound.
         _sched_error = TimeoutError(
             f"APScheduler did not become ready within {_STARTUP_TIMEOUT_S:.0f}s."
         )

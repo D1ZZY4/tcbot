@@ -54,6 +54,33 @@ def test_start_raises_runtime_error_on_timeout(
     assert sched_mod._sched_task is None
 
 
+def test_start_reports_a_job_store_failure_without_waiting_for_the_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A broken job store must fail fast and keep its original cause.
+
+    The store is built before the scheduler starts. A missing CREATE
+    privilege or an unreachable URL used to raise outside the guarded
+    block, so ``start()`` waited the whole readiness window and then
+    reported a timeout with the real error discarded.
+    """
+
+    def _broken_store(_url: str) -> Any:
+        raise RuntimeError("job store unavailable")
+
+    monkeypatch.setattr(sched_mod, "_STARTUP_TIMEOUT_S", 30.0)
+    monkeypatch.setattr(sched_mod, "_build_job_store", _broken_store)
+
+    with pytest.raises(RuntimeError, match="APScheduler failed to start") as excinfo:
+        # * The readiness event fires as soon as the failure is recorded, so
+        # * the outer bound only exists to catch a regression, not a hang.
+        asyncio.run(asyncio.wait_for(sched_mod.start(_TEST_URL), 2.0))
+
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    assert "job store unavailable" in str(excinfo.value.__cause__)
+    assert sched_mod._sched_task is None
+
+
 def test_start_success_path_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _ready(*args: Any, **kwargs: Any) -> None:
         if sched_mod._sched_ready is not None:
