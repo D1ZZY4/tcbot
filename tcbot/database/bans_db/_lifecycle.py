@@ -16,7 +16,7 @@ from tcbot.database.engine import run_transaction
 from tcbot.database.users_cache import ensure_users
 from tcbot.utils.time_and_date import utc_now
 
-from ._shared import _drop_review_keys
+from ._shared import _drop_review_keys, _in_force
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -132,6 +132,11 @@ async def approve_appeal_and_queue_unban(
                 moderation_actions.c.external_ref == ban_id,
                 moderation_actions.c.action_type == "ban",
                 moderation_actions.c.status == "active",
+                # * A timed ban whose deadline passed is no longer in force,
+                # * even before the daily sweep moves the row. Accepting the
+                # * appeal would record a staff decision about a restriction
+                # * nobody can enforce.
+                _in_force(),
             )
             .with_for_update()
         )

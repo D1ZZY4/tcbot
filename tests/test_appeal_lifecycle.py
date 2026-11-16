@@ -29,7 +29,12 @@ from tcbot import database as db
 from tcbot.database import engine as engine_module
 from tcbot.database.base import moderation_actions, moderation_appeals, moderation_cases
 from tcbot.utils.time_and_date import utc_now
-from tests.postgres_support import reset_community, seed_chats, seed_users
+from tests.postgres_support import (
+    reset_community,
+    seed_action,
+    seed_chats,
+    seed_users,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -445,6 +450,43 @@ async def test_an_expired_ban_withdraws_its_pending_appeal(ban_db: str) -> None:
     assert ban is not None
     assert ban.get("is_active") is False
     assert ban.get("review_message_id") is None
+
+
+async def test_an_elapsed_ban_cannot_have_its_appeal_approved(ban_db: str) -> None:
+    """An approval needs a ban that is still in force, not only stored active.
+
+    The daily sweep is what moves an elapsed ban to ``expired``. Before it
+    runs, the stored status still reads ``active``, so the approval write
+    has to apply the deadline itself instead of recording a staff decision
+    about a restriction nobody can enforce.
+    """
+    now = utc_now()
+    action_id = await seed_action(
+        "ban",
+        _TARGET_ID,
+        actor_user_id=_REVIEWER_ID,
+        external_ref=_BAN_REF,
+        created_at=now - timedelta(hours=2),
+        expires_at=now - timedelta(hours=1),
+    )
+    await engine_module.run(
+        moderation_appeals.insert().values(
+            action_id=action_id,
+            appellant_user_id=_TARGET_ID,
+            appeal_text="please reconsider",
+            status="pending",
+            submitted_at=now,
+        )
+    )
+
+    accepted, run_id = await db.bans_db.approve_appeal_and_queue_unban(
+        _BAN_REF, _REVIEWER_ID, "Admin", _REVIEWER_ID, (-1001,)
+    )
+
+    assert accepted is False
+    assert run_id is None
+    rows = await _appeals()
+    assert [row["status"] for row in rows] == ["pending"]
 
 
 async def test_the_appeal_count_follows_the_records(ban_db: str) -> None:

@@ -99,6 +99,13 @@ async def test_a_timed_ban_stops_being_active_at_its_deadline(postgres: str) -> 
     assert await bans_db.active_bans_for_users([9]) == []
     assert await bans_db.active_ban_user_ids() == [42]
 
+    # * A single-record read agrees with the active queries: the stored
+    # * status is still ``active`` until the daily sweep, but the document
+    # * must not present an elapsed ban as in force.
+    elapsed = await bans_db.get_ban("expiredtimedban")
+    assert elapsed is not None
+    assert elapsed.get("is_active") is False
+
 
 async def test_the_database_refuses_a_second_active_ban(postgres: str) -> None:
     """One active ban per user, enforced by the database."""

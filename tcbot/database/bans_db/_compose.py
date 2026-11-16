@@ -23,6 +23,7 @@ from tcbot.database.documents import ActionStatus, BanDoc, ScopeType
 from tcbot.database.engine import db_call, fetch_all
 from tcbot.database.types import BanId
 from tcbot.utils.logger import get_logger
+from tcbot.utils.time_and_date import to_utc, utc_now
 
 from ._shared import (
     META_APPEAL_LINK,
@@ -118,6 +119,21 @@ async def _proof_ids_for(action_ids: list[int]) -> dict[int, int]:
     return result
 
 
+def _row_in_force(row: dict[str, Any], now: datetime) -> bool:
+    """Return True while the decision is active and its deadline has not passed.
+
+    The stored status only changes when the daily sweep runs, so a timed
+    ban can still read ``active`` after its deadline. Every active query
+    applies the deadline at read time, and the document has to agree with
+    them: a caller that treats such a record as in force (an appeal, a
+    review decision) would act on a ban that nobody can enforce.
+    """
+    if str(row.get("status") or "") != "active":
+        return False
+    expires_at = row.get("expires_at")
+    return expires_at is None or to_utc(expires_at) > now
+
+
 def _review_timestamp(metadata: dict[str, Any]) -> datetime | None:
     """Return the moment the review slot was claimed.
 
@@ -148,6 +164,7 @@ def compose_row(
         metadata = {}
     action_id = int(row["id"])
     status = str(row["status"])
+    now = utc_now()
     return BanDoc(
         id=action_id,
         ban_id=cast("BanId", str(row["external_ref"])),
@@ -163,7 +180,7 @@ def compose_row(
         until_date=row.get("expires_at"),
         duration_str=metadata.get(META_DURATION),
         duration_seconds=row.get("duration_seconds"),
-        is_active=status == "active",
+        is_active=_row_in_force(row, now),
         status=cast("ActionStatus", status),
         update_count=int(metadata.get(META_UPDATE_COUNT, 0) or 0),
         review_message_id=metadata.get(META_REVIEW_MESSAGE),
