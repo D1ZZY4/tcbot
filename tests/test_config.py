@@ -108,6 +108,9 @@ def test_proofs_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
         _load(monkeypatch, PROOFS="  ")
     with pytest.raises(RuntimeError, match="PROOFS is required"):
         _load(monkeypatch, PROOFS="not-a-chat")
+    # * A positive id names a user, not a chat that can hold evidence.
+    with pytest.raises(RuntimeError, match="PROOFS is required"):
+        _load(monkeypatch, PROOFS="123456789")
 
 
 def test_invalid_chat_id_falls_back_to_zero(

@@ -33,7 +33,7 @@ _DEFAULT_PORT: int = 5000
 # * reverse proxy can set BIND_HOST=127.0.0.1.
 _DEFAULT_BIND_HOST: str = "0.0.0.0"
 _ERR_OWNER_ID: str = "OWNER_ID is required and must be a positive integer."
-_ERR_PROOFS: str = "PROOFS is required and must be a valid chat id."
+_ERR_PROOFS: str = "PROOFS is required and must be a valid group or channel chat id."
 # * The connection pool of the database. The size has to fit the number
 # * of connections the database grants this user: a pooler in session or
 # * transaction mode caps it at a small number, and a pool that is larger
@@ -191,7 +191,9 @@ def _proofs_from_env() -> tuple[int, int | None]:
     if not raw:
         raise RuntimeError(_ERR_PROOFS)
     chat_id, thread_id = parse_chat_id(raw)
-    if chat_id == 0:
+    # * A group or channel id is negative; a positive one names a user and
+    # * cannot hold the evidence archive the schema records.
+    if chat_id >= 0:
         raise RuntimeError(_ERR_PROOFS)
     return chat_id, thread_id
 
