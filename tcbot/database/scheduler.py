@@ -230,10 +230,19 @@ async def expire_stale_records() -> None:
         raise RuntimeError(
             "Stale record cleanup incomplete; see errors above."
         ) from failures[0]
+    removed = members_res if isinstance(members_res, int) else 0
+    erased, erased_ids = erasures_res if isinstance(erasures_res, tuple) else (0, [])
+    # * The name and the role are invalidated only once the transaction has
+    # * committed. A reader that misses the in-memory layer during the
+    # * commit would otherwise load the pre-erasure row and repopulate both
+    # * cache layers with the data the erasure just removed.
+    for user_id in erased_ids:
+        user_mention_cache.invalidate(user_id)
+        effective_role_cache.invalidate(user_id)
     log.info(
         "Stale record cleanup: removed %d stale memberships and processed %d erasures.",
-        members_res,
-        erasures_res,
+        removed,
+        erased,
     )
 
 
@@ -254,14 +263,19 @@ async def _cleanup_members(sess: AsyncSession, cutoff: Any) -> int:
     return int(getattr(result, "rowcount", 0) or 0)
 
 
-async def _sweep_erasures(sess: AsyncSession) -> int:
-    """Process the erasure queue under a cross-instance lock."""
+async def _sweep_erasures(sess: AsyncSession) -> tuple[int, list[int]]:
+    """Process the erasure queue under a cross-instance lock.
+
+    Returns the number of processed requests and the user ids the batch
+    covered. The caller invalidates those ids only after the transaction
+    commits, so a concurrent cache fill cannot restore an erased name.
+    """
     locked = await sess.scalar(
         text("SELECT pg_try_advisory_xact_lock(hashtextextended(:scope, 0))"),
         {"scope": "tcbot:cleanup:erasures"},
     )
     if not locked:
-        return 0
+        return 0, []
     pending = await sess.execute(
         text(
             "SELECT user_id FROM telegram_user_erasures "
@@ -275,12 +289,7 @@ async def _sweep_erasures(sess: AsyncSession) -> int:
     )
     erased_ids = [int(row[0]) for row in pending]
     result = await sess.execute(text("SELECT sweep_pending_user_erasures(25)"))
-    # * The anonymised name and the revoked role must not keep rendering
-    # * from a cache that the database cannot see.
-    for user_id in erased_ids:
-        user_mention_cache.invalidate(user_id)
-        effective_role_cache.invalidate(user_id)
-    return int(result.scalar() or 0)
+    return int(result.scalar() or 0), erased_ids
 
 
 async def expire_promotion_requests() -> None:

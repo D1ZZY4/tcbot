@@ -57,6 +57,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **A re-queued enforcement run clears its completion stamp** (`tcbot/database/enforcement_db.py`): a run that closed after a failed target kept `finished_at` when the retry deadline returned it to the queue, so the ledger carried a completion time for work that had not started. The requeue clears the stamp.
 
+- **An erased account cannot re-enter the cache during the sweep** (`tcbot/database/scheduler.py`): the name and role caches were invalidated inside the erasure transaction, before its commit, so a concurrent miss could repopulate the pre-erasure row. The ids are returned from the transaction and invalidated after the commit. Behavior changes: none for a successful erasure; a concurrent read no longer restores the erased name.
+
 - **A scheduler job-store failure reports its own cause at boot** (`tcbot/database/scheduler.py`): the store was built before the guarded block, so a missing privilege or an unreachable host raised outside it, left the readiness event unset, and made `start()` wait the full 30 s budget before reporting a generic timeout. The construction now runs inside the guarded block, and the original exception becomes the cause of the reported failure.
 
 - **A server-side SQL refusal does not open the database circuit** (`tcbot/database/engine.py`): psycopg 3 reports a lock timeout, a deadlock, a serialisation failure, or a statement cancellation as an `OperationalError`, and the classifier counted five of them as a link outage, rejecting every database call federation-wide. Those SQLSTATEs prove the link is healthy now and are not counted.
