@@ -68,18 +68,36 @@ def _database_url() -> str:
     return url
 
 
+# * SQLSTATEs that mean the server answered and refused this statement. They
+# * arrive as ``OperationalError`` in psycopg 3, but the connection is
+# * healthy: counting them would open the circuit for the whole federation
+# * because one statement hit a lock timeout or a deadlock.
+_NON_CONNECTION_SQLSTATES: frozenset[str] = frozenset(
+    {
+        "40001",  # serialization_failure
+        "40P01",  # deadlock_detected
+        "55P03",  # lock_not_available
+        "57014",  # query_canceled (statement timeout)
+    }
+)
+
+
 def is_connection_error(exc: BaseException) -> bool:
     """Return True when the database link itself failed.
 
     A dropped connection, a refused socket, or a driver timeout is a
     connection failure. A constraint violation or a syntax error is not:
     the server answered, so the statement was wrong and retrying it
-    would fail the same way.
+    would fail the same way. A server-side cancellation or lock refusal
+    also proves the link is healthy, so it is not counted here.
     """
+    orig = getattr(exc, "orig", None)
+    sqlstate = str(getattr(orig, "sqlstate", "") or getattr(orig, "pgcode", "") or "")
+    if sqlstate in _NON_CONNECTION_SQLSTATES:
+        return False
     if isinstance(exc, (OperationalError, InterfaceError)):
         return True
     if isinstance(exc, DBAPIError):
-        orig = getattr(exc, "orig", None)
         if orig is not None and isinstance(orig, (ConnectionError, TimeoutError)):
             return True
         if getattr(exc, "connection_invalidated", False):

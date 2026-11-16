@@ -83,6 +83,31 @@ def test_classifier_rejects_application_errors() -> None:
     assert is_transient_db_error(DBAPIError("stmt", {}, Exception("plain"))) is False
 
 
+def test_classifier_rejects_server_side_refusals() -> None:
+    """A lock timeout or deadlock proves the server answered.
+
+    psycopg 3 raises these as ``OperationalError``, so the old classifier
+    counted five of them as a connection outage and opened the circuit for
+    every caller even though the link was healthy.
+    """
+
+    class _DriverError(Exception):
+        sqlstate = "55P03"
+
+    assert (
+        is_transient_db_error(OperationalError("stmt", {}, _DriverError("lock")))
+        is False
+    )
+
+    class _CancelledError(Exception):
+        sqlstate = "57014"
+
+    assert (
+        is_transient_db_error(OperationalError("stmt", {}, _CancelledError("timeout")))
+        is False
+    )
+
+
 def test_classifier_labels_a_saturated_pool_transient() -> None:
     """A pool timeout is a load condition, not a broken database.
 
