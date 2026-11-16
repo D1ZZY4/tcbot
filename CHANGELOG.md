@@ -95,6 +95,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **The migration helper refuses a schema name it cannot quote** (`tcbot/database/migrations.py`): `ensure_schema` interpolated the name into `CREATE SCHEMA`, relying on every caller to validate it. The helper now checks for a plain identifier itself. Behavior changes: an invalid name raises before the statement reaches the server.
 
+- **The database package exposes the MTProto store on its lazy surface** (`tcbot/database/__init__.py`): `mtproto_store` was importable but absent from the declared module set, unlike every other database module. Behavior changes: `dir()` and the declared surface include it.
+
 - **Integer coercion of database and report values has one owner** (`tcbot/database/types.py`, `tcbot/enforcement_worker.py`, `tcbot/notification_worker.py`, `tcbot/modules/maintenance.py`, `tcbot/database/enforcement_db.py`): the enforcement worker, the notification worker, the repair command, and the run report each converted untrusted integer values with their own copy of the same rules. `database.types.as_int()` now owns the conversion, so a row read through any layer resolves the same way. Behavior changes: none; the accepted values and the fallback are unchanged.
 
 - **A cancelled enforcement run keeps the reason it was abandoned** (`tcbot/database/enforcement_db.py`): the cancellation helper accepted a reason and then discarded it, so an operator found a terminal run with no explanation. The reason is now stored in the run metadata and remains available for diagnosis. Behavior changes: a cancelled run carries `cancel_reason` in its metadata; the enforcement itself is unchanged.
