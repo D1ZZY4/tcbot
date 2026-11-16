@@ -289,32 +289,42 @@ class Promote:
         admin_fname: str,
         target_id: int,
         target_fname: str,
-        current_role: str | None,
         role: str,
         locale: str | None = None,
     ) -> tuple[bool, str]:
-        """Execute a role assignment. Returns (success, reply_text).
+        """Execute a role assignment. Returns (success, reply text).
 
-        The executor role is read fresh at the mutation point: the
-        command and the role picker both resolve it earlier, and the
-        target classification and bot probe in between can take seconds.
-        A demotion or ownership transfer in that window must not still
-        grant the rank the executor held at entry. A failed lookup
-        refuses the grant.
+        Both roles are read fresh at the mutation point: the command and
+        the role picker resolve them earlier, and the target
+        classification and bot probe in between can take seconds. A
+        demotion or ownership transfer of the executor in that window
+        must not still grant the rank the executor held at entry, and a
+        target promoted or demoted meanwhile must not be ranked on the
+        value the prompt captured. A failed lookup refuses the grant.
         """
-        try:
-            executor_role = await db.users_roles.get_effective_role(
-                admin_id, fresh=True
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
+        role_results = await asyncio.gather(
+            db.users_roles.get_effective_role(admin_id, fresh=True),
+            db.users_roles.get_effective_role(target_id, fresh=True),
+            return_exceptions=True,
+        )
+        throw_if_cancelled(role_results)
+        executor_result, target_result = role_results
+        if isinstance(executor_result, BaseException):
             log.warning(
                 "Promote.execute executor role lookup failed for %d: %s",
                 admin_id,
-                exc,
+                executor_result,
             )
             return False, t("admins.error.role_lookup_failed", locale)
+        if isinstance(target_result, BaseException):
+            log.warning(
+                "Promote.execute target role lookup failed for %d: %s",
+                target_id,
+                target_result,
+            )
+            return False, t("admins.error.role_lookup_failed", locale)
+        executor_role = executor_result
+        current_role = target_result
         # * The grant table is read here, not only in the role picker: the
         # * command and the callback both check the executor, but the
         # * helper owns the rule so a future caller cannot hand out rank

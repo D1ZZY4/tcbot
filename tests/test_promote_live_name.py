@@ -75,11 +75,10 @@ def test_picker_resolves_live_name_on_cache_miss(
         admin_fname: str,
         target_id: int,
         target_fname: str,
-        current_role: str | None,
         role: str,
         locale: str | None = None,
     ) -> tuple[bool, str]:
-        _ = (bot, admin_id, admin_fname, current_role, locale)
+        _ = (bot, admin_id, admin_fname, locale)
         captured["target_fname"] = target_fname
         captured["role"] = role
         return True, "Done."

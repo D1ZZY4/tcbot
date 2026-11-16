@@ -36,11 +36,15 @@ def _install_ban(
 
 
 def _install_executor_role(monkeypatch: pytest.MonkeyPatch, role: str | None) -> None:
-    """Install the fresh executor role read at the mutation point."""
+    """Install the fresh role reads at the mutation point.
+
+    The executor is user 1; the target (user 42) starts with no role unless
+    a test says otherwise.
+    """
 
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
-        _ = (user_id, fresh)
-        return role
+        _ = fresh
+        return role if user_id == 1 else None
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
 
@@ -113,7 +117,6 @@ def test_promote_execute_refuses_a_banned_target(
             "Founder",
             42,
             "Target",
-            None,
             "admin",
             "en-US",
         )
@@ -148,7 +151,6 @@ def test_promote_execute_rechecks_the_executor_rank(
             "Founder",
             42,
             "Target",
-            None,
             "admin",
             "en-US",
         )
@@ -177,7 +179,7 @@ def test_promote_execute_fails_closed_on_a_role_lookup_error(
 
     ok, _text = asyncio.run(
         promote_flow.Promote.execute(
-            _bot(), 1, "Founder", 42, "Target", None, "admin", "en-US"
+            _bot(), 1, "Founder", 42, "Target", "admin", "en-US"
         )
     )
     assert ok is False
@@ -206,13 +208,48 @@ def test_promote_execute_allows_a_clean_target(
             "Founder",
             42,
             "Target",
-            None,
             "developer",
             "en-US",
         )
     )
     assert ok is True
     assert assigned == [(42, "developer")]
+
+
+def test_promote_execute_rechecks_the_target_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target promoted while the prompt was open is not overwritten.
+
+    The command and the role picker read the target role before the grant.
+    A Founder promoting the target to Admin in that window must not be
+    undone by an older Developer grant decided against the stale role.
+    """
+    _install_ban(monkeypatch, ban=None)
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        _ = fresh
+        return "founder" if user_id == 1 else "admin"
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    assigned: list[tuple[int, str]] = []
+
+    async def _set_role(user_id: int, role: str, assigned_by: int) -> None:
+        _ = assigned_by
+        assigned.append((user_id, role))
+
+    monkeypatch.setattr(db.users_roles, "set_role", _set_role)
+    monkeypatch.setattr(db.users_cache, "upsert_user", _noop_user_upsert)
+
+    ok, text = asyncio.run(
+        promote_flow.Promote.execute(
+            _bot(), 1, "Founder", 42, "Target", "developer", "en-US"
+        )
+    )
+
+    assert ok is False
+    assert assigned == []
+    assert "Admin" in text
 
 
 def test_promote_request_refuses_a_banned_target(

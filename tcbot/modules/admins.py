@@ -135,7 +135,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     if classified is None:
         return
-    ident, current_role = classified
+    ident, _entry_role = classified
     refusal = identity.refuse_message("promote", ident, locale)
     if refusal is not None:
         await safe_reply(msg, refusal, log_label="cmd_promote refusal")
@@ -162,7 +162,6 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             admin.first_name,
             target_id,
             target_fname or str(target_id),
-            current_role,
             role,
             locale,
         )
@@ -322,7 +321,6 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         admin.first_name,
         target_id,
         target_fname,
-        current_role,
         role,
         locale,
     )

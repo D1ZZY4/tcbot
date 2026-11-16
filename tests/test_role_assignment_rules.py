@@ -73,9 +73,9 @@ def _install_promote(
         _ = user_id
         return "en-US"
 
-    async def _effective_role(user_id: int, *, fresh: bool = False) -> str:
-        _ = (user_id, fresh)
-        return executor_role
+    async def _effective_role(user_id: int, *, fresh: bool = False) -> str | None:
+        _ = fresh
+        return executor_role if user_id == 1 else current_role
 
     monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
     monkeypatch.setattr(db.users_roles, "set_role", _set_role)
@@ -107,7 +107,7 @@ def test_founder_assigns_admin_directly(monkeypatch: pytest.MonkeyPatch) -> None
     seen = _install_promote(monkeypatch)
     ok, _text = asyncio.run(
         promote_flow.Promote.execute(
-            _bot(), 1, "Founder", 42, "Target", None, "admin", "en-US"
+            _bot(), 1, "Founder", 42, "Target", "admin", "en-US"
         )
     )
     assert ok is True
@@ -121,9 +121,7 @@ def test_admin_promotion_to_admin_queues_a_request(
     """An Admin may not grant Admin; the request goes to the Founder."""
     seen = _install_promote(monkeypatch, executor_role="admin")
     ok, _text = asyncio.run(
-        promote_flow.Promote.execute(
-            _bot(), 1, "Admin", 42, "Target", None, "admin", "en-US"
-        )
+        promote_flow.Promote.execute(_bot(), 1, "Admin", 42, "Target", "admin", "en-US")
     )
     assert ok is True
     assert seen["added"] == []
@@ -140,7 +138,6 @@ def test_admin_assigns_a_subrole_directly(monkeypatch: pytest.MonkeyPatch) -> No
             "Admin",
             42,
             "Target",
-            None,
             "developer",
             "en-US",
         )
@@ -159,7 +156,6 @@ def test_developer_may_not_assign_any_role(monkeypatch: pytest.MonkeyPatch) -> N
             "Developer",
             42,
             "Target",
-            None,
             "tester",
             "en-US",
         )
@@ -173,7 +169,7 @@ def test_promotion_refuses_a_higher_ranked_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A target that already outranks the new role is refused."""
-    seen = _install_promote(monkeypatch)
+    seen = _install_promote(monkeypatch, current_role="admin")
     ok, _text = asyncio.run(
         promote_flow.Promote.execute(
             _bot(),
@@ -181,7 +177,6 @@ def test_promotion_refuses_a_higher_ranked_target(
             "Founder",
             42,
             "Target",
-            "admin",
             "developer",
             "en-US",
         )
@@ -192,7 +187,7 @@ def test_promotion_refuses_a_higher_ranked_target(
 
 def test_promotion_refuses_the_founder(monkeypatch: pytest.MonkeyPatch) -> None:
     """The Founder role is never assignable through a promotion."""
-    seen = _install_promote(monkeypatch)
+    seen = _install_promote(monkeypatch, current_role="founder")
     ok, _text = asyncio.run(
         promote_flow.Promote.execute(
             _bot(),
@@ -200,7 +195,6 @@ def test_promotion_refuses_the_founder(monkeypatch: pytest.MonkeyPatch) -> None:
             "Founder",
             42,
             "Target",
-            "founder",
             "developer",
             "en-US",
         )
