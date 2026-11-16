@@ -15,6 +15,7 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
+from tcbot.database.types import as_int
 from tcbot.modules.helper import decorators, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
@@ -353,28 +354,12 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ────────────────── Command Repair </tcrepair> ────────────────── #
 
 
-def _read_int(value: object) -> int:
-    """Read an integer from a database or command value without trusting it."""
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return 0
-    return 0
-
-
 def _repair_lines(runs: list[dict[str, object]], locale: str) -> str:
     """Render the unsettled runs as one MarkdownV2 message."""
     lines = [t("maintenance.repair.header", locale, n=len(runs))]
     for run in runs:
-        run_id = _read_int(run.get("id"))
-        applied = _read_int(run.get("succeeded_count")) + _read_int(
-            run.get("skipped_count")
-        )
+        run_id = as_int(run.get("id"))
+        applied = as_int(run.get("succeeded_count")) + as_int(run.get("skipped_count"))
         lines.append(
             t(
                 "maintenance.repair.line",
@@ -382,12 +367,12 @@ def _repair_lines(runs: list[dict[str, object]], locale: str) -> str:
                 run=Safe(code(str(run_id))),
                 operation=str(run.get("operation") or ""),
                 action_type=str(run.get("action_type") or ""),
-                user=Safe(code(str(_read_int(run.get("target_user_id"))))),
+                user=Safe(code(str(as_int(run.get("target_user_id"))))),
                 status=str(run.get("status") or ""),
                 applied=applied,
-                total=_read_int(run.get("target_count")),
-                failed=_read_int(run.get("failed_count")),
-                exhausted=_read_int(run.get("exhausted_targets")),
+                total=as_int(run.get("target_count")),
+                failed=as_int(run.get("failed_count")),
+                exhausted=as_int(run.get("exhausted_targets")),
             )
         )
     lines.append(t("maintenance.repair.footer", locale))
@@ -458,8 +443,8 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode=None,
         )
         return
-    run_id = _read_int(args[1])
-    chat_id = _read_int(args[2]) if len(args) == 3 else None
+    run_id = as_int(args[1])
+    chat_id = as_int(args[2]) if len(args) == 3 else None
     if run_id <= 0 or (len(args) == 3 and chat_id in (None, 0)):
         await safe_reply(
             msg,

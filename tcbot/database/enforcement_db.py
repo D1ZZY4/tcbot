@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Literal
 from sqlalchemy import text
 
 from tcbot.database.engine import run_transaction
+from tcbot.database.types import as_int
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -556,17 +557,7 @@ async def redrive_run(run_id: int, *, chat_id: int | None = None) -> RepairResul
 
 def report_count(report: dict[str, object] | None, key: str, default: int = 0) -> int:
     """Read one integer counter from a run report."""
-    value = (report or {}).get(key)
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return 0
-    return default
+    return as_int((report or {}).get(key), default)
 
 
 def report_targets(report: dict[str, object] | None) -> list[dict[str, object]]:

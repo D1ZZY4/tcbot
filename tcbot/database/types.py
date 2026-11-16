@@ -38,3 +38,24 @@ def make_short_id(length: int = 10) -> str:
     predictable by an observer.
     """
     return "".join(secrets.choice(_ID_ALPHABET) for _ in range(length))
+
+
+def as_int(value: object, default: int = 0) -> int:
+    """Return *value* as an integer, or *default* when it is unusable.
+
+    Database drivers return a column in the type the server declared, but a
+    row read through a plain mapping or a cache can hand back a string. Every
+    caller that needs an integer from such a value uses this helper, so the
+    fallback is identical on the worker, the command, and the report paths.
+    A boolean is an integer in Python and keeps its numeric value.
+    """
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default

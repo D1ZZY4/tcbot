@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from telegram.error import BadRequest, Forbidden
 
 from tcbot import database as db
+from tcbot.database.types import as_int
 from tcbot.utils.i18n import resolve_locale, t
 from tcbot.utils.logger import get_logger
 
@@ -63,20 +64,6 @@ async def run_once(bot: Bot) -> None:
             )
 
 
-def _as_int(value: object) -> int:
-    """Read a database integer without trusting its runtime type."""
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return 0
-    return 0
-
-
 def _card_is_still_decidable(action: dict[str, object], message_id: int) -> bool:
     """Return True when the card still belongs to a live review.
 
@@ -88,7 +75,7 @@ def _card_is_still_decidable(action: dict[str, object], message_id: int) -> bool
     return (
         str(action.get("status") or "") == "active"
         and action.get("has_pending_appeal") is True
-        and _as_int(action.get("review_message_id")) == message_id
+        and as_int(action.get("review_message_id")) == message_id
     )
 
 
@@ -109,11 +96,11 @@ async def _group_locale(chat_id: int) -> str:
 
 async def _process_task(bot: Bot, task: dict[str, object]) -> None:
     """Edit one card, or record why the retry cannot succeed."""
-    task_id = _as_int(task.get("id"))
-    action_id = _as_int(task.get("action_id"))
-    chat_id = _as_int(task.get("chat_id"))
-    message_id = _as_int(task.get("message_id"))
-    attempts = _as_int(task.get("attempts"))
+    task_id = as_int(task.get("id"))
+    action_id = as_int(task.get("action_id"))
+    chat_id = as_int(task.get("chat_id"))
+    message_id = as_int(task.get("message_id"))
+    attempts = as_int(task.get("attempts"))
     if task_id <= 0 or action_id <= 0 or chat_id == 0 or message_id <= 0:
         return
     action = await db.notifications_db.load_task_action(task_id)

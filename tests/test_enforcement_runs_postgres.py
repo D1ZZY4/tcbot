@@ -31,6 +31,7 @@ from tcbot.database.base import (
     telegram_chats,
     telegram_users,
 )
+from tcbot.database.types import as_int
 from tests.postgres_support import reset_community, seed_chats, seed_users
 
 if TYPE_CHECKING:
@@ -50,10 +51,6 @@ async def run_db(postgres_db: str) -> AsyncIterator[str]:
 
 def _proof() -> list[EvidenceItemDoc]:
     return [{"media_type": "photo", "archive_message_id": 501}]
-
-
-def _as_int(value: object) -> int:
-    return value if isinstance(value, int) else int(str(value))
 
 
 async def test_unban_revokes_and_queues_the_delivery(run_db: str) -> None:
@@ -123,9 +120,9 @@ async def test_unban_revokes_and_queues_the_delivery(run_db: str) -> None:
     claimed = await enforcement_db.claim_run(run_id)
     assert claimed is not None
     targets = await enforcement_db.claim_targets(run_id)
-    assert [_as_int(target["chat_id"]) for target in targets] == [-1001]
+    assert [as_int(target["chat_id"]) for target in targets] == [-1001]
     await enforcement_db.complete_target(
-        _as_int(targets[0]["id"]), status="succeeded", outcome="succeeded"
+        as_int(targets[0]["id"]), status="succeeded", outcome="succeeded"
     )
     report = await enforcement_db.run_report(run_id)
     assert report is not None
@@ -328,16 +325,16 @@ async def test_review_card_outbox_round_trip(run_db: str) -> None:
         proof_items=_proof(),
         proof_expected_count=1,
     )
-    action_id = _as_int(ban.get("id"))
+    action_id = as_int(ban.get("id"))
     await notifications_db.enqueue_review_card_edit(action_id, -1001, 900)
 
     tasks = await notifications_db.claim_due_tasks(10, retry_after=timedelta(minutes=5))
     assert tasks
     task = tasks[0]
-    assert _as_int(task.get("action_id")) == action_id
-    assert _as_int(task.get("message_id")) == 900
+    assert as_int(task.get("action_id")) == action_id
+    assert as_int(task.get("message_id")) == 900
 
-    task_id = _as_int(task.get("id"))
+    task_id = as_int(task.get("id"))
     await notifications_db.complete_task(task_id, state="sent")
     row = await engine_module.fetch_one(
         select(
@@ -401,7 +398,7 @@ async def test_an_exhausted_failed_target_can_be_re_driven(run_db: str) -> None:
     targets = await enforcement_db.claim_targets(run_id)
     assert len(targets) == 1
     await enforcement_db.complete_target(
-        _as_int(targets[0]["id"]),
+        as_int(targets[0]["id"]),
         status="failed",
         outcome="failed",
         error_kind="Forbidden",
@@ -412,7 +409,7 @@ async def test_an_exhausted_failed_target_can_be_re_driven(run_db: str) -> None:
     assert report is not None
     assert report["status"] == "failed"
     listed = await enforcement_db.list_unsettled_runs()
-    assert any(_as_int(row.get("id")) == run_id for row in listed)
+    assert any(as_int(row.get("id")) == run_id for row in listed)
 
     repaired = await enforcement_db.redrive_run(run_id)
     assert repaired.state == "queued"
@@ -427,7 +424,7 @@ async def test_an_exhausted_failed_target_can_be_re_driven(run_db: str) -> None:
     assert await enforcement_db.claim_run(run_id) is not None
     retried = await enforcement_db.claim_targets(run_id)
     assert len(retried) == 1
-    assert _as_int(retried[0]["attempt_count"]) == 2
+    assert as_int(retried[0]["attempt_count"]) == 2
 
 
 async def test_a_repair_can_target_one_group(run_db: str) -> None:
@@ -452,7 +449,7 @@ async def test_a_repair_can_target_one_group(run_db: str) -> None:
     assert len(targets) == 2
     for target in targets:
         await enforcement_db.complete_target(
-            _as_int(target["id"]),
+            as_int(target["id"]),
             status="failed",
             outcome="failed",
             error_kind="Forbidden",
@@ -470,7 +467,7 @@ async def test_a_repair_can_target_one_group(run_db: str) -> None:
         ).where(moderation_enforcement_targets.c.run_id == run_id)
     )
     retry_by_chat = {
-        _as_int(row["chat_id"]): row["next_retry_at"] is not None for row in rows
+        as_int(row["chat_id"]): row["next_retry_at"] is not None for row in rows
     }
     assert retry_by_chat == {-1001: True, -1002: False}
 

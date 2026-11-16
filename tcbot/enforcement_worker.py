@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from telegram import ChatPermissions
 
 from tcbot import database as db
+from tcbot.database.types import as_int
 from tcbot.utils.dispatch import (
     fan_out,
     gather_bounded,
@@ -39,20 +40,6 @@ _MAX_RUNS_PER_TICK: int = 10
 _MAX_TARGETS_PER_RUN: int = 100
 _MAX_ATTEMPTS: int = 3
 _RETRY_DELAY = timedelta(minutes=5)
-
-
-def _as_int(value: object) -> int:
-    """Read a database integer column without trusting its runtime type."""
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return 0
-    return 0
 
 
 def configure(bot: Bot) -> None:
@@ -111,7 +98,7 @@ async def deliver_queued_run(bot: Bot, run_id: int) -> bool:
 
 async def _process_run(bot: Bot, run: dict[str, object]) -> None:
     """Process one claimed run, one target at a time within the run."""
-    run_id = _as_int(run.get("id"))
+    run_id = as_int(run.get("id"))
     if run_id <= 0:
         return
     action = await db.enforcement_db.load_run_action(run_id)
@@ -168,7 +155,7 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
             error_detail="an active federation ban supersedes the kick repair",
         )
         return
-    target_user_id = _as_int(action.get("target_user_id"))
+    target_user_id = as_int(action.get("target_user_id"))
     if target_user_id <= 0:
         await db.enforcement_db.cancel_run(
             run_id, error_detail="the action carries no target"
@@ -188,7 +175,7 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
         _deliver(
             bot,
             action_type,
-            _as_int(target.get("chat_id")),
+            as_int(target.get("chat_id")),
             target_user_id,
             operation,
             expiry,
@@ -216,7 +203,7 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
             and not is_benign_telegram_error(result)
         ]
         if not remaining:
-            await _close_repaired_kick(_as_int(action.get("action_id")))
+            await _close_repaired_kick(as_int(action.get("action_id")))
 
 
 async def _deliver(
@@ -264,8 +251,8 @@ async def _close_repaired_kick(action_id: int) -> None:
 
 async def _record_target(target: dict[str, object], result: object) -> None:
     """Persist one target result and schedule a bounded retry on failure."""
-    target_id = _as_int(target.get("id"))
-    attempts = _as_int(target.get("attempt_count"))
+    target_id = as_int(target.get("id"))
+    attempts = as_int(target.get("attempt_count"))
     if target_id <= 0:
         return
     if result is None:
