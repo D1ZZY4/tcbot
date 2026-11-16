@@ -315,6 +315,7 @@ async def update_ban(
         else (cfg.proofs[1] if destination_chat_id is None else None)
     )
     proof_id = new_proof_id or old_proof_id
+    current_id = int(current.get("id") or 0)
     target_id = cast("int", current.get("target_user_id"))
     metadata: dict[str, Any] = {
         META_DURATION: duration_str,
@@ -323,14 +324,44 @@ async def update_ban(
         META_PREVIOUS_LOG: old_log_id or None,
     }
     external_ref = make_ban_id()
-    # * Same single clock reading as create_ban: the case and proof writes
-    # * must not push created_at past the new deadline.
-    now = utc_now()
 
     async def _work(sess: AsyncSession) -> dict[str, Any] | None:
         case_id = await _open_case(
             sess, target_id, admin_id, reason, requires_evidence=True
         )
+        # * The active ban at write time is the one this decision supersedes.
+        # * The moderator read the record before the proof window, and a
+        # * second re-ban can land in between; superseding the stale record
+        # * would make the schema reject the supersession and lose the whole
+        # * decision. The case lock above serialises the writers, so this
+        # * read is the authoritative one. An elapsed deadline is excluded:
+        # * the insert trigger expires that row itself, and naming it as the
+        # * superseded action would then fail the supersession rule.
+        now = utc_now()
+        active_id = await sess.scalar(
+            select(moderation_actions.c.id)
+            .where(
+                moderation_actions.c.target_user_id == target_id,
+                moderation_actions.c.action_type == "ban",
+                moderation_actions.c.status == "active",
+                (moderation_actions.c.expires_at.is_(None))
+                | (moderation_actions.c.expires_at > now),
+            )
+            .order_by(moderation_actions.c.created_at.desc())
+            .limit(1)
+            .with_for_update()
+        )
+        supersedes = int(active_id) if active_id is not None else None
+        if supersedes is not None and supersedes != current_id:
+            log.warning(
+                "Re-ban of %s supersedes the newer active ban %s",
+                ban_id,
+                supersedes,
+            )
+        # * One clock reading for the whole decision, taken after the lock:
+        # * the case and proof writes may take a moment over a network, and
+        # * a later reading could push created_at past a short deadline.
+        now = utc_now()
         # * A re-ban that keeps the previous proof must carry the whole
         # * batch, not just its first message: read the archived items so
         # * the new action keeps the real media types and item count.
@@ -375,7 +406,7 @@ async def update_ban(
                         metadata=metadata,
                         case_id=case_id,
                         evidence_upload_id=upload_id,
-                        supersedes_action_id=current.get("id"),
+                        supersedes_action_id=supersedes,
                         action_origin="manual",
                     )
                     .returning(*ACTION_COLUMNS)
@@ -409,7 +440,19 @@ async def update_ban(
         await moderation_db.close_case(sess, case_id, admin_id)
         return dict(row)
 
-    row = await run_transaction(_work)
+    try:
+        row = await run_transaction(_work)
+    except Exception as insert_error:
+        if constraint_name(insert_error) != CONSTRAINT_ACTIVE_USER:
+            raise
+        # * A writer that bypassed the case lock can still land an active ban
+        # * first. The retry reads that ban under the lock and supersedes it,
+        # * so the moderator's decision is filed instead of lost.
+        log.info(
+            "Concurrent ban for user %d won the race; superseding it on retry.",
+            target_id,
+        )
+        row = await run_transaction(_work)
     if row is None:
         return None
     docs = await compose_rows([row])

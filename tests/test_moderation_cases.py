@@ -13,6 +13,7 @@ lifecycle live there.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -22,8 +23,10 @@ from tcbot import cfg
 from tcbot.database import bans_db, warns_db
 from tcbot.database import engine as engine_module
 from tcbot.database.base import moderation_actions, moderation_cases, telegram_users
+from tcbot.utils.time_and_date import utc_now
 from tests.postgres_support import (
     reset_community,
+    seed_action,
     seed_case,
     seed_chats,
     seed_users,
@@ -172,3 +175,65 @@ async def test_a_reban_opens_a_new_case_and_supersedes_the_old_decision(
     )
     assert superseded is not None
     assert superseded["status"] == "superseded"
+
+
+async def test_a_reban_of_a_superseded_decision_supersedes_the_current_ban(
+    community_db: str,
+) -> None:
+    """An older reference still lands the decision on the live ban.
+
+    A proof window can stay open while another moderator re-bans the same
+    target, so the record a flow read at entry is already superseded when
+    it writes. The new decision must supersede the ban that is active at
+    write time instead of failing the supersession rule.
+    """
+    first = await bans_db.create_ban(42, "spam", 7, 501, 0, "firstban001")
+    second = await bans_db.update_ban(
+        str(first.get("ban_id", "")), "spam again", 7, 502, 0, 501, 0
+    )
+    assert second is not None
+
+    third = await bans_db.update_ban(
+        str(first.get("ban_id", "")), "spam once more", 8, 503, 0, 501, 0
+    )
+
+    assert third is not None
+    assert third.get("ban_id") not in (first.get("ban_id"), second.get("ban_id"))
+    active = await bans_db.get_active_ban(42)
+    assert active is not None
+    assert active.get("ban_id") == third.get("ban_id")
+    cases = await _cases_of(42)
+    assert len(cases) == 3
+    assert all(case["status"] == "resolved" for case in cases)
+
+
+async def test_a_reban_of_an_elapsed_decision_starts_a_fresh_active_ban(
+    community_db: str,
+) -> None:
+    """An elapsed record is expired by the insert, not named as superseded.
+
+    A re-ban can reach the write after the previous ban passed its deadline
+    during the proof window. The insert trigger expires that row before it
+    resolves the supersession, so naming it would fail the rule. The new
+    decision must stand on its own.
+    """
+    now = utc_now()
+    await seed_action(
+        "ban",
+        42,
+        actor_user_id=7,
+        external_ref="expiredban01",
+        created_at=now - timedelta(hours=2),
+        expires_at=now - timedelta(hours=1),
+    )
+
+    fresh = await bans_db.update_ban("expiredban01", "spam again", 7, 503, 0, 0, 0)
+
+    assert fresh is not None
+    assert fresh.get("is_active") is True
+    active = await bans_db.get_active_ban(42)
+    assert active is not None
+    assert active.get("ban_id") == fresh.get("ban_id")
+    previous = await bans_db.get_ban("expiredban01")
+    assert previous is not None
+    assert previous.get("status") == "expired"
