@@ -71,6 +71,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **The schema pins the definer search path to its own schema** (`tcbot/database/schema/functions.sql`, `alembic/versions/0010_schema_hardening.py`): six `SECURITY DEFINER` functions named `public` in their search path instead of the schema the files were applied to, and the erasure batch read its rows by timestamp alone. The functions now pin `pg_catalog` and the active schema, the batch tie-breaks on `id` like the caller's pre-read, and revision 0010 reapplies the files on an existing database. Behavior changes: none for the deployment schema; a development or test schema no longer resolves a definer function through `public`.
+
 - **Integer coercion of database and report values has one owner** (`tcbot/database/types.py`, `tcbot/enforcement_worker.py`, `tcbot/notification_worker.py`, `tcbot/modules/maintenance.py`, `tcbot/database/enforcement_db.py`): the enforcement worker, the notification worker, the repair command, and the run report each converted untrusted integer values with their own copy of the same rules. `database.types.as_int()` now owns the conversion, so a row read through any layer resolves the same way. Behavior changes: none; the accepted values and the fallback are unchanged.
 
 - **A cancelled enforcement run keeps the reason it was abandoned** (`tcbot/database/enforcement_db.py`): the cancellation helper accepted a reason and then discarded it, so an operator found a terminal run with no explanation. The reason is now stored in the run metadata and remains available for diagnosis. Behavior changes: a cancelled run carries `cancel_reason` in its metadata; the enforcement itself is unchanged.

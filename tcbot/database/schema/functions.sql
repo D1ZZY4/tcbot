@@ -426,7 +426,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION %SCHEMA%.expire_due_moderation_actions_and_queue_revokes() RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'pg_catalog, public'
+    SET search_path TO 'pg_catalog', '%SCHEMA%'
     AS $$
 DECLARE
     v_expired integer;
@@ -460,7 +460,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION %SCHEMA%.expire_due_role_assignments_and_audit() RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'pg_catalog, public'
+    SET search_path TO 'pg_catalog', '%SCHEMA%'
     AS $$
 DECLARE
     v_expired integer;
@@ -958,7 +958,7 @@ CREATE OR REPLACE FUNCTION %SCHEMA%.repoint_chat_records(
     p_new_chat_id bigint
 ) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'pg_catalog, public'
+    SET search_path TO 'pg_catalog', '%SCHEMA%'
     AS $$
 DECLARE
     v_actions   integer;
@@ -2481,7 +2481,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION %SCHEMA%.queue_revoke_enforcement_for_expired_actions() RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'pg_catalog, public'
+    SET search_path TO 'pg_catalog', '%SCHEMA%'
     AS $$
 DECLARE
     v_run_ids bigint[];
@@ -2528,7 +2528,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION %SCHEMA%.reconcile_stuck_enforcement_targets(p_stale_after interval DEFAULT '00:15:00'::interval) RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'pg_catalog, public'
+    SET search_path TO 'pg_catalog', '%SCHEMA%'
     AS $$
 DECLARE
     v_count integer;
@@ -2980,7 +2980,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION %SCHEMA%.scheduled_job_claim(p_job_key text, p_run_key text DEFAULT NULL::text, p_triggered_by text DEFAULT 'cron'::text) RETURNS bigint
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'pg_catalog, public'
+    SET search_path TO 'pg_catalog', '%SCHEMA%'
     AS $$
 DECLARE
     v_job        %SCHEMA%.scheduled_jobs%ROWTYPE;
@@ -3157,7 +3157,10 @@ BEGIN
     FOR v_req IN
         SELECT * FROM %SCHEMA%.telegram_user_erasures
         WHERE status = 'pending'
-        ORDER BY requested_at
+        -- * The id tie-break matches the caller's pre-read, so the ids it
+        -- * invalidates in the cache are exactly the rows this batch
+        -- * erased even when several requests share a timestamp.
+        ORDER BY requested_at, id
         LIMIT GREATEST(p_limit, 0)
     LOOP
         BEGIN
