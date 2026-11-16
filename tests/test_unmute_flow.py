@@ -237,6 +237,7 @@ def test_a_partial_restore_names_the_failed_group(
             [
                 {"chat_id": 5, "status": "succeeded", "title": "G"},
                 {"chat_id": 6, "status": "failed", "title": "H"},
+                {"chat_id": -1, "status": "succeeded", "title": "P"},
             ]
         ),
     )
@@ -244,7 +245,7 @@ def test_a_partial_restore_names_the_failed_group(
     asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert len(msg.replies) == 1
     assert "some groups only" in msg.replies[0]
-    assert "1/2" in msg.replies[0]
+    assert "2/3" in msg.replies[0]
 
 
 def test_a_total_failure_reports_every_group(monkeypatch: pytest.MonkeyPatch) -> None:

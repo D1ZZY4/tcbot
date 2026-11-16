@@ -340,7 +340,12 @@ def test_a_due_retry_requeues_its_run() -> None:
 
 
 def test_a_delivery_outcome_keeps_pending_groups_out_of_applied() -> None:
-    """The target rows decide the result, not the failure subtraction."""
+    """The target rows decide the result, not the failure subtraction.
+
+    A group that was requested but has no target row (it disconnected
+    during the proof window) is still part of the total and counts as
+    pending, so the summary cannot claim a complete delivery.
+    """
     report = {
         "status": "running",
         "targets": [
@@ -353,10 +358,10 @@ def test_a_delivery_outcome_keeps_pending_groups_out_of_applied() -> None:
     outcome = enforcement_db.delivery_outcome(report, 9)
 
     assert (outcome.total, outcome.applied, outcome.failed, outcome.pending) == (
-        3,
+        9,
         1,
         1,
-        1,
+        7,
     )
     assert enforcement_db.report_settled(report) is False
 

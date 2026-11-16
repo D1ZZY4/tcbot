@@ -630,23 +630,25 @@ def delivery_outcome(
 ) -> DeliveryOutcome:
     """Summarise a run from its targets, falling back to its counters.
 
-    The target rows are the authoritative per-group results, so they win
-    when present. The run counters and the caller's group count are only a
-    fallback for a report that could not be read: the answer then reports
-    every group as pending instead of claiming a delivery nobody observed.
+    The target rows are the authoritative per-group results, but a
+    requested chat can be absent from them: the queue only records an
+    active connected chat, so a group disconnected during the proof window
+    leaves no row. The caller passes the requested scope as
+    *fallback_total*, and a shortfall counts as pending instead of
+    disappearing from the total. The run counters are only a fallback for
+    a report that could not be read: the answer then reports every group
+    as pending instead of claiming a delivery nobody observed.
     """
     targets = report_targets(report)
     if targets:
         statuses = [str(target.get("status") or "") for target in targets]
-        return DeliveryOutcome(
-            total=len(statuses),
-            applied=sum(status in ("succeeded", "skipped") for status in statuses),
-            failed=sum(status == "failed" for status in statuses),
-            pending=sum(status in ("pending", "in_progress") for status in statuses),
-        )
-    total = report_count(report, "target_count") or fallback_total
-    applied = report_landed_count(report)
-    failed = report_count(report, "failed_count")
+        total = max(len(statuses), fallback_total)
+        applied = sum(status in ("succeeded", "skipped") for status in statuses)
+        failed = sum(status == "failed" for status in statuses)
+    else:
+        total = report_count(report, "target_count") or fallback_total
+        applied = report_landed_count(report)
+        failed = report_count(report, "failed_count")
     return DeliveryOutcome(
         total=total,
         applied=applied,

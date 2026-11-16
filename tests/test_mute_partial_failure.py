@@ -226,13 +226,14 @@ def test_unmute_total_failure_keeps_its_delivery_run(
     async def _report(run_id: int) -> dict[str, Any]:
         return {
             "id": run_id,
-            "target_count": 2,
-            "failed_count": 2,
+            "target_count": 3,
+            "failed_count": 3,
             "succeeded_count": 0,
             "skipped_count": 0,
             "targets": [
                 {"chat_id": 101, "status": "failed", "title": "Group A"},
                 {"chat_id": 102, "status": "failed", "title": "Group B"},
+                {"chat_id": -1, "status": "failed", "title": "Primary"},
             ],
         }
 

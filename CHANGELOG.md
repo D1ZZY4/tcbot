@@ -53,6 +53,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **A delivery summary counts a requested group that never got a target** (`tcbot/database/enforcement_db.py`, `tcbot/modules/helper/pipelines/unban_flow.py`): the queue only records an active connected chat, so a group disconnected during the proof window produced no target row, and the summary counted only the rows it had. A ban then read as a complete delivery while that group was never touched. The caller's requested scope is now the floor of the reported total, the shortfall counts as pending, and the unban wording reports it as queued. Behavior changes: a delivery that cannot reach a group that left the federation reads as pending instead of full.
+
 - **An animated proof stays an animation** (`tcbot/modules/helper/pipelines/proof_flow.py`): a GIF was classified as a document and uploaded with `send_document`, while the evidence row recorded `animation`, so the archive and the stored media disagreed. Animations now upload with `send_animation`, and a gallery keeps the animation beside its photos and videos. Behavior changes: a GIF proof lands as an animation message instead of a file attachment.
 
 - **A re-ban keeps the whole previous evidence batch** (`tcbot/database/moderation_db.py`, `tcbot/database/bans_db/_writes.py`): a re-ban without a newly landed proof re-archived only the first previous message as one photo, dropping the other items and their media types. The update now copies every archived item with its expected count, and a partial previous batch stays partial instead of being recorded as complete. Behavior changes: a manual re-ban cannot attach an incomplete inherited proof, so the moderator supplies a complete one.

@@ -195,7 +195,10 @@ async def execute_unban(
     total = delivery.total
     failed = delivery.failed
     landed = delivery.applied
-    if not settled:
+    if not settled or delivery.pending > 0:
+        # * A settled run can still have a shortfall: a requested group that
+        # * left the federation leaves no target row. The queued wording is
+        # * the honest one there, because the group is replayed on reconnect.
         unban_note = t(
             "unbanning.note.queued",
             locale,

@@ -233,6 +233,36 @@ def test_a_run_another_worker_owns_is_reported_as_queued(
     assert bot.unbanned == []
 
 
+def test_a_settled_run_with_a_missing_group_is_reported_as_queued(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A group that left the federation must not read as a completed unban.
+
+    The queue only records an active connected chat, so the report can be
+    terminal while it covers fewer groups than the command requested. The
+    shortfall is a pending delivery, and the reply must not claim the
+    whole scope was reached.
+    """
+    _install(monkeypatch, groups=[{"chat_id": 1, "title": "A"}])
+
+    async def _short_report(run_id: int) -> dict[str, Any]:
+        return {
+            "status": "partial",
+            "target_count": 1,
+            "failed_count": 0,
+            "succeeded_count": 1,
+            "skipped_count": 0,
+            "targets": [{"chat_id": 1, "title": "A", "status": "succeeded"}],
+        }
+
+    monkeypatch.setattr(db.enforcement_db, "run_report", _short_report)
+
+    msg, bot = _FakeMsg(), _FakeBot()
+    asyncio.run(unban_flow.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+
+    assert "queued" in msg.replies[-1]
+
+
 def test_anonymous_admin_log_names_anonymous(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
