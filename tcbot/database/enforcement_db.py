@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import text
 
@@ -210,7 +210,12 @@ _COMPLETE_EMPTY_RUN = text(
 _CANCEL_RUN = text(
     """
     UPDATE moderation_enforcement_runs
-       SET status = 'cancelled', finished_at = now(), updated_at = now()
+       SET status = 'cancelled',
+           finished_at = now(),
+           updated_at = now(),
+           metadata = metadata || jsonb_build_object(
+               'cancel_reason', CAST(:error_detail AS text)
+           )
      WHERE id = :run_id AND status = 'running'
     """
 )
@@ -282,6 +287,63 @@ _CONNECT_REPLAY_ACTIONS = text(
      WHERE status = 'active'
        AND action_type IN ('ban', 'mute')
        AND target_user_id = ANY(:user_ids)
+    """
+)
+
+# * The operator view of the ledger: only the runs a person may still have to
+# * act on. A completed run is absent even when it is recent, because the
+# * delivery already landed and there is nothing to repair.
+_UNSETTLED_RUNS = text(
+    """
+    SELECT r.id, r.action_id, r.operation, r.status, r.target_count,
+           r.succeeded_count, r.failed_count, r.skipped_count,
+           a.action_type, a.target_user_id, a.status AS action_status,
+           r.created_at, r.updated_at,
+           count(t.id) FILTER (WHERE t.status = 'failed') AS failed_targets,
+           count(t.id) FILTER (
+               WHERE t.status = 'failed' AND t.next_retry_at IS NULL
+           ) AS exhausted_targets
+      FROM moderation_enforcement_runs AS r
+      JOIN moderation_actions AS a ON a.id = r.action_id
+      LEFT JOIN moderation_enforcement_targets AS t ON t.run_id = r.id
+     WHERE r.status IN ('queued', 'running', 'partial', 'failed')
+     GROUP BY r.id, a.action_type, a.target_user_id, a.status
+     ORDER BY r.updated_at DESC, r.id DESC
+     LIMIT :limit
+    """
+)
+
+_REDRIVE_RUN_LOCK = text(
+    """
+    SELECT status
+      FROM moderation_enforcement_runs
+     WHERE id = :run_id
+       FOR UPDATE
+    """
+)
+
+# * A manual replay only brings the retry deadline forward. The target
+# * trigger accepts failed -> failed when next_retry_at changes, and the
+# * attempt history keeps what actually happened.
+_REDRIVE_TARGETS = text(
+    """
+    UPDATE moderation_enforcement_targets
+       SET next_retry_at = now(),
+           updated_at = now()
+     WHERE run_id = :run_id
+       AND status = 'failed'
+       AND (CAST(:chat_id AS bigint) IS NULL OR chat_id = :chat_id)
+    RETURNING id
+    """
+)
+
+_REDRIVE_RUN = text(
+    """
+    UPDATE moderation_enforcement_runs
+       SET status = 'queued',
+           finished_at = NULL,
+           updated_at = now()
+     WHERE id = :run_id
     """
 )
 
@@ -433,6 +495,65 @@ async def run_report(run_id: int) -> dict[str, object] | None:
     return await run_transaction(_work)
 
 
+async def list_unsettled_runs(limit: int = 10) -> list[dict[str, object]]:
+    """Return the runs an operator may still have to repair.
+
+    A run is unsettled while it is queued, running, partial, or failed.
+    The rows carry the counters of the run plus the number of failed
+    targets and the number of those whose retry budget is exhausted, so
+    the operator view can separate "the worker will retry this" from
+    "nothing will move until a person re-drives it".
+
+    The limit is clamped: the command renders the rows in one message, and
+    an unbounded read would let a backlog grow the reply without bound.
+    """
+
+    async def _work(sess: AsyncSession) -> list[dict[str, object]]:
+        rows = (
+            (await sess.execute(_UNSETTLED_RUNS, {"limit": max(1, min(limit, 50))}))
+            .mappings()
+            .all()
+        )
+        return [dict(row) for row in rows]
+
+    return await run_transaction(_work)
+
+
+async def redrive_run(run_id: int, *, chat_id: int | None = None) -> RepairResult:
+    """Bring the failed targets of one run forward for another attempt.
+
+    The repair keeps the original decision and run: a new moderation
+    action would be a new verdict, while the operator only wants the
+    delivery of the existing one. A run that a worker still owns is left
+    alone, and a cancelled run is terminal. When *chat_id* is given, only
+    that one group is re-driven.
+    """
+
+    async def _work(sess: AsyncSession) -> RepairResult:
+        status = await sess.scalar(_REDRIVE_RUN_LOCK, {"run_id": run_id})
+        if status is None:
+            return RepairResult("missing")
+        if status == "cancelled":
+            return RepairResult("cancelled")
+        if status in ("queued", "running"):
+            return RepairResult("in_progress")
+        rows = (
+            (
+                await sess.execute(
+                    _REDRIVE_TARGETS, {"run_id": run_id, "chat_id": chat_id}
+                )
+            )
+            .mappings()
+            .all()
+        )
+        if not rows:
+            return RepairResult("no_failed_target")
+        await sess.execute(_REDRIVE_RUN, {"run_id": run_id})
+        return RepairResult("queued", len(rows))
+
+    return await run_transaction(_work)
+
+
 def report_count(report: dict[str, object] | None, key: str, default: int = 0) -> int:
     """Read one integer counter from a run report."""
     value = (report or {}).get(key)
@@ -484,6 +605,23 @@ def report_landed_count(report: dict[str, object] | None) -> int:
     return report_count(report, "succeeded_count") + report_count(
         report, "skipped_count"
     )
+
+
+RepairState = Literal[
+    "queued",
+    "no_failed_target",
+    "in_progress",
+    "cancelled",
+    "missing",
+]
+
+
+@dataclass(frozen=True)
+class RepairResult:
+    """The outcome of one operator re-drive request."""
+
+    state: RepairState
+    targets: int = 0
 
 
 @dataclass(frozen=True)
@@ -654,10 +792,15 @@ async def complete_empty_run(run_id: int) -> None:
 
 
 async def cancel_run(run_id: int, *, error_detail: str) -> None:
-    """Cancel a run whose action is no longer expirable."""
-    _ = error_detail
+    """Cancel a run whose action is no longer expirable.
+
+    The reason is kept on the run, so the ledger says why a delivery was
+    abandoned instead of leaving a terminal row with no explanation.
+    """
 
     async def _work(sess: AsyncSession) -> None:
-        await sess.execute(_CANCEL_RUN, {"run_id": run_id})
+        await sess.execute(
+            _CANCEL_RUN, {"run_id": run_id, "error_detail": error_detail}
+        )
 
     await run_transaction(_work)

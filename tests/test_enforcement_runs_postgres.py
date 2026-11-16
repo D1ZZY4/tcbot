@@ -380,6 +380,129 @@ async def test_a_kick_status_follows_its_delivery(run_db: str) -> None:
     assert status == "completed"
 
 
+async def test_an_exhausted_failed_target_can_be_re_driven(run_db: str) -> None:
+    """An operator can retry a run whose automatic budget is spent."""
+    ban = await bans_db.create_ban(
+        42,
+        "spam",
+        7,
+        501,
+        0,
+        "liferun0005",
+        destination_chat_id=cfg.proofs[0],
+        proof_items=_proof(),
+        proof_expected_count=1,
+        enforcement_chat_ids=[-1001],
+    )
+    run_id = ban.get("enforcement_run_id")
+    assert isinstance(run_id, int)
+
+    assert await enforcement_db.claim_run(run_id) is not None
+    targets = await enforcement_db.claim_targets(run_id)
+    assert len(targets) == 1
+    await enforcement_db.complete_target(
+        _as_int(targets[0]["id"]),
+        status="failed",
+        outcome="failed",
+        error_kind="Forbidden",
+        error_detail="not enough rights",
+    )
+
+    report = await enforcement_db.run_report(run_id)
+    assert report is not None
+    assert report["status"] == "failed"
+    listed = await enforcement_db.list_unsettled_runs()
+    assert any(_as_int(row.get("id")) == run_id for row in listed)
+
+    repaired = await enforcement_db.redrive_run(run_id)
+    assert repaired.state == "queued"
+    assert repaired.targets == 1
+    run = await engine_module.fetch_one(
+        select(moderation_enforcement_runs.c.status).where(
+            moderation_enforcement_runs.c.id == run_id
+        )
+    )
+    assert run == {"status": "queued"}
+
+    assert await enforcement_db.claim_run(run_id) is not None
+    retried = await enforcement_db.claim_targets(run_id)
+    assert len(retried) == 1
+    assert _as_int(retried[0]["attempt_count"]) == 2
+
+
+async def test_a_repair_can_target_one_group(run_db: str) -> None:
+    """A single chat id re-drives that group and leaves the others failed."""
+    await seed_chats(-1002)
+    ban = await bans_db.create_ban(
+        42,
+        "spam",
+        7,
+        501,
+        0,
+        "liferun0007",
+        destination_chat_id=cfg.proofs[0],
+        proof_items=_proof(),
+        proof_expected_count=1,
+        enforcement_chat_ids=[-1001, -1002],
+    )
+    run_id = ban.get("enforcement_run_id")
+    assert isinstance(run_id, int)
+    assert await enforcement_db.claim_run(run_id) is not None
+    targets = await enforcement_db.claim_targets(run_id)
+    assert len(targets) == 2
+    for target in targets:
+        await enforcement_db.complete_target(
+            _as_int(target["id"]),
+            status="failed",
+            outcome="failed",
+            error_kind="Forbidden",
+            error_detail="not enough rights",
+        )
+
+    repaired = await enforcement_db.redrive_run(run_id, chat_id=-1001)
+    assert repaired.state == "queued"
+    assert repaired.targets == 1
+
+    rows = await engine_module.fetch_all(
+        select(
+            moderation_enforcement_targets.c.chat_id,
+            moderation_enforcement_targets.c.next_retry_at,
+        ).where(moderation_enforcement_targets.c.run_id == run_id)
+    )
+    retry_by_chat = {
+        _as_int(row["chat_id"]): row["next_retry_at"] is not None for row in rows
+    }
+    assert retry_by_chat == {-1001: True, -1002: False}
+
+
+async def test_a_cancelled_run_is_not_re_driven(run_db: str) -> None:
+    ban = await bans_db.create_ban(
+        42,
+        "spam",
+        7,
+        501,
+        0,
+        "liferun0006",
+        destination_chat_id=cfg.proofs[0],
+        proof_items=_proof(),
+        proof_expected_count=1,
+        enforcement_chat_ids=[-1001],
+    )
+    run_id = ban.get("enforcement_run_id")
+    assert isinstance(run_id, int)
+    assert await enforcement_db.claim_run(run_id) is not None
+    await enforcement_db.cancel_run(run_id, error_detail="superseded")
+    metadata = await engine_module.fetch_value(
+        select(moderation_enforcement_runs.c.metadata).where(
+            moderation_enforcement_runs.c.id == run_id
+        )
+    )
+    assert metadata == {"cancel_reason": "superseded"}
+
+    assert (await enforcement_db.redrive_run(run_id)).state == "cancelled"
+    assert (await enforcement_db.redrive_run(999_999)).state == "missing"
+
+
 async def test_a_destination_is_registered_without_rewriting_a_group(
     run_db: str,
 ) -> None:

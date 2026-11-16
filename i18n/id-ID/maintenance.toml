@@ -9,6 +9,7 @@ overview = "Mengelola grup terhubung: bersihkan yang tidak bisa diakses, atau ke
 body = """
 `/leaveall` (aliases: `/exitall`, `/tcleave`)
 `/cleanup` (aliases: `/tcclean`, `/tcc`)
+`/tcrepair` (alias: `/tcr`) atau `/tcrepair retry` <run_id> [chat_id]
 `/tcforget` (alias: `/tcf`) <user_id> <reason>"""
 
 [help.leaveall]
@@ -17,6 +18,9 @@ body = "Membuat bot keluar dari semua grup terhubung sekaligus, menandai semuany
 [help.cleanup]
 body = "Memindai semua grup di database dan mencoba memastikan bot masih punya akses. Grup mana pun yang botnya di-kick, dihapus, atau sudah tidak terjangkau ditandai terputus dan dikeluarkan dari daftar aktif. Jalankan berkala agar daftar grup tetap akurat."
 
+[help.repair]
+body = "Menampilkan keputusan moderasi yang pengirimannya ke Telegram masih queued, running, parsial, atau gagal. Pakai `retry` dengan id run agar grup yang gagal dicoba lagi; tambahkan id chat untuk mencoba satu grup saja. Keputusan yang sudah ada yang dijalankan ulang, jadi tidak ada ban, mute, atau unban baru yang dibuat."
+
 [help.forget]
 body = "Mengantrekan permintaan penghapusan untuk satu akun Telegram. Sapuan pembersihan berikutnya menganonimkan profil, mencabut role dan tindakan moderasi yang aktif, lalu menghapus baris pribadi. Alasan wajib diisi dan dicatat di audit trail."
 
@@ -24,11 +28,14 @@ body = "Mengantrekan permintaan penghapusan untuk satu akun Telegram. Sapuan pem
 body = """
 `/cleanup`: hapus grup basi atau yang tidak bisa diakses.
 `/leaveall`: keluar darurat dari semua grup terhubung.
+`/tcrepair`: tampilkan run enforcement yang masih butuh perhatian.
+`/tcrepair retry 42`: coba ulang semua grup yang gagal pada run 42.
+`/tcrepair retry 42 -1001234567890`: coba ulang satu grup pada run 42.
 `/tcforget 123456789 akun tidak aktif`: antrekan penghapusan akun."""
 
 # Runtime strings (maintenance.py). All render as MarkdownV2.
 # Placeholders: counts as pre-formatted code, {detail} prebuilt suffix,
-# {partial}/{log_failed} ints.
+# {partial}/{log_failed} ints, {run}/{user} pre-formatted code in [repair].
 
 [status]
 sending = "Keluar dari {n} grup..."
@@ -45,3 +52,15 @@ done = "Membersihkan {n} grup yang tidak bisa diakses."
 usage = "Gunakan: /tcforget <user_id> <alasan>"
 queued = "Permintaan penghapusan {request} diantrekan untuk user {user}. Sapuan pembersihan berikutnya menganonimkan akun tersebut."
 failed = "Tidak bisa mengantrekan permintaan penghapusan. Periksa user ID dan log."
+
+[repair]
+usage = "Gunakan: /tcrepair atau /tcrepair retry <run_id> [chat_id]"
+none = "Tidak ada run enforcement yang belum selesai."
+header = "Run enforcement yang belum selesai (terbaru {n}):"
+line = "Run {run}: {operation} {action_type} untuk user {user} - {status} ({applied}/{total} terkirim, {failed} gagal, {exhausted} habis percobaan)"
+footer = "Pakai /tcrepair retry <run_id> [chat_id] untuk mencoba ulang grup yang gagal."
+queued = "Run {run}: {n} grup yang gagal diantrekan untuk dicoba lagi. Worker mengirimkannya sekarang atau pada tick berikutnya."
+no_failed = "Run {run} tidak punya grup gagal untuk dicoba ulang."
+in_progress = "Run {run} masih queued atau running; worker sudah menanganinya."
+cancelled = "Run {run} sudah dibatalkan dan tidak bisa dijalankan ulang."
+missing = "Run {run} tidak ada."

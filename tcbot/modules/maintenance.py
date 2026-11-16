@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes, MessageHandler
 
-from tcbot import cfg
+from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, messages
@@ -26,7 +26,7 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
-    from telegram import Bot, Update
+    from telegram import Bot, Message, Update
 
 log = get_logger(__name__)
 
@@ -48,12 +48,14 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
         who=(
             f"{bold('/leaveall')}: {replies.perm_founder_only(locale, plain=False)}\n"
             f"{bold('/cleanup')}: {replies.perm_staff_only(locale, plain=False)}\n"
+            f"{bold('/tcrepair')}: {replies.perm_staff_only(locale, plain=False)}\n"
             f"{bold('/tcforget')}: {replies.perm_founder_only(locale, plain=False)}"
         ),
         where=replies.context_bot_or_group(locale),
         details=[
             ("/leaveall", t("maintenance.help.leaveall.body", locale)),
             ("/cleanup", t("maintenance.help.cleanup.body", locale)),
+            ("/tcrepair", t("maintenance.help.repair.body", locale)),
             ("/tcforget", t("maintenance.help.forget.body", locale)),
         ],
         target=False,
@@ -348,6 +350,170 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+# ────────────────── Command Repair </tcrepair> ────────────────── #
+
+
+def _read_int(value: object) -> int:
+    """Read an integer from a database or command value without trusting it."""
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+    return 0
+
+
+def _repair_lines(runs: list[dict[str, object]], locale: str) -> str:
+    """Render the unsettled runs as one MarkdownV2 message."""
+    lines = [t("maintenance.repair.header", locale, n=len(runs))]
+    for run in runs:
+        run_id = _read_int(run.get("id"))
+        applied = _read_int(run.get("succeeded_count")) + _read_int(
+            run.get("skipped_count")
+        )
+        lines.append(
+            t(
+                "maintenance.repair.line",
+                locale,
+                run=Safe(code(str(run_id))),
+                operation=str(run.get("operation") or ""),
+                action_type=str(run.get("action_type") or ""),
+                user=Safe(code(str(_read_int(run.get("target_user_id"))))),
+                status=str(run.get("status") or ""),
+                applied=applied,
+                total=_read_int(run.get("target_count")),
+                failed=_read_int(run.get("failed_count")),
+                exhausted=_read_int(run.get("exhausted_targets")),
+            )
+        )
+    lines.append(t("maintenance.repair.footer", locale))
+    return "\n".join(lines)
+
+
+async def _reply_repair_list(msg: Message, locale: str) -> None:
+    """Reply with the runs that still need an operator."""
+    try:
+        runs = await db.enforcement_db.list_unsettled_runs()
+    except Exception:
+        log.exception("list_unsettled_runs failed during tcrepair")
+        await safe_reply(
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="tcrepair list-failed",
+            parse_mode=None,
+        )
+        return
+    if not runs:
+        await safe_reply(
+            msg,
+            t("maintenance.repair.none", locale, plain=True),
+            log_label="tcrepair none",
+            parse_mode=None,
+        )
+        return
+    await safe_reply(
+        msg,
+        _repair_lines(runs, locale),
+        log_label="tcrepair list",
+    )
+
+
+@decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
+@decorators.staff_only
+@decorators.log_execution
+async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """List the unsettled enforcement runs, or re-drive one failed group.
+
+    The enforcement ledger retries transient failures on its own, but a
+    target that exhausts its attempts is terminal. This command is the
+    operator path back into that target without filing a new moderation
+    decision: ``/tcrepair retry <run_id> [chat_id]`` makes the failed
+    group due again and hands the existing run to the worker.
+    """
+    msg = update.effective_message
+    if msg is None:
+        return
+    locale = await locale_for_update(update)
+    args = parse_cmd_args(msg.text)
+    if not args:
+        await _reply_repair_list(msg, locale)
+        return
+    if args[0].lower() != "retry" or len(args) > 3:
+        await safe_reply(
+            msg,
+            t("maintenance.repair.usage", locale, plain=True),
+            log_label="tcrepair usage",
+            parse_mode=None,
+        )
+        return
+    if len(args) < 2:
+        await safe_reply(
+            msg,
+            t("maintenance.repair.usage", locale, plain=True),
+            log_label="tcrepair usage",
+            parse_mode=None,
+        )
+        return
+    run_id = _read_int(args[1])
+    chat_id = _read_int(args[2]) if len(args) == 3 else None
+    if run_id <= 0 or (len(args) == 3 and chat_id in (None, 0)):
+        await safe_reply(
+            msg,
+            t("maintenance.repair.usage", locale, plain=True),
+            log_label="tcrepair invalid",
+            parse_mode=None,
+        )
+        return
+    try:
+        result = await db.enforcement_db.redrive_run(run_id, chat_id=chat_id)
+    except Exception:
+        log.exception("redrive_run failed for run=%d", run_id)
+        await safe_reply(
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="tcrepair retry-failed",
+            parse_mode=None,
+        )
+        return
+
+    run_ref = Safe(code(str(run_id)))
+    if result.state == "queued":
+        # * Deliver now when this process can claim the run; a claim
+        # * failure is not an error because the scheduled worker owns it.
+        try:
+            await enforcement_worker.deliver_queued_run(ctx.bot, run_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Repair delivery failed for run=%d; it stays queued", run_id)
+        await safe_reply(
+            msg,
+            t(
+                "maintenance.repair.queued",
+                locale,
+                run=run_ref,
+                n=result.targets,
+            ),
+            log_label=f"tcrepair queued run {run_id}",
+        )
+        return
+    key = {
+        "no_failed_target": "maintenance.repair.no_failed",
+        "in_progress": "maintenance.repair.in_progress",
+        "cancelled": "maintenance.repair.cancelled",
+        "missing": "maintenance.repair.missing",
+    }.get(result.state)
+    await safe_reply(
+        msg,
+        t(key or "maintenance.repair.missing", locale, run=run_ref),
+        log_label=f"tcrepair {result.state} run {run_id}",
+    )
+
+
 # ────────────────── Command Forget </tcforget> ────────────────── #
 
 
@@ -418,10 +584,12 @@ _CLEANUP_CMDS = (
     | build_prefixed_filters("tcc")
 )
 _FORGET_CMDS = build_prefixed_filters("tcforget") | build_prefixed_filters("tcf")
+_REPAIR_CMDS = build_prefixed_filters("tcrepair") | build_prefixed_filters("tcr")
 
 
 __handlers__ = [
     MessageHandler(_LEAVEALL_CMDS, cmd_leaveall),
     MessageHandler(_CLEANUP_CMDS, cmd_cleanup),
+    MessageHandler(_REPAIR_CMDS, cmd_repair),
     MessageHandler(_FORGET_CMDS, cmd_forget),
 ]

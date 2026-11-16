@@ -9,6 +9,7 @@ overview = "Manage connected groups: clean up inaccessible ones, or leave all gr
 body = """
 `/leaveall` (aliases: `/exitall`, `/tcleave`)
 `/cleanup` (aliases: `/tcclean`, `/tcc`)
+`/tcrepair` (alias: `/tcr`) or `/tcrepair retry` <run_id> [chat_id]
 `/tcforget` (alias: `/tcf`) <user_id> <reason>"""
 
 [help.leaveall]
@@ -17,6 +18,9 @@ body = "Makes the bot leave every connected group simultaneously, marks them all
 [help.cleanup]
 body = "Scans all groups in the database and attempts to verify the bot still has access. Any group where the bot was kicked, removed, or can no longer reach is marked as disconnected and removed from the active list. Run this periodically to keep the group list accurate."
 
+[help.repair]
+body = "Lists the moderation decisions whose Telegram delivery is still queued, running, partial, or failed. Use `retry` with a run id to make its failed groups due again; add a chat id to retry only one group. The existing decision is re-driven, so no new ban, mute, or unban is filed."
+
 [help.forget]
 body = "Queues an erasure request for one Telegram account. The next cleanup sweep anonymises the profile, revokes live roles and moderation actions, and removes the personal rows. The reason is required and recorded in the audit trail."
 
@@ -24,11 +28,14 @@ body = "Queues an erasure request for one Telegram account. The next cleanup swe
 body = """
 `/cleanup`: remove stale or inaccessible groups.
 `/leaveall`: emergency withdrawal from all connected groups.
+`/tcrepair`: list the enforcement runs that still need attention.
+`/tcrepair retry 42`: re-drive every failed group of run 42.
+`/tcrepair retry 42 -1001234567890`: re-drive one group of run 42.
 `/tcforget 123456789 inactive account`: queue an account erasure."""
 
 # Runtime strings (maintenance.py). All render as MarkdownV2.
 # Placeholders: counts as pre-formatted code, {detail} prebuilt suffix,
-# {partial}/{log_failed} ints.
+# {partial}/{log_failed} ints, {run}/{user} pre-formatted code in [repair].
 
 [status]
 sending = "Leaving {n} groups..."
@@ -45,3 +52,15 @@ done = "Cleaned up {n} inaccessible group(s)."
 usage = "Usage: /tcforget <user_id> <reason>"
 queued = "Erasure request {request} queued for user {user}. The next cleanup sweep anonymises the account."
 failed = "Could not queue the erasure request. Check the user ID and the logs."
+
+[repair]
+usage = "Usage: /tcrepair or /tcrepair retry <run_id> [chat_id]"
+none = "No unsettled enforcement runs."
+header = "Unsettled enforcement runs (latest {n}):"
+line = "Run {run}: {operation} {action_type} for user {user} - {status} ({applied}/{total} applied, {failed} failed, {exhausted} exhausted)"
+footer = "Use /tcrepair retry <run_id> [chat_id] to re-drive a failed group."
+queued = "Run {run}: queued {n} failed group(s) for retry. The worker delivers them now or on its next tick."
+no_failed = "Run {run} has no failed group to retry."
+in_progress = "Run {run} is still queued or running; the worker already owns it."
+cancelled = "Run {run} was cancelled and cannot be re-driven."
+missing = "Run {run} does not exist."

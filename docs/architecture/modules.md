@@ -83,7 +83,7 @@ the layer boundaries.
 | `groups.py` | `Groups` | `/tcgroups`, `/tcg` | Connected group list and details toggle. |
 | `kick.py` | `Kick` | `/tckick`, `/tck` | Tester+ current-group kick through shared reason/proof flow. |
 | `language.py` | `Language` | `/language`, `/lang`, `/langs` plus `language_menu`, `lang:list:*`, `lang:set:*` callbacks | Per-user (PM) and per-group locale selection. Group changes require the group creator or federation staff; the selected locale drives all following replies. |
-| `maintenance.py` | `Maintenance` | `/leaveall`, `/exitall`, `/tcleave`, `/cleanup`, `/tcclean`, `/tcc` | Emergency leave-all and staff cleanup operations. |
+| `maintenance.py` | `Maintenance` | `/leaveall`, `/exitall`, `/tcleave`, `/cleanup`, `/tcclean`, `/tcc`, `/tcrepair`, `/tcr` | Emergency leave-all, staff cleanup, and enforcement-run repair. |
 | `mute.py` | `Mute` | `/tcmute`, `/tcm`, `/tcunmute`, `/tcunm`, `/tcum` | Federation-wide mute conversation and direct unmute. |
 | `stats.py` | `Stats` | `/tcstats`, `/tcs` plus stats callbacks | Summary, staff list, active bans, connected chats, search/detail callbacks. |
 | `unban.py` | `Unban` | `/tcunban`, `/tcunb` | Developer+ federation unban. |

@@ -45,6 +45,7 @@ Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `API_ID`, and `API_HAS
 | `/help`, `/start` | Topic help and the start menu. |
 | `/language` | Per-user or per-group interface language. |
 | `/leaveall`, `/cleanup` | Founder-only mass leave and staff-only cleanup of dead group records. |
+| `/tcrepair` (alias `/tcr`) | Staff-only list of unsettled enforcement runs and re-drive of their failed groups. |
 | `/tcforget` (alias `/tcf`) | Founder-only account erasure request for the next cleanup sweep. |
 | `/tcbroadcast` | Staff-only broadcast to every connected group. |
 | `/ping`, `/speedtest` | Latency check and throughput measurement; `/st full` uses a larger sample. |

@@ -187,6 +187,7 @@ the origin chat of a decision.
 |---|---|---|---|
 | `/leaveall` | `/exitall`, `/tcleave` | Leave every non-primary connected group and mark them inactive. | Founder only |
 | `/cleanup` | `/tcclean`, `/tcc` | Check active groups and deactivate ones the bot can no longer access. | Staff+ |
+| `/tcrepair` | `/tcr` | List unsettled enforcement runs, or re-drive the failed groups of one run. | Staff+ |
 | `/tcforget` | `/tcf` | Queue one Telegram-account erasure for the next cleanup sweep. | Founder only |
 
 Behavior:
@@ -200,6 +201,12 @@ Behavior:
   leave a "ghost" active row).
 - `/cleanup` is rate limited to 3 per 60 s and uses bounded membership
   checks with `_MEMBERSHIP_CHECK_TIMEOUT = 3.0` per check.
+- `/tcrepair` lists the enforcement runs still `queued`, `running`,
+  `partial`, or `failed`, with the applied, failed, and exhausted counts of
+  each. `/tcrepair retry <run_id> [chat_id]` brings the failed target (or
+  one requested chat) forward and hands the existing run to the worker.
+  The command never files a new moderation decision, and it refuses a run
+  that a worker already owns or that was cancelled.
 
 - `/tcforget <user_id> <reason>` queues an erasure through
   `request_user_erasure`; the daily cleanup sweep anonymises the profile,
@@ -211,8 +218,10 @@ parallel with the leave and posts a `group_disconnected` log entry per
 group to `cfg.logs` (a leave counts as failed unless both `leave_chat` and
 `deactivate_group` succeed). `/cleanup` deactivates rows whose membership
 check reports the bot as `left` or `kicked`; a failed membership check
-keeps the group (fail closed). `/tcforget` writes a pending
-`telegram_user_erasures` row.
+keeps the group (fail closed). `/tcrepair` reads
+`moderation_enforcement_runs` and its targets, then updates the failed
+targets and returns the run to `queued` in one transaction. `/tcforget`
+writes a pending `telegram_user_erasures` row.
 
 ## Netspeed: `netspeed.py`
 

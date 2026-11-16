@@ -133,7 +133,7 @@ The unban log includes:
 - An unban attempt with no active ban record replies `<user> has no active federation ban.` and queues nothing.
 - A concurrent unban that loses the race sees `revoked == 0` and returns the same idempotent no-record reply instead of claiming a new change.
 - `unban_chat_member` is called with `only_if_banned=True`, so it is a no-op in groups where the user is not currently banned.
-- A failed Telegram delivery leaves the run queued. The scheduled worker retries the target up to three times with a five-minute delay.
+- A failed Telegram delivery leaves the run queued. The scheduled worker retries the target up to three times with a five-minute delay. After that budget is spent, `/tcrepair retry <run_id> [chat_id]` re-drives the existing run or one group without queueing a second unban.
 - The Developer rank minimum (`mod_only`) prevents a Tester from unbanning a Founder or Admin; the rank check fires before the active-ban pre-fetch.
 - A staff target re-promoted while banned is demoted first through `demote_before_unban(..., trigger="unban")`; a failed demote blocks the unban.
 - Federation log send failure does not roll back the decision or the run.
@@ -152,6 +152,7 @@ The unban log includes:
 10. The reply reports the per-group run outcome and names failed groups.
 11. A run another worker already claimed is reported as queued.
 12. The scheduled enforcement worker retries unfinished targets without a new moderation decision.
-13. The unban log is sent to `cfg.logs` with `messages.unban_log`.
-14. The appeal-approve path uses the same atomic decision plus run model.
-15. A staff target with an active ban is demoted before the decision; a failed demote blocks the unban.
+13. An exhausted delivery can be re-driven with `/tcrepair retry <run_id> [chat_id]`.
+14. The unban log is sent to `cfg.logs` with `messages.unban_log`.
+15. The appeal-approve path uses the same atomic decision plus run model.
+16. A staff target with an active ban is demoted before the decision; a failed demote blocks the unban.

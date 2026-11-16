@@ -136,4 +136,7 @@ Disconnected groups are marked inactive rather than deleted, preserving historic
 - `/tcbroadcast` sends a message to every active connected group through bounded fan-out and logs success/failure counts.
 - Staff-only `/cleanup` (aliases `/tcclean`, `/tcc`) checks active groups and
   deactivates groups the bot can no longer access.
+- Staff-only `/tcrepair` (alias `/tcr`) lists the queued, running, partial,
+  and failed enforcement runs, and `/tcrepair retry <run_id> [chat_id]`
+  re-drives the existing decision instead of filing a new one.
 - `/leaveall`, `/exitall`, and `/tcleave` are Founder-only emergency commands that make the bot leave connected groups and mark them inactive.

@@ -338,7 +338,7 @@ The same transaction queues the edit that closes a pending appeal review card, s
 - Empty proof input returns `None` fast; a failed photo gallery upload falls through to the document loop so collected file proof still lands instead of being discarded. Only a batch with no usable item stores `0` as proof ID.
 - If the ban log send fails, the database write may still complete, but no log message ID is stored.
 - If active group enforcement partially fails, the ban record remains active and the summary reports the failed groups. A delivery that has not settled yet is reported as pending rather than applied, and the worker finishes it.
-- A group that refuses because the bot lost its admin rights is a failed delivery, not a benign no-op. The target is recorded as a permanent failure, named in the summary, and left for operator access repair instead of being counted as banned.
+- A group that refuses because the bot lost its admin rights is a failed delivery, not a benign no-op. The target is recorded as a permanent failure, named in the summary, and left for operator access repair instead of being counted as banned. After the access is restored, `/tcrepair retry <run_id> <chat_id>` re-drives that one group without filing a second ban.
 - A duplicate active ban is updated rather than creating another active record through the command path. Two moderators banning the same target at the same moment race on the one-active-ban index: the record that lands first stays canonical, and the second ban logs and enforces against that canonical record instead of failing with a database error.
 - A lower-ranked staff target is auto-demoted when the ban is enforced.
 - Same-rank and higher-rank staff targets are protected.

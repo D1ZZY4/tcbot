@@ -284,7 +284,7 @@ database error.
 | `kicks_db.py` | `moderation_actions` (kick scope), `moderation_cases` | Kick decisions and their per-user history. |
 | `mutes_db.py` | `moderation_actions` (mute scope), `moderation_cases` | Mute decisions, the live active-mute view, and the per-user history. |
 | `queues_db.py` | `promotion_requests` | Queued staff promotion requests and their resolution status. |
-| `enforcement_db.py` | `moderation_enforcement_runs`, `moderation_enforcement_targets`, `moderation_enforcement_attempts` | Queue one run for a decision, claim runs and targets, record per-group outcomes and attempts, report the result, and requeue abandoned runs. Apply runs cover ban and mute; revoke runs cover expiry, manual unban, and appeal approval; reconcile runs repair a stranded kick. |
+| `enforcement_db.py` | `moderation_enforcement_runs`, `moderation_enforcement_targets`, `moderation_enforcement_attempts` | Queue one run for a decision, claim runs and targets, record per-group outcomes and attempts, report the result, requeue abandoned runs, and re-drive an exhausted failure on operator request. Apply runs cover ban and mute; revoke runs cover expiry, manual unban, and appeal approval; reconcile runs repair a stranded kick. |
 | `notifications_db.py` | `moderation_notification_tasks` | Durable retry queue for review-card edits whose direct Telegram update failed. |
 | `erasure_db.py` | `telegram_user_erasures` | Queue one account erasure through the database function. |
 | `pg_cron.py` | `cron.job` (optional) | Register or remove the database-only maintenance jobs when pg_cron is enabled. |
@@ -746,6 +746,17 @@ its last attempt moment and falls back to the row's update moment when the
 worker died before recording the attempt. The released target keeps a due
 retry deadline, so the next worker tick claims it again instead of leaving
 the run open forever.
+
+An automatic retry budget ends after three attempts. The target then stays
+`failed` with no retry deadline, and the run stays `partial` or `failed`.
+`redrive_run()` is the operator path back into that state: it locks the run,
+refuses one that is already queued or running, refuses a cancelled run, and
+brings every failed target (or one requested chat) forward with a due retry
+deadline before returning the existing run to `queued`. The re-drive keeps
+the original decision and run, so a repair never files a second moderation
+verdict. `/tcrepair` exposes the list and the retry to staff. A run that the
+worker cancels stores its reason under `metadata.cancel_reason`, so the
+terminal state remains diagnosable.
 
 A `revoke` run is additionally cancelled when a later decision of the same
 type and target is in force, and a kick `reconcile` run is cancelled when a
