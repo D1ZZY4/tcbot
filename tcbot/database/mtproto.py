@@ -20,7 +20,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot import cfg
 from tcbot.database.base import mtproto_state
-from tcbot.database.engine import fetch_one, run
+from tcbot.database.engine import db_call, fetch_one, run
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.dispatch import gather_bounded
 from tcbot.utils.logger import get_logger
@@ -492,11 +492,19 @@ def _harvest_state_id(chat_id: int) -> str:
 
 
 async def _load_harvest_offset(chat_id: int) -> int:
-    """Return the member position where the last slice stopped."""
+    """Return the member position where the last slice stopped.
+
+    The cursor read is a normal database call, so it runs through the
+    shared circuit and call budget like every other read: a stalled
+    database must fail this slice quickly instead of holding the harvest
+    for the driver's socket timeout.
+    """
     try:
-        row = await fetch_one(
-            select(mtproto_state.c.value).where(
-                mtproto_state.c.id == _harvest_state_id(chat_id)
+        row = await db_call(
+            lambda: fetch_one(
+                select(mtproto_state.c.value).where(
+                    mtproto_state.c.id == _harvest_state_id(chat_id)
+                )
             )
         )
     except asyncio.CancelledError:
@@ -521,16 +529,21 @@ async def _save_harvest_state(chat_id: int, offset: int, *, complete: bool) -> N
     """Persist the harvest cursor; a failed write only loses resume progress."""
     payload = msgspec.json.encode({"offset": max(0, offset), "complete": complete})
     try:
-        await run(
-            pg_insert(mtproto_state)
-            .values(
-                id=_harvest_state_id(chat_id),
-                value=payload,
-                updated_on=int(utc_now().timestamp()),
-            )
-            .on_conflict_do_update(
-                index_elements=["id"],
-                set_={"value": payload, "updated_on": int(utc_now().timestamp())},
+        await db_call(
+            lambda: run(
+                pg_insert(mtproto_state)
+                .values(
+                    id=_harvest_state_id(chat_id),
+                    value=payload,
+                    updated_on=int(utc_now().timestamp()),
+                )
+                .on_conflict_do_update(
+                    index_elements=["id"],
+                    set_={
+                        "value": payload,
+                        "updated_on": int(utc_now().timestamp()),
+                    },
+                )
             )
         )
     except asyncio.CancelledError:
