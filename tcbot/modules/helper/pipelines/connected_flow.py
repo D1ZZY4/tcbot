@@ -208,6 +208,16 @@ class ConnectionAddedMixin:
                     was_connected,
                 )
                 was_connected = False
+            for label, result in zip(
+                ("deactivate", "remove_pending"), conn_results[1:], strict=True
+            ):
+                if isinstance(result, BaseException):
+                    log.error(
+                        "Bot removal cleanup (%s) failed for chat=%d: %s",
+                        label,
+                        chat.id,
+                        result,
+                    )
             if was_connected:
                 try:
                     await send_log(
@@ -571,6 +581,16 @@ class ConnectionDecisionMixin:
                 return_exceptions=True,
             )
             throw_if_cancelled(cancel_results)
+            for label, result in zip(
+                ("card edit", "rejection log", "leave"), cancel_results, strict=True
+            ):
+                if isinstance(result, BaseException):
+                    log.warning(
+                        "Join cancellation (%s) failed for chat=%d: %s",
+                        label,
+                        chat.id,
+                        result,
+                    )
 
 
 # ─────────────────────── Connection builder ─────────────────────── #
