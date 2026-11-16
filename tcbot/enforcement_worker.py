@@ -29,6 +29,7 @@ from tcbot.utils.dispatch import (
     throw_if_cancelled,
 )
 from tcbot.utils.logger import get_logger
+from tcbot.utils.time_and_date import to_utc, utc_now
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -155,6 +156,17 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
             error_detail="an active federation ban supersedes the kick repair",
         )
         return
+    expires_at = action.get("expires_at")
+    expiry = expires_at if isinstance(expires_at, datetime) else None
+    # * A timed decision that ran out while its run waited is no longer in
+    # * force. Applying it would ban or mute a user after the deadline the
+    # * moderator set; the revoke run cannot undo the time already served.
+    if operation == "apply" and expiry is not None and to_utc(expiry) <= utc_now():
+        await db.enforcement_db.cancel_run(
+            run_id,
+            error_detail="the decision expired before its delivery",
+        )
+        return
     target_user_id = as_int(action.get("target_user_id"))
     if target_user_id <= 0:
         await db.enforcement_db.cancel_run(
@@ -169,8 +181,6 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
         await db.enforcement_db.complete_empty_run(run_id)
         return
 
-    expires_at = action.get("expires_at")
-    expiry = expires_at if isinstance(expires_at, datetime) else None
     coros = [
         _deliver(
             bot,
