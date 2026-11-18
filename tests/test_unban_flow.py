@@ -100,6 +100,16 @@ def _install(
             raise deactivate
         return 1, 77
 
+    async def _allow_enforcement(
+        executor_id: int,
+        target_id: int,
+        *,
+        min_role: str,
+        action: str,
+        locale: str | None,
+    ) -> None:
+        _ = (executor_id, target_id, min_role, action, locale)
+
     async def _deliver(bot: _FakeBot, run_id: int) -> bool:
         for group in selected_groups:
             try:
@@ -135,6 +145,7 @@ def _install(
     monkeypatch.setattr(db.bans_db, "get_active_ban", _get_active_ban)
     monkeypatch.setattr(db.bans_db, "revoke_ban_and_queue_unban", _revoke)
     monkeypatch.setattr(db.groups_db, "active_groups", _active_groups)
+    monkeypatch.setattr(unban_flow.guards, "enforcement_refusal", _allow_enforcement)
     monkeypatch.setattr(unban_flow.enforcement_worker, "deliver_queued_run", _deliver)
     monkeypatch.setattr(db.enforcement_db, "run_report", _report)
     return calls
@@ -154,6 +165,25 @@ def test_no_record_replies_without_touching_chats(
     assert msg.replies == [
         t("unbanning.note.no_record", "en-US", user=Safe(user_ref(42, "T")))
     ]
+
+
+def test_a_final_rank_refusal_blocks_the_revocation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A demotion during the group load must not still revoke the ban."""
+    calls = _install(monkeypatch)
+
+    async def _deny(*args: Any, **kwargs: Any) -> str:
+        _ = (args, kwargs)
+        return "rank lost"
+
+    monkeypatch.setattr(unban_flow.guards, "enforcement_refusal", _deny)
+    msg, bot = _FakeMsg(), _FakeBot()
+
+    asyncio.run(unban_flow.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+
+    assert calls["deactivate"] == []
+    assert msg.replies == ["rank lost"]
 
 
 def test_read_failure_replies_retry_and_skips_deactivate(

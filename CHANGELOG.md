@@ -53,6 +53,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **A refused moderation action cannot land after a demotion during proof upload** (`tcbot/modules/helper/pipelines/ban_flow.py`, `kick_flow.py`, `mute_flow.py`, `warn_flow.py`, `unban_flow.py`): the enforcement-time rank gate ran before the proof upload and the group fetch, so an executor demoted or a target promoted while those network calls were in flight could still be actioned with the role held at entry. The fresh executor-versus-target gate now runs again immediately before the ban, kick, mute, warn, or unban decision is written. Behavior changes: a moderator who lost rank during the upload is refused and no decision is recorded.
+
 - **A failed rollback no longer hides the exception that caused it** (`tcbot/database/engine.py`): a second failure from `rollback()` replaced the original error or cancellation, which turned a shutdown into a logged worker failure. The rollback is now best effort and the original exception stays authoritative.
 
 - **A caller-side timeout counts against the Telegram circuit** (`tcbot/utils/dispatch.py`): enforcement deliveries bounded by `asyncio.timeout` raised the builtin `TimeoutError`, which the generic fan-out branch treated as a service response. It now records a transient failure like PTB's own timeout.

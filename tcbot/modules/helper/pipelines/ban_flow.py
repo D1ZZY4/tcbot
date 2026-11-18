@@ -488,6 +488,30 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         # * A ban issued from the bot PM has no group origin, so it never
         # * joins and the scope stays the primary group alone.
         groups = _enforcement_scope(groups, prompt_chat_id)
+        # * The proof upload can outlive a demotion or a target promotion.
+        # * Re-run the same fresh executor-versus-target gate immediately
+        # * before the decision is written; a refused action leaves no ban
+        # * record and no queued delivery.
+        refusal = await guards.enforcement_refusal(
+            admin_id,
+            target_id,
+            min_role="developer",
+            action="Ban",
+            locale=locale,
+        )
+        if refusal is not None:
+            if prompt_msg_id and prompt_chat_id:
+                await safe_edit_message(
+                    bot,
+                    prompt_chat_id,
+                    prompt_msg_id,
+                    refusal,
+                    reply_markup=None,
+                    log_level="debug",
+                    log_label="Ban rank-refusal after proof",
+                    catch_all=True,
+                )
+            return
         log_msg_id, db_ok, ban_id, enforcement_run_id = await _execute_ban_record(
             bot,
             meta,

@@ -112,6 +112,23 @@ async def execute_warn(
             raise
         except Exception:
             log.warning("Warn proof upload skipped for target=%d", target_id)
+    # * The proof upload can outlive a demotion or a target promotion.
+    # * Repeat the fresh gate immediately before the warning is recorded.
+    refusal = await guards.enforcement_refusal(
+        admin_id,
+        target_id,
+        min_role="tester",
+        action="Warn",
+        locale=locale,
+    )
+    if refusal is not None:
+        await safe_reply(
+            msg,
+            refusal,
+            log_label="execute_warn rank-refusal after proof",
+            parse_mode=None,
+        )
+        return
     try:
         count = await db.warns_db.add_warn(
             target_id,

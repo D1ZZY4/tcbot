@@ -136,6 +136,28 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             raise
         except Exception:
             log.warning("Mute proof upload skipped for target=%d", target_id)
+    # * The proof upload can outlive a demotion or a target promotion.
+    # * Repeat the fresh gate immediately before the decision is written.
+    refusal = await guards.enforcement_refusal(
+        admin_id,
+        target_id,
+        min_role="tester",
+        action="Mute",
+        locale=locale,
+    )
+    if refusal is not None:
+        await safe_edit_message(
+            bot,
+            prompt_chat,
+            prompt_id,
+            refusal,
+            reply_markup=None,
+            log_level="debug",
+            log_label="_execute_mute rank-refusal after proof",
+            catch_all=True,
+        )
+        return
+
     # * The decision lands before the fan-out: no group is touched on a
     # * database failure. The decision and the live state are one record,
     # * so the mute and its history cannot disagree.

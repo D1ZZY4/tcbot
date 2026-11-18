@@ -109,6 +109,24 @@ async def execute_kick(
         except Exception:
             log.warning("Kick proof upload skipped for target=%d", target_id)
 
+    # * The proof upload can outlive a demotion or a target promotion.
+    # * Repeat the fresh gate immediately before the audit record.
+    refusal = await guards.enforcement_refusal(
+        admin_id,
+        target_id,
+        min_role="tester",
+        action="Kick",
+        locale=locale,
+    )
+    if refusal is not None:
+        await safe_reply(
+            msg,
+            refusal,
+            log_label="execute_kick rank-refusal after proof",
+            parse_mode=None,
+        )
+        return
+
     # * Audit first: the DB kick record must exist before enforcement.
     # * A failed write aborts with a retry reply instead of leaving an
     # * enforced but unaudited kick that /check can never see.

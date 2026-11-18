@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.database import documents as docs
-from tcbot.modules.helper import messages
+from tcbot.modules.helper import guards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply, send_log
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -126,6 +126,26 @@ async def execute_unban(
     chat_ids = [
         int(grp.get("chat_id", 0)) for grp in groups if int(grp.get("chat_id", 0) or 0)
     ]
+    # * The group load is a network round trip between the entry check and
+    # * the revocation. Re-run the fresh executor-versus-target gate so a
+    # * demotion or a target promotion in that window cannot be overridden.
+    if admin is not None:
+        refusal = await guards.enforcement_refusal(
+            admin.id,
+            target_id,
+            min_role="developer",
+            action="Unban",
+            locale=locale,
+        )
+        if refusal is not None:
+            if msg is not None:
+                await safe_reply(
+                    msg,
+                    refusal,
+                    log_label="Unban rank-refusal",
+                    parse_mode=None,
+                )
+            return
     try:
         revoked, run_id = await db.bans_db.revoke_ban_and_queue_unban(
             target_id,
