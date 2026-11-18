@@ -320,6 +320,19 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return_exceptions=True,
     )
     throw_if_cancelled(join_results)
+    # * One failed member must not hide the enforcement failure for the whole
+    # * batch. The individual helper already logs its own Telegram refusal,
+    # * but an unexpected error before that call only surfaced here.
+    for failure in join_results:
+        if isinstance(failure, BaseException) and not isinstance(
+            failure, asyncio.CancelledError
+        ):
+            log.error(
+                "Join enforcement failed in chat=%d: %s",
+                chat.id,
+                failure,
+                exc_info=failure,
+            )
 
 
 @decorators.log_execution
