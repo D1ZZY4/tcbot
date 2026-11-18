@@ -91,9 +91,10 @@ def test_a_locale_delete_survives_sat_queue() -> None:
 
             cache.invalidate(123)
 
-            # * The delete is non-droppable; no tombstone is needed because
-            # * a locale read does not consult one.
-            assert redis_io._redis_pending[(prefix, loop)] == before + 1
+            # * A locale read now consults the cross-process tombstone, so
+            # * the invalidation enqueues the marker and the delete; both
+            # * survive a saturated queue.
+            assert redis_io._redis_pending[(prefix, loop)] == before + 2
             new_tasks |= set(redis_io._redis_bg_tasks) - tasks_before
         for task in new_tasks:
             task.cancel()

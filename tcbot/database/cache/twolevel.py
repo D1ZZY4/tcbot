@@ -172,7 +172,7 @@ class TwoLevelCache[T]:
         # * Advance the key's generation so an in-flight fetch discards its
         # * stale result instead of resurrecting the revoked value.
         self._advance(key)
-        if self._is_revocation:
+        if self._critical_delete:
             self._redis_tombstone_background(key)
         self._redis_del_background(key, droppable=not self._critical_delete)
 
@@ -448,7 +448,7 @@ class TwoLevelCache[T]:
                 # L2: Redis (bounded: a stalled Redis must not hold the hot path)
                 rc = await self._client()
                 if rc is not None and (
-                    not self._is_revocation or not await self._tombstoned(rc, key)
+                    not self._critical_delete or not await self._tombstoned(rc, key)
                 ):
                     rkey = self._rkey(key)
                     try:

@@ -99,7 +99,8 @@ def test_explicit_put_during_a_fetch_wins() -> None:
     asyncio.run(_run())
 
 
-def test_a_cross_process_tombstone_forces_the_source_read() -> None:
+@pytest.mark.parametrize("prefix", ["role", "ulocale"])
+def test_a_cross_process_tombstone_forces_the_source_read(prefix: str) -> None:
     """A revocation marker written by another process must hide old L2 data."""
 
     class _TombstoneRedis:
@@ -110,7 +111,7 @@ def test_a_cross_process_tombstone_forces_the_source_read() -> None:
             raise AssertionError("L2 must not be read while a tombstone is live")
 
     async def _run() -> None:
-        cache = TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix="role")
+        cache = TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix=prefix)
         calls = 0
 
         async def _fetch() -> str:
@@ -125,6 +126,28 @@ def test_a_cross_process_tombstone_forces_the_source_read() -> None:
         patch.setattr(twolevel, "cfg", dataclasses.replace(cfg, redis_url="redis://x"))
         patch.setattr(redis_io, "usable_redis_client", lambda: _TombstoneRedis())
         asyncio.run(_run())
+
+
+def test_a_locale_invalidation_enqueues_a_tombstone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A language change uses the same cross-process marker as a role."""
+    calls: list[tuple[str, bool]] = []
+
+    def _enqueue(prefix: str, factory: Any, *, droppable: bool = True) -> None:
+        _ = factory
+        calls.append((prefix, droppable))
+
+    monkeypatch.setattr(
+        twolevel,
+        "cfg",
+        dataclasses.replace(cfg, redis_url="redis://x"),
+    )
+    monkeypatch.setattr(redis_io, "enqueue_redis_mutation", _enqueue)
+
+    TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix="ulocale").invalidate(7)
+
+    assert calls == [("ulocale", False), ("ulocale", False)]
 
 
 def test_normal_fetch_still_populates_the_cache() -> None:
