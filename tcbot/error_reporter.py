@@ -11,6 +11,7 @@ import contextlib
 import platform
 import re
 import sys
+import threading
 import traceback
 from itertools import islice
 from typing import TYPE_CHECKING
@@ -289,24 +290,30 @@ _OWNER_WINDOW: float = 3600.0
 _OWNER_BUDGET: int = 3
 _OWNER_MAX: int = 1000
 _owner_sent: dict[tuple[object, ...], tuple[float, int]] = {}
+# * The logger sink runs on whatever thread emitted the record, including
+# * the Flask webhook thread, while report_exc runs on the event loop. Both
+# * prune and mutate the dedupe maps, so their multi-step updates share a
+# * lock instead of relying on the GIL for compound operations.
+_dedupe_lock = threading.Lock()
 
 
 def _owner_suppressed(fp: tuple[object, ...]) -> bool:
     """Check the hourly owner-DM budget for a fingerprint."""
     now = monotonic()
-    if len(_owner_sent) >= _OWNER_MAX:
-        for key in [
-            k for k, (at, _) in _owner_sent.items() if now - at >= _OWNER_WINDOW
-        ]:
-            del _owner_sent[key]
-    start, count = _owner_sent.get(fp, (now, 0))
-    if now - start >= _OWNER_WINDOW:
-        start, count = now, 0
-    if count >= _OWNER_BUDGET:
-        _owner_sent[fp] = (start, count)
-        return True
-    _owner_sent[fp] = (start, count + 1)
-    return False
+    with _dedupe_lock:
+        if len(_owner_sent) >= _OWNER_MAX:
+            for key in [
+                k for k, (at, _) in _owner_sent.items() if now - at >= _OWNER_WINDOW
+            ]:
+                del _owner_sent[key]
+        start, count = _owner_sent.get(fp, (now, 0))
+        if now - start >= _OWNER_WINDOW:
+            start, count = now, 0
+        if count >= _OWNER_BUDGET:
+            _owner_sent[fp] = (start, count)
+            return True
+        _owner_sent[fp] = (start, count + 1)
+        return False
 
 
 _MAX_CONTEXT_LEN: int = 120
@@ -360,21 +367,22 @@ def _seen_recently(fp: tuple[object, ...]) -> bool:
     would cost the event loop exactly when an incident floods it.
     """
     now = monotonic()
-    while _recent:
-        oldest = next(iter(_recent))
-        if now - _recent[oldest] <= _DEDUPE_WINDOW:
-            break
-        del _recent[oldest]
-    if len(_recent) >= _RECENT_MAX:
-        # * The map is full of live fingerprints: drop the oldest tenth so
-        # * the newest ones keep their slot.
-        for key in list(islice(_recent, _RECENT_MAX // 10)):
-            del _recent[key]
-    seen = fp in _recent
-    if seen:
-        # * Move the entry to the end so the front stays the oldest.
-        del _recent[fp]
-    _recent[fp] = now
+    with _dedupe_lock:
+        while _recent:
+            oldest = next(iter(_recent))
+            if now - _recent[oldest] <= _DEDUPE_WINDOW:
+                break
+            del _recent[oldest]
+        if len(_recent) >= _RECENT_MAX:
+            # * The map is full of live fingerprints: drop the oldest tenth so
+            # * the newest ones keep their slot.
+            for key in list(islice(_recent, _RECENT_MAX // 10)):
+                del _recent[key]
+        seen = fp in _recent
+        if seen:
+            # * Move the entry to the end so the front stays the oldest.
+            del _recent[fp]
+        _recent[fp] = now
     return seen
 
 
