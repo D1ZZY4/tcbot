@@ -109,6 +109,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **Proof sessions have their own lifecycle owner** (`tcbot/modules/helper/pipelines/proof_session.py`, `ban_flow.py`): the session dataclass, registry, and shutdown drain were embedded in the already large ban flow. They now live in a focused module, so the ban flow stays inside the file budget and the session contract can be tested without the executor.
+
 - **The schema pins the definer search path to its own schema** (`tcbot/database/schema/functions.sql`, `alembic/versions/0010_schema_hardening.py`): six `SECURITY DEFINER` functions named `public` in their search path instead of the schema the files were applied to, and the erasure batch read its rows by timestamp alone. The functions now pin `pg_catalog` and the active schema, the batch tie-breaks on `id` like the caller's pre-read, and revision 0010 reapplies the files on an existing database. Behavior changes: none for the deployment schema; a development or test schema no longer resolves a definer function through `public`.
 
 - **The migration takes the schema the bot will read** (`tcbot/database/migrations.py`, `alembic/env.py`, `tcbot/database/engine.py`): `upgrade_head` derived the target schema from `DB_SCHEMA` in the process environment, while the engine used `cfg.db_schema`. A caller that set the schema programmatically could migrate one schema and read another. The caller now passes the schema through the Alembic config, and the environment remains the fallback for a hand-run `alembic upgrade`. Behavior changes: none for a deployment configured through the environment.

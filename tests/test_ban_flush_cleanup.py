@@ -15,6 +15,10 @@ from telegram import Chat, Message
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import ban_flow
+from tcbot.modules.helper.pipelines.proof_session import (
+    ProofSession,
+    ProofSessionRegistry,
+)
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.time_and_date import monotonic
 
@@ -95,7 +99,7 @@ def _flush_sleep_scenario(
     monkeypatch: pytest.MonkeyPatch,
     *,
     with_successor: bool,
-) -> tuple[dict[tuple[int, int], Any], ban_flow._ProofSession | None]:
+) -> tuple[ProofSessionRegistry, ProofSession | None]:
     """Run the real ``_flush_session`` up to a bound session and cancel it mid-window.
 
     The key may hold a successor by the time the flush resolves; returning the
@@ -103,14 +107,14 @@ def _flush_sleep_scenario(
     """
     key = (11, 22)
     now = monotonic()
-    first = ban_flow._ProofSession(
+    first = ProofSession(
         scope=_prefilled_scope(),
         last_arrival=now,
         deadline=now + 60,
     )
     successor = None
     if with_successor:
-        successor = ban_flow._ProofSession(
+        successor = ProofSession(
             scope=_prefilled_scope(),
             last_arrival=now,
             deadline=now + 60,
@@ -118,10 +122,10 @@ def _flush_sleep_scenario(
 
     events = [asyncio.Event() for _ in range(2)]
     _install_flush_sleep_spy(monkeypatch, events)
-    registry: dict[tuple[int, int], Any] = {}
-    monkeypatch.setattr(ban_flow, "_proof_sessions", registry)
+    registry = ProofSessionRegistry()
+    monkeypatch.setattr(ban_flow, "proof_sessions", registry)
 
-    async def _scenario() -> tuple[dict[tuple[int, int], Any], Any]:
+    async def _scenario() -> tuple[ProofSessionRegistry, Any]:
         registry[key] = first
         task = asyncio.create_task(ban_flow._flush_session(key, _DummyBot()))  # type: ignore[arg-type]
         await asyncio.sleep(0)
@@ -159,7 +163,7 @@ def test_flush_finally_clears_own_session(
 ) -> None:
     registry, successor = _flush_sleep_scenario(monkeypatch, with_successor=False)
     assert successor is None
-    assert registry == {}
+    assert len(registry) == 0
 
 
 def test_done_proof_finally_guard_regression(
@@ -170,14 +174,14 @@ def test_done_proof_finally_guard_regression(
     ctx = _FakeCtx({})
     scope = flow_scope(ctx, update)  # type: ignore[arg-type]
     scope.update(_prefilled_scope())
-    first = ban_flow._ProofSession(
+    first = ProofSession(
         msgs=[object()],  # type: ignore[list-item]
         meta={"ban_target_id": 33, "ban_admin_id": 44},
         scope=scope,
     )
-    successor = ban_flow._ProofSession(scope=_prefilled_scope())
-    registry: dict[tuple[int, int], Any] = {}
-    monkeypatch.setattr(ban_flow, "_proof_sessions", registry)
+    successor = ProofSession(scope=_prefilled_scope())
+    registry = ProofSessionRegistry()
+    monkeypatch.setattr(ban_flow, "proof_sessions", registry)
 
     async def _replace_while_executing(*args: Any, **kwargs: Any) -> None:
         registry.pop(key, None)
@@ -267,20 +271,20 @@ def test_zombie_text_ends_silently() -> None:
 def test_zombie_media_creates_no_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    registry: dict[tuple[int, int], Any] = {}
-    monkeypatch.setattr(ban_flow, "_proof_sessions", registry)
+    registry = ProofSessionRegistry()
+    monkeypatch.setattr(ban_flow, "proof_sessions", registry)
     update = _ZombieUpdate(message=object())
     outcome = asyncio.run(
         ban_flow.on_proof_received(update, _ZombieCtx({}))  # type: ignore[arg-type]
     )
     assert outcome == ban_flow.ConversationHandler.END
-    assert registry == {}
+    assert len(registry) == 0
 
 
 def test_zombie_done_tap_ends_silently(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ban_flow, "_proof_sessions", {})
+    monkeypatch.setattr(ban_flow, "proof_sessions", ProofSessionRegistry())
     query = _ZombieQuery()
     update = _ZombieUpdate(query=query)
     outcome = asyncio.run(
@@ -293,7 +297,7 @@ def test_zombie_done_tap_ends_silently(
 def test_zombie_timeout_silent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ban_flow, "_proof_sessions", {})
+    monkeypatch.setattr(ban_flow, "proof_sessions", ProofSessionRegistry())
     bot = _ZombieBot()
     msg = _ZombieMessage()
     update = _ZombieUpdate(message=msg)
@@ -331,15 +335,15 @@ def test_live_unexpected_still_nags(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _timeout_scenario(
     monkeypatch: pytest.MonkeyPatch, *, flushing: bool
-) -> tuple[dict[tuple[int, int], Any], ban_flow._ProofSession]:
+) -> tuple[ProofSessionRegistry, ProofSession]:
     """Run the timeout handler against a session and report the registry."""
-    registry: dict[tuple[int, int], Any] = {}
-    monkeypatch.setattr(ban_flow, "_proof_sessions", registry)
+    registry = ProofSessionRegistry()
+    monkeypatch.setattr(ban_flow, "proof_sessions", registry)
     update = _ZombieUpdate(message=_ZombieMessage())
     ctx = _ZombieCtx({})
     scope = flow_scope(ctx, update)  # type: ignore[arg-type]
     scope.update({"ban_target_id": 33})
-    session = ban_flow._ProofSession(scope=scope, flushing=flushing)
+    session = ProofSession(scope=scope, flushing=flushing)
     key = (_FakeChat.id, _FakeUser.id)
     registry[key] = session
 

@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import telegram.error
@@ -39,6 +38,10 @@ from tcbot.modules.helper.pipelines.proof_flow import (
     PROOF_MEDIA_FILTER,
     BuildProof,
     upload_proof_media,
+)
+from tcbot.modules.helper.pipelines.proof_session import (
+    ProofSession,
+    proof_sessions,
 )
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
@@ -74,32 +77,12 @@ BAN_USER_DATA_KEYS = (
     "ban_admin_fname",
     "ban_prompt_msg_id",
     "ban_prompt_chat_id",
-    "ban_executing",
     "ban_locale",
 )
 WAITING_PROOF = 0
 WAITING_UPDATE_CONFIRM = 1
 proof = BuildProof("ban", skip_allowed=False)
 _PROOF_COLLECT_MAX_S: float = 60.0
-# * Upper bound for the shutdown drain of the pending proof flushes.
-_PROOF_DRAIN_TIMEOUT_S: float = 30.0
-
-
-@dataclass
-class _ProofSession:
-    """One in-progress proof collection keyed by (chat_id, user_id)."""
-
-    msgs: list[Message] = field(default_factory=list)
-    meta: dict[str, Any] = field(default_factory=dict)
-    scope: dict[str, Any] = field(default_factory=dict)
-    deadline: float = 0.0
-    last_arrival: float = 0.0
-    flushing: bool = False
-    cancelled: bool = False
-    flush_task: asyncio.Task[None] | None = None
-
-
-_proof_sessions: dict[tuple[int, int], _ProofSession] = {}
 
 
 def _clear_ban_state(scope: dict[str, Any] | None) -> None:
@@ -115,41 +98,18 @@ def _cancel_proof_session(scope: dict[str, Any] | None) -> None:
     _clear_ban_state(scope)
     if scope is None:
         return
-    for key in [k for k, s in _proof_sessions.items() if s.scope is scope]:
-        session = _proof_sessions.pop(key)
+    for key, session in proof_sessions.items():
+        if session.scope is not scope:
+            continue
+        proof_sessions.pop(key, session)
         session.cancelled = True
         if session.flush_task is not None:
             session.flush_task.cancel()
 
 
 async def drain_proof_sessions() -> None:
-    """Let pending proof flushes finish so no ban is left half-applied.
-
-    A running flush already owns its ban record and fan-out, so the drain
-    waits for it and cancels only the sessions still in their silence
-    window.
-    """
-    pending = [s.flush_task for s in _proof_sessions.values() if s.flush_task]
-    if not pending:
-        return
-    live = [t for t in pending if not t.done()]
-    if not live:
-        return
-    try:
-        await asyncio.wait_for(
-            asyncio.gather(*live, return_exceptions=True),
-            timeout=_PROOF_DRAIN_TIMEOUT_S,
-        )
-        return
-    except TimeoutError:
-        log.warning(
-            "Ban proof flush still running after %.0fs; cancelling.",
-            _PROOF_DRAIN_TIMEOUT_S,
-        )
-    for task in live:
-        if not task.done():
-            task.cancel()
-    await asyncio.gather(*[t for t in live if not t.done()], return_exceptions=True)
+    """Let pending proof flushes finish so no ban is left half-applied."""
+    await proof_sessions.drain()
 
 
 # ─────────────────────── Proof session flush ────────────────────── #
@@ -159,14 +119,14 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
     """Flush one proof session after a silence window or the hard cap."""
     # * Own the session from the first await, so a cancellation during the
     # * silence window still releases the registry entry in the finally block.
-    session: _ProofSession | None = _proof_sessions.get(key)
+    session: ProofSession | None = proof_sessions.get(key)
     if session is None:
         return
     try:
         while True:
             await asyncio.sleep(cfg.album_debounce)
             if (
-                _proof_sessions.get(key) is not session
+                proof_sessions.get(key) is not session
                 or session.cancelled
                 or session.flushing
             ):
@@ -200,8 +160,8 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
     except asyncio.CancelledError:
         raise
     finally:
-        if session is not None and _proof_sessions.get(key) is session:
-            _proof_sessions.pop(key, None)
+        if session is not None and proof_sessions.get(key) is session:
+            proof_sessions.pop(key, None)
             _clear_ban_state(session.scope)
 
 
@@ -805,13 +765,12 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
     if not scope.get("ban_target_id"):
         return ConversationHandler.END
     key = (chat.id, user.id)
-    session = _proof_sessions.get(key)
+    session = proof_sessions.get(key)
     if session is not None and session.flushing:
         return ConversationHandler.END
     if session is None:
-        scope["ban_executing"] = True
         now = monotonic()
-        session = _ProofSession(
+        session = ProofSession(
             # * The snapshot carries this conversation's payload only, so a
             # * second action in another group cannot change the target the
             # * flush enforces against.
@@ -820,7 +779,7 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
             deadline=now + _PROOF_COLLECT_MAX_S,
             last_arrival=now,
         )
-        _proof_sessions[key] = session
+        proof_sessions.add(key, session)
         task = asyncio.create_task(_flush_session(key, ctx.bot))
         session.flush_task = task
     else:
@@ -840,7 +799,7 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if key is None:
         return ConversationHandler.END
     scope = flow_scope(ctx, update)
-    session = _proof_sessions.get(key)
+    session = proof_sessions.get(key)
     if session is None or session.flushing or not session.msgs:
         if not scope.get("ban_target_id"):
             try:
@@ -865,13 +824,17 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     session.flushing = True
     if session.flush_task is not None:
         session.flush_task.cancel()
+        # * Await the cancelled timer before the execution path continues.
+        # * Its finally clause may pop the registry entry; the cleanup below
+        # * must still clear this session's scope even when that happened.
+        await asyncio.gather(session.flush_task, return_exceptions=True)
     try:
         await q.answer()
     except Exception as exc:
         log.debug("Ban done-proof answer failed: %s", exc)
     if not session.meta.get("ban_target_id") or not session.meta.get("ban_admin_id"):
         log.warning("Done-proof flush aborted: meta missing target_id or admin_id")
-        _proof_sessions.pop(key, None)
+        proof_sessions.pop(key, None)
         _clear_ban_state(session.scope)
         return ConversationHandler.END
     tap_msg = update.effective_message
@@ -880,7 +843,7 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             await q.answer()
         except Exception as exc:
             log.debug("Ban done-proof recheck answer failed: %s", exc)
-        _proof_sessions.pop(key, None)
+        proof_sessions.pop(key, None)
         _clear_ban_state(session.scope)
         return ConversationHandler.END
     if not await guards.recheck_executor_rank(tap_msg, user.id, min_role="developer"):
@@ -888,7 +851,7 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             await q.answer()
         except Exception as exc:
             log.debug("Ban done-proof recheck answer failed: %s", exc)
-        _proof_sessions.pop(key, None)
+        proof_sessions.pop(key, None)
         _clear_ban_state(session.scope)
         return ConversationHandler.END
     try:
@@ -896,9 +859,13 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     except Exception:
         log.exception("Done-proof _execute_ban raised")
     finally:
-        if _proof_sessions.get(key) is session:
-            _proof_sessions.pop(key, None)
-            _clear_ban_state(session.scope)
+        # * Always clear this conversation's payload. The cancelled timer may
+        # * already have removed the registry entry, but the scope still
+        # * belongs to the session that this handler just consumed. A
+        # * successor session registered meanwhile keeps its own entry.
+        if proof_sessions.get(key) is session:
+            proof_sessions.pop(key, session)
+        _clear_ban_state(session.scope)
     return ConversationHandler.END
 
 
@@ -929,7 +896,7 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     # * Once flushing has started the ban is executing; cancelling mid-
     # * _execute_ban would cancel the in-flight fan-out (partial ban, DB
     # * written, no summary). Ignore the tap and let execution finish.
-    for sess in list(_proof_sessions.values()):
+    for sess in proof_sessions.values():
         if sess.scope is scope and sess.flushing:
             await q.answer()
             return ConversationHandler.END
@@ -958,7 +925,7 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     # * in-flight fan-out after the ban record and the federation log were
     # * written: the federation would carry a ban no group enforces. The
     # * running flush owns the prompt and replaces it with its summary.
-    for sess in list(_proof_sessions.values()):
+    for sess in proof_sessions.values():
         if sess.scope is scope and sess.flushing:
             log.info("Ban proof timeout ignored: the ban is already executing.")
             return ConversationHandler.END

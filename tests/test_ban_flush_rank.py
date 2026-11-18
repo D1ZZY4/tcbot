@@ -12,6 +12,10 @@ from typing import Any
 import pytest
 
 from tcbot.modules.helper.pipelines import ban_flow
+from tcbot.modules.helper.pipelines.proof_session import (
+    ProofSession,
+    ProofSessionRegistry,
+)
 from tcbot.utils.time_and_date import monotonic
 
 
@@ -36,9 +40,9 @@ def _session(
     *,
     admin_id: int = 44,
     target_id: int = 33,
-) -> ban_flow._ProofSession:
+) -> ProofSession:
     now = monotonic()
-    return ban_flow._ProofSession(
+    return ProofSession(
         msgs=[object()],  # type: ignore[list-item]
         meta={"ban_target_id": target_id, "ban_admin_id": admin_id},
         scope=_prefilled_scope(),
@@ -49,13 +53,13 @@ def _session(
 
 def _run_flush(
     monkeypatch: pytest.MonkeyPatch,
-    session: ban_flow._ProofSession,
-) -> tuple[dict[tuple[int, int], Any], list[Any]]:
+    session: ProofSession,
+) -> tuple[ProofSessionRegistry, list[Any]]:
     key = (11, 22)
-    registry: dict[tuple[int, int], Any] = {}
+    registry = ProofSessionRegistry()
     executed: list[Any] = []
     _install_fast_sleep(monkeypatch)
-    monkeypatch.setattr(ban_flow, "_proof_sessions", registry)
+    monkeypatch.setattr(ban_flow, "proof_sessions", registry)
 
     async def _fake_execute(bot: Any, msgs: Any, meta: Any) -> None:
         executed.append((bot, msgs, meta))
@@ -76,7 +80,7 @@ def test_flush_hands_the_session_to_the_ban_executor(
     """The executor owns the rank gate; the flush only hands over the batch."""
     registry, executed = _run_flush(monkeypatch, _session())
     assert len(executed) == 1
-    assert registry == {}
+    assert len(registry) == 0
 
 
 def test_flush_releases_the_session_when_cancelled_during_the_window(
@@ -84,9 +88,9 @@ def test_flush_releases_the_session_when_cancelled_during_the_window(
 ) -> None:
     """A shutdown cancellation must not leave the proof session behind."""
     key = (11, 22)
-    registry: dict[tuple[int, int], Any] = {}
+    registry = ProofSessionRegistry()
     session = _session()
-    monkeypatch.setattr(ban_flow, "_proof_sessions", registry)
+    monkeypatch.setattr(ban_flow, "proof_sessions", registry)
 
     async def _scenario() -> None:
         registry[key] = session
@@ -99,4 +103,4 @@ def test_flush_releases_the_session_when_cancelled_during_the_window(
             await task
 
     asyncio.run(_scenario())
-    assert registry == {}
+    assert len(registry) == 0

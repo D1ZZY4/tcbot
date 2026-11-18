@@ -24,6 +24,7 @@ from typing import Any
 import pytest
 
 from tcbot.modules.helper.pipelines import ban_flow
+from tcbot.modules.helper.pipelines.proof_session import ProofSessionRegistry
 from tcbot.modules.helper.scope import clear_flow_scope, conversation_key, flow_scope
 
 
@@ -170,8 +171,8 @@ def test_the_ban_proof_session_snapshots_its_own_conversation(
     group A, starts another one in group B, then uploads the proof in group
     A. Without the scope the flush would ban the group B target.
     """
-    registry: dict[tuple[int, int], Any] = {}
-    monkeypatch.setattr(ban_flow, "_proof_sessions", registry)
+    registry = ProofSessionRegistry()
+    monkeypatch.setattr(ban_flow, "proof_sessions", registry)
 
     ctx = _FakeCtx()
     group_a = _FakeUpdate(chat_id=100, user_id=42)
