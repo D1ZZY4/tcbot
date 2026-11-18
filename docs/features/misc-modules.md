@@ -211,8 +211,11 @@ Behavior:
 - `/tcforget <user_id> <reason>` queues an erasure through
   `request_user_erasure`; the ten-minute erasure sweep (and the daily
   cleanup as a fallback) anonymises the profile, revokes live roles and
-  moderation actions, and invalidates the affected name and role cache
-  entries after the transaction commits.
+  moderation actions, withdraws open appeals and review slots, cancels
+  pending promotion requests, and invalidates the affected name, locale,
+  and role cache entries after the transaction commits. The current
+  federation owner is refused: transfer ownership first, otherwise the
+  sweep would leave the community without a Founder.
 
 Database impact: `/leaveall` deactivates each `connected_chats` row in
 parallel with the leave and posts a `group_disconnected` log entry per

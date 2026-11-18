@@ -50,6 +50,7 @@ done = "Membersihkan {n} grup yang tidak bisa diakses."
 
 [forget]
 usage = "Gunakan: /tcforget <user_id> <alasan>"
+owner = "Pemilik federasi saat ini tidak bisa dihapus. Pindahkan kepemilikan terlebih dahulu."
 queued = "Permintaan penghapusan {request} diantrekan untuk user {user}. Sapuan pembersihan berikutnya menganonimkan akun tersebut."
 failed = "Tidak bisa mengantrekan permintaan penghapusan. Periksa user ID dan log."
 

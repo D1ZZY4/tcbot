@@ -22,7 +22,14 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
 from tcbot import cfg
-from tcbot.database import bans_db, erasure_db, groups_db, users_cache, warns_db
+from tcbot.database import (
+    bans_db,
+    erasure_db,
+    groups_db,
+    users_cache,
+    users_roles,
+    warns_db,
+)
 from tcbot.database import engine as engine_module
 from tcbot.database.base import (
     chat_members,
@@ -262,6 +269,32 @@ async def test_an_erasure_request_is_swept(postgres: str) -> None:
     )
     assert row is not None
     assert row["erased_at"] is not None
+
+
+async def test_an_erasure_request_never_removes_the_current_owner(
+    postgres: str,
+) -> None:
+    """The current Founder must transfer ownership before being erased."""
+    await users_roles.set_owner(7)
+    request_id = await erasure_db.request_erasure(7, "account deletion")
+    assert request_id > 0
+
+    await engine_module.db_call(
+        lambda: engine_module.run(text("SELECT sweep_pending_user_erasures(25)"))
+    )
+
+    row = await engine_module.fetch_one(
+        telegram_users.select().where(telegram_users.c.user_id == 7)
+    )
+    assert row is not None
+    assert row["erased_at"] is None
+    request = await engine_module.fetch_one(
+        text(
+            "SELECT status FROM telegram_user_erasures WHERE id = :request_id"
+        ).bindparams(request_id=request_id)
+    )
+    assert request is not None
+    assert request["status"] == "retained"
 
 
 async def test_the_member_cache_name_search_finds_the_user(postgres: str) -> None:

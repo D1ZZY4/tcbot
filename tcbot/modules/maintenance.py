@@ -534,6 +534,28 @@ async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     try:
+        owner_id = await db.users_roles.get_owner_id(fresh=True)
+    except Exception:
+        log.exception("tcforget owner lookup failed")
+        await safe_reply(
+            msg,
+            replies.err_db_retry(locale, plain=True),
+            log_label="tcforget owner-lookup-failed",
+            parse_mode=None,
+        )
+        return
+    if owner_id == user_id:
+        # ! CRITICAL: erasing the Founder would revoke the only owner row,
+        # ! and the boot seed could recreate it for the erased account. The
+        # ! operator must transfer ownership before erasing that account.
+        await safe_reply(
+            msg,
+            t("maintenance.forget.owner", locale, plain=True),
+            log_label="tcforget current-owner",
+            parse_mode=None,
+        )
+        return
+    try:
         request_id = await db.erasure_db.request_erasure(user_id, reason)
     except Exception:
         log.exception("tcforget request failed for user=%d", user_id)

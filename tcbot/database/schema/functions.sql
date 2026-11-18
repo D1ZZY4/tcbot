@@ -2149,10 +2149,11 @@ CREATE OR REPLACE FUNCTION %SCHEMA%.process_user_erasure(p_erasure_id bigint) RE
     SET search_path TO 'pg_catalog', '%SCHEMA%'
     AS $$
 DECLARE
-    v_req       %SCHEMA%.telegram_user_erasures%ROWTYPE;
-    v_affected  jsonb := '{}'::jsonb;
-    v_count     integer;
-    v_action_id bigint;
+    v_req          %SCHEMA%.telegram_user_erasures%ROWTYPE;
+    v_affected     jsonb := '{}'::jsonb;
+    v_count        integer;
+    v_action_count integer := 0;
+    v_action_id    bigint;
 BEGIN
     SELECT * INTO v_req
     FROM %SCHEMA%.telegram_user_erasures
@@ -2165,6 +2166,21 @@ BEGIN
 
     IF v_req.status <> 'pending' THEN
         RAISE EXCEPTION 'Erasure request % is %', p_erasure_id, v_req.status;
+    END IF;
+
+    -- * Erasing the current owner would revoke the only Founder row, and a
+    -- * restart could recreate that role for the erased account. The
+    -- * operator must transfer ownership first; the sweep records the
+    -- * refused request as retained.
+    IF EXISTS (
+        SELECT 1
+          FROM %SCHEMA%.role_assignments AS ra
+         WHERE ra.user_id = v_req.user_id
+           AND ra.role_key = 'owner'
+           AND ra.status = 'active'
+           AND (ra.expires_at IS NULL OR ra.expires_at > now())
+    ) THEN
+        RAISE EXCEPTION 'The current federation owner cannot be erased';
     END IF;
 
     UPDATE %SCHEMA%.telegram_user_erasures
@@ -2197,14 +2213,33 @@ BEGIN
     GET DIAGNOSTICS v_count = ROW_COUNT;
     v_affected := jsonb_set(v_affected, '{role_assignments_revoked}', to_jsonb(v_count), true);
 
+    -- * A revoked ban must not leave a pending appeal and a live review
+    -- * card behind: the card would only be able to reject a decision that
+    -- * no longer exists.
+    UPDATE %SCHEMA%.moderation_appeals AS ap
+       SET status = 'withdrawn',
+           resolved_at = now(),
+           decision_note = 'Account erased'
+      WHERE ap.status = 'pending'
+        AND ap.action_id IN (
+            SELECT a.id
+              FROM %SCHEMA%.moderation_actions AS a
+             WHERE a.target_user_id = v_req.user_id
+               AND a.status = 'active'
+        );
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    v_affected := jsonb_set(v_affected, '{appeals_withdrawn}', to_jsonb(v_count), true);
+
     FOR v_action_id IN
         UPDATE %SCHEMA%.moderation_actions
            SET status = 'revoked',
-               revoked_at = now()
+               revoked_at = now(),
+               metadata = metadata - 'review_message_id' - 'review_timestamp'
          WHERE target_user_id = v_req.user_id
            AND status = 'active'
         RETURNING id
     LOOP
+        v_action_count := v_action_count + 1;
         INSERT INTO %SCHEMA%.moderation_enforcement_runs
             (action_id, operation, idempotency_key, requested_by_user_id, status)
         VALUES
@@ -2221,8 +2256,23 @@ BEGIN
         ON CONFLICT (run_id, chat_id) DO NOTHING;
     END LOOP;
 
+    v_affected := jsonb_set(
+        v_affected,
+        '{moderation_actions_revoked}',
+        to_jsonb(v_action_count),
+        true
+    );
+
+    -- * A request filed before the erasure could otherwise be approved
+    -- * later and grant a role to an account that no longer exists.
+    UPDATE %SCHEMA%.promotion_requests
+       SET status = 'cancelled',
+           resolved_at = now(),
+           decision_note = 'Target account erased'
+     WHERE target_user_id = v_req.user_id
+       AND status = 'pending';
     GET DIAGNOSTICS v_count = ROW_COUNT;
-    v_affected := jsonb_set(v_affected, '{moderation_actions_revoked}', to_jsonb(v_count), true);
+    v_affected := jsonb_set(v_affected, '{promotion_requests_cancelled}', to_jsonb(v_count), true);
 
     UPDATE %SCHEMA%.telegram_user_erasures
        SET status = 'completed',

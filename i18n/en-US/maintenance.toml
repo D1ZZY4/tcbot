@@ -50,6 +50,7 @@ done = "Cleaned up {n} inaccessible group(s)."
 
 [forget]
 usage = "Usage: /tcforget <user_id> <reason>"
+owner = "The current federation owner cannot be erased. Transfer ownership first."
 queued = "Erasure request {request} queued for user {user}. The next cleanup sweep anonymises the account."
 failed = "Could not queue the erasure request. Check the user ID and the logs."
 

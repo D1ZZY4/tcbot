@@ -13,7 +13,11 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import text
 
 from tcbot.database.base import chat_members
-from tcbot.database.cache import effective_role_cache, user_mention_cache
+from tcbot.database.cache import (
+    effective_role_cache,
+    user_locale_cache,
+    user_mention_cache,
+)
 from tcbot.database.engine import run_transaction
 from tcbot.database.queues_db import expire_stale_requests
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -237,6 +241,7 @@ def _invalidate_erased(user_ids: list[int]) -> None:
     for user_id in user_ids:
         user_mention_cache.invalidate(user_id)
         effective_role_cache.invalidate(user_id)
+        user_locale_cache.invalidate(user_id)
 
 
 async def _cleanup_members(sess: AsyncSession, cutoff: Any) -> int:
@@ -269,6 +274,7 @@ async def _sweep_erasures(sess: AsyncSession) -> tuple[int, list[int]]:
     )
     if not locked:
         return 0, []
+    started_at = await sess.scalar(text("SELECT now()"))
     pending = await sess.execute(
         text(
             "SELECT user_id FROM telegram_user_erasures "
@@ -282,7 +288,22 @@ async def _sweep_erasures(sess: AsyncSession) -> tuple[int, list[int]]:
     )
     erased_ids = [int(row[0]) for row in pending]
     result = await sess.execute(text("SELECT sweep_pending_user_erasures(25)"))
-    return int(result.scalar() or 0), erased_ids
+    erased_count = int(result.scalar() or 0)
+    # * A request inserted between the pre-read and the function call can
+    # * still be erased by the batch. Read back every account completed in
+    # * this transaction so its caches are invalidated too; invalidating an
+    # * extra id is harmless, while missing one serves the old profile for
+    # * the whole cache TTL.
+    if started_at is not None:
+        completed = await sess.execute(
+            text(
+                "SELECT user_id FROM telegram_user_erasures "
+                "WHERE status = 'completed' AND processed_at >= :started_at"
+            ),
+            {"started_at": started_at},
+        )
+        erased_ids.extend(int(row[0]) for row in completed)
+    return erased_count, sorted(set(erased_ids))
 
 
 async def _run_erasure_sweep() -> tuple[int, list[int]]:
