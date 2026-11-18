@@ -102,6 +102,28 @@ def test_schedules_land_in_the_persistent_job_store(store: _FakeJobStore) -> Non
     assert job.misfire_grace_time == 86400
 
 
+def test_worker_entry_points_are_registered_from_the_caller(
+    store: _FakeJobStore,
+) -> None:
+    """The storage layer must not import the Telegram worker modules."""
+
+    async def _worker() -> None:
+        return None
+
+    async def _run() -> None:
+        await sched_mod.start(
+            _TEST_URL,
+            enforcement_job=_worker,
+            notification_job=_worker,
+        )
+        await sched_mod.stop()
+
+    asyncio.run(_run())
+
+    assert store.jobs[sched_mod._ENFORCEMENT_WORKER_SCHEDULE_ID].func is _worker
+    assert store.jobs[sched_mod._NOTIFICATION_WORKER_SCHEDULE_ID].func is _worker
+
+
 def test_unchanged_schedule_keeps_its_persisted_fire_time(
     store: _FakeJobStore,
 ) -> None:

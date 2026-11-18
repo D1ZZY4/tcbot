@@ -36,12 +36,14 @@ from tcbot.database.cache import drain_redis_mutations
 from tcbot.database.engine import close as close_database
 from tcbot.database.engine import connect
 from tcbot.enforcement_worker import configure as configure_enforcement_worker
+from tcbot.enforcement_worker import run as run_enforcement_worker
 from tcbot.modules import get_handlers
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.modules.helper.extraction import refresh as identity_refresh
 from tcbot.modules.helper.pipelines import connected_flow, stats_flow
 from tcbot.modules.helper.pipelines.ban_flow import drain_proof_sessions
 from tcbot.notification_worker import configure as configure_notification_worker
+from tcbot.notification_worker import run as run_notification_worker
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import _ensure_loaded
@@ -385,7 +387,12 @@ async def _post_init(app: Application) -> None:
     configure_enforcement_worker(app.bot)
     configure_notification_worker(app.bot)
     pg_cron_active = await pg_cron.sync_schedules()
-    await sched_mod.start(cfg.database_url, database_jobs_in_pg_cron=pg_cron_active)
+    await sched_mod.start(
+        cfg.database_url,
+        database_jobs_in_pg_cron=pg_cron_active,
+        enforcement_job=run_enforcement_worker,
+        notification_job=run_notification_worker,
+    )
     _startup_tasks.spawn(_warm_hot_caches())
     asyncio.get_running_loop().set_exception_handler(_make_asyncio_exc_handler())
     lec, _ = cfg.logs_errors

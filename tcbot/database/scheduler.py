@@ -20,22 +20,23 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import create_engine, text
 
-from tcbot import cfg, enforcement_worker
+from tcbot import cfg
 from tcbot.database.base import chat_members
 from tcbot.database.cache import effective_role_cache, user_mention_cache
 from tcbot.database.connection_options import schema_options
 from tcbot.database.engine import run_transaction
 from tcbot.database.queues_db import expire_stale_requests
-from tcbot.notification_worker import run as run_notification_worker
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
     from datetime import tzinfo
 
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    AsyncJob = Callable[[], Awaitable[None]]
 
 log = get_logger(__name__)
 
@@ -485,6 +486,8 @@ async def _scheduler_background(
     database_url: str,
     *,
     database_jobs_in_pg_cron: bool,
+    enforcement_job: AsyncJob | None,
+    notification_job: AsyncJob | None,
 ) -> None:
     """Long-running background task that owns the AsyncIOScheduler lifecycle.
 
@@ -534,6 +537,8 @@ async def _scheduler_background(
                 scheduler,
                 store,
                 database_jobs_in_pg_cron=database_jobs_in_pg_cron,
+                enforcement_job=enforcement_job,
+                notification_job=notification_job,
             ),
         )
         if _sched_ready is None:
@@ -698,6 +703,8 @@ def _reconcile_schedules(
     store: SQLAlchemyJobStore,
     *,
     database_jobs_in_pg_cron: bool,
+    enforcement_job: AsyncJob | None = None,
+    notification_job: AsyncJob | None = None,
 ) -> None:
     """Align the persisted schedules with the current configuration.
 
@@ -778,31 +785,35 @@ def _reconcile_schedules(
     )
     log.info("Scheduled promotion request expiry: every hour.")
 
-    # * The expiry sweep only queues the per-group revokes. This worker is
-    # * the consumer that actually lifts the restriction on Telegram.
-    _ensure_job(
-        scheduler,
-        job_id=_ENFORCEMENT_WORKER_SCHEDULE_ID,
-        func=enforcement_worker.run,
-        trigger=IntervalTrigger(minutes=5, timezone=_SCHEDULER_TIMEZONE),
-        args=(),
-        misfire_grace_time=300,
-        stored=stored,
-    )
-    log.info("Scheduled enforcement worker: every 5 minutes.")
+    # * The expiry sweep only queues the per-group revokes. The application
+    # * passes the worker entry points in, so the storage layer never imports
+    # * the Telegram delivery modules. The callables still have stable module
+    # * paths, so APScheduler persists and reloads them by reference.
+    if enforcement_job is not None:
+        _ensure_job(
+            scheduler,
+            job_id=_ENFORCEMENT_WORKER_SCHEDULE_ID,
+            func=enforcement_job,
+            trigger=IntervalTrigger(minutes=5, timezone=_SCHEDULER_TIMEZONE),
+            args=(),
+            misfire_grace_time=300,
+            stored=stored,
+        )
+        log.info("Scheduled enforcement worker: every 5 minutes.")
 
     # * A review-card edit that failed in the handler is retried here, so
     # * a settled appeal cannot leave a live-looking card behind.
-    _ensure_job(
-        scheduler,
-        job_id=_NOTIFICATION_WORKER_SCHEDULE_ID,
-        func=run_notification_worker,
-        trigger=IntervalTrigger(minutes=5, timezone=_SCHEDULER_TIMEZONE),
-        args=(),
-        misfire_grace_time=300,
-        stored=stored,
-    )
-    log.info("Scheduled notification worker: every 5 minutes.")
+    if notification_job is not None:
+        _ensure_job(
+            scheduler,
+            job_id=_NOTIFICATION_WORKER_SCHEDULE_ID,
+            func=notification_job,
+            trigger=IntervalTrigger(minutes=5, timezone=_SCHEDULER_TIMEZONE),
+            args=(),
+            misfire_grace_time=300,
+            stored=stored,
+        )
+        log.info("Scheduled notification worker: every 5 minutes.")
     # * The retired weekly cleanup job must not fire: it pointed at a
     # * membership sweep the daily job replaced.
     _remove_job(
@@ -829,6 +840,8 @@ async def start(
     database_url: str,
     *,
     database_jobs_in_pg_cron: bool = False,
+    enforcement_job: AsyncJob | None = None,
+    notification_job: AsyncJob | None = None,
 ) -> None:
     """Initialise and start the APScheduler background scheduler.
 
@@ -843,6 +856,10 @@ async def start(
         database_url: PostgreSQL connection string (same as ``DATABASE_URL``).
         database_jobs_in_pg_cron: Remove the pure-database expiry schedule
             when pg_cron already owns it.
+        enforcement_job: The application's enforcement worker entry point.
+            The storage layer never imports it, so the dependency points
+            from the runtime into the scheduler.
+        notification_job: The application's review-card retry worker.
 
     """
     global _sched_ready, _sched_stop, _sched_error, _sched_task
@@ -855,7 +872,10 @@ async def start(
     _sched_error = None
     _sched_task = asyncio.create_task(
         _scheduler_background(
-            database_url, database_jobs_in_pg_cron=database_jobs_in_pg_cron
+            database_url,
+            database_jobs_in_pg_cron=database_jobs_in_pg_cron,
+            enforcement_job=enforcement_job,
+            notification_job=notification_job,
         ),
         name="tcbot.scheduler",
     )

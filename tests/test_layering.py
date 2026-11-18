@@ -32,6 +32,18 @@ _TCBOT_ROOT = Path(__file__).resolve().parent.parent / "tcbot"
 # * helper layer both build on it, so it must not depend on either.
 _FORBIDDEN_IN_UTILS = ("tcbot.modules", "tcbot.database", "tcbot.error_reporter")
 
+# * The storage layer is below the runtime workers and the transport shell.
+# * The scheduler receives the worker entry points from startup instead of
+# * importing them, so a schema tool or a health-only host does not load the
+# * Telegram delivery stack through the database package.
+_FORBIDDEN_IN_DATABASE = (
+    "tcbot.modules",
+    "tcbot.enforcement_worker",
+    "tcbot.notification_worker",
+    "tcbot.alive",
+    "tcbot.error_reporter",
+)
+
 # * Hard per-module line budget from the project rules. A module that
 # * reaches it is split into a same-named package with focused submodules.
 _FILE_BUDGET_LINES = 1000
@@ -225,6 +237,19 @@ def test_database_stays_below_the_command_modules() -> None:
     """
     offenders = _command_import_offenders(_TCBOT_ROOT / "database")
     assert not offenders, "database must not import a command module:" + _report(
+        offenders
+    )
+
+
+def test_database_stays_below_the_runtime_workers() -> None:
+    """The storage layer must not import the workers or the transport shell.
+
+    The scheduler takes the enforcement and notification entry points as
+    arguments, so importing the database package for a schema tool or the
+    health endpoint does not pull in Telegram delivery code.
+    """
+    offenders = _offenders(_TCBOT_ROOT / "database", _FORBIDDEN_IN_DATABASE)
+    assert not offenders, "database must not import runtime workers:" + _report(
         offenders
     )
 

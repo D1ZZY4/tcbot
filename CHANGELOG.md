@@ -111,6 +111,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Changed
 
+- **The scheduler receives its worker entry points from startup** (`tcbot/database/scheduler.py`, `tcbot/__main__.py`): the storage package imported `enforcement_worker` and `notification_worker`, so loading the database layer for a schema tool or the health endpoint also loaded Telegram delivery code. `start()` now takes the two callables, and the database package stays below the runtime workers. Persisted jobs keep their stable module paths.
+
 - **Proof sessions have their own lifecycle owner** (`tcbot/modules/helper/pipelines/proof_session.py`, `ban_flow.py`): the session dataclass, registry, and shutdown drain were embedded in the already large ban flow. They now live in a focused module, so the ban flow stays inside the file budget and the session contract can be tested without the executor.
 
 - **The schema pins the definer search path to its own schema** (`tcbot/database/schema/functions.sql`, `alembic/versions/0010_schema_hardening.py`): six `SECURITY DEFINER` functions named `public` in their search path instead of the schema the files were applied to, and the erasure batch read its rows by timestamp alone. The functions now pin `pg_catalog` and the active schema, the batch tie-breaks on `id` like the caller's pre-read, and revision 0010 reapplies the files on an existing database. Behavior changes: none for the deployment schema; a development or test schema no longer resolves a definer function through `public`.
