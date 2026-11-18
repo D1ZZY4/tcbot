@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -110,9 +111,18 @@ class KeyedUpdateProcessor(BaseUpdateProcessor):
         if entry is None:
             entry = self._locks[key] = _KeyLock()
         entry.waiters += 1
+        locked = False
         try:
             async with entry.lock:
+                locked = True
                 await self._guarded(coroutine)
+        except asyncio.CancelledError:
+            # * A queued update that never reached the handler owns a
+            # * coroutine object. Closing it prevents the "never awaited"
+            # * warning and releases whatever the handler captured.
+            if not locked and inspect.iscoroutine(coroutine):
+                coroutine.close()
+            raise
         finally:
             # * No await between the decrement and the removal, so the map
             # * never drops a lock another update is about to take.
@@ -122,12 +132,21 @@ class KeyedUpdateProcessor(BaseUpdateProcessor):
 
     async def _guarded(self, coroutine: Awaitable[Any]) -> None:
         """Run one handler under the global concurrency cap."""
-        async with self._global:
-            self._running += 1
-            try:
-                await coroutine
-            finally:
-                self._running -= 1
+        entered = False
+        try:
+            async with self._global:
+                entered = True
+                self._running += 1
+                try:
+                    await coroutine
+                finally:
+                    self._running -= 1
+        except asyncio.CancelledError:
+            # * Cancellation while waiting for a global slot means the
+            # * coroutine was never started.
+            if not entered and inspect.iscoroutine(coroutine):
+                coroutine.close()
+            raise
 
     @property
     def tracked_keys(self) -> int:

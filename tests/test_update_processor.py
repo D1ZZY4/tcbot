@@ -18,6 +18,7 @@ granularity the registered conversations use.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from typing import Any
 
 import pytest
@@ -156,6 +157,34 @@ def test_a_failing_update_releases_its_lock() -> None:
 
     asyncio.run(_scenario())
     assert processor.tracked_keys == 0
+
+
+def test_a_queued_update_closes_its_coroutine_on_cancellation() -> None:
+    """Shutdown must not leave a never-awaited handler coroutine behind."""
+    processor = KeyedUpdateProcessor(max_concurrent_updates=1)
+    release = asyncio.Event()
+
+    async def _hold() -> None:
+        await release.wait()
+
+    queued = _hold()
+
+    async def _scenario() -> None:
+        first = asyncio.create_task(
+            processor.process_update(_FakeUpdate(100, 42), _hold())
+        )
+        second = asyncio.create_task(
+            processor.process_update(_FakeUpdate(100, 42), queued)
+        )
+        await asyncio.sleep(0)
+        second.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await second
+        release.set()
+        await first
+
+    asyncio.run(_scenario())
+    assert inspect.getcoroutinestate(queued) == inspect.CORO_CLOSED
 
 
 def test_a_burst_on_one_conversation_does_not_starve_the_others() -> None:
