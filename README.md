@@ -130,7 +130,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | Variable | Description |
 |---|---|
 | `WEBHOOK_URL` | Public HTTPS base URL for webhook transport; empty falls back to polling. Auto-detected from `REPLIT_DEV_DOMAIN` only when the bot runs as the Replit application. |
-| `WEBHOOK_SECRET` | Used as-is when set, auto-generated per restart when empty. |
+| `WEBHOOK_SECRET` | Used as-is when set (1-256 characters from `A-Z`, `a-z`, `0-9`, `_`, `-`), auto-generated per restart when empty. |
 | `API_ID` | Required: Telegram API ID for MTProto identity lookups; boot refuses without it. |
 | `API_HASH` | Required: Telegram API hash matching `API_ID`; never commit the real value. |
 | `MTPROTO_SESSION` | Namespace for the shared MTProto session in PostgreSQL (default `tcbot_mtproto`). |

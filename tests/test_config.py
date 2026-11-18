@@ -229,6 +229,14 @@ def test_webhook_secret_is_explicit_or_generated(
     assert generated.webhook_secret != "s3cret"
 
 
+def test_webhook_secret_rejects_characters_telegram_refuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A secret outside Telegram's allowed set must fail before boot."""
+    with pytest.raises(RuntimeError, match="WEBHOOK_SECRET"):
+        _load(monkeypatch, WEBHOOK_SECRET="bad secret!")
+
+
 def test_mtproto_session_defaults_when_blank(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

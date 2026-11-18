@@ -55,6 +55,10 @@ _DEFAULT_PROMOTION_REQUEST_TTL_DAYS: int = 7
 # * it has to be a plain identifier. Anything else is refused instead of
 # * being quoted into the option string.
 _DB_SCHEMA_PATTERN: re.Pattern[str] = re.compile(r"^[a-z_][a-z0-9_]*$")
+# * Telegram accepts a webhook secret of 1-256 characters from this set. A
+# * value outside it makes set_webhook fail after the bot has started, so it
+# * is refused at configuration load with an actionable message instead.
+_WEBHOOK_SECRET_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_-]{1,256}$")
 _REPLIT_DEV_DOMAIN_VAR: str = "REPLIT_DEV_DOMAIN"
 _DEFAULT_COMMUNITY_CHANNEL_URL: str = "https://t.me/TranssionCoreFederation"
 _DEFAULT_COMMUNITY_GROUP_URL: str = "https://t.me/TranssionCoreFederationGroup"
@@ -303,7 +307,14 @@ def _auto_webhook_url() -> str:
 def _resolve_webhook_secret() -> str:
     """Return WEBHOOK_SECRET, generating a random token when unset."""
     explicit = os.getenv("WEBHOOK_SECRET", "").strip()
-    return explicit if explicit else secrets.token_hex(32)
+    if not explicit:
+        return secrets.token_hex(32)
+    if not _WEBHOOK_SECRET_PATTERN.fullmatch(explicit):
+        raise RuntimeError(
+            "WEBHOOK_SECRET must contain 1-256 characters from A-Z, a-z, 0-9, "
+            "underscore, or hyphen."
+        )
+    return explicit
 
 
 def _chat_id_from_env(key: str) -> int:
