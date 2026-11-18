@@ -68,8 +68,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Run tests
-        run: uv run pytest tests/ -q -n auto --cov=tcbot --cov-branch --cov-report=term-missing --cov-report=html
+      - name: Run PostgreSQL integration tests
+        run: uv run pytest tests/ -q -m postgres --cov=tcbot --cov-branch --cov-report=
+
+      - name: Run remaining tests
+        run: uv run pytest tests/ -q -m "not postgres" -n auto --cov=tcbot --cov-branch --cov-append --cov-report=term-missing --cov-report=html
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v7

@@ -157,8 +157,13 @@ git diff --check
 When your change touches behavior and the test suite is available, also run:
 
 ```bash
-uv run --with pytest python -m pytest tests/ -q
+uv run pytest tests/ -q
 ```
+
+Database-backed tests read `TCBOT_TEST_DATABASE_URL`; Redis integration tests
+read `TCBOT_TEST_REDIS_URL`. Both groups skip when their variable is unset, so
+a plain local run exercises the unit suite only. CI supplies both and runs the
+PostgreSQL group in a serial step before the parallel suite.
 
 For documentation-only changes, at minimum read the changed files, check
 relative links and stale paths, and run:

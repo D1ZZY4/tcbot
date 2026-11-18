@@ -43,6 +43,21 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Mark every test that owns the shared PostgreSQL schema.
+
+    CI runs the marked group in one serial step and the rest in parallel.
+    The collection hook also catches tests that request the shared
+    ``postgres_db`` or ``postgres_url`` fixture without declaring the
+    marker themselves, so xdist cannot strand them on a worker that is not
+    allowed to own the test schema.
+    """
+    for item in items:
+        fixturenames = getattr(item, "fixturenames", ())
+        if "postgres_db" in fixturenames or "postgres_url" in fixturenames:
+            item.add_marker(pytest.mark.postgres)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _production_logging() -> None:
     """Install the production logging setup once, like main() does at startup.
