@@ -11,9 +11,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 import msgspec
 
+import tcbot.database.cache.redis_io as redis_io
 import tcbot.database.redis_client as _redis_mod
 from tcbot import cfg
-from tcbot.database.cache import redis_io
 from tcbot.database.cache.codec import (
     _decode_redis_value,
     _msgspec_enc_hook,
@@ -568,7 +568,7 @@ class TwoLevelCache[T]:
         client keeps working; only a missing client triggers the
         reconnect, which the client module rate-limits.
         """
-        rc = redis_io.redis_client()
+        rc = redis_io.usable_redis_client()
         if rc is None:
             rc = await redis_io.acquire_redis_client()
         return rc

@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot.database import users_roles
-from tcbot.database.cache import _OWNER_KEY
+from tcbot.database.cache.singletons import _OWNER_KEY
 from tests.postgres_support import identity_db_call
 
 

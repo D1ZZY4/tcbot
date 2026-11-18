@@ -63,7 +63,7 @@ def test_redis_set_marks_unhealthy_on_a_driver_timeout(
 ) -> None:
     """The socket timeout is recorded without being raised to the caller."""
     fake = _FakeTimedOutRedis()
-    monkeypatch.setattr(redis_io, "redis_client", lambda: fake)
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: fake)
 
     asyncio.run(_cache()._redis_set("k", "v"))
 
@@ -76,7 +76,7 @@ def test_redis_delete_marks_unhealthy_on_a_driver_timeout(
 ) -> None:
     """A failed delete is recorded too."""
     fake = _FakeTimedOutRedis()
-    monkeypatch.setattr(redis_io, "redis_client", lambda: fake)
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: fake)
 
     asyncio.run(_cache()._redis_delete("k"))
 
@@ -87,6 +87,6 @@ def test_redis_delete_marks_unhealthy_on_a_driver_timeout(
 def test_redis_set_marks_healthy_on_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(redis_io, "redis_client", lambda: _FakeOkRedis())
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: _FakeOkRedis())
     asyncio.run(_cache()._redis_set("k", "v"))
     assert redis_client_mod.liveness() is True

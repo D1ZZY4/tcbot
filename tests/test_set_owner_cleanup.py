@@ -18,7 +18,7 @@ from sqlalchemy.sql.expression import Update
 from tcbot.database import engine as engine_module
 from tcbot.database import users_roles
 from tcbot.database.base import role_assignments
-from tcbot.database.cache import _OWNER_KEY
+from tcbot.database.cache.singletons import _OWNER_KEY
 from tests.postgres_support import reset_community, seed_users
 
 if TYPE_CHECKING:

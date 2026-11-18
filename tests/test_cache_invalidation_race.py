@@ -122,7 +122,7 @@ def test_a_cross_process_tombstone_forces_the_source_read() -> None:
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(twolevel, "cfg", dataclasses.replace(cfg, redis_url="redis://x"))
-        patch.setattr(redis_io, "redis_client", lambda: _TombstoneRedis())
+        patch.setattr(redis_io, "usable_redis_client", lambda: _TombstoneRedis())
         asyncio.run(_run())
 
 
@@ -326,7 +326,7 @@ def test_a_read_that_overlaps_clear_all_does_not_repopulate_l1() -> None:
         patch.setattr(
             twolevel, "cfg", dataclasses.replace(cfg, redis_url="redis://test")
         )
-        patch.setattr(redis_io, "redis_client", lambda: fake)
+        patch.setattr(redis_io, "usable_redis_client", lambda: fake)
         patch.setattr(redis_io, "acquire_redis_client", _no_client)
         patch.setattr(redis_io, "enqueue_redis_mutation", _enqueue)
         asyncio.run(_run())

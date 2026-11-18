@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 import msgspec
 import pytest
 
-from tcbot.database.cache import (
+from tcbot.database.cache.codec import (
     _decode_redis_value,
     _msgspec_enc_hook,
     _tag_scalars,

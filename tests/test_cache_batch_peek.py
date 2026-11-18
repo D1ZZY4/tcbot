@@ -68,7 +68,7 @@ def test_a_batch_read_reaches_the_second_layer(
 ) -> None:
     """A value that only exists in Redis must come back from a batch read."""
     redis = _FakeRedis()
-    monkeypatch.setattr(redis_io, "redis_client", lambda: redis)
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: redis)
 
     cache = _cache()
     redis.store["tcbot:test-batch-peek:v2:7"] = _encode(["Ann", "ann", None])
@@ -84,7 +84,7 @@ def test_a_batch_read_fills_the_in_memory_layer(
 ) -> None:
     """A value read from Redis must be cached for the next read."""
     redis = _FakeRedis()
-    monkeypatch.setattr(redis_io, "redis_client", lambda: redis)
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: redis)
 
     cache = _cache()
     redis.store["tcbot:test-batch-peek:v2:7"] = _encode(["Ann", "ann", None])
@@ -102,7 +102,7 @@ def test_a_batch_read_serves_the_in_memory_layer_without_redis(
 ) -> None:
     """A value the in-memory layer already holds costs no round trip."""
     redis = _FakeRedis()
-    monkeypatch.setattr(redis_io, "redis_client", lambda: redis)
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: redis)
 
     cache = _cache()
     cache.put(7, ["Ann", "ann", None])
@@ -122,7 +122,7 @@ def test_a_batch_read_treats_a_redis_outage_as_a_miss(
         async def mget(self, *keys: str) -> list[str | None]:
             raise OSError("redis is down")
 
-    monkeypatch.setattr(redis_io, "redis_client", lambda: _DeadRedis())
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: _DeadRedis())
 
     found = asyncio.run(_cache().peek_many([7, 8]))
 
@@ -139,7 +139,7 @@ def test_the_batch_mention_reader_reaches_the_second_layer(
     sends every list view back to the database.
     """
     redis = _FakeRedis()
-    monkeypatch.setattr(redis_io, "redis_client", lambda: redis)
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: redis)
 
     async def _no_database(*args: Any, **kwargs: Any) -> Any:
         raise AssertionError("the batch reader reached the database")

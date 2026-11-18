@@ -19,11 +19,8 @@ from tcbot.database.base import (
     role_permissions,
     telegram_users,
 )
-from tcbot.database.cache import (
-    _OWNER_KEY,
-    effective_role_cache,
-    owner_id_cache,
-)
+from tcbot.database.cache import effective_role_cache, owner_id_cache
+from tcbot.database.cache.singletons import _OWNER_KEY
 from tcbot.database.documents import AdminDoc, RoleRefDoc
 from tcbot.database.engine import (
     db_call,

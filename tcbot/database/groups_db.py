@@ -18,11 +18,11 @@ from tcbot.database.base import (
     telegram_chats,
 )
 from tcbot.database.cache import (
-    _ALL_GROUPS_KEY,
     active_groups_cache,
     connected_cache,
     group_locale_cache,
 )
+from tcbot.database.cache.singletons import _ALL_GROUPS_KEY
 from tcbot.database.documents import GroupDoc, PendingGroupDoc
 from tcbot.database.engine import (
     db_call,

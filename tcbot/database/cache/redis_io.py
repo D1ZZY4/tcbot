@@ -65,7 +65,7 @@ _CLEAR_ALL_TIMEOUT_S: float = 10.0
 # ─────────────────────────── Client access ─────────────────────────── #
 
 
-def redis_client() -> Any:
+def usable_redis_client() -> Any:
     """Return the Redis client, or None when it cannot serve this loop.
 
     A client whose sockets belong to another event loop would wait for

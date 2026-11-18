@@ -110,7 +110,7 @@ def test_cache_resolves_the_client_through_the_reconnect_path(
 ) -> None:
     """The cache reaches Redis again after a failed startup."""
     fake = _FakeRedis()
-    monkeypatch.setattr(redis_io, "redis_client", lambda: None)
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: None)
     monkeypatch.setattr(
         redis_client_mod,
         "cfg",

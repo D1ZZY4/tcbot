@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from tcbot.database import groups_db as _locale_mod
-from tcbot.database.cache import _ALL_GROUPS_KEY, group_locale_cache
+from tcbot.database.cache import group_locale_cache
+from tcbot.database.cache.singletons import _ALL_GROUPS_KEY
 from tests.postgres_support import reset_community, seed_users
 
 if TYPE_CHECKING:

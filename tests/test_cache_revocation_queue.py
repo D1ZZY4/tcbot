@@ -29,7 +29,7 @@ class _FakeOkRedis:
 
 @pytest.fixture(autouse=True)
 def _clean_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(redis_io, "redis_client", lambda: _FakeOkRedis())
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: _FakeOkRedis())
     # * The cache only enqueues L2 mutations when Redis is configured: with
     # * no REDIS_URL there is no L2 to mutate, so the queue stays empty.
     monkeypatch.setattr(

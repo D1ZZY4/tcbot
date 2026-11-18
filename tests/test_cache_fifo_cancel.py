@@ -24,7 +24,7 @@ class _FakeOkRedis:
 
 @pytest.fixture(autouse=True)
 def _clean_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(redis_io, "redis_client", lambda: _FakeOkRedis())
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: _FakeOkRedis())
     redis_io._redis_pending.clear()
     redis_io._redis_tails.clear()
     redis_io._redis_bg_tasks.clear()
