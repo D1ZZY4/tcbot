@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
-from tcbot.modules.helper import decorators, targets
+from tcbot.modules.helper import decorators, extraction, targets
 from tcbot.modules.helper.messages import replies, safe_reply
 from tcbot.modules.helper.pipelines.mute_flow import (
     execute_unmute,
@@ -115,6 +115,22 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     raw_args = resolved.args
 
     remaining_args = list(raw_args[1:] if has_explicit_target else raw_args)
+    # * A reply may restate the quoted user before the duration. The
+    # * resolver keeps the reply when the token names the same account, so
+    # * without this strip the target token would be mistaken for reason
+    # * text and the mute would silently become permanent.
+    reply_sender = (
+        msg.reply_to_message.from_user if msg.reply_to_message is not None else None
+    )
+    target_username = getattr(reply_sender, "username", None) or resolved.ident.username
+    if (
+        not has_explicit_target
+        and remaining_args
+        and extraction.restates_reply_target(
+            remaining_args[0], target_id, target_username
+        )
+    ):
+        remaining_args.pop(0)
 
     duration = None
     if remaining_args:

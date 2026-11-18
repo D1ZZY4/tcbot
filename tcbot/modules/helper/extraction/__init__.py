@@ -17,6 +17,7 @@ from tcbot.modules.helper.extraction.resolve import (
     first_arg_is_explicit,
     parse_user_id_token,
     reply_uid,
+    restates_reply_target,
 )
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "launch_identity_refresh",
     "parse_user_id_token",
     "reply_uid",
+    "restates_reply_target",
     "sync_user_identity",
 ]

@@ -58,6 +58,27 @@ async def _safe_get_chat(bot: Bot, ident: str | int) -> Chat | ChatFullInfo | No
 # ──────────────────────── Target resolution ─────────────────────── #
 
 
+def restates_reply_target(
+    token: str | None,
+    target_id: int,
+    target_username: str | None,
+) -> bool:
+    """Return True when *token* restates the reply target.
+
+    A moderator may repeat the quoted user before the reason or duration.
+    The numeric form is exact; the username form is compared case-folded
+    against the quoted sender's username. An absent username means the
+    token cannot be proven to restate the target and is left untouched.
+    """
+    if not token:
+        return False
+    if parse_user_id_token(token) == target_id:
+        return True
+    if not token.startswith("@") or not target_username:
+        return False
+    return token[1:].casefold() == target_username.casefold()
+
+
 def first_arg_is_explicit(args: list[str]) -> bool:
     """Return True when ``args[0]`` is shaped like an explicit target.
 

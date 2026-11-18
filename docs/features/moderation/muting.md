@@ -108,7 +108,7 @@ The target can be specified by:
 - Passing a numeric user ID after the command.
 - Passing an `@username` after the command, when resolvable.
 
-`cmd_mute` strips the target token first, then attempts to parse the duration token from the head of the remaining list. Anything left after the duration is the inline reason:
+`cmd_mute` strips the target token first, then attempts to parse the duration token from the head of the remaining list. When a reply restates the quoted target (`/tcmute @alice 10m spam` or `/tcmute 123456789 10m spam`), that duplicate is stripped before the duration parse, so the mute keeps its intended lifetime. Anything left after the duration is the inline reason:
 
 ```text
 /tcmute @username 3d spamming in chat
@@ -129,7 +129,7 @@ The target can be specified by:
 
 The reason prompt and proof prompt are stamped with `extra_info` (`<code id>: <duration>`) so the moderator sees the duration even when no reason was typed inline.
 
-When the command replies to a user message, the quoted sender is the default target, with one exception: a leading numeric ID or `@username` that verifies as a real user different from the quoted sender overrides the reply, because a typed ID is deliberate intent while a quote is often just context. That override token is consumed as the target before duration parsing. Anything unverified (a reason starting with a number, an unknown ID) or fuzzy (partial-name search) keeps the reply target, and a restated ID naming the quoted user themself is still dropped from the reason as a duplicate. The shared `extraction.extract_mod_target(update, args, bot)` helper owns both the resolution and the consumed-or-reason decision.
+When the command replies to a user message, the quoted sender is the default target, with one exception: a leading numeric ID or `@username` that verifies as a real user different from the quoted sender overrides the reply, because a typed ID is deliberate intent while a quote is often just context. That override token is consumed as the target before duration parsing. Anything unverified (a reason starting with a number, an unknown ID) or fuzzy (partial-name search) keeps the reply target. A restated numeric ID or `@username` naming the quoted user themself is dropped before the duration parse, so it is not mistaken for a reason or a permanent duration. The shared `extraction.extract_mod_target(update, args, bot)` helper owns the resolution; `extraction.restates_reply_target()` owns the duplicate check.
 
 Inline reasons share the same 1000-character cap as typed reasons (`reason_flow.MAX_REASON_LEN`). Overlong inline input fails fast with the shared retry notice before any prompt is sent; typed input exceeding the cap stays in `WAITING_REASON` with the same text.
 
@@ -249,7 +249,7 @@ The reply and federation log use `keyboards.action_proof_kb(target_id, proof_lin
 
 ## Edge cases
 
-- A duration token that fails the regex is silently dropped and treated as part of the reason text.
+- A token that fails the duration regex stays in the reason text; it is never silently discarded.
 - A demote failure is logged loudly and the mute still proceeds; the target's rank is repaired by a later join-time enforcement pass.
 - `execute_unmute` with no active mute record replies `<user> has no active federation mute.` and queues no delivery.
 - A failed active-mute read fails closed with a retry notice instead of being treated as "no active mute".

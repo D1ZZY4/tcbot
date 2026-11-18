@@ -88,6 +88,15 @@ def _reply_from(uid: int, name: str = "Reply") -> Any:
     return reply
 
 
+def test_a_restated_reply_target_is_recognised() -> None:
+    """Both supported restatements name the same quoted account."""
+    assert ex.restates_reply_target("123456789", 123456789, "alice") is True
+    assert ex.restates_reply_target("@Alice", 123456789, "alice") is True
+    assert ex.restates_reply_target("alice", 123456789, "alice") is False
+    assert ex.restates_reply_target("@bob", 123456789, "alice") is False
+    assert ex.restates_reply_target("@alice", 123456789, None) is False
+
+
 def test_reply_user_wins_without_io(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     _stub_cache(monkeypatch)
     bot = _FakeBot()
