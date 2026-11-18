@@ -166,7 +166,7 @@ class _AsyncRateLimiter:
     async def check(self, uid: int) -> float:
         """Return 0.0 if allowed, or seconds to wait if denied."""
         r = db.redis_client.client()
-        if r is None:
+        if r is None or not db.redis_client.client_is_usable():
             return self._local.check(uid)
 
         key = f"rl:{self._prefix}:{uid}"
@@ -175,17 +175,18 @@ class _AsyncRateLimiter:
         member = str(time.time_ns())
 
         try:
-            result = await asyncio.wait_for(
-                r.eval(
-                    _RL_LUA,
-                    1,
-                    key,
-                    str(now),
-                    str(self.window),
-                    str(self.max_calls),
-                    member,
-                ),
-                timeout=_RL_REDIS_TIMEOUT_S,
+            # * The client's socket timeout bounds the call. Wrapping it in
+            # * asyncio.wait_for would cancel an in-flight Redis command and
+            # * leave its reply unread on the pooled connection, desyncing the
+            # * next cache operation that reuses it.
+            result = await r.eval(
+                _RL_LUA,
+                1,
+                key,
+                str(now),
+                str(self.window),
+                str(self.max_calls),
+                member,
             )
             if result == 0:
                 return 0.0
@@ -197,12 +198,6 @@ class _AsyncRateLimiter:
             log.debug("Redis rate limiter error, using local fallback: %s", exc)
             return self._local.check(uid)
 
-
-# * Upper bound for one Redis rate-limit round trip. The socket default is
-# * far higher; without this cap a stalled Redis would hold every command
-# * and callback for seconds before the local fallback runs. A timeout
-# * falls through to the in-process bucket, so limiting is never disabled.
-_RL_REDIS_TIMEOUT_S: float = 1.5
 
 # * Commands : 8 calls per 30 s - comfortable for regular moderation
 _cmd_limiter = _AsyncRateLimiter(max_calls=8, window=30.0, prefix="cmd")
