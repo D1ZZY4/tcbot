@@ -187,7 +187,14 @@ async def session() -> AsyncIterator[AsyncSession]:
             yield sess
             await sess.commit()
         except BaseException:
-            await sess.rollback()
+            # * The rollback is best effort. A second failure here must not
+            # * replace the exception that aborted the operation: a failed
+            # * rollback would otherwise turn a cancellation into a generic
+            # * database error and hide the original cause from every caller.
+            try:
+                await sess.rollback()
+            except BaseException as rollback_exc:
+                log.warning("Database rollback failed: %s", rollback_exc)
             raise
 
 

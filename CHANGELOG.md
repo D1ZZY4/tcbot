@@ -53,6 +53,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **A failed rollback no longer hides the exception that caused it** (`tcbot/database/engine.py`): a second failure from `rollback()` replaced the original error or cancellation, which turned a shutdown into a logged worker failure. The rollback is now best effort and the original exception stays authoritative.
+
 - **A caller-side timeout counts against the Telegram circuit** (`tcbot/utils/dispatch.py`): enforcement deliveries bounded by `asyncio.timeout` raised the builtin `TimeoutError`, which the generic fan-out branch treated as a service response. It now records a transient failure like PTB's own timeout.
 
 - **An open Telegram circuit leaves enforcement attempts queued** (`tcbot/enforcement_worker.py`): a skipped target still consumed one of its three attempts. The worker now pauses before claiming work while the circuit is OPEN, and the recovery window is still allowed to reach HALF_OPEN.

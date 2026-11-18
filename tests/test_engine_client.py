@@ -142,6 +142,36 @@ def test_connect_does_not_repeat_shared_kwargs(
         assert source.count(f"{key}=") == 1, f"{key} is passed twice to the engine"
 
 
+def test_a_failed_rollback_does_not_mask_the_original_error() -> None:
+    """The operation failure stays authoritative when rollback also fails."""
+
+    class _BrokenSession:
+        async def __aenter__(self) -> _BrokenSession:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def commit(self) -> None:
+            raise RuntimeError("commit failed")
+
+        async def rollback(self) -> None:
+            raise RuntimeError("rollback failed")
+
+    previous_factory = engine_module._session_factory
+    engine_module._session_factory = lambda: _BrokenSession()  # type: ignore[assignment]
+    try:
+
+        async def _run() -> None:
+            async with engine_module.session():
+                pass
+
+        with pytest.raises(RuntimeError, match="commit failed"):
+            asyncio.run(_run())
+    finally:
+        engine_module._session_factory = previous_factory
+
+
 def test_the_database_url_gets_the_async_driver() -> None:
     """A plain postgresql URL is rewritten for the async psycopg driver."""
     original = engine_module.cfg
