@@ -153,16 +153,29 @@ async def complete_task(
     state: str,
     error: str | None = None,
     retry_after: timedelta | None = None,
+    expected_attempts: int | None = None,
 ) -> None:
-    """Mark one card-edit task terminal or schedule its next retry."""
+    """Mark one card-edit task terminal or schedule its next retry.
+
+    A worker that claimed the task passes the attempt count it observed.
+    The update then applies only while that exact claim is still the
+    current pending row, so a re-queued task with a newer card cannot be
+    overwritten by the previous worker's result.
+    """
     if state not in ("pending", "sent", "failed", "skipped"):
         raise ValueError(f"Refusing unknown notification state {state!r}")
     next_retry_at = utc_now() + retry_after if retry_after is not None else None
+    stmt = moderation_notification_tasks.update().where(
+        moderation_notification_tasks.c.id == task_id
+    )
+    if expected_attempts is not None:
+        stmt = stmt.where(
+            moderation_notification_tasks.c.state == "pending",
+            moderation_notification_tasks.c.attempts == expected_attempts,
+        )
     await run_transaction(
         lambda sess: sess.execute(
-            moderation_notification_tasks.update()
-            .where(moderation_notification_tasks.c.id == task_id)
-            .values(
+            stmt.values(
                 state=state,
                 last_error=error,
                 next_retry_at=next_retry_at,

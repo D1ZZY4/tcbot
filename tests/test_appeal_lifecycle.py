@@ -27,7 +27,12 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot import database as db
 from tcbot.database import engine as engine_module
-from tcbot.database.base import moderation_actions, moderation_appeals, moderation_cases
+from tcbot.database.base import (
+    moderation_actions,
+    moderation_appeals,
+    moderation_cases,
+    moderation_notification_tasks,
+)
 from tcbot.utils.time_and_date import utc_now
 from tests.postgres_support import (
     reset_community,
@@ -431,6 +436,39 @@ async def test_the_card_outbox_sees_a_settled_rejection(ban_db: str) -> None:
     assert after is not None
     assert after["has_pending_appeal"] is False
     assert after["review_message_id"] is None
+
+
+async def test_an_old_worker_cannot_overwrite_a_requeued_card_edit(
+    ban_db: str,
+) -> None:
+    """A new card edit must survive the previous worker's completion."""
+    await _seed_ban()
+    ban = await db.bans_db.get_ban(_BAN_REF)
+    assert ban is not None
+    action_id = int(str(ban.get("id")))
+    await db.notifications_db.enqueue_review_card_edit(action_id, -1001, 77)
+    tasks = await db.notifications_db.claim_due_tasks(
+        10, retry_after=timedelta(minutes=5)
+    )
+    task = next(task for task in tasks if int(str(task["action_id"])) == action_id)
+    claimed_attempts = int(str(task["attempts"]))
+
+    await db.notifications_db.enqueue_review_card_edit(action_id, -1001, 88)
+    task_id = int(str(task["id"]))
+    await db.notifications_db.complete_task(
+        task_id,
+        state="sent",
+        expected_attempts=claimed_attempts,
+    )
+
+    row = await engine_module.fetch_one(
+        select(
+            moderation_notification_tasks.c.message_id,
+            moderation_notification_tasks.c.state,
+            moderation_notification_tasks.c.attempts,
+        ).where(moderation_notification_tasks.c.id == task_id)
+    )
+    assert row == {"message_id": 88, "state": "pending", "attempts": 0}
 
 
 async def test_an_expired_ban_withdraws_its_pending_appeal(ban_db: str) -> None:

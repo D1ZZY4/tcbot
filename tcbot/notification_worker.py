@@ -14,6 +14,8 @@ from telegram.error import BadRequest, Forbidden
 
 from tcbot import database as db
 from tcbot.database.types import as_int
+from tcbot.utils import circuit_breaker as _cb
+from tcbot.utils.circuit_breaker import CircuitState
 from tcbot.utils.i18n import resolve_locale, t
 from tcbot.utils.logger import get_logger
 
@@ -49,6 +51,15 @@ async def run() -> None:
 
 async def run_once(bot: Bot) -> None:
     """Claim and process the due card edits."""
+    # * A card edit skipped by an open circuit never reached Telegram.
+    # * Leaving the tasks unclaimed preserves their retry budget for the
+    # * next tick after the circuit recovers.
+    if _cb.telegram.state is CircuitState.OPEN:
+        log.warning(
+            "Notification worker paused: Telegram circuit is OPEN; "
+            "queued card edits stay pending for the next tick."
+        )
+        return
     tasks = await db.notifications_db.claim_due_tasks(
         _MAX_TASKS_PER_TICK, retry_after=_RETRY_DELAY
     )
@@ -73,6 +84,7 @@ async def run_once(bot: Bot) -> None:
                         task_id,
                         state="failed",
                         error=f"worker error: {exc}",
+                        expected_attempts=as_int(task.get("attempts")),
                     )
                 except asyncio.CancelledError:
                     raise
@@ -130,11 +142,14 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
             task_id,
             state="failed",
             error="the task carries an invalid action, chat, or message id",
+            expected_attempts=attempts,
         )
         return
     action = await db.notifications_db.load_task_action(task_id)
     if action is None or _card_is_still_decidable(action, message_id):
-        await db.notifications_db.complete_task(task_id, state="skipped")
+        await db.notifications_db.complete_task(
+            task_id, state="skipped", expected_attempts=attempts
+        )
         return
     locale = await _group_locale(chat_id)
     text = t("appeals.review.card_closed", locale, plain=True)
@@ -155,11 +170,16 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
             and ("not found" in detail or "message_id_invalid" in detail)
         ):
             await db.notifications_db.complete_task(
-                task_id, state="skipped", error=str(exc)
+                task_id,
+                state="skipped",
+                error=str(exc),
+                expected_attempts=attempts,
             )
             return
         if isinstance(exc, BadRequest) and "not modified" in detail:
-            await db.notifications_db.complete_task(task_id, state="sent")
+            await db.notifications_db.complete_task(
+                task_id, state="sent", expected_attempts=attempts
+            )
             return
         retry = attempts < _MAX_ATTEMPTS
         log.warning(
@@ -177,6 +197,9 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
             state="failed" if not retry else "pending",
             error=str(exc),
             retry_after=_RETRY_DELAY if retry else None,
+            expected_attempts=attempts,
         )
         return
-    await db.notifications_db.complete_task(task_id, state="sent")
+    await db.notifications_db.complete_task(
+        task_id, state="sent", expected_attempts=attempts
+    )
