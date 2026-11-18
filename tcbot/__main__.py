@@ -565,11 +565,14 @@ async def _run_webhook_mode(app: Application) -> None:
 def _print_fatal(stage: str, exc: BaseException) -> None:
     """Print a fatal startup error with traceback to stderr."""
     border = "=" * _FATAL_BORDER_WIDTH
+    detail = error_reporter.scrub_text(f"{type(exc).__name__}: {exc}")
     print(f"\n{_FATAL_RED}{border}", file=sys.stderr)
     print(f" FATAL STARTUP ERROR in stage: {stage}", file=sys.stderr)
-    print(f" {type(exc).__name__}: {exc}", file=sys.stderr)
+    print(f" {detail}", file=sys.stderr)
     print(f"{border}", file=sys.stderr)
-    tb_text = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    tb_text = error_reporter.scrub_text(
+        "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    )
     print(f"{_FATAL_RED}{tb_text}{_FATAL_RESET}", file=sys.stderr, end="")
     print(f"{border}{_FATAL_RESET}", file=sys.stderr)
 

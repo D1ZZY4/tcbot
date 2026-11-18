@@ -115,6 +115,7 @@ def test_scrub_secrets_redacts_exact_configured_values(
             api_hash="SENTINEL-APIHASH-xyz",
             webhook_secret="SENTINEL-WEBHOOK-xyz",
             redis_url="SENTINEL-REDIS-xyz",
+            sentry_dsn="SENTINEL-SENTRY-xyz",
         ),
     )
     for value in (
@@ -123,6 +124,7 @@ def test_scrub_secrets_redacts_exact_configured_values(
         "SENTINEL-APIHASH-xyz",
         "SENTINEL-WEBHOOK-xyz",
         "SENTINEL-REDIS-xyz",
+        "SENTINEL-SENTRY-xyz",
     ):
         text = error_reporter._scrub_secrets(f"leak>>{value}<<done")
         assert value not in text

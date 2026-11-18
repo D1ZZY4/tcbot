@@ -439,14 +439,24 @@ _URL_CREDENTIALS_RE = re.compile(r"://(?:[^:@/\s]+)?:[^@/\s]+@")
 
 
 def _scrub_secrets(text: str) -> str:
-    """Redact exact configured values first, then credential-shaped patterns."""
-    for secret in (
-        cfg.bot_token,
-        cfg.database_url,
-        cfg.api_hash,
-        cfg.webhook_secret,
-        cfg.redis_url,
-    ):
+    """Redact exact configured values first, then credential-shaped patterns.
+
+    A fatal startup report can run when the configuration itself failed to
+    load. Reading ``cfg`` would raise again and mask the original error, so
+    the configured-value pass degrades to the shape-based redaction below.
+    """
+    try:
+        configured = (
+            cfg.bot_token,
+            cfg.database_url,
+            cfg.api_hash,
+            cfg.webhook_secret,
+            cfg.redis_url,
+            getattr(cfg, "sentry_dsn", ""),
+        )
+    except Exception:
+        configured = ()
+    for secret in configured:
         if secret and secret in text:
             text = text.replace(secret, "[REDACTED]")
     text = _TOKEN_RE.sub("[REDACTED_TOKEN]", text)
