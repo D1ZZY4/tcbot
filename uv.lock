@@ -1097,7 +1097,7 @@ asyncio = [
 
 [[package]]
 name = "tcbot"
-version = "6.9.0"
+version = "7.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },

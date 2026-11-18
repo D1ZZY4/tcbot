@@ -80,7 +80,7 @@ keeps the `Unreleased` section and links to each release note.
 
 | Document | Purpose |
 |---|---|
-| [Release notes](releases/v6.9.0.md) | Newest published release; older releases link from there. |
+| [Release notes](releases/v7.1.0.md) | Newest published release; older releases link from there. |
 
 ## Architecture at a glance
 
