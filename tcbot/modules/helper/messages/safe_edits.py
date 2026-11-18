@@ -207,12 +207,18 @@ async def answer_and_edit(q: CallbackQuery, text: str, **kwargs: Any) -> None:
     not-modified errors are swallowed like the raw callback sites it replaces.
     Cancellation always propagates instead of reading as success.
     """
-    results = await asyncio.gather(
+    answer_r, edit_r = await asyncio.gather(
         q.answer(),
         safe_edit_cb(q, text, **kwargs),
         return_exceptions=True,
     )
-    throw_if_cancelled(results)
+    throw_if_cancelled((answer_r, edit_r))
+    # * safe_edit_cb handles benign Telegram refusals, but a generic edit
+    # * failure would otherwise be captured by gather and silently dropped.
+    if isinstance(answer_r, BaseException):
+        log.debug("answer_and_edit answer failed: %s", answer_r)
+    if isinstance(edit_r, BaseException):
+        log.warning("answer_and_edit edit failed: %s", edit_r)
 
 
 async def ack_and_render(

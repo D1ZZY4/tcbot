@@ -53,6 +53,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **A failed callback edit is reported** (`tcbot/modules/helper/messages/safe_edits.py`): the shared answer-and-edit helper collected a generic answer or edit failure and discarded it. A failed edit is now logged with its error; benign Telegram refusals stay quiet.
+
 - **A review-card task at its attempt ceiling becomes terminal** (`tcbot/notification_worker.py`): a failure before the retry decision left the row pending forever while each claim advanced its attempt count. The worker now marks such a task failed at `_MAX_ATTEMPTS`.
 
 - **A cancelled queued update closes its handler coroutine** (`tcbot/utils/update_processor.py`): shutdown while an update waited on a conversation lock or the global cap left the coroutine unawaited. The processor now closes a coroutine that never started.
