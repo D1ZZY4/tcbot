@@ -13,6 +13,7 @@ the history keeps the record.
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -22,7 +23,13 @@ from tcbot import cfg
 from tcbot.database import engine as engine_module
 from tcbot.database import warns_db
 from tcbot.database.base import moderation_actions
-from tests.postgres_support import reset_community, seed_chats, seed_users
+from tcbot.utils.time_and_date import utc_now
+from tests.postgres_support import (
+    reset_community,
+    seed_action,
+    seed_chats,
+    seed_users,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -141,6 +148,43 @@ async def test_a_removal_of_a_missing_warning_changes_nothing(warn_db: str) -> N
 
     assert await _counter(42, 5) == 0
     assert await _decision_count(42, 5) == 1
+
+
+async def test_a_removal_skips_an_expired_warning(warn_db: str) -> None:
+    """The newest warning that ran out is not the warning in force.
+
+    The counter and the warn list ignore expired decisions. Revoking the
+    newest expired row would report a removal while the live count stayed
+    the same, so the removal follows the same expiry rule.
+    """
+    now = utc_now()
+    live_id = await seed_action(
+        "warn",
+        42,
+        chat_id=5,
+        created_at=now - timedelta(hours=2),
+        expires_at=now + timedelta(hours=10),
+    )
+    expired_id = await seed_action(
+        "warn",
+        42,
+        chat_id=5,
+        created_at=now - timedelta(hours=1),
+        expires_at=now - timedelta(minutes=30),
+    )
+
+    assert await warns_db.remove_last_warn(42, 5) is True
+
+    assert await _counter(42, 5) == 0
+    statuses = {
+        int(row["id"]): row["status"]
+        for row in await engine_module.fetch_all(
+            moderation_actions.select().where(
+                moderation_actions.c.id.in_([live_id, expired_id])
+            )
+        )
+    }
+    assert statuses == {live_id: "revoked", expired_id: "completed"}
 
 
 async def test_a_failed_removal_leaves_the_counter_untouched(

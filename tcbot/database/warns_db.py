@@ -24,7 +24,6 @@ from tcbot.database.documents import WarnDoc
 from tcbot.database.engine import (
     db_call,
     fetch_all,
-    fetch_one,
     fetch_value,
     run_transaction,
 )
@@ -43,10 +42,42 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
+# * Warning mutations of one target share a user-wide advisory lock. A
+# * clear spans every group, so a per-chat lock alone lets a concurrent
+# * filing read a count that the clear is already revoking and fire the
+# * threshold on fewer live warnings than the limit. The chat lock keeps
+# * the group counters of a user independent of each other.
+_WARN_USER_LOCK: str = "warn-user:{user_id}"
+_WARN_CHAT_LOCK: str = "warn:{chat_id}:{user_id}"
+
 
 def _lifetime_seconds(lifetime: timedelta) -> int:
     """Return the lifetime of a decision in whole seconds."""
     return max(int(lifetime.total_seconds()), 0)
+
+
+async def _lock_warn_mutation(
+    sess: AsyncSession, user_id: int, chat_id: int | None = None
+) -> None:
+    """Serialise every warning mutation of one target.
+
+    The user lock always comes first, so a filing and a clear that touch
+    the same user cannot deadlock on the per-chat lock. The caller runs
+    the lock and its mutation inside one transaction; PostgreSQL releases
+    both when it commits or rolls back.
+    """
+    await sess.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
+        {"scope": _WARN_USER_LOCK.format(user_id=user_id)},
+    )
+    if chat_id is None:
+        return
+    await sess.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
+        {
+            "scope": _WARN_CHAT_LOCK.format(chat_id=chat_id, user_id=user_id),
+        },
+    )
 
 
 # ──────────────────────────── Tables ────────────────────────────── #
@@ -132,10 +163,7 @@ async def add_warn(
         # * threshold in order: the count below sees every warning that
         # * committed before it, so two moderators warning at once cannot
         # * both read a count below the limit and skip the automatic ban.
-        await sess.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
-            {"scope": f"warn:{chat_id}:{user_id}"},
-        )
+        await _lock_warn_mutation(sess, user_id, chat_id)
         case_id = await _open_case(sess, user_id, admin_id, reason, chat_id)
         upload_id = None
         if proof_items and destination_chat_id:
@@ -263,6 +291,9 @@ async def _clear_warn_docs(
     """
 
     async def _work(sess: AsyncSession) -> int:
+        # * The same lock a filing takes: a clear that overlaps a warning
+        # * must not let the filing read a count the clear is revoking.
+        await _lock_warn_mutation(sess, user_id)
         stmt = moderation_actions.update().where(
             moderation_actions.c.target_user_id == user_id,
             moderation_actions.c.action_type == "warn",
@@ -338,37 +369,41 @@ def _compose_warn(row: dict[str, Any]) -> WarnDoc:
 
 
 async def remove_last_warn(user_id: int, chat_id: int) -> bool:
-    """Revoke the most recent warning of a user in a chat.
+    """Revoke the most recent warning that is still in force.
 
-    Returns True when one was revoked. The decision moves to ``revoked``
-    instead of being deleted, so the warning count drops without the
-    history losing the record.
+    Returns True when one was revoked. The selection uses the same expiry
+    rule as the counter and the warn list: an expired warning is history,
+    so revoking it would report a removal while the live count stayed the
+    same. The decision moves to ``revoked`` instead of being deleted, so
+    the count drops without the history losing the record.
+
+    The selection and the revocation run in one transaction under the
+    shared warn lock, so a concurrent filing cannot be missed between the
+    read and the update.
     """
-    row = await db_call(
-        lambda: fetch_one(
+
+    async def _work(sess: AsyncSession) -> bool:
+        await _lock_warn_mutation(sess, user_id, chat_id)
+        # * Read the clock after the lock: a warning that expires while the
+        # * caller waits is no longer a candidate for removal.
+        now = utc_now()
+        action_id = await sess.scalar(
             select(moderation_actions.c.id)
             .where(
                 moderation_actions.c.target_user_id == user_id,
                 moderation_actions.c.action_type == "warn",
                 moderation_actions.c.chat_id == chat_id,
                 moderation_actions.c.status == "completed",
+                (moderation_actions.c.expires_at.is_(None))
+                | (moderation_actions.c.expires_at > now),
             )
             .order_by(
                 moderation_actions.c.created_at.desc(), moderation_actions.c.id.desc()
             )
             .limit(1)
         )
-    )
-    if row is None:
-        return False
-    revoked = await _revoke_warn(int(row["id"]))
-    return bool(revoked)
-
-
-async def _revoke_warn(action_id: int) -> bool:
-    """Move one warning decision to ``revoked``."""
-
-    async def _work(sess: AsyncSession) -> bool:
+        if action_id is None:
+            return False
         result = await sess.execute(
             moderation_actions.update()
             .where(
