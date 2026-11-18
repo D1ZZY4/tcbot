@@ -259,14 +259,16 @@ The newest warning is selected by `created_at` descending, then `id` descending.
 
 ## `/warns` / `/warnlist` behavior
 
-`/warns` shows warning history for the target in the current group.
+`/warns` shows the warnings that are still in force for the target in the
+current group.
 
 Flow:
 
 1. Resolve target.
 2. If unresolved, ask for a target.
-3. Fetch the 50 most recent warnings with
+3. Fetch the 50 most recent in-force warnings with
    `warns_db.get_warns(target_id, chat_id, newest_first=True, limit=50)`.
+   Expired decisions stay in the database history but are not rendered.
 4. If none exist, reply that the target has no warnings in this group.
 5. Otherwise, reply with the total count from `warns_db.warn_count(...)` and
    a numbered reason list of the newest warnings first.

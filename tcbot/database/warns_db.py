@@ -300,6 +300,7 @@ async def get_warns(
         if newest_first
         else (moderation_actions.c.created_at.asc(), moderation_actions.c.id.asc())
     )
+    now = utc_now()
     stmt = (
         select(*_WARN_COLUMNS)
         .where(
@@ -307,6 +308,12 @@ async def get_warns(
             moderation_actions.c.action_type == "warn",
             moderation_actions.c.chat_id == chat_id,
             moderation_actions.c.status == "completed",
+            # * The warn list has to agree with the counter: an expired
+            # * decision is history, not an active warning. Without this
+            # * condition a target with no warnings in force could still
+            # * render a page of expired ones under a zero header count.
+            (moderation_actions.c.expires_at.is_(None))
+            | (moderation_actions.c.expires_at > now),
         )
         # * The surrogate id breaks timestamp ties so a page boundary
         # * cannot repeat or skip a record.

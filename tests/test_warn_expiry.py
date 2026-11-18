@@ -125,9 +125,10 @@ async def test_a_warning_that_ran_out_stops_counting(
         )
     )
 
-    # * The decision keeps its facts and its row: only the counter moves,
-    # * because it reads the expiry at query time.
+    # * The decision keeps its facts and its row: only the counter and the
+    # * rendered list move, because they read the expiry at query time.
     assert await warns_db.warn_count(42, 5) == 0
+    assert await warns_db.get_warns(42, 5, newest_first=True) == []
     stored = await _stored_warning()
     assert stored is not None
     assert stored["status"] == "completed"

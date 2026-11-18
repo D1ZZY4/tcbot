@@ -53,6 +53,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **Warnings that ran out are not rendered as active** (`tcbot/database/warns_db.py`): `/warns` and the `/check` warning drill-down fetched every completed warning while the header counted only the ones still in force. `get_warns` now applies the same expiry condition as `warn_counts`.
+
 - **A delivery summary counts a requested group that never got a target** (`tcbot/database/enforcement_db.py`, `tcbot/modules/helper/pipelines/unban_flow.py`): the queue only records an active connected chat, so a group disconnected during the proof window produced no target row, and the summary counted only the rows it had. A ban then read as a complete delivery while that group was never touched. The caller's requested scope is now the floor of the reported total, the shortfall counts as pending, and the unban wording reports it as queued. Behavior changes: a delivery that cannot reach a group that left the federation reads as pending instead of full.
 
 - **A re-queued enforcement run clears its completion stamp** (`tcbot/database/enforcement_db.py`): a run that closed after a failed target kept `finished_at` when the retry deadline returned it to the queue, so the ledger carried a completion time for work that had not started. The requeue clears the stamp.
