@@ -42,7 +42,7 @@ The registered `/start` entry filter only accepts private-chat messages matching
 
 The deep-link flow itself is DM-only. If the link is opened outside a private chat, the bot asks the user to open it in private messages.
 
-A second entry point is the main group (`MAIN_GROUP`). There, a banned user sends a `#appeal` message (with the log reference, and optionally the ban id); the bot looks up their active ban by sender and runs the same submission gates and posting as the DM path. Outside `MAIN_GROUP` the tag stays silent. Repeated `#appeal` messages from one user are rate-limited before the lookup runs.
+A second entry point is the main group (`MAIN_GROUP`). There, a banned user sends a `#appeal` message (with the log reference, and optionally the ban id); the bot looks up their active ban by sender and runs the same submission gates and posting as the DM path. Outside `MAIN_GROUP` the tag stays silent. Repeated `#appeal` messages from one user are rate-limited before the lookup runs. Long ordinary words that happen to match the public-reference shape are ignored; the submission is always tied to the sender's own active ban.
 
 ## Eligibility checks
 

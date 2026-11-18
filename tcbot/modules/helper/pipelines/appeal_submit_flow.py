@@ -63,7 +63,6 @@ _SECONDS_PER_HOUR: int = 3600
 # * appeal.
 REF_PATTERN: str = r"[a-z0-9]{10,32}"
 _ID_RE = re.compile(rf"^/start\s+appeal_({REF_PATTERN})$")
-_MENTIONED_REF_RE = re.compile(rf"\b({REF_PATTERN})\b")
 _APPEAL_STATE_KEYS: tuple[str, ...] = (
     "appeal_ban_id",
     "appeal_log_msg_id",
@@ -164,15 +163,10 @@ async def handle_group_appeal(
             parse_mode=None,
         )
         return
-    mentioned = _MENTIONED_REF_RE.search(text)
-    if mentioned and mentioned.group(1) != bid:
-        await safe_reply(
-            msg,
-            t("appeals.submit.invalid_link", locale, plain=True),
-            log_label="Appeal group id-mismatch",
-            parse_mode=None,
-        )
-        return
+    # * A free-form appeal can contain ordinary words that happen to match
+    # * the public-reference shape. The message is always tied to the
+    # * sender's own active ban, so only a labelled reference is meaningful;
+    # * rejecting an unlabelled token would block legitimate appeals.
     if ctx.user_data is None:
         return
     scope = flow_scope(ctx, update)
