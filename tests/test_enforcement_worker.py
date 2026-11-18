@@ -16,6 +16,7 @@ from telegram.error import BadRequest
 from tcbot import database as db
 from tcbot import enforcement_worker
 from tcbot.database import enforcement_db
+from tcbot.utils import circuit_breaker as _cb
 
 
 class _FakeBot:
@@ -622,3 +623,30 @@ async def _async_none() -> None:
 
 async def _record(target: list[int], value: int) -> None:
     target.append(value)
+
+
+def test_an_open_telegram_circuit_does_not_consume_target_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Queued work waits while Telegram is known to be unreachable."""
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    claimed: list[int] = []
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        claimed.append(limit)
+        return []
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+
+    _cb.telegram.reset()
+    for _ in range(_cb.telegram._failure_threshold):
+        _cb.telegram.record_failure()
+    try:
+        asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+        assert claimed == []
+    finally:
+        _cb.telegram.reset()

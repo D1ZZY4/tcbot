@@ -21,6 +21,8 @@ from telegram import ChatPermissions
 
 from tcbot import database as db
 from tcbot.database.types import as_int
+from tcbot.utils import circuit_breaker as _cb
+from tcbot.utils.circuit_breaker import CircuitState
 from tcbot.utils.dispatch import (
     fan_out,
     gather_bounded,
@@ -70,6 +72,18 @@ async def run_once(bot: Bot) -> None:
     starve every other expiry in the same tick.
     """
     await db.enforcement_db.requeue_stale_runs()
+    # * Claiming a target consumes one of its three attempts even when the
+    # * Telegram circuit is open and the call is skipped before it leaves the
+    # * process. Leave the work queued while the circuit is OPEN so an outage
+    # * cannot exhaust the retry budget without a single delivery attempt.
+    # * Reading ``state`` (not ``peek_state``) lets an elapsed recovery window
+    # * move the breaker to HALF_OPEN and admit its single probe.
+    if _cb.telegram.state is CircuitState.OPEN:
+        log.warning(
+            "Enforcement worker paused: Telegram circuit is OPEN; "
+            "queued runs stay available for the next tick."
+        )
+        return
     runs = await db.enforcement_db.claim_runs(_MAX_RUNS_PER_TICK)
     for run in runs:
         try:
