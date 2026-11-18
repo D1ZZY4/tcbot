@@ -137,7 +137,7 @@ PROOFS="-1001234567890"
 | `LOGS` | Recommended | `chat_id` or `chat_id/thread_id` | Audit-log destination. The bot boots without it, but every audit post then fails. |
 | `LOGS_ERRORS` | Recommended | `chat_id` or `chat_id/thread_id` | Error-report destination. When empty, reports fall back to the owner DM instead of being dropped. |
 | `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination (channel, group, or forum thread). Also receives a copy of every review card, so one value covers all appeal surfaces. The appeal instruction handle is derived from the public logs link (`COMMUNITY_LOGS_URL`), so no separate handle variable is needed. |
-| `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. |
+| `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. The 60-second collection cap still applies when this value is larger. |
 | `API_ID` | Yes | integer | Telegram API ID for MTProto identity lookups. The bot refuses to boot without it. |
 | `API_HASH` | Yes | string | Telegram API hash matching `API_ID`. Never commit the real value. |
 | `MTPROTO_SESSION` | No | string | Namespace for the shared MTProto session in PostgreSQL. Default `tcbot_mtproto`. |

@@ -124,7 +124,13 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
         return
     try:
         while True:
-            await asyncio.sleep(cfg.album_debounce)
+            # * Sleep no longer than the collection deadline: a deployment
+            # * with a very large debounce value must not defeat the hard
+            # * 60-second cap and leave a ban unflushed indefinitely.
+            remaining = session.deadline - monotonic()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(cfg.album_debounce, remaining))
             if (
                 proof_sessions.get(key) is not session
                 or session.cancelled
