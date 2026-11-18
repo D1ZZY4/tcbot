@@ -121,6 +121,10 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **A notification row with unusable ids becomes terminal** (`tcbot/notification_worker.py`): a queued card edit whose action, chat, or message id was missing returned without recording an outcome, so the claim advanced its attempt count every five minutes forever. The row is now marked failed and stops consuming a worker slot.
 
+- **A transient identity resolve no longer poisons the shared profile cache** (`tcbot/database/users_cache.py`, `tcbot/database/cache/twolevel.py`): `remember_identity` documented an L1-only write but used the shared `put`, so a resolve that failed on a network blip could publish the not-found sentinel to Redis and show the numeric fallback in every process for the full L2 TTL. The new `put_local` keeps that write in the process-local layer; positive identities remain durable in `telegram_users`.
+
+- **A batch identity read cannot restore a profile invalidated during its query** (`tcbot/database/users_cache.py`, `tcbot/database/cache/twolevel.py`): the batch readers filled many keys from one query without checking for a concurrent invalidation, so an erasure or profile update that landed during the read could be undone in both cache layers. The cache exposes a mutation revision, and a batch whose source read overlaps a mutation skips the fill. Behavior changes: the affected keys stay uncached and the next read fetches them again.
+
 ### Changed
 
 - **The scheduler lives in a focused package** (`tcbot/database/scheduler/__init__.py`, `tcbot/database/scheduler/jobs.py`): the scheduler module had grown past the project's hard file budget, mixing schedule lifecycle with the maintenance jobs. `__init__.py` now owns the lifecycle, schedule catalog, and job store; `jobs.py` owns expiry, erasure, retention, and cleanup. The package re-exports every previous name, so persisted APScheduler job paths and existing imports keep resolving. Behavior changes: none.

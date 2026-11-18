@@ -90,3 +90,35 @@ async def test_a_partial_write_invalidates_rather_than_lying(
     await db.users_cache.upsert_user(7, None, "Alice")
 
     assert user_mention_cache.get(7) is CACHE_MISS
+
+
+def test_a_resolved_identity_stays_process_local(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A live resolve must not publish a failure sentinel to Redis.
+
+    A resolve that failed for a transient reason also resolves to no
+    identity. Sharing that sentinel through L2 would show the numeric
+    fallback for every process until the Redis TTL, so the helper only
+    fills its own in-memory layer.
+    """
+    local: list[tuple[int, Any]] = []
+    shared: list[tuple[int, Any]] = []
+
+    class _Cache:
+        def put(self, key: int, value: Any) -> None:
+            shared.append((key, value))
+
+        def put_local(self, key: int, value: Any) -> None:
+            local.append((key, value))
+
+    monkeypatch.setattr(users_cache, "user_mention_cache", _Cache())
+
+    users_cache.remember_identity(7, None, None, None)
+    users_cache.remember_identity(8, "Alice", "alice", "Smith")
+
+    assert shared == []
+    assert local == [
+        (7, [None, None, None]),
+        (8, ["Alice", "alice", "Smith"]),
+    ]

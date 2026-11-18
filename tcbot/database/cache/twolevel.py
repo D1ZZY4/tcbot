@@ -85,6 +85,7 @@ class TwoLevelCache[T]:
         "_mem",
         "_redis_prefix",
         "_redis_ttl",
+        "_revision",
         "_states",
     )
 
@@ -115,6 +116,11 @@ class TwoLevelCache[T]:
         # * sides of the Redis sweep: a read that overlaps the sweep can no
         # * longer publish the pre-sweep value into L1 after the sweep ends.
         self._epoch: int = 0
+        # * Monotonic mutation counter. A batch reader that is about to fill
+        # * many keys at once captures it before its source read and skips
+        # * the fill when it changed, so an invalidation that lands during
+        # * the read cannot be undone by the batch.
+        self._revision: int = 0
 
     # ── Sync operations (in-memory layer only) ── #
 
@@ -130,10 +136,27 @@ class TwoLevelCache[T]:
     def put(self, key: Any, val: T) -> None:
         """Store in memory and enqueue an ordered Redis write."""
         self._mem.put(key, val)
+        self._revision += 1
         # * Advance the key's generation so a fetch that started before
         # * this write cannot overwrite the newer value with an older one.
         self._advance(key)
         self._redis_put_background(key, val)
+
+    def put_local(self, key: Any, val: T) -> None:
+        """Store in memory without publishing to Redis.
+
+        Use for a value that is only a process-local hint and must not
+        become shared state, such as a resolved identity that the source
+        of truth already stores elsewhere. The generation still advances,
+        so a fetch that started before the write cannot overwrite it.
+        """
+        self._mem.put(key, val)
+        self._revision += 1
+        self._advance(key)
+
+    def revision(self) -> int:
+        """Return a counter that advances on every cache mutation."""
+        return self._revision
 
     def invalidate(self, key: Any) -> None:
         """Remove from memory and enqueue an ordered Redis delete.
@@ -145,6 +168,7 @@ class TwoLevelCache[T]:
         """
         self._mem.invalidate(key)
         metrics.record_invalidation()
+        self._revision += 1
         # * Advance the key's generation so an in-flight fetch discards its
         # * stale result instead of resurrecting the revoked value.
         self._advance(key)
@@ -155,6 +179,7 @@ class TwoLevelCache[T]:
     def clear(self) -> None:
         """Clear the in-memory layer (does not flush Redis keys)."""
         self._mem.clear()
+        self._revision += 1
         # * Advance every known generation so an in-flight fetch discards
         # * its pre-clear result instead of writing it back into L1.
         for state in self._states.values():
@@ -181,6 +206,7 @@ class TwoLevelCache[T]:
         """
         self._mem.clear()
         metrics.record_invalidation()
+        self._revision += 1
         # * Advance every known generation so an in-flight fetch discards
         # * its pre-sweep result, and bump the cache-wide epoch so a read
         # * that starts mid-sweep cannot republish into L1.
@@ -216,6 +242,7 @@ class TwoLevelCache[T]:
                 # * already wrote into L1 is cleared here.
                 self._mem.clear()
                 self._epoch += 1
+                self._revision += 1
 
         task = redis_io.enqueue_redis_mutation(
             self._redis_prefix, _clear_redis, droppable=False

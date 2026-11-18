@@ -158,6 +158,10 @@ async def _mention_triples(
     if not missing:
         return result
     # * Batch-fetch only uncached users from the database in a single query.
+    # * The cache revision is captured before the read: an invalidation that
+    # * lands while it runs (an erasure, a profile update) makes the rows
+    # * stale, so the batch must not publish them back into L1 or Redis.
+    revision = user_mention_cache.revision()
     docs = await db_call(
         lambda: fetch_all(
             select(
@@ -168,6 +172,7 @@ async def _mention_triples(
             ).where(telegram_users.c.user_id.in_(missing))
         )
     )
+    publish = user_mention_cache.revision() == revision
     for doc in docs:
         uid = doc["user_id"]
         # * Populate L1 (and fire-and-forget L2 Redis write) for next lookup.
@@ -176,13 +181,15 @@ async def _mention_triples(
             doc.get("username"),
             doc.get("last_name"),
         ]
-        user_mention_cache.put(uid, triple)
+        if publish:
+            user_mention_cache.put(uid, triple)
         result[uid] = triple
     # * Fill fallback for users not found in DB either and cache the sentinel so
     # * subsequent calls skip the database round-trip on the next lookup.
     for uid in missing:
         if uid not in result:
-            user_mention_cache.put(uid, list(_NOT_FOUND_SENTINEL))
+            if publish:
+                user_mention_cache.put(uid, list(_NOT_FOUND_SENTINEL))
             result[uid] = list(_NOT_FOUND_SENTINEL)
     return result
 
@@ -550,14 +557,21 @@ def remember_identity(
     username: str | None,
     last_name: str | None,
 ) -> None:
-    """Mirror a resolved identity into L1 without touching the database.
+    """Mirror a resolved identity into L1 without touching other layers.
 
     Used after a Telegram-side resolve so the next read hits L1. A partial
     write through :func:`upsert_user` invalidates rather than populates, so
     without this the next read would miss L1. A fully empty identity stores
     the not-found sentinel.
+
+    The write stays process-local on purpose. A resolve that failed for a
+    transient reason (network, MTProto outage) also resolves to no
+    identity, and publishing that sentinel to Redis would show the numeric
+    fallback for every process until the L2 TTL. Positive identities are
+    already durable in ``telegram_users``, so a neighbouring process can
+    load them from the database.
     """
     if first_name is None:
-        user_mention_cache.put(user_id, list(_NOT_FOUND_SENTINEL))
+        user_mention_cache.put_local(user_id, list(_NOT_FOUND_SENTINEL))
     else:
-        user_mention_cache.put(user_id, [first_name, username, last_name])
+        user_mention_cache.put_local(user_id, [first_name, username, last_name])

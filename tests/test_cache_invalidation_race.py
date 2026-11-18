@@ -13,7 +13,8 @@ from typing import Any
 import pytest
 
 from tcbot import cfg
-from tcbot.database.cache import redis_io, twolevel
+from tcbot.database import users_cache
+from tcbot.database.cache import CACHE_MISS, redis_io, twolevel, user_mention_cache
 from tcbot.database.cache.twolevel import TwoLevelCache
 
 
@@ -330,3 +331,39 @@ def test_a_read_that_overlaps_clear_all_does_not_repopulate_l1() -> None:
         patch.setattr(redis_io, "acquire_redis_client", _no_client)
         patch.setattr(redis_io, "enqueue_redis_mutation", _enqueue)
         asyncio.run(_run())
+
+
+def test_a_batch_fill_discards_rows_invalidated_during_the_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A batch read must not undo an erasure that landed during its query.
+
+    The batch readers fill many keys from one query. The cache revision is
+    captured before the query, so an invalidation that lands while it runs
+    makes the batch skip the fill instead of restoring the erased name.
+    """
+
+    async def _db_call(op: Any, **kwargs: Any) -> Any:
+        return await op()
+
+    async def _fetch_all(_stmt: Any) -> list[dict[str, Any]]:
+        user_mention_cache.invalidate(7)
+        return [
+            {
+                "user_id": 7,
+                "first_name": "Alice",
+                "username": "alice",
+                "last_name": None,
+            }
+        ]
+
+    monkeypatch.setattr(users_cache, "db_call", _db_call)
+    monkeypatch.setattr(users_cache, "fetch_all", _fetch_all)
+
+    async def _run() -> None:
+        user_mention_cache.clear()
+        result = await users_cache._mention_triples([7])
+        assert result[7] == ["Alice", "alice", None]
+        assert user_mention_cache.get(7) is CACHE_MISS
+
+    asyncio.run(_run())
