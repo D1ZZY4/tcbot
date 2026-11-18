@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
+import threading
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -272,17 +272,25 @@ def test_circuit_partial_outage_still_trips() -> None:
 
 
 def test_pick_best_probes_concurrently(monkeypatch: pytest.MonkeyPatch) -> None:
+    lock = threading.Lock()
+    active = 0
+    peak = 0
+
     def _slow_ping(base: str, cancel: Any = None) -> float:
-        time.sleep(0.05)
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        threading.Event().wait(0.05)
+        with lock:
+            active -= 1
         return 10.0
 
     monkeypatch.setattr(netspeed, "_ping_server", _slow_ping)
     servers = [{"url": f"https://s{i}/x", "id": str(i)} for i in range(5)]
-    start = time.monotonic()
     _server, ping, _base = netspeed._pick_best(servers)  # type: ignore[arg-type]
-    elapsed = time.monotonic() - start
     assert ping == 10.0
-    assert elapsed < 0.4  # parallel ~0.05s, sequential would be ~0.25s+overhead
+    assert peak > 1
 
 
 def test_identity_needs_refresh_reads_the_stored_updated_at() -> None:
