@@ -650,3 +650,34 @@ def test_an_open_telegram_circuit_does_not_consume_target_attempts(
         assert claimed == []
     finally:
         _cb.telegram.reset()
+
+
+def test_an_immediate_delivery_leaves_the_run_queued_on_an_open_circuit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A decision just filed must not burn a retry without a delivery.
+
+    The caller delivers its run immediately after committing. When the
+    breaker is OPEN no slot reaches Telegram, so claiming the run would
+    record failed attempts for a call the worker never made.
+    """
+    claimed: list[int] = []
+
+    async def _claim_run(run_id: int) -> dict[str, object] | None:
+        claimed.append(run_id)
+        return {"id": run_id}
+
+    monkeypatch.setattr(enforcement_db, "claim_run", _claim_run)
+
+    _cb.telegram.reset()
+    for _ in range(_cb.telegram._failure_threshold):
+        _cb.telegram.record_failure()
+    try:
+        delivered = asyncio.run(
+            enforcement_worker.deliver_queued_run(_FakeBot(), 7)  # type: ignore[arg-type]
+        )
+    finally:
+        _cb.telegram.reset()
+
+    assert delivered is False
+    assert claimed == []

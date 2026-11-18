@@ -103,7 +103,19 @@ async def deliver_queued_run(bot: Bot, run_id: int) -> bool:
     The caller has already committed the decision and its run, so failing
     to claim it is not an error: the scheduled worker delivers it, and the
     run stays recoverable if this process dies before the claim.
+
+    An OPEN Telegram circuit skips the claim entirely. A slot skipped by
+    the breaker never reaches Telegram, and recording it as a failed
+    attempt would exhaust the target's retry budget without a delivery.
+    The run stays queued for the scheduled worker, which pauses while the
+    circuit is open.
     """
+    if _cb.telegram.state is CircuitState.OPEN:
+        log.warning(
+            "Enforcement run %s delivered later: Telegram circuit is OPEN.",
+            run_id,
+        )
+        return False
     run = await db.enforcement_db.claim_run(run_id)
     if run is None:
         return False
