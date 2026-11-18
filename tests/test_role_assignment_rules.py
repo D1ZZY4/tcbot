@@ -247,10 +247,6 @@ def _install_transfer(
     async def _upsert(*args: Any, **kwargs: Any) -> None:
         _ = (args, kwargs)
 
-    async def _resolve_and_check(*args: Any, **kwargs: Any) -> tuple[str, str | None]:
-        _ = (args, kwargs)
-        return ("founder", None)
-
     async def _locale(user_id: int) -> str:
         _ = user_id
         return "en-US"
@@ -263,7 +259,6 @@ def _install_transfer(
     monkeypatch.setattr(db.users_roles, "transfer_ownership", _transfer)
     monkeypatch.setattr(db.users_roles, "is_owner", _is_owner)
     monkeypatch.setattr(db.users_roles, "remove_role", _remove_role)
-    monkeypatch.setattr(transfer_flow, "resolve_and_check", _resolve_and_check)
 
     async def _safe_reply(*args: Any, **kwargs: Any) -> None:
         _ = (args, kwargs)
@@ -310,6 +305,10 @@ def test_transfer_grants_ownership_and_keeps_the_old_owner(
     )
     assert seen["owner"] == [42]
     assert seen["admins"] == [1]
+    # * Clearing the target's old role belongs to the atomic transfer, not a
+    # * separate pre-write. A successful transfer therefore records no
+    # * standalone remove_role call.
+    assert seen["roles"] == []
 
 
 def test_transfer_refuses_a_banned_target(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -321,6 +320,7 @@ def test_transfer_refuses_a_banned_target(monkeypatch: pytest.MonkeyPatch) -> No
     )
     assert seen["owner"] == []
     assert seen["admins"] == []
+    assert seen["roles"] == []
 
 
 def test_transfer_refuses_when_the_owner_changed_mid_flight(
@@ -358,3 +358,5 @@ def test_a_failed_transfer_keeps_the_current_owner(
     )
     assert seen["owner"] == []
     assert seen["admins"] == []
+    # * A failed swap must leave the target's existing role untouched.
+    assert seen["roles"] == []

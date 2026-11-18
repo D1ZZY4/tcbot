@@ -15,7 +15,6 @@ from tcbot import database as db
 from tcbot import error_reporter
 from tcbot.modules.helper import identity
 from tcbot.modules.helper.extraction import extract_target
-from tcbot.modules.helper.guards import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ownership_transferred,
@@ -23,7 +22,6 @@ from tcbot.modules.helper.messages import (
     safe_reply,
     send_log,
 )
-from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -163,29 +161,11 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    # * Rank-check the target so the new owner keeps no residual
-    # * Developer/Tester role beside the Founder record. The shared demote
-    # * helper revokes the assignment and invalidates the role cache.
-    role_check = await resolve_and_check(
-        msg, current_owner.id, target_id, min_role="developer"
-    )
-    if role_check == (None, None):
-        return
-    _executor_role, target_role = role_check
-    if target_role and target_role != "founder":
-        try:
-            await Demote.remove_role(target_id)
-            log.info(
-                "cmd_transfer cleared pre-existing role %s from new owner %d",
-                target_role,
-                target_id,
-            )
-        except Exception as exc:
-            log.warning(
-                "cmd_transfer remove_role failed for new owner %d: %s",
-                target_id,
-                exc,
-            )
+    # * The target's existing role is cleared inside transfer_ownership.
+    # * Revoking it here would be a second, non-atomic side effect: a failed
+    # * transfer would leave the target stripped of a role it still held.
+    # * The transaction swaps the owner, grants the previous Founder Admin,
+    # * and revokes every active assignment of the new owner together.
 
     # * The swap and the previous Founder's Admin grant are one transaction,
     # * so a failure cannot leave the federation ownerless or leave the
