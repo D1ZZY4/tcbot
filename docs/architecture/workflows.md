@@ -29,8 +29,7 @@ Conversation and multi-step logic lives in `tcbot/modules/helper/pipelines/`. Ea
 | `BuildProof.keyboard()` | Returns `[Skip] [Cancel]` when skipping is allowed, otherwise `[Cancel]`. |
 | `BuildProof.step_prompt(...)` | Prompt after an in-conversation reason. |
 | `BuildProof.noted_prompt(...)` | Prompt when a reason was provided inline. |
-| `upload_proof(bot, msgs, caption, proof_chat, proof_thread)` | Uploads proof media and returns the first uploaded message ID. Photos and videos travel as one media group (caption on the first item); animations and files are sent individually after the gallery, with `send_animation` and `send_document`. Returns `None` fast without Telegram I/O on empty input or a batch with no usable item; a failed gallery falls through to the single-media loop, and a failed single item is logged and skipped. |
-| `upload_proof_items(bot, msgs, caption, proof_chat, proof_thread)` | Uploads proof media and returns `(landed_items, expected_item_count)`. Each landed item keeps its media type, archive message id, order, and file metadata, so a lost file is distinguishable from a completed gallery. |
+| `upload_proof_items(bot, msgs, caption, proof_chat, proof_thread)` | Uploads proof media and returns `(landed_items, expected_item_count)`. Photos and videos travel as one media group (caption on the first item); animations and files are sent individually after the gallery. Each landed item keeps its media type, archive message id, order, and file metadata, so a lost file is distinguishable from a completed gallery. |
 | `upload_proof_media(bot, msgs, caption)` | Single owner for the "upload the proof and remember where it landed" step. Reads the destination from the configured proof channel, returns a `ProofUpload` (`message_id`, `link`, `items`, `expected_item_count`), and never raises: a proof that could not be stored must not void the moderation action. |
 | `upload_proof_for_action(bot, msgs, target_id, admin_id, admin_fname)` | The same, with the standard caption that names the target, the acting staff member, and the time. Used by the kick, mute, and warn executors. |
 | `ProofUpload.landed` | True when at least one proof message reached the channel. The ban executor requires a complete upload for a manual ban and checks the item count before writing the record. |
@@ -55,7 +54,7 @@ Exports:
 | `BuildReason(...)` | Configures reason-step prompts and buttons. |
 | `build_modaction_conv(reason, proof, entry_fn, executor, entry_filter, escape_filter=None, *, min_role)` | Builds the shared kick/mute/warn conversation. `min_role` is the tier the executor re-checks at enforcement time. |
 
-The shared factory stores action-specific values in the conversation scope, then calls the supplied executor adapter. When a moderator submits proof media, `_on_proof` stores the actual `Message` objects (`{action}_proof_msgs`) in that scope. Executors pop `{action}_proof_msgs` and upload them to the proof channel via `upload_proof()`; the resulting URL is shown as an inline keyboard button via `keyboards.action_proof_kb()`.
+The shared factory stores action-specific values in the conversation scope, then calls the supplied executor adapter. When a moderator submits proof media, `_on_proof` stores the actual `Message` objects (`{action}_proof_msgs`) in that scope. Executors pop `{action}_proof_msgs` and upload them to the proof channel via `upload_proof_media()` or `upload_proof_for_action()`; the landed items are archived with the decision and the resulting URL is shown as an inline keyboard button via `keyboards.action_proof_kb()`.
 
 `_on_proof` buffers every proof item (`{action}_proof_msgs`) until the moderator taps `Done`; `_on_done_proof` runs the executor with the live tap update. Tapping `Done` with nothing collected answers with a retry alert and stays put.
 
@@ -253,16 +252,17 @@ Promotion is not a conversation. `Promote.execute(...)` in `pipelines/promote_fl
 
 ## Demotion: `demote_flow.py`
 
-Demotion is not a conversation. `Demote.execute(...)` in `pipelines/demote_flow.py` handles two distinct paths controlled by the optional `trigger` argument. It returns `True` when a role row was actually removed and `False` when the role was already gone; a database failure propagates to the caller, which owns the failure policy.
+Demotion is not a conversation. `Demote.execute(...)` in `pipelines/demote_flow.py` handles the manual path and the automatic paths controlled by the optional `trigger` argument. It returns `True` when a role row was actually removed and `False` when the role was already gone; a database failure propagates to the caller, which owns the failure policy.
 
 | Call | Trigger | Path |
 |---|---|---|
 | `Demote.execute(...)` | `None` | Manual `/tcdemote`: `admins.py` sends a Confirm/Cancel prompt first; the confirm callback calls `Demote.execute(trigger=None)`, which removes the role, posts the federation log, and DMs the target. |
-| `Demote.execute(..., trigger="ban")` | `"ban"` | Auto-demote before a federation ban: silently removes the role. The DM body names the trigger verb (banned/kicked/muted), but the federation log is identical to the manual path and never notes the trigger. |
+| `Demote.execute(..., trigger="ban")` | `"ban"` | Auto-demote before a federation ban or join-time ban: silently removes the role. The DM body names the trigger verb (banned/kicked/muted), but the federation log is identical to the manual path and never notes the trigger. |
 | `Demote.execute(..., trigger="kick")` | `"kick"` | Auto-demote before a current-group kick: same silent role-removal path as `"ban"`. |
-| `Demote.execute(..., trigger="mute")` | `"mute"` | Auto-demote before a federation-wide mute: same silent role-removal path as `"ban"` and `"kick"`. |
+| `Demote.execute(..., trigger="mute")` | `"mute"` | Auto-demote before a federation-wide mute or join-time mute: same silent role-removal path as `"ban"` and `"kick"`. |
+| `Demote.execute(..., trigger="warn")` | `"warn"` | Warn-threshold staff exemption: removes the role and exempts the target from the threshold ban. |
 
-`Demote.remove_role(target_id, target_role)` is the shared DB write used by all four paths. It delegates to `users_roles` and returns `True` if a role was actually removed. It revokes the active assignment of the user, whatever role it holds, so a stale row cannot resurrect the privilege on the next demote.
+`Demote.remove_role(target_id)` is the shared DB write used by every path. It delegates to `users_roles` and returns `True` if a role was actually removed. It revokes the active assignment of the user, whatever role it holds, so a stale row cannot resurrect the privilege on the next demote.
 
 The demote runs at enforcement time, next to the Telegram call it protects, never at the entry. The reason and proof steps of the ban, kick, and mute flows are cancelable, so an entry-time demote would strip the target's role, log it, and tell the target they were banned while the moderator could still cancel the action.
 

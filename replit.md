@@ -18,6 +18,7 @@ Required secrets:
 - `BOT_TOKEN`: Telegram bot token from BotFather.
 - `DATABASE_URL`: PostgreSQL connection string.
 - `OWNER_ID`: Telegram user ID for the initial federation founder.
+- `PROOFS`: Evidence destination; boot refuses without a negative group or channel chat ID.
 - `API_ID`: Telegram API ID for MTProto identity lookups; boot refuses without it.
 - `API_HASH`: Telegram API hash matching `API_ID`; boot refuses without it.
 
@@ -108,6 +109,7 @@ The `uv.lock` file ensures reproducible installs on Replit. Do not commit
 - [ ] `BOT_TOKEN` set in Replit Secrets.
 - [ ] `DATABASE_URL` set in Replit Secrets.
 - [ ] `OWNER_ID` set in Replit Secrets.
+- [ ] `PROOFS` set to the evidence group or channel.
 - [ ] `API_ID` set in Replit Secrets.
 - [ ] `API_HASH` set in Replit Secrets.
 - [ ] `WEBHOOK_URL` set for production webhook mode (optional on Replit: `REPLIT_DEV_DOMAIN` is auto-detected when the bot runs as the Replit application).

@@ -31,13 +31,13 @@ Three workflows with identical triggers (push to `main`, `feat/**`,
   --check .`, `uv run ruff check .`, the 1000-line file-size budget over
   `tcbot/`, and `uv run python -c "import tcbot"`.
 - **Lint (Pyright)** (`.github/workflows/lint-pyright.yml`): `uv run pyright`.
-- **Test (Pytest)** (`.github/workflows/test-pytest.yml`): `uv run pytest tests/ -q -n auto --cov=tcbot --cov-branch --cov-report=term-missing --cov-report=html` (parallel via `pytest-xdist`, coverage via `pytest-cov`, report uploaded as the `coverage-report` artifact).
+- **Test (Pytest)** (`.github/workflows/test-pytest.yml`): runs the marked PostgreSQL group serially, then the remaining tests with `-n auto`; coverage from both passes is combined and the report is uploaded as the `coverage-report` artifact.
 
 **What they share:**
 - `uv sync --frozen` installs from the lockfile before every job.
 - **Fails the PR** if any step exits with a non-zero code.
 - Dummy but shape-valid `BOT_TOKEN`, `DATABASE_URL`, and `OWNER_ID` values
-  (validated at import time, never connecting), so fork PRs without
+  (validated on first `cfg` access, never connecting), so fork PRs without
   repository secrets still pass.
 
 **Service containers:** the test job starts a PostgreSQL and a Redis
@@ -52,14 +52,16 @@ would write, read, and delete live cache entries. The suite also moves
 the shared caches into a test-only key namespace, so no run can reach a
 deployment key.
 
-**The database-backed tests and xdist:** the suite runs with `-n auto`,
-and two workers cannot share one schema, because they would drop each
-other's tables. The integration tests therefore use one schema, `test`,
-and one worker owns it: the first xdist worker runs the database-backed
-tests, and the others skip them. The project uses three schemas and no
+**The database-backed tests and xdist:** two workers cannot share the
+`test` schema, because they would drop each other's tables. The marked
+PostgreSQL group therefore runs in one serial pytest invocation before the
+parallel suite; `tests/conftest.py` adds the marker to every test that
+requests the shared database fixture. The remaining suite then runs under
+xdist with `-m "not postgres"`, so no database test is silently skipped on a
+worker that does not own the schema. The project uses three schemas and no
 more (`public` for the deployment, `test` for the integration tests, and
-`development` for a developer), so a run never leaves a schema behind
-that nobody owns.
+`development` for a developer), so a run never leaves a schema behind that
+nobody owns.
 
 **Why this exists:**
 The three workflows provide a repeatable CI result for formatting, lint,

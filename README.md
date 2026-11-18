@@ -99,7 +99,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | Variable | Required | Description |
 |---|---|---|
 | `PROOFS` | Yes | Ban proof media destination; boot refuses without a negative group or channel chat ID. |
-| `LOGS` | Yes | Audit-log destination for bans, unbans, appeals, and admin actions. |
+| `LOGS` | Recommended | Audit-log destination for bans, unbans, appeals, and admin actions. The bot boots without it, but every audit post then fails. |
 | `LOGS_ERRORS` | Recommended | Error-report destination; when empty, reports fall back to the owner DM instead of being dropped. |
 | `APPEALS` | For appeals | Submitted-appeal record destination (channel, group, or forum thread as `chat_id` or `chat_id/thread_id`; also receives a copy of every review card). |
 
@@ -188,7 +188,7 @@ Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run 
 
 `.github/workflows/run-bot.yml` runs the bot in 5-hour windows (GitHub hard-caps a job at 6 h) with a crash watchdog, a handover dispatch about 10 minutes before the window ends, and a `*/15` cron resurrection fallback. A push to `main` touching bot code, translations, dependencies, or the runner itself queues a successor run and the live bot hands over gracefully within minutes; docs-only pushes never restart the bot.
 
-1. Repository → Settings → Secrets and variables → Actions: set `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID` (plus `WEBHOOK_URL`/`WEBHOOK_SECRET` for webhook mode, `REDIS_URL` optional, `API_ID`/`API_HASH` for MTProto).
+1. Repository → Settings → Secrets and variables → Actions: set `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `PROOFS`, `API_ID`, and `API_HASH` (plus `WEBHOOK_URL`/`WEBHOOK_SECRET` for webhook mode, and `REDIS_URL` when the shared cache is used).
 2. For gap-free chaining add `BOT_PAT`: a Personal Access Token with the `workflow` scope. Without it only the 15-minute cron restarts the bot.
 3. Actions → "TCF Bot - 24/7 Runner" → Run workflow (or wait for the schedule).
 4. Verify in the run logs (`Bot started`, `subsystems ready`); crash tails ship as credential-scrubbed artifacts kept 7 days.
@@ -199,7 +199,7 @@ Fail-fast guard: 5 deaths within 10 minutes aborts the run (usually bad config);
 <details>
 <summary>Docker and Docker Compose</summary>
 
-1. `cp config.env.example .env` and set at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL=postgresql://tcbot:tcbot@postgres:5432/tcbot`, `API_ID`, `API_HASH`, `REDIS_URL=redis://redis:6379/0`.
+1. `cp config.env.example .env` and set at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL=postgresql://tcbot:tcbot@postgres:5432/tcbot`, `PROOFS`, `API_ID`, `API_HASH`, and `REDIS_URL=redis://redis:6379/0`.
 2. `docker compose up --build` (bot plus `postgres:16-alpine` plus `redis:7-alpine`, each with health checks; the bot waits for both databases).
 3. Verify: `curl localhost:${PORT:-5000}/health` returns subsystem JSON with HTTP 200.
 
@@ -212,7 +212,7 @@ Single image without compose: `docker build -t tcf-bot .` then `docker run --env
 The repository ships no `Procfile`; deploy the existing `Dockerfile` through the container registry.
 
 1. `heroku create <app> && heroku stack:set container --app <app>` (or set the stack in Dashboard → Settings).
-2. `heroku config:set BOT_TOKEN=... DATABASE_URL=... OWNER_ID=... WEBHOOK_URL=https://<app>.herokuapp.com WEBHOOK_SECRET=... --app <app>` (plus `REDIS_URL` from Heroku Data for Redis when needed; never commit secrets).
+2. `heroku config:set BOT_TOKEN=... DATABASE_URL=... OWNER_ID=... PROOFS=... API_ID=... API_HASH=... WEBHOOK_URL=https://<app>.herokuapp.com WEBHOOK_SECRET=... --app <app>` (plus `REDIS_URL` from Heroku Data for Redis when needed; never commit secrets).
 3. `heroku container:push worker --app <app> && heroku container:release worker --app <app>`.
 4. `heroku ps:scale worker=1 --app <app>` and verify with `heroku logs --tail --app <app>`.
 
@@ -223,7 +223,7 @@ Heroku assigns `PORT` automatically and the bot reads it from the environment. K
 <summary>VPS with systemd (Ubuntu/Debian)</summary>
 
 1. Install Python 3.14 and `uv`, then `git clone <repo-url> /opt/tcf-bot && cd /opt/tcf-bot && uv sync --frozen`.
-2. Create `/opt/tcf-bot/config.env` with `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL` (a managed instance with the VPS IP allowlisted, or self-hosted PostgreSQL), plus `API_ID` and `API_HASH` for MTProto lookups, mode `0600`.
+2. Create `/opt/tcf-bot/config.env` with `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL` (a managed instance with the VPS IP allowlisted, or self-hosted PostgreSQL), `PROOFS`, and `API_ID`/`API_HASH` for MTProto lookups, mode `0600`.
 3. Install this unit as `/etc/systemd/system/tcf-bot.service` (adjust the `uv` path from `which uv`):
 
 ```ini
@@ -253,7 +253,7 @@ WantedBy=multi-user.target
 <summary>Windows Server over RDP</summary>
 
 1. RDP in, install Python 3.14 (add to PATH) and `uv` (`irm https://astral.sh/uv/install.ps1 | iex`), then `git clone <repo-url> C:\tcf-bot` and `uv sync --frozen` inside it.
-2. Create `C:\tcf-bot\config.env` with `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `API_ID`, and `API_HASH`; restrict it to the service account via file ACLs.
+2. Create `C:\tcf-bot\config.env` with `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `PROOFS`, `API_ID`, and `API_HASH`; restrict it to the service account via file ACLs.
 3. Verify once interactively: `uv run python -m tcbot` (expect `subsystems ready`, `Ctrl+C` to stop).
 4. Persist with Task Scheduler: trigger "At startup", action `uv.exe run --frozen python -m tcbot` with start-in `C:\tcf-bot`, "Run whether user is logged on or not", "If the task fails, restart every 1 minute". Prefer a dedicated service account, never an admin's personal session.
 5. Webhook mode needs public HTTPS reaching the host `PORT` (reverse proxy or tunnel) plus `WEBHOOK_URL`; otherwise the bot polls. Monitor `GET /health` and keep exactly one running instance per token.
@@ -271,9 +271,9 @@ The Flask keep-alive server binds to `${BIND_HOST}:${PORT}` (`BIND_HOST` default
 
 ## Troubleshooting
 
-- `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `API_ID`, or `API_HASH` errors on startup: the bot fails fast on missing identity, database, or MTProto settings. Set them in `config.env` or the host secret manager.
+- `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `PROOFS`, `API_ID`, or `API_HASH` errors on startup: the bot fails fast on missing identity, database, evidence, or MTProto settings. Set them in `config.env` or the host secret manager.
 - PostgreSQL connection failures: check the URL, network access, the host firewall, and the credentials.
-- `GET /health` returns 503: one subsystem (database, Redis, scheduler, or a circuit breaker) is degraded; read the JSON body to see which one.
+- `GET /health` returns 503: the database, scheduler, or a circuit breaker is degraded; read the JSON body to see which one. Redis is reported as `ok`-or-`error` but does not change the status code, because the cache is optional.
 
 ## Development
 

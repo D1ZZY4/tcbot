@@ -182,12 +182,11 @@ The promotion executor rejects these cases:
 
 When Founder promotes a target to Admin:
 
-1. `users_roles.add_admin(target_id, founder_id)` grants the `admin` role.
-2. If the target had a Developer/Tester role, `users_roles.remove_role(target_id)` revokes it.
-3. `users_cache.upsert_user(...)` caches the display name.
-4. A `promoted` log (with `role="admin"`) is sent to `cfg.logs`.
-5. The target is notified by DM when possible.
-6. The command message is updated/replied with a success message.
+1. `users_roles.add_admin(target_id, founder_id)` grants the `admin` role and revokes the active Developer/Tester assignment in the same transaction.
+2. `users_cache.upsert_user(...)` caches the display name.
+3. A `promoted` log (with `role="admin"`) is sent to `cfg.logs`.
+4. The target is notified by DM when possible.
+5. The command message is updated/replied with a success message.
 
 ### Founder/Admin promotion to Developer or Tester
 
@@ -327,20 +326,18 @@ Flow:
 
 1. The target is resolved by reply, user ID, or username.
 2. Identity refusal rejects self-transfer, the bot, Telegram, other bots, anonymous-admin, and Founder targets.
-3. `resolve_and_check(..., min_role="developer")` refuses transferring to a staff target of equal or higher rank, the current Founder included.
-4. The current owner is re-read fresh before the mutation. A concurrent transfer or a demotion that happened while the target was classified refuses the command, so an in-flight transfer cannot overwrite a newer owner.
-5. Any non-Founder role the target already holds is cleared first via `Demote.remove_role`.
-6. `users_roles.transfer_ownership(current_owner.id, target_id)` swaps the owner and grants the previous Founder the Admin role in one transaction, all under an advisory lock. The transaction re-reads the current owner, so a stale prompt cannot replace a newer owner. A failure leaves both roles untouched instead of committing the swap without the Admin grant.
-7. The in-process error-reporter owner is refreshed to the new owner.
-8. The owner cache is updated and the effective-role cache is cleared entirely.
-9. An `ownership_transferred` log is sent to `cfg.logs` in parallel with the reply.
-10. The command replies with the new owner mention.
+3. The current owner is re-read fresh before the mutation. A concurrent transfer or a demotion that happened while the target was classified refuses the command, so an in-flight transfer cannot overwrite a newer owner.
+4. `users_roles.transfer_ownership(current_owner.id, target_id)` swaps the owner, revokes the target's previous active role, and grants the previous Founder the Admin role in one transaction under an advisory lock. The transaction re-reads the current owner, so a stale prompt cannot replace a newer owner. A failure leaves both roles untouched instead of committing the swap without the Admin grant.
+5. The in-process error-reporter owner is refreshed to the new owner.
+6. The owner cache is updated and the effective-role cache is cleared entirely.
+7. An `ownership_transferred` log is sent to `cfg.logs` in parallel with the reply.
+8. The command replies with the new owner mention.
 
 After transfer, the previous Founder becomes Admin and the new target becomes Founder.
 
 ## Auto-demotion on moderation actions
 
-`Demote.execute(..., trigger="ban"|"kick"|"mute")` from `pipelines/demote_flow.py` is used before ban/kick/mute when the target has a lower staff role than the executor.
+`Demote.execute(..., trigger="ban"|"kick"|"mute"|"warn")` from `pipelines/demote_flow.py` is used before ban/kick/mute when the target has a lower staff role than the executor, and for the warn-threshold staff exemption.
 
 Behavior:
 
@@ -350,7 +347,7 @@ Behavior:
 
 Ban, kick, and mute command modules block equal/higher-ranked targets before calling auto-demotion, so auto-demotion only applies to lower-ranked staff targets.
 
-A single warning below the warn limit does not auto-demote. However, when the warn limit is reached, `warn_flow` calls `Demote.execute(trigger="ban")` and then exempts the staff target from the auto-ban (staff are never auto-banned via warnings); the threshold warn itself is still recorded. Individual warnings below the threshold leave the role intact.
+A single warning below the warn limit does not auto-demote. However, when the warn limit is reached, `warn_flow` calls `Demote.execute(trigger="warn")` and then exempts the staff target from the auto-ban (staff are never auto-banned via warnings); the threshold warn itself is still recorded. Individual warnings below the threshold leave the role intact.
 
 ## Logs
 

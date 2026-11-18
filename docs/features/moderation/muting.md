@@ -20,10 +20,10 @@ flowchart TD
     ReasonStep -->|yes| ProofStep[WAITING_PROOF]
     ReasonStep -->|no| ReasonPrompt[WAITING_REASON]
     ReasonPrompt --> ProofStep
-    ProofStep --> Exec[execute_mute: persist record then restrict]
+    ProofStep --> Exec[execute_mute: upload proof, rank gate, persist record]
     Exec --> Store[record_mute DB write]
     Store -->|write failed| AbortM[Retry notice, no group touched]
-    Store -->|stored| FanOut[fan_out restrict + upload proof concurrently]
+    Store -->|stored| FanOut[enforcement worker restricts each group]
     FanOut --> Log[log channel post]
     FanOut --> Reply[Edit prompt to summary]
     Unmute[/tcunmute command/] --> ExecU[execute_unmute]
@@ -161,7 +161,7 @@ Execution order:
 3. Persist `db.mutes_db.record_mute(...)` first. A failing write aborts with a retry notice and no group is touched (fail-closed, mirroring the ban flow and the warn auto-ban): enforcing chats without a stored decision would leave a restriction that `/tcunmute` refuses to lift.
 4. Build the restriction `ChatPermissions(can_send_messages=False)` and the `until_date` value (`utc_now() + duration` or `None` for permanent).
 5. Remove the target's effective role via `demote_before_enforcement(..., trigger="mute")` (best-effort; the mute proceeds even if the demote fails).
-6. Fan `restrict_chat_member` across the group list through the decision's durable `apply` run while uploading proof to `cfg.proofs` concurrently (caption `messages.proof_caption_new`). Failed targets are counted and retried by the enforcement worker; an upload failure degrades to no proof link.
+6. Upload proof to `cfg.proofs` with the `messages.proof_caption_new` caption, archive the landed items, re-run the fresh rank gate, and write the mute decision. The durable `apply` run then restricts every group; failed targets are counted and retried by the enforcement worker, while an upload failure degrades to no proof link.
 7. Run two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
     - `bot.send_message(cfg.logs, mute_log, ..., reply_markup=proof_kb)`.
     - `bot.edit_message_text(summary, chat_id=prompt_chat, message_id=prompt_id, ..., reply_markup=proof_kb)` so the moderator sees the result inline.

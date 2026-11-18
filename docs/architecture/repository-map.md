@@ -104,7 +104,7 @@ tcbot/
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache/              TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   ├── redis_client.py     Optional async Redis client (owns the connect/degrade decision)
-│   ├── scheduler.py        APScheduler background jobs (SQLAlchemyJobStore)
+│   ├── scheduler.py        APScheduler background jobs (SQLAlchemyJobStore); worker callables are injected
 │   ├── mtproto.py          Bot-token MTProto client: resolve + member harvest
 │   ├── mtproto_store.py    PostgreSQL-backed Kurigram storage engine
 │   ├── settings_db.py      Per-user settings (locale and timezone preferences)
@@ -130,6 +130,7 @@ tcbot/
 │       │   └── replies.py       Shared localized reply and help-text strings, HelpEntry shape
 │       ├── scope.py        Per-conversation payload scope for the moderation flows
 │       └── pipelines/
+│           ├── proof_session.py  Live proof sessions and their shutdown drain
 │           └── *_flow.py modules   Conversation factories, plus Promote / Demote / Check classes
 └── utils/
     ├── circuit_breaker.py  Async circuit breaker for Telegram + PostgreSQL

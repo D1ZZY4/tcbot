@@ -52,8 +52,8 @@ The kick command is a `ConversationHandler` built by `reason_flow.build_modactio
 5. The bot rejects attempts to kick itself or the executor's own account via `identity.refuse_message`.
 6. If an inline reason was supplied, the bot skips directly to proof collection (`WAITING_PROOF`). Otherwise it prompts for a reason (`WAITING_REASON`).
 7. Reason is skippable via the `Skip` button; the recorded reason becomes the localized `replies.no_reason(locale)` text when skipped.
-8. Proof is skippable via the `Skip` button. When supplied, one or more photos/videos upload to `cfg.proofs` through `proof_flow.upload_proof`.
-9. `execute_kick` ban-then-unbans the target in the current chat, writes a `kicks_db.log_kick(...)` audit row, posts a kick log to `cfg.logs`, and replies with the summary.
+8. Proof is skippable via the `Skip` button. When supplied, photos, videos, animations, and files upload to `cfg.proofs` through `proof_flow.upload_proof_for_action`, and the landed items are archived with the kick decision.
+9. `execute_kick` re-runs the fresh rank gate after the upload, ban-then-unbans the target in the current chat, writes a `kicks_db.log_kick(...)` audit row, posts a kick log to `cfg.logs`, and replies with the summary.
 
 ## Target resolution and reason parsing
 

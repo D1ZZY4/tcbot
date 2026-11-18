@@ -101,7 +101,7 @@ That means the proof keyboard provides `Done` and `Cancel`; there is no `Skip` b
 - Single GIF: uploaded with `send_animation`, so the archived message stays an animation.
 - Single file: uploaded with `send_document`.
 - Mixed collection: every item sent before the flush lands in one proof session (album parts and sequential sends alike). Photos and videos travel together with `send_media_group` (caption on the first item); animations and files are sent individually after the gallery, with `send_animation` and `send_document` respectively.
-- The session flushes when the moderator taps `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap. Both enforcement paths re-check that the moderator still meets Developer rank at execution time: the `Done` tap re-checks in `on_done_proof`, and the silence-window background flush re-checks before calling the executor. A moderator demoted during proof collection, or a role-lookup outage at flush time, aborts the flush without enforcing and clears the session.
+- The session flushes when the moderator taps `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap. The `Done` tap re-checks the fresh executor and target roles before calling the executor, and the executor runs the same gate again after the proof upload and immediately before the ban record. A moderator demoted during proof collection, or a role-lookup outage at flush time, aborts the flush without enforcing and clears the session.
 
 The uploader returns one `ProofItem` per landed message. The archive stores each item
 with its media type (`photo`, `video`, `animation`, `document`), archive message id,
@@ -335,7 +335,7 @@ The same transaction queues the edit that closes a pending appeal review card, s
 ## Edge cases
 
 - When the ban write (`create_ban` / `update_ban`) fails, the flow aborts before any group is touched and the prompt is edited with a database-retry notice. This fail-closed path mirrors `execute_unban` and the warn auto-ban flow, and keeps a chat-enforced ban from existing without a decision record.
-- Empty proof input returns `None` fast; a failed photo gallery upload falls through to the document loop so collected file proof still lands instead of being discarded. Only a batch with no usable item stores `0` as proof ID.
+- A failed photo gallery upload falls through to the single-media loop so collected file proof still lands instead of being discarded. A manual ban with no landed item, or with an incomplete batch, is refused before its record is written; a re-ban without new proof carries the full previous batch.
 - If the ban log send fails, the database write may still complete, but no log message ID is stored.
 - If active group enforcement partially fails, the ban record remains active and the summary reports the failed groups. A delivery that has not settled yet is reported as pending rather than applied, and the worker finishes it.
 - A group that refuses because the bot lost its admin rights is a failed delivery, not a benign no-op. The target is recorded as a permanent failure, named in the summary, and left for operator access repair instead of being counted as banned. After the access is restored, `/tcrepair retry <run_id> <chat_id>` re-drives that one group without filing a second ban.

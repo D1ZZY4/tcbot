@@ -125,8 +125,9 @@ The review card contains two inline buttons:
 
 Both callbacks use the underscore-delimited
 `<action>_<ban_id>_<review_message_id>` shape that the handler registers and
-parses (`appeals.py` pattern `^appeal_(approve|reject)_\S+_\d+$`;
-`appeal_review_flow.py` splits the last segment). Both
+parses (`appeals.py` pattern `^appeal_(approve|reject)_\S+$`;
+`appeal_review_flow.py` splits the trailing numeric segment). The broader
+handler pattern also accepts the legacy payload without a review id. Both
 `keyboards.appeal_review_kb()` buttons emit this shape, so Approve and Reject
 taps reach the review handler. The trailing id must still match the live
 `review_message_id` on the ban record; a card from an earlier appeal carries

@@ -291,7 +291,7 @@ Single owner of the lifecycle of fire-and-forget background tasks.
 | `TaskTracker.pending` | How many tracked tasks have not finished yet. |
 | `DEFAULT_DRAIN_TIMEOUT_S` | The default drain budget in seconds. |
 
-Every subsystem that schedules background work owns one tracker: the member cache, the startup warm-up, the asyncio error reports, the identity refresh, the admin harvest, the group-title refresh, and the error-report deliveries. The tracker keeps a strong reference to each task so the garbage collector cannot drop a running coroutine, retrieves a failed task's exception so asyncio does not report it twice, and releases the whole set from one place at shutdown.
+Every subsystem that schedules background work owns one tracker: the member cache, the startup warm-up, the asyncio error reports, the identity refresh, the admin harvest, the group-title refresh, and the error-report deliveries. The tracker keeps a strong reference to each task so the garbage collector cannot drop a running coroutine, retrieves a failed task's exception so asyncio does not report it twice, and releases the whole set from one place at shutdown. Ban proof sessions use `ProofSessionRegistry` in `pipelines/proof_session.py` because a flush must finish its ban rather than be cancelled at the generic drain deadline; the registry owns that distinct drain contract.
 
 ## `update_processor.py`
 

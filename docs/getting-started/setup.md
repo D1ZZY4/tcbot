@@ -134,7 +134,7 @@ PROOFS="-1001234567890"
 | `BIND_HOST` | No | interface address | Listener interface for the keep-alive and webhook server. Default `0.0.0.0`; use `127.0.0.1` behind a local reverse proxy. |
 | `MAIN_GROUP` | Usually | negative integer chat ID | Main community group or forum. A positive value is treated as unset with a warning. |
 | `PROOFS` | Yes | negative `chat_id` or `chat_id/thread_id` | Destination for ban proof media. Startup fails when it is missing, names a user, or is otherwise invalid, because a ban cannot be filed without landed evidence. |
-| `LOGS` | Yes | `chat_id` or `chat_id/thread_id` | Audit-log destination. |
+| `LOGS` | Recommended | `chat_id` or `chat_id/thread_id` | Audit-log destination. The bot boots without it, but every audit post then fails. |
 | `LOGS_ERRORS` | Recommended | `chat_id` or `chat_id/thread_id` | Error-report destination. When empty, reports fall back to the owner DM instead of being dropped. |
 | `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination (channel, group, or forum thread). Also receives a copy of every review card, so one value covers all appeal surfaces. The appeal instruction handle is derived from the public logs link (`COMMUNITY_LOGS_URL`), so no separate handle variable is needed. |
 | `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. |
@@ -155,7 +155,7 @@ PROOFS="-1001234567890"
 | `WEBHOOK_SECRET` | No | random string | Secret token sent in the `X-Telegram-Bot-Api-Secret-Token` header by Telegram on every webhook POST. Auto-generated with `secrets.token_hex(32)` if absent. Set it explicitly for a stable deployment token. |
 | `WARN_LIMIT` | No | integer >= 1 | Per-group warning threshold that triggers automatic federation ban. Default `3`. When a user's warn count in one group reaches or exceeds this value, they are federation-banned and their group warns cleared (on success). |
 | `FED_WARN_LIMIT` | No | integer >= 0 | Federation-wide warning threshold: sum of warn counts across all groups triggers an automatic federation ban when >= this value. Default `0` (disabled). Set to a positive integer to enable cross-group warn aggregation. |
-| `WARN_EXPIRY_DAYS` | No | positive integer | Days after which warning decisions expire and stop counting towards the auto-ban threshold. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
+| `WARN_EXPIRY_DAYS` | No | integer >= 0 | Days after which warning decisions expire and stop counting towards the auto-ban threshold. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
 | `COMMUNITY_CHANNEL_URL` | No | http(s) URL | Main Channel button in the Additional Links menu. Built-in default `https://t.me/TranssionCoreFederation`. |
 | `COMMUNITY_GROUP_URL` | No | http(s) URL | Discussion Group button. Built-in default `https://t.me/TranssionCoreFederationGroup`. |
 | `COMMUNITY_LOGS_URL` | No | http(s) URL | Logs Channel button. Built-in default `https://t.me/TranssionCoreFederationLogs`. |
@@ -174,8 +174,9 @@ CREATE EXTENSION IF NOT EXISTS pg_cron;
 ```
 
 Set `PG_CRON_ENABLED=true` and restart the bot. At startup it registers
-`moderation.expire`, `role.expire`, and `enforcement.reconcile` through
-`cron.schedule`, then removes the matching APScheduler expiry job. The bot
+`moderation.expire`, `role.expire`, `enforcement.reconcile`, and
+`scheduler.drift` through `cron.schedule`, then removes the matching
+APScheduler expiry job. The bot
 still runs the Telegram enforcement worker. If the extension or the
 privilege is missing, the bot logs a warning and keeps APScheduler as the
 single owner. A managed provider may require enabling the extension from
@@ -206,7 +207,7 @@ process into a restart loop.
 
 ## Startup sequence
 
-1. `tcbot.__init__` loads configuration into `cfg` and fails fast when `BOT_TOKEN`, `DATABASE_URL`, or `OWNER_ID` are missing.
+1. `tcbot.__init__` loads configuration into `cfg` and fails fast when `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `PROOFS`, `API_ID`, or `API_HASH` are missing or unusable.
 2. `tcbot.__main__.main()` configures logging.
 3. `tcbot.alive.start_keepalive()` starts Flask on `BIND_HOST:PORT` (`BIND_HOST` defaults to `0.0.0.0`).
 4. PTB `ApplicationBuilder` builds the bot application.

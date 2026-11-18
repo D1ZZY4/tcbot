@@ -262,7 +262,7 @@ and [`roles/demote.md`](roles/demote.md).
 | `/tcpromote` | `/tcp` | Assign a federation role (or queue Founders-only promotions). | Staff+ |
 | `/tcdemote` | `/tcd` | Remove a federation role with a confirm/cancel prompt. | Staff+ |
 | `/transferowner` | `/tfowner` | Transfer Founder ownership. | Founder only |
-| `/tcpromoterequests` | `/tcreqs` | Submit a promotion request with proof. | Anyone |
+| `/tcpromoterequests` | `/tcreqs` | Submit a promotion request to the Founder. | Anyone |
 | `/tcpromotelist` | `/tcplist` | List pending promotion requests. | Staff+ |
 
 | Callback | Purpose |
