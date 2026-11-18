@@ -130,9 +130,10 @@ async def _connect_locked(url: str) -> None:
     c = aioredis.Redis(connection_pool=pool)
     try:
         await c.ping()
-    except Exception:
-        # * A failed PING must not orphan the pool's sockets: the pool was
-        # * passed explicitly, so client.aclose() would leave it behind.
+    except BaseException:
+        # * A failed or cancelled PING must not orphan the pool's sockets:
+        # * the pool was passed explicitly, so client.aclose() would leave
+        # * it behind. Re-raise after cleanup so cancellation still wins.
         try:
             await pool.aclose()
         except Exception as exc:
