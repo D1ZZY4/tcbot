@@ -119,6 +119,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **An immediate enforcement delivery respects an open Telegram circuit** (`tcbot/enforcement_worker.py`): the scheduled worker paused while the breaker was open, but the immediate path still claimed the run. A slot skipped by the breaker never reached Telegram, so recording it as a failed target consumed a retry without a delivery. The immediate path now leaves the run queued for the scheduled worker while the circuit is open.
 
+- **A notification row with unusable ids becomes terminal** (`tcbot/notification_worker.py`): a queued card edit whose action, chat, or message id was missing returned without recording an outcome, so the claim advanced its attempt count every five minutes forever. The row is now marked failed and stops consuming a worker slot.
+
 ### Changed
 
 - **The scheduler lives in a focused package** (`tcbot/database/scheduler/__init__.py`, `tcbot/database/scheduler/jobs.py`): the scheduler module had grown past the project's hard file budget, mixing schedule lifecycle with the maintenance jobs. `__init__.py` now owns the lifecycle, schedule catalog, and job store; `jobs.py` owns expiry, erasure, retention, and cleanup. The package re-exports every previous name, so persisted APScheduler job paths and existing imports keep resolving. Behavior changes: none.

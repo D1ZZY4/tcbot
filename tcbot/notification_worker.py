@@ -120,7 +120,17 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
     chat_id = as_int(task.get("chat_id"))
     message_id = as_int(task.get("message_id"))
     attempts = as_int(task.get("attempts"))
-    if task_id <= 0 or action_id <= 0 or chat_id == 0 or message_id <= 0:
+    if task_id <= 0:
+        return
+    if action_id <= 0 or chat_id == 0 or message_id <= 0:
+        # * A row with a missing identifier can never succeed, and leaving
+        # * it pending makes the claim advance its attempt count forever.
+        # * Record the terminal state so it stops consuming a worker slot.
+        await db.notifications_db.complete_task(
+            task_id,
+            state="failed",
+            error="the task carries an invalid action, chat, or message id",
+        )
         return
     action = await db.notifications_db.load_task_action(task_id)
     if action is None or _card_is_still_decidable(action, message_id):

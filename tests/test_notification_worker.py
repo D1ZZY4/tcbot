@@ -146,3 +146,28 @@ def test_a_rejected_appeal_closes_its_still_active_ban_card(
 
     assert len(bot.edits) == 1
     assert completed[0]["state"] == "sent"
+
+
+def test_an_invalid_task_is_settled_instead_of_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row that can never succeed must stop consuming a worker slot.
+
+    A missing message id makes the edit impossible. Leaving the row
+    pending lets the claim advance its attempt count every tick forever.
+    """
+    completed: list[dict[str, Any]] = []
+    task = {**_task(), "message_id": 0}
+
+    async def _claim(limit: int = 10, *, retry_after: Any) -> list[dict[str, object]]:
+        return [task]
+
+    async def _complete(task_id: int, **kwargs: Any) -> None:
+        completed.append({"task_id": task_id, **kwargs})
+
+    monkeypatch.setattr(db.notifications_db, "claim_due_tasks", _claim)
+    monkeypatch.setattr(db.notifications_db, "complete_task", _complete)
+
+    asyncio.run(notification_worker.run_once(_Bot()))  # type: ignore[arg-type]
+
+    assert completed[0]["state"] == "failed"
