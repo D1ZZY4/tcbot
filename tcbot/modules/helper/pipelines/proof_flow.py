@@ -416,20 +416,6 @@ async def upload_proof_items(
     return landed, len(sources)
 
 
-async def upload_proof(
-    bot: Bot,
-    msgs: list[Message],
-    caption: str,
-    proof_chat: int,
-    proof_thread: int | None,
-) -> int | None:
-    """Upload proof media and return the first message that landed, or None."""
-    landed, _expected = await upload_proof_items(
-        bot, msgs, caption, proof_chat, proof_thread
-    )
-    return landed[0].archive_message_id if landed else None
-
-
 # ─────────────────────── Proof upload owner ──────────────────────── #
 
 

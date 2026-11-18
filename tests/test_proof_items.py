@@ -10,7 +10,6 @@ import asyncio
 from types import SimpleNamespace
 from typing import Any, cast
 
-import pytest
 from telegram import Bot, Message
 
 from tcbot.modules.helper.pipelines import proof_flow
@@ -201,23 +200,6 @@ def test_a_failed_chunk_marks_the_upload_partial() -> None:
     assert expected == 11
     assert len(items) == 10
     assert [item.item_order for item in items] == list(range(10))
-
-
-def test_upload_proof_keeps_the_first_message_id(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def _items(*args: Any, **kwargs: Any) -> tuple[list[Any], int]:
-        return [SimpleNamespace(archive_message_id=77)], 1
-
-    monkeypatch.setattr(proof_flow, "upload_proof_items", _items)
-
-    result = asyncio.run(
-        proof_flow.upload_proof(
-            cast("Bot", None), [cast("Message", object())], "cap", -100, None
-        )
-    )
-
-    assert result == 77
 
 
 def test_an_animation_is_sent_as_an_animation() -> None:

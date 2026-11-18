@@ -107,8 +107,11 @@ def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:
     bot.send_video = AsyncMock(side_effect=AssertionError("no single send"))
     bot.send_document = AsyncMock(side_effect=AssertionError("no single send"))
 
-    result = asyncio.run(proof_flow.upload_proof(bot, msgs, "cap", 1, None))  # type: ignore[arg-type]
-    assert result == 1
+    items, expected = asyncio.run(
+        proof_flow.upload_proof_items(bot, msgs, "cap", 1, None)  # type: ignore[arg-type]
+    )
+    assert [item.archive_message_id for item in items] == [1] * 11
+    assert expected == 11
     assert calls == [10, 1]
 
 
