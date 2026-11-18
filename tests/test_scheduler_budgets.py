@@ -93,6 +93,25 @@ def test_a_failed_retention_sweep_raises(
         asyncio.run(scheduler.sweep_retention())
 
 
+def test_a_retention_job_failure_is_committed_before_the_caller_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The registry keeps the failed run instead of rolling it back."""
+
+    class _Session:
+        async def scalar(self, statement: Any, params: Any = None) -> dict[str, Any]:
+            _ = (statement, params)
+            return {"status": "failed", "error": "policy blocked", "affected": 0}
+
+    async def _fake_run_transaction(op: Any, **kwargs: Any) -> Any:
+        return await op(_Session())
+
+    monkeypatch.setattr(scheduler_jobs, "run_transaction", _fake_run_transaction)
+
+    with pytest.raises(RuntimeError, match="policy blocked"):
+        asyncio.run(scheduler.sweep_retention())
+
+
 def test_the_erasure_sweep_invalidates_the_processed_accounts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

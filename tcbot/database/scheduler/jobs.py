@@ -370,6 +370,13 @@ async def sweep_retention() -> None:
     except Exception:
         log.exception("Retention sweep failed.")
         raise
+    if isinstance(report, dict) and report.get("status") == "failed":
+        # * The database function commits the failed run before it returns,
+        # * so the failure is visible in scheduled_job_runs even though this
+        # * caller still reports the tick as failed.
+        raise RuntimeError(
+            f"Retention sweep failed: {report.get('error') or 'unknown error'}"
+        )
     removed = 0
     if isinstance(report, dict):
         value = report.get("affected")

@@ -3007,13 +3007,15 @@ BEGIN
     PERFORM %SCHEMA%.scheduled_job_finish(
         v_run_id, v_status, v_affected, v_error_kind, v_error_detail, v_result);
 
-    IF v_status = 'failed' THEN
-        RAISE EXCEPTION 'Scheduled job % failed: %', p_job_key, v_error_detail;
-    END IF;
-
+    -- * The failure must commit its run row before the caller raises. A
+    -- * RAISE here would roll the whole transaction back, including the
+    -- * claim and the finish record, and the registry would keep reporting
+    -- * the previous successful run.
     RETURN jsonb_build_object('job_key', p_job_key,
                               'run_id', v_run_id,
                               'affected', v_affected,
+                              'status', v_status,
+                              'error', v_error_detail,
                               'result', v_result);
 END;
 $$;
