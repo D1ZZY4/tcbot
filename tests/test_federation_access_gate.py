@@ -199,3 +199,65 @@ def test_a_staffer_can_collapse_a_role_prompt(
     q = _FakeCallback(data="demote_cancel:99:42")
     asyncio.run(handler(_update(q), SimpleNamespace(user_data={})))
     assert q.edits == [t(cancelled_key, "en-US", plain=True)]
+
+
+# ───────────────────────── Role command origin ───────────────────────── #
+
+
+class _FakeMessage:
+    """Message double carrying a group chat and recording replies."""
+
+    def __init__(self) -> None:
+        self.chat = SimpleNamespace(id=-100999, type="supergroup")
+        self.text = "/tcpromote 42 developer"
+        self.replies: list[str] = []
+
+    async def reply_text(self, text: str, **kwargs: Any) -> object:
+        self.replies.append(text)
+        return object()
+
+
+def _undecorated(handler: Any) -> Any:
+    """Return the handler body without its tier and rate-limit wrappers."""
+    while hasattr(handler, "__wrapped__"):
+        handler = handler.__wrapped__
+    return handler
+
+
+@pytest.mark.parametrize(
+    ("handler", "text"),
+    [
+        (admins.cmd_promote, "/tcpromote 42 developer"),
+        (admins.cmd_demote, "/tcdemote 42"),
+        (admins.cmd_transfer, "/transferowner 42"),
+    ],
+)
+def test_a_role_command_refuses_a_non_federation_group(
+    monkeypatch: pytest.MonkeyPatch, handler: Any, text: str
+) -> None:
+    """Federation role changes must originate in a federation chat.
+
+    The moderation commands already refuse a disconnected group. A role
+    change is equally federation-wide, so a group the bot was added to
+    for another purpose must not host one.
+    """
+
+    async def _locale(_update: Any) -> str:
+        return "en-US"
+
+    async def _not_connected(_chat_id: int, *, fresh: bool = False) -> bool:
+        return False
+
+    monkeypatch.setattr(admins, "locale_for_update", _locale)
+    monkeypatch.setattr(db.groups_db, "is_connected", _not_connected)
+    msg = _FakeMessage()
+    msg.text = text
+    update = SimpleNamespace(
+        effective_message=msg,
+        effective_user=SimpleNamespace(id=42, first_name="Admin"),
+        effective_chat=msg.chat,
+    )
+
+    asyncio.run(_undecorated(handler)(update, SimpleNamespace(bot=None, user_data={})))
+
+    assert msg.replies == [t("common.err.group_not_found", "en-US", plain=True)]

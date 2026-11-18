@@ -18,6 +18,7 @@ from tcbot.modules.helper.guards import (
     can_demote_admin,
     cancel_owner_mismatch,
     check_callback_executor,
+    require_federation_origin,
 )
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
@@ -96,6 +97,15 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if admin is None or msg is None:
         return
     locale = await locale_for_update(update)
+    if not await require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=True,
+        log_label="cmd_promote origin",
+    ):
+        return
     args = parse_cmd_args(msg.text)
 
     has_explicit_target = extraction.first_arg_is_explicit(args)
@@ -393,6 +403,15 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if admin is None or msg is None:
         return
     locale = await locale_for_update(update)
+    if not await require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=True,
+        log_label="cmd_demote origin",
+    ):
+        return
     args = parse_cmd_args(msg.text)
 
     resolved = await resolve_executor_target(
@@ -641,10 +660,23 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Transfer federation ownership to another user.
 
-    Validates the target and hands the transfer to
+    Validates the origin and the target and hands the transfer to
     ``transfer_flow.execute_transfer``, which replaces the owner record
     first and keeps the previous Founder as Admin.
     """
+    msg = update.effective_message
+    if msg is None:
+        return
+    locale = await locale_for_update(update)
+    if not await require_federation_origin(
+        msg,
+        chat_id=msg.chat.id,
+        chat_type=msg.chat.type,
+        locale=locale,
+        allow_private=True,
+        log_label="cmd_transfer origin",
+    ):
+        return
     await execute_transfer(update, ctx)
 
 
