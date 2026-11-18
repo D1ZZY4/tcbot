@@ -53,6 +53,23 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
 
 __help__: replies.HelpEntry = get_help()
 
+# ────────────────────── Staff cleanup resolution ───────────────────── #
+
+
+def _cleanup_role(target_role: str | None, ident: identity.Identity) -> str | None:
+    """Return the staff role the unban must demote, whichever read saw it.
+
+    The classification and the rank check are separate fresh reads, so a
+    promotion between them makes one of them staff and the other role-less.
+    Either match proves a staff holder, and the fail-closed demote must run
+    for that role instead of being skipped because the rank check won.
+    """
+    if target_role in db.users_roles.STAFF_ROLES:
+        return target_role
+    if ident.kind in db.users_roles.STAFF_ROLES:
+        return ident.kind
+    return None
+
 
 # ──────────────────── Command Unban </tcunban> ──────────────────── #
 
@@ -188,7 +205,12 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if ban_record is None:
             await safe_reply(msg, refusal or "", log_label="unban refusal")
             return
-        if target_role:
+        # * The classification and the role read are two separate fresh
+        # * reads. When they disagree on a promotion, either one proves a
+        # * staff holder, so the fail-closed demote must not be skipped just
+        # * because the rank check saw the target as role-less.
+        effective_staff_role = _cleanup_role(target_role, ident)
+        if effective_staff_role is not None:
             # * Fail closed: the shared gate blocks the unban when the demote
             # * raised, or when it cleared no row while the role still
             # * resolves (a split-brain). A staff holder must never keep
@@ -197,7 +219,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 ctx.bot,
                 target_id,
                 target_fname or str(target_id),
-                target_role,
+                effective_staff_role,
                 admin.id,
                 admin.first_name,
             )
@@ -208,7 +230,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                         "demote.abort.body",
                         locale,
                         user=Safe(user_ref(target_id, target_fname or str(target_id))),
-                        target_role=target_role,
+                        target_role=effective_staff_role,
                         action="unban",
                     ),
                     log_label=f"unban demote-{gate.value}",

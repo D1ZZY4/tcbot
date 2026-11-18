@@ -13,6 +13,8 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
+from tcbot.modules import unban
+from tcbot.modules.helper.identity import Identity
 from tcbot.modules.helper.pipelines import unban_flow
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -300,3 +302,15 @@ def test_anonymous_admin_log_names_anonymous(
     msg, bot = _FakeMsg(), _FakeBot()
     asyncio.run(unban_flow.execute_unban(_update(msg, None), _ctx(bot), 42, "T"))
     assert bot.logs and "anonymous admin" in bot.logs[-1]
+
+
+def test_staff_cleanup_uses_whichever_read_saw_the_role() -> None:
+    """A promotion between the two fresh reads still forces the demote.
+
+    The classification and the rank check each read the role. When one
+    sees staff and the other does not, the unban must clean up the rank
+    rather than skip the gate because the rank check won the race.
+    """
+    assert unban._cleanup_role(None, Identity("admin", 42, "Target")) == "admin"
+    assert unban._cleanup_role("tester", Identity("user", 42, "Target")) == "tester"
+    assert unban._cleanup_role(None, Identity("user", 42, "Target")) is None

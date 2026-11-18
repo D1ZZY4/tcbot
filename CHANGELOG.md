@@ -115,6 +115,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Warning removal and clearing share one serialisation rule** (`tcbot/database/warns_db.py`): a clear spans every group but took no advisory lock, so a warning filed at the same moment could read a count that the clear was already revoking and fire the threshold ban with fewer live warnings than the limit. Every warning mutation of one target now takes a user-wide transaction lock, with the per-group lock layered on top for a filing. `/tcunwarn` also applies the counter's expiry rule, so it cannot revoke an expired warning and report a removal while the live count stays the same. Behavior changes: concurrent warn and unwarn/reset operations resolve in a defined order, and a removal always lowers the live count.
 
+- **An unban cleans up a staff role whichever fresh read saw it** (`tcbot/modules/unban.py`): the classification and the rank check are separate reads, and a target promoted between them could reach the unban with the rank check reporting no role. The fail-closed demote now uses the role whichever read observed, so a staff holder never keeps rank after the ban lifts.
+
 ### Changed
 
 - **The scheduler lives in a focused package** (`tcbot/database/scheduler/__init__.py`, `tcbot/database/scheduler/jobs.py`): the scheduler module had grown past the project's hard file budget, mixing schedule lifecycle with the maintenance jobs. `__init__.py` now owns the lifecycle, schedule catalog, and job store; `jobs.py` owns expiry, erasure, retention, and cleanup. The package re-exports every previous name, so persisted APScheduler job paths and existing imports keep resolving. Behavior changes: none.
