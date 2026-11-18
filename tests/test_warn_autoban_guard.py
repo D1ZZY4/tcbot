@@ -179,3 +179,80 @@ def test_threshold_ban_stores_warn_proof_on_ban_record(
     ]
     assert cleared == [42]
     assert len(msg.replies) == 1
+
+
+def test_threshold_ban_demotes_at_enforcement_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target promoted after the role read must lose the rank before the ban.
+
+    The staff exemption reads the target role first. A promotion in that
+    window would otherwise leave federation rank after the automatic ban;
+    every other enforcement path re-checks at fan-out time.
+    """
+    demoted: list[tuple[int, str]] = []
+
+    async def _locale(_update: Any) -> str:
+        return "en-US"
+
+    async def _add_warn(*args: Any, **kwargs: Any) -> int:
+        return 3
+
+    async def _role_lookup(user_id: int, *, fresh: bool = False) -> str | None:
+        return "tester" if user_id == 1 else None
+
+    async def _groups() -> list[dict[str, Any]]:
+        return [{"chat_id": 5, "title": "Group"}]
+
+    async def _no_ban(user_id: int) -> None:
+        return None
+
+    async def _create_ban(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        return {"ban_id": "b1"}
+
+    async def _set_log(ban_id: str, log_msg_id: int) -> None:
+        return None
+
+    async def _clear_all(user_id: int) -> int:
+        return 1
+
+    async def _demote(
+        bot: Any,
+        target_id: int,
+        target_fname: str,
+        *,
+        trigger: str,
+        executor_id: int = 0,
+        executor_fname: str = "",
+    ) -> str | None:
+        demoted.append((target_id, trigger))
+        return "tester"
+
+    monkeypatch.setattr(warn_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(db.warns_db, "add_warn", _add_warn)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role_lookup)
+    monkeypatch.setattr(db.groups_db, "active_groups", _groups)
+    monkeypatch.setattr(db.bans_db, "get_active_ban", _no_ban)
+    monkeypatch.setattr(db.bans_db, "create_ban", _create_ban)
+    monkeypatch.setattr(db.bans_db, "set_log_message_id", _set_log)
+    monkeypatch.setattr(db.warns_db, "clear_all_warns", _clear_all)
+    monkeypatch.setattr(warn_flow, "demote_before_enforcement", _demote)
+
+    msg = _FakeMsg()
+    update = SimpleNamespace(
+        effective_message=msg,
+        effective_chat=SimpleNamespace(id=22, title="Group", type="supergroup"),
+        effective_user=SimpleNamespace(id=1, first_name="Admin"),
+    )
+    ctx = SimpleNamespace(bot=_FakeBot(), user_data={})
+    asyncio.run(
+        warn_flow.execute_warn(
+            update,  # type: ignore[arg-type]
+            ctx,  # type: ignore[arg-type]
+            42,
+            "Target",
+            "spam",
+        )
+    )
+
+    assert demoted == [(42, "warn")]

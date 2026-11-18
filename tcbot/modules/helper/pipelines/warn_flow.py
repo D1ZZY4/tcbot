@@ -16,7 +16,7 @@ from tcbot import database as db
 from tcbot.modules.helper import guards, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
-from tcbot.modules.helper.pipelines.demote_flow import Demote
+from tcbot.modules.helper.pipelines.demote_flow import Demote, demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import (
     BuildProof,
     ProofUpload,
@@ -155,7 +155,7 @@ async def execute_warn(
         return
     proof_link: str | None = proof_upload.link if proof_upload else None
     warn_proof_id: int | None = proof_upload.message_id if proof_upload else None
-    proof_kb = keyboards.action_proof_kb(target_id, proof_link)
+    proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
     log_text = messages.warn_log(
         target_id,
         target_name,
@@ -254,6 +254,19 @@ async def execute_warn(
                 reply_markup=proof_kb,
             )
             return
+        # * The exemption above read the role before the ban was recorded.
+        # * A target promoted in that window would keep federation rank
+        # * after the ban landed. Re-check and demote at enforcement time,
+        # * exactly like the ban, kick, mute, and join paths, so a staff
+        # * holder never keeps rank after the federation ban.
+        await demote_before_enforcement(
+            ctx.bot,
+            target_id,
+            target_name,
+            trigger="warn",
+            executor_id=admin_id,
+            executor_fname=admin_fname,
+        )
         groups_result, existing_ban = await asyncio.gather(
             db.groups_db.active_groups(),
             db.bans_db.get_active_ban(target_id),
