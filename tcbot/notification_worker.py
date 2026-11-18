@@ -57,11 +57,30 @@ async def run_once(bot: Bot) -> None:
             await _process_task(bot, task)
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
             log.exception(
                 "Notification task %s failed; leaving it for the next tick.",
                 task.get("id"),
             )
+            # * A failure before the retry decision (the task/action read)
+            # * used to leave the row pending forever while the claim kept
+            # * advancing its attempt count. Enforce the same ceiling here so
+            # * the row reaches a terminal state and stops consuming a slot.
+            task_id = as_int(task.get("id"))
+            if task_id > 0 and as_int(task.get("attempts")) >= _MAX_ATTEMPTS:
+                try:
+                    await db.notifications_db.complete_task(
+                        task_id,
+                        state="failed",
+                        error=f"worker error: {exc}",
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    log.exception(
+                        "Notification task %s could not be marked failed.",
+                        task_id,
+                    )
 
 
 def _card_is_still_decidable(action: dict[str, object], message_id: int) -> bool:

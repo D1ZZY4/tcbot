@@ -84,6 +84,31 @@ def test_a_failed_card_edit_is_retried(monkeypatch: pytest.MonkeyPatch) -> None:
     assert completed[0]["retry_after"] is not None
 
 
+def test_a_worker_error_at_the_attempt_ceiling_is_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A task that fails before the retry decision must not retry forever."""
+    completed: list[dict[str, Any]] = []
+    task = {**_task(), "attempts": notification_worker._MAX_ATTEMPTS}
+
+    async def _claim(limit: int = 10, *, retry_after: Any) -> list[dict[str, object]]:
+        return [task]
+
+    async def _load(task_id: int) -> dict[str, object]:
+        raise RuntimeError("database unavailable")
+
+    async def _complete(task_id: int, **kwargs: Any) -> None:
+        completed.append({"task_id": task_id, **kwargs})
+
+    monkeypatch.setattr(db.notifications_db, "claim_due_tasks", _claim)
+    monkeypatch.setattr(db.notifications_db, "load_task_action", _load)
+    monkeypatch.setattr(db.notifications_db, "complete_task", _complete)
+
+    asyncio.run(notification_worker.run_once(_Bot()))  # type: ignore[arg-type]
+
+    assert completed[0]["state"] == "failed"
+
+
 def test_a_deleted_card_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     completed = _wire(monkeypatch)
     bot = _Bot(BadRequest("Message to edit not found"))

@@ -53,6 +53,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **A review-card task at its attempt ceiling becomes terminal** (`tcbot/notification_worker.py`): a failure before the retry decision left the row pending forever while each claim advanced its attempt count. The worker now marks such a task failed at `_MAX_ATTEMPTS`.
+
 - **A cancelled queued update closes its handler coroutine** (`tcbot/utils/update_processor.py`): shutdown while an update waited on a conversation lock or the global cap left the coroutine unawaited. The processor now closes a coroutine that never started.
 
 - **The Redis rate limiter no longer desyncs the pooled connection** (`tcbot/modules/helper/decorators/ratelimit.py`): the Lua check ran under `asyncio.wait_for`, whose cancellation can leave an unread reply on the shared connection. The client's socket timeout now bounds the call, and a client owned by another event loop falls back to the in-process bucket.
