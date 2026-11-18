@@ -52,8 +52,8 @@ async def _messages_for(action_ids: list[int]) -> dict[int, dict[str, int]]:
             .where(moderation_messages.c.action_id.in_(action_ids))
             # * The table is append-only history: a re-ban or a second appeal
             # * adds another row of the same kind. The newest row is the live
-            # * message, so the order is pinned instead of relying on heap
-            # * order for which one wins the dict below.
+            # * message, so the order is pinned and the last row per kind
+            # * overwrites the older reference in the dict below.
             .order_by(moderation_messages.c.id)
         )
     )

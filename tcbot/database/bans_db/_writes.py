@@ -347,7 +347,10 @@ async def update_ban(
                 (moderation_actions.c.expires_at.is_(None))
                 | (moderation_actions.c.expires_at > now),
             )
-            .order_by(moderation_actions.c.created_at.desc())
+            .order_by(
+                moderation_actions.c.created_at.desc(),
+                moderation_actions.c.id.desc(),
+            )
             .limit(1)
             .with_for_update()
         )

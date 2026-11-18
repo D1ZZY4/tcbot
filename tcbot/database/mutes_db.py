@@ -391,7 +391,10 @@ async def user_mutes(
             moderation_actions.c.target_user_id == user_id,
             moderation_actions.c.action_type == "mute",
         )
-        .order_by(moderation_actions.c.created_at.desc())
+        .order_by(
+            moderation_actions.c.created_at.desc(),
+            moderation_actions.c.id.desc(),
+        )
         .offset(max(0, skip))
     )
     if limit is not None:

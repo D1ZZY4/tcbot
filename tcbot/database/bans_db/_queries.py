@@ -41,7 +41,10 @@ async def get_active_ban(user_id: int) -> BanDoc | None:
                 moderation_actions.c.status == "active",
                 _in_force(),
             )
-            .order_by(moderation_actions.c.created_at.desc())
+            .order_by(
+                moderation_actions.c.created_at.desc(),
+                moderation_actions.c.id.desc(),
+            )
             .limit(1)
         )
     )
@@ -95,7 +98,10 @@ async def active_bans_page(skip: int, limit: int) -> list[BanDoc]:
                 moderation_actions.c.status == "active",
                 _in_force(),
             )
-            .order_by(moderation_actions.c.created_at.desc())
+            .order_by(
+                moderation_actions.c.created_at.desc(),
+                moderation_actions.c.id.desc(),
+            )
             .offset(max(0, skip))
             .limit(page_size)
         )
@@ -119,7 +125,10 @@ async def active_bans_for_users(user_ids: list[int]) -> list[BanDoc]:
                 moderation_actions.c.status == "active",
                 _in_force(),
             )
-            .order_by(moderation_actions.c.created_at.desc())
+            .order_by(
+                moderation_actions.c.created_at.desc(),
+                moderation_actions.c.id.desc(),
+            )
         )
     )
     return await compose_rows(rows)
@@ -144,7 +153,10 @@ async def user_appealable_bans(
                 )
             ),
         )
-        .order_by(moderation_actions.c.created_at.desc())
+        .order_by(
+            moderation_actions.c.created_at.desc(),
+            moderation_actions.c.id.desc(),
+        )
         .offset(max(0, skip))
     )
     if limit is not None:
@@ -186,7 +198,10 @@ async def user_bans(
             moderation_actions.c.target_user_id == user_id,
             moderation_actions.c.action_type == "ban",
         )
-        .order_by(moderation_actions.c.created_at.desc())
+        .order_by(
+            moderation_actions.c.created_at.desc(),
+            moderation_actions.c.id.desc(),
+        )
         .offset(max(0, skip))
     )
     if limit is not None:
