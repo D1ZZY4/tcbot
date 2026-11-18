@@ -11,6 +11,24 @@ from __future__ import annotations
 TIMEZONE_OPTION: str = "-c timezone=UTC"
 
 
+def normalize_database_url(url: str) -> str:
+    """Return *url* with the async psycopg driver SQLAlchemy can load.
+
+    Heroku-style providers still hand out ``postgres://``, and a plain
+    ``postgresql://`` selects the generic dialect. The application always
+    runs psycopg 3, so both forms are rewritten once at the boundary
+    instead of every engine guessing which driver is installed.
+    """
+    url = url.strip()
+    if url.startswith("postgresql+psycopg://"):
+        return url
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url[len("postgres://") :]
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://") :]
+    return url
+
+
 def schema_options(schema: str) -> str:
     """Return the libpq options that scope a connection to *schema*.
 

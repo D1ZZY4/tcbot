@@ -28,7 +28,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import create_engine
 
 from tcbot import cfg
-from tcbot.database.connection_options import schema_options
+from tcbot.database.connection_options import normalize_database_url, schema_options
 from tcbot.database.scheduler.jobs import (
     _EXPIRE_OP_TIMEOUT_S,
     _cleanup_old_records,
@@ -177,7 +177,7 @@ def _build_job_store(database_url: str) -> SQLAlchemyJobStore:
     single-threaded use can occupy.
     """
     engine = create_engine(
-        database_url,
+        normalize_database_url(database_url),
         pool_size=_JOBSTORE_POOL_SIZE,
         max_overflow=0,
         pool_timeout=_JOBSTORE_POOL_TIMEOUT_S,

@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import (
 
 from tcbot import cfg
 from tcbot.database import migrations
-from tcbot.database.connection_options import schema_options
+from tcbot.database.connection_options import normalize_database_url, schema_options
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.logger import get_logger
 
@@ -58,14 +58,7 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 def _database_url() -> str:
     """Return the configured PostgreSQL URL with the async driver."""
-    url = cfg.database_url.strip()
-    if url.startswith("postgresql+psycopg://"):
-        return url
-    if url.startswith("postgresql://"):
-        return "postgresql+psycopg://" + url[len("postgresql://") :]
-    if url.startswith("postgres://"):
-        return "postgresql+psycopg://" + url[len("postgres://") :]
-    return url
+    return normalize_database_url(cfg.database_url)
 
 
 # * SQLSTATEs that mean the server answered and refused this statement. They

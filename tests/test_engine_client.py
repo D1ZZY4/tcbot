@@ -198,3 +198,17 @@ def test_an_async_database_url_is_left_alone() -> None:
         )
     finally:
         engine_module.cfg = original
+
+
+def test_a_heroku_style_database_url_gets_the_async_driver() -> None:
+    """The scheduler and the engine must agree on a ``postgres://`` URL."""
+    original = engine_module.cfg
+    try:
+        engine_module.cfg = dataclasses.replace(
+            original, database_url="postgres://user:pw@host:5432/db"
+        )
+        assert (
+            engine_module._database_url() == "postgresql+psycopg://user:pw@host:5432/db"
+        )
+    finally:
+        engine_module.cfg = original
