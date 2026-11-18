@@ -175,7 +175,7 @@ async def test_the_decision_claim_only_matches_its_own_card(ban_db: str) -> None
 
 
 async def test_the_decision_claim_needs_an_active_ban(ban_db: str) -> None:
-    """A claim on a revoked decision changes nothing."""
+    """A slot cannot be claimed on a revoked decision."""
 
     async def _work(sess: AsyncSession) -> None:
         await _store_ban(sess)
@@ -186,13 +186,13 @@ async def test_the_decision_claim_needs_an_active_ban(ban_db: str) -> None:
         )
 
     await engine_module.run_transaction(_work)
-    assert await db.bans_db.set_review_if_absent(_BAN_REF, 77) is True
+    assert await db.bans_db.set_review_if_absent(_BAN_REF, 77) is False
 
     claimed = await db.bans_db.claim_appeal_decision(_BAN_REF, 77)
 
     assert claimed is False
     metadata = await _metadata()
-    assert metadata["review_message_id"] == 77
+    assert "review_message_id" not in metadata
 
 
 async def test_a_missing_decision_claims_nothing(ban_db: str) -> None:

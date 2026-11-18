@@ -18,10 +18,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from sqlalchemy import select
 
 from tcbot import database as db
 from tcbot.database import engine as engine_module
-from tcbot.database.base import moderation_actions
+from tcbot.database.base import moderation_actions, moderation_appeals
 from tcbot.modules.helper.pipelines import appeal_review_flow
 from tests.postgres_support import (
     reset_community,
@@ -216,7 +217,7 @@ async def _store_ban(
     *,
     ban_id: str = _BAN_REF,
     active: bool = True,
-    rejected: bool = False,
+    appeal_status: str | None = None,
     review_message_id: int | None = None,
 ) -> None:
     """Store one decision with the review state under test."""
@@ -237,13 +238,13 @@ async def _store_ban(
         action_origin="automated",
         status="active" if active else "revoked",
     )
-    if rejected:
+    if appeal_status is not None:
         await seed_appeal(
             action_id,
             9,
-            status="rejected",
+            status=appeal_status,
             reviewed_by_user_id=1,
-            decision_note="Admin",
+            decision_note="Admin" if appeal_status != "pending" else None,
         )
 
 
@@ -258,10 +259,10 @@ async def _review_message_id(ban_id: str = _BAN_REF) -> Any:
 
 
 async def test_the_restore_fills_an_empty_slot(ban_db: str) -> None:
-    """An active, unrejected ban gets its review slot back."""
+    """An active ban with a pending appeal gets its review slot back."""
 
     async def _work(sess: AsyncSession) -> None:
-        await _store_ban(sess)
+        await _store_ban(sess, appeal_status="pending")
 
     await engine_module.run_transaction(_work)
 
@@ -293,7 +294,7 @@ async def test_the_restore_skips_a_rejected_ban(ban_db: str) -> None:
     """A rejected appeal keeps its empty slot."""
 
     async def _work(sess: AsyncSession) -> None:
-        await _store_ban(sess, rejected=True)
+        await _store_ban(sess, appeal_status="rejected")
 
     await engine_module.run_transaction(_work)
 
@@ -301,6 +302,39 @@ async def test_the_restore_skips_a_rejected_ban(ban_db: str) -> None:
 
     assert restored is False
     assert await _review_message_id() is None
+
+
+async def test_the_restore_reaches_a_new_appeal_after_an_older_rejection(
+    ban_db: str,
+) -> None:
+    """An older rejection must not block the recovery of the new appeal."""
+    action_id = 0
+
+    async def _work(sess: AsyncSession) -> None:
+        nonlocal action_id
+        await _store_ban(sess, appeal_status="rejected")
+        row = await sess.scalar(
+            select(moderation_actions.c.id).where(
+                moderation_actions.c.external_ref == _BAN_REF
+            )
+        )
+        assert row is not None
+        action_id = int(row)
+        await sess.execute(
+            moderation_appeals.insert().values(
+                action_id=action_id,
+                appellant_user_id=9,
+                appeal_text="a second appeal",
+                status="pending",
+            )
+        )
+
+    await engine_module.run_transaction(_work)
+
+    restored = await db.bans_db.restore_review(_BAN_REF, 77, datetime.now(UTC))
+
+    assert restored is True
+    assert await _review_message_id() == 77
 
 
 async def test_the_restore_never_overwrites_a_filled_slot(ban_db: str) -> None:

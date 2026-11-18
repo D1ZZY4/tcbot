@@ -557,6 +557,8 @@ async def set_review_if_absent(ban_id: str, msg_id: int) -> bool:
             .where(
                 moderation_actions.c.external_ref == ban_id,
                 moderation_actions.c.action_type == "ban",
+                moderation_actions.c.status == "active",
+                _in_force(),
                 _slot_is_free(),
             )
             .values(metadata=_merge_metadata(patch))
@@ -624,17 +626,19 @@ def _open_appeal_exists(action_id: int, appellant_user_id: int) -> ColumnElement
     )
 
 
-def _decided_appeal_exists() -> ColumnElement[bool]:
-    """Return the condition that the decision carries a decided appeal.
+def _pending_appeal_exists() -> ColumnElement[bool]:
+    """Return the condition that the decision carries an open appeal.
 
-    A decided appeal is a closed question: its review card must not come
-    back, or a second reviewer could decide it again.
+    A review slot only belongs to a pending appeal. Without this check a
+    restore after a failed decision could resurrect a card for an appeal
+    that was already closed, and an older rejected appeal would block the
+    restore of a newer appeal that is still waiting for review.
     """
     return (
         select(moderation_appeals.c.id)
         .where(
             moderation_appeals.c.action_id == moderation_actions.c.id,
-            moderation_appeals.c.status.in_(("accepted", "rejected", "withdrawn")),
+            moderation_appeals.c.status == "pending",
         )
         .exists()
     )
@@ -649,8 +653,9 @@ async def restore_review(
 
     A staff member who cannot decide (a rank refusal, a database outage)
     must not leave the review card dead. The restore only fills an empty
-    slot on a ban that is still active and not yet rejected, so it cannot
-    resurrect a review that another reviewer already decided.
+    slot on an active ban that still carries a pending appeal, so it cannot
+    resurrect a review for a closed appeal. A newer appeal remains
+    recoverable even when an older appeal on the same ban was rejected.
     """
     patch = _json_patch(
         {
@@ -667,10 +672,10 @@ async def restore_review(
                 moderation_actions.c.status == "active",
                 _in_force(),
                 _slot_is_free(),
-                # * A decided appeal is a decision: its review card must
-                # * not come back, or a second reviewer could decide it
-                # * again.
-                ~_decided_appeal_exists(),
+                # * Only a pending appeal owns a review slot. A closed
+                # * appeal must not get its card back, and an older
+                # * rejection must not block a newer pending appeal.
+                _pending_appeal_exists(),
             )
             .values(metadata=_merge_metadata(patch))
         )
