@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 
 from tcbot.database import scheduler
+from tcbot.database.scheduler import jobs as scheduler_jobs
 
 
 def test_the_expiry_sweep_carries_its_own_budget(
@@ -31,7 +32,7 @@ def test_the_expiry_sweep_carries_its_own_budget(
         seen["timeout"] = kwargs.get("timeout")
         return {}
 
-    monkeypatch.setattr(scheduler, "run_transaction", _fake_run_transaction)
+    monkeypatch.setattr(scheduler_jobs, "run_transaction", _fake_run_transaction)
 
     asyncio.run(scheduler.expire_due_decisions())
 
@@ -46,7 +47,7 @@ def test_a_failed_sweep_does_not_report_success(
     async def _fake_run_transaction(op: Any, **kwargs: Any) -> dict[str, Any]:
         raise RuntimeError("db blip")
 
-    monkeypatch.setattr(scheduler, "run_transaction", _fake_run_transaction)
+    monkeypatch.setattr(scheduler_jobs, "run_transaction", _fake_run_transaction)
 
     with pytest.raises(RuntimeError, match="rolled back"):
         asyncio.run(scheduler.expire_due_decisions())
@@ -67,7 +68,7 @@ def test_the_retention_sweep_runs_the_registry_job(
     async def _fake_run_transaction(op: Any, **kwargs: Any) -> Any:
         return await op(_Session())
 
-    monkeypatch.setattr(scheduler, "run_transaction", _fake_run_transaction)
+    monkeypatch.setattr(scheduler_jobs, "run_transaction", _fake_run_transaction)
 
     asyncio.run(scheduler.sweep_retention())
 
@@ -86,7 +87,42 @@ def test_a_failed_retention_sweep_raises(
     async def _fake_run_transaction(op: Any, **kwargs: Any) -> Any:
         raise RuntimeError("db blip")
 
-    monkeypatch.setattr(scheduler, "run_transaction", _fake_run_transaction)
+    monkeypatch.setattr(scheduler_jobs, "run_transaction", _fake_run_transaction)
 
     with pytest.raises(RuntimeError, match="db blip"):
         asyncio.run(scheduler.sweep_retention())
+
+
+def test_the_erasure_sweep_invalidates_the_processed_accounts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An erased profile must leave both cache layers before the tick ends.
+
+    The erasure and the invalidation are separate steps: a queued deletion
+    that committed and then failed to invalidate would keep the erased
+    name readable for the whole cache TTL.
+    """
+    invalidated: list[tuple[str, int]] = []
+
+    class _Cache:
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+        def invalidate(self, user_id: int) -> None:
+            invalidated.append((self.label, user_id))
+
+    async def _sweep() -> tuple[int, list[int]]:
+        return 2, [7, 8]
+
+    monkeypatch.setattr(scheduler_jobs, "_run_erasure_sweep", _sweep)
+    monkeypatch.setattr(scheduler_jobs, "user_mention_cache", _Cache("profile"))
+    monkeypatch.setattr(scheduler_jobs, "effective_role_cache", _Cache("role"))
+
+    asyncio.run(scheduler.process_erasure_queue())
+
+    assert invalidated == [
+        ("profile", 7),
+        ("role", 7),
+        ("profile", 8),
+        ("role", 8),
+    ]

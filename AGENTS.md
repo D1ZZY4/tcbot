@@ -142,7 +142,7 @@ Current stack:
 │   │   ├── cache/            TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   │   ├── pg_cron.py        Optional pg_cron ownership of database-only jobs
 │   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
-│   │   ├── scheduler.py      APScheduler background task + SQLAlchemyJobStore
+│   │   ├── scheduler/        APScheduler task, SQLAlchemyJobStore, and scheduled jobs
 │   │   ├── engine.py         Async engine, session boundary, circuit-breaker guard
 │   │   ├── connection_options.py  libpq search_path and UTC options shared by every engine
 │   │   ├── base/             Table, column, constraint, and index definitions

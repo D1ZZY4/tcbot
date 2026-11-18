@@ -100,6 +100,9 @@ def test_schedules_land_in_the_persistent_job_store(store: _FakeJobStore) -> Non
     assert job.args == ()
     assert job.coalesce is True
     assert job.misfire_grace_time == 86400
+    erasure = store.jobs[sched_mod._ERASURE_SCHEDULE_ID]
+    assert erasure.args == ()
+    assert erasure.misfire_grace_time == 600
 
 
 def test_worker_entry_points_are_registered_from_the_caller(

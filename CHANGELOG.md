@@ -47,6 +47,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Account erasure has an operator entry point** (`tcbot/database/erasure_db.py`, `tcbot/modules/maintenance.py`, `tcbot/database/scheduler.py`): the erasure queue had a sweeper but nothing could enqueue a request. `/tcforget <user_id> <reason>` now queues one, and the cleanup sweep invalidates the erased user's name and role caches after anonymising the row. Behavior changes: a Founder can erase an account without manual SQL.
 
+- **Queued account erasures run every ten minutes** (`tcbot/database/scheduler/`, `docs/architecture/database.md`): the `user.erasure` registry entry declares a ten-minute application job, but only the daily cleanup drained the queue, so a queued deletion could wait a day. A dedicated `tcbot.erasure_every_10m` job drains one batch and invalidates the profile and role caches after the transaction commits. Behavior changes: a queued erasure is processed within ten minutes; the daily cleanup remains the fallback.
+
 - **Speedtest has a full mode** (`tcbot/modules/netspeed.py`, `i18n/*/netspeed.toml`): `/speedtest full` moves a larger sample over four connections per direction and gets a 300 s ceiling. The quick mode keeps its small payload so it does not starve Telegram traffic. Behavior changes: the full mode reports a more representative throughput at the cost of bandwidth.
 
 - **Cache queue evictions are counted** (`tcbot/utils/metrics.py`, `tcbot/database/cache/redis_io.py`): when a revocation needs room at the hard queue ceiling, the evicted display hint is recorded as `tcbot_cache_queue_evictions_total{prefix}`, so an operator can distinguish that case from a dropped mutation.
@@ -110,6 +112,8 @@ All notable changes to this project are documented here. For workflow details, s
 - **A re-ban keeps the whole previous evidence batch** (`tcbot/database/moderation_db.py`, `tcbot/database/bans_db/_writes.py`): a re-ban without a newly landed proof re-archived only the first previous message as one photo, dropping the other items and their media types. The update now copies every archived item with its expected count, and a partial previous batch stays partial instead of being recorded as complete. Behavior changes: a manual re-ban cannot attach an incomplete inherited proof, so the moderator supplies a complete one.
 
 ### Changed
+
+- **The scheduler lives in a focused package** (`tcbot/database/scheduler/__init__.py`, `tcbot/database/scheduler/jobs.py`): the scheduler module had grown past the project's hard file budget, mixing schedule lifecycle with the maintenance jobs. `__init__.py` now owns the lifecycle, schedule catalog, and job store; `jobs.py` owns expiry, erasure, retention, and cleanup. The package re-exports every previous name, so persisted APScheduler job paths and existing imports keep resolving. Behavior changes: none.
 
 - **The scheduler receives its worker entry points from startup** (`tcbot/database/scheduler.py`, `tcbot/__main__.py`): the storage package imported `enforcement_worker` and `notification_worker`, so loading the database layer for a schema tool or the health endpoint also loaded Telegram delivery code. `start()` now takes the two callables, and the database package stays below the runtime workers. Persisted jobs keep their stable module paths.
 
