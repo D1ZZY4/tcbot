@@ -100,10 +100,6 @@ async def record_mute(
     decision without the run would lose the groups that failed the first
     delivery.
     """
-    # * One clock reading for the whole decision: the case write may take a
-    # * moment, and a later created_at could pass a short deadline, which
-    # * the schema refuses as an already-expired row.
-    now = utc_now()
 
     async def _work(sess: AsyncSession) -> tuple[int, int | None]:
         # * Serialise the read-supersede-insert sequence per user. Without
@@ -114,6 +110,10 @@ async def record_mute(
             text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
             {"scope": f"mute:{user_id}"},
         )
+        # * Read the clock after the lock and hold the active row: an
+        # * unmute may have revoked it while this writer waited, and the
+        # * trigger would reject a supersession of a no-longer-active row.
+        now = utc_now()
         case_id = await _open_case(sess, user_id, admin_id, reason)
         upload_id = None
         if proof_items and destination_chat_id:
@@ -134,7 +134,8 @@ async def record_mute(
                     select(
                         moderation_actions.c.id,
                         moderation_actions.c.expires_at,
-                    ).where(
+                    )
+                    .where(
                         moderation_actions.c.target_user_id == user_id,
                         moderation_actions.c.action_type == "mute",
                         moderation_actions.c.status == "active",
@@ -145,6 +146,7 @@ async def record_mute(
                         (moderation_actions.c.expires_at.is_(None))
                         | (moderation_actions.c.expires_at > now),
                     )
+                    .with_for_update()
                 )
             )
             .mappings()
