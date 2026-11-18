@@ -34,7 +34,7 @@ Demotion removes a federation role from a user. Five invocation paths reach the 
 
 Two more paths use `Demote.execute` with a different gate around it:
 
-6. Warn-limit threshold ban (`warn_flow.execute_warn`): demote when a warned user about to be federation-banned happens to hold a role.
+6. Warn-limit threshold ban (`warn_flow.execute_warn`): demote when a warned user about to be federation-banned happens to hold a role, and re-check with `demote_before_enforcement` immediately before the ban record is written so a promotion in the exemption window cannot survive the ban.
 7. Unban paths (`/tcunban` and the appeal-approve flow): demote a role-holding target before the ban is lifted, through the fail-closed `demote_before_unban` gate.
 
 The same log format is emitted in every case; there is no separate demote template.
@@ -45,6 +45,8 @@ The same log format is emitted in every case; there is no separate demote templa
 - Confirmation buttons: `Confirm`, `Cancel` (from `keyboards.demote_confirm_kb`).
 
 The target is resolved by `extraction.extract_target`: reply, user ID, or `@username`.
+
+The command must originate in a federation chat: the bot PM, the primary group, or a connected group. A group the bot was added to for another purpose is refused with the unknown-group notice, because a role change is federation-wide and its prompt and audit entry would otherwise land outside the federation. The same gate applies to `/tcpromote` and `/transferowner`.
 
 | Who | Targets they can demote |
 |---|---|

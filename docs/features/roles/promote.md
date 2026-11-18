@@ -43,6 +43,8 @@ Aliases (matched in any prefix configured by `cfg.prefixes`):
 
 The target is resolved by `extraction.extract_target`; accepts a reply, user ID, or resolvable `@username`.
 
+The command must originate in a federation chat: the bot PM, the primary group, or a connected group. A group the bot was added to for another purpose is refused with the unknown-group notice, because a role change is federation-wide and its prompt and audit entry would otherwise land outside the federation. The same gate applies to `/tcdemote` and `/transferowner`.
+
 A target with an active federation ban cannot gain a role. The ban is enforced per group by Telegram and not by the bot's own role resolution, so a banned holder of a staff role would keep moderating from every chat where the ban did not land. The guard fails closed: a failed ban lookup refuses the promotion instead of granting rank on an unknown state. It applies to the direct command, the role-picker callback, the public request path, and the Founder's approval of a queued request, so a request filed before the ban landed cannot be approved into a role.
 
 Both the command and the role-picker callback apply the same identity refusal (`identity.refuse_message("promote", ...)`), so neither entry point can grant a role to the anonymous-admin placeholder or a Telegram service account.

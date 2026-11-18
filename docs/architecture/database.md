@@ -31,7 +31,7 @@ flowchart TD
     Cache --> L1[TTLCache L1<br/>in-memory]
     Cache --> L2[Redis L2<br/>optional]
     L2 --> Redis[(Redis)]
-    Scheduler[scheduler.py<br/>APScheduler 3.11.3] --> Postgres
+    Scheduler[scheduler/<br/>APScheduler 3.11.3] --> Postgres
     Scheduler --> DBHelpers
     MTProto[mtproto.py<br/>bot-token client] --> Postgres
 ```
@@ -301,7 +301,7 @@ database error.
 | `settings_db.py` | `user_settings` | Per-user locale and timezone preferences; the locale read uses the shared two-level cache. |
 | `cache/` | in-process + Redis | `TTLCache[T]` (L1) and `TwoLevelCache[T]` (L1 in-process + L2 Redis) with eight public singletons. |
 | `redis_client.py` | Redis (optional) | Async Redis client singleton with pool management and liveness tracking. |
-| `scheduler.py` | PostgreSQL (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `SQLAlchemyJobStore`. The runtime passes the enforcement and notification worker callables to `start()`; the storage package does not import them. |
+| `scheduler/` | PostgreSQL (APScheduler) | APScheduler 3.11.3 `AsyncIOScheduler` backed by `SQLAlchemyJobStore`. `__init__.py` owns the lifecycle and the schedule catalog; `jobs.py` owns the maintenance jobs. The runtime passes the enforcement and notification worker callables to `start()`; the storage package does not import them. |
 | `mtproto.py` | Telegram MTProto | Bot-token client singleton: user-ID resolution and group member harvest. Claims a single-owner lease before connecting (90 s TTL, 30 s heartbeat); losers and parked sessions degrade to Bot-API-only. The harvest cursor read and write run through the shared `db_call` boundary, so a stalled database fails the slice on the call budget instead of holding it for the driver timeout. |
 | `mtproto_store.py` | `mtproto_state` | PostgreSQL-backed Kurigram storage engine shared by all instances, plus the atomic single-owner lease (`<ns>:lock:mtproto_owner`) with expiry takeover. The peer, name-list and update-state writes go out as one multi-row upsert per bounded chunk, so a session with hundreds of peers costs a handful of transactions instead of one per peer. |
 | `documents.py` | type-only | `TypedDict` document shapes and `Literal` aliases. |
@@ -365,10 +365,14 @@ it never identifies anybody.
   alone. Used by the ban and kick executors, which learn a name without
   learning a username.
 - `remember_identity(user_id: int, first_name: str | None, username: str | None, last_name: str | None) -> None`
-  Mirrors a resolved identity into L1 only, no database I/O. Used after a
-  Telegram-side resolve because `upsert_user` populates the mention cache on
-  a complete write and invalidates it only on a partial write. An empty
-  identity stores the all-`None` not-found sentinel.
+  Mirrors a resolved identity into L1 only, no database or Redis I/O
+  through `put_local`. Used after a Telegram-side resolve because
+  `upsert_user` populates the mention cache on a complete write and
+  invalidates it only on a partial write. An empty identity stores the
+  all-`None` not-found sentinel. The write stays process-local on purpose:
+  a resolve that failed for a transient reason also produces no identity,
+  and sharing that sentinel through L2 would show the numeric fallback in
+  every process until the Redis TTL.
 
 ### Queries
 
@@ -1155,8 +1159,10 @@ minimum 1). A second federation-wide threshold `cfg.fed_warn_limit` (env
   pair. The decision, its case, and the count read land in one transaction,
   and a transaction-scoped advisory lock orders a burst of warnings for the
   same group and user, so the count cannot lag the history or skip the
-  threshold. The count is derived from the history, so it cannot disagree
-  with it.
+  threshold. Every warning mutation of one target takes the same user-wide
+  lock first, so a clear that spans groups cannot race a filing into a
+  premature threshold ban. The count is derived from the history, so it
+  cannot disagree with it.
 - `clear_warns(user_id: int, chat_id: int) -> int`
   Revokes the active warnings of one group and returns how many were
   revoked. The history stays: the decision is revoked, never deleted.
@@ -1166,10 +1172,12 @@ minimum 1). A second federation-wide threshold `cfg.fed_warn_limit` (env
 - `clear_warns_for_chats(user_id: int, chat_ids: Sequence[int]) -> int`
   Revokes the active warnings of the given groups in one pass.
 - `remove_last_warn(user_id: int, chat_id: int) -> bool`
-  Revokes the most recent warning of a group and returns `True` only when
-  a warning was actually revoked. The revocation is conditional on the
-  warning still being in force, so two callers that read the same warning
-  do not both revoke it.
+  Revokes the most recent warning that is still in force and returns
+  `True` only when a warning was actually revoked. The selection applies
+  the same expiry rule as `warn_counts`, so an expired decision is never
+  revoked in place of a live one. The selection and the conditional
+  revocation run in one transaction under the shared warn lock, so two
+  callers that read the same warning do not both revoke it.
 
 ### Queries
 
@@ -1369,7 +1377,7 @@ degrades transparently to pure in-memory behavior.
 
 Methods:
 
-- `get(key)` / `put(key, val)` / `invalidate(key)`: synchronous, operate on L1; `put` and `invalidate` additionally enqueue an ordered (FIFO) Redis write/delete through the shared mutation chain for the cache's prefix.
+- `get(key)` / `put(key, val)` / `invalidate(key)`: synchronous, operate on L1; `put` and `invalidate` additionally enqueue an ordered (FIFO) Redis write/delete through the shared mutation chain for the cache's prefix. `put_local(key, val)` writes only L1, for a process-local hint that must not become shared state (a resolved identity, whose durable copy is in the database). `revision()` returns a counter that advances on every mutation, so a batch reader can skip a fill whose source read overlapped an invalidation.
 - `clear()`: synchronous, clears L1 only; never touches Redis.
 - `clear_all()`: async, clears L1 and deletes every Redis key matching `tcbot:<prefix>:v2:*` via `SCAN` + `UNLINK` in batches of 100 (never blocking `KEYS`). The whole sweep is bounded by a 10 s wait, and each Redis command relies on the client's socket timeout rather than a `wait_for` wrapper, so a stalled sweep never holds the FIFO mutation tail by cancelling a command mid-flight. A cache-wide epoch advances on both sides of the sweep and L1 is cleared again when it ends, so a read that overlapped the sweep cannot republish pre-sweep state. Use when the affected key is unknown, for example after an ownership transfer. Not for hot paths.
 - `get_or_fetch(key, fetch)`: async hot path. Layer order:
@@ -1471,7 +1479,12 @@ Pool parameters: `decode_responses=True`, `max_connections=20`,
 - A cancelled predecessor does not drop its successors: each FIFO mutation shields its predecessor and only aborts on its own cancellation, so one cancelled task cannot cascade-cancel the tail.
 - A client that belongs to another event loop is reported as absent by the cache, so a read falls back to the database instead of waiting on a socket that can never answer.
 
-## Scheduler (`scheduler.py`)
+## Scheduler (`scheduler/`)
+
+`__init__.py` owns the lifecycle, the schedule catalog, and the job store;
+`jobs.py` owns the maintenance jobs (expiry, erasure, retention, cleanup).
+The package re-exports every job name, so a persisted APScheduler record
+that still points at `tcbot.database.scheduler.<func>` keeps resolving.
 
 `start(database_url: str) -> None`
 spawns the `tcbot.scheduler` background asyncio task and waits up to 30 s
@@ -1559,7 +1572,8 @@ Recurring jobs:
 | Job ID | Trigger | Purpose |
 |---|---|---|
 | `tcbot.expiry_daily` | `IntervalTrigger(hours=24)` | Calls `expire_due_decisions()`: moves the ban, mute, and role-assignment rows whose deadline passed to `expired`, withdraws any pending appeal of an expired ban with its review slot, and queues the matching revoke enforcement runs. A mute already carries its Telegram `until_date`, so its restriction lifts natively. Registered only when pg_cron does not own expiry. Uses `misfire_grace_time=86400` and `coalesce=True` so a restart straddling the daily fire still runs the sweep once. The sweep takes a transaction advisory lock, so two bot instances cannot expire the same records. |
-| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. Each branch takes its own transaction advisory lock. The erasure branch invalidates the name and role caches after its transaction commits, so a concurrent read cannot repopulate the pre-erasure row. |
+| `tcbot.stale_cleanup_daily` | `IntervalTrigger(hours=24)` | Calls `expire_stale_records()`: deletes membership-cache rows older than 90 days and processes the pending Telegram-account erasures. Always registered. Uses `misfire_grace_time=86400` and `coalesce=True`. Each branch takes its own transaction advisory lock. The erasure branch invalidates the name and role caches after its transaction commits, so a concurrent read cannot repopulate the pre-erasure row, and it still invalidates an erased account when the sibling membership delete failed. |
+| `tcbot.erasure_every_10m` | `IntervalTrigger(minutes=10)` | Calls `process_erasure_queue()`: drains one batch of the `telegram_user_erasures` queue and invalidates the cached profile and role of every erased account after the transaction commits. This is the runtime for the `user.erasure` registry entry, so a queued deletion is processed within ten minutes instead of waiting for the daily cleanup. Uses `misfire_grace_time=600` and `coalesce=True`. |
 | `tcbot.retention_daily` | `IntervalTrigger(hours=24)` | Calls `sweep_retention()`: runs the `retention.sweep` registry job, which applies the `retention_policies` windows to runtime telemetry, prunes expired MTProto session state, and records the run in `scheduled_job_runs`. Always registered; the day-scoped run key keeps the sweep to one per UTC day across instances. Uses `misfire_grace_time=86400` and `coalesce=True`. |
 | `tcbot.enforcement_worker` | `IntervalTrigger(minutes=5)` | Calls `enforcement_worker.run()`: claims queued `apply`, `revoke`, and `reconcile` runs and applies the decision across the recorded groups. Ban and mute apply, expiry lifts, manual unbans, approved appeals, and kick unban repair all use this worker. An `apply` run whose decision passed its deadline while the run waited is cancelled before any group is touched. A failed target is recorded as `failed` with a due retry deadline and retried up to three times, five minutes apart. Registered by startup through the injected worker callable. |
 | `tcbot.promotion_expiry_hourly` | `IntervalTrigger(hours=1)` | Calls `expire_promotion_requests()`: marks pending requests past `PROMOTION_REQUEST_TTL_DAYS` as `expired`, releasing the one-pending-per-target slot. The write is idempotent and the enqueue path also expires a stale target row lazily. |
@@ -1588,7 +1602,7 @@ Retired schedules are removed on every startup:
 Persistent per-ban unban jobs: there are NONE in the current code. The
 scheduler registers only the periodic jobs above (plus the legacy
 removal). There is no `DateTrigger` usage and no per-ban unban/untimed job
-API in `scheduler.py`.
+API in `scheduler/`.
 
 Scheduler error behavior: a background-task crash sets `_sched_error`,
 unblocks `start()` (so it never hangs forever), and `start()` re-raises as

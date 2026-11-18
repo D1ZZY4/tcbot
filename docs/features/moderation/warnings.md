@@ -189,6 +189,13 @@ transaction, so a warning never exists without the investigation it
 belongs to. The count is read from the view, so two moderators warning
 the same user in the same group at the same moment both count.
 
+Every warning mutation of one target takes the same user-wide transaction
+advisory lock, and the filing adds the per-group lock on top. A clear spans
+groups, so a per-group lock alone would let a concurrent warning read a
+count that a clear was already revoking and fire the threshold on fewer
+live warnings than the limit. The user lock is always taken first, so a
+filing and a clear cannot deadlock.
+
 If the write fails, the transaction rolls back and the exception is
 re-raised. This avoids creating a warning without the record that makes
 it readable.
@@ -203,7 +210,7 @@ outage as "no warnings to clear".
 
 Executor database reads fail closed with a retry notice instead of ending the conversation silently: a failed warn insert, count read, warn list, reset clear, or federation aggregate replies `I couldn't reach the database right now.` (the warn itself stays recorded when the insert already landed, and the threshold re-check is left to a retry).
 
-`warns_db.remove_last_warn(...)` revokes the newest warning that is still in force. A failure raises instead of returning `False`, so `/tcunwarn` replies with the database-retry notice instead of misreporting an outage as "no warnings".
+`warns_db.remove_last_warn(...)` revokes the newest warning that is still in force. It applies the same expiry rule as the counter and the warn list, so `/tcunwarn` never revokes an expired decision and reports a removal while the live count stays the same. A failure raises instead of returning `False`, so `/tcunwarn` replies with the database-retry notice instead of misreporting an outage as "no warnings".
 
 ## Warning auto-ban behavior
 
@@ -223,7 +230,7 @@ If `auto_ban_trigger == "per_group"` or `auto_ban_trigger == "fed_global"`:
 
 The trigger uses `>=` for per-group (retry-safe after total enforcement failure) and `>=` for federation-wide (cross-group aggregate with no atomicity guarantee).
 
-1. The target role is re-read for the auto-ban decision. A role-lookup failure aborts the auto-ban with a retry reply instead of proceeding as non-staff; the persisted warn count re-fires the `>=` threshold on the next warn.
+1. The target role is re-read for the auto-ban decision. A role-lookup failure aborts the auto-ban with a retry reply instead of proceeding as non-staff; the persisted warn count re-fires the `>=` threshold on the next warn. Immediately before the ban record is written, `demote_before_enforcement` reads the role again and demotes a staff holder: a target promoted after the exemption check would otherwise keep federation rank while the automatic ban lands.
 2. Active federation groups, any existing active ban, and the audit log are fetched/sent in parallel via `asyncio.gather`.
 3. If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban decision in `moderation_actions` (the same record used by `/tcban`), reusing the warn proof upload as the ban `proof_message_id` when one was collected so `/check` shows View Proof. This makes the ban appealable via the standard appeal flow. If the write fails, the auto-ban aborts before any group is touched (fail-closed, mirroring `execute_unban`): the threshold warn stays recorded and the admin is told to ban manually with `/tcban` once the database recovers.
 4. The ban decision's `apply` run delivers `ban_chat_member` to all active connected groups plus MAIN_GROUP; failed targets are retried by the enforcement worker.

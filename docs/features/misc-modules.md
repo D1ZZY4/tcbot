@@ -209,9 +209,10 @@ Behavior:
   that a worker already owns or that was cancelled.
 
 - `/tcforget <user_id> <reason>` queues an erasure through
-  `request_user_erasure`; the daily cleanup sweep anonymises the profile,
-  revokes live roles and moderation actions, and invalidates the affected
-  name and role cache entries.
+  `request_user_erasure`; the ten-minute erasure sweep (and the daily
+  cleanup as a fallback) anonymises the profile, revokes live roles and
+  moderation actions, and invalidates the affected name and role cache
+  entries after the transaction commits.
 
 Database impact: `/leaveall` deactivates each `connected_chats` row in
 parallel with the leave and posts a `group_disconnected` log entry per

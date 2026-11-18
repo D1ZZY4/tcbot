@@ -104,7 +104,7 @@ tcbot/
 │   ├── queues_db.py        Promotion request queue
 │   ├── cache/              TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   ├── redis_client.py     Optional async Redis client (owns the connect/degrade decision)
-│   ├── scheduler.py        APScheduler background jobs (SQLAlchemyJobStore); worker callables are injected
+│   ├── scheduler/          APScheduler lifecycle, schedule catalog, and maintenance jobs
 │   ├── mtproto.py          Bot-token MTProto client: resolve + member harvest
 │   ├── mtproto_store.py    PostgreSQL-backed Kurigram storage engine
 │   ├── settings_db.py      Per-user settings (locale and timezone preferences)
