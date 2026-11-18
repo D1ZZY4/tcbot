@@ -1712,9 +1712,12 @@ whether PostgreSQL owns the database-only jobs, and starts
 `scheduler.start(cfg.database_url, database_jobs_in_pg_cron=...,
 enforcement_job=..., notification_job=...)`.
 A background `_warm_hot_caches` task pre-loads owner ID, active groups, and
-the owner's effective role into L1+L2. `_post_shutdown` stops the
-scheduler, closes Redis, and disposes the database engine. Related `cfg`
-fields: `database_url`, `redis_url`, `db_schema`, `pg_cron_enabled`,
+the owner's effective role into L1+L2. `_post_stop` runs while PTB still
+owns the Bot HTTP client: it stops the scheduler and drains proof sessions,
+identity refreshes, and error deliveries before `Application.shutdown()`.
+`_post_shutdown` then drains the remaining cache tasks, closes Redis,
+stops MTProto, and disposes the database engine. Related `cfg` fields:
+`database_url`, `redis_url`, `db_schema`, `pg_cron_enabled`,
 `initial_owner_id`.
 
 ## Safety rules

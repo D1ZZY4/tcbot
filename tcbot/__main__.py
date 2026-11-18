@@ -400,19 +400,36 @@ async def _post_init(app: Application) -> None:
     log.debug("Owner: %d | LOG_ERRORS: %d", cfg.initial_owner_id, lec)
 
 
-async def _post_shutdown(app: Application) -> None:
-    """Drain tasks, stop the scheduler, and close clients."""
-    await _member_cache_tasks.drain()
-    await _startup_tasks.drain()
+async def _post_stop(app: Application) -> None:
+    """Drain Bot-dependent work before PTB shuts the HTTP client down.
+
+    PTB calls ``post_stop`` while the Bot client is still initialized and
+    calls ``post_shutdown`` only after ``Bot.shutdown()``. A proof flush,
+    identity refresh, or error report that runs in the later hook can no
+    longer reach Telegram, so the scheduler and every Bot-dependent task
+    are stopped and drained here.
+    """
+    # * Stop the producer first: a running scheduled job must not enqueue
+    # * new work after the trackers below have been drained.
+    await sched_mod.stop()
     await _asyncio_report_tasks.drain()
     await identity_refresh.identity_refresh_tasks.drain()
     await connected_flow.harvest_tasks.drain()
     await stats_flow.title_refresh_tasks.drain()
     await drain_proof_sessions()
     await error_reporter.drain_pending()
+
+
+async def _post_shutdown(app: Application) -> None:
+    """Drain the remaining tasks and close every external client."""
+    # * The normal path already stopped the scheduler in ``_post_stop``.
+    # * The failed-bootstrap path can reach this hook directly, so stop it
+    # * here as well before the database is closed.
+    await sched_mod.stop()
+    await _member_cache_tasks.drain()
+    await _startup_tasks.drain()
     await drain_redis_mutations()
     shutdown_results = await asyncio.gather(
-        sched_mod.stop(),
         redis_client.close(),
         mtproto_mod.stop(),
         return_exceptions=True,
@@ -447,7 +464,12 @@ def base_builder() -> ApplicationBuilder:
 
 def build_application(*, polling: bool) -> Application:
     """Construct the PTB Application with transport-appropriate pools."""
-    builder = base_builder().post_init(_post_init).post_shutdown(_post_shutdown)
+    builder = (
+        base_builder()
+        .post_init(_post_init)
+        .post_stop(_post_stop)
+        .post_shutdown(_post_shutdown)
+    )
     if polling:
         builder = builder.get_updates_connection_pool_size(_UPDATES_POOL_SIZE)
     return builder.build()
@@ -535,6 +557,7 @@ async def _run_webhook_mode(app: Application) -> None:
                     await app.stop()
                 except Exception as exc:
                     log.warning("PTB application stop failed (non-fatal): %s", exc)
+            await _post_stop(app)
             await _post_shutdown(app)
     log.info("Bot shutdown complete.")
 
@@ -641,6 +664,7 @@ __all__ = [
     "_member_cache_tasks",
     "_post_init",
     "_post_shutdown",
+    "_post_stop",
     "_print_fatal",
     "_run_webhook_mode",
     "_startup_tasks",

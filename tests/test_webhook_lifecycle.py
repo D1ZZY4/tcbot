@@ -59,17 +59,21 @@ async def test_post_init_failure_does_not_unregister_another_instance(
     async def _post_init(_app: object) -> None:
         raise RuntimeError("boot failed")
 
+    async def _post_stop(_app: object) -> None:
+        shut_down.append(2)
+
     async def _post_shutdown(_app: object) -> None:
         shut_down.append(1)
 
     monkeypatch.setattr(main_module, "_post_init", _post_init)
+    monkeypatch.setattr(main_module, "_post_stop", _post_stop)
     monkeypatch.setattr(main_module, "_post_shutdown", _post_shutdown)
 
     with pytest.raises(RuntimeError, match="boot failed"):
         await main_module._run_webhook_mode(app)  # type: ignore[arg-type]
 
     assert app.bot.deleted == 0
-    assert shut_down == [1]
+    assert shut_down == [2, 1]
 
 
 @pytest.mark.asyncio
@@ -83,14 +87,18 @@ async def test_start_failure_does_not_unregister_another_instance(
     async def _post_init(_app: object) -> None:
         return None
 
+    async def _post_stop(_app: object) -> None:
+        shut_down.append(2)
+
     async def _post_shutdown(_app: object) -> None:
         shut_down.append(1)
 
     monkeypatch.setattr(main_module, "_post_init", _post_init)
+    monkeypatch.setattr(main_module, "_post_stop", _post_stop)
     monkeypatch.setattr(main_module, "_post_shutdown", _post_shutdown)
 
     with pytest.raises(RuntimeError, match="start failed"):
         await main_module._run_webhook_mode(app)  # type: ignore[arg-type]
 
     assert app.bot.deleted == 0
-    assert shut_down == [1]
+    assert shut_down == [2, 1]
