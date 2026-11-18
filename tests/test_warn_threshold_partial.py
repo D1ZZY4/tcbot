@@ -65,3 +65,20 @@ def test_partial_enforcement_ignores_benign_refusals(
     asyncio.run(warn_flow._clear_warns_after_threshold_ban(42, _GROUPS, [-1001, -1002]))
     assert calls["all"] == [42]
     assert calls["chats"] == []
+
+
+def test_a_reduced_scope_never_clears_the_whole_slate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reduced group list must not clear warnings for untouched groups."""
+    calls = _install(monkeypatch)
+    asyncio.run(
+        warn_flow._clear_warns_after_threshold_ban(
+            42,
+            _GROUPS,
+            [-1001, -1002],
+            scope_complete=False,
+        )
+    )
+    assert calls["all"] == []
+    assert calls["chats"] == [(42, [-1001, -1002])]

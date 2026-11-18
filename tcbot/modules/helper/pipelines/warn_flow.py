@@ -259,7 +259,7 @@ async def execute_warn(
         # * after the ban landed. Re-check and demote at enforcement time,
         # * exactly like the ban, kick, mute, and join paths, so a staff
         # * holder never keeps rank after the federation ban.
-        await demote_before_enforcement(
+        enforced_role = await demote_before_enforcement(
             ctx.bot,
             target_id,
             target_name,
@@ -267,6 +267,22 @@ async def execute_warn(
             executor_id=admin_id,
             executor_fname=admin_fname,
         )
+        if enforced_role == "founder":
+            # * The target was promoted to Founder after the staff exemption
+            # * read. The role is protected, so the automatic ban must not
+            # * proceed.
+            await safe_reply(
+                msg,
+                t(
+                    "warnings.exempt.failed",
+                    locale,
+                    user=Safe(user_ref(target_id, target_name)),
+                    role="Founder",
+                ),
+                log_label="Warn threshold Founder protection",
+                reply_markup=proof_kb,
+            )
+            return
         groups_result, existing_ban = await asyncio.gather(
             db.groups_db.active_groups(),
             db.bans_db.get_active_ban(target_id),
@@ -459,7 +475,10 @@ async def execute_warn(
             # * could never fire again. A complete enforcement clears the
             # * whole slate so a later unban does not re-ban on stale counts.
             clear_result = await _clear_warns_after_threshold_ban(
-                target_id, groups, landed_chat_ids
+                target_id,
+                groups,
+                landed_chat_ids,
+                scope_complete=not groups_fetch_failed,
             )
             if isinstance(clear_result, BaseException):
                 log.error(
@@ -508,22 +527,27 @@ async def _clear_warns_after_threshold_ban(
     target_id: int,
     groups: list[dict[str, Any]],
     landed_chat_ids: list[int],
+    *,
+    scope_complete: bool = True,
 ) -> Any:
     """Clear the warn slate of the groups the threshold ban reached.
 
     A complete enforcement clears every group so a later unban does not
     re-ban on stale counts. A partial enforcement clears only the groups
     where the ban landed: the failed groups keep their warnings so their
-    threshold can fire again once the enforcement succeeds.
+    threshold can fire again once the enforcement succeeds. A reduced
+    scope is never complete even when every group in it accepted the ban,
+    because the groups that could not be loaded were never attempted.
     """
-    if len(landed_chat_ids) >= len(groups):
+    if scope_complete and len(landed_chat_ids) >= len(groups):
         return await db.warns_db.clear_all_warns(target_id)
     log.warning(
-        "Warn threshold ban applied to %d/%d groups for target=%d; "
-        "warnings kept in the groups where enforcement failed.",
+        "Warn threshold ban applied to %d/%d known groups for target=%d "
+        "(complete scope=%s); warnings kept outside the reached groups.",
         len(landed_chat_ids),
         len(groups),
         target_id,
+        scope_complete,
     )
     return await db.warns_db.clear_warns_for_chats(target_id, landed_chat_ids)
 

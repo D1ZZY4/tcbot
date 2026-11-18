@@ -236,7 +236,7 @@ The trigger uses `>=` for per-group (retry-safe after total enforcement failure)
 4. The ban decision's `apply` run delivers `ban_chat_member` to all active connected groups plus MAIN_GROUP; failed targets are retried by the enforcement worker.
 5. Per-group failures are logged at WARNING level with group title, chat_id, and exception.
 6. An applied-to summary is computed: "Applied to X/Y groups", "Applied to X/Y groups (Z failed: ...)", or "WARNING: ban not enforced in any group" when all fail. A delivery that is still pending is reported as progress and retried automatically instead of being counted as applied, and a group that refused because the bot lost its admin rights is a permanent failure named in the summary. When the group-list fetch itself fails, the reply gains a reduced-scope WARNING suffix (and an error is logged) instead of reporting full success over the reachable subset.
-7. The warning slate is cleared only where the ban landed. A complete enforcement (no transient failure) calls `warns_db.clear_all_warns(target_id)` so a later unban does not re-ban on stale counts. A partial enforcement calls `warns_db.clear_warns_for_chats(target_id, landed_chats)` instead: the groups where the ban failed keep their warnings, so their threshold can fire again. Clearing everything after a partial enforcement would leave those groups with no warning and no ban.
+7. The warning slate is cleared only where the ban landed. A complete enforcement over the full connected-group scope calls `warns_db.clear_all_warns(target_id)` so a later unban does not re-ban on stale counts. A partial enforcement, or any enforcement whose connected-group list could not be loaded, calls `warns_db.clear_warns_for_chats(target_id, landed_chats)` instead: the groups where the ban failed or was never attempted keep their warnings, so their threshold can fire again. Clearing everything after a partial or reduced scope would leave those groups with no warning and no ban.
 8. The originating group receives a reply that the user hit the warn limit and has been federation-banned, including the applied-to summary.
 9. If the user already holds an active federation ban, a new ban decision is not created; the existing decision's apply scope is re-driven to ensure enforcement in any newly connected groups.
 10. A newly created ban decision is the only active ban of the target: a partial unique index refuses a second one, so `/check` and the appeal deep link always agree on the same record.
@@ -244,7 +244,7 @@ The trigger uses `>=` for per-group (retry-safe after total enforcement failure)
 Both auto-ban branches behave as follows:
 
 - On complete enforcement, warnings are cleared across all groups.
-- On partial enforcement, warnings are cleared only in the groups where the ban landed; the failed groups keep them and the next warn re-fires the auto-ban via the `>=` per-group check.
+- On partial enforcement or a reduced group scope, warnings are cleared only in the groups where the ban landed; the failed and unattempted groups keep them and the next warn re-fires the auto-ban via the `>=` per-group check.
 - On complete fan-out failure, no warning is cleared and the next warn re-fires the auto-ban via the `>=` per-group check.
 
 ## `/tcunwarn` behavior
