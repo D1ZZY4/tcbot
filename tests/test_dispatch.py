@@ -14,6 +14,7 @@ import pytest
 from telegram.error import BadRequest, Forbidden, TimedOut
 
 from tcbot.modules.helper.messages.replies import applied_summary
+from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
@@ -145,6 +146,22 @@ def test_fan_out_propagates_cancellation() -> None:
 
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(_main())
+
+
+def test_fan_out_counts_a_wrapper_timeout_against_the_circuit() -> None:
+    """A caller-side timeout is a transport stall, not a service response."""
+
+    async def _timeout() -> str:
+        raise TimeoutError("delivery exceeded its bound")
+
+    _cb.telegram.reset()
+    before = _cb.telegram._failure_count
+    try:
+        results = asyncio.run(fan_out([_timeout()]))
+        assert isinstance(results[0], TimeoutError)
+        assert _cb.telegram._failure_count == before + 1
+    finally:
+        _cb.telegram.reset()
 
 
 def test_gather_bounded_empty_input() -> None:

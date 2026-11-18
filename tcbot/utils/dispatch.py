@@ -127,6 +127,14 @@ async def fan_out[T](
                 _cb.telegram.record_failure()
                 log.debug("fan_out: network error (counted against circuit): %s", exc)
                 return exc
+            except TimeoutError as exc:
+                # * Callers bound individual deliveries with asyncio.timeout.
+                # * A builtin TimeoutError is a transport stall just like
+                # * PTB's TimedOut, so it has to count against the circuit
+                # * even though it never passed through the Telegram client.
+                _cb.telegram.record_failure()
+                log.debug("fan_out: wrapper timeout (counted against circuit): %s", exc)
+                return exc
             except NetworkError as exc:
                 # ! CRITICAL: BadRequest subclasses NetworkError in PTB, but a
                 # ! 400 is an API refusal (user not in chat, chat gone), never

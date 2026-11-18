@@ -53,6 +53,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **A caller-side timeout counts against the Telegram circuit** (`tcbot/utils/dispatch.py`): enforcement deliveries bounded by `asyncio.timeout` raised the builtin `TimeoutError`, which the generic fan-out branch treated as a service response. It now records a transient failure like PTB's own timeout.
+
 - **An open Telegram circuit leaves enforcement attempts queued** (`tcbot/enforcement_worker.py`): a skipped target still consumed one of its three attempts. The worker now pauses before claiming work while the circuit is OPEN, and the recovery window is still allowed to reach HALF_OPEN.
 
 - **A failed member in a batch join is reported** (`tcbot/modules/greeting.py`): per-member exceptions were collected and discarded. An unexpected join-enforcement failure is now logged with the chat and member context.
