@@ -192,6 +192,20 @@ class TwoLevelCache[T]:
                 task.add_done_callback(
                     lambda _: self._pending_invalidations.discard(key)
                 )
+            else:
+                # * The queue ceiling dropped the delete. Keep blocking L2
+                # * reads while the stale value can still live there, then
+                # * release the marker so a long outage cannot grow the set
+                # * without bound. Dropping the marker early would let the
+                # * revoked value come back from L2 for a full TTL.
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    self._pending_invalidations.discard(key)
+                else:
+                    loop.call_later(
+                        self._redis_ttl, self._pending_invalidations.discard, key
+                    )
         else:
             self._redis_del_background(key, droppable=not self._critical_delete)
 
@@ -234,6 +248,14 @@ class TwoLevelCache[T]:
             state.generation += 1
         pattern = f"tcbot:{self._redis_prefix}:v2:*"
 
+        def _close_window() -> None:
+            # * Close the window: reads that overlapped the sweep are
+            # * discarded by the second epoch bump, and anything they
+            # * already wrote into L1 is cleared here.
+            self._mem.clear()
+            self._epoch += 1
+            self._revision += 1
+
         async def _clear_redis() -> None:
             try:
                 live = await self._client()
@@ -256,29 +278,35 @@ class TwoLevelCache[T]:
                         exc,
                     )
             finally:
-                # * Close the window: reads that overlapped the sweep are
-                # * discarded by the second epoch bump, and anything they
-                # * already wrote into L1 is cleared here.
-                self._mem.clear()
-                self._epoch += 1
-                self._revision += 1
+                _close_window()
 
         task = redis_io.enqueue_redis_mutation(
             self._redis_prefix, _clear_redis, droppable=False
         )
-        if task is not None:
-            try:
-                await asyncio.wait_for(
-                    asyncio.shield(task),
-                    timeout=redis_io._CLEAR_ALL_TIMEOUT_S,
-                )
-            except TimeoutError:
-                log.warning(
-                    "Redis clear_all for prefix %s still running after %ds; "
-                    "continuing with L1 cleared.",
-                    self._redis_prefix,
-                    redis_io._CLEAR_ALL_TIMEOUT_S,
-                )
+        if task is None:
+            # * The absolute queue ceiling can drop even a non-droppable
+            # * sweep. Close the local window and make the missed L2 flush
+            # * visible, instead of returning a silent success with stale
+            # * privileges still cached in Redis.
+            log.error(
+                "Redis clear_all for prefix %s was dropped by the mutation queue; "
+                "L2 keys were not swept and may serve stale values until their TTL.",
+                self._redis_prefix,
+            )
+            _close_window()
+            return
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(task),
+                timeout=redis_io._CLEAR_ALL_TIMEOUT_S,
+            )
+        except TimeoutError:
+            log.warning(
+                "Redis clear_all for prefix %s still running after %ds; "
+                "continuing with L1 cleared.",
+                self._redis_prefix,
+                redis_io._CLEAR_ALL_TIMEOUT_S,
+            )
 
     # ── Async hot-path ── #
 
@@ -342,7 +370,11 @@ class TwoLevelCache[T]:
             # * A value invalidated while the read was in flight must not
             # * enter L1: it would serve the revoked value for a full TTL.
             metrics.record_hit("l2")
-            if state.generation == generation and self._epoch == epoch:
+            if (
+                state.generation == generation
+                and self._epoch == epoch
+                and key not in self._pending_invalidations
+            ):
                 self._mem.put(key, loaded)
             return loaded
         finally:
@@ -420,6 +452,7 @@ class TwoLevelCache[T]:
                     if (
                         states[key].generation == generations[key]
                         and self._epoch == epoch
+                        and key not in self._pending_invalidations
                     ):
                         self._mem.put(key, loaded)
                     found[key] = loaded
