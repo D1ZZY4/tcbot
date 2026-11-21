@@ -24,5 +24,12 @@ def message_link(chat_id: int, message_id: int, thread_id: int | None = None) ->
 
 
 def appeal_deep_link(bot_username: str, ban_id: str) -> str:
-    """Return a deep link that starts a private chat with the bot and triggers the appeal flow for ban_id."""
+    """Return a bot deep link, or an empty string when the username is unknown.
+
+    An empty username would produce ``https://t.me/?start=...``, which opens
+    no bot. Callers drop the button on an empty result instead of shipping a
+    dead link.
+    """
+    if not bot_username:
+        return ""
     return f"https://t.me/{bot_username}?start=appeal_{ban_id}"

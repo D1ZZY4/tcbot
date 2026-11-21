@@ -46,15 +46,16 @@ def ban_log_kb(
                 )
             ]
         )
-    rows.append(
-        [
-            InlineKeyboardButton(
-                t("button.submit_appeal", locale, plain=True),
-                url=appeal_url,
-                style=KeyboardButtonStyle.PRIMARY,
-            )
-        ]
-    )
+    if appeal_url:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    t("button.submit_appeal", locale, plain=True),
+                    url=appeal_url,
+                    style=KeyboardButtonStyle.PRIMARY,
+                )
+            ]
+        )
     return InlineKeyboardMarkup(rows)
 
 

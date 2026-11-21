@@ -30,3 +30,7 @@ def test_appeal_deep_link_shape() -> None:
     assert (
         appeal_deep_link("bot", "x" * 10) == "https://t.me/bot?start=appeal_xxxxxxxxxx"
     )
+
+
+def test_appeal_deep_link_without_a_username_is_empty() -> None:
+    assert appeal_deep_link("", "x" * 10) == ""
