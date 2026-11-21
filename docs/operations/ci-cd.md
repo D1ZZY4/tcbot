@@ -235,13 +235,13 @@ Without `BOT_PAT`, the Run Bot workflow cannot dispatch its own next run; it fal
 
 The Run Bot workflow forwards the full federation env surface as repository
 secrets, so every runtime variable must be set there for the runner:
-`DATABASE_URL`, `OWNER_ID`, `COMMUNITY_NAME`, `PREFIXES`, `MAIN_GROUP`,
-`PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `BIND_HOST`,
+`DATABASE_URL`, `OWNER_ID`, `COMMUNITY_NAME`, `PREFIXES`, `MAIN_CHANNEL`,
+`MAIN_GROUP`, `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `LOG_LEVEL`, `PORT`, `BIND_HOST`,
 `PG_CRON_ENABLED`, `PROMOTION_REQUEST_TTL_DAYS`, `REDIS_URL`, `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_SCHEMA`,
 `WARN_EXPIRY_DAYS`,
 `WARN_LIMIT`, `FED_WARN_LIMIT`, `API_ID`, `API_HASH`,
 `ALBUM_DEBOUNCE_SECONDS`, `MODULES_LOAD`, `MODULES_NO_LOAD`, `SENTRY_DSN`,
-`MTPROTO_SESSION`, the `COMMUNITY_*_URL` links,
+`MTPROTO_SESSION`,
 alongside `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `WEBHOOK_URL`, and
 `WEBHOOK_SECRET`. The runner schedules maintenance through APScheduler, the
 same as every other long-lived transport.
