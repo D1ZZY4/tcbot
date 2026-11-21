@@ -116,7 +116,7 @@ async def status_counts(set_id: int) -> dict[str, int]:
     """Return the count of slots in each status for the editor panel."""
     rows = await db_call(
         lambda: fetch_all(
-            select(rule_publications.c.status, func.count())
+            select(rule_publications.c.status, func.count().label("count"))
             .where(rule_publications.c.rule_set_id == set_id)
             .group_by(rule_publications.c.status)
         )

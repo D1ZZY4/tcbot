@@ -105,7 +105,7 @@ async def delete_category(set_id: int, category_key: str) -> bool:
     """Remove an empty category; a category with draft items is kept."""
     count = await db_call(
         lambda: fetch_one(
-            select(func.count())
+            select(func.count().label("count"))
             .select_from(rule_items)
             .where(
                 rule_items.c.category_key == category_key,

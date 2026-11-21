@@ -82,7 +82,7 @@ async def add_item(
     category_title, category_order = await _snapshot(version_id, category_key)
     count_row = await db_call(
         lambda: fetch_one(
-            select(func.count())
+            select(func.count().label("count"))
             .select_from(rule_items)
             .where(rule_items.c.rule_set_version_id == version_id)
         )

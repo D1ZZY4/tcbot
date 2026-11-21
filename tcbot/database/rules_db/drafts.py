@@ -51,14 +51,16 @@ async def open_draft(set_id: int, user_id: int) -> dict[str, Any]:
     number_row = await db_call(
         lambda: fetch_one(
             select(
-                func.coalesce(func.max(rule_set_versions.c.version_number), 0)
+                func.coalesce(func.max(rule_set_versions.c.version_number), 0).label(
+                    "max_version"
+                )
             ).where(
                 rule_set_versions.c.rule_set_id == set_id,
                 rule_set_versions.c.locale == WORKING_LOCALE,
             )
         )
     )
-    next_number = int(number_row["coalesce"] if number_row else 0) + 1
+    next_number = int(number_row["max_version"] if number_row else 0) + 1
 
     async def _work(sess: AsyncSession) -> int:
         created = await sess.execute(

@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import rule_publication_runs
@@ -56,7 +56,13 @@ async def acquire(
                 started_at=utc_now(),
                 lease_expires_at=utc_now() + timedelta(seconds=lease),
             )
-            .on_conflict_do_nothing(constraint="uq_rule_publication_runs_active")
+            .on_conflict_do_nothing(
+                index_elements=[
+                    rule_publication_runs.c.rule_set_id,
+                    rule_publication_runs.c.chat_id,
+                ],
+                index_where=text("status = 'running'"),
+            )
             .returning(rule_publication_runs.c.id)
         )
     )

@@ -73,7 +73,7 @@ async def acknowledgement_count(version_id: int) -> int:
     """Return how many users accepted one published version."""
     row = await db_call(
         lambda: fetch_one(
-            select(func.count())
+            select(func.count().label("count"))
             .select_from(rule_acknowledgements)
             .where(rule_acknowledgements.c.rule_set_version_id == version_id)
         )
