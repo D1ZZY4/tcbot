@@ -338,6 +338,15 @@ def test_webhook_503_when_ptb_not_ready(monkeypatch: pytest.MonkeyPatch) -> None
     assert body == "Service unavailable"
 
 
+def test_webhook_503_while_shutting_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A POST during shutdown must be retried, not acknowledged and lost."""
+    _wire_webhook(monkeypatch, queue=_FakeWhQueue(), loop=object(), bot=object())
+    monkeypatch.setattr(alive_mod, "_wh_shutting_down", True)
+    body, code = _call_webhook(json_data={"update_id": 1})
+    assert code == 503
+    assert body == "Service unavailable"
+
+
 def test_webhook_400_when_empty_body(monkeypatch: pytest.MonkeyPatch) -> None:
     _wire_webhook(monkeypatch, queue=_FakeWhQueue(), loop=object(), bot=object())
     body, code = _call_webhook()

@@ -27,7 +27,7 @@ from telegram.ext import (
 
 from tcbot import cfg, error_reporter
 from tcbot import database as db
-from tcbot.alive import register_webhook, start_keepalive
+from tcbot.alive import begin_shutdown, register_webhook, start_keepalive
 from tcbot.database import engine as db_engine
 from tcbot.database import mtproto as mtproto_mod
 from tcbot.database import pg_cron, redis_client
@@ -284,10 +284,17 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
         if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
             log.debug("[asyncio] transient (not reported): %s", exc)
             return
-        if exc is not None and error_reporter._benign(exc):
+        if error_reporter._is_benign(exc):
             log.debug("[asyncio] benign (not reported): %s", exc)
             return
-        log.error("[asyncio] %s%s", detail, f" - {exc}" if exc else "")
+        # * Attaching the exception makes this record and the report_exc call
+        # * below share one fingerprint, so a single incident ships once.
+        log.error(
+            "[asyncio] %s%s",
+            detail,
+            f" - {exc}" if exc else "",
+            exc_info=exc,
+        )
         if exc is not None and (
             mtproto_mod.is_auth_key_duplicated(exc)
             or mtproto_mod.is_auth_key_not_found(exc)
@@ -395,9 +402,7 @@ async def _post_init(app: Application) -> None:
     )
     _startup_tasks.spawn(_warm_hot_caches())
     asyncio.get_running_loop().set_exception_handler(_make_asyncio_exc_handler())
-    lec, _ = cfg.logs_errors
     log.info("Bot initialised.")
-    log.debug("Owner: %d | LOG_ERRORS: %d", cfg.initial_owner_id, lec)
 
 
 async def _post_stop(app: Application) -> None:
@@ -543,6 +548,10 @@ async def _run_webhook_mode(app: Application) -> None:
             raise
         finally:
             log.info("Webhook mode shutting down...")
+            # * Refuse new POSTs before PTB stops fetching, so Telegram
+            # * retries them against the next process instead of accepting a
+            # * 200 for an update nobody will process.
+            begin_shutdown()
             if webhook_set:
                 try:
                     await app.bot.delete_webhook(drop_pending_updates=False)

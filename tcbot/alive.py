@@ -163,6 +163,10 @@ _wh_queue: asyncio.Queue[object] | None = None
 _wh_loop: asyncio.AbstractEventLoop | None = None
 _wh_secret: str = ""
 _wh_bot: telegram.Bot | None = None
+# * Once shutdown starts, PTB stops fetching from update_queue. Acknowledging
+# * a POST after that point would silently drop the update, so the route asks
+# * Telegram to retry until the listener is gone.
+_wh_shutting_down: bool = False
 
 # * A Telegram webhook request must receive a retryable response when the PTB
 # * loop cannot accept the update promptly.  This bounds the synchronous Flask
@@ -181,12 +185,24 @@ def register_webhook(
     Called from __main__.py after app.initialize() and before waiting for
     shutdown.  Thread-safe: only written once at startup.
     """
-    global _wh_queue, _wh_loop, _wh_secret, _wh_bot
+    global _wh_queue, _wh_loop, _wh_secret, _wh_bot, _wh_shutting_down
     _wh_queue = queue
     _wh_loop = loop
     _wh_secret = secret
     _wh_bot = bot
+    _wh_shutting_down = False
     log.info("Webhook receiver registered.")
+
+
+def begin_shutdown() -> None:
+    """Make the webhook route return 503 so Telegram retries in-flight updates.
+
+    Called before the webhook is deleted and PTB is stopped. An update queued
+    after PTB stops fetching would otherwise be acknowledged but never
+    processed, losing moderation and greeting events on every restart.
+    """
+    global _wh_shutting_down
+    _wh_shutting_down = True
 
 
 @_app.route("/webhook", methods=["POST"])
@@ -199,6 +215,10 @@ def webhook_route() -> tuple[str, int]:
     if not _wh_secret or not secret_matches(token, _wh_secret):
         log.warning("Webhook: rejected request with invalid or missing secret token.")
         return "Forbidden", 403
+
+    if _wh_shutting_down:
+        log.debug("Webhook: update deferred during shutdown.")
+        return "Service unavailable", 503
 
     if _wh_queue is None or _wh_loop is None or _wh_bot is None:
         log.warning("Webhook: received update before PTB is ready.")
