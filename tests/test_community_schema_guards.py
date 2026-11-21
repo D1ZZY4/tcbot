@@ -559,6 +559,62 @@ async def test_reconciliation_releases_a_target_that_never_attempted(
     assert row["last_error_kind"] == "worker_timeout"
 
 
+async def test_reconciliation_makes_an_exhausted_target_terminal(
+    community: str,
+) -> None:
+    """A stuck target that used all attempts must not gain a fourth delivery.
+
+    The claim trigger increments ``attempt_count`` for every failed to
+    in_progress transition. Releasing an exhausted target with a due retry
+    deadline would let the next tick claim it once more.
+    """
+    action_id = await _open_ban(3, external_ref="ban00000012")
+    run_row = await engine_module.fetch_one(
+        text(
+            "INSERT INTO moderation_enforcement_runs "
+            "(action_id, operation, idempotency_key) "
+            "VALUES (:action, 'apply', 'run-00000006') RETURNING id"
+        ).bindparams(action=action_id)
+    )
+    assert run_row is not None
+    run_id = int(run_row["id"])
+    target_row = await engine_module.fetch_one(
+        text(
+            "INSERT INTO moderation_enforcement_targets (run_id, chat_id) "
+            "VALUES (:run, -1001) RETURNING id"
+        ).bindparams(run=run_id)
+    )
+    assert target_row is not None
+    target_id = int(target_row["id"])
+
+    # * The claim trigger owns attempt_count: a pending to in_progress
+    # * transition sets it to 1 regardless of a value written in the same
+    # * statement. Pass the matching ceiling explicitly instead of trying to
+    # * force a count the guard would overwrite.
+    await _run(
+        "UPDATE moderation_enforcement_targets "
+        "SET status = 'in_progress' WHERE id = :id",
+        id=target_id,
+    )
+
+    recovered = await _fetch_one(
+        "SELECT reconcile_stuck_enforcement_targets('0 seconds', 1)"
+    )
+
+    assert recovered == 1
+    row = await engine_module.fetch_one(
+        text(
+            "SELECT status, next_retry_at, last_error_kind, attempt_count "
+            "FROM moderation_enforcement_targets WHERE id = :id"
+        ).bindparams(id=target_id)
+    )
+    assert row is not None
+    assert row["status"] == "failed"
+    assert row["next_retry_at"] is None
+    assert row["last_error_kind"] == "attempts_exhausted"
+    assert row["attempt_count"] == 1
+
+
 # ───────────────────────── The audit trail ───────────────────────── #
 
 

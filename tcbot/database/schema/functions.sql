@@ -2168,7 +2168,7 @@ BEGIN
         RAISE EXCEPTION 'Erasure request % is %', p_erasure_id, v_req.status;
     END IF;
 
-    -- * Erasing the current owner would revoke the only Founder row, and a
+    -- * Erasing the current owner would revoke the only Owner row, and a
     -- * restart could recreate that role for the erased account. The
     -- * operator must transfer ownership first; the sweep records the
     -- * refused request as retained.
@@ -2576,7 +2576,14 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION %SCHEMA%.reconcile_stuck_enforcement_targets(p_stale_after interval DEFAULT '00:15:00'::interval) RETURNS integer
+-- * The attempt ceiling mirrors enforcement_db.MAX_ATTEMPTS. A stuck target
+-- * that already used its budget must become terminal: a failed row with a
+-- * due next_retry_at would be claimed again and increment the count past the
+-- * ceiling, issuing one more Telegram delivery than the worker ever allows.
+CREATE OR REPLACE FUNCTION %SCHEMA%.reconcile_stuck_enforcement_targets(
+    p_stale_after interval DEFAULT '00:15:00'::interval,
+    p_max_attempts integer DEFAULT 3
+) RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'pg_catalog', '%SCHEMA%'
     AS $$
@@ -2588,9 +2595,20 @@ BEGIN
     WITH recovered AS (
         UPDATE %SCHEMA%.moderation_enforcement_targets AS t
            SET status = 'failed',
-               next_retry_at = now(),
-               last_error_kind = 'worker_timeout',
-               last_error_detail = 'Target stayed in progress beyond the stale window and was released for retry'
+               next_retry_at = CASE
+                   WHEN t.attempt_count < p_max_attempts THEN now()
+                   ELSE NULL
+               END,
+               last_error_kind = CASE
+                   WHEN t.attempt_count < p_max_attempts THEN 'worker_timeout'
+                   ELSE 'attempts_exhausted'
+               END,
+               last_error_detail = CASE
+                   WHEN t.attempt_count < p_max_attempts
+                       THEN 'Target stayed in progress beyond the stale window and was released for retry'
+                   ELSE 'Target stayed in progress beyond the stale window and exhausted its attempt budget'
+               END,
+               updated_at = now()
          WHERE t.status = 'in_progress'
            AND COALESCE(t.last_attempt_at, t.updated_at) < clock_timestamp() - p_stale_after
            AND EXISTS (
