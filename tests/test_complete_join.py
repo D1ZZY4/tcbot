@@ -175,6 +175,55 @@ def test_a_benign_replay_refusal_is_not_queued(
     assert queued == []
 
 
+def test_a_transient_replay_queue_failure_is_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A short database blip must not drop the unapplied remainder."""
+    monkeypatch.setattr(connected_flow, "_REPLAY_QUEUE_BACKOFF", 0.0)
+    attempts = 0
+
+    async def _flaky_queue(chat_id: int, user_ids: list[int], by: int | None) -> int:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("transient db blip")
+        return len(user_ids)
+
+    queued = _install_world(monkeypatch, ban_uids=[11, 22, 33])
+    monkeypatch.setattr(connected_flow, "_REPLAY_BUDGET_S", 0.0)
+    monkeypatch.setattr(db.enforcement_db, "queue_connect_replay", _flaky_queue)
+    bot = _FakeBot()
+
+    blind = asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
+
+    assert blind is True
+    assert attempts == 2
+    assert queued == []
+
+
+def test_an_exhausted_replay_queue_failure_is_surfaced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An active group must never silently miss federation decisions."""
+    monkeypatch.setattr(connected_flow, "_REPLAY_QUEUE_BACKOFF", 0.0)
+    attempts = 0
+
+    async def _broken_queue(chat_id: int, user_ids: list[int], by: int | None) -> int:
+        nonlocal attempts
+        attempts += 1
+        raise RuntimeError("db down")
+
+    _install_world(monkeypatch, ban_uids=[11, 22, 33])
+    monkeypatch.setattr(connected_flow, "_REPLAY_BUDGET_S", 0.0)
+    monkeypatch.setattr(db.enforcement_db, "queue_connect_replay", _broken_queue)
+    bot = _FakeBot()
+
+    with pytest.raises(RuntimeError, match="connect replay queue failed"):
+        asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
+
+    assert attempts == connected_flow._REPLAY_QUEUE_ATTEMPTS
+
+
 def test_a_missing_welcome_permission_is_reported() -> None:
     """The new Bot API right is surfaced to the owner, not silently ignored."""
     bot = _FakeBot()

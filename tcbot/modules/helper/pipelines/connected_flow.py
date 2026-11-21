@@ -67,13 +67,19 @@ _REPLAY_CAP: int = 500
 _WELCOME_PERMISSION: str = "can_send_welcome_messages"
 # * Telegram admits 20 requests a minute per group, so a long ban or mute
 # * list cannot be enforced in one pass. The replay runs until this budget
-# * is spent and reports the remainder as not applied; the enforcement
-# * sweep repairs the rest. Without the budget a large list kept the
-# * connect handler running for a quarter of an hour.
+# * is spent; the unapplied remainder is queued as durable enforcement work.
+# * Without the budget a large list kept the connect handler running for a
+# * quarter of an hour.
 _REPLAY_BUDGET_S: float = 20.0
 # * Enforcement actions issued per round. The deadline is checked between
 # * rounds, so the round size bounds how long the budget can be overrun.
 _REPLAY_ROUND: int = 8
+# * The queue write is the only durability boundary for the unapplied
+# * remainder. A transient failure is worth a short retry; exhausting it
+# * must surface the failure instead of leaving an active group silently
+# * missing federation decisions.
+_REPLAY_QUEUE_ATTEMPTS: int = 3
+_REPLAY_QUEUE_BACKOFF: float = 0.2
 # * Owner of the in-flight admin-identity harvests.
 harvest_tasks = TaskTracker("admin harvest")
 
@@ -834,27 +840,42 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
             )
         )
         if pending_user_ids:
-            try:
-                queued = await db.enforcement_db.queue_connect_replay(
-                    chat_id, pending_user_ids, owner_id
-                )
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                log.exception(
-                    "Connect replay queue failed for chat %d (%d user(s))",
+            queued = 0
+            for attempt in range(_REPLAY_QUEUE_ATTEMPTS):
+                try:
+                    queued = await db.enforcement_db.queue_connect_replay(
+                        chat_id, pending_user_ids, owner_id
+                    )
+                    break
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    if attempt == _REPLAY_QUEUE_ATTEMPTS - 1:
+                        # ! CRITICAL: the group is already active, so a lost
+                        # queue write leaves active decisions unenforced with
+                        # no durable record. Surface the failure: both callers
+                        # show a retry prompt, and add_group is idempotent.
+                        log.exception(
+                            "Connect replay queue failed for chat %d after %d "
+                            "attempt(s); %d pending user(s): %s",
+                            chat_id,
+                            attempt + 1,
+                            len(pending_user_ids),
+                            pending_user_ids,
+                        )
+                        raise RuntimeError(
+                            f"connect replay queue failed for chat {chat_id} "
+                            f"with {len(pending_user_ids)} pending user(s)"
+                        ) from exc
+                    await asyncio.sleep(_REPLAY_QUEUE_BACKOFF * (attempt + 1))
+            if queued:
+                log.warning(
+                    "Connect replay for chat %d left %d decision(s); "
+                    "queued %d enforcement run(s) to finish them.",
                     chat_id,
                     len(pending_user_ids),
+                    queued,
                 )
-            else:
-                if queued:
-                    log.warning(
-                        "Connect replay for chat %d left %d decision(s); "
-                        "queued %d enforcement run(s) to finish them.",
-                        chat_id,
-                        len(pending_user_ids),
-                        queued,
-                    )
             replay_blind = True
         if pending_ban_uids or pending_mute_docs:
             log.warning(
