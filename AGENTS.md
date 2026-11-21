@@ -163,7 +163,7 @@ Current stack:
 │   │   │   ├── guards.py      Permission gates: may the executor act, and on whom
 │   │   │   ├── targets.py     Target resolution: who the command acts on
 │   │   │   ├── extraction/   Target/user extraction helpers
-│   │   │   ├── identity.py   Self/bot/Telegram/Founder/staff classification
+│   │   │   ├── identity.py   Self/bot/Telegram/Owner/staff classification
 │   │   │   ├── locale.py     Render-locale resolution (per-update locale)
 │   │   │   ├── messages/       Safe edits, channel delivery, and federation log renderers
 │   │   │   │   ├── safe_edits.py    Safe-edit transport helpers
@@ -281,7 +281,7 @@ Never commit real credentials. Required secret values include:
 
 Important non-secret/runtime variables include:
 
-- `OWNER_ID`: initial federation founder Telegram user ID.
+- `OWNER_ID`: initial federation Owner Telegram user ID.
 - `MTPROTO_SESSION`: namespace for the shared MTProto session in PostgreSQL, default `tcbot_mtproto`.
 - `COMMUNITY_NAME`: display name used in bot messages and logs.
 - `PREFIXES`: command prefix list, default `['/', '!', '.']`.

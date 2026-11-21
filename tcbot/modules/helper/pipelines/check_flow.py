@@ -208,7 +208,7 @@ class CheckProfileMixin:
                 else t("checking.profile.no", locale)
             )
         role_lines = [t("checking.profile.role", locale, role=Safe(bold(role_label)))]
-        if role and role != "founder" and role_by_id:
+        if role and role != "owner" and role_by_id:
             by_name = await db.users_cache.get_first_name(role_by_id, str(role_by_id))
             role_lines.append(
                 t(
@@ -217,7 +217,7 @@ class CheckProfileMixin:
                     by=Safe(user_ref(role_by_id, by_name)),
                 )
             )
-        if role and role != "founder" and role_at:
+        if role and role != "owner" and role_at:
             role_lines.append(
                 t("checking.profile.assigned_at", locale, at=Safe(fmt_dt(role_at)))
             )

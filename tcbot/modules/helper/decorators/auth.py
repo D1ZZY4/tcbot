@@ -121,7 +121,7 @@ mod_only = _auth_only(label="mod_only", refusal="mod_only", min_role="developer"
 basic_mod_only = _auth_only(
     label="basic_mod_only",
     refusal="basic_mod_only",
-    min_role="tester",
+    min_role="moderator",
 )
 
 

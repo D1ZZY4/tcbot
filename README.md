@@ -24,7 +24,7 @@ Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `PROOFS`, `API_ID`, an
 - **Federation bans with proof.** `/tcban` collects proof media or text first, then enforces across every connected group and stores the proof reference for review.
 - **Appeals.** Banned users submit through a deep link in bot DM or with `#appeal` in the main group. Staff approve or reject from review cards posted in the main group.
 - **Standard moderation.** `/tckick`, `/tcmute`, `/tcwarn`, `/tcunban`, and `/check` cover kick, mute, warn, unban, and ban-history lookup. Warn thresholds can trigger an automatic federation ban.
-- **Staff roles.** Founder, Admin, Developer, and Tester hierarchy with promotion requests, demotion, and automatic demotion before a staff member is banned, kicked, or muted.
+- **Staff roles.** Owner, Admin, Developer, and Moderator hierarchy with promotion requests, demotion, and automatic demotion before a staff member is banned, kicked, or muted.
 - **Connected groups.** Groups and forums opt in with `/tcconnect`. Multi-group actions fan out with bounded concurrency so one failing group does not abort the rest.
 - **Audit trail.** Moderation, appeal, role, and error reports go to the configured log destinations.
 
@@ -39,14 +39,14 @@ Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `PROOFS`, `API_ID`, an
 | `/tcwarn` (alias `/tcw`), `/tcunwarn`, `/warns`, `/resetwarns` | Per-group warnings; hitting the limit triggers an automatic federation ban. |
 | `/check`, `/checkme` | Ban-history lookup for a target or for yourself, with appeal links. |
 | `/tcconnect`, `/tcdisconnect`, `/rmtc`, `/tcgroups` | Connect or remove groups and list the federation roster. |
-| `/tcpromote`, `/tcdemote`, `/transferowner` | Manage Founder, Admin, Developer, and Tester roles. |
+| `/tcpromote`, `/tcdemote`, `/transferowner` | Manage Owner, Admin, Developer, and Moderator roles. |
 | `/tcstats` | Federation statistics with drill-down views. |
 | `/tcpromoterequests`, `/tcpromotelist` | Submit an Admin promotion request and list the pending ones. |
 | `/help`, `/start` | Topic help and the start menu. |
 | `/language` | Per-user or per-group interface language. |
-| `/leaveall`, `/cleanup` | Founder-only mass leave and staff-only cleanup of dead group records. |
+| `/leaveall`, `/cleanup` | Owner-only mass leave and staff-only cleanup of dead group records. |
 | `/tcrepair` (alias `/tcr`) | Staff-only list of unsettled enforcement runs and re-drive of their failed groups. |
-| `/tcforget` (alias `/tcf`) | Founder-only account erasure request for the next erasure sweep. |
+| `/tcforget` (alias `/tcf`) | Owner-only account erasure request for the next erasure sweep. |
 | `/tcbroadcast` | Staff-only broadcast to every connected group. |
 | `/ping`, `/speedtest` | Latency check and throughput measurement; `/st full` uses a larger sample. |
 
@@ -59,7 +59,7 @@ Only six values are required. Everything else has a working default.
 | Variable | Required | Description |
 |---|---:|---|
 | `BOT_TOKEN` | Yes | Bot token from BotFather. |
-| `OWNER_ID` | Yes | Telegram user ID seeded as the initial Founder. |
+| `OWNER_ID` | Yes | Telegram user ID seeded as the initial Owner. |
 | `DATABASE_URL` | Yes | PostgreSQL connection string. The bot applies its schema migrations at startup. |
 | `PROOFS` | Yes | Ban proof media destination; boot refuses without a negative group or channel chat ID. |
 | `API_ID` | Yes | Telegram API ID for MTProto identity lookups; boot refuses without it. |
@@ -78,7 +78,7 @@ Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (e
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `BOT_TOKEN` | Yes | - | Bot token from BotFather. |
-| `OWNER_ID` | Yes | - | Telegram user ID seeded as the initial Founder. |
+| `OWNER_ID` | Yes | - | Telegram user ID seeded as the initial Owner. |
 | `DATABASE_URL` | Yes | - | PostgreSQL connection string. |
 | `COMMUNITY_NAME` | No | `Bot` | Display name used in bot messages and logs. |
 | `PREFIXES` | No | `["/", "!", "."]` | Python-style list of command prefixes. |

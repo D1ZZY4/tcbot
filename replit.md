@@ -17,7 +17,7 @@ Required secrets:
 
 - `BOT_TOKEN`: Telegram bot token from BotFather.
 - `DATABASE_URL`: PostgreSQL connection string.
-- `OWNER_ID`: Telegram user ID for the initial federation founder.
+- `OWNER_ID`: Telegram user ID for the initial federation Owner.
 - `PROOFS`: Evidence destination; boot refuses without a negative group or channel chat ID.
 - `API_ID`: Telegram API ID for MTProto identity lookups; boot refuses without it.
 - `API_HASH`: Telegram API hash matching `API_ID`; boot refuses without it.

@@ -33,10 +33,10 @@ async def test_role_count_counts_only_the_requested_role(role_db: str) -> None:
     """The count helper filters on the role instead of counting every row."""
     await users_roles.set_role(11, "developer", 1)
     await users_roles.set_role(12, "developer", 1)
-    await users_roles.set_role(13, "tester", 1)
+    await users_roles.set_role(13, "moderator", 1)
 
     assert await users_roles.role_count("developer") == 2
-    assert await users_roles.role_count("tester") == 1
+    assert await users_roles.role_count("moderator") == 1
     assert await users_roles.role_count("admin") == 0
 
 
@@ -51,7 +51,7 @@ def _stub_stats_reads(monkeypatch: pytest.MonkeyPatch) -> list[str]:
         return 5
 
     async def _role_count(role: str) -> int:
-        return {"developer": 2, "tester": 3}[role]
+        return {"developer": 2, "moderator": 3}[role]
 
     async def _fail_all_by_role(role: str) -> list[object]:
         called_all_by_role.append(role)

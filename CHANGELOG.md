@@ -38,6 +38,12 @@ All notable changes to this project are documented here. For workflow details, s
 - **An invalid webhook secret is rejected at startup** (`tcbot/__init__.py`, `config.env.example`, `README.md`, `docs/getting-started/setup.md`): boot now fails with an actionable message instead of failing later during Telegram webhook registration. Behavior changes: an out-of-range or malformed `WEBHOOK_SECRET` now prevents startup.
 - **A failed scheduled job keeps its failure record** (`tcbot/database/scheduler/jobs.py`, `tcbot/database/schema/functions.sql`): the record survives the next run so the failure remains visible for diagnosis. Behavior changes: none.
 - **Account erasure protects the owner and closes open decisions** (`tcbot/modules/maintenance.py`, `tcbot/database/scheduler/jobs.py`, `alembic/versions/0011_erasure_cleanup.py`): the federation owner cannot be erased and pending decisions are closed when an erasure runs. Behavior changes: none.
+- **A role-less user can no longer pass the basic moderator gate** (`tcbot/modules/helper/decorators/auth.py`, `tests/test_authz.py`): the tier was compared against a role name that no longer exists, so a missing role matched the zero rank and was admitted. Behavior changes: the decorator now refuses role-less callers; downstream moderator checks already refused them, so command outcomes are unchanged.
+- **Stale role names no longer distort statistics and profile details** (`tcbot/modules/helper/pipelines/stats_flow.py`, `tcbot/modules/helper/pipelines/check_flow.py`, `tcbot/modules/helper/pipelines/demote_flow.py`, `tests/test_stats_roles.py`): owner and moderator keys left over from the vocabulary rename never matched, so moderator counts read zero, the staff-only panes never appeared, and the protected-owner demote check never fired. Behavior changes: moderator counts and staff panes now appear for the correct roles.
+
+### Documentation
+
+- **Current guides use the shipped role vocabulary** (`README.md`, `AGENTS.md`, `replit.md`, `docs/architecture/helpers.md`): Owner and Moderator replace the former Founder and Tester names in live documentation. Historical release notes are unchanged.
 
 ## Releases
 

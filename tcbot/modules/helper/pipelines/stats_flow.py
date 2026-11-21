@@ -100,7 +100,7 @@ class OverviewViews:
             db.users_roles.get_owner_id(),
             db.users_roles.admin_count(),
             db.users_roles.role_count("developer"),
-            db.users_roles.role_count("tester"),
+            db.users_roles.role_count("moderator"),
             db.bans_db.active_ban_count(),
             db.groups_db.active_group_count(),
             db.users_cache.total_users(),
@@ -171,13 +171,13 @@ class OverviewViews:
             throw_if_cancelled((owner_check, role_check))
             if isinstance(role_check, BaseException):
                 role_check = None
-            show_users = (owner_check is True) or (role_check == "founder")
+            show_users = (owner_check is True) or (role_check == "owner")
             # * The drill-down panes list federation-wide records, so they
             # * render for TC Staff only. The callbacks re-check the rank
             # * fresh, so the button is a convenience and not the gate.
             show_staff = show_users or db.users_roles.role_rank(
                 role_check
-            ) >= db.users_roles.role_rank("tester")
+            ) >= db.users_roles.role_rank("moderator")
         if owner_id:
             owner_id_int = cast("int", owner_id)
             try:
@@ -215,12 +215,12 @@ class OverviewViews:
     async def staff_roster(
         cls, locale: str | None = None, *, bot: Bot | None = None
     ) -> tuple[str, InlineKeyboardMarkup]:
-        """Full staff breakdown: Founder, Admins, Developers, Testers."""
+        """Full staff breakdown: Owner, Admins, Developers, Moderators."""
         owner_id, admins, developers, moderators = await asyncio.gather(
             db.users_roles.get_owner_id(),
             db.users_roles.all_admins(),
             db.users_roles.all_by_role("developer"),
-            db.users_roles.all_by_role("tester"),
+            db.users_roles.all_by_role("moderator"),
             return_exceptions=True,
         )
         throw_if_cancelled((owner_id, admins, developers, moderators))

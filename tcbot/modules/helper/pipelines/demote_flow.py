@@ -237,12 +237,12 @@ async def demote_before_enforcement(
         return None
     if not target_role:
         return None
-    if target_role == "founder":
+    if target_role == "owner":
         # * The owner row is not removable by a demote. Return the protected
         # * role so the caller can refuse the enforcement instead of logging
         # * a demotion that never happened.
         log.warning(
-            "Pre-%s found the target %d is the Founder; the role is protected",
+            "Pre-%s found the target %d is the Owner; the role is protected",
             trigger,
             target_id,
         )

@@ -685,3 +685,26 @@ def test_role_tiers_invoke_handler_when_rank_is_sufficient(
     asyncio.run(tier(_handler)(_auth_update(), SimpleNamespace()))
 
     assert calls == [True]
+
+
+@pytest.mark.parametrize(
+    "tier",
+    [auth.staff_only, auth.mod_only, auth.basic_mod_only],
+    ids=["staff_only", "mod_only", "basic_mod_only"],
+)
+def test_role_tiers_reject_a_user_with_no_role(
+    monkeypatch: pytest.MonkeyPatch, tier: Any
+) -> None:
+    """A missing role must never satisfy a minimum-rank gate."""
+    calls: list[bool] = []
+
+    async def _no_role(user_id: int, *, fresh: bool = False) -> str | None:
+        return None
+
+    async def _handler(update: Any, ctx: Any) -> None:
+        calls.append(True)
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _no_role)
+    asyncio.run(tier(_handler)(_auth_update(), SimpleNamespace()))
+
+    assert calls == []

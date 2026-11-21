@@ -237,11 +237,10 @@ async def _is_exempt(uid: int) -> bool:
 async def _throttle_tier(uid: int) -> str:
     """Return the global command-bucket tier for ``uid`` in one cached read.
 
-    ``"exempt"`` for the Founder (no global throttle), ``"staff"`` for
-    Tester rank and above (roomier flood ceiling), ``"regular"`` for
-    everyone else. ``get_effective_role`` resolves the owner to
-    ``"founder"`` itself, so this single read covers all three tiers with
-    zero database round trips on cache hits. Fail-closed: any lookup
+    ``"exempt"`` for the Owner (no global throttle), ``"staff"`` for
+    Moderator rank and above (roomier flood ceiling), ``"regular"`` for
+    everyone else. One ``get_effective_role`` read covers all three tiers
+    with zero database round trips on cache hits. Fail-closed: any lookup
     failure lands on ``"regular"`` (the strictest bucket), so an outage
     never loosens throttling. Cancellation propagates.
     """
