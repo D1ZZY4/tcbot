@@ -55,15 +55,17 @@ async def run_once(bot: Bot) -> None:
     # * A card edit skipped by an open circuit never reached Telegram.
     # * Leaving the tasks unclaimed preserves their retry budget for the
     # * next tick after the circuit recovers.
-    if _cb.telegram.state is CircuitState.OPEN:
+    state = _cb.telegram.state
+    if state is CircuitState.OPEN:
         log.warning(
             "Notification worker paused: Telegram circuit is OPEN; "
             "queued card edits stay pending for the next tick."
         )
         return
-    tasks = await db.notifications_db.claim_due_tasks(
-        _MAX_TASKS_PER_TICK, retry_after=_RETRY_DELAY
-    )
+    # * HALF_OPEN admits one probe. Claiming more tasks would call a still
+    # * degraded Telegram concurrently and burn their retry budget.
+    limit = 1 if state is CircuitState.HALF_OPEN else _MAX_TASKS_PER_TICK
+    tasks = await db.notifications_db.claim_due_tasks(limit, retry_after=_RETRY_DELAY)
     for task in tasks:
         try:
             await _process_task(bot, task)
@@ -167,6 +169,12 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
         raise
     except Exception as exc:
         detail = str(exc).lower()
+        # * A Telegram refusal means the service answered. Like fan_out, do
+        # * not count it toward the breaker; only transport failures do.
+        if isinstance(exc, (BadRequest, Forbidden)):
+            _cb.telegram.release_probe(reached_service=True)
+        else:
+            _cb.telegram.record_failure()
         if isinstance(exc, Forbidden) or (
             isinstance(exc, BadRequest)
             and ("not found" in detail or "message_id_invalid" in detail)
@@ -202,6 +210,7 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
             expected_attempts=attempts,
         )
         return
+    _cb.telegram.record_success()
     await db.notifications_db.complete_task(
         task_id, state="sent", expected_attempts=attempts
     )

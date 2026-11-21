@@ -14,6 +14,7 @@ from telegram.error import BadRequest
 
 from tcbot import database as db
 from tcbot import notification_worker
+from tcbot.utils import circuit_breaker as _cb
 
 
 class _Bot:
@@ -82,6 +83,28 @@ def test_a_failed_card_edit_is_retried(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(bot.edits) == 1
     assert completed[0]["state"] == "pending"
     assert completed[0]["retry_after"] is not None
+
+
+def test_a_half_open_circuit_claims_one_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    claimed: list[int] = []
+
+    async def _claim(limit: int = 10, *, retry_after: Any) -> list[dict[str, object]]:
+        claimed.append(limit)
+        return [_task()]
+
+    _wire(monkeypatch)
+    monkeypatch.setattr(db.notifications_db, "claim_due_tasks", _claim)
+
+    _cb.telegram.reset()
+    _cb.telegram._state = _cb.CircuitState.HALF_OPEN
+    try:
+        asyncio.run(notification_worker.run_once(_Bot()))  # type: ignore[arg-type]
+    finally:
+        _cb.telegram.reset()
+
+    assert claimed == [1]
 
 
 def test_a_worker_error_at_the_attempt_ceiling_is_terminal(
