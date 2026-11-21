@@ -41,7 +41,9 @@ pytestmark = [pytest.mark.postgres]
 async def warn_db(postgres_db: str) -> AsyncIterator[str]:
     """Start from an empty community."""
     await reset_community()
-    await seed_users(1, 42)
+    # * seed_action uses 7 as the default actor, and the case table has a
+    # * foreign key to the identity table.
+    await seed_users(1, 7, 42)
     await seed_chats(5, cfg.proofs[0])
     yield postgres_db
     await reset_community()
@@ -164,6 +166,7 @@ async def test_a_removal_skips_an_expired_warning(warn_db: str) -> None:
         chat_id=5,
         created_at=now - timedelta(hours=2),
         expires_at=now + timedelta(hours=10),
+        external_ref="warnlive0042",
     )
     expired_id = await seed_action(
         "warn",
@@ -171,6 +174,7 @@ async def test_a_removal_skips_an_expired_warning(warn_db: str) -> None:
         chat_id=5,
         created_at=now - timedelta(hours=1),
         expires_at=now - timedelta(minutes=30),
+        external_ref="warnexpired42",
     )
 
     assert await warns_db.remove_last_warn(42, 5) is True

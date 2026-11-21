@@ -203,15 +203,19 @@ def build_test_schema(url: str, schema: str | None = None) -> None:
 
 
 def create_empty_schema(url: str, schema: str) -> None:
-    """Create *schema* without any table in it.
+    """Recreate *schema* as an empty schema.
 
     The migration check needs a schema the Alembic revisions can fill from
-    scratch, so it cannot reuse the metadata-built one.
+    scratch, so it cannot reuse the metadata-built one. A run interrupted
+    between setup and teardown leaves tables and revision stamps behind;
+    clearing the schema first keeps the next run from seeding an already
+    populated one and failing on duplicate rows.
     """
     admin_engine = create_engine(sync_database_url(url), pool_pre_ping=True)
     try:
         with admin_engine.begin() as conn:
-            conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
+            conn.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+            conn.execute(text(f'CREATE SCHEMA "{schema}"'))
     finally:
         admin_engine.dispose()
 

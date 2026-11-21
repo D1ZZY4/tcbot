@@ -45,17 +45,22 @@ async def test_a_pending_request_carries_its_expiry(queue_db: str) -> None:
 
 
 async def test_expiry_frees_the_pending_slot(queue_db: str) -> None:
-    first = await queues_db.enqueue(42, "target", "Target", 7)
-    # * A request becomes overdue with the passage of time, not by storing an
-    # * expiry before its submission: the schema keeps expires_at after
-    # * requested_at, so the fixture has to age both columns together.
+    # * Insert an already-overdue request directly. The lifecycle trigger
+    # * keeps request facts immutable, so an enqueued row cannot be aged
+    # * afterwards; a fresh insert may carry both timestamps in the past as
+    # * long as the expiry still follows the submission.
     requested_at = utc_now() - timedelta(hours=1)
+    first = "expiredrequest01"
     await engine_module.run(
-        promotion_requests.update()
-        .where(promotion_requests.c.request_id == first)
-        .values(
+        promotion_requests.insert().values(
+            request_id=first,
+            target_user_id=42,
+            requested_role_key="admin",
+            requested_by_user_id=7,
+            status="pending",
             requested_at=requested_at,
             expires_at=requested_at + timedelta(minutes=30),
+            metadata={"username": "target", "first_name": "Target"},
         )
     )
 
