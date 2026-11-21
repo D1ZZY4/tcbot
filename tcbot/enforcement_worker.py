@@ -79,16 +79,27 @@ async def run_once(bot: Bot) -> None:
     # * cannot exhaust the retry budget without a single delivery attempt.
     # * Reading ``state`` (not ``peek_state``) lets an elapsed recovery window
     # * move the breaker to HALF_OPEN and admit its single probe.
-    if _cb.telegram.state is CircuitState.OPEN:
+    state = _cb.telegram.state
+    if state is CircuitState.OPEN:
         log.warning(
             "Enforcement worker paused: Telegram circuit is OPEN; "
             "queued runs stay available for the next tick."
         )
         return
-    runs = await db.enforcement_db.claim_runs(_MAX_RUNS_PER_TICK)
+    # * HALF_OPEN admits one probe. Claiming a full batch would make fan_out
+    # * skip every other slot and record each skip as a failed attempt that
+    # * never reached Telegram, exhausting the retry budget across the whole
+    # * federation during recovery. Deliver the probe; the other targets stay
+    # * queued for the next tick once the probe closes the circuit.
+    probe_only = state is CircuitState.HALF_OPEN
+    runs = await db.enforcement_db.claim_runs(1 if probe_only else _MAX_RUNS_PER_TICK)
     for run in runs:
         try:
-            await _process_run(bot, run)
+            await _process_run(
+                bot,
+                run,
+                max_targets=1 if probe_only else _MAX_TARGETS_PER_RUN,
+            )
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -111,7 +122,8 @@ async def deliver_queued_run(bot: Bot, run_id: int) -> bool:
     The run stays queued for the scheduled worker, which pauses while the
     circuit is open.
     """
-    if _cb.telegram.state is CircuitState.OPEN:
+    state = _cb.telegram.state
+    if state is CircuitState.OPEN:
         log.warning(
             "Enforcement run %s delivered later: Telegram circuit is OPEN.",
             run_id,
@@ -120,12 +132,21 @@ async def deliver_queued_run(bot: Bot, run_id: int) -> bool:
     run = await db.enforcement_db.claim_run(run_id)
     if run is None:
         return False
-    await _process_run(bot, run)
+    await _process_run(
+        bot,
+        run,
+        max_targets=1 if state is CircuitState.HALF_OPEN else _MAX_TARGETS_PER_RUN,
+    )
     return True
 
 
-async def _process_run(bot: Bot, run: dict[str, object]) -> None:
-    """Process one claimed run, one target at a time within the run."""
+async def _process_run(
+    bot: Bot,
+    run: dict[str, object],
+    *,
+    max_targets: int = _MAX_TARGETS_PER_RUN,
+) -> None:
+    """Process one claimed run, up to *max_targets* targets at a time."""
     run_id = as_int(run.get("id"))
     if run_id <= 0:
         return
@@ -201,7 +222,7 @@ async def _process_run(bot: Bot, run: dict[str, object]) -> None:
         )
         return
 
-    targets = await db.enforcement_db.claim_targets(run_id, _MAX_TARGETS_PER_RUN)
+    targets = await db.enforcement_db.claim_targets(run_id, max_targets)
     if not targets:
         # * A repair with no claimable target is not a successful unban: the
         # * chat may be disconnected, so the record stays failed and visible.

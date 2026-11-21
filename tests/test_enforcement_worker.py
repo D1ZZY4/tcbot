@@ -652,6 +652,64 @@ def test_an_open_telegram_circuit_does_not_consume_target_attempts(
         _cb.telegram.reset()
 
 
+def test_a_half_open_circuit_claims_only_its_single_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Skipped fan-out slots must not consume the targets' retry budget.
+
+    A HALF_OPEN breaker admits one Telegram call. Claiming a full batch makes
+    every other slot fail without a delivery, which would exhaust the budget
+    across the federation. Only the probe is claimed; the rest stay queued.
+    """
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    claimed_runs: list[int] = []
+    claimed_targets: list[int] = []
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        claimed_runs.append(limit)
+        return [{"id": 1, "action_id": 2, "operation": "revoke"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "ban",
+            "action_status": "expired",
+            "operation": "revoke",
+        }
+
+    async def _targets(run_id: int, limit: int = 100) -> list[dict[str, object]]:
+        claimed_targets.append(limit)
+        return [{"id": 3, "chat_id": -100, "attempt_count": 0}]
+
+    async def _complete(target_id: int, **kwargs: Any) -> None:
+        return None
+
+    async def _fan_out(coros: Any) -> list[object]:
+        for coro in coros:
+            await coro
+        return [None] * len(coros)
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
+    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+
+    _cb.telegram.reset()
+    _cb.telegram._state = _cb.CircuitState.HALF_OPEN
+    try:
+        asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+    finally:
+        _cb.telegram.reset()
+
+    assert claimed_runs == [1]
+    assert claimed_targets == [1]
+
+
 def test_an_immediate_delivery_leaves_the_run_queued_on_an_open_circuit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
