@@ -235,11 +235,16 @@ async def _handle_member(
 
     if ban:
         # * Best-effort demote keeps the role-vs-state invariant (a
-        # * banned user must not hold a federation role); enforcement below
-        # * runs regardless because the DB record already exists.
-        await demote_before_enforcement(
+        # * banned user must not hold a federation role). Enforcement runs
+        # * unless the verdict names the protected Owner, which the guard
+        # * below skips.
+        enforced_role = await demote_before_enforcement(
             bot, member.id, member.first_name, trigger="ban"
         )
+        if enforced_role == "owner":
+            # * The protected Owner is never a valid enforcement target. The
+            # * helper already logged the refusal; skip the Telegram ban.
+            return
         try:
             await asyncio.wait_for(
                 bot.ban_chat_member(chat.id, member.id),
@@ -263,29 +268,36 @@ async def _handle_member(
         return
 
     if mute:
-        await demote_before_enforcement(
+        enforced_role = await demote_before_enforcement(
             bot, member.id, member.first_name, trigger="mute"
         )
-        until = mute.get("until_date")
-        perms = ChatPermissions(can_send_messages=False)
-        try:
-            await asyncio.wait_for(
-                bot.restrict_chat_member(
-                    chat.id, member.id, permissions=perms, until_date=until
-                ),
-                timeout=TELEGRAM_LOOKUP_TIMEOUT,
-            )
-            log.info(
-                "Re-applied active federation mute for uid=%d in chat=%d",
+        if enforced_role == "owner":
+            log.warning(
+                "Skipping mute re-apply against the protected Owner uid=%d in chat=%d",
                 member.id,
                 chat.id,
             )
-        except Exception:
-            log.exception(
-                "Mute re-apply on join failed for uid=%d in chat=%d",
-                member.id,
-                chat.id,
-            )
+        else:
+            until = mute.get("until_date")
+            perms = ChatPermissions(can_send_messages=False)
+            try:
+                await asyncio.wait_for(
+                    bot.restrict_chat_member(
+                        chat.id, member.id, permissions=perms, until_date=until
+                    ),
+                    timeout=TELEGRAM_LOOKUP_TIMEOUT,
+                )
+                log.info(
+                    "Re-applied active federation mute for uid=%d in chat=%d",
+                    member.id,
+                    chat.id,
+                )
+            except Exception:
+                log.exception(
+                    "Mute re-apply on join failed for uid=%d in chat=%d",
+                    member.id,
+                    chat.id,
+                )
 
     if greet and not _enforcement_blind:
         markup = await _ack_markup(member.id, locale)
@@ -418,9 +430,11 @@ async def on_join_request_approved(
         # * well; ban_chat_member on an already-removed user is benign.
         # * Checked before the mute-failure early-return below so a mute-DB
         # * outage cannot disable ban enforcement on this path.
-        await demote_before_enforcement(
+        enforced_role = await demote_before_enforcement(
             ctx.bot, user.id, user.first_name, trigger="ban"
         )
+        if enforced_role == "owner":
+            return
         try:
             await asyncio.wait_for(
                 ctx.bot.ban_chat_member(chat.id, user.id),
@@ -454,7 +468,16 @@ async def on_join_request_approved(
     if not mute:
         return
 
-    await demote_before_enforcement(ctx.bot, user.id, user.first_name, trigger="mute")
+    enforced_role = await demote_before_enforcement(
+        ctx.bot, user.id, user.first_name, trigger="mute"
+    )
+    if enforced_role == "owner":
+        log.warning(
+            "Skipping mute re-apply against the protected Owner uid=%d in chat=%d",
+            user.id,
+            chat.id,
+        )
+        return
     until = mute.get("until_date")
     perms = ChatPermissions(can_send_messages=False)
     try:

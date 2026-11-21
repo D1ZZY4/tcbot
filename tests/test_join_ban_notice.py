@@ -29,9 +29,15 @@ class _FakeBot:
     def __init__(self) -> None:
         self.sent: list[tuple[int, str, dict[str, Any]]] = []
         self.banned: list[tuple[int, int]] = []
+        self.restricted: list[tuple[int, int]] = []
 
     async def ban_chat_member(self, chat_id: int, user_id: int) -> None:
         self.banned.append((chat_id, user_id))
+
+    async def restrict_chat_member(
+        self, chat_id: int, user_id: int, **kwargs: Any
+    ) -> None:
+        self.restricted.append((chat_id, user_id))
 
     async def send_message(self, chat_id: int, text: str, **kwargs: Any) -> object:
         self.sent.append((chat_id, text, kwargs))
@@ -174,3 +180,76 @@ def test_a_secondary_group_still_gets_the_ban_notice(
     assert bot.banned == [(-1001, 42)]
     assert len(message.replies) == 1
     assert bot.sent and bot.sent[0][0] == 42
+
+
+def test_join_enforcement_never_bans_the_protected_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A demote verdict of "owner" suppresses the Telegram ban on join."""
+
+    async def _harvest(*args: object, **kwargs: object) -> None:
+        return None
+
+    async def _ban(*args: object, **kwargs: object) -> BanDoc:
+        return _ban_payload()
+
+    async def _mute(*args: object, **kwargs: object) -> None:
+        return None
+
+    async def _demote(*args: object, **kwargs: object) -> str:
+        return "owner"
+
+    monkeypatch.setattr(db.users_cache, "harvest_user_identity", _harvest)
+    monkeypatch.setattr(db.bans_db, "get_active_ban", _ban)
+    monkeypatch.setattr(db.mutes_db, "get_active_mute", _mute)
+    monkeypatch.setattr(greeting, "demote_before_enforcement", _demote)
+    bot = _FakeBot()
+
+    asyncio.run(
+        greeting._handle_member(
+            cast("User", _FakeUser()),
+            cast("Message", _FakeMessage()),
+            cast("Chat", _FakeChat()),
+            cast("Bot", bot),
+            "en-US",
+        )
+    )
+
+    assert bot.banned == []
+
+
+def test_join_enforcement_never_mutes_the_protected_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A demote verdict of "owner" suppresses the Telegram mute on join."""
+
+    async def _harvest(*args: object, **kwargs: object) -> None:
+        return None
+
+    async def _ban(*args: object, **kwargs: object) -> None:
+        return None
+
+    async def _mute(*args: object, **kwargs: object) -> dict[str, object]:
+        return {"until_date": None}
+
+    async def _demote(*args: object, **kwargs: object) -> str:
+        return "owner"
+
+    monkeypatch.setattr(db.users_cache, "harvest_user_identity", _harvest)
+    monkeypatch.setattr(db.bans_db, "get_active_ban", _ban)
+    monkeypatch.setattr(db.mutes_db, "get_active_mute", _mute)
+    monkeypatch.setattr(greeting, "demote_before_enforcement", _demote)
+    bot = _FakeBot()
+
+    asyncio.run(
+        greeting._handle_member(
+            cast("User", _FakeUser()),
+            cast("Message", _FakeMessage()),
+            cast("Chat", _FakeChat()),
+            cast("Bot", bot),
+            "en-US",
+            greet=False,
+        )
+    )
+
+    assert bot.restricted == []
