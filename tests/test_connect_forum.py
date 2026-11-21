@@ -84,7 +84,10 @@ async def test_forum_prompt_is_sent_without_an_attributed_adder(
     monkeypatch.setattr(
         connected_flow,
         "cfg",
-        SimpleNamespace(is_primary_group=lambda _chat_id: False),
+        SimpleNamespace(
+            is_primary_group=lambda _chat_id: False,
+            is_infrastructure_chat=lambda _chat_id: False,
+        ),
     )
     monkeypatch.setattr(connected_flow, "locale_for_update", _locale)
     monkeypatch.setattr(connected_flow.db.groups_db, "get_pending", _get_pending)
@@ -126,7 +129,10 @@ async def test_forum_prompt_records_the_adder_when_known(
     monkeypatch.setattr(
         connected_flow,
         "cfg",
-        SimpleNamespace(is_primary_group=lambda _chat_id: False),
+        SimpleNamespace(
+            is_primary_group=lambda _chat_id: False,
+            is_infrastructure_chat=lambda _chat_id: False,
+        ),
     )
     monkeypatch.setattr(connected_flow, "locale_for_update", _locale)
     monkeypatch.setattr(connected_flow.db.groups_db, "get_pending", _get_pending)

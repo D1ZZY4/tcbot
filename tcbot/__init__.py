@@ -60,10 +60,6 @@ _DB_SCHEMA_PATTERN: re.Pattern[str] = re.compile(r"^[a-z_][a-z0-9_]*$")
 # * is refused at configuration load with an actionable message instead.
 _WEBHOOK_SECRET_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_-]{1,256}$")
 _REPLIT_DEV_DOMAIN_VAR: str = "REPLIT_DEV_DOMAIN"
-_DEFAULT_COMMUNITY_CHANNEL_URL: str = "https://t.me/TranssionCoreFederation"
-_DEFAULT_COMMUNITY_GROUP_URL: str = "https://t.me/TranssionCoreFederationGroup"
-_DEFAULT_COMMUNITY_LOGS_URL: str = "https://t.me/TranssionCoreFederationLogs"
-_DEFAULT_COMMUNITY_APPEAL_URL: str = "https://t.me/TranssionCoreFederationAppeals"
 # * The Replit dev domain is only usable when this process is the one the
 # * Replit platform exposes. The variable is also set in a workspace shell
 # * that starts the bot by hand, and the dev domain there points at the
@@ -94,12 +90,6 @@ _LOG_LEVELS: dict[str, int] = {
     "CRITICAL": 50,
     "FATAL": 50,
 }
-
-
-def tme_handle_from_url(url: str) -> str:
-    """Return display handle ``@name`` for a ``https://t.me/`` URL."""
-    name = url.strip().removeprefix("https://t.me/").strip("/")
-    return "@" + name if name and "/" not in name and "+" not in name else url.strip()
 
 
 def parse_list(raw: str) -> list[str]:
@@ -347,6 +337,22 @@ def _main_group_from_env() -> int:
     return value
 
 
+def _main_channel_from_env() -> int:
+    """Read ``MAIN_CHANNEL``; a channel id has to be negative.
+
+    The channel is the publication target for rules. A positive value
+    names a user and cannot be a channel, so it is treated as unset.
+    """
+    value = _chat_id_from_env("MAIN_CHANNEL")
+    if value > 0:
+        log.warning(
+            "MAIN_CHANNEL must be a negative channel chat id; treating the "
+            "configured value as unset."
+        )
+        return 0
+    return value
+
+
 def _env_or(key: str, default: str) -> str:
     """Read an env var, falling back to *default* when it is blank."""
     return os.getenv(key, "").strip() or default
@@ -391,6 +397,7 @@ class Configs:
     port: int
     bind_host: str
     main_group: int
+    main_channel: int
     logs: tuple[int, int | None]
     logs_errors: tuple[int, int | None]
     proofs: tuple[int, int | None]
@@ -410,10 +417,6 @@ class Configs:
     warn_limit: int
     webhook_url: str
     webhook_secret: str
-    community_channel_url: str
-    community_group_url: str
-    community_logs_url: str
-    community_appeal_url: str
     api_id: int
     api_hash: str
     mtproto_session: str
@@ -430,6 +433,25 @@ class Configs:
         if chat_id is None or chat_id == 0 or self.main_group == 0:
             return False
         return chat_id == self.main_group
+
+    def is_infrastructure_chat(self, chat_id: int | None) -> bool:
+        """Check whether *chat_id* is a deployment-owned destination.
+
+        The main group, main channel, proof archive, and the three log and
+        appeal destinations are infrastructure, not managed federation
+        groups. They must never be connected through the join flow, even
+        when one of them is a group rather than a channel.
+        """
+        if chat_id is None or chat_id == 0:
+            return False
+        return chat_id in {
+            self.main_group,
+            self.main_channel,
+            self.proofs[0],
+            self.logs[0],
+            self.logs_errors[0],
+            self.appeals[0],
+        }
 
     @property
     def is_webhook_mode(self) -> bool:
@@ -460,6 +482,7 @@ class Configs:
             port=parse_port(os.getenv("PORT", str(_DEFAULT_PORT)).strip()),
             bind_host=_env_or("BIND_HOST", _DEFAULT_BIND_HOST),
             main_group=_main_group_from_env(),
+            main_channel=_main_channel_from_env(),
             logs=parse_chat_id(os.getenv("LOGS", "").strip()),
             logs_errors=parse_chat_id(os.getenv("LOGS_ERRORS", "").strip()),
             proofs=_proofs_from_env(),
@@ -487,18 +510,6 @@ class Configs:
             warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),
             webhook_url=_auto_webhook_url(),
             webhook_secret=_resolve_webhook_secret(),
-            community_channel_url=_env_or(
-                "COMMUNITY_CHANNEL_URL", _DEFAULT_COMMUNITY_CHANNEL_URL
-            ),
-            community_group_url=_env_or(
-                "COMMUNITY_GROUP_URL", _DEFAULT_COMMUNITY_GROUP_URL
-            ),
-            community_appeal_url=_env_or(
-                "COMMUNITY_APPEAL_URL", _DEFAULT_COMMUNITY_APPEAL_URL
-            ),
-            community_logs_url=_env_or(
-                "COMMUNITY_LOGS_URL", _DEFAULT_COMMUNITY_LOGS_URL
-            ),
             api_id=_int_from_env("API_ID", 0, minimum=0),
             api_hash=os.getenv("API_HASH", "").strip(),
             mtproto_session=_env_or("MTPROTO_SESSION", "tcbot_mtproto"),
@@ -533,5 +544,4 @@ __all__ = [
     "parse_chat_id",
     "parse_list",
     "parse_port",
-    "tme_handle_from_url",
 ]

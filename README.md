@@ -91,6 +91,7 @@ Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (e
 | Variable | Required | Description |
 |---|---|---|
 | `MAIN_GROUP` | Usually | Main community group or forum (negative chat ID). |
+| `MAIN_CHANNEL` | For rules | Main community channel (negative chat ID); the publication target for rules. |
 
 ### Logs, proofs, and appeals
 
@@ -138,7 +139,12 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 
 ### Community links
 
-`COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_APPEAL_URL`: each shows one button in the Additional Links menu; a non-empty value overrides the built-in default, empty falls back to it.
+The Additional Links menu derives its buttons from `MAIN_CHANNEL`, `MAIN_GROUP`,
+`LOGS`, and `APPEALS` through Telegram `get_chat`: a chat username becomes a
+`t.me` link, otherwise its invite link is used, and a chat with neither drops
+its button. No static community URL variables remain. See
+[Community rules](docs/features/moderation/rules.md) for the rules editor and channel
+publication.
 
 </details>
 

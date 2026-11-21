@@ -45,7 +45,7 @@ async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     await answer_and_edit(
         q,
         additional_msg(locale),
-        reply_markup=keyboards.additional_menu_kb(locale),
+        reply_markup=await keyboards.additional_menu_kb(ctx.bot, locale),
     )
 
 

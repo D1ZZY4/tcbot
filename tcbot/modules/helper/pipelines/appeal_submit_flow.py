@@ -22,7 +22,7 @@ from telegram.ext import (
     filters,
 )
 
-from tcbot import cfg, tme_handle_from_url
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.keyboards import appeal_cancel_kb, appeal_review_kb
@@ -30,6 +30,7 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import message_link, safe_reply, send_log
 from tcbot.modules.helper.pipelines.appeal_review_flow import AppealReviewMixin
 from tcbot.modules.helper.scope import flow_scope
+from tcbot.utils.community_links import display as display_community_link
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import pre
 from tcbot.utils.i18n import t
@@ -544,15 +545,17 @@ class AppealSubmitMixin(SubmitMessageMixin):
     """User-side appeal submission: entry, gates, posting, and cancel paths."""
 
     community_name: str
-    log_channel: str
+    log_channel: int
     cancel_label: str
     cancel_callback: str
 
-    def instruction_text(self, locale: str | None = None) -> str:
+    def instruction_text(
+        self, locale: str | None = None, log_display: str | None = None
+    ) -> str:
         """Multi-line MarkdownV2 instruction prompt."""
         return instruction_text(
             community_name=self.community_name,
-            log_channel=self.log_channel,
+            log_channel=log_display or str(self.log_channel),
             locale=locale,
         )
 
@@ -665,8 +668,9 @@ class AppealSubmitMixin(SubmitMessageMixin):
         scope["appeal_ban_id"] = ban_id
         scope["appeal_log_msg_id"] = ban.get("log_message_id", 0)
         try:
+            log_display = await display_community_link(ctx.bot, self.log_channel)
             instr = await msg.reply_text(
-                self.instruction_text(locale),
+                self.instruction_text(locale, log_display),
                 parse_mode="MarkdownV2",
                 reply_markup=appeal_cancel_kb(
                     t("button.cancel", locale, plain=True),
@@ -818,9 +822,9 @@ class BuildAppeal(AppealSubmitMixin, AppealReviewMixin):
     """Configurable appeal ConversationHandler builder."""
 
     community_name: str
-    log_channel: str
+    log_channel: int
     cancel_label: str = field(default="Cancel", kw_only=True)
     cancel_callback: str = field(default="cancel_appeal", kw_only=True)
 
 
-appeal = BuildAppeal(cfg.community_name, tme_handle_from_url(cfg.community_logs_url))
+appeal = BuildAppeal(cfg.community_name, cfg.logs[0])

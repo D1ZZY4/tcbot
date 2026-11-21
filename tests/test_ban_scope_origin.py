@@ -35,7 +35,8 @@ def test_a_private_origin_never_joins_the_scope() -> None:
     """A ban issued from the bot PM has no group to enforce in."""
     scope = _scope([], 555)
     assert 555 not in scope
-    assert scope == [ban_flow.cfg.main_group]
+    expected = [ban_flow.cfg.main_group] if ban_flow.cfg.main_group else []
+    assert scope == expected
 
 
 def test_the_connected_groups_stay_in_the_scope() -> None:
@@ -45,7 +46,8 @@ def test_the_connected_groups_stay_in_the_scope() -> None:
     assert 10 in scope
     assert 20 in scope
     assert -1001 in scope
-    assert ban_flow.cfg.main_group in scope
+    if ban_flow.cfg.main_group:
+        assert ban_flow.cfg.main_group in scope
 
 
 def test_the_origin_is_not_duplicated() -> None:

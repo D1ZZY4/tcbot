@@ -24,6 +24,7 @@ def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
     base.update(env)
     for key in (
         "MAIN_GROUP",
+        "MAIN_CHANNEL",
         "LOGS",
         "LOGS_ERRORS",
         "APPEALS",
@@ -188,7 +189,36 @@ def test_env_fallbacks_use_documented_defaults(
     """Blank optional variables fall back to their documented defaults."""
     loaded = _load(monkeypatch, COMMUNITY_NAME="  ")
     assert loaded.community_name == "Bot"
-    assert loaded.community_channel_url == "https://t.me/TranssionCoreFederation"
+    assert loaded.main_channel == 0
+
+
+def test_main_channel_accepts_a_channel_and_rejects_a_user_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A negative id is a channel; a positive id names a user and is unset."""
+    assert (
+        _load(monkeypatch, MAIN_CHANNEL="-1001234567890").main_channel == -1001234567890
+    )
+    assert _load(monkeypatch, MAIN_CHANNEL="123456789").main_channel == 0
+
+
+def test_infrastructure_chats_are_recognised_without_forum_threads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every deployment destination is infrastructure, including thread forms."""
+    loaded = _load(
+        monkeypatch,
+        MAIN_CHANNEL="-1001",
+        MAIN_GROUP="-1002",
+        PROOFS="-1003",
+        LOGS="-1004/7",
+        LOGS_ERRORS="-1005",
+        APPEALS="-1006",
+    )
+    for chat_id in (-1001, -1002, -1003, -1004, -1005, -1006):
+        assert loaded.is_infrastructure_chat(chat_id) is True
+    assert loaded.is_infrastructure_chat(-9999) is False
+    assert loaded.is_infrastructure_chat(None) is False
 
 
 def test_optional_secrets_stay_empty_when_unset(

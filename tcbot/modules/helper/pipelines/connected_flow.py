@@ -267,6 +267,11 @@ class ConnectionAddedMixin:
                         "Primary group registration failed for chat %d", chat.id
                     )
                 return
+            # * Log, proof, appeal, and main-channel destinations are
+            # * deployment infrastructure. Even when one is a group, adding
+            # * the bot to it must never start a federation connection.
+            if cfg.is_infrastructure_chat(chat.id):
+                return
             pending, is_already_connected = await asyncio.gather(
                 db.groups_db.get_pending(chat.id),
                 db.groups_db.is_connected(chat.id, fresh=True),

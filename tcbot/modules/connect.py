@@ -82,7 +82,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     requests in parallel (Telegram lookup is bounded to avoid stalls). On
     success, the group is connected right away: the command requires Telegram
     administrator rights in the group, which is the authorization, so no
-    separate founder approval step exists.
+    separate owner approval step exists.
     """
     chat = update.effective_chat
     user = update.effective_user
@@ -99,6 +99,19 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             msg,
             replies.err_group_only(locale, plain=True),
             log_label="cmd_tctc group-only",
+            parse_mode=None,
+        )
+        return
+
+    # * The main group and the log/proof/appeal destinations belong to the
+    # * deployment, not to the federation. They are never managed groups:
+    # * the main group already hosts moderation commands as the primary
+    # * origin, and the others are record-keeping destinations.
+    if cfg.is_infrastructure_chat(chat.id):
+        await safe_reply(
+            msg,
+            t("connecting.state.infrastructure_chat", locale, plain=True),
+            log_label="cmd_tctc infrastructure",
             parse_mode=None,
         )
         return

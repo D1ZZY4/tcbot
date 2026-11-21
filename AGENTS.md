@@ -287,7 +287,8 @@ Important non-secret/runtime variables include:
 - `PREFIXES`: command prefix list, default `['/', '!', '.']`.
 - `PORT`: Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
 - `BIND_HOST`: listener interface for the keep-alive and webhook server, default `0.0.0.0`; use `127.0.0.1` behind a local reverse proxy.
-- `MAIN_GROUP`, `COMMUNITY_GROUP_URL`: community chat IDs / links.
+- `MAIN_GROUP`: main community group chat id.
+- `MAIN_CHANNEL`: main community channel chat id; the rules publication target. A positive value is treated as unset.
 - `LOGS`, `LOGS_ERRORS`, `APPEALS`: log and appeal destinations; values may be `chat_id` or `chat_id/thread_id` (channel, group, or forum thread). `PROOFS` is required and belongs in the list above.
 - `ALBUM_DEBOUNCE_SECONDS`: proof silence window before the ban executor runs.
 - `LOG_LEVEL`: bot log level.
@@ -304,7 +305,7 @@ Important non-secret/runtime variables include:
 - `WARN_LIMIT`: per-group warn threshold that triggers auto-ban; default `3`.
 - `WARN_EXPIRY_DAYS`: days after which warn records expire; default `0` (disabled).
 - `FED_WARN_LIMIT`: federation-wide warn threshold that triggers auto-ban; default `0` (disabled).
-- `COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, `COMMUNITY_APPEAL_URL`: optional community links shown in the additional menu (built-in defaults apply when empty).
+- Community menu links are derived from `MAIN_CHANNEL`, `MAIN_GROUP`, `LOGS`, and `APPEALS` through `tcbot/utils/community_links.py`; no static `COMMUNITY_*_URL` variables remain.
 
 Use `config.env.example` as the complete template.
 

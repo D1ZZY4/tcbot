@@ -6,12 +6,19 @@
 
 from __future__ import annotations
 
+import asyncio
+from typing import TYPE_CHECKING
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
 from tcbot import cfg
-from tcbot.modules.helper.keyboards.common import _https_url, back_markup
+from tcbot.modules.helper.keyboards.common import back_markup
+from tcbot.utils import community_links
 from tcbot.utils.i18n import t
+
+if TYPE_CHECKING:
+    from telegram import Bot
 
 
 def main_menu_kb(locale: str | None = None) -> InlineKeyboardMarkup:
@@ -85,52 +92,59 @@ def back_to_start_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     return back_markup("back_to_start", locale)
 
 
-def additional_menu_kb(locale: str | None = None) -> InlineKeyboardMarkup:
-    """Community links menu; rows without a configured URL are omitted."""
-    rows: list[list[InlineKeyboardButton]] = []
+async def additional_menu_kb(
+    bot: Bot, locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """Community links menu; chats without a public link are omitted.
 
-    channel_url = _https_url(cfg.community_channel_url, "channel")
-    group_url = _https_url(cfg.community_group_url, "group")
+    The four lookups are independent and share no state, so they run in
+    parallel. A chat that cannot be resolved simply drops its button.
+    """
+    rows: list[list[InlineKeyboardButton]] = []
+    channel_id, group_id, appeals_id, logs_id = await asyncio.gather(
+        community_links.resolve(bot, cfg.main_channel),
+        community_links.resolve(bot, cfg.main_group),
+        community_links.resolve(bot, cfg.appeals[0]),
+        community_links.resolve(bot, cfg.logs[0]),
+    )
     channel_btn = (
         InlineKeyboardButton(
             t("button.main_channel", locale, plain=True),
-            url=channel_url,
+            url=channel_id,
             style=KeyboardButtonStyle.PRIMARY,
         )
-        if channel_url
+        if channel_id
         else None
     )
     group_btn = (
         InlineKeyboardButton(
             t("button.discussion_group", locale, plain=True),
-            url=group_url,
+            url=group_id,
             style=KeyboardButtonStyle.PRIMARY,
         )
-        if group_url
+        if group_id
         else None
     )
-    appeal_url = _https_url(cfg.community_appeal_url, "appeals")
     appeal_btn = (
         InlineKeyboardButton(
             t("button.appeals_channel", locale, plain=True),
-            url=appeal_url,
+            url=appeals_id,
             style=KeyboardButtonStyle.PRIMARY,
         )
-        if appeal_url
+        if appeals_id
         else None
     )
     first_row = [b for b in (channel_btn, group_btn, appeal_btn) if b is not None]
     if first_row:
         rows.append(first_row)
 
-    logs_url = _https_url(cfg.community_logs_url, "logs")
     logs_btn = (
         InlineKeyboardButton(
             t("button.logs_channel", locale, plain=True),
-            url=logs_url,
+            url=logs_id,
             style=KeyboardButtonStyle.PRIMARY,
         )
-        if logs_url
+        if logs_id
         else None
     )
     if logs_btn:
