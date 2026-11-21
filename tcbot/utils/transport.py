@@ -18,6 +18,10 @@ HTTP_POOL_TIMEOUT: int = 15
 # * transport call, not a clock concern.
 TELEGRAM_LOOKUP_TIMEOUT: float = 3.0
 
+# * Bound on one Telegram state-changing call (ban, mute, edit). It keeps a
+# * stalled call from holding a worker slot until the transport write timeout.
+TELEGRAM_ACTION_TIMEOUT: float = 20.0
+
 # * Connection pool size for the underlying httpx client (API calls).
 # * Not used for update fetching in webhook mode; still needed for send/edit/etc.
 # * Sized above the fan_out cap (10): one full fan-out plus concurrent

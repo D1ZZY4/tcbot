@@ -18,6 +18,7 @@ from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
 from tcbot.utils.i18n import resolve_locale, t
 from tcbot.utils.logger import get_logger
+from tcbot.utils.transport import TELEGRAM_ACTION_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -154,13 +155,14 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
     locale = await _group_locale(chat_id)
     text = t("appeals.review.card_closed", locale, plain=True)
     try:
-        await bot.edit_message_text(
-            text,
-            chat_id=chat_id,
-            message_id=message_id,
-            parse_mode=None,
-            reply_markup=None,
-        )
+        async with asyncio.timeout(TELEGRAM_ACTION_TIMEOUT):
+            await bot.edit_message_text(
+                text,
+                chat_id=chat_id,
+                message_id=message_id,
+                parse_mode=None,
+                reply_markup=None,
+            )
     except asyncio.CancelledError:
         raise
     except Exception as exc:

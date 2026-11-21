@@ -59,6 +59,10 @@ All notable changes to this project are documented here. For workflow details, s
 - **The rules picker Cancel button works in moderation flows** (`tcbot/modules/helper/pipelines/reason_flow.py`, `tcbot/modules/helper/pipelines/ban_rules_step.py`): the button sent a callback that no handler matched, so tapping it did nothing. Behavior changes: Cancel now aborts the active kick, mute, warn, or ban rules step.
 - **A stale button can no longer act on a newer moderation flow** (`tcbot/modules/helper/scope.py`, `tcbot/modules/helper/pipelines/reason_flow.py`, `tcbot/modules/helper/pipelines/ban_confirmation.py`, `tcbot/modules/warns.py`): conversations are keyed per chat and user, so a Cancel, rule picker, or Done button left on an old prompt could cancel, alter, or prematurely execute a newer action by the same moderator. Every moderation callback now records its prompt identity at entry and ignores taps from any other message. Behavior changes: taps on outdated prompts are acknowledged and discarded instead of changing the active action.
 
+### Improved
+
+- **One bounded timeout for Telegram state changes** (`tcbot/utils/transport.py`, `tcbot/enforcement_worker.py`, `tcbot/notification_worker.py`): review-card edits now share the 20-second application-level bound already used by ban, mute, and unban delivery, so a stalled edit cannot hold a worker slot until the transport timeout. Behavior changes: a review-card edit that stalls for more than 20 seconds is retried by the notification worker instead of waiting longer.
+
 ### Documentation
 
 - **Current guides use the shipped role vocabulary** (`README.md`, `AGENTS.md`, `replit.md`, `docs/architecture/helpers.md`): Owner and Moderator replace the former Founder and Tester names in live documentation. Historical release notes are unchanged.

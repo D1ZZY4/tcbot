@@ -32,6 +32,7 @@ from tcbot.utils.dispatch import (
 )
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import to_utc, utc_now
+from tcbot.utils.transport import TELEGRAM_ACTION_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -253,7 +254,7 @@ async def _deliver(
     """Apply or lift one decision in one chat."""
     if chat_id == 0:
         return
-    async with asyncio.timeout(20):
+    async with asyncio.timeout(TELEGRAM_ACTION_TIMEOUT):
         if operation == "apply":
             if action_type == "ban":
                 await bot.ban_chat_member(chat_id, user_id)
