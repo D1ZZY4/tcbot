@@ -21,9 +21,13 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from tcbot import error_reporter
+from tcbot import modules as modules_mod
 from tcbot.utils import logger as logger_mod
 
 _TCBOT_ROOT = Path(__file__).resolve().parent.parent / "tcbot"
@@ -321,3 +325,60 @@ def test_every_python_file_starts_with_the_project_header() -> None:
             if not any(line.startswith("# © Copyright") for line in head):
                 missing.append(str(path.relative_to(project_root)))
     assert not missing, "files without the project header:" + _report(missing)
+
+
+def test_no_command_module_uses_the_builtin_command_handler() -> None:
+    """PTB's CommandHandler only matches '/', dropping '!' and '.' commands."""
+    offenders: list[str] = []
+    for path in sorted((_TCBOT_ROOT / "modules").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        uses_handler = any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "CommandHandler"
+            for node in ast.walk(tree)
+        )
+        if uses_handler:
+            offenders.append(path.name)
+    assert not offenders, "built-in CommandHandler in:" + _report(offenders)
+
+
+def test_an_unknown_no_load_name_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A typo must not leave a module enabled while looking disabled."""
+    monkeypatch.setattr(
+        modules_mod,
+        "cfg",
+        SimpleNamespace(modules_load=(), modules_no_load=("netspeeed",)),
+    )
+    with pytest.raises(SystemExit):
+        modules_mod._filter_modules(["netspeed"])
+
+
+def test_no_load_name_outside_an_allowlist_is_valid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real module excluded by MODULES_LOAD is not a MODULES_NO_LOAD typo.
+
+    The denylist has no effect when an allowlist is active, so a valid name
+    outside that allowlist must not fail boot. Validating against the
+    allowlist-filtered set would reject it as unknown.
+    """
+    monkeypatch.setattr(
+        modules_mod,
+        "cfg",
+        SimpleNamespace(modules_load=("netspeed",), modules_no_load=("bans",)),
+    )
+    assert modules_mod._filter_modules(["bans", "netspeed"]) == ["netspeed"]
+
+
+def test_no_load_typo_is_refused_with_an_allowlist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The typo guard still applies when MODULES_LOAD is active."""
+    monkeypatch.setattr(
+        modules_mod,
+        "cfg",
+        SimpleNamespace(modules_load=("netspeed",), modules_no_load=("netspeeed",)),
+    )
+    with pytest.raises(SystemExit):
+        modules_mod._filter_modules(["bans", "netspeed"])

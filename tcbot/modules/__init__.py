@@ -51,13 +51,17 @@ def _filter_modules(modules: list[str]) -> list[str]:
     to_load = cfg.modules_load
     no_load = cfg.modules_no_load
 
-    if to_load:
-        invalid = [m for m in to_load if m not in modules]
+    # * Validate both lists against the full discovered set. A denylist name
+    # * that is a real module but absent from an allowlist is valid and simply
+    # * has no effect; validating after the allowlist would reject it as a typo.
+    for label, names in (("MODULES_LOAD", to_load), ("MODULES_NO_LOAD", no_load)):
+        invalid = [m for m in names if m not in modules]
         if invalid:
-            log.error("MODULES_LOAD contains invalid names: %s. Exiting.", invalid)
+            log.error("%s contains invalid names: %s. Exiting.", label, invalid)
             raise SystemExit(1)
-        modules = [m for m in to_load if m in modules]
 
+    if to_load:
+        modules = [m for m in to_load if m in modules]
     if no_load:
         log.info("Not loading modules: %s", no_load)
         modules = [m for m in modules if m not in no_load]
