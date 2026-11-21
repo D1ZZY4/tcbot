@@ -12,8 +12,9 @@ persistence lives in ``rules_db`` and rendering in ``messages.rules``.
 
 from __future__ import annotations
 
+import asyncio
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from telegram.ext import (
     CallbackQueryHandler,
@@ -25,8 +26,8 @@ from telegram.ext import (
 from tcbot import database as db
 from tcbot.modules.helper.keyboards import rules as rules_kb
 from tcbot.modules.helper.locale import locale_for_update
+from tcbot.modules.helper.messages import replies, safe_edit_cb, safe_reply
 from tcbot.modules.helper.messages import rules as rules_msg
-from tcbot.modules.helper.messages import safe_edit_cb, safe_reply
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -47,6 +48,41 @@ _TITLE_MAX: int = 200
 _BODY_MAX: int = 3500
 _URL_MAX: int = 500
 _SLUG_PATTERN: re.Pattern[str] = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
+
+async def editor_allowed(update: Update) -> bool:
+    """Re-check the editor capability on every editor surface.
+
+    A capability can be revoked while a panel or a dialog stays open, so
+    every mutation re-reads the permission instead of trusting the command
+    that opened the editor. A lookup failure rejects.
+    """
+    uid = update.effective_user.id if update.effective_user else 0
+    try:
+        return await db.users_roles.has_permission(uid, "rules.manage")
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning("rules.manage lookup failed for %d: %s", uid, exc)
+        return False
+
+
+async def refuse_editor(update: Update) -> None:
+    """Answer the callback and explain why an editor action was refused."""
+    query = update.callback_query
+    if query is not None:
+        try:
+            await query.answer()
+        except Exception as exc:
+            log.debug("editor refusal answer failed: %s", exc)
+    msg = query.message if query is not None else update.effective_message
+    if msg is not None:
+        await safe_reply(
+            cast("Any", msg),
+            replies.refuse_permission(await locale_for_update(update), plain=True),
+            log_label="rules editor refusal",
+            parse_mode=None,
+        )
 
 
 def _slug(title: str) -> str:
@@ -81,6 +117,9 @@ class RulesEditor:
 
     async def panel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Show the editor panel, opening a draft when none exists."""
+        if not await editor_allowed(update):
+            await refuse_editor(update)
+            return ConversationHandler.END
         q = update.callback_query
         if q is not None:
             await q.answer()
@@ -106,6 +145,9 @@ class RulesEditor:
         msg = update.effective_message
         user = update.effective_user
         if msg is None or user is None or not msg.text:
+            return ConversationHandler.END
+        if not await editor_allowed(update):
+            await refuse_editor(update)
             return ConversationHandler.END
         scope = flow_scope(ctx, update)
         step = scope.get("rules_step")
@@ -284,6 +326,9 @@ class RulesEditor:
 
     async def discard(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Delete the draft; the channel and published version are untouched."""
+        if not await editor_allowed(update):
+            await refuse_editor(update)
+            return ConversationHandler.END
         q = update.callback_query
         if q is not None:
             await q.answer()

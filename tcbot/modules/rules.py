@@ -20,6 +20,8 @@ from tcbot.modules.helper.messages import rules as rules_msg
 from tcbot.modules.helper.pipelines.rules_flow import (
     WAITING_CATEGORY_TITLE,
     build_rules_conv,
+    editor_allowed,
+    refuse_editor,
 )
 from tcbot.modules.helper.pipelines.rules_publish import publish_rules
 from tcbot.modules.helper.scope import flow_scope
@@ -183,6 +185,9 @@ async def on_rules_panel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     query = update.callback_query
     if query is None:
         return
+    if not await editor_allowed(update):
+        await refuse_editor(update)
+        return
     await query.answer()
     rule_set = await db.rules_db.get_or_create_community_set()
     draft = await db.rules_db.open_draft(int(rule_set["id"]), query.from_user.id)
@@ -234,6 +239,10 @@ async def on_rules_cat_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     if query is None or query.data is None:
         return
+    if not await editor_allowed(update):
+        await refuse_editor(update)
+        return
+    await query.answer()
     action, key = query.data.split(":", 1)
     rule_set = await db.rules_db.get_or_create_community_set()
     set_id = int(rule_set["id"])
@@ -242,7 +251,6 @@ async def on_rules_cat_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         scope = flow_scope(ctx, update)
         scope["rules_category_key"] = key
         scope["rules_step"] = "rename_category"
-        await query.answer()
         if query.message is not None:
             await safe_reply(
                 cast("Any", query.message),
@@ -253,7 +261,6 @@ async def on_rules_cat_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         # * conversation, which stores the pending rename in the scope.
         scope["rules_rename_state"] = WAITING_CATEGORY_TITLE
         return
-    await query.answer()
     if action == "rules_cat_up":
         await db.rules_db.move_category(set_id, key, -1)
     elif action == "rules_cat_down":

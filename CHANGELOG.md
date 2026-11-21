@@ -43,6 +43,7 @@ All notable changes to this project are documented here. For workflow details, s
 - **Stale role names no longer distort statistics and profile details** (`tcbot/modules/helper/pipelines/stats_flow.py`, `tcbot/modules/helper/pipelines/check_flow.py`, `tcbot/modules/helper/pipelines/demote_flow.py`, `tests/test_stats_roles.py`): owner and moderator keys left over from the vocabulary rename never matched, so moderator counts read zero, the staff-only panes never appeared, and the protected-owner demote check never fired. Behavior changes: moderator counts and staff panes now appear for the correct roles.
 - **An incident report is no longer lost when its rollover summary fails** (`tcbot/error_reporter.py`, `tests/test_error_reporter_throttle.py`): a transient failure sending the suppressed-error summary no longer discards the current report that triggered the rollover.
 - **Redis queue bound documentation matches the enforced limit** (`tcbot/database/cache/redis_io.py`): the queue comments now state that a revocation is dropped at the hard ceiling when no droppable operation can be evicted, matching the behavior the tests exercise. Behavior changes: none.
+- **Rules editor actions are re-authorized on every tap** (`tcbot/modules/rules.py`, `tcbot/modules/helper/pipelines/rules_flow.py`): category reorder, delete, rename, and draft text edits now re-check the `rules.manage` capability instead of trusting the command that opened the panel. Behavior changes: a user whose capability was revoked can no longer edit rules from an old panel.
 
 ### Documentation
 
