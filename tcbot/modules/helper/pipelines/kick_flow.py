@@ -20,7 +20,11 @@ from tcbot.modules.helper.pipelines.proof_flow import (
     ProofUpload,
     upload_proof_for_action,
 )
-from tcbot.modules.helper.pipelines.reason_flow import BuildReason, build_modaction_conv
+from tcbot.modules.helper.pipelines.reason_flow import (
+    BuildReason,
+    build_modaction_conv,
+    rules_from_scope,
+)
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.formatter import user_ref
@@ -38,7 +42,7 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 # * Per-action BuildReason and BuildProof instances; imported by kick.py
-reason = BuildReason("kick")
+reason = BuildReason("kick", skip_allowed=False)
 proof = BuildProof("kick")
 
 
@@ -76,7 +80,7 @@ async def execute_kick(
     refusal = await guards.enforcement_refusal(
         admin_id,
         target_id,
-        min_role="tester",
+        min_role="moderator",
         action="Kick",
         locale=locale,
     )
@@ -114,7 +118,7 @@ async def execute_kick(
     refusal = await guards.enforcement_refusal(
         admin_id,
         target_id,
-        min_role="tester",
+        min_role="moderator",
         action="Kick",
         locale=locale,
     )
@@ -132,6 +136,7 @@ async def execute_kick(
     # * enforced but unaudited kick that /check can never see.
     kick_action_id: int | None = None
     kick_delivered = False
+    rule_ids, rule_note = rules_from_scope(flow_scope(ctx, update), "kick")
     try:
         kick_action_id = await db.kicks_db.log_kick(
             target_id,
@@ -144,6 +149,8 @@ async def execute_kick(
             ),
             destination_chat_id=cfg.proofs[0],
             destination_thread_id=cfg.proofs[1],
+            rule_item_ids=rule_ids,
+            rule_selection_note=rule_note,
         )
     except Exception:
         log.exception("log_kick DB write failed for target=%d", target_id)
@@ -355,5 +362,11 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 def kick_conversation(entry_fn: Callable[..., Any], entry_filter: BaseFilter) -> object:
     """Return the kick ConversationHandler via the central reason_flow factory."""
     return build_modaction_conv(
-        reason, proof, entry_fn, _exec_kick, entry_filter, min_role="tester"
+        reason,
+        proof,
+        entry_fn,
+        _exec_kick,
+        entry_filter,
+        min_role="moderator",
+        rules_enabled=True,
     )

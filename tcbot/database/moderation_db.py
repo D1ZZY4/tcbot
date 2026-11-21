@@ -18,7 +18,11 @@ from typing import TYPE_CHECKING, cast
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tcbot.database.base import moderation_cases, moderation_evidence_items
+from tcbot.database.base import (
+    moderation_case_rules,
+    moderation_cases,
+    moderation_evidence_items,
+)
 from tcbot.database.base import moderation_evidence_uploads as evidence_uploads
 from tcbot.database.users_cache import ensure_users
 from tcbot.utils.time_and_date import utc_now
@@ -282,6 +286,45 @@ async def archive_proof(
         )
     )
     return batch_id
+
+
+async def link_case_rules(
+    sess: AsyncSession,
+    case_id: int,
+    rule_item_ids: Sequence[int],
+    linked_by_user_id: int,
+    context_chat_id: int | None,
+    note: str | None = None,
+) -> None:
+    """Attach the rules a moderator selected to the decision's case.
+
+    The caller must invoke this inside the same transaction that opens the
+    case and writes the action, so a failed link cancels the decision too.
+    The database trigger rejects draft items and validates the rule scope;
+    it permits a community rule to name the group the action originated
+    from, which is the audit context rather than a rule scope. An empty
+    selection is a no-op: the optional note belongs to the action metadata.
+    """
+    ordered_ids = list(dict.fromkeys(int(item_id) for item_id in rule_item_ids))
+    if not ordered_ids:
+        return
+    await sess.execute(
+        pg_insert(moderation_case_rules)
+        .values(
+            [
+                {
+                    "case_id": case_id,
+                    "rule_item_id": item_id,
+                    "linked_by_user_id": linked_by_user_id,
+                    "attribution_source": "moderator",
+                    "context_chat_id": context_chat_id,
+                    "note": note,
+                }
+                for item_id in ordered_ids
+            ]
+        )
+        .on_conflict_do_nothing(index_elements=["case_id", "rule_item_id"])
+    )
 
 
 async def close_case(sess: AsyncSession, case_id: int, actor_user_id: int) -> None:

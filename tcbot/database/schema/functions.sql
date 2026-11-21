@@ -3636,3 +3636,26 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION %SCHEMA%.validate_rule_publication_scope() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'pg_catalog'
+    AS $$
+DECLARE
+  v_rule_set_id bigint;
+  v_locale text;
+BEGIN
+  SELECT rsv.rule_set_id, rsv.locale
+    INTO v_rule_set_id, v_locale
+    FROM %SCHEMA%.rule_set_versions AS rsv
+   WHERE rsv.id = NEW.rule_set_version_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Publication version does not exist';
+  END IF;
+  IF NEW.rule_set_id IS DISTINCT FROM v_rule_set_id
+     OR NEW.locale IS DISTINCT FROM v_locale THEN
+    RAISE EXCEPTION 'Publication set and locale must match its version';
+  END IF;
+  RETURN NEW;
+END;
+$$;

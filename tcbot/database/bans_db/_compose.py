@@ -15,9 +15,11 @@ from sqlalchemy import select
 from tcbot.database.base import (
     moderation_actions,
     moderation_appeals,
+    moderation_case_rules,
     moderation_evidence_items,
     moderation_evidence_uploads,
     moderation_messages,
+    rule_items,
 )
 from tcbot.database.documents import ActionStatus, BanDoc, ScopeType
 from tcbot.database.engine import db_call, fetch_all
@@ -61,6 +63,35 @@ async def _messages_for(action_ids: list[int]) -> dict[int, dict[str, int]]:
     for row in rows:
         kind = str(row["message_kind"])
         result.setdefault(int(row["action_id"]), {})[kind] = int(row["message_id"])
+    return result
+
+
+async def _rules_for(action_ids: list[int]) -> dict[int, list[str]]:
+    """Return the linked rule titles of every action.
+
+    The titles come from the exact items attached to the case, so a later
+    rename of a published rule cannot change what a past decision cited.
+    """
+    if not action_ids:
+        return {}
+    rows = await db_call(
+        lambda: fetch_all(
+            select(
+                moderation_actions.c.id.label("action_id"),
+                rule_items.c.title.label("title"),
+            )
+            .join(
+                moderation_case_rules,
+                moderation_case_rules.c.case_id == moderation_actions.c.case_id,
+            )
+            .join(rule_items, rule_items.c.id == moderation_case_rules.c.rule_item_id)
+            .where(moderation_actions.c.id.in_(action_ids))
+            .order_by(moderation_actions.c.id, rule_items.c.id)
+        )
+    )
+    result: dict[int, list[str]] = {}
+    for row in rows:
+        result.setdefault(int(row["action_id"]), []).append(str(row["title"]))
     return result
 
 
@@ -157,6 +188,7 @@ def compose_row(
     messages: dict[str, int],
     appeal: dict[str, Any] | None,
     proof_message_id: int | None,
+    rules: list[str] | None = None,
 ) -> BanDoc:
     """Return the ban document of one decision row."""
     metadata = row.get("metadata") or {}
@@ -195,6 +227,7 @@ def compose_row(
         action_origin=str(row.get("action_origin") or "manual"),
         scope_type=cast("ScopeType", str(row.get("scope_type") or "community")),
         origin_chat_id=row.get("origin_chat_id"),
+        rules=list(rules or []),
         metadata=metadata,
     )
 
@@ -204,13 +237,14 @@ async def compose_rows(rows: list[dict[str, Any]]) -> list[BanDoc]:
     if not rows:
         return []
     action_ids = [int(row["id"]) for row in rows]
-    # * The three side tables are independent reads of the same decision
+    # * The four side tables are independent reads of the same decision
     # * set, so they run concurrently and the composition waits for all
     # * of them.
-    messages, appeals, proofs = await asyncio.gather(
+    messages, appeals, proofs, rules = await asyncio.gather(
         _messages_for(action_ids),
         _appeals_for(action_ids),
         _proof_ids_for(action_ids),
+        _rules_for(action_ids),
     )
     return [
         compose_row(
@@ -218,6 +252,7 @@ async def compose_rows(rows: list[dict[str, Any]]) -> list[BanDoc]:
             messages.get(int(row["id"]), {}),
             appeals.get(int(row["id"])),
             proofs.get(int(row["id"])),
+            rules.get(int(row["id"]), []),
         )
         for row in rows
     ]

@@ -73,7 +73,10 @@ from .rbac import (
 )
 from .rules import (
     rule_acknowledgements,
+    rule_categories,
     rule_items,
+    rule_publication_runs,
+    rule_publications,
     rule_set_versions,
     rule_sets,
 )
@@ -100,6 +103,9 @@ SCHEMA_TABLES: tuple[str, ...] = (
     "rule_sets",
     "rule_set_versions",
     "rule_items",
+    "rule_categories",
+    "rule_publication_runs",
+    "rule_publications",
     "rule_acknowledgements",
     "moderation_cases",
     "moderation_case_rules",
@@ -176,7 +182,10 @@ __all__ = [
     "role_definitions",
     "role_permissions",
     "rule_acknowledgements",
+    "rule_categories",
     "rule_items",
+    "rule_publication_runs",
+    "rule_publications",
     "rule_set_versions",
     "rule_sets",
     "rules",

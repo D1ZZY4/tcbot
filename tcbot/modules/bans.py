@@ -20,10 +20,12 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import message_link, replies, safe_reply
 from tcbot.modules.helper.pipelines.ban_flow import (
     BAN_USER_DATA_KEYS,
-    WAITING_PROOF,
     WAITING_UPDATE_CONFIRM,
     ban_conversation,
-    proof_prompt_content,
+)
+from tcbot.modules.helper.pipelines.ban_rules_step import (
+    BAN_RULES_STATES,
+    show_ban_rules,
 )
 from tcbot.modules.helper.pipelines.reason_flow import (
     is_reason_too_long,
@@ -179,20 +181,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * without anything ever happening to them. The enforcement-time
     # * demote closes the same role-vs-state invariant.
 
-    text, kb = proof_prompt_content(
-        target_id, target_fname or str(target_id), ban_reason, locale
-    )
-    try:
-        prompt = await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=kb)
-        scope["ban_prompt_msg_id"] = prompt.message_id
-        scope["ban_prompt_chat_id"] = msg.chat.id
-    except Exception as exc:
-        log.debug("cmd_ban_start proof-prompt reply failed: %s", exc)
-        for key in BAN_USER_DATA_KEYS:
-            scope.pop(key, None)
-        return ConversationHandler.END
-
-    return WAITING_PROOF
+    return await show_ban_rules(update, ctx)
 
 
 async def _ask_update_confirm(
@@ -251,4 +240,6 @@ async def _ask_update_confirm(
 
 _BAN_CMDS = build_prefixed_filters("tcban") | build_prefixed_filters("tcb")
 
-__handlers__ = [ban_conversation(cmd_ban_start, _BAN_CMDS)]
+__handlers__ = [
+    ban_conversation(cmd_ban_start, _BAN_CMDS, extra_states=BAN_RULES_STATES)
+]

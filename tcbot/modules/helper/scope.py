@@ -49,7 +49,7 @@ def flow_scope(ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> dict[str, Any]
     The scope map of one user holds one entry per chat that user moderated
     in, so its size follows the federation and not the traffic.
     """
-    user_data = ctx.user_data
+    user_data = getattr(ctx, "user_data", None)
     if user_data is None:
         return {}
     key = conversation_key(update)

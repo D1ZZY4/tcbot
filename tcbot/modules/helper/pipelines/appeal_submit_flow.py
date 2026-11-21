@@ -358,8 +358,15 @@ async def post_appeal(
     appeal_link = (
         message_link(appeal_chat, appeal_msg_id, appeal_thread) if appeal_msg_id else ""
     )
+    linked_rules: list[str] = []
+    try:
+        banned = await db.bans_db.get_ban(ban_id)
+        if banned is not None:
+            linked_rules = list(banned.get("rules") or [])
+    except Exception as exc:
+        log.debug("Appeal rule lookup failed for %s: %s", ban_id, exc)
     review_text = messages.appeal_received_log(
-        uid, user.first_name, ban_id, appeal_link
+        uid, user.first_name, ban_id, appeal_link, linked_rules
     )
     # * The review card id is the decision token, so the main card is posted
     # * first and its keyboard is attached once the id is known. A card left

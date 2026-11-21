@@ -112,6 +112,7 @@ admin_id = "ID Admin: {id}"
 reason = "Alasan: {reason}"
 ban_id = "ID Ban: {id}"
 date = "Tanggal: {date}"
+rules = "Aturan yang dilanggar: {rules}"
 unknown_date = "Tidak diketahui"
 
 # checkme/check runtime (checking.py). [error] sends plain.

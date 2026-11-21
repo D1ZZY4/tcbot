@@ -1,0 +1,51 @@
+# Rules feature: editor dialog, public menu, and acknowledgement.
+# Templates stay raw; the engine escapes MarkdownV2 at render time.
+
+[editor]
+panel = "Rules editor\nSet: {name}\nStatus: {status}\nItems: {count}"
+ask_category = "Send the category title."
+ask_title = "Send the item title."
+ask_body = "Send the item body (plain text)."
+ask_url = "Send an optional http(s) reference URL, or - to skip."
+bad_title = "The title must be 1-{limit} characters."
+bad_body = "The body must be 1-{limit} characters."
+bad_url = "The reference URL must be an http(s) link of at most 500 characters."
+confirm_discard = "Discard the current draft? Published rules are not affected."
+discarded = "Draft discarded."
+cancelled = "Rules editor closed."
+open_pm = "Open a private chat with me and send /tcrules there."
+ask_rename = "Send the new category title."
+status = "Channel: synced {synced}, failed {failed}, missing {missing}, retired {retired}. Acknowledgements: {acks}."
+
+[menu]
+rules = "Rules"
+body = "There are rules on {community}."
+empty = "There are no published rules yet."
+category = "Rules: {category}"
+no_rules = "No rules in this category."
+preview = "Preview - not published yet."
+
+[picker]
+prompt = "Select the rules that were broken. You can choose more than one."
+other = "Other / Not covered"
+clear = "Clear"
+require_selection = "Select at least one rule or choose Other / Not covered."
+ask_note = "Send a short note (at most 200 characters)."
+bad_note = "The note must be 1-{limit} characters."
+
+[publish]
+error = "Publish failed: {error}"
+result = "Published. Channel messages synced: {synced}; failed: {failed}."
+
+[selected]
+none = "No rule selected."
+one = "Rule: {titles}"
+many = "Rules ({count}): {titles}"
+other = "Other: {note}"
+
+[ack]
+recorded = "Thanks, you accepted the current rules."
+already = "You already accepted these rules."
+outdated = "These rules have changed since the greeting."
+disabled = "Acknowledgement is no longer required."
+wrong_member = "This button belongs to another member."

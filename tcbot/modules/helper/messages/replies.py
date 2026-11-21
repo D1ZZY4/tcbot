@@ -123,9 +123,9 @@ def rate_limit_text(wait_s: float, locale: str | None = None, *, plain: bool) ->
 # ─────────────────────── Permission Tiers ───────────────────────── #
 
 
-def perm_founder_only(locale: str | None = None, *, plain: bool) -> str:
-    """Founder-only refusal in the render locale."""
-    return t("common.perm.founder_only", locale, plain=plain)
+def perm_owner_only(locale: str | None = None, *, plain: bool) -> str:
+    """Owner-only refusal in the render locale."""
+    return t("common.perm.owner_only", locale, plain=plain)
 
 
 def perm_staff_only(locale: str | None = None, *, plain: bool) -> str:
@@ -138,9 +138,9 @@ def perm_dev_above(locale: str | None = None, *, plain: bool) -> str:
     return t("common.perm.dev_above", locale, plain=plain)
 
 
-def perm_tester_above(locale: str | None = None, *, plain: bool) -> str:
-    """Tester-and-above notice in the render locale."""
-    return t("common.perm.tester_above", locale, plain=plain)
+def perm_moderator_above(locale: str | None = None, *, plain: bool) -> str:
+    """Moderator-and-above notice in the render locale."""
+    return t("common.perm.moderator_above", locale, plain=plain)
 
 
 # ─────────────────────── Authorization refusals ─────────────────────── #
@@ -148,7 +148,7 @@ def perm_tester_above(locale: str | None = None, *, plain: bool) -> str:
 
 
 def refuse_owner_only(locale: str | None = None, *, plain: bool) -> str:
-    """Founder-only command refusal in the render locale."""
+    """Owner-only command refusal in the render locale."""
     return t("common.refuse.owner_only", locale, plain=plain)
 
 
@@ -163,7 +163,7 @@ def refuse_mod_only(locale: str | None = None, *, plain: bool) -> str:
 
 
 def refuse_basic_mod_only(locale: str | None = None, *, plain: bool) -> str:
-    """Tester-and-above command refusal in the render locale."""
+    """Moderator-and-above command refusal in the render locale."""
     return t("common.refuse.basic_mod_only", locale, plain=plain)
 
 
@@ -185,6 +185,11 @@ def refuse_anon_admin(locale: str | None = None, *, plain: bool) -> str:
 def refuse_outranked(role: str, locale: str | None = None, *, plain: bool) -> str:
     """Outrank refusal naming the target role in the render locale."""
     return t("common.refuse.outranked", locale, role=role, plain=plain)
+
+
+def refuse_permission(locale: str | None = None, *, plain: bool) -> str:
+    """Missing-permission refusal in the render locale."""
+    return t("common.refuse.permission", locale, plain=plain)
 
 
 # ─────────────────────── Action Defaults ────────────────────────── #

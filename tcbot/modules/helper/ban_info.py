@@ -97,6 +97,9 @@ async def build_ban_detail(
         f"{t('checking.ban_info.ban_id', locale, id=Safe(code(ban.get('ban_id', ''))))}\n"
         f"{t('checking.ban_info.date', locale, date=Safe(date_str))}"
     )
+    linked = ban.get("rules") or []
+    if linked:
+        text += "\n" + t("checking.ban_info.rules", locale, rules=", ".join(linked))
     return text, proof_link
 
 

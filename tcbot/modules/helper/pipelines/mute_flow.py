@@ -30,6 +30,7 @@ from tcbot.modules.helper.pipelines.proof_flow import (
 from tcbot.modules.helper.pipelines.reason_flow import (
     BuildReason,
     build_modaction_conv,
+    rules_from_scope,
 )
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
@@ -51,7 +52,7 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-reason = BuildReason("mute")
+reason = BuildReason("mute", skip_allowed=False)
 proof = BuildProof("mute")
 
 # ────────────────────────── Mute executor ───────────────────────── #
@@ -88,7 +89,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     refusal = await guards.enforcement_refusal(
         admin_id,
         target_id,
-        min_role="tester",
+        min_role="moderator",
         action="Mute",
         locale=locale,
     )
@@ -142,7 +143,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     refusal = await guards.enforcement_refusal(
         admin_id,
         target_id,
-        min_role="tester",
+        min_role="moderator",
         action="Mute",
         locale=locale,
     )
@@ -165,6 +166,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     # * so the mute and its history cannot disagree.
     record_r: BaseException | None = None
     run_id: int | None = None
+    rule_ids, rule_note = rules_from_scope(meta, "mute")
     try:
         _, run_id = await db.mutes_db.record_mute(
             target_id,
@@ -182,6 +184,8 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             ),
             destination_chat_id=cfg.proofs[0],
             destination_thread_id=cfg.proofs[1],
+            rule_item_ids=rule_ids,
+            rule_selection_note=rule_note,
         )
     except asyncio.CancelledError:
         raise
@@ -552,5 +556,6 @@ def mute_conversation(
         _exec_mute,
         entry_filter,
         escape_filter=escape_filter,
-        min_role="tester",
+        min_role="moderator",
+        rules_enabled=True,
     )

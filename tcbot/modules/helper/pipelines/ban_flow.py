@@ -78,6 +78,8 @@ BAN_USER_DATA_KEYS = (
     "ban_prompt_msg_id",
     "ban_prompt_chat_id",
     "ban_locale",
+    "ban_rules",
+    "ban_rules_note",
 )
 WAITING_PROOF = 0
 WAITING_UPDATE_CONFIRM = 1
@@ -207,6 +209,10 @@ async def _execute_ban_record(
     reason: str = meta.get(
         "ban_reason", replies.no_reason(meta.get("ban_locale"), plain=True)
     )
+    rule_ids: list[int] = list(meta.get("ban_rules") or [])
+    rule_note: str | None = meta.get("ban_rules_note")
+    raw_origin = meta.get("ban_prompt_chat_id")  # negative = connected chat
+    link_context = int(raw_origin) if raw_origin and int(raw_origin) < 0 else None
     bot_username = bot.username or ""
     old_admin_id = (
         int(existing.get("actor_user_id", admin_id)) if existing else admin_id
@@ -237,6 +243,9 @@ async def _execute_ban_record(
                 proof_expected_count=proof_expected_count,
                 destination_thread_id=proof_thread,
                 enforcement_chat_ids=enforcement_chat_ids,
+                origin_chat_id=link_context,
+                rule_item_ids=rule_ids,
+                rule_selection_note=rule_note,
             )
         else:
             written = await db.bans_db.create_ban(
@@ -251,6 +260,8 @@ async def _execute_ban_record(
                 proof_expected_count=proof_expected_count,
                 destination_thread_id=proof_thread,
                 enforcement_chat_ids=enforcement_chat_ids,
+                rule_item_ids=rule_ids,
+                rule_selection_note=rule_note,
             )
     except Exception:
         log.exception("Ban record write failed for ban_id=%s", ban_id)
@@ -736,25 +747,14 @@ async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
             scope.pop(key, None)
         return ConversationHandler.END
     target_id = int(scope.get("ban_target_id", 0) or 0)
-    target_fname = str(scope.get("ban_target_fname") or target_id)
     reason = str(scope.get("ban_reason") or "")
     if not target_id or not reason:
         return ConversationHandler.END
-    # * The demote runs at enforcement time, not here: the proof step that
-    # * follows is still cancelable, and a demote that lands on a cancelled
-    # * flow strips a federation role and tells the target they were banned
-    # * without the re-ban ever happening.
-    text, kb = proof_prompt_content(
-        target_id, target_fname, reason, await locale_for_update(update)
-    )
-    try:
-        await q.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=kb)
-    except Exception as exc:
-        log.debug("Ban continue prompt edit failed: %s", exc)
-        for key in BAN_USER_DATA_KEYS:
-            scope.pop(key, None)
-        return ConversationHandler.END
-    return WAITING_PROOF
+    # * The demote runs at enforcement time while the proof step stays
+    # * cancelable. Late import avoids a cycle with the rules step.
+    from tcbot.modules.helper.pipelines.ban_rules_step import show_ban_rules  # noqa: PLC0415
+
+    return await show_ban_rules(update, ctx)
 
 
 # ──────────────────── Proof collection handlers ─────────────────── #
@@ -965,32 +965,34 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
 
 
 def ban_conversation(
-    entry_fn: Callable[..., Any], entry_filter: BaseFilter
+    entry_fn: Callable[..., Any],
+    entry_filter: BaseFilter,
+    *,
+    extra_states: dict[Any, list[Any]] | None = None,
 ) -> ConversationHandler:
     """Return the ban ConversationHandler with the given entry-point function."""
+    states: dict[Any, list[Any]] = {
+        WAITING_PROOF: [
+            CallbackQueryHandler(on_cancel_proof, pattern=rf"^{proof.action}_cancel$"),
+            CallbackQueryHandler(
+                on_done_proof, pattern=rf"^{proof.action}_done_proof$"
+            ),
+            MessageHandler(PROOF_MEDIA_FILTER, on_proof_received),
+            MessageHandler(
+                ~PROOF_MEDIA_FILTER & ~ALL_PREFIXES_CMD_FILTER,
+                on_proof_unexpected,
+            ),
+        ],
+        WAITING_UPDATE_CONFIRM: [
+            CallbackQueryHandler(on_ban_update_continue, pattern=r"^ban_continue$"),
+            CallbackQueryHandler(on_cancel_proof, pattern=rf"^{proof.action}_cancel$"),
+        ],
+    }
+    if extra_states:
+        states.update(extra_states)
     return ConversationHandler(
         entry_points=[MessageHandler(entry_filter, entry_fn)],
-        states={
-            WAITING_PROOF: [
-                CallbackQueryHandler(
-                    on_cancel_proof, pattern=rf"^{proof.action}_cancel$"
-                ),
-                CallbackQueryHandler(
-                    on_done_proof, pattern=rf"^{proof.action}_done_proof$"
-                ),
-                MessageHandler(PROOF_MEDIA_FILTER, on_proof_received),
-                MessageHandler(
-                    ~PROOF_MEDIA_FILTER & ~ALL_PREFIXES_CMD_FILTER,
-                    on_proof_unexpected,
-                ),
-            ],
-            WAITING_UPDATE_CONFIRM: [
-                CallbackQueryHandler(on_ban_update_continue, pattern=r"^ban_continue$"),
-                CallbackQueryHandler(
-                    on_cancel_proof, pattern=rf"^{proof.action}_cancel$"
-                ),
-            ],
-        },
+        states=states,
         fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, on_proof_timeout)],
         per_chat=True,
         per_user=True,

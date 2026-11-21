@@ -129,6 +129,8 @@ async def create_ban(
     proof_expected_count: int = 0,
     destination_thread_id: int | None = None,
     enforcement_chat_ids: Sequence[int] | None = None,
+    rule_item_ids: Sequence[int] = (),
+    rule_selection_note: str | None = None,
 ) -> BanDoc:
     """Record a new community ban.
 
@@ -206,6 +208,21 @@ async def create_ban(
         if row is None:
             return None
         row = dict(row)
+        # * A private origin names a user, not a connected chat; the case-rule
+        # * trigger refuses an unconnected context chat.
+        link_context = (
+            origin_chat_id
+            if origin_chat_id is not None and origin_chat_id < 0
+            else None
+        )
+        await moderation_db.link_case_rules(
+            sess,
+            case_id,
+            rule_item_ids,
+            admin_id,
+            link_context,
+            rule_selection_note,
+        )
         if enforcement_chat_ids is not None:
             row["enforcement_run_id"] = await enforcement_db.queue_run(
                 sess,
@@ -296,6 +313,9 @@ async def update_ban(
     proof_expected_count: int = 0,
     destination_thread_id: int | None = None,
     enforcement_chat_ids: Sequence[int] | None = None,
+    origin_chat_id: int | None = None,
+    rule_item_ids: Sequence[int] = (),
+    rule_selection_note: str | None = None,
 ) -> BanDoc | None:
     """Record a re-ban.
 
@@ -421,6 +441,21 @@ async def update_ban(
         if row is None:
             return None
         row = dict(row)
+        # * A private origin names a user, not a connected chat; the case-rule
+        # * trigger refuses an unconnected context chat.
+        link_context = (
+            origin_chat_id
+            if origin_chat_id is not None and origin_chat_id < 0
+            else None
+        )
+        await moderation_db.link_case_rules(
+            sess,
+            case_id,
+            rule_item_ids,
+            admin_id,
+            link_context,
+            rule_selection_note,
+        )
         if enforcement_chat_ids is not None:
             row["enforcement_run_id"] = await enforcement_db.queue_run(
                 sess,

@@ -14,6 +14,7 @@ from tcbot.modules.helper.decorators.auth import (
     basic_mod_only,
     mod_only,
     owner_only,
+    permission_only,
     staff_only,
 )
 from tcbot.modules.helper.decorators.ratelimit import (
@@ -46,6 +47,7 @@ __all__ = [
     "log_execution",
     "mod_only",
     "owner_only",
+    "permission_only",
     "ratelimiter",
     "staff_only",
 ]

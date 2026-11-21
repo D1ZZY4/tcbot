@@ -1,0 +1,51 @@
+# Fitur aturan: dialog editor, menu publik, dan acknowledgement.
+# Template tetap apa adanya; mesin escape MarkdownV2 saat render.
+
+[editor]
+panel = "Editor aturan\nSet: {name}\nStatus: {status}\nItem: {count}"
+ask_category = "Kirim judul kategori."
+ask_title = "Kirim judul item."
+ask_body = "Kirim isi item (teks polos)."
+ask_url = "Kirim URL referensi http(s) opsional, atau - untuk lewati."
+bad_title = "Judul harus 1-{limit} karakter."
+bad_body = "Isi harus 1-{limit} karakter."
+bad_url = "URL referensi harus tautan http(s) dengan panjang maksimal 500 karakter."
+confirm_discard = "Buang draf saat ini? Aturan yang sudah terbit tidak berubah."
+discarded = "Draf dibuang."
+cancelled = "Editor aturan ditutup."
+open_pm = "Buka chat pribadi dengan saya lalu kirim /tcrules di sana."
+ask_rename = "Kirim judul kategori yang baru."
+status = "Kanal: tersinkron {synced}, gagal {failed}, hilang {missing}, pensiun {retired}. Acknowledgement: {acks}."
+
+[menu]
+rules = "Aturan"
+body = "Ada aturan di {community}."
+empty = "Belum ada aturan yang diterbitkan."
+category = "Aturan: {category}"
+no_rules = "Tidak ada aturan di kategori ini."
+preview = "Pratinjau - belum diterbitkan."
+
+[picker]
+prompt = "Pilih aturan yang dilanggar. Bisa lebih dari satu."
+other = "Lainnya / Tidak tercakup"
+clear = "Kosongkan"
+require_selection = "Pilih minimal satu aturan atau pilih Lainnya / Tidak tercakup."
+ask_note = "Kirim catatan singkat (maksimal 200 karakter)."
+bad_note = "Catatan harus 1-{limit} karakter."
+
+[publish]
+error = "Publish gagal: {error}"
+result = "Diterbitkan. Pesan kanal tersinkron: {synced}; gagal: {failed}."
+
+[selected]
+none = "Tidak ada aturan dipilih."
+one = "Aturan: {titles}"
+many = "Aturan ({count}): {titles}"
+other = "Lainnya: {note}"
+
+[ack]
+recorded = "Terima kasih, kamu menerima aturan yang berlaku."
+already = "Kamu sudah menerima aturan ini."
+outdated = "Aturan ini sudah berubah sejak sapaan join."
+disabled = "Acknowledgement sudah tidak diperlukan."
+wrong_member = "Tombol ini untuk anggota lain."

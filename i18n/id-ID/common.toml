@@ -20,10 +20,10 @@ groups_load_failed = "Tidak bisa memuat daftar grup. Coba lagi."
 db_retry = "Tidak bisa menjangkau database sekarang. Coba lagi sebentar."
 
 [perm]
-founder_only = "Hanya Founder."
+owner_only = "Hanya Owner."
 staff_only = "Staf TC (Admin ke atas)."
-dev_above = "Developer ke atas (Founder / Admin / Developer)."
-tester_above = "Tester ke atas (Founder / Admin / Developer / Tester)."
+dev_above = "Developer ke atas (Owner / Admin / Developer)."
+moderator_above = "Moderator ke atas (Owner / Admin / Developer / Moderator)."
 
 # Penolakan otorisasi kalimat penuh (pemilik: replies.py). Semuanya
 # terkirim sebagai teks polos (balasan parse_mode=None), jadi dirender
@@ -31,14 +31,15 @@ tester_above = "Tester ke atas (Founder / Admin / Developer / Tester)."
 # peran target.
 
 [refuse]
-owner_only = "Perintah ini khusus Founder - kamu tidak berwenang."
-staff_only = "Hanya Staf dan Founder untuk yang ini - kamu tidak punya pangkatnya."
+owner_only = "Perintah ini khusus Owner - kamu tidak berwenang."
+staff_only = "Hanya Staf dan Owner untuk yang ini - kamu tidak punya pangkatnya."
 mod_only = "Kamu butuh pangkat Developer ke atas untuk ini - bukan wewenangmu."
-basic_mod_only = "Kamu butuh setidaknya peran Tester untuk ini - bukan wewenangmu."
+basic_mod_only = "Kamu butuh setidaknya peran Moderator untuk ini - bukan wewenangmu."
 rank_insufficient = "Kamu tidak punya pangkat untuk yang ini."
 role_lookup = "Tidak bisa memverifikasi peran federasi sekarang. Coba lagi sebentar."
 anon_admin = "Mode admin anonim tidak didukung untuk perintah federasi. Kirim perintah ini dari akun pribadimu."
 outranked = "Itu seorang {role} - pangkatnya di atasmu di sini, tidak bisa bertindak terhadap mereka."
+permission = "Kamu tidak punya izin yang diperlukan untuk perintah ini."
 
 [limit]
 # Placeholders: {wait} = seconds as an integer, at least 1. The unit

@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.utils.formatter import code, esc, link, safe_username, user_ref
@@ -350,12 +353,15 @@ def appeal_received_log(
     target_fname: str,
     ban_id: str,
     appeal_link: str,
+    rules: Sequence[str] = (),
 ) -> str:
     """Review card posted to MAIN_GROUP and the appeals destination."""
     b = LogBuilder(f"New {cfg.community_name} Appeal Request").raw(
         f"User: {user_ref(target_id, target_fname)} \\(ID: {code(str(target_id))}\\)"
     )
     b.code_field("Ban ID", ban_id)
+    if rules:
+        b.field("Rules broken", ", ".join(rules))
     if appeal_link:
         b.link_field("Appeal", "View", appeal_link)
     else:
@@ -499,7 +505,7 @@ def promoted(
     by_id: int,
     by_fname: str,
 ) -> str:
-    """Unified promotion audit-log for Admin / Developer / Tester.
+    """Unified promotion audit-log for Admin / Developer / Moderator.
 
     Single shape: the role is shown as a field below the user, not in the title.
     """
@@ -567,7 +573,7 @@ def promote_request_log(
     username: str | None,
     request_id: str,
 ) -> str:
-    """Promotion-request audit-log message sent to the Founder."""
+    """Promotion-request audit-log message sent to the Owner."""
     uname_part = f"@{username}" if username else "N/A"
     return (
         LogBuilder(f"{cfg.community_name} Promotion Request")

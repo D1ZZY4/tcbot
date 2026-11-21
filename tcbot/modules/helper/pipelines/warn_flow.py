@@ -25,6 +25,7 @@ from tcbot.modules.helper.pipelines.proof_flow import (
 from tcbot.modules.helper.pipelines.reason_flow import (
     BuildReason,
     build_modaction_conv,
+    rules_from_scope,
 )
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
@@ -84,7 +85,7 @@ async def execute_warn(
     refusal = await guards.enforcement_refusal(
         admin_id,
         target_id,
-        min_role="tester",
+        min_role="moderator",
         action="Warn",
         locale=locale,
     )
@@ -117,7 +118,7 @@ async def execute_warn(
     refusal = await guards.enforcement_refusal(
         admin_id,
         target_id,
-        min_role="tester",
+        min_role="moderator",
         action="Warn",
         locale=locale,
     )
@@ -129,6 +130,7 @@ async def execute_warn(
             parse_mode=None,
         )
         return
+    rule_ids, rule_note = rules_from_scope(flow_scope(ctx, update), "warn")
     try:
         count = await db.warns_db.add_warn(
             target_id,
@@ -141,6 +143,8 @@ async def execute_warn(
             ),
             destination_chat_id=cfg.proofs[0],
             destination_thread_id=cfg.proofs[1],
+            rule_item_ids=rule_ids,
+            rule_selection_note=rule_note,
         )
     except Exception:
         log.exception(
@@ -267,7 +271,7 @@ async def execute_warn(
             executor_id=admin_id,
             executor_fname=admin_fname,
         )
-        if enforced_role == "founder":
+        if enforced_role == "owner":
             # * The target was promoted to Founder after the staff exemption
             # * read. The role is protected, so the automatic ban must not
             # * proceed.
@@ -321,6 +325,8 @@ async def execute_warn(
                         proof_upload.expected_item_count if proof_upload else 0
                     ),
                     enforcement_chat_ids=[int(grp.get("chat_id", 0)) for grp in groups],
+                    rule_item_ids=rule_ids,
+                    rule_selection_note=rule_note,
                 )
                 ban_id = ban_doc.get("ban_id", "")
                 ban_run_id = ban_doc.get("enforcement_run_id")
@@ -843,5 +849,6 @@ def warn_conversation(
         _exec_warn,
         entry_filter,
         escape_filter=escape_filter,
-        min_role="tester",
+        min_role="moderator",
+        rules_enabled=True,
     )

@@ -22,6 +22,7 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper.keyboards import rules as rules_kb
 from tcbot.modules.helper.locale import locale_for_chat, locale_for_update
 from tcbot.modules.helper.messages import (
     appeal_deep_link,
@@ -163,6 +164,26 @@ async def _send_join_ban_notices(
         )
 
 
+async def _ack_markup(member_id: int, locale: str) -> object | None:
+    """Build the greeting's I agree button when the current version needs it.
+
+    A failure to read the rules never blocks a welcome: the greeting is sent
+    without a button, and the member can still join. Acknowledgement stays a
+    greeting-only surface, so no button appears on channel posts or /rules.
+    """
+    try:
+        published = await db.rules_db.published_rules()
+        if published is None or not published["set"].get("requires_acknowledgement"):
+            return None
+        version_id = int(published["version"]["id"])
+        if await db.rules_db.has_acknowledged(version_id, member_id):
+            return None
+        return rules_kb.ack_kb(version_id, member_id, locale)
+    except Exception as exc:
+        log.debug("Greeting acknowledgement lookup failed for %d: %s", member_id, exc)
+        return None
+
+
 async def _handle_member(
     member: User,
     msg: Message,
@@ -267,6 +288,7 @@ async def _handle_member(
             )
 
     if greet and not _enforcement_blind:
+        markup = await _ack_markup(member.id, locale)
         await safe_reply(
             msg,
             t(
@@ -276,6 +298,7 @@ async def _handle_member(
                 community=cfg.community_name,
             ),
             log_label=f"Welcome for uid={member.id}",
+            reply_markup=markup,
         )
 
 

@@ -196,3 +196,5 @@ CREATE TRIGGER trg_set_updated_at BEFORE UPDATE ON %SCHEMA%.user_settings FOR EA
 CREATE TRIGGER trg_telegram_chats_guard_chat_type BEFORE UPDATE OF chat_type ON %SCHEMA%.telegram_chats FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.guard_telegram_chat_type_change();
 
 CREATE TRIGGER trg_validate_moderation_case_rule_scope BEFORE INSERT OR UPDATE ON %SCHEMA%.moderation_case_rules FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.validate_moderation_case_rule_scope();
+
+CREATE TRIGGER trg_validate_rule_publication_scope BEFORE INSERT OR UPDATE ON %SCHEMA%.rule_publications FOR EACH ROW EXECUTE FUNCTION %SCHEMA%.validate_rule_publication_scope();

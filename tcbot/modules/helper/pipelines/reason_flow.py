@@ -20,11 +20,13 @@ from telegram.ext import (
 )
 from telegram.ext.filters import BaseFilter
 
+from tcbot import database as db
 from tcbot.modules.helper import guards
 from tcbot.modules.helper.extraction import parse_user_id_token
 from tcbot.modules.helper.keyboards import reason_step_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply
+from tcbot.modules.helper.pipelines import rules_step
 from tcbot.modules.helper.pipelines.proof_flow import (
     PROOF_MEDIA_FILTER,
     BuildProof,
@@ -43,13 +45,24 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
+
+def rules_from_scope(
+    scope: dict[str, Any], action: str
+) -> tuple[list[int], str | None]:
+    """Return the rule ids and optional note collected by the picker."""
+    return list(scope.get(f"{action}_rules", [])), scope.get(f"{action}_rules_note")
+
+
 # ───────────────────────── Reason parsing ───────────────────────── #
 
 
 WAITING_REASON = 0
 WAITING_PROOF = 1
+WAITING_RULES = 2
+WAITING_RULES_NOTE = 3
 
 MAX_REASON_LEN: int = 1000
+MAX_RULES_NOTE_LEN: int = 200
 
 
 def parse_inline_reason(
@@ -145,13 +158,18 @@ class _FlowBase:
         proof: BuildProof,
         executor: Callable[..., Any],
         min_role: RoleName,
+        *,
+        rules_enabled: bool = False,
     ) -> None:
         self.action = action
         self.reason = reason
         self.proof = proof
         self.executor = executor
         self.min_role: RoleName = min_role
+        self.rules_enabled = rules_enabled
         self._reason_key = f"{action}_reason"
+        self._rules_key = f"{action}_rules"
+        self._rules_note_key = f"{action}_rules_note"
         self._proof_msgs_key = f"{action}_proof_msgs"
         self._extra_info_key = f"{action}_extra_info"
         self._prompt_chat_key = f"{action}_prompt_chat"
@@ -168,6 +186,48 @@ class _FlowBase:
         if tid:
             return user_ref(tid, raw)
         return esc(raw)
+
+    async def _edit_prompt(
+        self,
+        update: Update,
+        ctx: ContextTypes.DEFAULT_TYPE,
+        text: str,
+        markup: InlineKeyboardMarkup,
+    ) -> bool:
+        """Edit the shared prompt message, replying when it cannot be edited."""
+        scope = flow_scope(ctx, update)
+        chat_id = scope.get(self._prompt_chat_key)
+        message_id = scope.get(self._prompt_id_key)
+        try:
+            if chat_id is not None and message_id is not None:
+                await ctx.bot.edit_message_text(
+                    text,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    parse_mode="MarkdownV2",
+                    reply_markup=markup,
+                )
+            else:
+                msg = update.effective_message
+                if msg is None:
+                    return False
+                await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=markup)
+            return True
+        except Exception as exc:
+            log.debug("%s prompt edit failed: %s", self.action, exc)
+            return False
+
+    async def _show_proof_prompt(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, prompt_txt: str
+    ) -> int:
+        """Render the proof prompt and enter the proof state."""
+        locale = await locale_for_update(update)
+        if not await self._edit_prompt(
+            update, ctx, prompt_txt, self.proof.keyboard(locale)
+        ):
+            self._clear_scope(ctx, update)
+            return ConversationHandler.END
+        return WAITING_PROOF
 
     def _clear_scope(self, ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> None:
         """Remove all action keys from the conversation scope.
@@ -401,35 +461,7 @@ class _ReasonStepMixin(_FlowBase):
         prompt_txt = self.proof.step_prompt(
             self._get_target(scope, locale), self.action, text, extra_info, locale
         )
-        prompt_chat = scope.get(self._prompt_chat_key)
-        prompt_id = scope.get(self._prompt_id_key)
-        prompt_sent = False
-        if prompt_id is not None and prompt_chat is not None:
-            try:
-                await ctx.bot.edit_message_text(
-                    prompt_txt,
-                    chat_id=prompt_chat,
-                    message_id=prompt_id,
-                    parse_mode="MarkdownV2",
-                    reply_markup=self.proof.keyboard(locale),
-                )
-                prompt_sent = True
-            except Exception:
-                log.exception("%s prompt edit failed (reason step)", self.action)
-        else:
-            try:
-                await msg.reply_text(
-                    prompt_txt,
-                    parse_mode="MarkdownV2",
-                    reply_markup=self.proof.keyboard(locale),
-                )
-                prompt_sent = True
-            except Exception as exc:
-                log.debug("%s reason-text fallback reply failed: %s", self.action, exc)
-        if not prompt_sent:
-            self._clear_scope(ctx, update)
-            return ConversationHandler.END
-        return WAITING_PROOF
+        return await self._after_reason(update, ctx, prompt_txt)
 
     async def _on_skip_reason(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -466,7 +498,30 @@ class _ReasonStepMixin(_FlowBase):
             )
             self._clear_scope(ctx, update)
             return ConversationHandler.END
-        return WAITING_PROOF
+        return await self._after_reason(update, ctx, prompt_txt)
+
+    async def _after_reason(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, prompt_txt: str
+    ) -> int:
+        """Move to the rules picker when rules exist, otherwise to proof."""
+        scope = flow_scope(ctx, update)
+        scope[self._rules_key] = []
+        locale = await locale_for_update(update)
+        if self.rules_enabled:
+            uid = update.effective_user.id if update.effective_user else 0
+            try:
+                may_pick = await db.users_roles.has_permission(uid, "rules.view")
+            except Exception as exc:
+                log.warning("rules.view lookup failed for %d: %s", uid, exc)
+                may_pick = False
+            published = await db.rules_db.published_rules() if may_pick else None
+            if published is not None and published.get("items"):
+                markup = rules_step.picker_markup(published["items"], [], locale)
+                text = rules_step.picker_text(published["items"], [], locale)
+                if await self._edit_prompt(update, ctx, text, markup):
+                    return WAITING_RULES
+                return ConversationHandler.END
+        return await self._show_proof_prompt(update, ctx, prompt_txt)
 
     async def _on_reason_unexpected(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -490,10 +545,128 @@ class _ReasonStepMixin(_FlowBase):
         return WAITING_REASON
 
 
+# ─────────────────────── Rules picker step ──────────────────────── #
+
+
+class _RulesStepMixin(_FlowBase):
+    """Multi-select rules picker after the reason step."""
+
+    async def _picker_items(self) -> list[dict[str, Any]]:
+        published = await db.rules_db.published_rules()
+        return published["items"] if published else []
+
+    async def _render_picker(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        scope = flow_scope(ctx, update)
+        selected: list[int] = scope.get(self._rules_key, [])
+        locale = await locale_for_update(update)
+        items = await self._picker_items()
+        await self._edit_prompt(
+            update,
+            ctx,
+            rules_step.picker_text(items, selected, locale),
+            rules_step.picker_markup(items, selected, locale),
+        )
+        return WAITING_RULES
+
+    async def _on_rules_toggle(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        q = update.callback_query
+        if q is None or q.data is None:
+            return WAITING_RULES
+        item_id = rules_step.item_id_from_callback(q.data)
+        scope = flow_scope(ctx, update)
+        if item_id is not None:
+            scope[self._rules_key] = rules_step.toggle(
+                scope.get(self._rules_key, []), item_id
+            )
+        await q.answer()
+        return await self._render_picker(update, ctx)
+
+    async def _on_rules_clear(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        q = update.callback_query
+        if q is None:
+            return WAITING_RULES
+        flow_scope(ctx, update)[self._rules_key] = []
+        await q.answer()
+        return await self._render_picker(update, ctx)
+
+    async def _on_rules_done(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        q = update.callback_query
+        if q is None:
+            return WAITING_RULES
+        scope = flow_scope(ctx, update)
+        if not scope.get(self._rules_key) and not scope.get(self._rules_note_key):
+            await q.answer(
+                t("rules.picker.require_selection", None, plain=True), show_alert=True
+            )
+            return WAITING_RULES
+        await q.answer()
+        locale = await locale_for_update(update)
+        prompt_txt = self.proof.step_prompt(
+            self._get_target(scope, locale),
+            self.action,
+            scope.get(self._reason_key, ""),
+            scope.get(self._extra_info_key, ""),
+            locale,
+        )
+        return await self._show_proof_prompt(update, ctx, prompt_txt)
+
+    async def _on_rules_other(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        q = update.callback_query
+        if q is None:
+            return WAITING_RULES
+        await q.answer()
+        msg = update.effective_message
+        if msg is not None:
+            await safe_reply(
+                msg,
+                t("rules.picker.ask_note", None, plain=True),
+                log_label=f"{self.action} rules-note",
+                parse_mode=None,
+            )
+        return WAITING_RULES_NOTE
+
+    async def _on_rules_note_text(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        msg = update.effective_message
+        if msg is None or not msg.text:
+            return WAITING_RULES_NOTE
+        note = msg.text.strip()
+        if not note or len(note) > MAX_RULES_NOTE_LEN:
+            await safe_reply(
+                msg,
+                t("rules.picker.bad_note", None, limit=MAX_RULES_NOTE_LEN, plain=True),
+                log_label=f"{self.action} rules-note-limit",
+                parse_mode=None,
+            )
+            return WAITING_RULES_NOTE
+        scope = flow_scope(ctx, update)
+        scope[self._rules_note_key] = note
+        locale = await locale_for_update(update)
+        prompt_txt = self.proof.step_prompt(
+            self._get_target(scope, locale),
+            self.action,
+            scope.get(self._reason_key, ""),
+            scope.get(self._extra_info_key, ""),
+            locale,
+        )
+        return await self._show_proof_prompt(update, ctx, prompt_txt)
+
+
 # ─────────────────── ConversationHandler factory ────────────────── #
 
 
-class _ModActionFlow(_ReasonStepMixin, _ProofStepMixin, _FlowBase):
+class _ModActionFlow(_ReasonStepMixin, _RulesStepMixin, _ProofStepMixin, _FlowBase):
     """Per-action ConversationHandler state and callback container."""
 
     def build(
@@ -538,12 +711,37 @@ class _ModActionFlow(_ReasonStepMixin, _ProofStepMixin, _FlowBase):
         fallback_filter = ALL_PREFIXES_CMD_FILTER
         if escape_filter is not None:
             fallback_filter = fallback_filter & ~escape_filter
+        states: dict[Any, list[Any]] = {
+            WAITING_REASON: reason_state,
+            WAITING_PROOF: proof_state,
+        }
+        if self.rules_enabled:
+            states[WAITING_RULES] = [
+                CallbackQueryHandler(
+                    self._on_rules_toggle, pattern=r"^rules_step:pick:\d+$"
+                ),
+                CallbackQueryHandler(self._on_rules_done, pattern=r"^rules_step:done$"),
+                CallbackQueryHandler(
+                    self._on_rules_other, pattern=r"^rules_step:other$"
+                ),
+                CallbackQueryHandler(
+                    self._on_rules_clear, pattern=r"^rules_step:clear$"
+                ),
+                CallbackQueryHandler(
+                    self._on_cancel, pattern=rf"^{self.action}_cancel$"
+                ),
+            ]
+            states[WAITING_RULES_NOTE] = [
+                MessageHandler(
+                    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, self._on_rules_note_text
+                ),
+                CallbackQueryHandler(
+                    self._on_cancel, pattern=rf"^{self.action}_cancel$"
+                ),
+            ]
         return ConversationHandler(
             entry_points=[MessageHandler(entry_filter, entry_fn)],
-            states={
-                WAITING_REASON: reason_state,
-                WAITING_PROOF: proof_state,
-            },
+            states=states,
             fallbacks=[
                 CallbackQueryHandler(
                     self._on_cancel, pattern=rf"^{self.action}_cancel$"
@@ -565,8 +763,15 @@ def build_modaction_conv(
     escape_filter: BaseFilter | None = None,
     *,
     min_role: RoleName,
+    rules_enabled: bool = False,
 ) -> ConversationHandler:
-    """Build a generic reason + proof ConversationHandler."""
-    return _ModActionFlow(reason.action, reason, proof, executor, min_role).build(
-        entry_fn, entry_filter, escape_filter
+    """Build a generic reason + rules + proof ConversationHandler."""
+    flow = _ModActionFlow(
+        reason.action,
+        reason,
+        proof,
+        executor,
+        min_role,
+        rules_enabled=rules_enabled,
     )
+    return flow.build(entry_fn, entry_filter, escape_filter)

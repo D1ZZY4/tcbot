@@ -21,6 +21,7 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
@@ -136,6 +137,14 @@ Index(
     unique=True,
     postgresql_where=text("status = 'published'"),
 )
+# * Two staff members must never open two drafts for the same set and locale.
+Index(
+    "uq_rule_set_versions_draft",
+    rule_set_versions.c.rule_set_id,
+    rule_set_versions.c.locale,
+    unique=True,
+    postgresql_where=text("status = 'draft'"),
+)
 
 # * One rule inside a version. The search vector backs the rule lookup.
 rule_items = Table(
@@ -148,6 +157,10 @@ rule_items = Table(
     Column("title", Text, nullable=False),
     Column("body", Text, nullable=False),
     Column("content_format", Text, nullable=False, server_default="plain_text"),
+    # * Category snapshots freeze the presentation of an old version even if
+    # * the category catalogue is later renamed or reordered.
+    Column("category_title", Text, nullable=True),
+    Column("category_sort_order", Integer, nullable=True),
     Column("sort_order", Integer, nullable=False, server_default="100"),
     Column("is_mandatory", Boolean, nullable=False, server_default=text("true")),
     Column("reference_url", Text, nullable=True),
@@ -241,3 +254,168 @@ rule_acknowledgements = Table(
 
 Index("ix_rule_acknowledgements_user", rule_acknowledgements.c.user_id)
 Index("ix_rule_acknowledgements_context_chat", rule_acknowledgements.c.context_chat_id)
+
+# * The category catalogue of one rule set. Staff may rename, reorder, and
+# * add categories; item snapshots keep published versions unchanged.
+rule_categories = Table(
+    "rule_categories",
+    metadata,
+    Column("id", BigInteger, Identity(always=True), nullable=False),
+    Column("rule_set_id", BigInteger, nullable=False),
+    Column("category_key", Text, nullable=False),
+    Column("title", Text, nullable=False),
+    Column("sort_order", Integer, nullable=False, server_default="100"),
+    Column("is_active", Boolean, nullable=False, server_default=text("true")),
+    Column(
+        "created_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
+    ),
+    Column(
+        "updated_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
+    ),
+    PrimaryKeyConstraint("id"),
+    ForeignKeyConstraint(
+        ["rule_set_id"], ["rule_sets.id"], name="fk_rule_categories_rule_set"
+    ),
+    UniqueConstraint("rule_set_id", "category_key", name="uq_rule_categories_set_key"),
+    CheckConstraint(
+        "category_key ~ '^[a-z0-9][a-z0-9._-]*$'", name="ck_rule_categories_key"
+    ),
+    CheckConstraint("btrim(title) <> ''", name="ck_rule_categories_title"),
+    CheckConstraint("sort_order >= 0", name="ck_rule_categories_sort_order"),
+)
+
+Index("ix_rule_categories_rule_set", rule_categories.c.rule_set_id)
+
+# * The lock of one publish plus sync operation. No background owner exists:
+# * a run lives only while a staff publish is in progress.
+rule_publication_runs = Table(
+    "rule_publication_runs",
+    metadata,
+    Column("id", BigInteger, Identity(always=True), nullable=False),
+    Column("rule_set_id", BigInteger, nullable=False),
+    Column("rule_set_version_id", BigInteger, nullable=False),
+    Column("chat_id", BigInteger, nullable=False),
+    Column("status", Text, nullable=False, server_default="running"),
+    Column(
+        "started_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
+    ),
+    Column("finished_at", DateTime(timezone=True), nullable=True),
+    Column("lease_expires_at", DateTime(timezone=True), nullable=False),
+    Column("error", Text, nullable=True),
+    Column(
+        "created_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
+    ),
+    PrimaryKeyConstraint("id"),
+    ForeignKeyConstraint(
+        ["rule_set_id"], ["rule_sets.id"], name="fk_rule_publication_runs_rule_set"
+    ),
+    ForeignKeyConstraint(
+        ["rule_set_version_id"],
+        ["rule_set_versions.id"],
+        name="fk_rule_publication_runs_version",
+    ),
+    enum_check(
+        "ck_rule_publication_runs_status",
+        "status",
+        "running",
+        "completed",
+        "partial",
+        "failed",
+    ),
+)
+
+Index("ix_rule_publication_runs_status", rule_publication_runs.c.status)
+Index("ix_rule_publication_runs_lease", rule_publication_runs.c.lease_expires_at)
+# * A live run excludes a second concurrent publish for the same set and chat.
+Index(
+    "uq_rule_publication_runs_active",
+    rule_publication_runs.c.rule_set_id,
+    rule_publication_runs.c.chat_id,
+    unique=True,
+    postgresql_where=text("status = 'running'"),
+)
+
+# * One channel message slot. The message id lives here so the database stays
+# * the source of truth and a later publish can reconcile a failed or missing
+# * channel message.
+rule_publications = Table(
+    "rule_publications",
+    metadata,
+    Column("id", BigInteger, Identity(always=True), nullable=False),
+    Column("rule_set_id", BigInteger, nullable=False),
+    Column("rule_set_version_id", BigInteger, nullable=False),
+    Column("locale", Text, nullable=False, server_default="en-US"),
+    Column("chat_id", BigInteger, nullable=False),
+    Column("message_thread_id", BigInteger, nullable=True),
+    Column("category_key", Text, nullable=False),
+    Column("part_index", Integer, nullable=False, server_default="0"),
+    Column("message_id", BigInteger, nullable=True),
+    Column("content_hash", Text, nullable=True),
+    Column("run_id", BigInteger, nullable=True),
+    Column("status", Text, nullable=False, server_default="pending"),
+    Column("last_error", Text, nullable=True),
+    Column("last_synced_at", DateTime(timezone=True), nullable=True),
+    Column(
+        "created_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
+    ),
+    Column(
+        "updated_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
+    ),
+    PrimaryKeyConstraint("id"),
+    ForeignKeyConstraint(
+        ["rule_set_id"], ["rule_sets.id"], name="fk_rule_publications_rule_set"
+    ),
+    ForeignKeyConstraint(
+        ["rule_set_version_id"],
+        ["rule_set_versions.id"],
+        name="fk_rule_publications_version",
+    ),
+    ForeignKeyConstraint(
+        ["run_id"], ["rule_publication_runs.id"], name="fk_rule_publications_run"
+    ),
+    enum_check(
+        "ck_rule_publications_status",
+        "status",
+        "pending",
+        "synced",
+        "failed",
+        "missing",
+        "retired",
+        "deleted",
+    ),
+    CheckConstraint("part_index >= 0", name="ck_rule_publications_part_index"),
+    CheckConstraint(
+        "message_id IS NULL OR message_id > 0", name="ck_rule_publications_message_id"
+    ),
+    CheckConstraint(
+        "message_thread_id IS NULL OR message_thread_id > 0",
+        name="ck_rule_publications_thread_id",
+    ),
+)
+
+Index(
+    "ix_rule_publications_set_locale_status",
+    rule_publications.c.rule_set_id,
+    rule_publications.c.locale,
+    rule_publications.c.status,
+)
+Index("ix_rule_publications_version", rule_publications.c.rule_set_version_id)
+Index("ix_rule_publications_run", rule_publications.c.run_id)
+# * NULL thread ids are distinct in a plain unique index, so coalesce them.
+Index(
+    "uq_rule_publications_slot",
+    rule_publications.c.rule_set_id,
+    rule_publications.c.locale,
+    rule_publications.c.chat_id,
+    func.coalesce(rule_publications.c.message_thread_id, 0),
+    rule_publications.c.category_key,
+    rule_publications.c.part_index,
+    unique=True,
+)
+Index(
+    "uq_rule_publications_message",
+    rule_publications.c.chat_id,
+    rule_publications.c.message_id,
+    unique=True,
+    postgresql_where=text("message_id IS NOT NULL"),
+)
