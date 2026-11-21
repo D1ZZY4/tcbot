@@ -3,10 +3,10 @@
 This document describes the current ban appeal behavior implemented by `tcbot/modules/appeals.py`, `tcbot/modules/helper/pipelines/appeal_submit_flow.py` (user submission) and `appeal_review_flow.py` (staff decisions).
 
 For the ban flow that triggers appeals, see
-[`moderation/banning.md`](moderation/banning.md). For the check command often
-used during appeals, see [`moderation/check.md`](moderation/check.md). For
-shared helpers, see [`../architecture/helpers.md`](../architecture/helpers.md).
-For the database layer, see [`../architecture/database.md`](../architecture/database.md).
+[`banning.md`](banning.md). For the check command often
+used during appeals, see [`check.md`](check.md). For
+shared helpers, see [`../../architecture/helpers.md`](../../architecture/helpers.md).
+For the database layer, see [`../../architecture/database.md`](../../architecture/database.md).
 
 ```mermaid
 flowchart TD
@@ -183,7 +183,7 @@ If the review post fails, no review slot is stored. If the appeal-log post fails
 
 ## Staff review rules
 
-Appeal decisions are handled by `appeal.on_decision` and are registered outside the conversation handler. The entry is wrapped in a per-user staff throttle before the handler runs. Only Founder or Admin reviewers (effective role `founder`/`admin` via `users_roles.get_effective_role`) may use the review buttons. In this codebase that matches `is_staff` semantics; Developer and Tester custom roles are not included.
+Appeal decisions are handled by `appeal.on_decision` and are registered outside the conversation handler. The entry is wrapped in a per-user staff throttle before the handler runs. Only Owner or Admin reviewers (effective role `owner`/`admin` via `users_roles.get_effective_role`) may use the review buttons. In this codebase that matches `is_staff` semantics; Developer and Moderator custom roles are not included.
 
 A role-lookup outage fails closed with a retry alert instead of an authorization verdict, so a transient database blip is never misreported as "not authorized".
 
@@ -208,7 +208,7 @@ The original banning admin gets a 12-hour priority window after the appeal revie
 
 - During the first 12 hours, only the `actor_user_id` stored on the ban can approve or reject.
 - The original banning admin is always allowed during that window.
-- After 12 hours, any Founder/Admin reviewer can decide.
+- After 12 hours, any Owner/Admin reviewer can decide.
 - If `review_timestamp` is missing, or `actor_user_id` is missing or zero (legacy record), the lock does not apply.
 
 The callback handler always answers the callback query before continuing once it has parsed a valid decision action.

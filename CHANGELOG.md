@@ -4,7 +4,40 @@ All notable changes to this project are documented here. For workflow details, s
 
 ## [Unreleased]
 
-No unreleased changes.
+### Added
+
+- **Community rules can be edited, published, and acknowledged from the bot** (`tcbot/modules/rules.py`, `tcbot/modules/helper/pipelines/rules_flow.py`, `tcbot/database/rules_db/`, `docs/features/moderation/rules.md`): staff manage one draft through `/tcrules`, publish it to the main channel as one message per category, and members accept the current version with an `I agree` button on the join greeting. `/rules` is a read-only category menu. Channel messages are edited in place and a failed slot is reconciled by the next publish; there is no separate sync command.
+- **Rule publications carry a lock and a reconciliation record** (`alembic/versions/0012_rules_publication.py`, `tcbot/database/rules_db/runs.py`, `tcbot/database/rules_db/publications.py`): a short-lived run prevents two simultaneous publishes, and each channel message slot stores its message id and content hash so an unchanged message is edited rather than reposted.
+- **Permission checks by capability** (`tcbot/modules/helper/decorators/auth.py`, `tcbot/database/users_roles.py`): a `permission_only` decorator and the existing `has_permission` helper gate the editor on `rules.manage` without relying on role rank.
+- **Community menu links derive from chat ids** (`tcbot/utils/community_links.py`): the Additional menu resolves `MAIN_CHANNEL`, `MAIN_GROUP`, `LOGS`, and `APPEALS` through Telegram, preferring a username over an invite link and omitting a chat that has neither.
+
+### Changed
+
+- **Role vocabulary is now owner, admin, developer, and moderator** (`alembic/versions/0013_role_vocabulary.py`, `tcbot/database/users_roles.py`, `i18n/`): stored founder and tester values are normalised to owner and moderator, and the promotion command no longer accepts the old names. Behavior changes: promotion input and stored role keys use the four final names; the migration is one way.
+- **`MAIN_CHANNEL` replaces the static community URL variables** (`tcbot/__init__.py`, `config.env.example`, `README.md`, `AGENTS.md`): `COMMUNITY_CHANNEL_URL`, `COMMUNITY_GROUP_URL`, `COMMUNITY_LOGS_URL`, and `COMMUNITY_APPEAL_URL` are no longer read. Behavior changes: a deployment that relied on those variables must remove them and set the chat ids instead.
+- **A reason is required for kicks and mutes** (`tcbot/modules/helper/pipelines/kick_flow.py`, `tcbot/modules/helper/pipelines/mute_flow.py`): both flows now follow the ban and warn flows in asking for a reason without offering Skip. Behavior changes: a kick or mute without a reason now waits for one instead of proceeding.
+- **The main group hosts moderation without being connected** (`tcbot/__init__.py`, `tcbot/modules/connect.py`, `tcbot/modules/helper/pipelines/connected_flow.py`): the deployment destinations are recognised as infrastructure and refused by the connect paths, while the configured `MAIN_GROUP` stays a valid federation origin. Behavior changes: a deployment that left `MAIN_GROUP` unset now has to set it to its negative chat id for moderation to work in that group.
+
+### Fixed
+
+- **Overlapping mute writes no longer extend an expiry from stale state** (`tcbot/database/mutes_db.py`): the active row is now locked and the clock read inside the write, so two simultaneous mute actions cannot compute the same expiry from an outdated row. Behavior changes: none; a single mute is unchanged.
+- **Moderation history no longer skips or repeats rows between pages** (`tcbot/database/bans_db/`, `tcbot/database/kicks_db.py`, `tcbot/database/mutes_db.py`): entries that share a timestamp now sort by record id, giving every page a stable order. Behavior changes: none.
+- **The proof collection cap holds for every debounce window** (`tcbot/modules/helper/pipelines/ban_flow.py`, `config.env.example`, `docs/getting-started/setup.md`): a short album debounce no longer bypasses the limit on collected proof items. Behavior changes: none.
+- **Rank refusals render as readable text** (`tcbot/modules/helper/pipelines/ban_flow.py`, `tcbot/modules/helper/pipelines/mute_flow.py`): refusals that name a role now use plain text, so the viewer sees words instead of raw MarkdownV2 escapes. Behavior changes: the affected refusals are sent without Markdown parsing.
+- **Warn auto-bans keep warnings outside the narrowed ban scope** (`tcbot/modules/helper/pipelines/warn_flow.py`, `tcbot/modules/helper/pipelines/demote_flow.py`): the pending-warning slate is no longer cleared for warnings the reduced ban scope leaves untouched. Behavior changes: none.
+- **A locale change reaches every cache layer** (`tcbot/database/cache/twolevel.py`): an invalidation marker is now written alongside the removed value, so a stale locale cannot reappear after a change made in another process. Behavior changes: none.
+- **A cancelled Redis ping no longer leaks a connection pool** (`tcbot/database/redis_client.py`): the temporary pool is released when the startup connectivity check is cancelled. Behavior changes: none.
+- **Concurrent error reports cannot corrupt each other** (`tcbot/error_reporter.py`): the deduplication state is now serialised across threads. Behavior changes: none.
+- **Fatal startup output is redacted before it is shipped** (`tcbot/__main__.py`, `tcbot/error_reporter.py`): sensitive values are stripped from boot-time errors sent to the error channel. Behavior changes: none.
+- **Shutdown drains in-flight bot work before closing the client** (`tcbot/__main__.py`): outstanding tasks finish before the Telegram client is closed, avoiding task errors during stop. Behavior changes: none.
+- **Every database engine normalises the provider URL the same way** (`tcbot/database/connection_options.py`, `tcbot/database/engine.py`, `tcbot/database/scheduler/`): the scheduler no longer builds connection options from a differently shaped URL than the application engines. Behavior changes: none.
+- **A delayed notification cannot complete another worker's item** (`tcbot/database/notifications_db.py`, `tcbot/notification_worker.py`): completion is now bound to the worker's claim. Behavior changes: none.
+- **A decided appeal no longer reopens the ban review slot** (`tcbot/database/bans_db/_writes.py`): the slot is restored only while the appeal is still pending. Behavior changes: none.
+- **Group appeals accept ordinary long words** (`tcbot/modules/helper/pipelines/appeal_submit_flow.py`): a message containing a long word is no longer mistaken for a malformed appeal tag. Behavior changes: none.
+- **Mute durations parse correctly when the reply target is restated** (`tcbot/modules/helper/extraction/resolve.py`, `tcbot/modules/mute.py`): a repeated target is stripped from the command text before the duration is read. Behavior changes: none.
+- **An invalid webhook secret is rejected at startup** (`tcbot/__init__.py`, `config.env.example`, `README.md`, `docs/getting-started/setup.md`): boot now fails with an actionable message instead of failing later during Telegram webhook registration. Behavior changes: an out-of-range or malformed `WEBHOOK_SECRET` now prevents startup.
+- **A failed scheduled job keeps its failure record** (`tcbot/database/scheduler/jobs.py`, `tcbot/database/schema/functions.sql`): the record survives the next run so the failure remains visible for diagnosis. Behavior changes: none.
+- **Account erasure protects the owner and closes open decisions** (`tcbot/modules/maintenance.py`, `tcbot/database/scheduler/jobs.py`, `alembic/versions/0011_erasure_cleanup.py`): the federation owner cannot be erased and pending decisions are closed when an erasure runs. Behavior changes: none.
 
 ## Releases
 

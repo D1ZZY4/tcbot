@@ -42,9 +42,10 @@ deployment, see [`../replit.md`](../replit.md). For contribution workflow, see
 | Document | Purpose |
 |---|---|
 | [Workflow overview](features/workflow-overview.md) | User-visible moderation, appeal, connection, role, statistics, and maintenance flows. |
-| [Appeals](features/appeals.md) | Appeal deep links, private DM submission, review actions, and edge cases. |
+| [Appeals](features/moderation/appeals.md) | Appeal deep links, private DM submission, review actions, and edge cases. |
 | [Language](features/language.md) | Per-user and per-group locale preferences, TOML catalog, and selection flow. |
 | [Statistics](features/statistics.md) | `/tcstats`, drill-down views, search, and asynchronous design. |
+| [Community rules](features/moderation/rules.md) | Staff editor, channel publication, run locks, moderation picker, and acknowledgement. |
 | [Miscellaneous modules](features/misc-modules.md) | Encapsulated commands: about, additional, admins, start, help, greeting, broadcasting, maintenance, netspeed, privacy. |
 | [Banning](features/moderation/banning.md) | Federation ban flow, proof collection, updates, unban checks, logs, and appeal links. |
 | [Kicking](features/moderation/kicking.md) | `/tckick` group kick flow, auto-demote before kick, reason/proof conversation, and audit log. |
@@ -55,7 +56,7 @@ deployment, see [`../replit.md`](../replit.md). For contribution workflow, see
 | [Connecting](features/moderation/connecting.md) | `/tcconnect` and bot-added prompt, complete_join behavior, ban/mute replay, and edge cases. |
 | [Disconnecting](features/moderation/disconnecting.md) | `/tcdisconnect` and `/rmtc` group disconnect, parallel deactivation, and edge cases. |
 | [Groups](features/moderation/groups.md) | `/tcgroups` connected-groups list, keyboard navigation, and edge cases. |
-| [Roles](features/roles/roles.md) | Founder, Admin, Developer, and Tester hierarchy and safety rules. |
+| [Roles](features/roles/roles.md) | Owner, Admin, Developer, and Moderator hierarchy and safety rules. |
 | [Promote](features/roles/promote.md) | `/tcpromote`, direct and request-based promotion, callbacks, and edge cases. |
 | [Demote](features/roles/demote.md) | `/tcdemote`, automatic demotion, permission rules, and audit logging. |
 
