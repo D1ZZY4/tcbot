@@ -308,6 +308,16 @@ async def test_the_member_cache_name_search_finds_the_user(postgres: str) -> Non
     assert found[0].get("username") == "Alice_1"
 
 
+async def test_the_member_cache_resolves_an_exact_username(postgres: str) -> None:
+    """A username already observed on Telegram resolves without a live lookup."""
+    await users_cache.upsert_user(11, "Ghost_1", "Ghost", "Hunter")
+
+    assert await users_cache.get_by_username("@ghost_1") == (11, "Ghost")
+    assert await users_cache.get_by_username("GHOST_1") == (11, "Ghost")
+    assert await users_cache.get_by_username("nobody") is None
+    assert await users_cache.get_by_username("@") is None
+
+
 async def test_the_migrated_helpers_share_one_transaction_boundary(
     postgres: str,
 ) -> None:

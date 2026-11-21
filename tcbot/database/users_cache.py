@@ -360,6 +360,34 @@ async def search_by_name(needle: str, limit: int = 5) -> list[UserDoc]:
     return cast("list[UserDoc]", rows)
 
 
+async def get_by_username(username: str) -> tuple[int, str] | None:
+    """Resolve an exact username to ``(user_id, first_name)`` from the cache.
+
+    This is a deterministic fallback for the briefcase where both live
+    resolvers are unavailable: Telegram's Bot API misses some users and the
+    MTProto client can be parked after a session invalidation. The member
+    cache stores usernames observed on real updates and indexes their
+    lowercase form, so an exact match needs no scan and cannot guess a
+    different person the way a partial name search can.
+    """
+    needle = username.lstrip("@").strip().lower()
+    if not needle:
+        return None
+    row = await db_call(
+        lambda: fetch_one(
+            select(telegram_users.c.user_id, telegram_users.c.first_name)
+            .where(func.lower(telegram_users.c.username) == needle)
+            .limit(1)
+        )
+    )
+    if row is None:
+        return None
+    uid = row["user_id"]
+    if uid is None or int(uid) <= 0:
+        return None
+    return int(uid), str(row["first_name"] or "")
+
+
 # ────────────────────────────── Writes ───────────────────────────── #
 
 

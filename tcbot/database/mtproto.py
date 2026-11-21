@@ -281,6 +281,18 @@ def is_auth_dead() -> bool:
     return _auth_dead
 
 
+def is_available() -> bool:
+    """Report whether MTProto can currently answer identity lookups.
+
+    False when the session was parked, the client was never started, or it
+    dropped. Target resolvers use this to decide whether a cached username
+    is an acceptable last resort: while a live resolver exists, an unknown
+    username really is unknown and must not be guessed from the cache.
+    """
+    c: Client | None = _client
+    return not _auth_dead and c is not None and bool(c.is_connected)
+
+
 def is_auth_key_duplicated(exc: BaseException) -> bool:
     """Check whether *exc* is Telegram's 406 AUTH_KEY_DUPLICATED."""
     try:

@@ -115,6 +115,28 @@ async def _best_name(uid: int, *primary: str | None) -> str:
     return str(uid)
 
 
+async def _cached_username_target(username: str) -> tuple[int, str] | None:
+    """Last-resort exact username lookup while MTProto cannot answer.
+
+    The live resolvers are always tried first. A cached username is used only
+    when MTProto is down, because Telegram usernames can be released and
+    reassigned: while a live resolver exists, an unknown username must stay
+    unknown rather than resolve to whoever held it before.
+    """
+    if db.mtproto.is_available():
+        return None
+    cached = await db.users_cache.get_by_username(username)
+    if cached is None:
+        return None
+    uid, first = cached
+    log.warning(
+        "Resolved @%s from the member cache while MTProto is unavailable: %d",
+        username,
+        uid,
+    )
+    return uid, await _best_name(uid, first, username)
+
+
 async def extract_target(
     update: Update,
     args: list[str],
@@ -306,6 +328,14 @@ async def _args_target(
             uid, fname, _ = hit
             if uid > 0:
                 return uid, await _best_name(uid, fname, arg)
+        cached = await _cached_username_target(arg)
+        if cached is not None:
+            return cached
+        log.warning(
+            "Could not resolve @%s (MTProto available=%s).",
+            arg,
+            db.mtproto.is_available(),
+        )
 
     # * Priority 3: Partial name search in users_cache, read-only
     # * callers only (see _args_target docstring for why moderation
@@ -394,5 +424,8 @@ async def _entity_target(msg: Message, bot: Bot | None) -> tuple[int, str] | Non
                     uid, fname, _ = hit
                     if uid > 0:
                         return uid, await _best_name(uid, fname, uname)
+                cached = await _cached_username_target(uname)
+                if cached is not None:
+                    return cached
 
     return None

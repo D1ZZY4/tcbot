@@ -75,8 +75,12 @@ def _stub_cache(
             m for m in items if needle.lower() in str(m.get("first_name", "")).lower()
         ]
 
+    async def _by_username(username: str):
+        return None
+
     monkeypatch.setattr(db.users_cache, "get_first_name", _first_name)
     monkeypatch.setattr(db.users_cache, "search_by_name", _search)
+    monkeypatch.setattr(db.users_cache, "get_by_username", _by_username)
 
 
 def _reply_from(uid: int, name: str = "Reply") -> Any:
@@ -315,6 +319,51 @@ def test_username_falls_back_to_mtproto(monkeypatch) -> None:  # type: ignore[no
     assert _run(ex.extract_target(_update(_msg()), ["@ghost"], cast("Any", bot))) == (
         42,
         "Ghost",
+    )
+
+
+def test_username_uses_cached_lookup_when_mtproto_is_down(
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    """An observed username still resolves during an MTProto outage."""
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+
+    async def _no_hit(username: str):
+        return None
+
+    async def _cached(username: str):
+        assert username == "ghost"
+        return (42, "Ghost")
+
+    monkeypatch.setattr(db.mtproto, "resolve_username", _no_hit)
+    monkeypatch.setattr(db.mtproto, "is_available", lambda: False)
+    monkeypatch.setattr(db.users_cache, "get_by_username", _cached)
+    assert _run(ex.extract_target(_update(_msg()), ["@ghost"], cast("Any", bot))) == (
+        42,
+        "Ghost",
+    )
+
+
+def test_cached_username_is_ignored_while_mtproto_is_live(
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    """A live resolver that misses must not fall back to a stale cache entry."""
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+
+    async def _no_hit(username: str):
+        return None
+
+    async def _must_not_run(username: str):
+        raise AssertionError("cache must not override a live miss")
+
+    monkeypatch.setattr(db.mtproto, "resolve_username", _no_hit)
+    monkeypatch.setattr(db.mtproto, "is_available", lambda: True)
+    monkeypatch.setattr(db.users_cache, "get_by_username", _must_not_run)
+    assert _run(ex.extract_target(_update(_msg()), ["@ghost"], cast("Any", bot))) == (
+        None,
+        None,
     )
 
 
