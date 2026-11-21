@@ -15,18 +15,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import KeyboardButtonStyle
-
+from tcbot.modules.helper.keyboards import rules as rules_kb
 from tcbot.modules.helper.messages.rules import selected_summary
 from tcbot.utils.i18n import t
 
-_OTHER_CALLBACK = "rules_step:other"
-_DONE_CALLBACK = "rules_step:done"
-_CLEAR_CALLBACK = "rules_step:clear"
-_CANCEL_CALLBACK = "rules_step:cancel"
-
-_PREFIX = "rules_step:pick:"
+_PREFIX = rules_kb.PICKER_PICK_PREFIX
 
 
 def callback_for(item_id: int) -> str:
@@ -54,50 +47,6 @@ def toggle(selected: list[int], item_id: int) -> list[int]:
     return result
 
 
-def picker_markup(
-    items: list[dict[str, Any]], selected: list[int], locale: str | None = None
-) -> InlineKeyboardMarkup:
-    """Build the item grid with toggle, Other, Done, Clear, and Cancel."""
-    rows: list[list[InlineKeyboardButton]] = []
-    for item in items:
-        item_id = int(item["id"])
-        mark = "[x] " if item_id in selected else "[ ] "
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    mark + str(item["title"]),
-                    callback_data=callback_for(item_id),
-                    style=KeyboardButtonStyle.PRIMARY,
-                )
-            ]
-        )
-    rows.append(
-        [
-            InlineKeyboardButton(
-                t("rules.picker.other", locale, plain=True),
-                callback_data=_OTHER_CALLBACK,
-            ),
-            InlineKeyboardButton(
-                t("button.done", locale, plain=True),
-                callback_data=_DONE_CALLBACK,
-                style=KeyboardButtonStyle.SUCCESS,
-            ),
-        ]
-    )
-    rows.append(
-        [
-            InlineKeyboardButton(
-                t("rules.picker.clear", locale, plain=True),
-                callback_data=_CLEAR_CALLBACK,
-            ),
-            InlineKeyboardButton(
-                t("button.cancel", locale, plain=True), callback_data=_CANCEL_CALLBACK
-            ),
-        ]
-    )
-    return InlineKeyboardMarkup(rows)
-
-
 def picker_text(
     items: list[dict[str, Any]], selected: list[int], locale: str | None = None
 ) -> str:
@@ -106,13 +55,3 @@ def picker_text(
     titles = [str(item["title"]) for item in items if int(item["id"]) in selected_ids]
     chosen = selected_summary(titles, None, locale)
     return f"{t('rules.picker.prompt', locale)}\n\n{chosen}"
-
-
-def is_control(data: str) -> bool:
-    """Return True for a picker control button rather than an item toggle."""
-    return data in {
-        _OTHER_CALLBACK,
-        _DONE_CALLBACK,
-        _CLEAR_CALLBACK,
-        _CANCEL_CALLBACK,
-    }

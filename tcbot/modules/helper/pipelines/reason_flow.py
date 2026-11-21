@@ -24,6 +24,7 @@ from tcbot import database as db
 from tcbot.modules.helper import guards
 from tcbot.modules.helper.extraction import parse_user_id_token
 from tcbot.modules.helper.keyboards import reason_step_kb
+from tcbot.modules.helper.keyboards import rules as rules_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply
 from tcbot.modules.helper.pipelines import rules_step
@@ -553,7 +554,7 @@ class _ReasonStepMixin(_FlowBase):
                 may_pick = False
             published = await db.rules_db.published_rules() if may_pick else None
             if published is not None and published.get("items"):
-                markup = rules_step.picker_markup(published["items"], [], locale)
+                markup = rules_kb.picker_kb(published["items"], [], locale)
                 text = rules_step.picker_text(published["items"], [], locale)
                 if await self._edit_prompt(update, ctx, text, markup):
                     return WAITING_RULES
@@ -603,7 +604,7 @@ class _RulesStepMixin(_FlowBase):
             update,
             ctx,
             rules_step.picker_text(items, selected, locale),
-            rules_step.picker_markup(items, selected, locale),
+            rules_kb.picker_kb(items, selected, locale),
         )
         return WAITING_RULES
 

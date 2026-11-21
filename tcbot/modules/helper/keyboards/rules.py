@@ -14,6 +14,59 @@ from telegram.constants import KeyboardButtonStyle
 from tcbot.modules.helper.keyboards.common import back_row
 from tcbot.utils.i18n import t
 
+# * Callback payloads of the moderation rules picker, shared by the ban and
+# * reason flows. The picker keyboard owns them because it emits them.
+PICKER_PICK_PREFIX = "rules_step:pick:"
+PICKER_OTHER = "rules_step:other"
+PICKER_DONE = "rules_step:done"
+PICKER_CLEAR = "rules_step:clear"
+PICKER_CANCEL = "rules_step:cancel"
+
+
+def picker_kb(
+    items: list[dict[str, Any]], selected: list[int], locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """Build the moderation rules picker with toggles and control buttons."""
+    selected_ids = set(selected)
+    rows: list[list[InlineKeyboardButton]] = []
+    for item in items:
+        item_id = int(item["id"])
+        mark = "[x] " if item_id in selected_ids else "[ ] "
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    mark + str(item["title"]),
+                    callback_data=f"{PICKER_PICK_PREFIX}{item_id}",
+                    style=KeyboardButtonStyle.PRIMARY,
+                )
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                t("rules.picker.other", locale, plain=True),
+                callback_data=PICKER_OTHER,
+            ),
+            InlineKeyboardButton(
+                t("button.done", locale, plain=True),
+                callback_data=PICKER_DONE,
+                style=KeyboardButtonStyle.SUCCESS,
+            ),
+        ]
+    )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                t("rules.picker.clear", locale, plain=True),
+                callback_data=PICKER_CLEAR,
+            ),
+            InlineKeyboardButton(
+                t("button.cancel", locale, plain=True), callback_data=PICKER_CANCEL
+            ),
+        ]
+    )
+    return InlineKeyboardMarkup(rows)
+
 
 def _button(text: str, data: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(

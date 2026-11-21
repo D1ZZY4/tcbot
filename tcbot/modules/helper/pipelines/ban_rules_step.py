@@ -23,6 +23,7 @@ from telegram.ext import (
 )
 
 from tcbot import database as db
+from tcbot.modules.helper.keyboards import rules as rules_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply
 from tcbot.modules.helper.pipelines import rules_step
@@ -63,7 +64,7 @@ async def _render(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             await q.edit_message_text(
                 rules_step.picker_text(items, selected, locale),
                 parse_mode="MarkdownV2",
-                reply_markup=rules_step.picker_markup(items, selected, locale),
+                reply_markup=rules_kb.picker_kb(items, selected, locale),
             )
         except Exception as exc:
             log.debug("Ban rules picker edit failed: %s", exc)
@@ -72,7 +73,7 @@ async def _render(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             await update.effective_message.reply_text(
                 rules_step.picker_text(items, selected, locale),
                 parse_mode="MarkdownV2",
-                reply_markup=rules_step.picker_markup(items, selected, locale),
+                reply_markup=rules_kb.picker_kb(items, selected, locale),
             )
         except Exception as exc:
             log.debug("Ban rules picker reply failed: %s", exc)

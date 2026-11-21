@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from tcbot.modules.helper.keyboards import rules as rules_kb
 from tcbot.modules.helper.messages import rules as rules_msg
 from tcbot.modules.helper.pipelines import reason_flow, rules_step
 
@@ -78,7 +79,7 @@ def test_rules_scope_round_trips_selection_and_note() -> None:
 
 def test_picker_markup_offers_all_controls() -> None:
     """The picker always offers Other, Done, Clear, and Cancel."""
-    markup = rules_step.picker_markup([_item(1), _item(2)], [1], "en-US")
+    markup = rules_kb.picker_kb([_item(1), _item(2)], [1], "en-US")
     callbacks = {
         button.callback_data for row in markup.inline_keyboard for button in row
     }
