@@ -213,12 +213,12 @@ _cbq_limiter = _AsyncRateLimiter(max_calls=20, window=10.0, prefix="cbq")
 
 
 async def _is_exempt(uid: int) -> bool:
-    """Return True when ``uid`` is the current Founder (exempt from rate limits).
+    """Return True when ``uid`` is the current Owner (exempt from rate limits).
 
     Served from the cached owner ID (300 s TTL, invalidated on transfer),
     so hot paths pay zero database round trips on cache hits. A sync compare
     against the configured initial owner is deliberately NOT used as a fast
-    path: after an ownership transfer the initial owner is no longer Founder,
+    path: after an ownership transfer the initial owner is no longer the Owner,
     and a stale compare would exempt them from throttling forever. The
     cached read is the single source of truth. Fail-closed: any lookup
     failure (including no owner row yet) means not exempt, so an outage
@@ -295,7 +295,7 @@ async def global_rate_limit_handler(
     if not any(text.startswith(p) for p in cfg.prefixes if p):
         return  # * plain chat message - never rate-limit
 
-    # * One cached read decides the flood ceiling: Founder skips it, staff
+    # * One cached read decides the flood ceiling: the Owner skips it, staff
     # * get the roomier bucket, everyone else the strict one. Per-handler
     # * quotas below still pace each command individually.
     tier = await _throttle_tier(uid)
@@ -350,7 +350,7 @@ def ratelimiter[R](
             """Block the call and notify the user if the rate limit is exceeded."""
             uid = update.effective_user.id if update.effective_user else None
             if uid:
-                # * The Founder bypasses per-handler quotas (incident response
+                # * The Owner bypasses per-handler quotas (incident response
                 # * must never stall on a throttle); everyone else shares the
                 # * same bucket. Fail-closed via _is_exempt, cancellation
                 # * propagates.

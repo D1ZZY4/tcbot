@@ -217,7 +217,7 @@ Behavior:
   pending promotion requests, and invalidates the affected name, locale,
   and role cache entries after the transaction commits. The current
   federation owner is refused: transfer ownership first, otherwise the
-  sweep would leave the community without a Owner.
+  sweep would leave the community without an Owner.
 
 Database impact: `/leaveall` deactivates each `connected_chats` row in
 parallel with the leave and posts a `group_disconnected` log entry per

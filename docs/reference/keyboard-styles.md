@@ -165,11 +165,12 @@ Tapping a section renders the section text with a
 ### Conversation flow keyboards (`BuildReason`, `BuildProof`)
 
 ```text
-[ Skip ]   [ Cancel ]                   ← reason step (BuildReason.keyboard)
+[ text input ]   [ Cancel ]            ← reason step when skip is disallowed
+[ Skip ]   [ Cancel ]                   ← reason step when skip is allowed
 [ Skip ]   [ Done ]   [ Cancel ]        ← proof step (BuildProof.keyboard)
 ```
 
-`Skip` is omitted when skip is disallowed (warn requires reason), and `Done`
+`Skip` is omitted when skip is disallowed (warn, kick, and mute require a reason), and `Done`
 collects everything buffered and executes; both flows put all buttons on a
 single row. The action prefix lives in the callback (`ban_skip_reason`,
 `mute_done_proof`, `warn_cancel`, etc.) so the flow factory can wire it back

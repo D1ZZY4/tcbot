@@ -562,7 +562,7 @@ privilege.
   takes a PostgreSQL advisory lock, so two concurrent transfers serialise
   instead of interleaving: without the lock the two transactions could
   each revoke the other's owner row and leave the community with **no**
-  owner, which would leave the whole federation without a Owner until the
+  owner, which would leave the whole federation without an Owner until the
   next restart. The helper then verifies the single-row invariant loudly,
   refreshes the owner cache from a guarded source read, and calls
   `effective_role_cache.clear_all()` so no process keeps a stale
@@ -1188,9 +1188,10 @@ minimum 1). A second federation-wide threshold `cfg.fed_warn_limit` (env
 
 - `warn_count(user_id: int, chat_id: int) -> int`
   The active warning count of a user in a group.
-- `get_warns(user_id: int, chat_id: int, *, skip: int = 0, limit: int | None = None) -> list[WarnDoc]`
-  Full warn list for a user in a group, oldest first (timestamp ascending).
-  `limit=None` returns everything.
+- `get_warns(user_id: int, chat_id: int, *, skip: int = 0, limit: int | None = None, newest_first: bool = False) -> list[WarnDoc]`
+  Full warn list for a user in a group, oldest first by default.
+  `newest_first=True` pages the newest warnings on the server; `limit=None`
+  returns everything.
 - `user_total_warns(user_id: int) -> int`
   Total warn rows recorded against the user across all groups.
 - `user_warn_groups(user_id: int) -> list[tuple[int, int]]`

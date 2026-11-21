@@ -61,7 +61,7 @@ flowchart TD
     G --> Y[Reply/log result and end]
 ```
 
-Warns configure `BuildReason("warn", skip_allowed=False)`, so a reason cannot be skipped.
+Warns, kicks, and mutes configure `BuildReason(..., skip_allowed=False)`, so a reason cannot be skipped.
 
 ## Appeal flow
 

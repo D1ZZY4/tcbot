@@ -64,7 +64,7 @@ The mute command is a `ConversationHandler` built by `reason_flow.build_modactio
 5. The bot rejects attempts to mute itself or the executor's own account via `identity.refuse_message`.
 6. The bot parses an optional duration token from the first remaining argument.
 7. If an inline reason was supplied, the bot skips directly to proof collection (`WAITING_PROOF`). Otherwise it prompts for a reason (`WAITING_REASON`).
-8. Reason is skippable via the `Skip` button.
+8. A reason is required; the reason prompt offers text input and `Cancel`, but no `Skip`.
 9. Proof is skippable via the `Skip` button.
 10. `_execute_mute` restricts the target across all active connected groups plus primary groups, writes the active-mute record, posts the mute log, and edits the prompt to a summary.
 
@@ -135,9 +135,9 @@ Inline reasons share the same 1000-character cap as typed reasons (`reason_flow.
 
 ## Reason and proof behavior
 
-The mute conversation uses `BuildReason("mute")` and `BuildProof("mute")` (both default to `skip_allowed=True`). The reason keyboard exposes `Skip` and `Cancel`; the proof keyboard exposes `Skip`, `Done`, and `Cancel`:
+The mute conversation uses `BuildReason("mute", skip_allowed=False)` and `BuildProof("mute")`. The reason keyboard therefore has no `Skip`; the proof keyboard exposes `Skip`, `Done`, and `Cancel`:
 
-- Reason: text, `Skip`, `Cancel`.
+- Reason: text, `Cancel`.
 - Proof: photo, video, GIF, file, `Skip`, `Done`, `Cancel`.
 
 The `_ModActionFlow` class in `reason_flow.py` enforces the same race-safe semantics described in [`kicking.md`](kicking.md): proof buffering until `Done`, double-submit guard via the `mute_executing` key of the conversation scope, fallback cancel on any unrecognized command.
@@ -158,10 +158,10 @@ Execution order:
 
 1. Resolve the origin chat from the update; abort before any side effect when it is absent.
 2. Build the active-groups list: `groups_db.active_groups()` plus any primary groups (`cfg.main_group`) that are not already present. A fetch outage aborts with a retry notice and no group is touched.
-3. Persist `db.mutes_db.record_mute(...)` first. A failing write aborts with a retry notice and no group is touched (fail-closed, mirroring the ban flow and the warn auto-ban): enforcing chats without a stored decision would leave a restriction that `/tcunmute` refuses to lift.
-4. Build the restriction `ChatPermissions(can_send_messages=False)` and the `until_date` value (`utc_now() + duration` or `None` for permanent).
-5. Remove the target's effective role via `demote_before_enforcement(..., trigger="mute")` (best-effort; the mute proceeds even if the demote fails).
-6. Upload proof to `cfg.proofs` with the `messages.proof_caption_new` caption, archive the landed items, re-run the fresh rank gate, and write the mute decision. The durable `apply` run then restricts every group; failed targets are counted and retried by the enforcement worker, while an upload failure degrades to no proof link.
+3. Upload proof to `cfg.proofs` with the `messages.proof_caption_new` caption and archive the landed items. An upload failure degrades to no proof link without aborting the mute.
+4. Build the restriction `ChatPermissions(can_send_messages=False)` and the `until_date` value (`utc_now() + duration` or `None` for permanent), then re-run the fresh rank gate because the proof upload can outlive a demotion or a target promotion.
+5. Persist `db.mutes_db.record_mute(...)` with the proof items and the enforcement chat list. A failing write aborts with a retry notice and no group is touched (fail-closed, mirroring the ban flow and the warn auto-ban): enforcing chats without a stored decision would leave a restriction that `/tcunmute` refuses to lift.
+6. Remove the target's effective role via `demote_before_enforcement(..., trigger="mute")` (best-effort; the mute proceeds even if the demote fails), then deliver the queued `apply` run. Failed targets are counted and retried by the enforcement worker.
 7. Run two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
     - `bot.send_message(cfg.logs, mute_log, ..., reply_markup=proof_kb)`.
     - `bot.edit_message_text(summary, chat_id=prompt_chat, message_id=prompt_id, ..., reply_markup=proof_kb)` so the moderator sees the result inline.
@@ -270,7 +270,7 @@ Key behaviors to keep in mind:
 4. Self-mute and bot-mute attempts are rejected by `identity.refuse_message`.
 5. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
 6. Role-holding targets are auto-demoted when the mute is enforced.
-7. Reason is skippable; skipped reason records as the localized `replies.no_reason(locale)` text.
+7. A reason is required; there is no `Skip` on the reason prompt.
 8. Proof is skippable; skipped proof records nothing.
 9. The `_UNMUTE_CMDS` filter is excluded from the mute conversation fallback so unmute can interrupt a pending mute conversation.
 10. `execute_mute` restricts across `active_groups()` plus `cfg.main_group`, deduplicated.

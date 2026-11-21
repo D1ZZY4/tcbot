@@ -17,7 +17,7 @@ commands live in [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
 - Do not compare role ranks inline in command modules.
 - Use `ROLE_LABEL` for user-facing role labels.
 - Use `identity.classify`, `identity.refuse_message`, and
-  `identity.staff_notice` for self, bot, Telegram, Founder, and staff branches.
+  `identity.staff_notice` for self, bot, Telegram, Owner, and staff branches.
 - Call `Demote.execute(..., trigger="ban"|"kick"|"mute")` before banning, kicking,
   or muting a target who holds a federation role. This demote-before-enforce
   step is best-effort by design: when the role lookup or demote itself fails,
@@ -27,7 +27,7 @@ commands live in [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
   manual `/tcdemote` repairs it; the enforcement itself is never blocked by
   the demote failure. Unban and appeal-approve paths instead fail closed on
   the same failures.
-- Developer and Tester roles live in `tc_roles`.
+- Developer and Moderator are assignable roles; Owner and Admin are the governing tiers.
 - Admin promotion requests use `queues_db` and the existing promotion workflow.
 - Role lookup failures must reject the action (fail closed); never treat a
   failed lookup as a user with no role.

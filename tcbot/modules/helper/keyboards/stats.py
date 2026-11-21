@@ -24,7 +24,7 @@ def stats_main_kb(
     The drill-down panes enumerate federation-wide records, so their
     buttons render for TC Staff only; the ``stats_*`` callbacks enforce
     the same gate, so a stale or crafted tap still cannot open them. The
-    Users list exposes every cached user ID and stays Owner/Founder only.
+    Users list exposes every cached user ID and stays Owner only.
     """
     rows: list[list[InlineKeyboardButton]] = []
     if show_staff:

@@ -173,6 +173,7 @@ Current stack:
 │   │   │   │   ├── audit_logs.py    Audit-log builders
 │   │   │   │   ├── links.py         Telegram link builders (`t.me/c/...`, appeal deep links)
 │   │   │   │   ├── panels.py        Shared information and profile panels
+│   │   │   │   ├── rich.py          Rich messages: tables, blocks, buttons, and layout
 │   │   │   │   ├── rules.py         Rules rendering, hashing, and selected summaries
 │   │   │   │   └── replies.py       Localized reply functions and HelpEntry shape
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme

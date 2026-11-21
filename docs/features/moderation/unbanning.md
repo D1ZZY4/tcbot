@@ -32,7 +32,7 @@ flowchart TD
 
 `/tcunban` clears an active federation ban by revoking the underlying `moderation_actions` ban decisions and unbanning the target across every active connected group plus the primary groups (`cfg.main_group`). The revocation and the delivery intent land in one transaction, and the queued enforcement run owns the per-group work. The appeal-approve path uses the same run model through `bans_db.approve_appeal_and_queue_unban`.
 
-The Developer minimum rank (instead of Moderator) is enforced because unban is irreversible at the database level and a low-rank moderator could otherwise quietly undo a Owner ban.
+The Developer minimum rank (instead of Moderator) is enforced because unban is irreversible at the database level and a low-rank moderator could otherwise quietly undo an Owner ban.
 
 ## Commands and aliases
 
@@ -134,7 +134,7 @@ The unban log includes:
 - A concurrent unban that loses the race sees `revoked == 0` and returns the same idempotent no-record reply instead of claiming a new change.
 - `unban_chat_member` is called with `only_if_banned=True`, so it is a no-op in groups where the user is not currently banned.
 - A failed Telegram delivery leaves the run queued. The scheduled worker retries the target up to three times with a five-minute delay. After that budget is spent, `/tcrepair retry <run_id> [chat_id]` re-drives the existing run or one group without queueing a second unban.
-- The Developer rank minimum (`mod_only`) prevents a Moderator from unbanning a Owner or Admin. The rank check, the identity classification, and the active-ban pre-fetch are issued together; the refusal is evaluated before `execute_unban`, and a fresh gate runs again immediately before the revocation.
+- The Developer rank minimum (`mod_only`) prevents a Moderator from unbanning an Owner or Admin. The rank check, the identity classification, and the active-ban pre-fetch are issued together; the refusal is evaluated before `execute_unban`, and a fresh gate runs again immediately before the revocation.
 - A staff target re-promoted while banned is demoted first through `demote_before_unban(..., trigger="unban")`; a failed demote blocks the unban.
 - Federation log send failure does not roll back the decision or the run.
 

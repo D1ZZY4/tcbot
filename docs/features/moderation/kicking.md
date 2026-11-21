@@ -51,7 +51,7 @@ The kick command is a `ConversationHandler` built by `reason_flow.build_modactio
 4. The target must resolve to a Telegram user ID.
 5. The bot rejects attempts to kick itself or the executor's own account via `identity.refuse_message`.
 6. If an inline reason was supplied, the bot skips directly to proof collection (`WAITING_PROOF`). Otherwise it prompts for a reason (`WAITING_REASON`).
-7. Reason is skippable via the `Skip` button; the recorded reason becomes the localized `replies.no_reason(locale)` text when skipped.
+7. A reason is required. The reason prompt offers text input and `Cancel`, but no `Skip`; the moderator must supply the reason before proof collection.
 8. Proof is skippable via the `Skip` button. When supplied, photos, videos, animations, and files upload to `cfg.proofs` through `proof_flow.upload_proof_for_action`, and the landed items are archived with the kick decision.
 9. `execute_kick` re-runs the fresh rank gate after the upload, ban-then-unbans the target in the current chat, writes a `kicks_db.log_kick(...)` audit row, posts a kick log to `cfg.logs`, and replies with the summary.
 
@@ -88,9 +88,9 @@ Inline reasons share the same 1000-character cap as typed reasons (`reason_flow.
 
 ## Reason and proof behavior
 
-The kick conversation uses `BuildReason("kick")` and `BuildProof("kick")` (both default to `skip_allowed=True`). The reason keyboard exposes `Skip` and `Cancel`; the proof keyboard exposes `Skip`, `Done`, and `Cancel`:
+The kick conversation uses `BuildReason("kick", skip_allowed=False)` and `BuildProof("kick")`. The reason keyboard therefore has no `Skip`; the proof keyboard exposes `Skip`, `Done`, and `Cancel`:
 
-- Reason: text, `Skip`, `Cancel`.
+- Reason: text, `Cancel`.
 - Proof: photo, video, GIF, file, `Skip`, `Done`, `Cancel`.
 
 The reason keyboard is built by `reason.keyboard()` and the proof keyboard by `proof.keyboard()`; each only contains `Skip` when its builder allows skipping.
@@ -182,7 +182,7 @@ Key behaviors to keep in mind:
 4. Self-kick and bot-kick attempts are rejected by `identity.refuse_message`.
 5. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
 6. Role-holding targets are auto-demoted when the kick is enforced.
-7. Reason is skippable; skipped reason records as the localized `replies.no_reason(locale)` text.
+7. A reason is required; there is no `Skip` on the reason prompt.
 8. Proof is optional for a kick. When supplied, the landed items are archived with the decision as a non-required evidence batch, so the audit record points at the real media instead of only a channel message.
 9. The `WAITING_PROOF` step accepts photos, videos, GIFs, and files; other messages bounce with a friendly prompt.
 10. Proof items accumulate until the moderator taps `Done` (an empty `Done` answers with a retry alert); the executor then runs once with everything collected.

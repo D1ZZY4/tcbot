@@ -127,6 +127,7 @@ tcbot/
 │       │   ├── safe_edits.py    Safe-edit transport helpers
 │       │   ├── audit_logs.py    Audit-log builders (LogBuilder + per-event logs)
 │       │   ├── links.py         Telegram link builders (`t.me/c/...`, appeal deep links)
+│       │   ├── rich.py          Rich messages: tables, blocks, buttons, layout, PTB transport
 │       │   └── replies.py       Shared localized reply and help-text strings, HelpEntry shape
 │       ├── scope.py        Per-conversation payload scope for the moderation flows
 │       └── pipelines/

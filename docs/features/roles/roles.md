@@ -35,7 +35,7 @@ flowchart TD
 
 ## Purpose
 
-The role system controls who can perform moderation and administrative actions. It combines one Owner/owner, Admin records, and custom Developer/Moderator roles into a single effective hierarchy used across bans, kicks, warnings, unbans, promotion flows, and role protection.
+The role system controls who can perform moderation and administrative actions. It combines one Owner, Admin records, and custom Developer/Moderator roles into a single effective hierarchy used across bans, kicks, warnings, unbans, promotion flows, and role protection.
 
 ## Effective role hierarchy
 

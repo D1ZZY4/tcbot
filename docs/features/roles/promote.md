@@ -79,9 +79,10 @@ await Promote.execute(
     target_id,
     target_fname,
     role,
+    locale=None,
 )  # tuple[ok, reply_text]
 await Promote.request_admin(
-    bot, admin_id, target_id, target_fname, target_username=None
+    bot, admin_id, target_id, target_fname, target_username=None, locale=None
 )  # tuple[ok, reply_text]
 ```
 
@@ -166,7 +167,7 @@ All callbacks re-check the tapper's current effective role (Owner/Admin) before 
 
 ### Approval path
 
-A non-owner tap, or a failed owner lookup, answers with an alert and leaves the card actionable. The card is shared through the Owner DM or the log channel, so editing it would let any reader remove the Owner's only decision surface. A request that targets the current Owner is refused: approving it would rewrite the owner assignment as Admin and leave the federation without a Owner. A transfer cancels that pending request, so the card cannot be approved later.
+A non-owner tap, or a failed owner lookup, answers with an alert and leaves the card actionable. The card is shared through the Owner DM or the log channel, so editing it would let any reader remove the Owner's only decision surface. A request that targets the current Owner is refused: approving it would rewrite the owner assignment as Admin and leave the federation without an Owner. A transfer cancels that pending request, so the card cannot be approved later.
 
 1. `queues_db.resolve(request_id, "approved", admin.id)` marks the request resolved. The claim is atomic, so a concurrent approve and reject cannot both win; the loser finds the request already resolved and stops.
 2. `users_roles.add_admin(target_id, admin.id)` grants the admin role. The assignment revokes the role the target held before it in the same transaction, so a stale Developer or Moderator row cannot survive the promotion.

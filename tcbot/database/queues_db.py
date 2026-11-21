@@ -326,7 +326,7 @@ async def cancel_pending_for_user(user_id: int, resolved_by: int) -> int:
     """Cancel the pending promotion request of *user_id*; return rows closed.
 
     An ownership transfer makes a queued promotion moot: the new owner
-    already holds the Founder role, and approving the stale request would
+    already holds the Owner role, and approving the stale request would
     overwrite that role. The request is closed as ``cancelled`` so the
     history keeps the submission without leaving a card that can still be
     approved.

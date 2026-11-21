@@ -179,7 +179,7 @@ Rules:
 2. The required authorization guard is second.
 3. `log_execution` is innermost.
 4. Message-event handlers are exempt from per-handler rate-limit decorators.
-5. Use `owner_only` for Founder-only actions, `staff_only` for Founder/Admin actions, `mod_only` for federation moderation, and `basic_mod_only` for kick, mute, and warn.
+5. Use `owner_only` for Owner-only actions, `staff_only` for Owner/Admin actions, `mod_only` for federation moderation, and `basic_mod_only` for kick, mute, and warn.
 6. Always call `await q.answer()` before performing other callback-query work.
 7. Never use private PTB attributes such as `q._bot`; use `ctx.bot`.
 8. Do not retain `Update`, `Message`, or `CallbackQuery` objects beyond the handler call lifetime.
@@ -360,7 +360,7 @@ The following patterns are forbidden:
 - Adding dependencies without updating `pyproject.toml` and `uv.lock` through `uv`.
 - Editing secrets or unrelated project files during a scoped task.
 - Using sequential awaits for independent operations.
-- Inlining self, bot, Telegram, Founder, or staff branches instead of using `identity.classify`.
+- Inlining self, bot, Telegram, Owner, or staff branches instead of using `identity.classify`.
 - Hardcoding localized user-facing wording in Python instead of the `i18n/` catalog, except for sanctioned audit logs, staff operational messages, and infrastructure error reports.
 - Passing rendered strings as plain non-`Safe` placeholders.
 - Placing placeholders inside mini-markup spans.

@@ -37,7 +37,7 @@ A banned user can reach the appeal flow through a bot deep link:
 The registered `/start` entry filter only accepts private-chat messages matching:
 
 ```text
-/start appeal_<10 lowercase letters or digits>
+/start appeal_<10-32 lowercase letters or digits>
 ```
 
 The deep-link flow itself is DM-only. If the link is opened outside a private chat, the bot asks the user to open it in private messages.

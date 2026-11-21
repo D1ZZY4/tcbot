@@ -43,7 +43,7 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
     """Build one of the four federated-tier authorization decorators.
 
     ``min_role`` names the lowest ``users_roles`` rank that passes; when it is
-    ``None`` only the Founder (owner id) is authorized. ``refusal`` names the
+    ``None`` means only the Owner id is authorized. ``refusal`` names the
     tier key in ``_REFUSAL_BY_LABEL`` rendered in the viewer's locale.
     """
 
@@ -78,7 +78,7 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
                             # * database, so it refreshes the effective-role
                             # * cache too. Without it the rank comparison in
                             # * the same request would read the role the
-                            # * previous Founder still had, and an ownership
+                            # * previous Owner still had, and an ownership
                             # * transfer would refuse its own target.
                             db.users_roles.cache_effective_role(uid, "owner")
                     else:
