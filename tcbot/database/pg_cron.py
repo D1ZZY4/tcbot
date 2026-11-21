@@ -52,17 +52,17 @@ def _jobs() -> tuple[tuple[str, str, str], ...]:
         (
             _MODERATION_EXPIRE_JOB,
             _MODERATION_EXPIRE_SCHEDULE,
-            f"SELECT {_qualified('expire_due_moderation_actions_and_queue_revokes')}();",
+            f"SELECT {_qualified('run_scheduled_job')}('{_MODERATION_EXPIRE_JOB}');",
         ),
         (
             _ROLE_EXPIRE_JOB,
             _ROLE_EXPIRE_SCHEDULE,
-            f"SELECT {_qualified('expire_due_role_assignments_and_audit')}();",
+            f"SELECT {_qualified('run_scheduled_job')}('{_ROLE_EXPIRE_JOB}');",
         ),
         (
             _ENFORCEMENT_RECONCILE_JOB,
             _ENFORCEMENT_RECONCILE_SCHEDULE,
-            f"SELECT {_qualified('reconcile_stuck_enforcement_targets')}();",
+            f"SELECT {_qualified('run_scheduled_job')}('{_ENFORCEMENT_RECONCILE_JOB}');",
         ),
         (
             _SCHEDULER_DRIFT_JOB,
@@ -129,9 +129,9 @@ async def sync_schedules() -> bool:
     """Register the database maintenance jobs when pg_cron owns them.
 
     Returns True only when the extension is present and every job was
-    registered. On a partial failure the jobs registered by this call are
-    removed again, so the caller can safely keep APScheduler as the single
-    owner instead of running some sweeps twice.
+    registered. On a partial failure every job this module owns is removed,
+    including entries left by an earlier boot, so a failed hand-off cannot
+    leave pg_cron and APScheduler running the same sweep concurrently.
     """
     if not cfg.pg_cron_enabled:
         # * Honour a toggle-off: remove jobs a previous deployment created.
@@ -147,8 +147,10 @@ async def sync_schedules() -> bool:
     scheduled: list[str] = []
     for name, schedule, command in _jobs():
         if not await _schedule_job(name, schedule, command):
-            for registered in scheduled:
-                await _remove_job(registered)
+            # * The failing slot removed its old entry before trying. Sweep
+            # * all known names so an entry created by an earlier boot cannot
+            # * survive a hand-off that fell back to APScheduler.
+            await _remove_known_jobs()
             return False
         scheduled.append(name)
     log.info(

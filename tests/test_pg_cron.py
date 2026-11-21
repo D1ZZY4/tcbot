@@ -69,11 +69,15 @@ def test_every_registry_job_is_registered(monkeypatch: pytest.MonkeyPatch) -> No
         "enforcement.reconcile",
         "scheduler.drift",
     ]
-    assert "expire_due_moderation_actions_and_queue_revokes" in scheduled[0][2]
-    assert "expire_due_role_assignments_and_audit" in scheduled[1][2]
-    assert "reconcile_stuck_enforcement_targets" in scheduled[2][2]
-    assert "run_scheduled_job" in scheduled[3][2]
-    assert all('"public".' in job[2] for job in scheduled)
+    # * Every database job goes through the registry dispatcher, so a
+    # * pg_cron-owned sweep records the same run and failure telemetry as the
+    # * APScheduler-owned one.
+    assert [job[2] for job in scheduled] == [
+        "SELECT \"public\".run_scheduled_job('moderation.expire');",
+        "SELECT \"public\".run_scheduled_job('role.expire');",
+        "SELECT \"public\".run_scheduled_job('enforcement.reconcile');",
+        "SELECT \"public\".run_scheduled_job('scheduler.drift');",
+    ]
 
 
 def test_partial_registration_rolls_back(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,7 +100,14 @@ def test_partial_registration_rolls_back(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(pg_cron, "_remove_job", _remove)
 
     assert asyncio.run(pg_cron.sync_schedules()) is False
-    assert removed == ["moderation.expire"]
+    # * A stale entry from an earlier boot must not keep running after the
+    # * hand-off to APScheduler has failed.
+    assert removed == [
+        "moderation.expire",
+        "role.expire",
+        "enforcement.reconcile",
+        "scheduler.drift",
+    ]
 
 
 def test_apscheduler_drops_the_expiry_job_when_pg_cron_owns_it(
