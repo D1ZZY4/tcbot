@@ -293,3 +293,68 @@ def test_a_demotion_during_a_fresh_read_is_not_undone(
         assert users_roles.effective_role_cache.get(uid) != "admin"
     finally:
         _invalidate(uid)
+
+
+def test_publishing_owner_uses_the_guarded_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A post-transfer publish cannot overwrite a newer concurrent transfer."""
+    calls: list[tuple[object, ...]] = []
+
+    class _FakeOwnerCache:
+        async def refresh(self, key: Any, fetch: Any) -> Any:
+            calls.append(("refresh", key))
+            return await fetch()
+
+        def invalidate(self, key: Any) -> None:
+            calls.append(("invalidate", key))
+
+        def put(self, key: Any, val: Any) -> None:
+            calls.append(("put", key, val))
+
+    async def _fetch_owner() -> int:
+        return 61020
+
+    async def _owner_count() -> int:
+        return 1
+
+    async def _clear_all(_self: Any) -> None:
+        return None
+
+    monkeypatch.setattr(users_roles, "owner_id_cache", _FakeOwnerCache())
+    monkeypatch.setattr(users_roles, "_fetch_owner_id", _fetch_owner)
+    monkeypatch.setattr(users_roles, "_owner_count", _owner_count)
+    monkeypatch.setattr(type(users_roles.effective_role_cache), "clear_all", _clear_all)
+
+    asyncio.run(users_roles._publish_owner(61020, action="test"))
+
+    assert ("refresh", _OWNER_KEY) in calls
+    assert not any(call[0] == "put" for call in calls)
+
+
+def test_publishing_owner_invalidates_when_the_refresh_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A committed transfer is never undone by a failed cache read."""
+    invalidated: list[Any] = []
+
+    class _FailingOwnerCache:
+        async def refresh(self, key: Any, fetch: Any) -> Any:
+            raise RuntimeError("read down")
+
+        def invalidate(self, key: Any) -> None:
+            invalidated.append(key)
+
+    async def _owner_count() -> int:
+        return 1
+
+    async def _clear_all(_self: Any) -> None:
+        return None
+
+    monkeypatch.setattr(users_roles, "owner_id_cache", _FailingOwnerCache())
+    monkeypatch.setattr(users_roles, "_owner_count", _owner_count)
+    monkeypatch.setattr(type(users_roles.effective_role_cache), "clear_all", _clear_all)
+
+    asyncio.run(users_roles._publish_owner(61021, action="test"))
+
+    assert invalidated == [_OWNER_KEY]

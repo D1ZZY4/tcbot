@@ -162,6 +162,24 @@ async def _owner_count() -> int:
 # ───────────────────────── Owner CRUD ────────────────────────── #
 
 
+async def _fetch_owner_id() -> int | None:
+    """Read the current owner from the assignments table.
+
+    Shared by the cached getter and the post-transfer publisher so both
+    publish a value read from the source under the same generation guard.
+    """
+    # * The lowest owner row wins, exactly like the old sorted read.
+    row = await db_call(
+        lambda: fetch_one(
+            select(role_assignments.c.user_id)
+            .where(role_assignments.c.role_key == _OWNER_ROLE, *_active_assignment())
+            .order_by(role_assignments.c.user_id)
+            .limit(1)
+        )
+    )
+    return row["user_id"] if row else None
+
+
 async def get_owner_id(*, fresh: bool = False) -> int | None:
     """Return the current owner's user ID (L1->L2->DB cached).
 
@@ -171,27 +189,14 @@ async def get_owner_id(*, fresh: bool = False) -> int | None:
     hidden for up to the 300 s owner TTL; display reads keep the cached
     fast path.
     """
-
-    async def _fetch() -> int | None:
-        # * The lowest owner row wins, exactly like the old sorted read.
-        row = await db_call(
-            lambda: fetch_one(
-                select(role_assignments.c.user_id)
-                .where(
-                    role_assignments.c.role_key == _OWNER_ROLE, *_active_assignment()
-                )
-                .order_by(role_assignments.c.user_id)
-                .limit(1)
-            )
-        )
-        return row["user_id"] if row else None
-
     if fresh:
         # * The refresh publishes the value only when the key was not
         # * invalidated while the read was in flight, so a transfer that
         # * lands mid-read cannot be undone in the cache.
-        return await owner_id_cache.refresh(_OWNER_KEY, _fetch)
-    return cast("int | None", await owner_id_cache.get_or_fetch(_OWNER_KEY, _fetch))
+        return await owner_id_cache.refresh(_OWNER_KEY, _fetch_owner_id)
+    return cast(
+        "int | None", await owner_id_cache.get_or_fetch(_OWNER_KEY, _fetch_owner_id)
+    )
 
 
 async def is_owner(user_id: int, *, fresh: bool = False) -> bool:
@@ -366,7 +371,18 @@ async def set_owner(user_id: int) -> None:
 
 async def _publish_owner(user_id: int, *, action: str) -> None:
     """Refresh the caches and verify the single-owner invariant after a swap."""
-    owner_id_cache.put(_OWNER_KEY, user_id)
+    # * A guarded refresh, not a blind put: two overlapping transfers commit
+    # * in lock order but can publish out of order after the lock is released.
+    # * The generation guard discards a read that overlapped another write.
+    try:
+        await owner_id_cache.refresh(_OWNER_KEY, _fetch_owner_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        # * The swap is already committed. Invalidate instead of failing the
+        # * command, so the next display read re-reads the source.
+        log.exception("%s owner cache refresh failed for user %d", action, user_id)
+        owner_id_cache.invalidate(_OWNER_KEY)
     # * The transaction is atomic, so the invariant holds. Verify it anyway
     # * and log loudly, so a split brain is noticed instead of serving
     # * nondeterministic owners.
