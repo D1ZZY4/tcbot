@@ -550,8 +550,9 @@ async def _ship_throttled(text: str) -> None:
                     message_thread_id=_thread_id,
                 )
             except Exception as exc:
+                # * The summary is best effort: a failed send must not drop
+                # * the current report that triggered this rollover.
                 log.warning("Failed to ship error summary to LOG_ERRORS: %s", exc)
-                return
     if _sent_in_window >= _SEND_BUDGET:
         _suppressed_in_window += 1
         return
