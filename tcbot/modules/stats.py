@@ -109,7 +109,7 @@ async def _require_owner_list(
 ) -> str | None:
     """Return the render locale when the tapper may open the Users list.
 
-    Owner-or-Owner only: the list carries every cached user ID. A denied
+    Owner only: the list carries every cached user ID. A denied
     tapper gets the Owner-only alert and ``None``. Lookup outages fail
     closed with a retry alert; cancellation propagates.
     """
@@ -259,7 +259,11 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     if isinstance(results, BaseException):
         # * An outage must not render as "no bans match this query": the
         # * operator would read a failed search as a clean result.
-        log.error("Stats search failed for query %r: %s", query, results)
+        # * The query is member-authored text. ERROR records reach the staff
+        # * channel, so log its shape rather than its contents.
+        log.error(
+            "Stats search failed for a %d-character query: %s", len(query), results
+        )
         chat_id = ctx.user_data.get(CHAT_KEY)
         msg_id = ctx.user_data.get(MSG_KEY)
         if chat_id is not None and msg_id is not None:
