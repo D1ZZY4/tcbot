@@ -9,11 +9,13 @@
 -- and the row level security is enabled again. The roles are checked
 -- first, because a plain PostgreSQL server does not carry them.
 --
--- The schema is taken from the connection, so the file applies to the
--- deployment schema and to the schema an integration test owns.
+-- The schema placeholder is the same one every other schema file uses.
+-- The loader substitutes the quoted identifier, so the quote marks are
+-- trimmed before the name reaches format('%I', ...).
 
 DO $do$
 DECLARE
+    v_schema text := btrim('%SCHEMA%', '"');
     table_name text;
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')
@@ -72,15 +74,15 @@ BEGIN
     ] LOOP
         EXECUTE format(
             'ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY',
-            current_schema(), table_name
+            v_schema, table_name
         );
         EXECUTE format(
             'DROP POLICY IF EXISTS deny_exposed_api_roles ON %I.%I',
-            current_schema(), table_name
+            v_schema, table_name
         );
         EXECUTE format(
             'CREATE POLICY deny_exposed_api_roles ON %I.%I TO authenticated, anon USING (false) WITH CHECK (false)',
-            current_schema(), table_name
+            v_schema, table_name
         );
     END LOOP;
 END;
@@ -90,6 +92,7 @@ $do$;
 -- exposed API roles do not get a grant on them either.
 DO $do$
 DECLARE
+    v_schema text := btrim('%SCHEMA%', '"');
     view_name text;
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')
@@ -109,7 +112,7 @@ BEGIN
     ] LOOP
         EXECUTE format(
             'REVOKE ALL ON %I.%I FROM anon, authenticated',
-            current_schema(), view_name
+            v_schema, view_name
         );
     END LOOP;
 END;
