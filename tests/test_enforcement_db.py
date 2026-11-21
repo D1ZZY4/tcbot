@@ -12,7 +12,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 from tcbot.database import enforcement_db, scheduler
-from tcbot.database.base import moderation_enforcement_runs, scheduled_job_runs
+from tcbot.database.base import (
+    moderation_enforcement_runs,
+    moderation_enforcement_targets,
+    scheduled_job_runs,
+)
 from tcbot.database.engine import fetch_one
 from tcbot.utils.time_and_date import utc_now
 from tests.postgres_support import (
@@ -158,6 +162,59 @@ async def test_a_failed_target_is_retried_after_its_deadline(
     assert row is not None
     assert row["status"] == "running"
     assert row["finished_at"] is None
+
+
+async def test_stale_requeue_respects_the_attempt_budget(
+    enforcement_db_ready: str,
+) -> None:
+    """A stranded target at the attempt ceiling becomes terminal, not retryable."""
+    now = utc_now()
+    case_id = await seed_case(9, opened_by_user_id=7)
+    await seed_action(
+        "ban",
+        9,
+        actor_user_id=7,
+        case_id=case_id,
+        created_at=now - timedelta(hours=2),
+        expires_at=now - timedelta(hours=1),
+    )
+    await scheduler.expire_due_decisions()
+    runs = await enforcement_db.claim_runs(limit=1)
+    run_id = int(str(runs[0]["id"]))
+
+    target_id = 0
+    for _ in range(enforcement_db.MAX_ATTEMPTS - 1):
+        targets = await enforcement_db.claim_targets(run_id)
+        assert targets
+        target_id = int(str(targets[0]["id"]))
+        await enforcement_db.complete_target(
+            target_id,
+            status="failed",
+            outcome="failed",
+            error_kind="TimedOut",
+            error_detail="network down",
+            retry_after=timedelta(seconds=0),
+        )
+        await enforcement_db.requeue_stale_runs(timedelta(seconds=0))
+        assert await enforcement_db.claim_runs(limit=1)
+
+    # * Leave the last attempt mid-delivery, as a worker crash would.
+    targets = await enforcement_db.claim_targets(run_id)
+    assert targets
+    target_id = int(str(targets[0]["id"]))
+    assert int(str(targets[0]["attempt_count"])) == enforcement_db.MAX_ATTEMPTS
+
+    await enforcement_db.requeue_stale_runs(timedelta(seconds=0))
+
+    row = await fetch_one(
+        moderation_enforcement_targets.select().where(
+            moderation_enforcement_targets.c.id == target_id
+        )
+    )
+    assert row is not None
+    assert row["status"] == "failed"
+    assert row["next_retry_at"] is None
+    assert row["last_error_kind"] == "attempts_exhausted"
 
 
 async def test_a_connect_replay_remainder_is_queued_for_the_new_chat(

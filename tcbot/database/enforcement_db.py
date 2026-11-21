@@ -16,6 +16,11 @@ from tcbot.database.engine import run_transaction
 from tcbot.database.types import as_int
 from tcbot.utils.time_and_date import utc_now
 
+# * Single source of truth for the delivery budget of one enforcement target.
+# * The worker and the stale-run requeue must agree, or a stranded target can
+# * receive an extra Telegram delivery after its attempts are exhausted.
+MAX_ATTEMPTS: int = 3
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -84,13 +89,25 @@ _REQUEUE_RUNS = text(
 # * deadline, never as pending: the target trigger only accepts
 # * in_progress -> succeeded|skipped|failed. The run is re-queued below, so
 # * the next tick claims the due target through the failed-retry branch.
+# * A target that already used its attempt budget becomes terminal instead,
+# * so a stale run cannot deliver an extra time during a Telegram outage.
 _REQUEUE_TARGETS = text(
     """
     UPDATE moderation_enforcement_targets AS t
        SET status = 'failed',
-           next_retry_at = now(),
-           last_error_kind = 'worker_timeout',
-           last_error_detail = 'Target stayed in progress past the stale-run window and was released for retry',
+           next_retry_at = CASE
+               WHEN t.attempt_count < :max_attempts THEN now()
+               ELSE NULL
+           END,
+           last_error_kind = CASE
+               WHEN t.attempt_count < :max_attempts THEN 'worker_timeout'
+               ELSE 'attempts_exhausted'
+           END,
+           last_error_detail = CASE
+               WHEN t.attempt_count < :max_attempts
+                   THEN 'Target stayed in progress past the stale-run window and was released for retry'
+               ELSE 'Target stayed in progress past the stale-run window and exhausted its attempt budget'
+           END,
            updated_at = now()
       FROM moderation_enforcement_runs AS r
      WHERE t.run_id = r.id
@@ -695,7 +712,10 @@ async def requeue_stale_runs(stale_after: timedelta = timedelta(minutes=30)) -> 
     """
 
     async def _work(sess: AsyncSession) -> None:
-        params = {"stale_seconds": int(stale_after.total_seconds())}
+        params = {
+            "stale_seconds": int(stale_after.total_seconds()),
+            "max_attempts": MAX_ATTEMPTS,
+        }
         await sess.execute(_REQUEUE_TARGETS, params)
         await sess.execute(_REQUEUE_RUNS, params)
 

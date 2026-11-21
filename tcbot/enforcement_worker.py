@@ -41,7 +41,7 @@ log = get_logger(__name__)
 _BOT: Bot | None = None
 _MAX_RUNS_PER_TICK: int = 10
 _MAX_TARGETS_PER_RUN: int = 100
-_MAX_ATTEMPTS: int = 3
+_MAX_ATTEMPTS: int = db.enforcement_db.MAX_ATTEMPTS
 _RETRY_DELAY = timedelta(minutes=5)
 
 
