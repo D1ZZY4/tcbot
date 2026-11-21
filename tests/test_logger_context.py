@@ -2,13 +2,17 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Request-context logging: bound IDs render on every line until cleared."""
+"""Request-context logging: binding, rendering, and decorator cleanup."""
 
 from __future__ import annotations
 
 import logging
+from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
+from tcbot.modules.helper.decorators import tracing
 from tcbot.utils.logger import (
     BotLogFormatter,
     bind_request_context,
@@ -42,3 +46,39 @@ def test_structlog_logger_reaches_caplog(caplog: Any) -> None:
     with caplog.at_level(logging.INFO, logger="test.logger.routing"):
         log.info("hello structlog %s", "world")
     assert "hello structlog world" in caplog.text
+
+
+def _wrapped_update() -> Any:
+    return SimpleNamespace(
+        update_id=1,
+        effective_user=SimpleNamespace(id=2),
+        effective_chat=SimpleNamespace(id=-3),
+    )
+
+
+async def test_log_execution_clears_context_after_success(monkeypatch: Any) -> None:
+    """The tracer clears request IDs after a handler completes normally."""
+    cleared: list[bool] = []
+    monkeypatch.setattr(tracing, "clear_request_context", lambda: cleared.append(True))
+
+    async def _ok(update: Any, ctx: Any) -> str:
+        return "done"
+
+    assert await tracing.log_execution(_ok)(_wrapped_update(), None) == "done"
+    assert cleared == [True]
+
+
+async def test_log_execution_clears_context_when_handler_raises(
+    monkeypatch: Any,
+) -> None:
+    """The tracer clears request IDs even when a handler raises."""
+    cleared: list[bool] = []
+    monkeypatch.setattr(tracing, "clear_request_context", lambda: cleared.append(True))
+
+    async def _boom(update: Any, ctx: Any) -> None:
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await tracing.log_execution(_boom)(_wrapped_update(), None)
+
+    assert cleared == [True]
