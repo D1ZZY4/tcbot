@@ -276,6 +276,7 @@ Single owner for the outbound Telegram transport tuning used by every runtime en
 | `HTTP_READ_TIMEOUT` / `HTTP_WRITE_TIMEOUT` / `HTTP_CONNECT_TIMEOUT` / `HTTP_POOL_TIMEOUT` | Seconds for the PTB `ApplicationBuilder` HTTP timeouts. |
 | `API_POOL_SIZE` | Connection pool size for the underlying httpx client. |
 | `TELEGRAM_LOOKUP_TIMEOUT` | Standard 3s budget for a single Telegram lookup (`get_chat`, `get_chat_member`). |
+| `TELEGRAM_ACTION_TIMEOUT` | Shared 20s bound for one Telegram state-changing call (ban, mute, unban, review-card edit), applied by both workers. |
 
 `tcbot/__main__.py` imports these for both webhook and polling transport instead of redefining them, so timeout and pool behavior stays identical across transports.
 

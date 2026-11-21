@@ -66,11 +66,13 @@ No commands. A single callback renders the community links menu.
 |---|---|
 | `additional_menu` | Render `additional.msg.body` with `additional_menu_kb`. |
 
-`additional_menu_kb` shows the channel, group, appeal, and logs rows. Each
-row uses the matching env URL (`COMMUNITY_CHANNEL_URL`,
-`COMMUNITY_GROUP_URL`, `COMMUNITY_APPEAL_URL`, `COMMUNITY_LOGS_URL`) and
-falls back to the built-in community link when the value is empty. Rate
-limit: 15 callbacks per 30 s. No database impact.
+`additional_menu_kb` shows the channel, group, appeal, and logs rows. It
+resolves each link from the configured chat ids (`MAIN_CHANNEL`,
+`MAIN_GROUP`, `APPEALS`, `LOGS`) through `community_links.resolve`, which
+prefers a chat username and falls back to an invite link. A chat with no
+public link is omitted rather than replaced by a built-in URL. The four
+lookups are independent and run in parallel. Rate limit: 15 callbacks per
+30 s. No database impact.
 
 ## Privacy: `privacy.py`
 

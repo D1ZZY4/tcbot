@@ -139,6 +139,7 @@ Current stack:
 │   │   ├── kicks_db.py       Kicks
 │   │   ├── mutes_db.py       Mutes
 │   │   ├── queues_db.py      Promotion requests
+│   │   ├── rules_db/         Community rules, publications, and acknowledgement
 │   │   ├── cache/            TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
 │   │   ├── pg_cron.py        Optional pg_cron ownership of database-only jobs
 │   │   ├── redis_client.py   Optional Redis client (owns the connect/degrade decision)
@@ -146,8 +147,10 @@ Current stack:
 │   │   ├── engine.py         Async engine, session boundary, circuit-breaker guard
 │   │   ├── connection_options.py  libpq search_path and UTC options shared by every engine
 │   │   ├── base/             Table, column, constraint, and index definitions
+│   │   ├── schema/           SQL views, functions, triggers, and seed data
 │   │   ├── migrations.py     Alembic wiring: applies the pending revisions at startup
 │   │   ├── enforcement_db.py Claim and record the queued expiry revokes
+│   │   ├── notifications_db.py Durable review-card edit outbox
 │   │   ├── erasure_db.py     Queue a Telegram-account erasure
 │   │   ├── documents.py      Typed document shapes
 │   │   ├── types.py          Domain primitive types
@@ -169,6 +172,8 @@ Current stack:
 │   │   │   │   ├── safe_edits.py    Safe-edit transport helpers
 │   │   │   │   ├── audit_logs.py    Audit-log builders
 │   │   │   │   ├── links.py         Telegram link builders (`t.me/c/...`, appeal deep links)
+│   │   │   │   ├── panels.py        Shared information and profile panels
+│   │   │   │   ├── rules.py         Rules rendering, hashing, and selected summaries
 │   │   │   │   └── replies.py       Localized reply functions and HelpEntry shape
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
 │   │   │   └── scope.py       Per-conversation payload scope for the moderation flows
@@ -193,13 +198,16 @@ Current stack:
 │   │   ├── maintenance.py    Maintenance commands
 │   │   ├── netspeed.py       Network speed test
 │   │   ├── privacy.py        Privacy panel (callback-only, via start menu)
+│   │   ├── rules.py          /tcrules editor and /rules menu
 │   │   └── start.py          /start command
 │   └── utils/                Logging, dispatch, prefixes, datetime helpers
 │       ├── circuit_breaker.py  Telegram/PostgreSQL circuit breaker
+│       ├── community_links.py  Resolve community menu links from chat ids
 │       ├── dispatch.py        fan_out() bounded concurrency dispatcher
 │       ├── formatter.py       MarkdownV2 formatter (esc, code, user_ref, bold)
 │       ├── i18n.py            TOML catalog, t() and locale resolution
 │       ├── logger.py          Logging setup
+│       ├── metrics.py         Runtime metrics counters
 │       ├── pagination.py      Page arithmetic (clamp_page) for paged views
 │       ├── prefixes.py        Command prefix resolution
 │       ├── secrets.py         Constant-time secret comparison for inbound credentials

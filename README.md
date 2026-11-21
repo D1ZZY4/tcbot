@@ -41,6 +41,7 @@ Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `PROOFS`, `API_ID`, an
 | `/tcconnect`, `/tcdisconnect`, `/rmtc`, `/tcgroups` | Connect or remove groups and list the federation roster. |
 | `/tcpromote`, `/tcdemote`, `/transferowner` | Manage Owner, Admin, Developer, and Moderator roles. |
 | `/tcstats` | Federation statistics with drill-down views. |
+| `/tcrules`, `/rules` | Staff rule editor and the read-only community rules menu. |
 | `/tcpromoterequests`, `/tcpromotelist` | Submit an Admin promotion request and list the pending ones. |
 | `/help`, `/start` | Topic help and the start menu. |
 | `/language` | Per-user or per-group interface language. |

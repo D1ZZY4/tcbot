@@ -564,10 +564,13 @@ privilege.
   each revoke the other's owner row and leave the community with **no**
   owner, which would leave the whole federation without a Owner until the
   next restart. The helper then verifies the single-row invariant loudly,
-  puts the new ID in the owner cache, and calls
+  refreshes the owner cache from a guarded source read, and calls
   `effective_role_cache.clear_all()` so no process keeps a stale
-  `"owner"` role after the transfer. A failed transfer rolls back, fails
-  closed, and logs operator guidance.
+  `"owner"` role after the transfer. The guarded refresh discards a read
+  that overlapped another transfer, so two concurrent swaps cannot publish
+  out of order; a failed refresh invalidates the key instead of failing the
+  committed swap. A failed transfer rolls back, fails closed, and logs
+  operator guidance.
 - `transfer_ownership(previous_owner_id: int, new_owner_id: int) -> None`
   The atomic transfer used by `/transferowner`: it verifies the current
   owner under the advisory lock, swaps the owner assignment, and grants the

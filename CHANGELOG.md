@@ -67,6 +67,8 @@ All notable changes to this project are documented here. For workflow details, s
 
 - **Current guides use the shipped role vocabulary** (`README.md`, `AGENTS.md`, `replit.md`, `docs/architecture/helpers.md`): Owner and Moderator replace the former Founder and Tester names in live documentation. Historical release notes are unchanged.
 - **Architecture guides describe the new callback guard and cache marker** (`docs/architecture/workflows.md`, `docs/architecture/database.md`): the workflow guide explains stale-tap rejection and the ban confirmation module, and the database guide explains the local pending-invalidation marker.
+- **Reference material matches the shipped rules surface** (`README.md`, `AGENTS.md`, `docs/reference/keyboard-styles.md`, `docs/features/moderation/rules.md`, `docs/architecture/helpers.md`, `docs/architecture/database.md`, `docs/architecture/utilities.md`, `docs/features/moderation/connecting.md`): the command table lists `/tcrules` and `/rules`, the repository tree includes the rules, schema, notifications, panels, and metrics modules, the rules-picker callbacks and keyboard ownership are documented, and the permission helper, guarded owner refresh, shared action timeout, and connect replay failure behavior are described.
+- **Setup and module guides no longer document removed community URL variables** (`docs/getting-started/setup.md`, `docs/features/misc-modules.md`): the Additional Links menu resolves its buttons from chat ids through Telegram instead of static `COMMUNITY_*_URL` settings with built-in defaults. Historical release notes are unchanged.
 
 ## Releases
 

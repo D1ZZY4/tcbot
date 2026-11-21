@@ -82,14 +82,14 @@ systemd, Windows over RDP) live in the collapsible `Deployment` section of
 
 ### Community links (optional)
 
-The Additional Links menu in the bot start screen shows four buttons by default: Main Channel, Discussion Group, Logs Channel, and Appeals Channel. Each reads `COMMUNITY_*_URL`; a non-empty env value overrides the built-in default, and empty falls back to it, so a fresh deployment shows every button with zero setup. A non-http(s) env value is rejected: it logs a warning and that button is omitted.
+The Additional Links menu in the bot start screen offers Main Channel, Discussion Group, Logs Channel, and Appeals Channel. The links are derived from chat ids, not static URLs: `community_links.resolve` asks Telegram for each chat and prefers its username, then its invite link. A chat with neither is omitted, so a fresh deployment may show fewer than four buttons until the chats have a public handle.
 
-| Variable | Button label |
+| Source chat id | Button label |
 |---|---|
-| `COMMUNITY_CHANNEL_URL` | Main Channel |
-| `COMMUNITY_GROUP_URL` | Discussion Group |
-| `COMMUNITY_LOGS_URL` | Logs Channel |
-| `COMMUNITY_APPEAL_URL` | Appeals Channel |
+| `MAIN_CHANNEL` | Main Channel |
+| `MAIN_GROUP` | Discussion Group |
+| `LOGS` | Logs Channel |
+| `APPEALS` | Appeals Channel |
 
 ## Environment variable format
 
@@ -136,7 +136,7 @@ PROOFS="-1001234567890"
 | `PROOFS` | Yes | negative `chat_id` or `chat_id/thread_id` | Destination for ban proof media. Startup fails when it is missing, names a user, or is otherwise invalid, because a ban cannot be filed without landed evidence. |
 | `LOGS` | Recommended | `chat_id` or `chat_id/thread_id` | Audit-log destination. The bot boots without it, but every audit post then fails. |
 | `LOGS_ERRORS` | Recommended | `chat_id` or `chat_id/thread_id` | Error-report destination. When empty, reports fall back to the owner DM instead of being dropped. |
-| `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination (channel, group, or forum thread). Also receives a copy of every review card, so one value covers all appeal surfaces. The appeal instruction handle is derived from the public logs link (`COMMUNITY_LOGS_URL`), so no separate handle variable is needed. |
+| `APPEALS` | Yes for appeals | `chat_id` or `chat_id/thread_id` | Submitted appeal record destination (channel, group, or forum thread). Also receives a copy of every review card, so one value covers all appeal surfaces. The appeal instruction handle is derived from the public link of `LOGS`, so no separate handle variable is needed. |
 | `ALBUM_DEBOUNCE_SECONDS` | No | integer seconds | Proof silence window for ban proof media. Default `4`; values below `1` fall back to default. The 60-second collection cap still applies when this value is larger. |
 | `API_ID` | Yes | integer | Telegram API ID for MTProto identity lookups. The bot refuses to boot without it. |
 | `API_HASH` | Yes | string | Telegram API hash matching `API_ID`. Never commit the real value. |
@@ -156,12 +156,9 @@ PROOFS="-1001234567890"
 | `WARN_LIMIT` | No | integer >= 1 | Per-group warning threshold that triggers automatic federation ban. Default `3`. When a user's warn count in one group reaches or exceeds this value, they are federation-banned and their group warns cleared (on success). |
 | `FED_WARN_LIMIT` | No | integer >= 0 | Federation-wide warning threshold: sum of warn counts across all groups triggers an automatic federation ban when >= this value. Default `0` (disabled). Set to a positive integer to enable cross-group warn aggregation. |
 | `WARN_EXPIRY_DAYS` | No | integer >= 0 | Days after which warning decisions expire and stop counting towards the auto-ban threshold. Default `0` (disabled). Set to a positive integer to enable automatic warn expiry. |
-| `COMMUNITY_CHANNEL_URL` | No | http(s) URL | Main Channel button in the Additional Links menu. Built-in default `https://t.me/TranssionCoreFederation`. |
-| `COMMUNITY_GROUP_URL` | No | http(s) URL | Discussion Group button. Built-in default `https://t.me/TranssionCoreFederationGroup`. |
-| `COMMUNITY_LOGS_URL` | No | http(s) URL | Logs Channel button. Built-in default `https://t.me/TranssionCoreFederationLogs`. |
-| `COMMUNITY_APPEAL_URL` | No | http(s) URL | Appeals Channel button. Built-in default `https://t.me/TranssionCoreFederationAppeals`. |
+| `MAIN_CHANNEL` | Recommended | negative integer chat ID | Main community channel. Target for rules publication and source of the Main Channel button. A positive value is treated as unset with a warning. |
 
-Each community link falls back to its built-in default when empty, so all four buttons show with zero setup. A non-http(s) value is ignored with a warning and hides that button.
+Community menu links have no static URL variables. They are resolved from `MAIN_CHANNEL`, `MAIN_GROUP`, `LOGS`, and `APPEALS` through Telegram, and a chat without a public username or invite link drops its button.
 
 ### Optional pg_cron
 

@@ -66,8 +66,8 @@ delivery is not promised.
 
 ## Moderation picker
 
-The shared step in `rules_step.py` renders published items as a multi-select
-picker. A flow keeps the chosen item ids and an optional "Other / Not covered"
+The shared step in `rules_step.py` drives a multi-select picker over published
+items; its keyboard is built by `keyboards/rules.py`. A flow keeps the chosen item ids and an optional "Other / Not covered"
 note in its conversation scope and passes them to the decision writer, which
 attaches them to the case through `moderation_db.link_case_rules` in the same
 transaction as the decision. Draft items are refused by the schema; items from

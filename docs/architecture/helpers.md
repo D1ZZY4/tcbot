@@ -231,7 +231,7 @@ All command modules that expose user-facing commands use these helpers rather th
 | `no_reason(locale=None, *, plain)` | Default fallback text when no moderation reason is supplied. |
 | `err_cannot_resolve(locale=None, *, plain)` | Error when the target cannot be resolved (covers "no target provided" and "unresolvable"). Used by all command modules at `extract_target` return sites. |
 | `err_role_verify` / `err_group_only` / `err_no_connected_groups` / `err_group_not_found` / `err_groups_load_failed` / `err_db_retry` / `err_perm_expired` / `err_unknown_role` (`locale=None, *, plain`) | Role-verification, group-only, empty-federation, unknown-group, group-load-failure, DB-retry, expired-permission, and unknown-role notices respectively. |
-| `perm_founder_only` / `perm_staff_only` / `perm_dev_above` / `perm_tester_above` (`locale=None, *, plain`) | Permission hints: Owner only, TC Staff, Developer or above, Moderator or above. |
+| `perm_owner_only` / `perm_staff_only` / `perm_dev_above` / `perm_moderator_above` (`locale=None, *, plain`) | Permission hints: Owner only, TC Staff, Developer or above, Moderator or above. |
 | `context_bot_or_group` / `context_anyone` / `where_connected_group` (`locale=None`) | Context-guard and scope bodies for help "Where" sections (V2-escaped). |
 | `sec_commands(locale=None)` | Help-text section header: `Commands & Aliases`. |
 | `sec_who(locale=None)` | Help-text section header: `Who can use`. |
