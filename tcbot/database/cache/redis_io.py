@@ -29,15 +29,14 @@ _REDIS_MAX_PENDING: int = 200
 # * Hard ceiling for the queue depth, droppable ops included. A dead Redis
 # * would otherwise grow the queue without bound, and an unbounded queue is
 # * a memory leak that outlives the outage. At this ceiling a droppable op
-# * is dropped, and a revocation op first evicts a droppable op that has not
-# * started, so a pending revocation is not discarded in favour of a display
-# * hint. Only when every queued op is critical does the ceiling rise to the
-# * absolute bound below.
+# * is dropped, and a revocation first evicts a droppable op that has not
+# * started. When none can be evicted, the revocation is dropped here too:
+# * the revoked state then survives until the key TTL, which is recoverable,
+# * while exhausting process memory is not.
 _REDIS_HARD_MAX_PENDING: int = 1000
-# * Absolute ceiling: a run of critical ops with a dead Redis still has to
-# * stop somewhere. Past this depth even a revocation is dropped with an
-# * error-level warning: the revoked state then survives until the key TTL,
-# * which is recoverable, while exhausting the process memory is not.
+# * Final backstop for a queue already above the hard ceiling. Normal
+# * operation bounds the queue at the hard ceiling first, so this value is
+# * only reached when a backlog was created under a lower limit.
 _REDIS_ABSOLUTE_MAX_PENDING: int = 2000
 _redis_pending: dict[tuple[str, asyncio.AbstractEventLoop], int] = {}
 _redis_drop_warned: set[tuple[str, asyncio.AbstractEventLoop]] = set()
@@ -183,9 +182,9 @@ def enqueue_redis_mutation(
     (``umention``) remain droppable.
 
     At the hard ceiling a critical op evicts the oldest droppable op that
-    has not started, so a revocation is not discarded in favour of a
-    display hint. Only the absolute ceiling, where every queued op is
-    critical, drops a revocation.
+    has not started. If none can be evicted, the revocation is dropped to
+    keep the queue bounded; the absolute ceiling is a final backstop for a
+    queue already above the hard limit.
     """
     try:
         loop = asyncio.get_running_loop()

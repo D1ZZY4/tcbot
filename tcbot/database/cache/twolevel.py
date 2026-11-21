@@ -83,6 +83,7 @@ class TwoLevelCache[T]:
         "_epoch",
         "_is_revocation",
         "_mem",
+        "_pending_invalidations",
         "_redis_prefix",
         "_redis_ttl",
         "_revision",
@@ -121,6 +122,12 @@ class TwoLevelCache[T]:
         # * the fill when it changed, so an invalidation that lands during
         # * the read cannot be undone by the batch.
         self._revision: int = 0
+        # * Keys whose L2 delete is queued but may not have landed yet. An
+        # * in-process reader must not republish the old L2 value while the
+        # * tombstone/delete is still pending: the generation is already
+        # * current for a read that starts after the invalidation, so only
+        # * this local marker can close that window.
+        self._pending_invalidations: set[Any] = set()
 
     # ── Sync operations (in-memory layer only) ── #
 
@@ -136,6 +143,7 @@ class TwoLevelCache[T]:
     def put(self, key: Any, val: T) -> None:
         """Store in memory and enqueue an ordered Redis write."""
         self._mem.put(key, val)
+        self._pending_invalidations.discard(key)
         self._revision += 1
         # * Advance the key's generation so a fetch that started before
         # * this write cannot overwrite the newer value with an older one.
@@ -151,6 +159,7 @@ class TwoLevelCache[T]:
         so a fetch that started before the write cannot overwrite it.
         """
         self._mem.put(key, val)
+        self._pending_invalidations.discard(key)
         self._revision += 1
         self._advance(key)
 
@@ -174,7 +183,17 @@ class TwoLevelCache[T]:
         self._advance(key)
         if self._critical_delete:
             self._redis_tombstone_background(key)
-        self._redis_del_background(key, droppable=not self._critical_delete)
+        if cfg.redis_url:
+            self._pending_invalidations.add(key)
+            task = self._redis_del_background(key, droppable=not self._critical_delete)
+            if task is not None:
+                # * The delete has landed when this task finishes; until
+                # * then L2 can still hold the revoked value locally.
+                task.add_done_callback(
+                    lambda _: self._pending_invalidations.discard(key)
+                )
+        else:
+            self._redis_del_background(key, droppable=not self._critical_delete)
 
     def clear(self) -> None:
         """Clear the in-memory layer (does not flush Redis keys)."""
@@ -447,8 +466,12 @@ class TwoLevelCache[T]:
 
                 # L2: Redis (bounded: a stalled Redis must not hold the hot path)
                 rc = await self._client()
-                if rc is not None and (
-                    not self._critical_delete or not await self._tombstoned(rc, key)
+                if (
+                    rc is not None
+                    and key not in self._pending_invalidations
+                    and (
+                        not self._critical_delete or not await self._tombstoned(rc, key)
+                    )
                 ):
                     rkey = self._rkey(key)
                     try:
@@ -562,6 +585,7 @@ class TwoLevelCache[T]:
     def _publish(self, key: Any, val: T) -> None:
         """Store *val* in the memory layer and enqueue the ordered Redis write."""
         self._mem.put(key, val)
+        self._pending_invalidations.discard(key)
         self._enqueue_write(key, val)
 
     def _enqueue_write(self, key: Any, val: T) -> None:
@@ -642,12 +666,18 @@ class TwoLevelCache[T]:
         """Fire-and-forget Redis write without blocking the caller."""
         self._enqueue_write(key, val)
 
-    def _redis_del_background(self, key: Any, *, droppable: bool = True) -> None:
-        """Fire-and-forget Redis key deletion without blocking the caller."""
+    def _redis_del_background(
+        self, key: Any, *, droppable: bool = True
+    ) -> asyncio.Task[None] | None:
+        """Queue a Redis key deletion without blocking the caller.
+
+        The task is returned so ``invalidate`` can clear the local pending
+        marker once the delete has actually landed.
+        """
         if not cfg.redis_url:
-            return
+            return None
         rkey = self._rkey(key)
-        redis_io.enqueue_redis_mutation(
+        return redis_io.enqueue_redis_mutation(
             self._redis_prefix,
             lambda: self._redis_delete(rkey),
             droppable=droppable,

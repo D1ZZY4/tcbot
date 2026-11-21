@@ -1395,9 +1395,13 @@ advances on every write and every invalidation. A fetch that was already
 in flight compares the counter before it publishes, so a value that
 predates the change is handed to its caller but never cached. The same
 check and the cache-wide epoch guard `refresh`, `peek`, and `peek_many`,
-so an L2 read that races an invalidation cannot repopulate L1. The state is
-dropped once its last waiter leaves, so high-cardinality callers (profile
-lookups) never accumulate stale entries.
+so an L2 read that races an invalidation cannot repopulate L1. An invalidation
+also marks the key locally until its queued Redis delete lands: a `get_or_fetch`
+starting inside that window skips L2 and reads the source, because its
+generation is already current while the cross-process tombstone may not have
+been written yet. The marker clears when the delete finishes or a fresh value
+is published. The state is dropped once its last waiter leaves, so
+high-cardinality callers (profile lookups) never accumulate stale entries.
 
 - `refresh(key, fetch)`: async, re-reads the key from the source and publishes the result. It is the path a fresh read uses: the value it carries can predate a concurrent write, and the generation counter keeps that stale value out of the cache.
 

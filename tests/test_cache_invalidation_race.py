@@ -128,6 +128,57 @@ def test_a_cross_process_tombstone_forces_the_source_read(prefix: str) -> None:
         asyncio.run(_run())
 
 
+def test_a_local_invalidation_hides_stale_l2_until_its_delete_lands() -> None:
+    """A read racing a queued delete must not republish the revoked L2 value.
+
+    ``invalidate`` clears L1 and advances the generation at once, but the
+    cross-process tombstone and the L2 delete are queued on the background
+    FIFO. A reader that lands between those steps sees a live generation
+    and no tombstone, so it can read the old L2 payload and put it back in
+    L1 for a whole TTL.
+    """
+
+    class _StaleRedis:
+        async def exists(self, key: str) -> int:
+            _ = key
+            return 0  # the queued tombstone has not landed yet
+
+        async def get(self, key: str) -> str:
+            _ = key
+            return '"revoked"'
+
+    async def _no_client() -> None:
+        return None
+
+    def _never_run(
+        prefix: str, factory: Any, *, droppable: bool = True
+    ) -> asyncio.Task[Any] | None:
+        _ = (prefix, factory, droppable)
+        return None
+
+    async def _run() -> None:
+        cache = TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix="role")
+        fetch_calls = 0
+
+        async def _fetch() -> str:
+            nonlocal fetch_calls
+            fetch_calls += 1
+            return "fresh"
+
+        cache.invalidate("k")
+        assert await cache.get_or_fetch("k", _fetch) == "fresh"
+        assert fetch_calls == 1
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            twolevel, "cfg", dataclasses.replace(cfg, redis_url="redis://test")
+        )
+        patch.setattr(redis_io, "usable_redis_client", lambda: _StaleRedis())
+        patch.setattr(redis_io, "acquire_redis_client", _no_client)
+        patch.setattr(redis_io, "enqueue_redis_mutation", _never_run)
+        asyncio.run(_run())
+
+
 def test_a_locale_invalidation_enqueues_a_tombstone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
