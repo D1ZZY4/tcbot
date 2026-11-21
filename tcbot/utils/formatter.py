@@ -60,6 +60,35 @@ def italic(text: str) -> str:
     return f"_{content}_" if content else ""
 
 
+def underline(text: str) -> str:
+    """Wrap text in MarkdownV2 underline markers, escaping the content first."""
+    content = esc(text)
+    return f"__{content}__" if content else ""
+
+
+def strike(text: str) -> str:
+    """Wrap text in MarkdownV2 strikethrough markers, escaping the content first."""
+    content = esc(text)
+    return f"~{content}~" if content else ""
+
+
+# * Shared visual vocabulary for long bot messages. The rule separates a
+# * heading from its content; the arrow marks one item of a list. Neither
+# * character is a MarkdownV2 special, so neither needs escaping.
+SECTION_RULE: str = "━━━━━━━━━━━━━━━━━━━━"
+BULLET: str = "➛"
+
+
+def bullet_list(lines: list[str]) -> str:
+    """Render already-formatted lines as an arrow-bulleted block."""
+    return "\n".join(f"{BULLET} {line}" for line in lines if line)
+
+
+def section(title: str, body: str) -> str:
+    """Render a titled section with the shared divider rule."""
+    return f"{bold(title)}\n{SECTION_RULE}\n{body}"
+
+
 def code(text: str) -> str:
     """Wrap text in a MarkdownV2 code span, escaping backticks and backslashes.
 

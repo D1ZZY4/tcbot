@@ -18,6 +18,7 @@ from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, guards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
 from tcbot.utils.formatter import code
 from tcbot.utils.i18n import Safe, t
@@ -132,7 +133,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         elif broadcast_text:
             try:
                 await ctx.bot.send_message(
-                    chat_id, broadcast_text, parse_mode="MarkdownV2"
+                    chat_id, apply_style(broadcast_text), parse_mode="MarkdownV2"
                 )
             except BadRequest as exc:
                 # * Retry as plain text only for MarkdownV2 parse failures. Any
@@ -172,11 +173,13 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if status is not None:
         edit_r, log_r = await asyncio.gather(
             status.edit_text(
-                t(
-                    "broadcasting.send.done",
-                    locale,
-                    ok=Safe(code(str(success))),
-                    failed=Safe(code(str(failed))),
+                apply_style(
+                    t(
+                        "broadcasting.send.done",
+                        locale,
+                        ok=Safe(code(str(success))),
+                        failed=Safe(code(str(failed))),
+                    )
                 ),
                 parse_mode="MarkdownV2",
             ),

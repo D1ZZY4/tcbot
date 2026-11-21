@@ -9,9 +9,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from telegram import Bot
 from telegram.error import BadRequest
 
 from tcbot import cfg
+from tcbot.modules.helper.messages import rich
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
 
@@ -25,6 +28,42 @@ log = get_logger(__name__)
 # ─────────────────────────────── Safe edits ──────────────────────────────── #
 
 _IGNORED = {"message is not modified", "message to edit not found", "chat not found"}
+
+
+def _styled(text: str, parse_mode: str | None) -> str:
+    """Apply the shared visual grammar to formatted text only.
+
+    Plain notices (``parse_mode=None``) are never parsed by Telegram, so
+    adding MarkdownV2 layout to them would ship raw markup to the viewer.
+    """
+    return apply_style(text) if parse_mode == "MarkdownV2" else text
+
+
+def _rich_payload(text: str, parse_mode: str | None) -> dict[str, Any] | None:
+    """Return a rich payload for formatted text, or None for plain notices."""
+    if parse_mode != "MarkdownV2":
+        return None
+    return rich.markdown_message_from(_styled(text, parse_mode))
+
+
+def _bot_of(obj: object) -> Bot | None:
+    """Return the bot of a PTB object, or None for lightweight fakes."""
+    getter = getattr(obj, "get_bot", None)
+    if getter is None:
+        return None
+    try:
+        return getter()
+    except Exception:
+        return None
+
+
+def _rich_ready(bot: object | None) -> bool:
+    """Only a real PTB Bot can reach the Bot API rich-message methods.
+
+    Lightweight fakes and older PTB releases keep the MarkdownV2 path, which
+    is also the compatibility fallback for servers without rich support.
+    """
+    return isinstance(bot, Bot)
 
 
 def _log_edit_failure(
@@ -88,8 +127,26 @@ async def safe_edit(
     propagating them; cancellation always propagates. ``parse_mode``
     defaults to ``"MarkdownV2"``; pass ``None`` for plain text.
     """
+    payload = _rich_payload(text, parse_mode)
+    rich_bot = _bot_of(msg)
+    if payload is not None and isinstance(rich_bot, Bot):
+        await _edit_via(
+            rich.edit_rich(
+                rich_bot,
+                msg.chat.id,
+                msg.message_id,
+                payload,
+                reply_markup=kwargs.get("reply_markup"),
+                fallback_text=_styled(text, parse_mode),
+            ),
+            log_level=log_level,
+            log_label=log_label,
+            catch_all=catch_all,
+            default_msg="edit failed: %s",
+        )
+        return
     await _edit_via(
-        msg.edit_text(text, parse_mode=parse_mode, **kwargs),
+        msg.edit_text(_styled(text, parse_mode), parse_mode=parse_mode, **kwargs),
         log_level=log_level,
         log_label=log_label,
         catch_all=catch_all,
@@ -113,8 +170,27 @@ async def safe_edit_cb(
     content (e.g. a section sub-button while already viewing that section).
     The failure parameters behave exactly as in :func:`safe_edit`.
     """
+    payload = _rich_payload(text, parse_mode)
+    target = getattr(q, "message", None)
+    rich_bot = _bot_of(q)
+    if payload is not None and target is not None and isinstance(rich_bot, Bot):
+        await _edit_via(
+            rich.edit_rich(
+                rich_bot,
+                target.chat.id,
+                target.message_id,
+                payload,
+                reply_markup=kwargs.get("reply_markup"),
+                fallback_text=_styled(text, parse_mode),
+            ),
+            log_level=log_level,
+            log_label=log_label,
+            catch_all=catch_all,
+            default_msg="callback edit failed: %s",
+        )
+        return
     await _edit_via(
-        q.edit_message_text(text, parse_mode=parse_mode, **kwargs),
+        q.edit_message_text(_styled(text, parse_mode), parse_mode=parse_mode, **kwargs),
         log_level=log_level,
         log_label=log_label,
         catch_all=catch_all,
@@ -140,9 +216,31 @@ async def safe_edit_message(
     state instead of a live ``Message``/``CallbackQuery`` handle. Failure
     parameters behave exactly as in :func:`safe_edit`.
     """
+    payload = _rich_payload(text, parse_mode)
+    if (
+        payload is not None
+        and chat_id is not None
+        and message_id is not None
+        and _rich_ready(bot)
+    ):
+        await _edit_via(
+            rich.edit_rich(
+                bot,
+                chat_id,
+                message_id,
+                payload,
+                reply_markup=kwargs.get("reply_markup"),
+                fallback_text=_styled(text, parse_mode),
+            ),
+            log_level=log_level,
+            log_label=log_label,
+            catch_all=catch_all,
+            default_msg="message edit failed: %s",
+        )
+        return
     await _edit_via(
         bot.edit_message_text(
-            text,
+            _styled(text, parse_mode),
             chat_id=chat_id,
             message_id=message_id,
             parse_mode=parse_mode,
@@ -256,12 +354,21 @@ async def send_log(bot: Bot, text: str, **kwargs: Any) -> Message:
     through here, so a change to the contract lands in one place.
     """
     chat_id, thread_id = cfg.logs
-    return await bot.send_message(
+    if not _rich_ready(bot):
+        return await bot.send_message(
+            chat_id,
+            apply_style(text),
+            parse_mode="MarkdownV2",
+            message_thread_id=thread_id,
+            **kwargs,
+        )
+    return await rich.send_rich(
+        bot,
         chat_id,
-        text,
-        parse_mode="MarkdownV2",
+        rich.markdown_message_from(text),
         message_thread_id=thread_id,
-        **kwargs,
+        reply_markup=kwargs.get("reply_markup"),
+        fallback_text=apply_style(text),
     )
 
 
@@ -383,7 +490,23 @@ async def safe_reply(
     ``reply_text`` is almost always benign: the user blocked the bot,
     the chat was deleted, or the message thread was closed.
     """
+    payload = _rich_payload(text, parse_mode)
+    rich_bot = _bot_of(msg)
+    if payload is not None and isinstance(rich_bot, Bot):
+        try:
+            await rich.send_rich(
+                rich_bot,
+                msg.chat.id,
+                payload,
+                reply_to_message_id=msg.message_id,
+                reply_markup=kwargs.get("reply_markup"),
+                fallback_text=_styled(text, parse_mode),
+            )
+            return
+        except Exception as exc:
+            log.debug("%s reply failed: %s", log_label, exc)
+            return
     try:
-        await msg.reply_text(text, parse_mode=parse_mode, **kwargs)
+        await msg.reply_text(_styled(text, parse_mode), parse_mode=parse_mode, **kwargs)
     except Exception as exc:
         log.debug("%s reply failed: %s", log_label, exc)

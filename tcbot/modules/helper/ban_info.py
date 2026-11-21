@@ -13,7 +13,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.messages import message_link
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import code, user_ref
+from tcbot.utils.formatter import BULLET, SECTION_RULE, code, user_ref
 from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_dt
@@ -86,20 +86,24 @@ async def build_ban_detail(
     date_str = ban_date_text(ban, locale)
 
     text = (
-        f"{t('checking.ban_info.title', locale)}\n\n"
-        f"{t('checking.ban_info.user', locale, user=Safe(user_ref(uid, target_fname, target_uname)))}\n"
-        f"{t('checking.ban_info.user_id', locale, id=Safe(code(str(uid))))}\n\n"
-        f"{t('checking.ban_info.banned_by', locale, admin=Safe(user_ref(aid, admin_fname, admin_uname)))}\n"
-        f"{t('checking.ban_info.admin_id', locale, id=Safe(code(str(aid))))}\n\n"
+        f"{t('checking.ban_info.title', locale)}\n{SECTION_RULE}\n"
+        f"{BULLET} {t('checking.ban_info.user', locale, user=Safe(user_ref(uid, target_fname, target_uname)))}\n"
+        f"{BULLET} {t('checking.ban_info.user_id', locale, id=Safe(code(str(uid))))}\n\n"
+        f"{BULLET} {t('checking.ban_info.banned_by', locale, admin=Safe(user_ref(aid, admin_fname, admin_uname)))}\n"
+        f"{BULLET} {t('checking.ban_info.admin_id', locale, id=Safe(code(str(aid))))}\n\n"
         # * Reason is moderator free text: pass raw so the engine escapes
         # * MarkdownV2 at render time (Safe would inject markup/parse errors).
-        f"{t('checking.ban_info.reason', locale, reason=ban.get('reason', None) or t('checking.events.no_reason', locale, plain=True))}\n"
-        f"{t('checking.ban_info.ban_id', locale, id=Safe(code(ban.get('ban_id', ''))))}\n"
-        f"{t('checking.ban_info.date', locale, date=Safe(date_str))}"
+        f"{BULLET} {t('checking.ban_info.reason', locale, reason=ban.get('reason', None) or t('checking.events.no_reason', locale, plain=True))}\n"
+        f"{BULLET} {t('checking.ban_info.ban_id', locale, id=Safe(code(ban.get('ban_id', ''))))}\n"
+        f"{BULLET} {t('checking.ban_info.date', locale, date=Safe(date_str))}"
     )
     linked = ban.get("rules") or []
     if linked:
-        text += "\n" + t("checking.ban_info.rules", locale, rules=", ".join(linked))
+        text += (
+            "\n"
+            + f"{BULLET} "
+            + t("checking.ban_info.rules", locale, rules=", ".join(linked))
+        )
     return text, proof_link
 
 

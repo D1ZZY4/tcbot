@@ -19,6 +19,7 @@ from tcbot import database as db
 from tcbot.modules.helper import guards, messages
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import answer_ack, cb_error_edit, send_log
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code, user_ref
@@ -62,7 +63,10 @@ async def _update_or_send_log(bot: Bot, lc: int, msg_id: int | None, text: str) 
     if msg_id:
         try:
             await bot.edit_message_text(
-                text, chat_id=lc, message_id=msg_id, parse_mode="MarkdownV2"
+                apply_style(text),
+                chat_id=lc,
+                message_id=msg_id,
+                parse_mode="MarkdownV2",
             )
             return
         except Exception as exc:
@@ -279,19 +283,23 @@ class ApproveMixin:
         dm_r, card_r, log_r, unban_log_r = await asyncio.gather(
             bot.send_message(
                 target_id,
-                t(
-                    "appeals.decision.approve_dm",
-                    target_locale,
-                    ban_id=Safe(code(ban_id)),
-                    community=self.community_name,
+                apply_style(
+                    t(
+                        "appeals.decision.approve_dm",
+                        target_locale,
+                        ban_id=Safe(code(ban_id)),
+                        community=self.community_name,
+                    )
                 ),
                 parse_mode="MarkdownV2",
             ),
             q.edit_message_text(
-                t(
-                    "appeals.decision.approve_card",
-                    locale,
-                    admin=Safe(user_ref(admin.id, admin.first_name)),
+                apply_style(
+                    t(
+                        "appeals.decision.approve_card",
+                        locale,
+                        admin=Safe(user_ref(admin.id, admin.first_name)),
+                    )
                 ),
                 parse_mode="MarkdownV2",
                 reply_markup=None,
@@ -435,10 +443,12 @@ class RejectMixin:
         target_locale = await locale_for_user(target_id)
         try:
             await q.edit_message_text(
-                t(
-                    "appeals.decision.reject_card",
-                    staff_locale,
-                    admin=Safe(user_ref(admin.id, admin.first_name)),
+                apply_style(
+                    t(
+                        "appeals.decision.reject_card",
+                        staff_locale,
+                        admin=Safe(user_ref(admin.id, admin.first_name)),
+                    )
                 ),
                 parse_mode="MarkdownV2",
                 reply_markup=None,
@@ -458,10 +468,12 @@ class RejectMixin:
         try:
             await bot.send_message(
                 target_id,
-                t(
-                    "appeals.decision.reject_dm",
-                    target_locale,
-                    ban_id=Safe(code(ban_id)),
+                apply_style(
+                    t(
+                        "appeals.decision.reject_dm",
+                        target_locale,
+                        ban_id=Safe(code(ban_id)),
+                    )
                 ),
                 parse_mode="MarkdownV2",
             )

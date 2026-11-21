@@ -31,6 +31,7 @@ from tcbot.modules.helper.messages import (
     safe_edit_message,
     safe_reply,
 )
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines.ban_confirmation import (
     on_ban_update_continue,
     stale_ban_callback,
@@ -322,7 +323,9 @@ async def _execute_ban_record(
     if kb is not None:
         send_kwargs["reply_markup"] = kb
     try:
-        log_msg = await bot.send_message(logs_chat, log_text, **send_kwargs)
+        log_msg = await bot.send_message(
+            logs_chat, apply_style(log_text), **send_kwargs
+        )
     except Exception:
         log.exception("Ban log send failed for ban_id=%s", canonical_ban_id)
         return 0, True, canonical_ban_id, enforcement_run_id
@@ -663,14 +666,17 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     if prompt_msg_id and prompt_chat_id:
         edit_result, upsert_result, pm_result, markup_result = await asyncio.gather(
             bot.edit_message_text(
-                summary,
+                apply_style(summary),
                 chat_id=prompt_chat_id,
                 message_id=prompt_msg_id,
                 parse_mode="MarkdownV2",
             ),
             db.users_cache.upsert_user(target_id, None, target_fname),
             bot.send_message(
-                target_id, _pm_text, parse_mode="MarkdownV2", reply_markup=_pm_kb
+                target_id,
+                apply_style(_pm_text),
+                parse_mode="MarkdownV2",
+                reply_markup=_pm_kb,
             ),
             bot.edit_message_reply_markup(
                 chat_id=prompt_chat_id, message_id=prompt_msg_id
@@ -685,7 +691,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             try:
                 await bot.send_message(
                     prompt_chat_id,
-                    summary,
+                    apply_style(summary),
                     parse_mode="MarkdownV2",
                 )
             except Exception as exc:
@@ -696,7 +702,10 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         upsert_result, pm_result = await asyncio.gather(
             db.users_cache.upsert_user(target_id, None, target_fname),
             bot.send_message(
-                target_id, _pm_text, parse_mode="MarkdownV2", reply_markup=_pm_kb
+                target_id,
+                apply_style(_pm_text),
+                parse_mode="MarkdownV2",
+                reply_markup=_pm_kb,
             ),
             return_exceptions=True,
         )

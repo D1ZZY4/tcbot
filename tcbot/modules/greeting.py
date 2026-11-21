@@ -29,6 +29,7 @@ from tcbot.modules.helper.messages import (
     message_link,
     safe_reply,
 )
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import code, user_ref
@@ -117,14 +118,14 @@ async def _send_join_ban_notices(
     )
     if reply_to is not None:
         group_send = reply_to.reply_text(
-            group_text,
+            apply_style(group_text),
             parse_mode="MarkdownV2",
             reply_markup=keyboard,
         )
     else:
         group_send = bot.send_message(
             chat.id,
-            group_text,
+            apply_style(group_text),
             parse_mode="MarkdownV2",
             reply_markup=keyboard,
         )
@@ -138,7 +139,7 @@ async def _send_join_ban_notices(
     )
     dm_send = bot.send_message(
         member.id,
-        dm_text,
+        apply_style(dm_text),
         parse_mode="MarkdownV2",
         reply_markup=keyboard,
     )

@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tcbot import cfg
-from tcbot.utils.formatter import bold, code
+from tcbot.utils.formatter import BULLET, SECTION_RULE, bold, code
 from tcbot.utils.i18n import Safe, t
 
 if TYPE_CHECKING:
@@ -25,12 +25,13 @@ def about_msg(locale: str | None = None) -> str:
     cname = cfg.community_name
     disc = Safe(t("about.page.disclaimer_text", locale, community=cname))
     return (
-        f"{t('about.page.title', locale, title=Safe(bold(cname)))}\n\n"
+        f"{t('about.page.title', locale, title=Safe(bold(cname)))}\n"
+        f"{SECTION_RULE}\n"
         f"{t('about.page.intro', locale)}\n\n"
-        f"{t('about.page.how_title', locale)}\n"
-        f"{t('about.page.how_body', locale)}\n\n"
-        f"{t('about.page.history_title', locale)}\n"
-        f"{t('about.page.history_body', locale, community=cname)}\n\n"
+        f"{t('about.page.how_title', locale)}\n{SECTION_RULE}\n"
+        f"{BULLET} {t('about.page.how_body', locale)}\n\n"
+        f"{t('about.page.history_title', locale)}\n{SECTION_RULE}\n"
+        f"{BULLET} {t('about.page.history_body', locale, community=cname)}\n\n"
         f"{t('about.page.disclaimer', locale, disc=disc)}"
     )
 
@@ -48,8 +49,8 @@ def render_groups(
     large federations. Cap the body and name the remainder instead.
     """
     header = t("groups.list.header", locale, n=len(groups))
-    lines = [header]
-    used = len(header) + 1
+    lines = [header, SECTION_RULE]
+    used = len(header) + len(SECTION_RULE) + 2
     for i, g in enumerate(groups):
         title = g.get("title", "Unknown")
         if detailed:
@@ -61,9 +62,10 @@ def render_groups(
             )
         else:
             line = t("groups.list.item", locale, title=title)
+        line = f"{BULLET} {line}"
         if used + len(line) + 1 > _MAX_RENDER_CHARS:
             lines.append(
-                t("groups.list.more", locale, n=len(groups) - i),
+                f"{BULLET} {t('groups.list.more', locale, n=len(groups) - i)}",
             )
             break
         lines.append(line)

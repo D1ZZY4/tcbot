@@ -22,6 +22,7 @@ from tcbot.modules.helper.messages import (
     safe_reply,
     send_log,
 )
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -38,9 +39,9 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     """Transfer federation ownership to another user.
 
     Resolves the new owner target and runs the identity checks, then swaps
-    the owner and grants the previous Founder the Admin role in one
+    the owner and grants the previous Owner the Admin role in one
     transaction. A failed transaction leaves both roles untouched instead of
-    leaving the federation ownerless or the former Founder without a role.
+    leaving the federation ownerless or the former Owner without a role.
     Logs and the confirmation reply run in parallel afterward.
     """
     locale = await locale_for_update(update)
@@ -164,12 +165,12 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     # * The target's existing role is cleared inside transfer_ownership.
     # * Revoking it here would be a second, non-atomic side effect: a failed
     # * transfer would leave the target stripped of a role it still held.
-    # * The transaction swaps the owner, grants the previous Founder Admin,
+    # * The transaction swaps the owner, grants the previous Owner Admin,
     # * and revokes every active assignment of the new owner together.
 
-    # * The swap and the previous Founder's Admin grant are one transaction,
+    # * The swap and the previous Owner's Admin grant are one transaction,
     # * so a failure cannot leave the federation ownerless or leave the
-    # * former Founder with no role.
+    # * former Owner with no role.
     try:
         await db.users_roles.transfer_ownership(current_owner.id, target_id)
     except Exception:
@@ -184,8 +185,8 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     # * Point infra error DMs at the new owner from here on.
     error_reporter.set_owner(target_id)
     # * A promotion request filed before the transfer would now target the
-    # * Founder. It is cancelled so the card cannot be approved later; a
-    # * failure is non-fatal because the approval path refuses the Founder
+    # * Owner. It is cancelled so the card cannot be approved later; a
+    # * failure is non-fatal because the approval path refuses the Owner
     # * role on its own.
     try:
         cancelled = await db.queues_db.cancel_pending_for_user(
@@ -200,7 +201,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                 cancelled,
                 target_id,
             )
-    # * The atomic transfer already granted the previous Founder the Admin
+    # * The atomic transfer already granted the previous Owner the Admin
     # * role, so the reply no longer has a partial-success warning.
     log_text = ownership_transferred(
         target_id,
@@ -219,7 +220,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             log_text,
         ),
         msg.reply_text(
-            transfer_note,
+            apply_style(transfer_note),
             parse_mode="MarkdownV2",
         ),
         return_exceptions=True,

@@ -14,6 +14,7 @@ from tcbot import database as db
 from tcbot.modules.helper import guards, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import (
     BuildProof,
@@ -287,7 +288,7 @@ async def execute_kick(
         if prompt_chat is not None and prompt_id is not None:
             try:
                 await ctx.bot.edit_message_text(
-                    summary,
+                    apply_style(summary),
                     chat_id=prompt_chat,
                     message_id=prompt_id,
                     parse_mode="MarkdownV2",

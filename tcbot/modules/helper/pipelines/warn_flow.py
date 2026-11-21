@@ -16,6 +16,7 @@ from tcbot import database as db
 from tcbot.modules.helper import guards, keyboards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply, send_log
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines.demote_flow import Demote, demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import (
     BuildProof,
@@ -467,7 +468,7 @@ async def execute_warn(
             # * skip the warn cleanup below.
             try:
                 await msg.reply_text(
-                    f"{ban_notice}{applied_line}",
+                    apply_style(f"{ban_notice}{applied_line}"),
                     parse_mode="MarkdownV2",
                     reply_markup=proof_kb,
                 )
@@ -508,13 +509,15 @@ async def execute_warn(
             reply_markup=proof_kb,
         ),
         msg.reply_text(
-            t(
-                "warnings.issued.body",
-                locale,
-                user=Safe(user_ref(target_id, target_name)),
-                count=count,
-                limit=warn_limit,
-                reason=reason_text,
+            apply_style(
+                t(
+                    "warnings.issued.body",
+                    locale,
+                    user=Safe(user_ref(target_id, target_name)),
+                    count=count,
+                    limit=warn_limit,
+                    reason=reason_text,
+                )
             ),
             parse_mode="MarkdownV2",
             reply_markup=proof_kb,
@@ -653,12 +656,14 @@ async def execute_unwarn(
             log_text,
         ),
         msg.reply_text(
-            t(
-                "warnings.removed.body",
-                locale,
-                user=Safe(user_ref(target_id, target_name)),
-                new=new_count,
-                limit=warn_limit,
+            apply_style(
+                t(
+                    "warnings.removed.body",
+                    locale,
+                    user=Safe(user_ref(target_id, target_name)),
+                    new=new_count,
+                    limit=warn_limit,
+                )
             ),
             parse_mode="MarkdownV2",
         ),
@@ -796,11 +801,13 @@ async def execute_resetwarns(
             log_text,
         ),
         msg.reply_text(
-            t(
-                "warnings.cleared.body",
-                locale,
-                removed=removed,
-                user=Safe(user_ref(target_id, target_name)),
+            apply_style(
+                t(
+                    "warnings.cleared.body",
+                    locale,
+                    removed=removed,
+                    user=Safe(user_ref(target_id, target_name)),
+                )
             ),
             parse_mode="MarkdownV2",
         ),

@@ -25,6 +25,7 @@ from tcbot.modules.helper.messages import (
     safe_edit_cb,
     send_log,
 )
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import esc
 from tcbot.utils.i18n import t
@@ -79,9 +80,9 @@ async def execute_promo_decision(
         locale = None
     if isinstance(is_owner, BaseException):
         log.warning("on_promo_decision owner check failed: %s", is_owner)
-        # * The card is shared (the Founder DM, or the log channel when the
+        # * The card is shared (the Owner DM, or the log channel when the
         # * DM fails), so a refused tap must leave its buttons in place. An
-        # * edit here would let any reader of the card destroy the Founder's
+        # * edit here would let any reader of the card destroy the Owner's
         # * only decision surface.
         await answer_alert(q, t("admins.error.role_lookup_failed", locale, plain=True))
         return
@@ -130,7 +131,7 @@ async def execute_promo_decision(
     if action == "promo_approve":
         # * A request can outlive an ownership transfer. Approving it would
         # * rewrite the owner assignment as an Admin, leaving the federation
-        # * without a Founder, so the Founder role is refused here. The
+        # * without an Owner, so the Owner role is refused here. The
         # * request stays pending; the transfer cancels it separately.
         try:
             target_role = await db.users_roles.get_effective_role(target_id, fresh=True)
@@ -149,7 +150,7 @@ async def execute_promo_decision(
             return
         # * A banned target must not gain rank through a queued request:
         # * the request may have been filed before the ban landed, and the
-        # * Founder's tap must not override the ban.
+        # * Owner's tap must not override the ban.
         ban_refusal = await banned_target_refusal(
             target_id,
             locale,
@@ -243,11 +244,13 @@ async def execute_promo_decision(
         target_locale = await locale_for_user(target_id)
         notify_results = await asyncio.gather(
             q.edit_message_text(
-                existing_text
-                + t(
-                    "admins.decision.approved_suffix",
-                    locale,
-                    name=admin.first_name,
+                apply_style(
+                    existing_text
+                    + t(
+                        "admins.decision.approved_suffix",
+                        locale,
+                        name=admin.first_name,
+                    )
                 ),
                 parse_mode="MarkdownV2",
                 reply_markup=None,
@@ -303,11 +306,13 @@ async def execute_promo_decision(
         target_locale = await locale_for_user(target_id)
         reject_results = await asyncio.gather(
             q.edit_message_text(
-                existing_text
-                + t(
-                    "admins.decision.rejected_suffix",
-                    locale,
-                    name=admin.first_name,
+                apply_style(
+                    existing_text
+                    + t(
+                        "admins.decision.rejected_suffix",
+                        locale,
+                        name=admin.first_name,
+                    )
                 ),
                 parse_mode="MarkdownV2",
                 reply_markup=None,

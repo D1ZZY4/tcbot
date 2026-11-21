@@ -15,6 +15,7 @@ from tcbot.modules.helper import decorators, extraction, guards, identity, targe
 from tcbot.modules.helper.guards import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines.reason_flow import (
     WAITING_PROOF,
     WAITING_REASON,
@@ -156,8 +157,10 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         scope["warn_reason"] = inline_reason
         try:
             prompt = await msg.reply_text(
-                proof.noted_prompt(
-                    "warn", inline_reason, target_mention, locale=locale
+                apply_style(
+                    proof.noted_prompt(
+                        "warn", inline_reason, target_mention, locale=locale
+                    )
                 ),
                 parse_mode="MarkdownV2",
                 reply_markup=proof.keyboard(locale),
@@ -173,7 +176,7 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         prompt = await msg.reply_text(
-            reason.prompt(target_mention, "warn", locale=locale),
+            apply_style(reason.prompt(target_mention, "warn", locale=locale)),
             parse_mode="MarkdownV2",
             reply_markup=reason.keyboard(locale),
         )

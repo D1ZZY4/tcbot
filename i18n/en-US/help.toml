@@ -26,14 +26,14 @@ prefixes = "*Note:* All commands also work with {prefixes}"
 [module]
 title = "Help for {name}"
 body = """{title}
-
+━━━━━━━━━━━━━━━━━━━━
 {overview}
-{note}"""
+➛ {note}"""
 
 [section]
 body = """{title}
-
-{content}"""
+━━━━━━━━━━━━━━━━━━━━
+➛ {content}"""
 
 [not_found]
 body = "Module {query} not found.{hint}"

@@ -18,6 +18,7 @@ from tcbot.modules.helper import decorators, targets
 from tcbot.modules.helper.keyboards import ban_update_confirm_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import message_link, replies, safe_reply
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines.ban_flow import (
     BAN_USER_DATA_KEYS,
     WAITING_UPDATE_CONFIRM,
@@ -225,7 +226,9 @@ async def _ask_update_confirm(
     )
     scope = flow_scope(ctx, update)
     try:
-        prompt = await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=kb)
+        prompt = await msg.reply_text(
+            apply_style(text), parse_mode="MarkdownV2", reply_markup=kb
+        )
         scope["ban_prompt_msg_id"] = prompt.message_id
         scope["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:

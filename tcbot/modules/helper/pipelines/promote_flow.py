@@ -15,6 +15,7 @@ from tcbot.modules.helper import keyboards, messages
 from tcbot.modules.helper.guards import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_user
 from tcbot.modules.helper.messages import send_log
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -36,7 +37,7 @@ async def assign_admin(
     target_fname: str,
     locale: str | None = None,
 ) -> tuple[bool, str]:
-    """Founder-only path: directly give the target the admin role and log it."""
+    """Owner-only path: directly give the target the admin role and log it."""
     try:
         await db.users_roles.add_admin(target_id, admin_id)
     except Exception:
@@ -99,7 +100,7 @@ async def assign_subrole(
     role: str,
     locale: str | None = None,
 ) -> tuple[bool, str]:
-    """Founder/Admin path for Developer/Tester role assignment."""
+    """Owner/Admin path for Developer/Moderator role assignment."""
     if current_role == "admin":
         label = db.users_roles.role_label(role)
         return (
@@ -173,8 +174,8 @@ async def request_admin(
     target_username: str | None = None,
     locale: str | None = None,
 ) -> tuple[bool, str]:
-    """Enqueue an Admin promotion request and notify the Founder."""
-    # * A banned user must not reach the Founder's approval card: the
+    """Enqueue an Admin promotion request and notify the Owner."""
+    # * A banned user must not reach the Owner's approval card: the
     # * request path is public, so the guard belongs here as well as on
     # * the approval itself.
     refusal = await banned_target_refusal(
@@ -227,7 +228,7 @@ async def request_admin(
         try:
             await bot.send_message(
                 owner_id,
-                req_text,
+                apply_style(req_text),
                 parse_mode="MarkdownV2",
                 reply_markup=keyboards.promo_decision_kb(request_id),
             )
@@ -276,7 +277,7 @@ class Promote:
         target_username: str | None = None,
         locale: str | None = None,
     ) -> tuple[bool, str]:
-        """Enqueue an Admin promotion request and notify the Founder."""
+        """Enqueue an Admin promotion request and notify the Owner."""
         return await request_admin(
             bot, admin_id, target_id, target_fname, target_username, locale
         )
@@ -345,8 +346,8 @@ class Promote:
         if refusal is not None:
             return False, refusal
         if role == "admin":
-            # * Only the Founder grants the Admin tier outright. An Admin
-            # * may request it, and the Founder decides on the request.
+            # * Only the Owner grants the Admin tier outright. An Admin
+            # * may request it, and the Owner decides on the request.
             if executor_role == "owner":
                 return await assign_admin(
                     bot,

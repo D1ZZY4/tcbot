@@ -28,6 +28,7 @@ from tcbot.modules.helper import messages
 from tcbot.modules.helper.keyboards import appeal_cancel_kb, appeal_review_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import message_link, safe_reply, send_log
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines.appeal_review_flow import AppealReviewMixin
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.community_links import display as display_community_link
@@ -374,7 +375,7 @@ async def post_appeal(
     # * decide the appeal that replaced it.
     try:
         rv = await ctx.bot.send_message(
-            cfg.main_group, review_text, parse_mode="MarkdownV2"
+            cfg.main_group, apply_style(review_text), parse_mode="MarkdownV2"
         )
     except Exception:
         log.exception("Appeal review post failed")
@@ -387,7 +388,7 @@ async def post_appeal(
         rv_appeals, sent_log, markup = await asyncio.gather(
             ctx.bot.send_message(
                 appeal_chat,
-                review_text,
+                apply_style(review_text),
                 parse_mode="MarkdownV2",
                 message_thread_id=appeal_thread,
                 reply_markup=review_kb,
@@ -677,7 +678,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
         try:
             log_display = await display_community_link(ctx.bot, self.log_channel)
             instr = await msg.reply_text(
-                self.instruction_text(locale, log_display),
+                apply_style(self.instruction_text(locale, log_display)),
                 parse_mode="MarkdownV2",
                 reply_markup=appeal_cancel_kb(
                     t("button.cancel", locale, plain=True),

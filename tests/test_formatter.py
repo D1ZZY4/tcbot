@@ -7,13 +7,19 @@
 from __future__ import annotations
 
 from tcbot.utils.formatter import (
+    BULLET,
+    SECTION_RULE,
     bold,
+    bullet_list,
     code,
     esc,
     italic,
     link,
     pre,
     safe_username,
+    section,
+    strike,
+    underline,
     user_ref,
 )
 
@@ -98,6 +104,20 @@ def test_code_and_pre_leave_v2_punctuation_literal() -> None:
     assert code("a.b (x) - y!") == "`a.b (x) - y!`"
     assert pre("a_b") == "```a_b```"
     assert pre("x`y\\z") == "```x\\`y\\\\z```"
+
+
+def test_underline_and_strike_escape_their_content() -> None:
+    assert underline("a_b") == "__a\\_b__"
+    assert strike("a~b") == "~a\\~b~"
+    assert underline("") == ""
+    assert strike("") == ""
+
+
+def test_section_and_bullets_use_the_shared_vocabulary() -> None:
+    body = bullet_list(["one", "two"])
+    assert body == f"{BULLET} one\n{BULLET} two"
+    rendered = section("Heading", body)
+    assert rendered == f"*Heading*\n{SECTION_RULE}\n{BULLET} one\n{BULLET} two"
 
 
 def test_link_keeps_query_intact_escapes_parens() -> None:

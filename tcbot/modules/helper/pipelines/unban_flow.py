@@ -15,6 +15,7 @@ from tcbot.database import documents as docs
 from tcbot.modules.helper import guards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply, send_log
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import user_ref
 from tcbot.utils.i18n import Safe, t
@@ -265,11 +266,13 @@ async def execute_unban(
                 log_text,
             ),
             msg.reply_text(
-                t(
-                    "unbanning.summary.body",
-                    locale,
-                    user=Safe(user_ref(target_id, target_fname)),
-                    note=Safe(unban_note),
+                apply_style(
+                    t(
+                        "unbanning.summary.body",
+                        locale,
+                        user=Safe(user_ref(target_id, target_fname)),
+                        note=Safe(unban_note),
+                    )
                 ),
                 parse_mode="MarkdownV2",
             ),

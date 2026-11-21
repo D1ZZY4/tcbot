@@ -26,14 +26,14 @@ prefixes = "*Catatan:* Semua perintah juga bisa dipakai dengan {prefixes}"
 [module]
 title = "Bantuan untuk {name}"
 body = """{title}
-
+━━━━━━━━━━━━━━━━━━━━
 {overview}
-{note}"""
+➛ {note}"""
 
 [section]
 body = """{title}
-
-{content}"""
+━━━━━━━━━━━━━━━━━━━━
+➛ {content}"""
 
 [not_found]
 body = "Modul {query} tidak ditemukan.{hint}"

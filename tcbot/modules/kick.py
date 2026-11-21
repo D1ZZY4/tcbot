@@ -12,6 +12,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, targets
 from tcbot.modules.helper.messages import replies, safe_reply
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines.kick_flow import kick_conversation, proof, reason
 from tcbot.modules.helper.pipelines.reason_flow import (
     WAITING_PROOF,
@@ -137,8 +138,10 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         scope["kick_reason"] = inline_reason
         try:
             prompt = await msg.reply_text(
-                proof.noted_prompt(
-                    "kick", inline_reason, target_mention, locale=locale
+                apply_style(
+                    proof.noted_prompt(
+                        "kick", inline_reason, target_mention, locale=locale
+                    )
                 ),
                 parse_mode="MarkdownV2",
                 reply_markup=proof.keyboard(locale),
@@ -153,7 +156,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         prompt = await msg.reply_text(
-            reason.prompt(target_mention, "kick", locale=locale),
+            apply_style(reason.prompt(target_mention, "kick", locale=locale)),
             parse_mode="MarkdownV2",
             reply_markup=reason.keyboard(locale),
         )

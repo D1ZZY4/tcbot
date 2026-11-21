@@ -21,6 +21,7 @@ from tcbot.modules.helper.messages import (
     safe_reply,
     send_log,
 )
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import (
     BuildProof,
@@ -313,7 +314,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             reply_markup=proof_kb,
         ),
         bot.edit_message_text(
-            summary,
+            apply_style(summary),
             chat_id=prompt_chat,
             message_id=prompt_id,
             parse_mode="MarkdownV2",
@@ -515,7 +516,7 @@ async def execute_unmute(
             ctx.bot,
             log_text,
         ),
-        msg.reply_text(note, parse_mode="MarkdownV2"),
+        msg.reply_text(apply_style(note), parse_mode="MarkdownV2"),
         return_exceptions=True,
     )
     throw_if_cancelled(results)
