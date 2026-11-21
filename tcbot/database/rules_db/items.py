@@ -16,7 +16,7 @@ from tcbot.database.base import (
     rule_items,
     rule_set_versions,
 )
-from tcbot.database.engine import db_call, fetch_all, fetch_one, run, run_returning
+from tcbot.database.engine import db_call, fetch_all, fetch_one, run_returning
 from tcbot.utils.time_and_date import utc_now
 
 
@@ -125,16 +125,3 @@ async def add_item(
         )
     )
     return dict(created[0])
-
-
-async def delete_item(version_id: int, item_id: int) -> bool:
-    """Delete one draft item; published items are refused by the schema."""
-    affected = await db_call(
-        lambda: run(
-            rule_items.delete().where(
-                rule_items.c.id == item_id,
-                rule_items.c.rule_set_version_id == version_id,
-            )
-        )
-    )
-    return affected > 0

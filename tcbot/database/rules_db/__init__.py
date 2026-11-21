@@ -20,7 +20,7 @@ from tcbot.database.rules_db.drafts import (
     open_draft,
     published_version,
 )
-from tcbot.database.rules_db.items import add_item, delete_item, list_items
+from tcbot.database.rules_db.items import add_item, list_items
 from tcbot.database.rules_db.publications import status_counts
 from tcbot.database.rules_db.publish import promote_version
 from tcbot.database.rules_db.read import (
@@ -29,11 +29,7 @@ from tcbot.database.rules_db.read import (
     published_rules,
     record_acknowledgement,
 )
-from tcbot.database.rules_db.sets import (
-    get_community_set,
-    get_or_create_community_set,
-    set_acknowledgement,
-)
+from tcbot.database.rules_db.sets import get_or_create_community_set
 
 __all__ = [
     "acknowledgement_count",
@@ -41,9 +37,7 @@ __all__ = [
     "add_item",
     "all_items",
     "delete_category",
-    "delete_item",
     "discard_draft",
-    "get_community_set",
     "get_or_create_community_set",
     "has_acknowledged",
     "list_categories",
@@ -57,6 +51,5 @@ __all__ = [
     "record_acknowledgement",
     "rename_category",
     "runs",
-    "set_acknowledgement",
     "status_counts",
 ]

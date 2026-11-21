@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import select
 
 from tcbot.database.base import rule_categories, rule_sets
-from tcbot.database.engine import db_call, fetch_all, fetch_one, run, run_returning
+from tcbot.database.engine import db_call, fetch_all, fetch_one, run_returning
 from tcbot.utils.time_and_date import utc_now
 
 COMMUNITY_KEY = "community"
@@ -75,24 +75,3 @@ async def get_or_create_community_set() -> dict[str, Any]:
         )
     )
     return rule_set
-
-
-async def get_community_set() -> dict[str, Any] | None:
-    """Return the community set without creating one."""
-    row = await db_call(
-        lambda: fetch_one(
-            select(rule_sets).where(rule_sets.c.scope_type == COMMUNITY_KEY)
-        )
-    )
-    return dict(row) if row is not None else None
-
-
-async def set_acknowledgement(set_id: int, *, enabled: bool) -> None:
-    """Toggle whether a public version requires an acknowledgement."""
-    await db_call(
-        lambda: run(
-            rule_sets.update()
-            .where(rule_sets.c.id == set_id)
-            .values(requires_acknowledgement=enabled, updated_at=utc_now())
-        )
-    )
