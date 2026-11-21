@@ -11,10 +11,10 @@ database layer, see [`../../architecture/database.md`](../../architecture/databa
 
 ```mermaid
 flowchart TD
-    Cmd[/tckick command/] --> Perm{Tester+ rank check}
+    Cmd[/tckick command/] --> Perm{Moderator+ rank check}
     Perm -->|denied| End1[Reject]
     Perm -->|allowed| Target[Resolve target]
-    Target --> Ident{Self / bot / Founder?}
+    Target --> Ident{Self / bot / Owner?}
     Ident -->|self or bot| Refuse[identity.refuse_message]
     Ident -->|allowed| ReasonStep[Inline reason present?]
     ReasonStep -->|yes| ProofStep[WAITING_PROOF]
@@ -35,7 +35,7 @@ A kick removes a user from the current group only, not from the federation. The 
 
 | Command | Alias | Purpose | Access |
 |---|---|---|---|
-| `/tckick` | `/tck` | Remove a user from the current group. | Tester and above via `basic_mod_only`. |
+| `/tckick` | `/tck` | Remove a user from the current group. | Moderator and above via `basic_mod_only`. |
 
 Commands use the project's configured prefixes; slash commands are examples.
 
@@ -47,7 +47,7 @@ The kick command is a `ConversationHandler` built by `reason_flow.build_modactio
 
 1. A moderator runs `/tckick <target> <reason>` or replies to a message with `/tck <reason>`.
 2. The bot resolves the executor role and target in parallel.
-3. The executor must have at least Tester rank.
+3. The executor must have at least Moderator rank.
 4. The target must resolve to a Telegram user ID.
 5. The bot rejects attempts to kick itself or the executor's own account via `identity.refuse_message`.
 6. If an inline reason was supplied, the bot skips directly to proof collection (`WAITING_PROOF`). Otherwise it prompts for a reason (`WAITING_REASON`).
@@ -169,15 +169,15 @@ The reply and federation log use `keyboards.action_proof_kb(target_id, proof_lin
 - If the post-ban `unban_chat_member` fails after one retry, the user is effectively banned in this chat. The decision becomes `failed`, a durable reconcile run is queued, and the reply appends a `WARNING:` line; the scheduled enforcement worker retries the unban without a new kick decision and restores `completed` when it lands. The repair is cancelled when a federation ban now holds the target, so it cannot lift the newer ban.
 - A demote failure is logged loudly and the kick still proceeds; the target's rank is repaired by a later join-time enforcement pass.
 - The reason and proof conversation is per-chat and per-user, so simultaneous kick flows are isolated.
-- The kick command is **group-only**: the entry rejects a private chat with the localized `replies.err_group_only(locale)` notice (English default: `Use this command in a group.`) before any role or target I/O, and `execute_kick` acts on the current chat (`ban_chat_member` then `unban_chat_member` in `effective_chat.id`). Rank gating is Tester or above via `basic_mod_only`; the decorator itself performs no group-membership check beyond the entry's private-chat guard.
-- The `/tckick` executor is not gated on `mod_only`; any Tester or higher can issue it.
+- The kick command is **group-only**: the entry rejects a private chat with the localized `replies.err_group_only(locale)` notice (English default: `Use this command in a group.`) before any role or target I/O, and `execute_kick` acts on the current chat (`ban_chat_member` then `unban_chat_member` in `effective_chat.id`). Rank gating is Moderator or above via `basic_mod_only`; the decorator itself performs no group-membership check beyond the entry's private-chat guard.
+- The `/tckick` executor is not gated on `mod_only`; any Moderator or higher can issue it.
 
 ## Behavior reference
 
 Key behaviors to keep in mind:
 
 1. `/tckick` works in the current group only; no fan-out, no federation-wide ban.
-2. `/tckick` requires Tester rank.
+2. `/tckick` requires Moderator rank.
 3. `/tckick` without a target is rejected with `replies.err_cannot_resolve(locale)`.
 4. Self-kick and bot-kick attempts are rejected by `identity.refuse_message`.
 5. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.

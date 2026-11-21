@@ -47,10 +47,10 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
         overview=t("maintenance.help.overview", locale),
         commands=t("maintenance.help.commands.body", locale),
         who=(
-            f"{bold('/leaveall')}: {replies.perm_founder_only(locale, plain=False)}\n"
+            f"{bold('/leaveall')}: {replies.perm_owner_only(locale, plain=False)}\n"
             f"{bold('/cleanup')}: {replies.perm_staff_only(locale, plain=False)}\n"
             f"{bold('/tcrepair')}: {replies.perm_staff_only(locale, plain=False)}\n"
-            f"{bold('/tcforget')}: {replies.perm_founder_only(locale, plain=False)}"
+            f"{bold('/tcforget')}: {replies.perm_owner_only(locale, plain=False)}"
         ),
         where=replies.context_bot_or_group(locale),
         details=[
@@ -545,7 +545,7 @@ async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if owner_id == user_id:
-        # ! CRITICAL: erasing the Founder would revoke the only owner row,
+        # ! CRITICAL: erasing the Owner would revoke the only owner row,
         # ! and the boot seed could recreate it for the erased account. The
         # ! operator must transfer ownership before erasing that account.
         await safe_reply(

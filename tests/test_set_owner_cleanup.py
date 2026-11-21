@@ -106,7 +106,7 @@ async def test_set_owner_leaves_exactly_one_owner(owner_db: str) -> None:
 async def test_transfer_ownership_swaps_and_grants_in_one_decision(
     owner_db: str,
 ) -> None:
-    """The previous Founder becomes Admin in the same transaction."""
+    """The previous Owner becomes Admin in the same transaction."""
     await users_roles.set_owner(61001)
     try:
         await users_roles.transfer_ownership(61001, 61002)
@@ -157,7 +157,7 @@ async def test_a_failed_transfer_keeps_the_previous_owner(
 
 
 async def test_a_role_grant_never_replaces_the_owner(owner_db: str) -> None:
-    """Only set_owner may replace the Founder role.
+    """Only set_owner may replace the Owner role.
 
     add_admin/set_role revoke the active assignment before the insert, and
     the owner row must be excluded from that revocation. A grant aimed at

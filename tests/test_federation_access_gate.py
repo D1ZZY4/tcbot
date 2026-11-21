@@ -95,7 +95,7 @@ def test_a_non_staffer_cannot_open_the_ban_list(
 
 def test_a_staffer_can_open_the_ban_list(monkeypatch: pytest.MonkeyPatch) -> None:
     """A Tester passes the gate and the list renders."""
-    _roles(monkeypatch, {42: "tester"})
+    _roles(monkeypatch, {42: "moderator"})
     q = _FakeCallback()
     rendered: list[Any] = []
 
@@ -126,7 +126,7 @@ def test_a_lookup_outage_closes_the_stats_gate(
 
 
 def test_the_owner_keeps_the_staff_panes() -> None:
-    """The owner id passes the gate even when the founder role is unset."""
+    """The owner id passes the gate even when the owner role is unset."""
     kb = stats_main_kb(show_users=True, show_staff=True)
     labels = [button.text for row in kb.inline_keyboard for button in row]
     assert "Users" in labels

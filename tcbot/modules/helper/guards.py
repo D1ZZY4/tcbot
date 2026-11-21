@@ -77,7 +77,7 @@ class StaffAccess(Enum):
 async def staff_access(user_id: int | None, *, min_role: RoleName) -> StaffAccess:
     """Check whether *user_id* may act at the *min_role* tier.
 
-    The owner id always passes: the owner row and the founder role can
+    The owner id always passes: the owner row and the owner role can
     diverge briefly around a transfer, and the operator must keep
     access. A lookup failure fails closed and is reported apart from a
     refusal, so the caller can ask for a retry instead of denying the
@@ -103,7 +103,7 @@ async def staff_access(user_id: int | None, *, min_role: RoleName) -> StaffAcces
 
 
 async def enforcement_verdict(
-    executor_id: int, target_id: int, *, min_role: RoleName = "tester"
+    executor_id: int, target_id: int, *, min_role: RoleName = "moderator"
 ) -> tuple[EnforcementVerdict, str | None]:
     """Re-check the executor against the target at enforcement time.
 
@@ -561,19 +561,19 @@ def can_demote_admin(executor_role: str | None, target_role: str | None) -> bool
 
     The rule is the same one the outrank check applies: the executor must
     outrank the target. On top of that, demoting an Admin needs the
-    Founder, because an Admin is the tier a demotion would strip.
+    Owner, because an Admin is the tier a demotion would strip.
 
     Both comparisons run through the shared rank table, so a tier that
     joins it takes part in the rule instead of slipping past a hardcoded
-    name. The Founder stays a named tier, because the Admin rule is about
+    name. The Owner stays a named tier, because the Admin rule is about
     that one role and not about a rank number.
 
     A target without a removable role passes: the caller decides whether
-    there is anything to demote. The Founder is never demotable, not even
-    by the Founder: the equal-rank rule and the protected-target rule both
+    there is anything to demote. The Owner is never demotable, not even
+    by the Owner: the equal-rank rule and the protected-target rule both
     forbid it, and a demote would revoke the owner assignment itself.
     """
-    if target_role == "founder":
+    if target_role == "owner":
         return False
     if target_role is None:
         return True
@@ -581,7 +581,7 @@ def can_demote_admin(executor_role: str | None, target_role: str | None) -> bool
         # * A target below the Admin tier follows the ordinary outrank
         # * rule, which this helper owns.
         return outranks(executor_role, target_role)
-    return executor_role == "founder"
+    return executor_role == "owner"
 
 
 async def banned_target_refusal(

@@ -118,7 +118,7 @@ def test_get_effective_role_outage_raises_and_does_not_poison(
     finally:
         _invalidate(uid)
 
-    assert recovered == "tester"
+    assert recovered == "moderator"
 
 
 def test_is_staff_fail_closed_on_outage_and_reraises_cancelled(
@@ -147,10 +147,10 @@ def test_is_staff_fail_closed_on_outage_and_reraises_cancelled(
         _invalidate(uid)
 
 
-def test_the_owner_assignment_resolves_to_the_founder_role(
+def test_the_owner_assignment_resolves_to_the_owner_role(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The community stores the owner, the application calls it founder.
+    """The community stores the owner, the application calls it owner.
 
     The storage key and the application vocabulary are different on
     purpose: the application never sees a storage key, so a rename of the
@@ -169,7 +169,7 @@ def test_the_owner_assignment_resolves_to_the_founder_role(
     finally:
         _invalidate(uid)
 
-    assert effective == "founder"
+    assert effective == "owner"
 
 
 def test_an_unknown_stored_role_resolves_to_no_role(

@@ -5,7 +5,8 @@ For shared helpers, see [`helpers.md`](helpers.md). For database helpers
 consumed by these flows, see [`database.md`](database.md). For per-feature flow
 details, see [`../features/moderation/banning.md`](../features/moderation/banning.md),
 [`../features/moderation/warnings.md`](../features/moderation/warnings.md),
-[`../features/appeals.md`](../features/appeals.md),
+[`../features/moderation/appeals.md`](../features/moderation/appeals.md),
+[`../features/moderation/rules.md`](../features/moderation/rules.md),
 [`../features/roles/promote.md`](../features/roles/promote.md), and
 [`../features/roles/demote.md`](../features/roles/demote.md).
 
@@ -246,9 +247,9 @@ flowchart TD
 
 ## Promotion: `promote_flow.py`
 
-Promotion is not a conversation. `Promote.execute(...)` in `pipelines/promote_flow.py` performs direct role assignment or creates a promotion request for Founder approval when required. `admins.py` registers the command and callback handlers.
+Promotion is not a conversation. `Promote.execute(...)` in `pipelines/promote_flow.py` performs direct role assignment or creates a promotion request for Owner approval when required. `admins.py` registers the command and callback handlers.
 
-`Promote.available_roles_for(executor_role)` is the single owner of the grant table, and the executor reads it before it acts: only the tiers in that list may be handed out, only the Founder grants the Admin tier outright, and an Admin may request it instead. The spellings the command accepts live in `users_roles.ROLE_ALIASES` next to the rest of the role vocabulary.
+`Promote.available_roles_for(executor_role)` is the single owner of the grant table, and the executor reads it before it acts: only the tiers in that list may be handed out, only the Owner grants the Admin tier outright, and an Admin may request it instead. The spellings the command accepts live in `users_roles.ROLE_ALIASES` next to the rest of the role vocabulary.
 
 ## Demotion: `demote_flow.py`
 
@@ -276,7 +277,7 @@ Two gates wrap that call and own the failure policy, so the rule cannot drift be
 ## Ownership transfer: `transfer_flow.py`
 
 Ownership transfer is not a conversation. `execute_transfer(bot, ...)` in
-`pipelines/transfer_flow.py` moves the Founder row to the target, promotes the
+`pipelines/transfer_flow.py` moves the Owner row to the target, promotes the
 target to admin, removes the old owner's custom role, and notifies both
 parties. The target must be a verified human (a verified bot is refused and
 an indeterminate lookup asks for a retry). `admins.py` registers the command
@@ -284,7 +285,7 @@ and callback handlers.
 
 ## Promotion decision: `promo_decision_flow.py`
 
-The Founder-side approve/reject callbacks for queued admin requests live in
+The Owner-side approve/reject callbacks for queued admin requests live in
 `pipelines/promo_decision_flow.py`. Approving runs `Promote.execute` and
 updates the pending card; rejecting clears the queue entry. Both paths
 re-read the owner and effective role fresh so a transfer in another process

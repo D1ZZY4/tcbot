@@ -10,22 +10,22 @@ database layer, see
 
 ```mermaid
 flowchart TD
-    Cmd[/tcpromote command/] --> Permission{Founder/Admin check}
+    Cmd[/tcpromote command/] --> Permission{Owner/Admin check}
     Permission -->|denied| End1[Reject]
     Permission -->|allowed| Resolve[Resolve target + role]
     Resolve --> Direct{Direct path?}
-    Direct -->|Founder direct| Apply[Apply role]
+    Direct -->|Owner direct| Apply[Apply role]
     Direct -->|Admin requesting| Queue[Add to promotion queue]
-    Queue --> NotifyFounder[Notify Founder]
-    NotifyFounder --> FounderDecision{Founder approves?}
-    FounderDecision -->|approve| Apply
-    FounderDecision -->|reject| Drop[Drop from queue]
+    Queue --> NotifyOwner[Notify Owner]
+    NotifyOwner --> OwnerDecision{Owner approves?}
+    OwnerDecision -->|approve| Apply
+    OwnerDecision -->|reject| Drop[Drop from queue]
     Apply --> Log[Write role log]
 ```
 
 ## Purpose
 
-Promotion assigns one of the federation roles (Admin, Developer, or Tester) to a user. Founder is not assignable through `/tcpromote`; ownership transfer uses `/transferowner` instead.
+Promotion assigns one of the federation roles (Admin, Developer, or Moderator) to a user. Owner is not assignable through `/tcpromote`; ownership transfer uses `/transferowner` instead.
 
 ## Command surface
 
@@ -37,15 +37,15 @@ Aliases (matched in any prefix configured by `cfg.prefixes`):
 
 | Command | Who can use | Purpose |
 |---|---|---|
-| `/tcpromote <target> [role]` | Founder, Admin | Assigns a role directly, or sends a request when Admin promotes to Admin. |
+| `/tcpromote <target> [role]` | Owner, Admin | Assigns a role directly, or sends a request when Admin promotes to Admin. |
 | `/tcpromoterequests` | Anyone | User submits a request for themselves to become Admin. |
-| `/tcpromotelist` | Founder, Admin (`@staff_only`) | Lists pending Admin promotion requests. |
+| `/tcpromotelist` | Owner, Admin (`@staff_only`) | Lists pending Admin promotion requests. |
 
 The target is resolved by `extraction.extract_target`; accepts a reply, user ID, or resolvable `@username`.
 
 The command must originate in a federation chat: the bot PM, the primary group, or a connected group. A group the bot was added to for another purpose is refused with the unknown-group notice, because a role change is federation-wide and its prompt and audit entry would otherwise land outside the federation. The same gate applies to `/tcdemote` and `/transferowner`.
 
-A target with an active federation ban cannot gain a role. The ban is enforced per group by Telegram and not by the bot's own role resolution, so a banned holder of a staff role would keep moderating from every chat where the ban did not land. The guard fails closed: a failed ban lookup refuses the promotion instead of granting rank on an unknown state. It applies to the direct command, the role-picker callback, the public request path, and the Founder's approval of a queued request, so a request filed before the ban landed cannot be approved into a role.
+A target with an active federation ban cannot gain a role. The ban is enforced per group by Telegram and not by the bot's own role resolution, so a banned holder of a staff role would keep moderating from every chat where the ban did not land. The guard fails closed: a failed ban lookup refuses the promotion instead of granting rank on an unknown state. It applies to the direct command, the role-picker callback, the public request path, and the Owner's approval of a queued request, so a request filed before the ban landed cannot be approved into a role.
 
 Both the command and the role-picker callback apply the same identity refusal (`identity.refuse_message("promote", ...)`), so neither entry point can grant a role to the anonymous-admin placeholder or a Telegram service account.
 
@@ -59,7 +59,7 @@ The first argument after the target accepts these tokens (case-insensitive):
 |---|---|
 | `admin` | `admin` |
 | `developer` · `dev` | `developer` |
-| `tester` · `test` | `tester` |
+| `moderator` · `mod` | `moderator` |
 
 Omitting the role triggers the inline button menu built by `keyboards.promote_role_kb()`.
 
@@ -89,17 +89,17 @@ await Promote.request_admin(
 |---|---|
 | `Promote.available_roles_for(executor_role)` | Returns the roles an executor with `executor_role` can assign. |
 | `Promote.execute(...)` | Full role-assignment flow used by `/tcpromote` (command + inline button). Re-reads both roles fresh at the mutation point, so a demotion or ownership transfer of the executor, or a promotion or demotion of the target, during target classification cannot still decide the grant on a stale rank. Routes to `assign_admin`, `assign_subrole`, or `request_admin` depending on requested role and executor role. A target with an active ban is refused before any role is written. |
-| `Promote.request_admin(...)` | Enqueues an Admin promotion request and notifies the Founder via DM, with the log channel as a fallback. |
-| `assign_admin(...)` | Founder-only path that grants the admin role, revokes any existing Developer/Tester assignment, sends the promotion log, and DMs the target. |
-| `assign_subrole(...)` | Founder/Admin path for Developer/Tester role; replaces any previous assignment in one transaction via `users_roles.set_role`, sends the promotion log, and DMs the target. |
+| `Promote.request_admin(...)` | Enqueues an Admin promotion request and notifies the Owner via DM, with the log channel as a fallback. |
+| `assign_admin(...)` | Owner-only path that grants the admin role, revokes any existing Developer/Moderator assignment, sends the promotion log, and DMs the target. |
+| `assign_subrole(...)` | Owner/Admin path for Developer/Moderator role; replaces any previous assignment in one transaction via `users_roles.set_role`, sends the promotion log, and DMs the target. |
 
 ## Permission matrix
 
 | Executor | Direct role choices | Admin promotion |
 |---|---|---|
-| Founder | Admin / Developer / Tester | Direct assign |
-| Admin | Developer / Tester | Submits request to Founder |
-| Developer / Tester / no-role | N/A | N/A (no permission) |
+| Owner | Admin / Developer / Moderator | Direct assign |
+| Admin | Developer / Moderator | Submits request to Owner |
+| Developer / Moderator / no-role | N/A | N/A (no permission) |
 
 The executor's role is enforced by the `@decorators.staff_only` decorator on `cmd_promote`, by the fresh callback re-check on the inline menu, and by the fresh re-read inside `Promote.execute`; the actual decision logic then rejects rank-equal or rank-higher targets against the target's role read in that same fresh pass. A failed executor-role or target-role lookup refuses the grant instead of falling back to an entry-time value.
 
@@ -107,26 +107,26 @@ The executor's role is enforced by the `@decorators.staff_only` decorator on `cm
 
 `Promote.execute` rejects the following:
 
-- Target is Founder (`That's the Founder - can't assign a role over them.`)
+- Target is Owner (`That's the Owner - can't assign a role over them.`)
 - Target already holds the requested role or a higher role.
 - Admin tries to assign Admin to someone who is already Admin (handled by the rank check above).
-- Promoting a user who is currently Admin into Developer/Tester (must demote first).
+- Promoting a user who is currently Admin into Developer/Moderator (must demote first).
 
 The command-level handler `cmd_promote` rejects self-promotion, the bot itself, Telegram, and anonymous-admin targets before delegating. A verified bot is refused as well: the quoted sender names itself for free, otherwise one bounded membership probe runs in the current chat, then one MTProto peer lookup. An off-group target whose lookup is unknown stays allowed by design, and only staff can trigger the command.
 
-## Direct Founder promotion to Admin
+## Direct Owner promotion to Admin
 
-When the Founder issues `/tcpromote @user admin`:
+When the Owner issues `/tcpromote @user admin`:
 
-1. `users_roles.add_admin(target_id, founder_id)` grants the admin role. The assignment revokes the assignment it replaces in the same transaction, so a previous Developer or Tester role never survives beside the new one.
+1. `users_roles.add_admin(target_id, owner_id)` grants the admin role. The assignment revokes the assignment it replaces in the same transaction, so a previous Developer or Moderator role never survives beside the new one.
 2. `users_cache.upsert_user(target_id, None, target_fname)` refreshes the member cache.
 3. A `messages.promoted(role="admin", ...)` log is sent to `cfg.logs`.
 4. The target is DM'd a welcome notification.
 5. The command replies with `Done. <mention> - <code id> is now a <community> Admin.`
 
-## Founder/Admin promotion to Developer/Tester
+## Owner/Admin promotion to Developer/Moderator
 
-When Founder or Admin assigns Developer/Tester:
+When Owner or Admin assigns Developer/Moderator:
 
 1. `users_roles.set_role(target_id, role, assigned_by)` grants the role in one transaction that revokes the assignment it replaces, so the user never holds two active roles.
 2. `users_cache.upsert_user(...)` refreshes the cache.
@@ -139,10 +139,10 @@ Admins cannot directly assign Admin. `Promote.execute` detects this and delegate
 
 1. Checks for an existing pending request via `queues_db.get_request(target_id)`.
 2. Inserts a new `promotion_requests` document with `status="pending"` via `queues_db.enqueue(...)`.
-3. Resolves the Founder's user ID via `users_roles.get_owner_id()`.
-4. DMs the Founder a review card with Approve / Reject buttons (`keyboards.promo_decision_kb`).
-5. Falls back to posting in `cfg.logs` when the Founder DM fails.
-6. Returns `Submitted - the Founder has been notified and will review it shortly.`
+3. Resolves the Owner's user ID via `users_roles.get_owner_id()`.
+4. DMs the Owner a review card with Approve / Reject buttons (`keyboards.promo_decision_kb`).
+5. Falls back to posting in `cfg.logs` when the Owner DM fails.
+6. Returns `Submitted - the Owner has been notified and will review it shortly.`
 
 Only one pending request per target is allowed. A pending request carries
 `expires_at`; once `PROMOTION_REQUEST_TTL_DAYS` (default 7) passes, the
@@ -160,16 +160,16 @@ A user submits a request for themselves to become Admin. `cmd_promote_request` f
 |---|---|---|
 | Role option | `promo_role:<role>:<target_id>:<executor_id>` (legacy without executor still works) | `on_promote_role_btn` |
 | Cancel | `promo_role_cancel:<target_id>:<executor_id>` (legacy `:<target_id>` still works) | `on_promote_role_cancel` |
-| Approve / Reject (Founder DM) | `promo_approve:<request_id>` / `promo_reject:<request_id>` | `on_promo_decision` |
+| Approve / Reject (Owner DM) | `promo_approve:<request_id>` / `promo_reject:<request_id>` | `on_promo_decision` |
 
-All callbacks re-check the tapper's current effective role (Founder/Admin) before applying any write, so a user who lost permission between selecting and confirming is rejected with an alert. New prompts carry the opener in both the role buttons and the cancel button, so only that staffer can act on or collapse the picker; a different tapper gets an alert and the prompt stays live. Legacy taps without an executor segment act as the tapper with the rank re-check; the cancel buttons carry the same staff-rank gate, so a non-staffer can never collapse a prompt. The role and demote-confirm callbacks re-run the same identity refusal as the command path, so the anonymous-admin placeholder, a Telegram service account, and the tapper themselves cannot be reached through a callback either.
+All callbacks re-check the tapper's current effective role (Owner/Admin) before applying any write, so a user who lost permission between selecting and confirming is rejected with an alert. New prompts carry the opener in both the role buttons and the cancel button, so only that staffer can act on or collapse the picker; a different tapper gets an alert and the prompt stays live. Legacy taps without an executor segment act as the tapper with the rank re-check; the cancel buttons carry the same staff-rank gate, so a non-staffer can never collapse a prompt. The role and demote-confirm callbacks re-run the same identity refusal as the command path, so the anonymous-admin placeholder, a Telegram service account, and the tapper themselves cannot be reached through a callback either.
 
 ### Approval path
 
-A non-owner tap, or a failed owner lookup, answers with an alert and leaves the card actionable. The card is shared through the Founder DM or the log channel, so editing it would let any reader remove the Founder's only decision surface. A request that targets the current Founder is refused: approving it would rewrite the owner assignment as Admin and leave the federation without a Founder. A transfer cancels that pending request, so the card cannot be approved later.
+A non-owner tap, or a failed owner lookup, answers with an alert and leaves the card actionable. The card is shared through the Owner DM or the log channel, so editing it would let any reader remove the Owner's only decision surface. A request that targets the current Owner is refused: approving it would rewrite the owner assignment as Admin and leave the federation without a Owner. A transfer cancels that pending request, so the card cannot be approved later.
 
 1. `queues_db.resolve(request_id, "approved", admin.id)` marks the request resolved. The claim is atomic, so a concurrent approve and reject cannot both win; the loser finds the request already resolved and stops.
-2. `users_roles.add_admin(target_id, admin.id)` grants the admin role. The assignment revokes the role the target held before it in the same transaction, so a stale Developer or Tester row cannot survive the promotion.
+2. `users_roles.add_admin(target_id, admin.id)` grants the admin role. The assignment revokes the role the target held before it in the same transaction, so a stale Developer or Moderator row cannot survive the promotion.
 3. `users_cache.upsert_user(...)` refreshes the display name. Failures only log; the promotion already committed.
 4. `messages.promote_approved_log(...)` is sent to `cfg.logs`.
 5. Target is DM'd a welcome notification.
@@ -190,17 +190,17 @@ All promotion paths share a single log builder for consistency:
 
 | Function | Trigger |
 |---|---|
-| `messages.promoted(target_id, target_fname, role, by_id, by_fname)` | Direct role assignment (Admin/Developer/Tester). Title: `New <community> Promoted`. |
+| `messages.promoted(target_id, target_fname, role, by_id, by_fname)` | Direct role assignment (Admin/Developer/Moderator). Title: `New <community> Promoted`. |
 | `messages.promote_request_log(...)` | A new Admin promotion request is created. |
-| `messages.promote_approved_log(...)` | The Founder approves a pending request. |
-| `messages.promote_rejected_log(...)` | The Founder rejects a pending request. |
+| `messages.promote_approved_log(...)` | The Owner approves a pending request. |
+| `messages.promote_rejected_log(...)` | The Owner rejects a pending request. |
 
 The unified `promoted` builder places the role as a field below the user (`Role: Admin`) so the title stays the same regardless of which role is assigned.
 
 ## Edge cases
 
 - The effective-role cache (`effective_role_cache` in `tcbot/database/cache/`) is invalidated by every write so subsequent reads see the new role.
-- A user holds at most one live role: the direct Founder path and the approval path both revoke any Developer/Tester assignment when granting Admin, and Developer/Tester assignment replaces the previous one in a single transaction.
+- A user holds at most one live role: the direct Owner path and the approval path both revoke any Developer/Moderator assignment when granting Admin, and Developer/Moderator assignment replaces the previous one in a single transaction.
 - DM notification failures are tolerated through `asyncio.gather(..., return_exceptions=True)` or explicit fallback logging; promotion still completes.
 - Pending requests are not deleted after approval/rejection; they are flagged with `status`, `resolved_at`, and `resolved_by_user_id`.
 - `cmd_promote` and `cmd_demote` share `resolve_executor_target` plus `classify_and_load_role` in `tcbot/modules/helper/targets.py` (executor role + target, then classify + role, both parallel and fail-closed); the role-button and demote-confirm callbacks share `check_callback_staff` (rank re-check alongside `q.answer()` so the spinner clears in one round trip). Cancellation always propagates.
@@ -208,11 +208,11 @@ The unified `promoted` builder places the role as a field below the user (`Role:
 
 ## Behavior reference
 
-- Founder can promote any role directly.
-- Admin can promote Developer / Tester directly.
+- Owner can promote any role directly.
+- Admin can promote Developer / Moderator directly.
 - Admin promoting to Admin enqueues a request rather than granting the admin role.
 - Duplicate pending requests for the same target are rejected.
-- Non-Founder cannot approve/reject promotion requests.
-- Self-promotion, bot promotion, and promotion-of-Founder are rejected.
+- Non-Owner cannot approve/reject promotion requests.
+- Self-promotion, bot promotion, and promotion-of-Owner are rejected.
 - Inline role-button menu re-checks executor role at click time.
 - Only the prompt opener can complete or cancel the inline role picker; other staff get an alert.

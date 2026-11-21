@@ -2,7 +2,7 @@
 
 This document describes the current federation ban, ban lookup, and unban behavior implemented by `tcbot/modules/bans.py`, `tcbot/modules/helper/pipelines/ban_flow.py`, `tcbot/modules/check.py`, `tcbot/modules/unban.py`, and `tcbot/database/bans_db/`.
 
-For the appeal flow following a ban, see [`../appeals.md`](../appeals.md). For
+For the appeal flow following a ban, see [`appeals.md`](appeals.md). For
 the check command used to look up bans, see [`check.md`](check.md). For warnings
 that may auto-ban, see [`warnings.md`](warnings.md). For role auto-demotion on
 ban, see [`../roles/roles.md`](../roles/roles.md). For shared helpers, see
@@ -46,7 +46,7 @@ The ban command is a `ConversationHandler` with two states: `WAITING_PROOF` (pro
 
 1. A moderator runs `/tcban <target> <reason>` or replies to a user with `/tcb <reason>`.
 2. The bot resolves the executor role and target in parallel.
-3. The executor must have at least Developer rank (`founder`, `admin`, or `developer`).
+3. The executor must have at least Developer rank (`owner`, `admin`, or `developer`).
 4. The target must resolve to a Telegram user ID.
 5. A non-empty reason is required before the proof step starts.
 6. The bot rejects attempts to ban itself or the executor's own account.
@@ -186,15 +186,15 @@ Ban execution uses the role hierarchy from `users_roles`:
 
 | Role | Rank |
 |---|---:|
-| Founder | 4 |
+| Owner | 4 |
 | Admin | 3 |
 | Developer | 2 |
-| Tester | 1 |
+| Moderator | 1 |
 | No role | 0 |
 
 The executor must have rank >= Developer. The target check behaves as follows:
 
-- If the target is Founder, they cannot be banned.
+- If the target is Owner, they cannot be banned.
 - If the target has a role with rank greater than or equal to the executor's rank, the action is blocked.
 - If the target has a lower role, the bot removes that role when the ban is enforced.
 
@@ -203,7 +203,7 @@ Auto-demotion is handled by `demote_before_enforcement(..., trigger="ban")` from
 The helper removes the role record, posts the federation demote log, and notifies the target by DM when possible:
 
 - Admin targets have their active role assignment revoked.
-- Developer/Tester targets have their active role assignment revoked.
+- Developer/Moderator targets have their active role assignment revoked.
 - A role auto-demotion log is sent to the federation logs channel.
 - The target is notified by DM when possible.
 
@@ -274,9 +274,9 @@ Ban log keyboards are defined in `keyboards/`:
 
 Special-role responses:
 
-- Founder receives a friendly Founder-specific clean response.
+- Owner receives a friendly Owner-specific clean response.
 - Admin receives a staff-specific clean response.
-- Developer/Tester receives a role-specific clean response.
+- Developer/Moderator receives a role-specific clean response.
 
 If the user has no active ban, the bot confirms they are clean.
 
@@ -308,8 +308,8 @@ The target is resolved by reply, user ID, or resolvable username. A typed numeri
 Special cases for the active-ban summary line:
 
 - The bot itself is always reported clean, with a `That's me - ...` recognition note on top of the profile.
-- Founder cannot be banned and is reported clean.
-- Admin/Developer/Tester targets are reported as staff with no active ban.
+- Owner cannot be banned and is reported clean.
+- Admin/Developer/Moderator targets are reported as staff with no active ban.
 - If an active ban exists, the profile shows the ban ID inline and the Bans drill-down lists the full record with a `View Proof` button when proof exists.
 
 Unlike `/checkme`, `/check` does not provide an appeal button because it is for third-party lookup.
@@ -323,7 +323,7 @@ Flow:
 1. The moderator runs `/tcunban <target>` or replies with `/tcunb`.
 2. The target is resolved.
 3. The bot rejects attempts to unban itself.
-4. Founder and staff targets are treated as not federation-bannable and no unban is attempted.
+4. Owner and staff targets are treated as not federation-bannable and no unban is attempted.
 5. `bans_db.get_active_ban(target_id)` must return a record.
 6. All active bans for the target are revoked with `bans_db.revoke_ban_and_queue_unban`, which also withdraws any pending appeal, releases the review slot, and queues the unban run in the same transaction; the one-active-ban index keeps the revocation to the decision in force.
 7. The target is unbanned from all active connected groups by the durable run with `only_if_banned=True`; a group that fails is retried by the scheduled worker.
@@ -350,7 +350,7 @@ The same transaction queues the edit that closes a pending appeal review card, s
 
 Key behaviors to keep in mind:
 
-1. Developer/Admin/Founder can start `/tcban`; Tester and unroled users cannot.
+1. Developer/Admin/Owner can start `/tcban`; Moderator and unroled users cannot.
 2. `/tcban` without a target is rejected.
 3. `/tcban <target>` without a reason is rejected.
 4. Self-ban and bot-ban attempts are rejected.

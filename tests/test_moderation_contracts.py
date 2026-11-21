@@ -63,16 +63,16 @@ async def ban_db(postgres_db: str) -> AsyncIterator[str]:
 # ────────────────────────────── Role rules ────────────────────────────── #
 
 
-def test_can_demote_admin_requires_the_founder() -> None:
-    """Only the Founder may remove an Admin role."""
-    assert guards.can_demote_admin("founder", "admin") is True
+def test_can_demote_admin_requires_the_owner() -> None:
+    """Only the Owner may remove an Admin role."""
+    assert guards.can_demote_admin("owner", "admin") is True
     assert guards.can_demote_admin("admin", "admin") is False
     assert guards.can_demote_admin("developer", "admin") is False
-    # * The Founder is never demotable, not even by the Founder.
-    assert guards.can_demote_admin("founder", "founder") is False
+    # * The Owner is never demotable, not even by the Owner.
+    assert guards.can_demote_admin("owner", "owner") is False
     # * Every other target follows the normal rank rule.
     assert guards.can_demote_admin("admin", "developer") is True
-    assert guards.can_demote_admin("admin", "tester") is True
+    assert guards.can_demote_admin("admin", "moderator") is True
     assert guards.can_demote_admin("admin", None) is True
 
 
@@ -80,7 +80,7 @@ def test_role_rank_orders_the_federation_hierarchy() -> None:
     """The rank table is the single source of truth for comparisons."""
     ranks = [
         db.users_roles.role_rank(role)
-        for role in ("founder", "admin", "developer", "tester", None, "bogus")
+        for role in ("owner", "admin", "developer", "moderator", None, "bogus")
     ]
     assert ranks == sorted(ranks, reverse=True)
     assert db.users_roles.role_rank(None) == 0
@@ -114,8 +114,8 @@ def test_the_throttle_tiers_keep_their_budgets() -> None:
     assert actual == expected
 
 
-def test_founder_bypasses_the_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The Founder is exempt from the per-user quotas."""
+def test_owner_bypasses_the_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Owner is exempt from the per-user quotas."""
 
     async def _owner(*args: Any, **kwargs: Any) -> int:
         _ = (args, kwargs)
@@ -154,8 +154,8 @@ def test_rate_limit_exemption_propagates_cancellation(
 def test_throttle_tier_resolves_the_flood_ceiling(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Founder, staff, and everyone else get their own bucket."""
-    roles = {1: "founder", 2: "tester", 3: None}
+    """Owner, staff, and everyone else get their own bucket."""
+    roles = {1: "owner", 2: "moderator", 3: None}
 
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
         _ = fresh

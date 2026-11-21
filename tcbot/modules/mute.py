@@ -64,7 +64,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
         name=__module_name__,
         overview=t("muting.help.overview", locale),
         commands=t("muting.help.commands.body", locale),
-        who=replies.perm_tester_above(locale, plain=False),
+        who=replies.perm_moderator_above(locale, plain=False),
         where=replies.where_connected_group(locale),
         what=t("muting.help.what.body", locale),
         flow=t("muting.help.flow.body", locale),
@@ -100,7 +100,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         update,
         ctx,
         action="mute",
-        min_role="tester",
+        min_role="moderator",
         allow_private=False,
         log_prefix="cmd_mute",
     )
@@ -241,7 +241,7 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         update,
         ctx,
         action="unmute",
-        min_role="tester",
+        min_role="moderator",
         log_prefix="cmd_unmute",
         execute=execute_unmute,
     )

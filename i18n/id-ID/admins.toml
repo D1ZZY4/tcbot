@@ -16,37 +16,37 @@ body = """
 `/tcpromotelist` (alias: `/tcplist`)"""
 
 [help.who]
-body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Founder dan Admin.
+body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Owner dan Admin.
 */transferowner*: {perm}
-*/tcpromoterequests*: siapa pun (membuat permintaan sendiri ke Founder)."""
+*/tcpromoterequests*: siapa pun (membuat permintaan sendiri ke Owner)."""
 
 [help.roles]
 title = "Hierarki Peran"
 body = """
-Founder (peringkat 4) > Admin (peringkat 3) > Developer (peringkat 2) > Tester (peringkat 1)
+Owner (peringkat 4) > Admin (peringkat 3) > Developer (peringkat 2) > Moderator (peringkat 1)
 
-Kamu tidak bisa mempromosikan pengguna ke peringkat yang sama atau lebih tinggi darimu. Admin yang mempromosikan seseorang ke Admin mengantrekan permintaan ke Founder."""
+Kamu tidak bisa mempromosikan pengguna ke peringkat yang sama atau lebih tinggi darimu. Admin yang mempromosikan seseorang ke Admin mengantrekan permintaan ke Owner."""
 
 [help.promote]
 body = """
 Memberi peran ke pengguna. Tanpa argumen peran, menu tombol inline akan muncul.
 
-*Pemakaian:* `/tcpromote <target> [admin|developer|tester]`
-- Founder bisa promosi ke peran mana pun langsung.
-- Admin bisa promosi ke Developer atau Tester langsung; promosi ke Admin mengirim permintaan tertunda ke Founder untuk disetujui."""
+*Pemakaian:* `/tcpromote <target> [admin|developer|moderator]`
+- Owner bisa promosi ke peran mana pun langsung.
+- Admin bisa promosi ke Developer atau Moderator langsung; promosi ke Admin mengirim permintaan tertunda ke Owner untuk disetujui."""
 
 [help.demote]
 body = """
 Mencabut peran pengguna. Tombol konfirmasi muncul sebelum tindakan dijalankan.
 
 *Pemakaian:* `/tcdemote <target>`
-- Founder bisa mendemosi peran mana pun.
-- Admin hanya bisa mendemosi Developer atau Tester.
+- Owner bisa mendemosi peran mana pun.
+- Admin hanya bisa mendemosi Developer atau Moderator.
 - Saat pengguna berperan di-ban atau di-kick, perannya dicabut dan mereka diberi tahu lewat DM."""
 
 [help.transferowner]
 body = """
-Mentransfer kepemilikan federasi ke pengguna lain. Founder saat ini turun jadi Admin. Hanya Founder.
+Mentransfer kepemilikan federasi ke pengguna lain. Owner saat ini turun jadi Admin. Hanya Owner.
 
 *Pemakaian:* `/transferowner <target>`"""
 
@@ -73,8 +73,8 @@ already_admin = "Pengguna itu sudah Admin. Demosi dulu sebelum memberi {role}."
 holds_role = "Pengguna itu sudah memegang peran {role} atau lebih tinggi."
 pending = "Sudah ada permintaan promosi tertunda untuk {user}."
 queue_fail = "Gagal mengantrekan permintaan promosi. Coba lagi."
-submitted = "Terkirim, Founder sudah diberi tahu dan akan segera meninjaunya."
-target_is_founder = "Itu Founder, tidak bisa memberi peran di atas mereka."
+submitted = "Terkirim, Owner sudah diberi tahu dan akan segera meninjaunya."
+target_is_owner = "Itu Owner, tidak bisa memberi peran di atas mereka."
 no_assign_perms = "Kamu tidak punya izin untuk memberi peran ini."
 
 [promote.dm]
@@ -92,7 +92,7 @@ existing = "Kamu sudah punya permintaan tertunda (ID: {id})."
 [error]
 no_assign_perms = "Kamu tidak punya izin untuk memberi peran apa pun."
 no_removable_role = "Pengguna itu tidak memegang peran yang bisa dicabut."
-founder_demote_only = "Hanya Founder yang bisa mendemosi Admin."
+owner_demote_only = "Hanya Owner yang bisa mendemosi Admin."
 no_longer_removable = "Pengguna itu sudah tidak memegang peran yang bisa dicabut."
 role_clear_failed = "Tidak bisa menghapus peran, mungkin sudah dihapus."
 role_lookup_failed = "Tidak bisa memverifikasi peran federasi sekarang. Coba lagi sebentar."
@@ -119,7 +119,7 @@ done = "Beres. {user} telah dihapus dari {role}."
 
 [transfer]
 set_owner_fail = "Tidak bisa mentransfer kepemilikan. Tidak ada perubahan; coba lagi."
-done = "Beres. {user} sekarang Founder."
+done = "Beres. {user} sekarang Owner."
 
 [list]
 header = "{title}"

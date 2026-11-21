@@ -104,13 +104,13 @@ async def _pane_access(
     return True
 
 
-async def _require_founder_list(
+async def _require_owner_list(
     q: CallbackQuery, user_id: int | None, update: Update
 ) -> str | None:
     """Return the render locale when the tapper may open the Users list.
 
-    Owner-or-Founder only: the list carries every cached user ID. A denied
-    tapper gets the Founder-only alert and ``None``. Lookup outages fail
+    Owner-or-Owner only: the list carries every cached user ID. A denied
+    tapper gets the Owner-only alert and ``None``. Lookup outages fail
     closed with a retry alert; cancellation propagates.
     """
     locale = await locale_for_update(update)
@@ -118,8 +118,8 @@ async def _require_founder_list(
         q,
         user_id,
         locale,
-        min_role="founder",
-        denial=replies.perm_founder_only(locale, plain=True),
+        min_role="owner",
+        denial=replies.perm_owner_only(locale, plain=True),
     )
     return locale if allowed else None
 
@@ -138,7 +138,7 @@ async def _require_staff_pane(q: CallbackQuery, update: Update) -> str | None:
         q,
         tapper.id if tapper is not None else None,
         locale,
-        min_role="tester",
+        min_role="moderator",
         denial=t("stats.error.staff_only", locale, plain=True),
     )
     return locale if allowed else None
@@ -154,7 +154,7 @@ async def _require_staff_input(msg: Message, update: Update) -> str | None:
     tapper = update.effective_user
     locale = await locale_for_update(update)
     access = await guards.staff_access(
-        tapper.id if tapper is not None else None, min_role="tester"
+        tapper.id if tapper is not None else None, min_role="moderator"
     )
     if access is guards.StaffAccess.LOOKUP_FAILED:
         await safe_reply(
@@ -419,7 +419,7 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         return
     page = numbers[0]
     tapper = update.effective_user
-    locale = await _require_founder_list(
+    locale = await _require_owner_list(
         q, tapper.id if tapper is not None else None, update
     )
     if locale is None:
@@ -440,7 +440,7 @@ async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         return
     page, idx, stable = parsed
     tapper = update.effective_user
-    locale = await _require_founder_list(
+    locale = await _require_owner_list(
         q, tapper.id if tapper is not None else None, update
     )
     if locale is None:

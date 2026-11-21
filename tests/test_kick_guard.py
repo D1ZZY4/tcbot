@@ -63,13 +63,13 @@ class _FakeCtx:
 
 @pytest.fixture
 def _staff_caller(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Stub role reads so the Tester-ranked caller passes the decorators."""
+    """Stub role reads so the Moderator-ranked caller passes the decorators."""
 
     async def _owner_id(*, fresh: bool = False) -> int:
         return 999
 
     async def _role(uid: int, *, fresh: bool = False) -> str | None:
-        return "tester"
+        return "moderator"
 
     monkeypatch.setattr(db.users_roles, "get_owner_id", _owner_id)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)

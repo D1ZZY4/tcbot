@@ -105,9 +105,9 @@ def test_threshold_ban_stores_warn_proof_on_ban_record(
         return ProofUpload(message_id=77, link="https://t.me/c/1/77")
 
     async def _role_lookup(user_id: int, *, fresh: bool = False) -> str | None:
-        # * The executor is a Tester; the target holds no role, so the
+        # * The executor is a Moderator; the target holds no role, so the
         # * enforcement-time rank check passes.
-        return "tester" if user_id == 1 else None
+        return "moderator" if user_id == 1 else None
 
     async def _groups() -> list[dict[str, Any]]:
         return [{"chat_id": 5, "title": "Group"}]
@@ -199,7 +199,7 @@ def test_threshold_ban_demotes_at_enforcement_time(
         return 3
 
     async def _role_lookup(user_id: int, *, fresh: bool = False) -> str | None:
-        return "tester" if user_id == 1 else None
+        return "moderator" if user_id == 1 else None
 
     async def _groups() -> list[dict[str, Any]]:
         return [{"chat_id": 5, "title": "Group"}]
@@ -226,7 +226,7 @@ def test_threshold_ban_demotes_at_enforcement_time(
         executor_fname: str = "",
     ) -> str | None:
         demoted.append((target_id, trigger))
-        return "tester"
+        return "moderator"
 
     monkeypatch.setattr(warn_flow, "locale_for_update", _locale)
     monkeypatch.setattr(db.warns_db, "add_warn", _add_warn)

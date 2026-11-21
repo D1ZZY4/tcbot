@@ -260,10 +260,10 @@ class Promote:
         executor read the same list, so an executor can never be offered
         a tier the executor would then refuse to grant.
         """
-        if executor_role == "founder":
-            return ["admin", "developer", "tester"]
+        if executor_role == "owner":
+            return ["admin", "developer", "moderator"]
         if executor_role == "admin":
-            return ["developer", "tester"]
+            return ["developer", "moderator"]
         return []
 
     @classmethod
@@ -330,8 +330,8 @@ class Promote:
         # * helper owns the rule so a future caller cannot hand out rank
         # * from a tier that may not grant it.
         allowed = cls.available_roles_for(executor_role)
-        if current_role == "founder":
-            return False, t("admins.promote.target_is_founder", locale)
+        if current_role == "owner":
+            return False, t("admins.promote.target_is_owner", locale)
         if db.users_roles.role_rank(current_role) >= db.users_roles.role_rank(role):
             label = db.users_roles.role_label(current_role)
             return False, t("admins.promote.holds_role", locale, role=label)
@@ -347,7 +347,7 @@ class Promote:
         if role == "admin":
             # * Only the Founder grants the Admin tier outright. An Admin
             # * may request it, and the Founder decides on the request.
-            if executor_role == "founder":
+            if executor_role == "owner":
                 return await assign_admin(
                     bot,
                     admin_id,

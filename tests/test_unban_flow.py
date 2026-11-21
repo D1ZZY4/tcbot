@@ -312,5 +312,7 @@ def test_staff_cleanup_uses_whichever_read_saw_the_role() -> None:
     rather than skip the gate because the rank check won the race.
     """
     assert unban._cleanup_role(None, Identity("admin", 42, "Target")) == "admin"
-    assert unban._cleanup_role("tester", Identity("user", 42, "Target")) == "tester"
+    assert (
+        unban._cleanup_role("moderator", Identity("user", 42, "Target")) == "moderator"
+    )
     assert unban._cleanup_role(None, Identity("user", 42, "Target")) is None

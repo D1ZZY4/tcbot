@@ -12,14 +12,14 @@ body = "`/tckick` (alias: `/tck`)"
 body = """
 Removes a user from the *current group only*. This is not a federation-wide action; the user can rejoin via an invite link unless they are separately federation-banned.
 
-If the target holds a federation role (Tester / Developer / Admin), that role is demoted and they are notified by DM. A log entry is posted to the federation logs channel.
+If the target holds a federation role (Moderator / Developer / Admin), that role is demoted and they are notified by DM. A log entry is posted to the federation logs channel.
 
 Telegram has no direct kick, so the bot bans and then unbans the user. If the second step still fails after one retry, a durable repair task keeps retrying the unban."""
 
 [help.flow]
 body = """
 1. Run `/tckick` with the target (and optional inline reason).
-2. If no reason was given, the bot asks: reply with text or tap *Skip*.
+2. If no reason was given, the bot asks for one: reply with text.
 3. The bot asks for proof: send a photo/video, then tap *Done*, or tap *Skip*."""
 
 [help.examples]

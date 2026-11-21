@@ -191,7 +191,7 @@ async def test_appeal_approval_is_one_decision(run_db: str) -> None:
     assert claimed is True
 
     accepted, run_id = await bans_db.approve_appeal_and_queue_unban(
-        "liferun0002", 7, "Founder", 7, [-1001]
+        "liferun0002", 7, "Owner", 7, [-1001]
     )
 
     assert accepted is True

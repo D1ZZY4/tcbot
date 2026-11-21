@@ -64,7 +64,7 @@ Appeal and promotion-request records are retained after resolution for reference
 
 [section.rights]
 label = "Your Rights"
-body = """You can review your own ban status at any time with `/checkme`, and you can request a review or deletion of your personal data by reaching out to a {community} Admin or the Founder directly.
+body = """You can review your own ban status at any time with `/checkme`, and you can request a review or deletion of your personal data by reaching out to a {community} Admin or the Owner directly.
 
 Requests are handled on a best-effort basis. Active ban records may be retained even after a deletion request if they are required for ongoing enforcement or federation integrity."""
 

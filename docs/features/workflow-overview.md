@@ -10,13 +10,13 @@ factories, and callback details, see
 |---|---|---|---|---|
 | Ban | `/tcban`, `/tcb` | Developer+ | All connected groups | Requires inline reason and proof media; the decision queues a durable apply run per group. |
 | Unban | `/tcunban`, `/tcunb` | Developer+ | All connected groups | Resolves an active ban, revokes it and queues a durable per-group unban run. |
-| Kick | `/tckick`, `/tck` | Tester+ | Current group only | Conversation asks for reason/proof; auto-demotes role holders and queues a durable unban repair if the second step fails. |
-| Mute | `/tcmute`, `/tcm` | Tester+ | All connected groups | Optional duration token before reason; the decision queues a durable apply run per group. |
-| Unmute | `/tcunmute`, `/tcunm`, `/tcum` | Tester+ | All connected groups | Direct command; restores send permissions. |
-| Warn | `/tcwarn`, `/tcw` | Tester+ | Current group warning history | Reason required; auto-ban at `WARN_LIMIT` (default 3) per group or when `FED_WARN_LIMIT` (env, default disabled) is crossed across all groups. |
-| Unwarn | `/tcunwarn`, `/tcunw` | Tester+ | Current group warning history | Removes the newest warning. |
-| Warn list | `/warns`, `/warnlist` | Tester+ | Current group warning history | Shows a user's warnings. |
-| Reset warns | `/resetwarns`, `/clearwarns` | Tester+ | Current group warning history | Clears all warnings for a user in the chat. |
+| Kick | `/tckick`, `/tck` | Moderator+ | Current group only | Conversation asks for reason/proof; auto-demotes role holders and queues a durable unban repair if the second step fails. |
+| Mute | `/tcmute`, `/tcm` | Moderator+ | All connected groups | Optional duration token before reason; the decision queues a durable apply run per group. |
+| Unmute | `/tcunmute`, `/tcunm`, `/tcum` | Moderator+ | All connected groups | Direct command; restores send permissions. |
+| Warn | `/tcwarn`, `/tcw` | Moderator+ | Current group warning history | Reason required; auto-ban at `WARN_LIMIT` (default 3) per group or when `FED_WARN_LIMIT` (env, default disabled) is crossed across all groups. |
+| Unwarn | `/tcunwarn`, `/tcunw` | Moderator+ | Current group warning history | Removes the newest warning. |
+| Warn list | `/warns`, `/warnlist` | Moderator+ | Current group warning history | Shows a user's warnings. |
+| Reset warns | `/resetwarns`, `/clearwarns` | Moderator+ | Current group warning history | Clears all warnings for a user in the chat. |
 
 ## Ban flow
 
@@ -91,7 +91,7 @@ Clarification: explanation of the situation
 Agreement: commitment to follow community rules
 ```
 
-The original banning admin has a 12-hour priority review window. During that window only the banning admin (`actor_user_id` on the ban) can act; other reviewers see the pending-review card. After the window, any Founder or Admin (effective role) can review the appeal. When the ban record carries no usable banning admin (missing or zero `actor_user_id`), the window does not apply. A review card left pending for more than 72 hours is cleared so the user can submit a fresh appeal, and a rejected appeal cannot be re-submitted for 24 hours.
+The original banning admin has a 12-hour priority review window. During that window only the banning admin (`actor_user_id` on the ban) can act; other reviewers see the pending-review card. After the window, any Owner or Admin (effective role) can review the appeal. When the ban record carries no usable banning admin (missing or zero `actor_user_id`), the window does not apply. A review card left pending for more than 72 hours is cleared so the user can submit a fresh appeal, and a rejected appeal cannot be re-submitted for 24 hours.
 
 ## Group connection flow
 
@@ -116,13 +116,13 @@ Disconnected groups are marked inactive rather than deleted, preserving historic
 
 ## Staff role flows
 
-- `/tcpromote` assigns `admin`, `developer`, or `tester` based on executor rank.
-- Founder can assign Admin, Developer, or Tester.
-- Admin can assign Developer or Tester directly.
-- Admin-to-Admin promotion creates a queued request for Founder approval.
+- `/tcpromote` assigns `admin`, `developer`, or `moderator` based on executor rank.
+- Owner can assign Admin, Developer, or Moderator.
+- Admin can assign Developer or Moderator directly.
+- Admin-to-Admin promotion creates a queued request for Owner approval.
 - `/tcpromoterequests` (`/tcreqs`) submits a promotion request; `/tcpromotelist` (`/tcplist`) lists pending requests.
 - `/tcdemote` uses confirm/cancel buttons before removing a role.
-- `/transferowner` transfers Founder ownership.
+- `/transferowner` transfers Owner ownership.
 
 ## Statistics and lookup flows
 
@@ -139,4 +139,4 @@ Disconnected groups are marked inactive rather than deleted, preserving historic
 - Staff-only `/tcrepair` (alias `/tcr`) lists the queued, running, partial,
   and failed enforcement runs, and `/tcrepair retry <run_id> [chat_id]`
   re-drives the existing decision instead of filing a new one.
-- `/leaveall`, `/exitall`, and `/tcleave` are Founder-only emergency commands that make the bot leave connected groups and mark them inactive.
+- `/leaveall`, `/exitall`, and `/tcleave` are Owner-only emergency commands that make the bot leave connected groups and mark them inactive.

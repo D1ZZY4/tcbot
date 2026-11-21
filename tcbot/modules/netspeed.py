@@ -89,7 +89,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
         name=__module_name__,
         overview=t("netspeed.help.overview", locale),
         commands=t("netspeed.help.commands.body", locale),
-        who=replies.perm_founder_only(locale, plain=False),
+        who=replies.perm_owner_only(locale, plain=False),
         where=replies.context_bot_or_group(locale),
         what=t("netspeed.help.what.body", locale),
         target=False,

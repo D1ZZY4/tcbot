@@ -107,7 +107,7 @@ def _set_up(
         return 1
 
     async def _role(*args: Any, **kwargs: Any) -> str:
-        return "founder"
+        return "owner"
 
     async def _safe_reply(_msg: Any, text: str, **kwargs: Any) -> None:
         captured.append(text)

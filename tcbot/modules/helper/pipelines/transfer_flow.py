@@ -109,7 +109,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    # * Banned users must not gain founder powers: fail closed on active
+    # * Banned users must not gain owner powers: fail closed on active
     # * ban (and on the lookup itself) so appeal/unban comes first.
     try:
         target_ban = await db.bans_db.get_active_ban(target_id)
@@ -137,7 +137,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
     # * Ownership may have moved while the target was classified and
     # * verified. Re-read it at the mutation point, so a second in-flight
-    # * transfer cannot overwrite a newer owner and a demoted founder
+    # * transfer cannot overwrite a newer owner and a demoted owner
     # * cannot hand the federation over. A failed lookup refuses.
     try:
         still_owner = await db.users_roles.is_owner(current_owner.id, fresh=True)

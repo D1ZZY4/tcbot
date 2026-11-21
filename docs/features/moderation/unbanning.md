@@ -4,7 +4,7 @@ This document describes the current federation unban behavior implemented by `tc
 
 For the ban flow that creates the records this command clears, see
 [`banning.md`](banning.md). For the appeal flow that can also trigger an unban,
-see [`../appeals.md`](../appeals.md). For the check command showing ban
+see [`appeals.md`](appeals.md). For the check command showing ban
 history, see [`check.md`](check.md). For shared helpers, see
 [`../../architecture/helpers.md`](../../architecture/helpers.md). For the
 database layer, see [`../../architecture/database.md`](../../architecture/database.md).
@@ -14,7 +14,7 @@ flowchart TD
     Cmd[/tcunban command/] --> Perm{Developer+ rank check}
     Perm -->|denied| End1[Reject]
     Perm -->|allowed| Target[Resolve target]
-    Target --> Ident{Self / bot / Founder?}
+    Target --> Ident{Self / bot / Owner?}
     Ident -->|self or bot| Refuse[identity.refuse_message]
     Ident -->|allowed| Parallel[Parallel: pre-fetch active ban]
     Parallel -->|no active ban| NoBan[Reply: no active ban]
@@ -32,7 +32,7 @@ flowchart TD
 
 `/tcunban` clears an active federation ban by revoking the underlying `moderation_actions` ban decisions and unbanning the target across every active connected group plus the primary groups (`cfg.main_group`). The revocation and the delivery intent land in one transaction, and the queued enforcement run owns the per-group work. The appeal-approve path uses the same run model through `bans_db.approve_appeal_and_queue_unban`.
 
-The Developer minimum rank (instead of Tester) is enforced because unban is irreversible at the database level and a low-rank moderator could otherwise quietly undo a Founder ban.
+The Developer minimum rank (instead of Moderator) is enforced because unban is irreversible at the database level and a low-rank moderator could otherwise quietly undo a Owner ban.
 
 ## Commands and aliases
 
@@ -134,7 +134,7 @@ The unban log includes:
 - A concurrent unban that loses the race sees `revoked == 0` and returns the same idempotent no-record reply instead of claiming a new change.
 - `unban_chat_member` is called with `only_if_banned=True`, so it is a no-op in groups where the user is not currently banned.
 - A failed Telegram delivery leaves the run queued. The scheduled worker retries the target up to three times with a five-minute delay. After that budget is spent, `/tcrepair retry <run_id> [chat_id]` re-drives the existing run or one group without queueing a second unban.
-- The Developer rank minimum (`mod_only`) prevents a Tester from unbanning a Founder or Admin. The rank check, the identity classification, and the active-ban pre-fetch are issued together; the refusal is evaluated before `execute_unban`, and a fresh gate runs again immediately before the revocation.
+- The Developer rank minimum (`mod_only`) prevents a Moderator from unbanning a Owner or Admin. The rank check, the identity classification, and the active-ban pre-fetch are issued together; the refusal is evaluated before `execute_unban`, and a fresh gate runs again immediately before the revocation.
 - A staff target re-promoted while banned is demoted first through `demote_before_unban(..., trigger="unban")`; a failed demote blocks the unban.
 - Federation log send failure does not roll back the decision or the run.
 
@@ -144,7 +144,7 @@ The unban log includes:
 2. `/tcunban` without a target is rejected with `replies.err_cannot_resolve(locale)`.
 3. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
 4. Self-unban and bot-unban attempts are rejected by `identity.refuse_message`.
-5. Founder is always treated as not federation-bannable, so unban is a no-op for Founder targets.
+5. Owner is always treated as not federation-bannable, so unban is a no-op for Owner targets.
 6. The active ban pre-fetch runs in parallel with `identity.classify` and `resolve_and_check`.
 7. `execute_unban` refuses to queue an unban when no active ban record exists.
 8. The decision and the unban run are written together; a failed write leaves the ban active.

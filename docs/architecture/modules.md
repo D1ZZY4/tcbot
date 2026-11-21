@@ -81,14 +81,14 @@ the layer boundaries.
 | `connect.py` | `Connect` | `/tcconnect`, `/tccon`, bot-added updates, connect/cancel callbacks | Group connection approval and permission checks. |
 | `disconnecting.py` | `Disconnect` | `/tcdisconnect`, `/tcdiscon`, `/rmtc` | Group-owner disconnect and staff remote disconnect. |
 | `groups.py` | `Groups` | `/tcgroups`, `/tcg` | Connected group list and details toggle. |
-| `kick.py` | `Kick` | `/tckick`, `/tck` | Tester+ current-group kick through shared reason/proof flow. |
+| `kick.py` | `Kick` | `/tckick`, `/tck` | Moderator+ current-group kick through shared reason/proof flow. |
 | `language.py` | `Language` | `/language`, `/lang`, `/langs` plus `language_menu`, `lang:list:*`, `lang:set:*` callbacks | Per-user (PM) and per-group locale selection. Group changes require the group creator or federation staff; the selected locale drives all following replies. |
 | `maintenance.py` | `Maintenance` | `/leaveall`, `/exitall`, `/tcleave`, `/cleanup`, `/tcclean`, `/tcc`, `/tcrepair`, `/tcr` | Emergency leave-all, staff cleanup, and enforcement-run repair. |
 | `mute.py` | `Mute` | `/tcmute`, `/tcm`, `/tcunmute`, `/tcunm`, `/tcum` | Federation-wide mute conversation and direct unmute. |
 | `stats.py` | `Stats` | `/tcstats`, `/tcs` plus stats callbacks | Summary, staff list, active bans, connected chats, search/detail callbacks. |
 | `unban.py` | `Unban` | `/tcunban`, `/tcunb` | Developer+ federation unban. |
 | `warns.py` | `Warnings` | `/tcwarn`, `/tcw`, `/tcunwarn`, `/tcunw`, `/warns`, `/warnlist`, `/resetwarns`, `/clearwarns` | Warning conversation and direct warning management commands. |
-| `netspeed.py` | `Netspeed` | `/ping`, `/p`, `/speedtest`, `/st` | Founder-only network diagnostics: API round-trip latency ping and full bandwidth speed test against speedtest.net in a thread executor. |
+| `netspeed.py` | `Netspeed` | `/ping`, `/p`, `/speedtest`, `/st` | Owner-only network diagnostics: API round-trip latency ping and full bandwidth speed test against speedtest.net in a thread executor. |
 
 ## Internal/menu modules
 
@@ -137,10 +137,10 @@ Always call `await q.answer()` at the beginning of callback handlers.
 
 | Decorator | Minimum effective role | Typical modules |
 |---|---|---|
-| `owner_only` | Founder | Owner transfer, leave-all. |
-| `staff_only` | Founder/Admin | Broadcast, cleanup, promotion requests. |
+| `owner_only` | Owner | Owner transfer, leave-all. |
+| `staff_only` | Owner/Admin | Broadcast, cleanup, promotion requests. |
 | `mod_only` | Developer+ | Ban and unban. |
-| `basic_mod_only` | Tester+ | Kick, mute, warn. |
+| `basic_mod_only` | Moderator+ | Kick, mute, warn. |
 
 Use role helpers from `users_roles` and `guards.resolve_and_check`; avoid manual chains of `is_owner()` + `is_admin()` checks.
 

@@ -28,13 +28,13 @@ Decorators provide authorization, handler-level rate limiting, and debug tracing
 
 | Decorator/helper | Purpose |
 |---|---|
-| `ratelimiter(throttle)` | Per-handler sliding-window user throttle backed by Redis sorted set when available; falls back to in-process sliding window. Use as the outermost command decorator and pass one of the shared `THROTTLE_*` tiers. The current Founder (cached owner ID, 300 s TTL) bypasses per-handler quotas so incident response never stalls; everyone else shares the same bucket. |
+| `ratelimiter(throttle)` | Per-handler sliding-window user throttle backed by Redis sorted set when available; falls back to in-process sliding window. Use as the outermost command decorator and pass one of the shared `THROTTLE_*` tiers. The current Owner (cached owner ID, 300 s TTL) bypasses per-handler quotas so incident response never stalls; everyone else shares the same bucket. |
 | `log_execution` | DEBUG-level entry/exit/exception tracing. Use as the innermost decorator. |
-| `owner_only` | Founder-only commands. |
-| `staff_only` | Founder/Admin commands. |
+| `owner_only` | Owner-only commands. |
+| `staff_only` | Owner/Admin commands. |
 | `mod_only` | Developer+ commands, such as ban and unban. |
-| `basic_mod_only` | Tester+ commands, such as kick, mute, and warn. |
-| `global_rate_limit_handler` | Universal rate limiter registered by `__main__.py` at group `-1`. Uses `_AsyncRateLimiter` (Redis sorted-set + in-process fallback) for both command and callback-query buckets. The Founder bypasses both buckets; plain chat messages are never limited. |
+| `basic_mod_only` | Moderator+ commands, such as kick, mute, and warn. |
+| `global_rate_limit_handler` | Universal rate limiter registered by `__main__.py` at group `-1`. Uses `_AsyncRateLimiter` (Redis sorted-set + in-process fallback) for both command and callback-query buckets. The Owner bypasses both buckets; plain chat messages are never limited. |
 
 ### Throttle tiers
 
@@ -59,8 +59,8 @@ The Redis key already carries the handler name, so two handlers on the same tier
 
 - **Redis available**: atomic Lua script on a sorted-set key `rl:{prefix}:{uid}`. Expired entries are purged each check via `ZREMRANGEBYSCORE`. State survives bot restarts, so the quota is consistent across restarts (including the 24/7 runner cycle in `.github/workflows/run-bot.yml`).
 - **Redis absent or error**: transparent fallback to `_RateLimiter` (in-process `deque`-based sliding window). Rate limiting is never silently disabled; the fallback is logged at DEBUG level.
-- **Founder exemption**: `_is_exempt(uid)` compares against the cached owner ID before any bucket check, in both the global handler and every per-handler wrapper. A failed lookup means not exempt (fail-closed, throttling stays on); cancellation propagates. Per-handler quotas are graduated by cost: reads 8-10 calls / 30 s, moderation writes 3-5 calls / 60 s, bulk actions 1-3 calls / 300 s, callbacks 15-20 presses / 30 s.
-- **Staff global tier**: `_throttle_tier(uid)` resolves the flood ceiling for commands in one cached role read: Founder skips it, Tester and above share `_cmd_staff_limiter` (16 calls / 30 s), everyone else uses `_cmd_limiter` (8 calls / 30 s). A failed lookup lands on the strict bucket; cancellation propagates. Per-handler quotas still pace each destructive command, and the callback bucket (20 presses / 10 s) is unchanged for all tiers.
+- **Owner exemption**: `_is_exempt(uid)` compares against the cached owner ID before any bucket check, in both the global handler and every per-handler wrapper. A failed lookup means not exempt (fail-closed, throttling stays on); cancellation propagates. Per-handler quotas are graduated by cost: reads 8-10 calls / 30 s, moderation writes 3-5 calls / 60 s, bulk actions 1-3 calls / 300 s, callbacks 15-20 presses / 30 s.
+- **Staff global tier**: `_throttle_tier(uid)` resolves the flood ceiling for commands in one cached role read: Owner skips it, Moderator and above share `_cmd_staff_limiter` (16 calls / 30 s), everyone else uses `_cmd_limiter` (8 calls / 30 s). A failed lookup lands on the strict bucket; cancellation propagates. Per-handler quotas still pace each destructive command, and the callback bucket (20 presses / 10 s) is unchanged for all tiers.
 - **One retry voice**: every rejection (global command, global callback, per-handler message, per-handler callback) replies with `replies.rate_limit_text(wait, locale, plain=True)`, so throttled users see identical wording regardless of which bucket stopped them. The text clamps to a minimum of 1 second so sub-second waits never render as "try again in 0 seconds".
 
 Typical command decorator order:
@@ -181,7 +181,7 @@ The `decorators/` package holds only decorators: the federated-tier guards, the 
 | `check_callback_staff(admin_id, q, update, *, min_role="admin")` | Re-checks the staff rank in parallel with `q.answer()`; returns the role or `None` after editing the perm-expired notice. The rank table decides the threshold, so a tier that joins it takes part in the gate. |
 | `check_callback_executor(update, q, admin, *, min_role="admin")` | Refuses the anonymous-admin placeholder, then runs `check_callback_staff`. Every admin callback uses it, so the placeholder can never reach a tier check that only happens to reject it by rank. |
 | `prompt_owner_mismatch(q, update, *, min_parts, key)` | Alert-denies a prompt tap from anyone but the recorded opener (new callbacks carry `{...}:{executor}`; legacy taps without the segment keep working). `cancel_owner_mismatch` and `action_owner_mismatch` are the cancel/action wrappers. |
-| `can_demote_admin(executor_role, target_role)` | Demote rank rule: the executor must outrank the target, and demoting an Admin needs the Founder. |
+| `can_demote_admin(executor_role, target_role)` | Demote rank rule: the executor must outrank the target, and demoting an Admin needs the Owner. |
 | `banned_target_refusal(target_id, locale, *, log_label)` | Returns a refusal line when the target holds an active ban, `None` when it does not. Used by the promotion paths so a banned user cannot gain federation rank. Fails closed: a failed ban lookup refuses the action. |
 | `require_federation_origin(msg, chat_id, chat_type, locale, allow_private=...)` | Enforces that moderation entries originate from a connected group or a primary group (private only when `allow_private` is set for federation-wide entries). A disconnected group, or a private chat where `allow_private` is false, replies with the shared notice and blocks the action; a connection-state outage replies with the database retry notice and blocks (fail closed). |
 | `targets.resolve_mod_target(update, ctx, *, action, min_role, allow_private, log_prefix, bot_check=False)` | Shared entry sequence for the ban/kick/mute/warn commands: resolves locale, checks the federation origin, extracts the target, and runs identity plus rank checks, replying and returning `None` on any failure. Returns a `ModTarget` (`msg`, `admin`, `locale`, `target_id`, `target_name`, `has_explicit_target`, `args`, `ident`); callers keep only duty-specific parsing (reason, duration) and conversation setup. `bot_check=True` (warn) runs a verified bot check before classifying. |
@@ -231,7 +231,7 @@ All command modules that expose user-facing commands use these helpers rather th
 | `no_reason(locale=None, *, plain)` | Default fallback text when no moderation reason is supplied. |
 | `err_cannot_resolve(locale=None, *, plain)` | Error when the target cannot be resolved (covers "no target provided" and "unresolvable"). Used by all command modules at `extract_target` return sites. |
 | `err_role_verify` / `err_group_only` / `err_no_connected_groups` / `err_group_not_found` / `err_groups_load_failed` / `err_db_retry` / `err_perm_expired` / `err_unknown_role` (`locale=None, *, plain`) | Role-verification, group-only, empty-federation, unknown-group, group-load-failure, DB-retry, expired-permission, and unknown-role notices respectively. |
-| `perm_founder_only` / `perm_staff_only` / `perm_dev_above` / `perm_tester_above` (`locale=None, *, plain`) | Permission hints: Founder only, TC Staff, Developer or above, Tester or above. |
+| `perm_founder_only` / `perm_staff_only` / `perm_dev_above` / `perm_tester_above` (`locale=None, *, plain`) | Permission hints: Owner only, TC Staff, Developer or above, Moderator or above. |
 | `context_bot_or_group` / `context_anyone` / `where_connected_group` (`locale=None`) | Context-guard and scope bodies for help "Where" sections (V2-escaped). |
 | `sec_commands(locale=None)` | Help-text section header: `Commands & Aliases`. |
 | `sec_who(locale=None)` | Help-text section header: `Who can use`. |

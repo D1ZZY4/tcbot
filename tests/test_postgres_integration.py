@@ -274,7 +274,7 @@ async def test_an_erasure_request_is_swept(postgres: str) -> None:
 async def test_an_erasure_request_never_removes_the_current_owner(
     postgres: str,
 ) -> None:
-    """The current Founder must transfer ownership before being erased."""
+    """The current Owner must transfer ownership before being erased."""
     await users_roles.set_owner(7)
     request_id = await erasure_db.request_erasure(7, "account deletion")
     assert request_id > 0

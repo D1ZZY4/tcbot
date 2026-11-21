@@ -81,7 +81,7 @@ async def test_the_admin_promotion_keeps_the_granted_role(
     revoke the admin role it had just written, and the promoted user
     would end up with no role at all while the command reported success.
     """
-    await users_roles.set_role(42, "tester", 1)
+    await users_roles.set_role(42, "moderator", 1)
 
     async def _send_log(_bot: Any, _text: str, **kwargs: Any) -> Any:
         _ = kwargs
@@ -146,7 +146,7 @@ async def test_the_configured_owner_takes_ownership_over_an_existing_role(
     await users_roles.ensure_initial_owner(42)
 
     assert await users_roles.get_owner_id(fresh=True) == 42
-    assert await users_roles.get_effective_role(42, fresh=True) == "founder"
+    assert await users_roles.get_effective_role(42, fresh=True) == "owner"
 
 
 async def test_a_demote_never_revokes_the_owner_assignment(roles_db: str) -> None:
@@ -157,4 +157,4 @@ async def test_a_demote_never_revokes_the_owner_assignment(roles_db: str) -> Non
 
     assert removed is False
     assert await users_roles.get_owner_id(fresh=True) == 42
-    assert await users_roles.get_effective_role(42, fresh=True) == "founder"
+    assert await users_roles.get_effective_role(42, fresh=True) == "owner"

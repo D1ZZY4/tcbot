@@ -186,7 +186,7 @@ def test_classify_failure_replies(monkeypatch: pytest.MonkeyPatch) -> None:
         raise RuntimeError("classify down")
 
     async def _resolve(*a: Any, **k: Any) -> tuple[str, str]:
-        return ("developer", "tester")
+        return ("developer", "moderator")
 
     async def _locale(*a: Any, **k: Any) -> str:
         return "en-US"

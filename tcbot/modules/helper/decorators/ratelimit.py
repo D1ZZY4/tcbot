@@ -252,11 +252,11 @@ async def _throttle_tier(uid: int) -> str:
     except Exception as exc:
         log.debug("Throttle-tier lookup failed for %d: %s", uid, exc)
         return "regular"
-    if role == "founder":
+    if role == "owner":
         return "exempt"
     # * role_rank is a pure mapping lookup (unknown roles rank 0), so no
     # * failure path here; DB failures already returned "regular" above.
-    if db.users_roles.role_rank(role) >= db.users_roles.role_rank("tester"):
+    if db.users_roles.role_rank(role) >= db.users_roles.role_rank("moderator"):
         return "staff"
     return "regular"
 

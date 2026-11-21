@@ -8,20 +8,20 @@ details, see [`demote.md`](demote.md). For module structure, see
 helpers, see [`../../architecture/helpers.md`](../../architecture/helpers.md).
 For the database layer, see [`../../architecture/database.md`](../../architecture/database.md).
 
-Every staff-management command except `/tcpromoterequests` (`/tcpromote`, `/tcdemote`, `/transferowner`, `/tcunwarn`, `/resetwarns`) classifies the target through `identity.classify(...)` and refuses disallowed identities (self, this bot, Telegram service account, other bots, Founder, and higher-rank staff where applicable) via `identity.refuse_message(action, ident)` before mutating state. `/tcpromoterequests` is the exception: the caller is both executor and target, which would always produce a self-refusal, so it instead checks `get_effective_role` and `queues_db.get_request` directly to reject callers who already have a role or a pending request.
+Every staff-management command except `/tcpromoterequests` (`/tcpromote`, `/tcdemote`, `/transferowner`, `/tcunwarn`, `/resetwarns`) classifies the target through `identity.classify(...)` and refuses disallowed identities (self, this bot, Telegram service account, other bots, Owner, and higher-rank staff where applicable) via `identity.refuse_message(action, ident)` before mutating state. `/tcpromoterequests` is the exception: the caller is both executor and target, which would always produce a self-refusal, so it instead checks `get_effective_role` and `queues_db.get_request` directly to reject callers who already have a role or a pending request.
 
 ```mermaid
 flowchart TD
-    Founder[Founder<br/>full power] --> Admin[Admin<br/>broadcast, cleanup, queue]
+    Owner[Owner<br/>full power] --> Admin[Admin<br/>broadcast, cleanup, queue]
     Admin --> Developer[Developer<br/>ban, unban]
-    Developer --> Tester[Tester<br/>kick, mute, warn]
-    Tester --> Member[Regular member]
-    Founder -.->|can promote/demote| Admin
-    Founder -.->|can promote/demote| Developer
-    Founder -.->|can promote/demote| Tester
-    Admin -.->|requests promote| Founder
+    Developer --> Moderator[Moderator<br/>kick, mute, warn]
+    Moderator --> Member[Regular member]
+    Owner -.->|can promote/demote| Admin
+    Owner -.->|can promote/demote| Developer
+    Owner -.->|can promote/demote| Moderator
+    Admin -.->|requests promote| Owner
     Admin -.->|can demote lower| Developer
-    Admin -.->|can demote lower| Tester
+    Admin -.->|can demote lower| Moderator
 ```
 
 ```mermaid
@@ -35,31 +35,31 @@ flowchart TD
 
 ## Purpose
 
-The role system controls who can perform moderation and administrative actions. It combines one Founder/owner, Admin records, and custom Developer/Tester roles into a single effective hierarchy used across bans, kicks, warnings, unbans, promotion flows, and role protection.
+The role system controls who can perform moderation and administrative actions. It combines one Owner/owner, Admin records, and custom Developer/Moderator roles into a single effective hierarchy used across bans, kicks, warnings, unbans, promotion flows, and role protection.
 
 ## Effective role hierarchy
 
 Effective roles are resolved by `users_roles.get_effective_role(user_id)`:
 
 1. Read the active `role_assignments` row of the user.
-2. Map its `role_key` back to the application vocabulary.
+2. Validate its `role_key` against the shared rank table.
 3. Cache the result in `effective_role_cache`.
 
-Only `developer` and `tester` are accepted as custom roles: `set_role` refuses anything else on write, and resolution ignores an unknown stored value (logged as an error, treated as no role) so a legacy or hand-edited row can never grant privilege.
+Only `developer` and `moderator` are accepted as custom roles: `set_role` refuses anything else on write, and resolution ignores an unknown stored value (logged as an error, treated as no role) so a legacy or hand-edited row can never grant privilege.
 
 The rank table is:
 
 | Effective role | Rank | Catalog role key |
 |---|---:|---|
-| `founder` | 4 | `owner` |
+| `owner` | 4 | `owner` |
 | `admin` | 3 | `admin` |
 | `developer` | 2 | `developer` |
-| `tester` | 1 | `moderator` |
+| `moderator` | 1 | `moderator` |
 | `None` | 0 | No role |
 
-`ROLE_LABEL` maps these internal names to display labels: Founder, Admin, Developer, Tester.
+`ROLE_LABEL` maps these internal names to display labels: Owner, Admin, Developer, Moderator.
 
-The catalog calls the last tier `moderator`; the handlers call it `tester`. `ROLE_KEY_BY_APP_ROLE` and `APP_ROLE_BY_ROLE_KEY` are the only place the two vocabularies meet.
+Application and database use the same four names, so no translation table exists between them.
 
 ## Permission model
 
@@ -72,17 +72,17 @@ Common moderation thresholds:
 | Action | Minimum effective role |
 |---|---|
 | `/tcban` | Developer |
-| `/tcunban` | Developer/Admin/Founder via `mod_only` |
-| `/tckick` | Tester |
-| `/tcwarn` | Tester |
-| `/tcunwarn` | Tester/Admin/Founder via `basic_mod_only` |
-| `/resetwarns` | Tester/Admin/Founder via `basic_mod_only` |
-| Appeal decision buttons | Founder or Admin via `users_roles.get_effective_role` (fresh read) |
-| `/tcpromote` | Founder or Admin |
-| `/tcdemote` | Founder or Admin |
-| `/transferowner` | Founder only |
-| `/tcpromotelist` | Founder or Admin via `staff_only` |
-| Promotion approve/reject buttons | Founder only |
+| `/tcunban` | Developer/Admin/Owner via `mod_only` |
+| `/tckick` | Moderator |
+| `/tcwarn` | Moderator |
+| `/tcunwarn` | Moderator/Admin/Owner via `basic_mod_only` |
+| `/resetwarns` | Moderator/Admin/Owner via `basic_mod_only` |
+| Appeal decision buttons | Owner or Admin via `users_roles.get_effective_role` (fresh read) |
+| `/tcpromote` | Owner or Admin |
+| `/tcdemote` | Owner or Admin |
+| `/transferowner` | Owner only |
+| `/tcpromotelist` | Owner or Admin via `staff_only` |
+| Promotion approve/reject buttons | Owner only |
 
 ### The permission catalog
 
@@ -106,11 +106,11 @@ A change to either side has to be a change to both.
 
 | Capability | Tiers that hold it |
 |---|---|
-| `moderation.ban`, `moderation.unban` | Founder, Admin, Developer |
+| `moderation.ban`, `moderation.unban` | Owner, Admin, Developer |
 | `moderation.kick`, `moderation.mute`, `moderation.unmute`, `moderation.warn`, `moderation.unwarn`, `moderation.reset_warnings` | every tier |
-| `moderation.review_appeals`, `roles.promote`, `roles.demote` | Founder, Admin |
-| `roles.transfer_ownership`, `roles.review_promotion_requests`, `community.leave_all`, `community.speedtest` | Founder only |
-| `community.broadcast`, `community.cleanup`, `groups.remove` | Founder, Admin |
+| `moderation.review_appeals`, `roles.promote`, `roles.demote` | Owner, Admin |
+| `roles.transfer_ownership`, `roles.review_promotion_requests`, `community.leave_all`, `community.speedtest` | Owner only |
+| `community.broadcast`, `community.cleanup`, `groups.remove` | Owner, Admin |
 
 ## Persistent tables
 
@@ -142,8 +142,8 @@ Accepted role arguments:
 | `admin` | `admin` |
 | `developer` | `developer` |
 | `dev` | `developer` |
-| `tester` | `tester` |
-| `test` | `tester` |
+| `moderator` | `moderator` |
+| `mod` | `moderator` |
 
 Target resolution supports reply, user ID, and resolvable username.
 
@@ -151,9 +151,9 @@ Target resolution supports reply, user ID, and resolvable username.
 
 | Executor | Direct role choices |
 |---|---|
-| Founder | Admin, Developer, Tester |
-| Admin | Developer, Tester |
-| Developer/Tester/unroled | No promotion access |
+| Owner | Admin, Developer, Moderator |
+| Admin | Developer, Moderator |
+| Developer/Moderator/unroled | No promotion access |
 
 If the command omits the role argument, the bot shows an inline role-selection menu using `keyboards.promote_role_kb(...)`.
 
@@ -170,27 +170,27 @@ The callback requires the prompt opener and re-checks the executor's current eff
 
 The promotion executor rejects these cases:
 
-- The executor is not Founder/Admin.
+- The executor is not Owner/Admin.
 - The target cannot be resolved.
 - The executor tries to promote themselves.
 - The target is the bot.
-- The target is Founder.
+- The target is Owner.
 - The target already has the requested role or a higher role.
-- The target is already Admin and the requested role is Developer/Tester; they must be demoted first.
+- The target is already Admin and the requested role is Developer/Moderator; they must be demoted first.
 
-### Direct Founder promotion to Admin
+### Direct Owner promotion to Admin
 
-When Founder promotes a target to Admin:
+When Owner promotes a target to Admin:
 
-1. `users_roles.add_admin(target_id, founder_id)` grants the `admin` role and revokes the active Developer/Tester assignment in the same transaction.
+1. `users_roles.add_admin(target_id, owner_id)` grants the `admin` role and revokes the active Developer/Moderator assignment in the same transaction.
 2. `users_cache.upsert_user(...)` caches the display name.
 3. A `promoted` log (with `role="admin"`) is sent to `cfg.logs`.
 4. The target is notified by DM when possible.
 5. The command message is updated/replied with a success message.
 
-### Founder/Admin promotion to Developer or Tester
+### Owner/Admin promotion to Developer or Moderator
 
-When Founder or Admin assigns Developer/Tester:
+When Owner or Admin assigns Developer/Moderator:
 
 1. `users_roles.set_role(target_id, role, assigned_by)` grants the role in one transaction that revokes the assignment it replaces, so the user never holds two active roles.
 2. `users_cache.upsert_user(...)` caches the display name.
@@ -203,9 +203,9 @@ Admins cannot directly assign Admin. When an Admin tries to promote a target to 
 
 1. The bot checks for an existing pending request for that target.
 2. A new request is inserted into `promotion_requests` with status `pending`.
-3. The Founder is fetched from the active owner assignment.
-4. The Founder is notified by DM with Approve/Reject buttons if possible.
-5. If the Founder DM fails or no owner ID exists, the request is posted to the logs channel as a fallback.
+3. The Owner is fetched from the active owner assignment.
+4. The Owner is notified by DM with Approve/Reject buttons if possible.
+5. If the Owner DM fails or no owner ID exists, the request is posted to the logs channel as a fallback.
 6. The command replies that the request was submitted.
 
 The pending-request guard is target-based: only one pending Admin promotion request is allowed for the same target.
@@ -223,10 +223,10 @@ Flow:
 
 1. Anonymous-admin senders (GroupAnonymousBot) are rejected before any lookup.
 2. The caller's effective role and any open pending request are fetched in parallel.
-3. A caller who already holds a federation role (Founder, Admin, Developer, or Tester) is told no request is needed.
+3. A caller who already holds a federation role (Owner, Admin, Developer, or Moderator) is told no request is needed.
 4. A caller who already has a pending request is told the request is pending.
-5. Otherwise, the bot enqueues a new `promotion_requests` document with `target_id` equal to the user's ID and `Promote.request_admin` notifies the Founder.
-6. The Founder is notified by DM with approve/reject buttons when possible.
+5. Otherwise, the bot enqueues a new `promotion_requests` document with `target_id` equal to the user's ID and `Promote.request_admin` notifies the Owner.
+6. The Owner is notified by DM with approve/reject buttons when possible.
 7. The logs channel is used as a fallback notification destination.
 8. The user receives a confirmation that the request was submitted.
 
@@ -239,7 +239,7 @@ Approve/reject buttons are generated by `keyboards.promo_decision_kb(request_id)
 | `Approve` | `promo_approve:<request_id>` |
 | `Reject` | `promo_reject:<request_id>` |
 
-Only the Founder can use these callbacks. The handler checks `users_roles.is_owner(admin.id, fresh=True)` before reading the request, so a transfer in another process takes effect immediately instead of lingering for the cache TTL.
+Only the Owner can use these callbacks. The handler checks `users_roles.is_owner(admin.id, fresh=True)` before reading the request, so a transfer in another process takes effect immediately instead of lingering for the cache TTL.
 
 ### Approval
 
@@ -247,7 +247,7 @@ Approval does the following:
 
 1. Adds the target to `role_assignments` with `users_roles.add_admin(...)`.
 2. Marks the request `approved` with `queues_db.resolve(...)`.
-3. Best-effort cleanup mirrors the direct Founder path: clears any stale Developer/Tester row and refreshes the member cache (otherwise the stale row resurrects on the next demote).
+3. Best-effort cleanup mirrors the direct Owner path: clears any stale Developer/Moderator row and refreshes the member cache (otherwise the stale row resurrects on the next demote).
 4. Sends a `promote_approved_log` to `cfg.logs`.
 5. Notifies the target by DM when possible.
 6. Edits the review message to append who approved it and removes the keyboard.
@@ -284,16 +284,16 @@ Aliases:
 - `/tcdemote`
 - `/tcd`
 
-Demotion removes an Admin, Developer, or Tester role after a confirmation step.
+Demotion removes an Admin, Developer, or Moderator role after a confirmation step.
 
 Flow:
 
-1. Founder/Admin runs `/tcdemote <target>` or replies with `/tcdemote`.
+1. Owner/Admin runs `/tcdemote <target>` or replies with `/tcdemote`.
 2. The bot resolves executor role and target in parallel.
-3. The executor must currently be Founder or Admin.
+3. The executor must currently be Owner or Admin.
 4. The target must hold a removable role.
-5. Founder cannot be demoted through this command.
-6. Admin targets can only be demoted by Founder.
+5. Owner cannot be demoted through this command.
+6. Admin targets can only be demoted by Owner.
 7. The bot sends a confirmation keyboard.
 
 Confirmation callback data:
@@ -320,20 +320,20 @@ Aliases:
 - `/transferowner`
 - `/tfowner`
 
-Only the current Founder can transfer ownership.
+Only the current Owner can transfer ownership.
 
 Flow:
 
 1. The target is resolved by reply, user ID, or username.
-2. Identity refusal rejects self-transfer, the bot, Telegram, other bots, anonymous-admin, and Founder targets.
+2. Identity refusal rejects self-transfer, the bot, Telegram, other bots, anonymous-admin, and Owner targets.
 3. The current owner is re-read fresh before the mutation. A concurrent transfer or a demotion that happened while the target was classified refuses the command, so an in-flight transfer cannot overwrite a newer owner.
-4. `users_roles.transfer_ownership(current_owner.id, target_id)` swaps the owner, revokes the target's previous active role, and grants the previous Founder the Admin role in one transaction under an advisory lock. The transaction re-reads the current owner, so a stale prompt cannot replace a newer owner. A failure leaves both roles untouched instead of committing the swap without the Admin grant.
+4. `users_roles.transfer_ownership(current_owner.id, target_id)` swaps the owner, revokes the target's previous active role, and grants the previous Owner the Admin role in one transaction under an advisory lock. The transaction re-reads the current owner, so a stale prompt cannot replace a newer owner. A failure leaves both roles untouched instead of committing the swap without the Admin grant.
 5. The in-process error-reporter owner is refreshed to the new owner.
 6. The owner cache is updated and the effective-role cache is cleared entirely.
 7. An `ownership_transferred` log is sent to `cfg.logs` in parallel with the reply.
 8. The command replies with the new owner mention.
 
-After transfer, the previous Founder becomes Admin and the new target becomes Founder.
+After transfer, the previous Owner becomes Admin and the new target becomes Owner.
 
 ## Auto-demotion on moderation actions
 
@@ -355,21 +355,21 @@ Role and promotion logs are built in `messages/` (`audit_logs.py`):
 
 | Template | Trigger |
 |---|---|
-| `promoted(target_id, target_fname, role, by_id, by_fname)` | Founder/Admin promotes a user to the named role (Admin, Developer, or Tester). |
+| `promoted(target_id, target_fname, role, by_id, by_fname)` | Owner/Admin promotes a user to the named role (Admin, Developer, or Moderator). |
 | `demoted(target_id, target_fname, role, by_id, by_fname)` | Role removed. Identical for manual demotion and auto-demote during a ban, kick, or mute (the log template has no trigger parameter). |
-| `ownership_transferred` | Founder transfers ownership. |
+| `ownership_transferred` | Owner transfers ownership. |
 | `promote_request_log` | Admin promotion request created. |
-| `promote_approved_log` | Founder approves a promotion request. |
-| `promote_rejected_log` | Founder rejects a promotion request. |
+| `promote_approved_log` | Owner approves a promotion request. |
+| `promote_rejected_log` | Owner rejects a promotion request. |
 
 ## Edge cases
 
 - Effective role cache can make reads fast, but writes invalidate affected users or clear the cache when ownership changes.
-- A user holds at most one live role: both the direct Founder path and the approval path clear any Developer/Tester row when granting Admin.
-- Direct Founder promotion to Admin removes existing Developer/Tester custom role, and promotion-request approval now does the same.
+- A user holds at most one live role: both the direct Owner path and the approval path clear any Developer/Moderator row when granting Admin.
+- Direct Owner promotion to Admin removes existing Developer/Moderator custom role, and promotion-request approval now does the same.
 - Promotion and demotion callbacks re-check current permissions at click time; losing permission after the menu was created blocks the callback.
-- Founder cannot be assigned over or demoted through the normal role commands.
-- Admin cannot demote Admin; Founder is required.
+- Owner cannot be assigned over or demoted through the normal role commands.
+- Admin cannot demote Admin; Owner is required.
 - Admin cannot directly promote a target to Admin; a request is created instead.
 - Pending promotion requests are not deleted after approval/rejection; they are marked with `status`, `resolved_at`, and `resolved_by_user_id`.
 - DM notification failures are tolerated in most role flows through `asyncio.gather(..., return_exceptions=True)` or explicit fallback logging.
@@ -381,16 +381,16 @@ Key role-system behaviors to keep in mind:
 1. `get_effective_role` returns the role of the active assignment, mapped to the application vocabulary.
 2. `role_rank(None)` returns `0`.
 3. `resolve_and_check` allows the action only when executor rank is strictly higher than target rank.
-4. Founder can directly promote Admin/Developer/Tester.
-5. Admin can directly promote Developer/Tester.
+4. Owner can directly promote Admin/Developer/Moderator.
+5. Admin can directly promote Developer/Moderator.
 6. Admin attempting to promote Admin creates a pending request.
 7. Duplicate pending promotion requests for the same target are rejected.
-8. Non-Founder cannot approve/reject promotion request callbacks.
-9. Founder approval grants the admin role and resolves the request.
-10. Founder rejection resolves the request without granting Admin.
-11. `/tcdemote` blocks self-demotion and Founder demotion.
+8. Non-Owner cannot approve/reject promotion request callbacks.
+9. Owner approval grants the admin role and resolves the request.
+10. Owner rejection resolves the request without granting Admin.
+11. `/tcdemote` blocks self-demotion and Owner demotion.
 12. Admin cannot demote Admin.
 13. Confirm demotion revokes the active role assignment of the target.
-14. Transfer ownership makes the old Founder an Admin and replaces the owner assignment.
+14. Transfer ownership makes the old Owner an Admin and replaces the owner assignment.
 15. Ban/kick/mute auto-demotes lower-ranked staff targets and logs the role removal.
 16. Equal-rank and higher-rank targets are protected from ban/kick/mute/warn actions.

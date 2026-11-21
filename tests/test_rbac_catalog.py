@@ -4,8 +4,8 @@
 
 """The permission catalog and the tier model agree.
 
-The handlers gate a command on a tier: the Founder, the Admin, the
-Developer, or the Tester. The schema carries a permission catalog, and
+The handlers gate a command on a tier: the Owner, the Admin, the
+Developer, or the Moderator. The schema carries a permission catalog, and
 its grants decide which role holds which capability. The two have to
 say the same thing, otherwise the catalog describes an authorization
 model the code does not implement.
@@ -31,14 +31,14 @@ if TYPE_CHECKING:
 
 # * The catalog names the tiers differently from the handlers: the
 # * catalog speaks of the Owner, the Admin, the Developer, and the
-# * Moderator, while the handlers speak of the Founder, the Admin, the
-# * Developer, and the Tester. The mapping is the only place the two
+# * Moderator, while the handlers speak of the Owner, the Admin, the
+# * Developer, and the Moderator. The mapping is the only place the two
 # * vocabularies meet.
 _ROLE_BY_TIER: dict[str, str] = {
-    "founder": "owner",
+    "owner": "owner",
     "admin": "admin",
     "developer": "developer",
-    "tester": "moderator",
+    "moderator": "moderator",
 }
 
 # * Every gated command, with the capability it needs and the tier the
@@ -49,22 +49,22 @@ _COMMAND_CAPABILITIES: dict[str, str] = {
     "moderation.ban": "developer",
     "moderation.unban": "developer",
     # * The group-level actions are open to every staff tier.
-    "moderation.kick": "tester",
-    "moderation.mute": "tester",
-    "moderation.unmute": "tester",
-    "moderation.warn": "tester",
-    "moderation.unwarn": "tester",
-    "moderation.reset_warnings": "tester",
+    "moderation.kick": "moderator",
+    "moderation.mute": "moderator",
+    "moderation.unmute": "moderator",
+    "moderation.warn": "moderator",
+    "moderation.unwarn": "moderator",
+    "moderation.reset_warnings": "moderator",
     # * Deciding an appeal and moving staff around are Admin work.
     "moderation.review_appeals": "admin",
     "roles.promote": "admin",
     "roles.demote": "admin",
     # * The owner-only operations keep their own permission, so an Admin
     # * never inherits them through the tier comparison.
-    "roles.transfer_ownership": "founder",
-    "roles.review_promotion_requests": "founder",
-    "community.leave_all": "founder",
-    "community.speedtest": "founder",
+    "roles.transfer_ownership": "owner",
+    "roles.review_promotion_requests": "owner",
+    "community.leave_all": "owner",
+    "community.speedtest": "owner",
     # * The community-wide operations are Admin work.
     "community.broadcast": "admin",
     "community.cleanup": "admin",
@@ -72,7 +72,7 @@ _COMMAND_CAPABILITIES: dict[str, str] = {
 }
 
 # * The tiers the contract walks, from the highest to the lowest.
-_TIERS: tuple[str, ...] = ("founder", "admin", "developer", "tester")
+_TIERS: tuple[str, ...] = ("owner", "admin", "developer", "moderator")
 
 # * The user that holds the role under test, and the user the role was
 # * granted by.
@@ -99,7 +99,7 @@ def _expected_holders(capability: str) -> set[str]:
 
 async def _assign(tier: str) -> None:
     """Give the holder user the role of *tier*."""
-    if tier == "founder":
+    if tier == "owner":
         await db.users_roles.set_owner(_HOLDER_ID)
         return
     if tier == "admin":

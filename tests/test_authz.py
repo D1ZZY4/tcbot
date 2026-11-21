@@ -7,11 +7,13 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import guards, targets
 from tcbot.modules.helper.decorators import auth
@@ -42,6 +44,38 @@ def _install(monkeypatch: pytest.MonkeyPatch, log: _ReplyLog) -> None:
     monkeypatch.setattr(targets, "safe_reply", _safe_reply)
 
 
+def test_primary_group_is_a_federation_origin_without_being_connected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The main group hosts moderation commands even when it is not connected.
+
+    A deployment keeps the primary group out of the connected-group registry.
+    The origin gate must short-circuit on the configured main group before
+    touching ``is_connected``; otherwise moderation is refused exactly where
+    the federation is managed.
+    """
+
+    async def _must_not_be_called(*args: Any, **kwargs: Any) -> bool:
+        raise AssertionError("is_connected must not be read for the primary group")
+
+    monkeypatch.setattr(db.groups_db, "is_connected", _must_not_be_called)
+    monkeypatch.setattr(
+        guards, "cfg", dataclasses.replace(cfg, main_group=-1002333013065)
+    )
+
+    msg = cast("Any", SimpleNamespace(reply_text=None))
+    allowed = asyncio.run(
+        require_federation_origin(
+            msg,
+            chat_id=-1002333013065,
+            chat_type="supergroup",
+            locale="en-US",
+            allow_private=False,
+        )
+    )
+    assert allowed is True
+
+
 def test_resolve_and_check_success(monkeypatch: pytest.MonkeyPatch) -> None:
     roles = {11: "developer", 22: None}
     log = _ReplyLog()
@@ -68,7 +102,9 @@ def test_resolve_and_check_fails_closed_on_lookup_failure(
         raise RuntimeError("db down")
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
-    executor, target = asyncio.run(resolve_and_check(_msg(), 11, 22, min_role="tester"))
+    executor, target = asyncio.run(
+        resolve_and_check(_msg(), 11, 22, min_role="moderator")
+    )
     assert (executor, target) == (None, None)
     # * One fail-closed retry notice, not a silent pass.
     assert len(log.texts) == 1
@@ -85,7 +121,7 @@ def test_resolve_and_check_propagates_cancellation(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _cancelled)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(resolve_and_check(_msg(), 11, 22, min_role="tester"))
+        asyncio.run(resolve_and_check(_msg(), 11, 22, min_role="moderator"))
 
 
 def test_resolve_and_check_rejects_outrank_and_low_rank(
@@ -95,11 +131,13 @@ def test_resolve_and_check_rejects_outrank_and_low_rank(
     _install(monkeypatch, log)
 
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
-        return "tester" if user_id == 11 else "admin"
+        return "moderator" if user_id == 11 else "admin"
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     # * Tester (rank 1) outranked by admin target (rank 3): refuse.
-    executor, target = asyncio.run(resolve_and_check(_msg(), 11, 22, min_role="tester"))
+    executor, target = asyncio.run(
+        resolve_and_check(_msg(), 11, 22, min_role="moderator")
+    )
     assert (executor, target) == (None, None)
     assert len(log.texts) == 1
 
@@ -204,7 +242,7 @@ def test_recheck_executor_rank_refuses_demotion(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     assert (
-        asyncio.run(guards.recheck_executor_rank(_msg(), 11, min_role="tester"))
+        asyncio.run(guards.recheck_executor_rank(_msg(), 11, min_role="moderator"))
         is False
     )
     assert len(log.texts) == 1
@@ -221,7 +259,7 @@ def test_recheck_executor_rank_fails_closed_on_outage(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
     assert (
-        asyncio.run(guards.recheck_executor_rank(_msg(), 11, min_role="tester"))
+        asyncio.run(guards.recheck_executor_rank(_msg(), 11, min_role="moderator"))
         is False
     )
     assert len(log.texts) == 1
@@ -238,7 +276,7 @@ def test_recheck_executor_rank_propagates_cancellation(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _cancelled)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(guards.recheck_executor_rank(_msg(), 11, min_role="tester"))
+        asyncio.run(guards.recheck_executor_rank(_msg(), 11, min_role="moderator"))
 
 
 def _update_ctx() -> tuple[Any, Any]:
@@ -328,7 +366,7 @@ def test_resolve_mod_target_replies_no_target(
             update,
             ctx,
             action="kick",
-            min_role="tester",
+            min_role="moderator",
             allow_private=False,
             log_prefix="cmd_kick",
         )
@@ -379,7 +417,7 @@ def test_resolve_staff_target_returns_resolved_target(
             update,
             ctx,
             action="unwarn",
-            min_role="tester",
+            min_role="moderator",
             log_prefix="cmd_unwarn",
         )
     )
@@ -415,7 +453,7 @@ def test_resolve_staff_target_refuses_a_protected_identity(
         msg: Any,
         **kwargs: Any,
     ) -> tuple[Any, Any]:
-        return SimpleNamespace(kind="founder"), None
+        return SimpleNamespace(kind="owner"), None
 
     async def _not_bot(upd: Any, target_id: int, bot: Any) -> bool:
         return False
@@ -434,7 +472,7 @@ def test_resolve_staff_target_refuses_a_protected_identity(
             update,
             ctx,
             action="unmute",
-            min_role="tester",
+            min_role="moderator",
             log_prefix="cmd_unmute",
         )
     )
@@ -462,7 +500,7 @@ def test_resolve_staff_target_refuses_a_disconnected_origin(
             update,
             ctx,
             action="resetwarns",
-            min_role="tester",
+            min_role="moderator",
             log_prefix="cmd_resetwarns",
         )
     )
@@ -542,4 +580,108 @@ def test_the_owner_tier_refreshes_the_effective_role_cache(
     guarded = auth.owner_only(_handler)
     asyncio.run(guarded(update, SimpleNamespace()))
 
-    assert cached == {1: "founder"}
+    assert cached == {1: "owner"}
+
+
+# ───────────────────── Decorator tier contracts ───────────────────── #
+
+
+def _auth_update(user_id: int = 42) -> Any:
+    """Build a minimal update that triggers no locale read and no reply."""
+    return SimpleNamespace(
+        effective_user=SimpleNamespace(id=user_id, is_bot=False),
+        effective_message=None,
+        effective_chat=None,
+    )
+
+
+@pytest.mark.parametrize(
+    "tier",
+    [auth.staff_only, auth.mod_only, auth.basic_mod_only],
+    ids=["staff_only", "mod_only", "basic_mod_only"],
+)
+def test_role_tiers_fail_closed_when_role_lookup_errors(
+    monkeypatch: pytest.MonkeyPatch, tier: Any
+) -> None:
+    """A failed role read must reject the caller, not treat it as success."""
+    calls: list[bool] = []
+
+    async def _boom(*args: Any, **kwargs: Any) -> str:
+        raise RuntimeError("role store unavailable")
+
+    async def _handler(update: Any, ctx: Any) -> None:
+        calls.append(True)
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
+    asyncio.run(tier(_handler)(_auth_update(), SimpleNamespace()))
+
+    assert calls == []
+
+
+def test_owner_tier_fails_closed_when_owner_lookup_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The owner tier must reject when the owner id cannot be read."""
+    calls: list[bool] = []
+
+    async def _boom(*, fresh: bool = False) -> int:
+        raise RuntimeError("role store unavailable")
+
+    async def _handler(update: Any, ctx: Any) -> None:
+        calls.append(True)
+
+    monkeypatch.setattr(db.users_roles, "get_owner_id", _boom)
+    asyncio.run(auth.owner_only(_handler)(_auth_update(), SimpleNamespace()))
+
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("tier", "lookup"),
+    [
+        (auth.owner_only, "get_owner_id"),
+        (auth.staff_only, "get_effective_role"),
+        (auth.mod_only, "get_effective_role"),
+        (auth.basic_mod_only, "get_effective_role"),
+    ],
+)
+def test_auth_tiers_propagate_cancellation(
+    monkeypatch: pytest.MonkeyPatch, tier: Any, lookup: str
+) -> None:
+    """Shutdown cancellation must not be turned into a refusal."""
+
+    async def _cancelled(*args: Any, **kwargs: Any) -> Any:
+        raise asyncio.CancelledError
+
+    async def _handler(update: Any, ctx: Any) -> None:
+        return None
+
+    monkeypatch.setattr(db.users_roles, lookup, _cancelled)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(tier(_handler)(_auth_update(), SimpleNamespace()))
+
+
+@pytest.mark.parametrize(
+    ("tier", "role"),
+    [
+        (auth.staff_only, "admin"),
+        (auth.mod_only, "developer"),
+        (auth.basic_mod_only, "moderator"),
+    ],
+)
+def test_role_tiers_invoke_handler_when_rank_is_sufficient(
+    monkeypatch: pytest.MonkeyPatch, tier: Any, role: str
+) -> None:
+    """Each tier admits a caller holding exactly its minimum role."""
+    calls: list[bool] = []
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return role
+
+    async def _handler(update: Any, ctx: Any) -> None:
+        calls.append(True)
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    asyncio.run(tier(_handler)(_auth_update(), SimpleNamespace()))
+
+    assert calls == [True]

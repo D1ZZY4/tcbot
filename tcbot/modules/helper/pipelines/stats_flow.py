@@ -112,7 +112,7 @@ class OverviewViews:
             owner_id,
             admin_count,
             developer_count,
-            tester_count,
+            moderator_count,
             ban_count,
             group_count,
             user_count,
@@ -123,7 +123,7 @@ class OverviewViews:
                 owner_id,
                 admin_count,
                 developer_count,
-                tester_count,
+                moderator_count,
                 ban_count,
                 group_count,
                 user_count,
@@ -136,7 +136,7 @@ class OverviewViews:
                 owner_id,
                 admin_count,
                 developer_count,
-                tester_count,
+                moderator_count,
                 ban_count,
                 group_count,
                 user_count,
@@ -153,8 +153,10 @@ class OverviewViews:
             if isinstance(developer_count, BaseException)
             else cast("int", developer_count)
         )
-        tester_count = (
-            0 if isinstance(tester_count, BaseException) else cast("int", tester_count)
+        moderator_count = (
+            0
+            if isinstance(moderator_count, BaseException)
+            else cast("int", moderator_count)
         )
         if isinstance(ban_count, BaseException):
             ban_count = 0
@@ -193,12 +195,12 @@ class OverviewViews:
         else:
             owner_line = Safe(t("stats.main.owner_unset", locale))
         staff_total = (
-            (1 if owner_id else 0) + admin_count + developer_count + tester_count
+            (1 if owner_id else 0) + admin_count + developer_count + moderator_count
         )
         text = (
             f"{t('stats.main.title', locale, community=Safe(bold(cfg.community_name)))}\n\n"
-            f"{t('stats.main.founder', locale, owner=owner_line)}\n"
-            f"{t('stats.main.staff', locale, n=Safe(bold(str(staff_total))), admins=admin_count, devs=developer_count, testers=tester_count)}\n"
+            f"{t('stats.main.owner', locale, owner=owner_line)}\n"
+            f"{t('stats.main.staff', locale, n=Safe(bold(str(staff_total))), admins=admin_count, devs=developer_count, moderators=moderator_count)}\n"
             f"{t('stats.main.users', locale, n=Safe(bold(str(user_count))))}\n"
             f"{t('stats.main.bans', locale, n=Safe(bold(str(ban_count))))}\n"
             f"{t('stats.main.chats', locale, n=Safe(bold(str(group_count))))}"
@@ -214,22 +216,22 @@ class OverviewViews:
         cls, locale: str | None = None, *, bot: Bot | None = None
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Full staff breakdown: Founder, Admins, Developers, Testers."""
-        owner_id, admins, developers, testers = await asyncio.gather(
+        owner_id, admins, developers, moderators = await asyncio.gather(
             db.users_roles.get_owner_id(),
             db.users_roles.all_admins(),
             db.users_roles.all_by_role("developer"),
             db.users_roles.all_by_role("tester"),
             return_exceptions=True,
         )
-        throw_if_cancelled((owner_id, admins, developers, testers))
+        throw_if_cancelled((owner_id, admins, developers, moderators))
         if isinstance(owner_id, BaseException):
             owner_id = None
         if isinstance(admins, BaseException):
             admins = []
         if isinstance(developers, BaseException):
             developers = [] if isinstance(developers, BaseException) else developers
-        if isinstance(testers, BaseException):
-            testers = [] if isinstance(testers, BaseException) else testers
+        if isinstance(moderators, BaseException):
+            moderators = [] if isinstance(moderators, BaseException) else moderators
         all_user_ids = []
         owner_idx = None
         owner_id_int = 0
@@ -239,7 +241,7 @@ class OverviewViews:
             all_user_ids.append(owner_id_int)
         all_user_ids.extend(a.get("user_id", 0) for a in admins)
         all_user_ids.extend(d.get("user_id", 0) for d in developers)
-        all_user_ids.extend(t.get("user_id", 0) for t in testers)
+        all_user_ids.extend(t.get("user_id", 0) for t in moderators)
         mention_data_map = await db.users_cache.get_mention_data_batch(all_user_ids)
         # * Staff without an identity row render as raw numeric IDs.
         # * Resolve those names live (bounded, failures keep the ID) so a
@@ -317,7 +319,7 @@ class OverviewViews:
 
         _section("Admins", admins)
         _section("Developers", developers)
-        _section("Testers", testers)
+        _section("Moderators", moderators)
         return "\n".join(lines).rstrip(), stats_back_kb(locale)
 
 

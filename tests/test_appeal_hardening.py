@@ -142,7 +142,7 @@ def _wire_approve(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return record
 
 
-def _run_approve(query: _FakeQuery, approver_role: str = "founder") -> None:
+def _run_approve(query: _FakeQuery, approver_role: str = "owner") -> None:
     """Run the approve executor against a staff-banned target."""
     admin = type("Admin", (), {"id": 1, "first_name": "Admin"})()
     ban: dict[str, Any] = {
@@ -180,7 +180,7 @@ def test_approve_demotes_staff_before_deactivate(
     record = _wire_approve(monkeypatch)
 
     async def _role(user_id: int, *, fresh: bool = False) -> str:
-        return "admin" if user_id == 9 else "founder"
+        return "admin" if user_id == 9 else "owner"
 
     async def _fake_demote(
         bot: Any,
@@ -216,7 +216,7 @@ def test_approve_blocks_when_demote_is_a_noop_and_the_role_survives(
     record = _wire_approve(monkeypatch)
 
     async def _role(user_id: int, *, fresh: bool = False) -> str:
-        return "admin" if user_id == 9 else "founder"
+        return "admin" if user_id == 9 else "owner"
 
     async def _fake_demote(*a: Any, **k: Any) -> bool:
         record["demoted"].append((9, "admin"))
@@ -243,7 +243,7 @@ def test_approve_blocks_when_the_demote_raises(
     record = _wire_approve(monkeypatch)
 
     async def _role(user_id: int, *, fresh: bool = False) -> str:
-        return "admin" if user_id == 9 else "founder"
+        return "admin" if user_id == 9 else "owner"
 
     async def _fake_demote(*a: Any, **k: Any) -> bool:
         raise RuntimeError("database down")
@@ -301,7 +301,7 @@ def test_approve_proceeds_when_the_approver_outranks_the_target(
     record = _wire_approve(monkeypatch)
 
     async def _role(user_id: int, *, fresh: bool = False) -> str:
-        return "admin" if user_id == 9 else "founder"
+        return "admin" if user_id == 9 else "owner"
 
     async def _fake_demote(*a: Any, **k: Any) -> bool:
         record["demoted"].append((9, "admin"))
@@ -311,7 +311,7 @@ def test_approve_proceeds_when_the_approver_outranks_the_target(
     monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
 
     query = _FakeQuery("appeal_approve_abc_1")
-    _run_approve(query, approver_role="founder")
+    _run_approve(query, approver_role="owner")
 
     assert record["demoted"] == [(9, "admin")]
     assert record["deactivated"] == ["abc"]
@@ -351,7 +351,7 @@ def test_stale_review_card_cannot_decide_a_newer_appeal(
     claimed: list[tuple[str, int]] = []
 
     async def _role(user_id: int, *, fresh: bool = False) -> str:
-        return "founder"
+        return "owner"
 
     async def _ban(ban_id: str) -> dict[str, Any]:
         return {
@@ -397,7 +397,7 @@ def test_a_live_legacy_card_is_still_accepted(
     claimed: list[tuple[str, int]] = []
 
     async def _role(user_id: int, *, fresh: bool = False) -> str:
-        return "founder"
+        return "owner"
 
     async def _ban(ban_id: str) -> dict[str, Any]:
         return {

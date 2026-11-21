@@ -52,7 +52,7 @@ def test_picker_resolves_live_name_on_cache_miss(
 
     async def _staff(admin_id: int, q: Any, update: Any) -> str:
         _ = (admin_id, q, update)
-        return "founder"
+        return "owner"
 
     async def _not_bot(update: Any, target_id: int, bot: Any) -> bool:
         _ = (update, target_id, bot)

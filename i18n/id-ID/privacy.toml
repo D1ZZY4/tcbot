@@ -64,7 +64,7 @@ Catatan banding dan permintaan promosi disimpan setelah diputuskan untuk referen
 
 [section.rights]
 label = "Hak Kamu"
-body = """Kamu bisa meninjau status ban sendiri kapan pun dengan `/checkme`, dan bisa meminta tinjauan atau penghapusan data pribadimu dengan menghubungi Admin {community} atau Founder langsung.
+body = """Kamu bisa meninjau status ban sendiri kapan pun dengan `/checkme`, dan bisa meminta tinjauan atau penghapusan data pribadimu dengan menghubungi Admin {community} atau Owner langsung.
 
 Permintaan ditangani sebaik mungkin. Catatan ban aktif bisa tetap disimpan walau ada permintaan hapus bila dibutuhkan untuk penegakan berjalan atau integritas federasi."""
 

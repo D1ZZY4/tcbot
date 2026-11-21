@@ -36,13 +36,13 @@ def _ident(kind: str) -> Identity:
     return Identity(kind, 123, "Dizzy", "dizzy")  # type: ignore[arg-type]
 
 
-def test_ban_refuses_self_bot_telegram_anon_founder() -> None:
-    for kind in ("self", "this_bot", "telegram", "anon_admin", "founder"):
+def test_ban_refuses_self_bot_telegram_anon_owner() -> None:
+    for kind in ("self", "this_bot", "telegram", "anon_admin", "owner"):
         assert isinstance(refuse_message("ban", _ident(kind)), str)
 
 
 def test_ban_allows_user_and_staff() -> None:
-    for kind in ("user", "admin", "developer", "tester", "other_bot"):
+    for kind in ("user", "admin", "developer", "moderator", "other_bot"):
         assert refuse_message("ban", _ident(kind)) is None
 
 
@@ -56,23 +56,23 @@ def test_promote_refuses_admin() -> None:
 
 
 def test_staff_notice_only_for_staff() -> None:
-    for kind in ("admin", "developer", "tester"):
+    for kind in ("admin", "developer", "moderator"):
         notice = staff_notice("warn", _ident(kind), "TCF")
         assert notice is not None and "warn" in notice
-    for kind in ("user", "founder", "self", "other_bot"):
+    for kind in ("user", "owner", "self", "other_bot"):
         assert staff_notice("warn", _ident(kind), "TCF") is None
 
 
 def test_profile_note_only_for_special_identities() -> None:
     for kind in ("this_bot", "self", "telegram", "anon_admin"):
         assert isinstance(profile_note(_ident(kind)), str)
-    for kind in ("user", "admin", "developer", "tester", "founder", "other_bot"):
+    for kind in ("user", "admin", "developer", "moderator", "owner", "other_bot"):
         assert profile_note(_ident(kind)) is None
 
 
 def test_role_label_maps_staff_only() -> None:
     assert _ident("admin").role_label == "Admin"
-    assert _ident("founder").role_label == "Founder"
+    assert _ident("owner").role_label == "Owner"
     assert _ident("user").role_label is None
     assert _ident("self").role_label is None
 
@@ -158,14 +158,14 @@ def test_classify_raises_when_the_role_cannot_be_resolved(
 
     The refusal table is keyed on the identity kind, so a target that
     resolved to ``"user"`` because of a database outage would silently
-    lose the protection that keeps a Founder from being moderated.
+    lose the protection that keeps a Owner from being moderated.
     """
 
     async def _boom(_user_id: int, *, fresh: bool = False) -> str:
         raise _database_outage()
 
     async def _name(_user_id: int) -> tuple[str, str | None]:
-        return ("Founder", None)
+        return ("Owner", None)
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
     monkeypatch.setattr(db.users_cache, "get_user_mention_data", _name)
@@ -181,7 +181,7 @@ def test_classify_still_resolves_when_only_the_name_lookup_fails(
     """The display name is not an authorization input, so it may degrade."""
 
     async def _role(_user_id: int, *, fresh: bool = False) -> str:
-        return "founder"
+        return "owner"
 
     async def _boom(_user_id: int) -> tuple[str, str | None]:
         raise _database_outage()
@@ -191,4 +191,4 @@ def test_classify_still_resolves_when_only_the_name_lookup_fails(
 
     bot = SimpleNamespace(id=999)
     ident = asyncio.run(classify(bot, 1, 2))  # type: ignore[arg-type]
-    assert ident.kind == "founder"
+    assert ident.kind == "owner"

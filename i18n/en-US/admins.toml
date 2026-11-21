@@ -16,37 +16,37 @@ body = """
 `/tcpromotelist` (alias: `/tcplist`)"""
 
 [help.who]
-body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Founder and Admin.
+body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Owner and Admin.
 */transferowner*: {perm}
-*/tcpromoterequests*: anyone (creates a self-request to the Founder)."""""
+*/tcpromoterequests*: anyone (creates a self-request to the Owner)."""""
 
 [help.roles]
 title = "Role Hierarchy"
 body = """
-Founder (rank 4) > Admin (rank 3) > Developer (rank 2) > Tester (rank 1)
+Owner (rank 4) > Admin (rank 3) > Developer (rank 2) > Moderator (rank 1)
 
-You cannot promote a user to a rank equal to or above your own. Admins promoting someone to Admin queues a request for the Founder."""
+You cannot promote a user to a rank equal to or above your own. Admins promoting someone to Admin queues a request for the Owner."""
 
 [help.promote]
 body = """
 Assigns a role to a user. Omit the role argument to get an inline button menu.
 
-*Usage:* `/tcpromote <target> [admin|developer|tester]`
-- Founder can promote to any role directly.
-- Admin can promote to Developer or Tester directly; promoting to Admin sends a pending request to the Founder for approval."""
+*Usage:* `/tcpromote <target> [admin|developer|moderator]`
+- Owner can promote to any role directly.
+- Admin can promote to Developer or Moderator directly; promoting to Admin sends a pending request to the Owner for approval."""
 
 [help.demote]
 body = """
 Removes a user's role. A confirmation button is shown before the action executes.
 
 *Usage:* `/tcdemote <target>`
-- Founder can demote any role.
-- Admin can demote Developer or Tester only.
+- Owner can demote any role.
+- Admin can demote Developer or Moderator only.
 - When a user with a role is banned or kicked, their role is removed and they are notified by DM."""
 
 [help.transferowner]
 body = """
-Transfers federation ownership to another user. The current Founder steps down to Admin. Founder only.
+Transfers federation ownership to another user. The current Owner steps down to Admin. Owner only.
 
 *Usage:* `/transferowner <target>`"""
 
@@ -73,8 +73,8 @@ already_admin = "That user is already an Admin. Demote them before assigning {ro
 holds_role = "That user already holds the {role} role or higher."
 pending = "There's already a pending promotion request for {user}."
 queue_fail = "Failed to queue the promotion request. Please try again."
-submitted = "Submitted - the Founder has been notified and will review it shortly."
-target_is_founder = "That's the Founder - can't assign a role over them."
+submitted = "Submitted - the Owner has been notified and will review it shortly."
+target_is_owner = "That's the Owner - can't assign a role over them."
 no_assign_perms = "You don't have permission to assign this role."
 
 [promote.dm]
@@ -92,7 +92,7 @@ existing = "You already have a pending request (ID: {id})."
 [error]
 no_assign_perms = "You don't have permission to assign any roles."
 no_removable_role = "That user doesn't hold a role that can be removed."
-founder_demote_only = "Only the Founder can demote an Admin."
+owner_demote_only = "Only the Owner can demote an Admin."
 no_longer_removable = "That user no longer holds a removable role."
 role_clear_failed = "Couldn't remove the role - it may have already been cleared."
 role_lookup_failed = "I couldn't verify federation roles right now. Please try again in a moment."
@@ -119,7 +119,7 @@ done = "Done. {user} has been removed from {role}."
 
 [transfer]
 set_owner_fail = "Couldn't transfer ownership. No changes were made; please try again."
-done = "Done. {user} is now the Founder."
+done = "Done. {user} is now the Owner."
 
 [list]
 header = "{title}"

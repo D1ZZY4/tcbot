@@ -57,7 +57,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
         who=t(
             "admins.help.who.body",
             locale,
-            perm=Safe(replies.perm_founder_only(locale, plain=False)),
+            perm=Safe(replies.perm_owner_only(locale, plain=False)),
         ),
         where=replies.context_bot_or_group(locale),
         details=[
@@ -83,7 +83,7 @@ __help__: replies.HelpEntry = get_help()
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Assign a federation role to a user (admin / developer / tester).
+    """Assign a federation role to a user (admin / developer / moderator).
 
     Fetches the executor role and resolves the target in parallel. Then fetches
     identity classification and the target's current role in a second parallel
@@ -395,7 +395,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     Fetches the executor role and resolves the target in parallel. Then fetches
     identity classification and the target's current role in a second parallel
     gather, since both are independent reads. Shows a confirmation keyboard for
-    the target's current role. Identity guards prevent demoting the Founder or
+    the target's current role. Identity guards prevent demoting the Owner or
     self without the correct flow.
     """
     admin = update.effective_user
@@ -450,8 +450,8 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not can_demote_admin(executor_role, target_role):
         await safe_reply(
             msg,
-            t("admins.error.founder_demote_only", locale, plain=True),
-            log_label="cmd_demote founder-only",
+            t("admins.error.owner_demote_only", locale, plain=True),
+            log_label="cmd_demote owner-only",
             parse_mode=None,
         )
         return
@@ -535,7 +535,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     else:
         target_fname, target_uname = mention_data
 
-    if not target_role or target_role == "founder":
+    if not target_role or target_role == "owner":
         await cb_error_edit(
             q,
             t("admins.error.no_longer_removable", locale, plain=True),
@@ -547,8 +547,8 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if not can_demote_admin(executor_role, target_role):
         await cb_error_edit(
             q,
-            t("admins.error.founder_demote_only", locale, plain=True),
-            log_label="on_demote_confirm founder-only",
+            t("admins.error.owner_demote_only", locale, plain=True),
+            log_label="on_demote_confirm owner-only",
             parse_mode=None,
         )
         return
@@ -662,7 +662,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     Validates the origin and the target and hands the transfer to
     ``transfer_flow.execute_transfer``, which replaces the owner record
-    first and keeps the previous Founder as Admin.
+    first and keeps the previous Owner as Admin.
     """
     msg = update.effective_message
     if msg is None:
@@ -686,12 +686,12 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(decorators.THROTTLE_BULK)
 @decorators.log_execution
 async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Submit a promotion request to the Founder.
+    """Submit a promotion request to the Owner.
 
     Checks the caller's existing role and any pending request in parallel.
     Rejects if the user already holds a federation role (no request needed) or
     already has an open request, then calls ``Promote.request_admin`` to create
-    a new queue entry and notify the Founder.
+    a new queue entry and notify the Owner.
 
     Note: identity.classify is intentionally not used here because the caller is
     the subject of the request (executor_id == target_id), which would always
@@ -704,7 +704,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     locale = await locale_for_update(update)
 
     # * Reject anonymous admins: a request from the group placeholder would
-    # * reach the Founder with no attributable sender. Real humans send from
+    # * reach the Owner with no attributable sender. Real humans send from
     # * their own account.
     if identity.is_anon_admin(user):
         await safe_reply(

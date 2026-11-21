@@ -114,7 +114,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * already-resolved IDs so there is no need to wait for them sequentially.
     # * return_exceptions=True prevents a DB failure from aborting the others.
     # * The rank check (min_role="developer") prevents a low-rank mod from
-    # * unbanning a Founder or Admin -- unbanning a higher-ranked target would
+    # * unbanning an Owner or Admin -- unbanning a higher-ranked target would
     # * silently invert the role-vs-state invariant because unban also clears
     # * all active bans for the user, which is irreversible.
     ident, pre_ban, role_result = await asyncio.gather(
@@ -156,7 +156,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     staff_roles = db.users_roles.STAFF_ROLES
     refusal = identity.refuse_message("unban", ident, locale)
-    # * Hard identity refusals (self, bot, telegram, anon_admin, founder)
+    # * Hard identity refusals (self, bot, telegram, anon_admin, owner)
     # * always block, regardless of federation role.
     if refusal is not None and ident.kind not in staff_roles:
         await safe_reply(msg, refusal, log_label="unban refusal")

@@ -51,12 +51,15 @@ _OWNER_TRANSFER_LOCK_KEY: int = 7_313_919_265_517_001
 # ────────────────────── Role hierarchy tables ───────────────────── #
 # * Numeric ranks compare executor vs target; labels render to humans.
 
-VALID_ROLES: tuple[Literal["developer", "tester"], ...] = ("developer", "tester")
+VALID_ROLES: tuple[Literal["developer", "moderator"], ...] = (
+    "developer",
+    "moderator",
+)
 
 # * Name of a community role. The role argument of every permission gate
 # * is typed with it, so a typo in a threshold name is a type error the
 # * checker reports instead of a rank that silently matches nobody.
-RoleName = Literal["founder", "admin", "developer", "tester"]
+RoleName = Literal["owner", "admin", "developer", "moderator"]
 
 # * Spellings the promote command accepts for a role. The table is role
 # * vocabulary, so it belongs next to the other role tables rather than
@@ -65,24 +68,22 @@ ROLE_ALIASES: dict[str, str] = {
     "admin": "admin",
     "developer": "developer",
     "dev": "developer",
-    "tester": "tester",
-    "test": "tester",
-    "moderator": "tester",
-    "mod": "tester",
+    "moderator": "moderator",
+    "mod": "moderator",
 }
 
 ROLE_RANK: dict[str, int] = {
-    "founder": 4,
+    "owner": 4,
     "admin": 3,
     "developer": 2,
-    "tester": 1,
+    "moderator": 1,
 }
 
 ROLE_LABEL: dict[str, str] = {
-    "founder": "Founder",
+    "owner": "Owner",
     "admin": "Admin",
     "developer": "Developer",
-    "tester": "Tester",
+    "moderator": "Moderator",
 }
 
 # * Single owner for the two role sets the moderation paths test against.
@@ -90,28 +91,16 @@ ROLE_LABEL: dict[str, str] = {
 # * missed by every set check, so the rank gate and the staff gate would
 # * disagree about the same user.
 # * STAFF_ROLES holds every role that can be demoted (the owner is protected
-# * and never demoted); FOUNDER_ADMIN_ROLES holds the roles that count as
+# * and never demoted); OWNER_ADMIN_ROLES holds the roles that count as
 # * community staff for permission gates.
-STAFF_ROLES: frozenset[str] = frozenset({"admin", "developer", "tester"})
-FOUNDER_ADMIN_ROLES: frozenset[str] = frozenset({"founder", "admin"})
+STAFF_ROLES: frozenset[str] = frozenset({"admin", "developer", "moderator"})
+OWNER_ADMIN_ROLES: frozenset[str] = frozenset({"owner", "admin"})
 
-# * The community catalog names the roles owner, admin, developer, and
-# * moderator. The application keeps its own vocabulary for the tiers
-# * the handlers compare against, so the translation between the two
-# * lives here and the rest of the code never sees a storage key.
-ROLE_KEY_BY_APP_ROLE: dict[str, str] = {
-    "founder": "owner",
-    "admin": "admin",
-    "developer": "developer",
-    "tester": "moderator",
-}
-APP_ROLE_BY_ROLE_KEY: dict[str, str] = {
-    value: key for key, value in ROLE_KEY_BY_APP_ROLE.items()
-}
-
-# * The role the community owner holds.
-_OWNER_ROLE: str = ROLE_KEY_BY_APP_ROLE["founder"]
-_ADMIN_ROLE: str = ROLE_KEY_BY_APP_ROLE["admin"]
+# * The application and the database use the same four role names. The
+# * translation tables the old vocabulary needed are gone, so a stored
+# * role key reaches the checks unchanged.
+_OWNER_ROLE: str = "owner"
+_ADMIN_ROLE: str = "admin"
 
 
 # * An assignment is in force while it is active and its expiry is in the
@@ -306,8 +295,8 @@ async def set_owner(user_id: int) -> None:
 
     Low-level assignment primitive for seeding and invariant tests. The
     ownership command must use :func:`transfer_ownership`, which also grants
-    the previous Founder the Admin role in the same transaction. Calling
-    this helper directly would leave the previous Founder without a role.
+    the previous Owner the Admin role in the same transaction. Calling
+    this helper directly would leave the previous Owner without a role.
     """
 
     # * The transfer runs in one transaction: the new assignment and the
@@ -400,11 +389,11 @@ async def _publish_owner(user_id: int, *, action: str) -> None:
 
 
 async def transfer_ownership(previous_owner_id: int, new_owner_id: int) -> None:
-    """Move ownership and keep the previous Founder as Admin in one transaction.
+    """Move ownership and keep the previous Owner as Admin in one transaction.
 
-    The owner swap and the previous Founder's Admin assignment have to land
+    The owner swap and the previous Owner's Admin assignment have to land
     together. A former split committed the swap first and granted the Admin
-    role second, so a failure in the second write left the former Founder
+    role second, so a failure in the second write left the former Owner
     with no role at all. The current owner is verified under the transfer
     lock, so a stale transfer prompt cannot demote the wrong account.
     """
@@ -536,13 +525,13 @@ async def admin_count() -> int:
 
 
 async def set_role(user_id: int, role: str, assigned_by: int) -> None:
-    """Assign a community role (developer/tester) to a user."""
+    """Assign a community role (developer/moderator) to a user."""
     # ! CRITICAL: reject anything outside VALID_ROLES. get_effective_role
-    # ! returns the stored value verbatim, so a stored "admin" or "founder"
+    # ! returns the stored value verbatim, so a stored "admin" or "owner"
     # ! would grant real privilege to a role row.
     if role not in VALID_ROLES:
         raise ValueError(f"Refusing to store invalid custom role: {role!r}")
-    await _assign_role(user_id, ROLE_KEY_BY_APP_ROLE[role], assigned_by)
+    await _assign_role(user_id, role, assigned_by)
     effective_role_cache.invalidate(user_id)
 
 
@@ -551,7 +540,7 @@ async def remove_role(user_id: int) -> bool:
 
     The owner assignment is never revoked here: ownership changes through
     ``set_owner``, which swaps the owner and its role in one transaction.
-    A demote therefore cannot leave the federation without a Founder.
+    A demote therefore cannot leave the federation without a Owner.
     """
     revoked = await _revoke_role(user_id, None)
     effective_role_cache.invalidate(user_id)
@@ -563,7 +552,7 @@ async def all_by_role(role: str) -> list[RoleRefDoc]:
     rows = await db_call(
         lambda: fetch_all(
             select(role_assignments.c.user_id).where(
-                role_assignments.c.role_key == ROLE_KEY_BY_APP_ROLE.get(role, role),
+                role_assignments.c.role_key == role,
                 *_active_assignment(),
             )
         )
@@ -577,7 +566,7 @@ async def role_count(role: str) -> int:
         select(func.count())
         .select_from(role_assignments)
         .where(
-            role_assignments.c.role_key == ROLE_KEY_BY_APP_ROLE.get(role, role),
+            role_assignments.c.role_key == role,
             *_active_assignment(),
         )
     )
@@ -596,7 +585,7 @@ async def _assign_role(user_id: int, role: str, assigned_by: int) -> None:
         # * cache has never seen must not fail the promotion on a foreign key.
         await ensure_users(sess, user_id, assigned_by)
         # ! CRITICAL: never revoke the owner assignment here. Only
-        # ! set_owner replaces the Founder; a grant that targeted the owner
+        # ! set_owner replaces the Owner; a grant that targeted the owner
         # ! must fail the active-user uniqueness rule instead of leaving the
         # ! community without an owner.
         await sess.execute(
@@ -627,7 +616,7 @@ async def _revoke_role(user_id: int, role: str | None) -> bool:
     """Revoke the active assignment of one user, optionally one role.
 
     The owner assignment is excluded, so a demote path can never strip the
-    Founder role; only :func:`set_owner` replaces it.
+    Owner role; only :func:`set_owner` replaces it.
     """
     stmt = role_assignments.update().where(
         role_assignments.c.user_id == user_id,
@@ -666,7 +655,7 @@ async def is_staff(user_id: int, *, fresh: bool = False) -> bool:
     except Exception as exc:
         log.warning("is_staff role check failed for %d: %s", user_id, exc)
         return False
-    return role in FOUNDER_ADMIN_ROLES
+    return role in OWNER_ADMIN_ROLES
 
 
 async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None:
@@ -694,15 +683,15 @@ async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None
             )
         )
         role = row["role_key"] if row else None
-        if role is not None and role not in APP_ROLE_BY_ROLE_KEY:
+        if role is not None and role not in ROLE_RANK:
             # ! CRITICAL: the assignment table only stores known roles, but
             # ! a hand-edited row could still carry something unexpected.
             # ! Returning it verbatim would grant real privilege, so treat
             # ! unknown stored values as no role instead of trusting the
             # ! document.
             log.error("Ignoring invalid stored role %r for user %d", role, user_id)
-            role = None
-        return APP_ROLE_BY_ROLE_KEY.get(str(role)) if role is not None else None
+            return None
+        return str(role) if role is not None else None
 
     if fresh:
         # * The refresh publishes the value only when the key was not
@@ -731,7 +720,7 @@ async def role_meta(user_id: int) -> tuple[str | None, int | None, datetime | No
     )
     if not row:
         return None, None, None
-    role = APP_ROLE_BY_ROLE_KEY.get(str(row["role_key"]))
+    role = str(row["role_key"]) if row["role_key"] in ROLE_RANK else None
     return role, row.get("assigned_by_user_id"), row.get("assigned_at")
 
 

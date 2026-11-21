@@ -884,18 +884,18 @@ def test_replies_errors_golden() -> None:
 
 
 def test_replies_tiers_golden() -> None:
-    assert replies.perm_founder_only(DEFAULT_LOCALE, plain=False) == "Founder only\\."
+    assert replies.perm_owner_only(DEFAULT_LOCALE, plain=False) == "Owner only\\."
     assert (
         replies.perm_staff_only(DEFAULT_LOCALE, plain=False)
         == "TC Staff \\(Admin and above\\)\\."
     )
     assert (
         replies.perm_dev_above(DEFAULT_LOCALE, plain=False)
-        == "Developer and above \\(Founder / Admin / Developer\\)\\."
+        == "Developer and above \\(Owner / Admin / Developer\\)\\."
     )
     assert (
-        replies.perm_tester_above(DEFAULT_LOCALE, plain=False)
-        == "Tester and above \\(Founder / Admin / Developer / Tester\\)\\."
+        replies.perm_moderator_above(DEFAULT_LOCALE, plain=False)
+        == "Moderator and above \\(Owner / Admin / Developer / Moderator\\)\\."
     )
     assert (
         replies.rate_limit_text(7, DEFAULT_LOCALE, plain=True)

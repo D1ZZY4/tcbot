@@ -3,19 +3,19 @@
 # Mini-markup only: `code` and *bold*, balanced and unnested.
 
 [help]
-overview = "Lihat ringkasan federasi live: Founder, staf, pengguna, ban aktif, dan grup terhubung, dengan menu drill-down untuk tiap bagian."
+overview = "Lihat ringkasan federasi live: Owner, staf, pengguna, ban aktif, dan grup terhubung, dengan menu drill-down untuk tiap bagian."
 
 [help.commands]
 body = "`/tcstats` (alias: `/tcs`)"
 
 [help.what]
-body = "Menampilkan ringkasan federasi live: Founder, total staf per peran, jumlah pengguna yang di-cache, ban federasi aktif, dan chat terhubung."
+body = "Menampilkan ringkasan federasi live: Owner, total staf per peran, jumlah pengguna yang di-cache, ban federasi aktif, dan chat terhubung."
 
 [help.drills]
 title = "Rincian"
 body = """
-*Daftar Staf*: Founder, Admin, Developer, Tester, semua dengan mention.
-*Pengguna*: daftar semua pengguna yang di-cache per halaman (hanya Founder, tombol dan daftarnya disembunyikan dari yang lain). Tombol bernomor membuka kartu detail per pengguna.
+*Daftar Staf*: Owner, Admin, Developer, Moderator, semua dengan mention.
+*Pengguna*: daftar semua pengguna yang di-cache per halaman (hanya Owner, tombol dan daftarnya disembunyikan dari yang lain). Tombol bernomor membuka kartu detail per pengguna.
 *Chat Terhubung*: daftar semua grup aktif per halaman; drill-in menampilkan pemilik, ID, dan tanggal connect.
 *Ban Pengguna*: daftar semua ban aktif per halaman dengan pintasan *Cari* untuk mencari pengguna via nama atau ID.
 
@@ -46,8 +46,8 @@ users = "Pengguna"
 
 [main]
 title = "{community} *Statistik*"
-founder = "Founder: {owner}"
-staff = "Staf: {n} (Admin {admins}, Dev {devs}, Tester {testers})"
+owner = "Owner: {owner}"
+staff = "Staf: {n} (Admin {admins}, Dev {devs}, Moderator {moderators})"
 users = "Pengguna terlacak: {n}"
 bans = "Ban aktif: {n}"
 chats = "Chat terhubung: {n}"
@@ -56,7 +56,7 @@ degraded = "Catatan: sebagian angka gagal dimuat; total di atas mungkin tidak le
 
 [roster]
 title = "*Daftar Staf* - {community}"
-founder = "Founder"
+owner = "Owner"
 section = "{label}"
 member = "- {user}"
 empty = "- Belum ada staf"

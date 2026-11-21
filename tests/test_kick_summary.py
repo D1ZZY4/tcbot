@@ -81,7 +81,7 @@ def _kick_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
         # * The executor is a Tester; the target holds no role, so the
         # * enforcement-time rank check passes.
-        return "tester" if user_id == 11 else None
+        return "moderator" if user_id == 11 else None
 
     async def _logged(*args: Any, **kwargs: Any) -> None:
         return None
@@ -140,7 +140,7 @@ def test_a_stranded_kick_queues_its_unban_repair(
     failed: list[int] = []
 
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
-        return "tester" if user_id == 11 else None
+        return "moderator" if user_id == 11 else None
 
     async def _logged(*args: Any, **kwargs: Any) -> int:
         return 55
@@ -177,7 +177,7 @@ def test_a_failed_ban_marks_the_kick_failed(
     failed: list[int] = []
 
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
-        return "tester" if user_id == 11 else None
+        return "moderator" if user_id == 11 else None
 
     async def _logged(*args: Any, **kwargs: Any) -> int:
         return 55

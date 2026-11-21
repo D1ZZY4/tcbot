@@ -12,14 +12,14 @@ body = "`/tckick` (alias: `/tck`)"
 body = """
 Mengeluarkan pengguna dari *grup ini saja*. Ini bukan tindakan se-federasi; pengguna bisa bergabung lagi lewat tautan undangan kecuali ia juga di-ban federasi.
 
-Jika target memegang peran federasi (Tester / Developer / Admin), peran itu didemosi dan mereka diberi tahu lewat DM. Satu entri log dikirim ke kanal log federasi.
+Jika target memegang peran federasi (Moderator / Developer / Admin), peran itu didemosi dan mereka diberi tahu lewat DM. Satu entri log dikirim ke kanal log federasi.
 
 Telegram tidak punya operasi kick langsung, jadi bot mem-ban lalu meng-unban pengguna. Jika tahap kedua tetap gagal setelah satu percobaan ulang, tugas perbaikan yang tahan restart akan terus mencoba unban."""
 
 [help.flow]
 body = """
 1. Jalankan `/tckick` dengan target (dan alasan inline opsional).
-2. Jika alasan belum diberikan, bot bertanya: balas dengan teks atau ketuk *Lewati*.
+2. Jika alasan belum diberikan, bot memintanya: balas dengan teks.
 3. Bot meminta bukti: kirim foto/video, lalu ketuk *Selesai*, atau ketuk *Lewati*."""
 
 [help.examples]

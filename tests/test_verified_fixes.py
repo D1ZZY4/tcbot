@@ -39,7 +39,7 @@ def test_nav_row_labels_follow_locale() -> None:
 def test_refusal_texts_match_legacy_english() -> None:
     assert (
         replies.refuse_owner_only("en-US", plain=True)
-        == "This command is reserved for the Founder - you're not authorized."
+        == "This command is reserved for the Owner - you're not authorized."
     )
     assert (
         replies.refuse_mod_only("en-US", plain=True)
@@ -237,15 +237,15 @@ def test_recheck_executor_rank() -> None:
             self.replies.append(text)
             return object()
 
-    async def _tester(uid: int, *, fresh: bool = False) -> str | None:
-        return "tester"
+    async def _moderator(uid: int, *, fresh: bool = False) -> str | None:
+        return "moderator"
 
-    async def _founder(uid: int, *, fresh: bool = False) -> str | None:
-        return "founder"
+    async def _owner(uid: int, *, fresh: bool = False) -> str | None:
+        return "owner"
 
     async def run() -> tuple[bool, bool, int]:
         orig = db.users_roles.get_effective_role
-        db.users_roles.get_effective_role = _tester  # type: ignore[assignment]
+        db.users_roles.get_effective_role = _moderator  # type: ignore[assignment]
         try:
             denied = await guards.recheck_executor_rank(
                 _Msg(),  # type: ignore[arg-type]
@@ -255,7 +255,7 @@ def test_recheck_executor_rank() -> None:
         finally:
             db.users_roles.get_effective_role = orig  # type: ignore[assignment]
         msg = _Msg()
-        db.users_roles.get_effective_role = _founder  # type: ignore[assignment]
+        db.users_roles.get_effective_role = _owner  # type: ignore[assignment]
         try:
             allowed = await guards.recheck_executor_rank(
                 msg,  # type: ignore[arg-type]

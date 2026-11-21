@@ -10,11 +10,11 @@ database layer, see [`../../architecture/database.md`](../../architecture/databa
 
 ```mermaid
 flowchart TD
-    Cmd[/tcmute command/] --> Perm{Tester+ rank check}
+    Cmd[/tcmute command/] --> Perm{Moderator+ rank check}
     Perm -->|denied| End1[Reject]
     Perm -->|allowed| Duration[Parse optional duration token]
     Duration --> Target[Resolve target]
-    Target --> Ident{Self / bot / Founder?}
+    Target --> Ident{Self / bot / Owner?}
     Ident -->|self or bot| Refuse[identity.refuse_message]
     Ident -->|allowed| ReasonStep[Inline reason present?]
     ReasonStep -->|yes| ProofStep[WAITING_PROOF]
@@ -46,8 +46,8 @@ A federation mute restricts a user from sending messages, media, stickers, and p
 
 | Command | Alias | Purpose | Access |
 |---|---|---|---|
-| `/tcmute` | `/tcm` | Apply a federation-wide mute to a user. | Tester and above via `basic_mod_only`. |
-| `/tcunmute` | `/tcunm`, `/tcum` | Restore full send permissions across all connected groups. | Tester and above via `basic_mod_only`. |
+| `/tcmute` | `/tcm` | Apply a federation-wide mute to a user. | Moderator and above via `basic_mod_only`. |
+| `/tcunmute` | `/tcunm`, `/tcum` | Restore full send permissions across all connected groups. | Moderator and above via `basic_mod_only`. |
 
 Commands use the project's configured prefixes; slash commands are examples.
 
@@ -59,7 +59,7 @@ The mute command is a `ConversationHandler` built by `reason_flow.build_modactio
 
 1. A moderator runs `/tcmute <target> [duration] [reason]` or replies to a message with `/tcm [duration] [reason]`.
 2. The bot resolves the executor role and target in parallel.
-3. The executor must have at least Tester rank.
+3. The executor must have at least Moderator rank.
 4. The target must resolve to a Telegram user ID.
 5. The bot rejects attempts to mute itself or the executor's own account via `identity.refuse_message`.
 6. The bot parses an optional duration token from the first remaining argument.
@@ -177,7 +177,7 @@ The fan-out errors are counted but do not roll back the DB mute record; the fail
 
 1. Resolve target.
 2. Reject unresolved target with `replies.err_cannot_resolve(locale)`.
-3. Run `identity.classify` and `resolve_and_check` in parallel (Tester minimum). If the executor is outranked or the target is self/bot, `identity.refuse_message` short-circuits.
+3. Run `identity.classify` and `resolve_and_check` in parallel (Moderator minimum). If the executor is outranked or the target is self/bot, `identity.refuse_message` short-circuits.
 4. Emit `identity.staff_notice("unmute", ident, cfg.community_name)` when applicable so staff-only targets see the heads-up.
 5. Delegate to `execute_unmute(update, ctx, target_id, target_name)`.
 
@@ -264,7 +264,7 @@ The reply and federation log use `keyboards.action_proof_kb(target_id, proof_lin
 
 Key behaviors to keep in mind:
 
-1. `/tcmute` requires Tester rank.
+1. `/tcmute` requires Moderator rank.
 2. `/tcmute <target> <duration> <reason>` parses the duration token before the reason text.
 3. `/tcmute` without a target is rejected with `replies.err_cannot_resolve(locale)`.
 4. Self-mute and bot-mute attempts are rejected by `identity.refuse_message`.

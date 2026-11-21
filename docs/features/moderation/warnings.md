@@ -9,7 +9,7 @@ For the database layer, see [`../../architecture/database.md`](../../architectur
 
 ```mermaid
 flowchart TD
-    Cmd[/tcwarn command/] --> Permission{Tester+ check}
+    Cmd[/tcwarn command/] --> Permission{Moderator+ check}
     Permission -->|denied| End1[Reject]
     Permission -->|allowed| Reason[WAITING_REASON]
     Reason --> Proof[WAITING_PROOF]
@@ -41,10 +41,10 @@ The per-group limit is read from the `WARN_LIMIT` environment variable (default 
 
 | Command | Alias | Purpose | Access |
 |---|---|---|---|
-| `/tcwarn` | `/tcw` | Add a warning in the current group. | Tester and above. |
-| `/tcunwarn` | `/tcunw` | Remove the most recent warning in the current group. | Tester and above via `basic_mod_only`. |
-| `/warns` | `/warnlist` | Show warning count and reasons for a target in the current group. | Tester and above via `basic_mod_only`. |
-| `/resetwarns` | `/clearwarns` | Clear all warnings for a target in the current group. | Tester and above via `basic_mod_only`. |
+| `/tcwarn` | `/tcw` | Add a warning in the current group. | Moderator and above. |
+| `/tcunwarn` | `/tcunw` | Remove the most recent warning in the current group. | Moderator and above via `basic_mod_only`. |
+| `/warns` | `/warnlist` | Show warning count and reasons for a target in the current group. | Moderator and above via `basic_mod_only`. |
+| `/resetwarns` | `/clearwarns` | Clear all warnings for a target in the current group. | Moderator and above via `basic_mod_only`. |
 
 Commands use configured prefixes; slash commands are examples.
 
@@ -67,7 +67,7 @@ The warning command uses the shared reason/proof conversation infrastructure.
 
 1. A moderator runs `/tcwarn <target> [reason]` or replies to a user with `/tcw [reason]`.
 2. The bot resolves the executor role and target in parallel.
-3. The executor must have at least Tester rank.
+3. The executor must have at least Moderator rank.
 4. The target must resolve to a Telegram user ID.
 5. The bot rejects attempts to warn itself.
 6. The target role is checked against the executor role.
@@ -125,27 +125,27 @@ Warnings use the same effective role rank table as other moderation actions:
 
 | Role | Rank |
 |---|---:|
-| Founder | 4 |
+| Owner | 4 |
 | Admin | 3 |
 | Developer | 2 |
-| Tester | 1 |
+| Moderator | 1 |
 | No role | 0 |
 
 Rules for `/tcwarn`:
 
-- Executor must be Tester or higher.
-- Founder targets are protected.
+- Executor must be Moderator or higher.
+- Owner targets are protected.
 - Targets with rank equal to or higher than the executor are protected.
 - A higher-ranked executor can warn a lower-ranked staff target.
 - A single warning below the warn limit does not auto-demote the target. However, if the target holds a federation role when their warn count reaches or exceeds `cfg.warn_limit` (checked with `>=`, so a post-failure retry still demotes), the auto-demote (`Demote.execute(trigger="warn")`) fires and the staff target is exempted from the auto-ban; the warn itself is still recorded. Staff are never auto-banned via warnings.
 
 `/tcunwarn` and `/resetwarns` handle staff targets differently:
 
-- Founder target: command replies that there are no warnings to remove/clear.
-- Admin/Developer/Tester target: command sends a heads-up message but proceeds with unwarn/reset.
+- Owner target: command replies that there are no warnings to remove/clear.
+- Admin/Developer/Moderator target: command sends a heads-up message but proceeds with unwarn/reset.
 - Bot target: command replies that there is nothing to remove/clear.
 
-`/warns` requires Tester or above (`basic_mod_only` plus the executor-vs-target rank check in `resolve_and_check`); the read-only path has no identity refusal.
+`/warns` requires Moderator or above (`basic_mod_only` plus the executor-vs-target rank check in `resolve_and_check`); the read-only path has no identity refusal.
 
 ## Database impact
 
@@ -255,7 +255,7 @@ Flow:
 
 1. Resolve target.
 2. Reject unresolved target.
-3. Handle bot/Founder/staff messages as described above.
+3. Handle bot/Owner/staff messages as described above.
 4. Read current warning count.
 5. If count is zero, reply that the target has no warnings in this group.
 6. Remove the newest warning decision with `warns_db.remove_last_warn(...)`.
@@ -291,7 +291,7 @@ Flow:
 
 1. Resolve target.
 2. Reject unresolved target.
-3. Handle bot/Founder/staff messages as described above.
+3. Handle bot/Owner/staff messages as described above.
 4. Revoke the matching warning decisions with `warns_db.clear_warns(...)`; the
    count view drops them without deleting the history.
 5. If nothing was revoked, reply that there are no warnings to clear.
@@ -365,15 +365,15 @@ Cancel edits the prompt to say no action was taken.
 - If auto-ban fails at 3 warnings, warning history is deliberately kept so moderators can retry or investigate.
 - If sending the warning log fails, the warning action still completes and the error is logged.
 - If clearing warnings after a successful auto-ban fails, the error is logged; the user has still been banned across the federation.
-- `/warns` requires Tester or above (same gate as `/tcunwarn` and `/resetwarns`), but it only reads warnings in the current group.
+- `/warns` requires Moderator or above (same gate as `/tcunwarn` and `/resetwarns`), but it only reads warnings in the current group.
 - `/tcunwarn` removes the latest warning only; use `/resetwarns` to clear all warnings.
-- Staff targets are protected only against `/tcwarn` when equal/higher ranked. Unwarn/reset proceed for Admin/Developer/Tester after a heads-up.
+- Staff targets are protected only against `/tcwarn` when equal/higher ranked. Unwarn/reset proceed for Admin/Developer/Moderator after a heads-up.
 
 ## Behavior reference
 
 Key warning behaviors to keep in mind:
 
-1. Tester/Admin/Founder can start `/tcwarn`; unroled users cannot.
+1. Moderator/Admin/Owner can start `/tcwarn`; unroled users cannot.
 2. `/tcwarn` without a target is rejected.
 3. `/tcwarn` with inline reason skips the reason prompt and asks for proof.
 4. `/tcwarn` without inline reason asks for a reason and does not offer `Skip` for reason.

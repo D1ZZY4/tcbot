@@ -15,7 +15,7 @@ Menjatuhkan *ban se-federasi* ke target, berlaku otomatis di semua grup terhubun
 Setelah perintah, bot memandumu lewat tahap bukti: kirim foto, video, GIF, atau file sebagai bukti dalam satu album atau satu per satu, lalu ketuk Selesai. Bukti wajib ada dan dicatat bersama catatan ban ke kanal log federasi. Setiap item yang terunggah diarsipkan dengan jenis media sebenarnya; jika ada item yang gagal masuk, ban tidak dijatuhkan dan kamu bisa mengirim ulang bukti.
 
 Jika pengguna sudah punya ban aktif, bot meminta konfirmasi dulu (lengkap dengan tautan Lihat Log dan Lihat Bukti) alih-alih mengubah diam-diam; hanya Lanjut yang menuju pengumpulan bukti, lalu catatan yang ada diperbarui dengan alasan dan bukti baru tanpa membuat duplikat.
-Jika target memegang peran federasi (Tester / Developer / Admin), peran itu didemosi dan mereka diberi tahu lewat DM sebelum ban ditegakkan."""
+Jika target memegang peran federasi (Moderator / Developer / Admin), peran itu didemosi dan mereka diberi tahu lewat DM sebelum ban ditegakkan."""
 
 [help.flow]
 body = """

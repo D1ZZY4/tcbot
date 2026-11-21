@@ -86,7 +86,7 @@ async def execute_promo_decision(
         await answer_alert(q, t("admins.error.role_lookup_failed", locale, plain=True))
         return
     if not is_owner:
-        await answer_alert(q, replies.perm_founder_only(locale, plain=True))
+        await answer_alert(q, replies.perm_owner_only(locale, plain=True))
         return
     if isinstance(req_result, BaseException):
         log.error("get_request_by_id failed for %s: %s", request_id, req_result)
@@ -142,9 +142,9 @@ async def execute_promo_decision(
                 q, t("admins.error.role_lookup_failed", locale, plain=True)
             )
             return
-        if target_role == "founder":
+        if target_role == "owner":
             await answer_alert(
-                q, t("admins.promote.target_is_founder", locale, plain=True)
+                q, t("admins.promote.target_is_owner", locale, plain=True)
             )
             return
         # * A banned target must not gain rank through a queued request:

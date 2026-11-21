@@ -15,7 +15,7 @@ Issues a *federation-wide ban* on the target, applied across all connected group
 After the command, the bot walks you through the proof step: send photos, videos, GIFs, or files as evidence in one album or one by one, then tap Done. Proof is required and is logged with the ban record to the federation logs channel. Every uploaded item is archived with its real media type; if any item fails to land, the ban is not filed and you can resend the proof.
 
 If the user already has an active ban, the bot first asks for confirmation (with View Log and View Proof links) instead of updating silently; only Continue leads to proof collection, and the existing record is then updated with the new reason and proof rather than creating a duplicate.
-If the target holds a federation role (Tester / Developer / Admin), that role is demoted and they are notified by DM before the ban is enforced."""
+If the target holds a federation role (Moderator / Developer / Admin), that role is demoted and they are notified by DM before the ban is enforced."""
 
 [help.flow]
 body = """

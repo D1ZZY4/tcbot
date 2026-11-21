@@ -25,7 +25,7 @@ flowchart TD
 `/tcstats` is the federation's read-only overview. A single inline keyboard
 opens drill-down panes. The Staff Roster, the Connected Chats, and the User
 Bans panes enumerate federation-wide records, so they are TC Staff only; the
-Users pane enumerates every cached user id, so it is Owner/Founder only. The
+Users pane enumerates every cached user id, so it is Owner/Owner only. The
 overview counters stay public.
 
 Aliases:
@@ -44,7 +44,7 @@ User Bans buttons render for TC Staff only, and the `stats_admins`,
 `stats_chats`, `stats_chat_item`, `stats_bans`, `stats_ban_item`,
 `stats_bans_search`, and `stats_search_*` callbacks re-read the tapper's role
 and refuse anyone else. A lookup outage closes the gate instead of opening
-it. The Users panes keep their own, stricter Owner/Founder gate.
+it. The Users panes keep their own, stricter Owner/Owner gate.
 
 ## Top-level overview
 
@@ -53,8 +53,8 @@ it. The Users panes keep their own, stricter Owner/Founder gate.
 ```text
 <community> Stats
 
-Founder: <mention>
-Staff: <total> (Admins n, Devs n, Testers n)
+Owner: <mention>
+Staff: <total> (Admins n, Devs n, Moderators n)
 Users tracked: <n>
 Active bans: <n>
 Connected chats: <n>
@@ -65,19 +65,19 @@ Inline keyboard:
 ```text
 [ Staff Roster ] [ User Bans ]
 [ Connected Chats ]
-[ Users ]                     <- Owner/Founder only (row 3)
+[ Users ]                     <- Owner/Owner only (row 3)
 ```
 
 The drill-down buttons render only when `viewer_id` holds a federation role
-(founder, admin, developer, or tester). The `Users` button is rendered only
-when `viewer_id` belongs to the Owner or holds the Founder role (`is_owner`
+(owner, admin, developer, or moderator). The `Users` button is rendered only
+when `viewer_id` belongs to the Owner or holds the Owner role (`is_owner`
 plus `get_effective_role`, both cached, in the same parallel batch; a failed
 lookup hides the button). The `stats_users` / `stats_user_item` callbacks
-enforce the same gate with a `Founder only.` alert, so a stale or crafted tap
+enforce the same gate with a `Owner only.` alert, so a stale or crafted tap
 without the button still cannot open the list. Lookup outages fail closed with
 a retry alert.
 
-Independent counters and the Founder mention are fetched concurrently with
+Independent counters and the Owner mention are fetched concurrently with
 `asyncio.gather`; the Telegram response still depends on database and network
 latency.
 
@@ -90,7 +90,7 @@ latency.
 ```text
 Staff Roster - <community>
 
-Founder
+Owner
 - <mention>
 
 Admins (n)
@@ -100,13 +100,13 @@ Developers (n)
 - <mention>
 - <mention>
 
-Testers (n)
+Moderators (n)
 - No staff assigned
 ```
 
 ### Users (`stats_users:<page>` and `stats_user_item:<page>:<idx>[:stable]`)
 
-Owner/Founder only, at both layers: the menu button renders only for them
+Owner/Owner only, at both layers: the menu button renders only for them
 and both callbacks alert-deny everyone else. `Stats.users_list(page)` paginates `users_cache.all_users_page()` (server-side skip/limit, sorted by `first_name`). Each row shows the cached display name, ID, and `@username` when present. Numbered buttons open `Stats.user_detail(bot, page, idx, stable)`, which renders instantly from cache and refreshes stale/sparse documents in the background via `extraction.launch_identity_refresh` (zero added latency):
 
 ```text
@@ -183,14 +183,14 @@ The previous `stats_chats_flow.py` has been removed; its responsibilities live e
 
 | Helper | Purpose |
 |---|---|
-| `users_roles.get_owner_id()` | Founder's user ID for the overview line. |
+| `users_roles.get_owner_id()` | Owner's user ID for the overview line. |
 | `users_roles.admin_count()` | Total Admins for the overview. |
 | `users_roles.all_admins()` | Full Admin list for the staff roster. |
-| `users_roles.all_by_role("developer" \| "tester")` | Per-role lists for the staff roster. |
-| `users_roles.is_owner(uid)` / `users_roles.get_effective_role(uid)` | Owner/Founder gate that decides whether the `Users` pane renders. |
+| `users_roles.all_by_role("developer" \| "moderator")` | Per-role lists for the staff roster. |
+| `users_roles.is_owner(uid)` / `users_roles.get_effective_role(uid)` | Owner/Owner gate that decides whether the `Users` pane renders. |
 | `users_cache.total_users()` | Cached-user count for the overview. |
 | `users_cache.all_users_page()` | Paginated user list (server-side skip/limit, server-sorted by `first_name`). |
-| `users_cache.get_user_mention_data(uid)` | User name/username for the Founder overview line and chat-adder row. |
+| `users_cache.get_user_mention_data(uid)` | User name/username for the Owner overview line and chat-adder row. |
 | `users_cache.get_mention_data_batch(uids)` | Parallel name resolution for the whole staff roster. |
 | `users_cache.get_first_names_batch(uids)` | Display names for the ban list and search results. |
 | `users_cache.search_by_name(needle, limit=...)` | Anchored prefix lookup for free-text search (same semantics as command target resolution). |
@@ -220,8 +220,8 @@ the search and message deletion concurrently.
 ## Behavior reference
 
 - `/tcstats` and `/tcs` both reach `cmd_stats` regardless of prefix (`/`, `!`, `.`).
-- The `Users` button and both Users callbacks are Owner/Founder only; the roster, chat, and ban panes are TC Staff only; the overview counters stay public.
-- `Staff Roster` page shows the Founder mention exactly once, then each role section, even when a role list is empty.
+- The `Users` button and both Users callbacks are Owner/Owner only; the roster, chat, and ban panes are TC Staff only; the overview counters stay public.
+- `Staff Roster` page shows the Owner mention exactly once, then each role section, even when a role list is empty.
 - `Users` pagination clamps to the last page when the requested page exceeds `total_pages`.
 - `Connected Chats` detail card shows the cached title, chat ID, connecting admin, and connection date; it is produced by `Stats.chat_detail` (the previous `stats_chats_flow.py` no longer exists).
 - `User Bans` Search panel handles numeric IDs and free-text queries; each hit drills into the same detail card as the regular bans list.

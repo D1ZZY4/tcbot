@@ -20,13 +20,13 @@ def _cells(markup):  # type: ignore[no-untyped-def]
 
 
 def test_promote_role_kb_pairs_roles_plus_cancel() -> None:
-    rows = _cells(kb.promote_role_kb(7, ["admin", "developer", "tester"]))
+    rows = _cells(kb.promote_role_kb(7, ["admin", "developer", "moderator"]))
     assert rows[0] == [
         ("Admin", "promo_role:admin:7", None, KeyboardButtonStyle.PRIMARY),
         ("Developer", "promo_role:developer:7", None, KeyboardButtonStyle.PRIMARY),
     ]
     assert rows[1] == [
-        ("Tester", "promo_role:tester:7", None, KeyboardButtonStyle.PRIMARY)
+        ("Moderator", "promo_role:moderator:7", None, KeyboardButtonStyle.PRIMARY)
     ]
     assert rows[2] == [("Cancel", "promo_role_cancel:7", None, None)]
 

@@ -92,10 +92,10 @@ The deactivation runs before the fan-out (not in parallel with it) precisely to 
 
 | Executor | `/tcdisconnect` (in group) | `/rmtc` (remote) |
 |---|---|---|
-| Founder | Yes | Yes |
+| Owner | Yes | Yes |
 | Admin | Yes | Yes |
 | Developer | No (not staff) | No (`staff_only` rejects) |
-| Tester | No (not staff) | No (`staff_only` rejects) |
+| Moderator | No (not staff) | No (`staff_only` rejects) |
 | No role | Only if group creator | No (`staff_only` rejects) |
 | Anonymous admin | No (always rejected) | No (`staff_only` rejects) |
 
@@ -158,7 +158,7 @@ Key behaviors to keep in mind:
 3. `/tcdisconnect` runs the three precondition reads in parallel.
 4. The deactivation runs first; only the log post, reply, and `leave_chat` run in parallel after it succeeds.
 5. An anonymous admin cannot run `/tcdisconnect`; the reply directs them to ask TC staff to use `/rmtc`.
-6. `/rmtc` requires TC staff (`staff_only` rejects Developer/Tester/no-role).
+6. `/rmtc` requires TC staff (`staff_only` rejects Developer/Moderator/no-role).
 7. `/rmtc` requires a numeric chat ID; the arg must pass `args[0].lstrip("-").isdigit()`.
 8. `/rmtc` for an unknown chat ID replies `replies.err_group_not_found(locale)`.
 9. `/rmtc` runs `leave_chat` even when the bot is not in the target chat; the API error is caught and logged.

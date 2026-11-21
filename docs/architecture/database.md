@@ -127,7 +127,7 @@ separate community would be a separate deployment.
 | Identity | `telegram_users`, `telegram_chats`, `chat_members`, `connected_chats`, `join_requests` |
 | Configuration | `community_settings`, `chat_settings`, `user_settings` |
 | Access | `role_definitions`, `permission_definitions`, `role_permissions`, `role_assignments`, `promotion_requests` |
-| Rules | `rule_sets`, `rule_set_versions`, `rule_items`, `rule_acknowledgements` |
+| Rules | `rule_sets`, `rule_set_versions`, `rule_items`, `rule_categories`, `rule_publication_runs`, `rule_publications`, `rule_acknowledgements` |
 | Moderation | `moderation_cases`, `moderation_case_rules`, `moderation_actions`, `moderation_appeals`, `moderation_messages`, `moderation_evidence_uploads`, `moderation_evidence_items`, `moderation_notification_tasks` |
 | Enforcement | `moderation_enforcement_runs`, `moderation_enforcement_targets`, `moderation_enforcement_attempts` |
 | Automation | `automation_policies`, `automation_policy_versions`, `automation_events`, `automation_runs`, `automation_run_steps`, `automation_run_step_attempts` |
@@ -467,11 +467,11 @@ the **assignment** (who holds which role right now).
 The catalog is reference data: it is seeded by `schema/seed.sql` and the
 seed is idempotent, so a deployment always starts from the same contract.
 
-The application speaks its own tier vocabulary: `founder`, `admin`,
-`developer`, `tester`. `ROLE_KEY_BY_APP_ROLE` and `APP_ROLE_BY_ROLE_KEY`
+The application speaks its own tier vocabulary: `owner`, `admin`,
+`developer`, `moderator`. `ROLE_KEY_BY_APP_ROLE` and `APP_ROLE_BY_ROLE_KEY`
 translate between the two, and they are the only place the vocabularies
 meet. The catalog calls the last tier `moderator`; the handlers call it
-`tester`.
+`moderator`.
 
 ### Assignment
 
@@ -498,15 +498,15 @@ even briefly.
 ### Role hierarchy
 
 ```text
-founder = 4 > admin = 3 > developer = 2 > tester = 1 > none = 0
+owner = 4 > admin = 3 > developer = 2 > moderator = 1 > none = 0
 ```
 
-- `VALID_ROLES`: `{"developer", "tester"}` (the only roles assignable via `set_role`).
+- `VALID_ROLES`: `{"developer", "moderator"}` (the only roles assignable via `set_role`).
 - `role_rank(role: str | None) -> int`: maps a role string to its rank, `0` for `None`/unknown.
-- `ROLE_LABEL`: human labels (`Founder`, `Admin`, `Developer`, `Tester`).
+- `ROLE_LABEL`: human labels (`Owner`, `Admin`, `Developer`, `Moderator`).
 - `role_label(role: str | None) -> str`: the human label for a role, falling back to the role itself. Single owner for the label lookup, so every surface renders a role the same way.
-- `STAFF_ROLES`: `{"admin", "developer", "tester"}`, every role that can be demoted (the Founder is protected and never demoted).
-- `FOUNDER_ADMIN_ROLES`: `{"founder", "admin"}`, the roles that count as federation staff for permission gates. Both sets live here so a new tier cannot land in the rank table and be missed by every set check.
+- `STAFF_ROLES`: `{"admin", "developer", "moderator"}`, every role that can be demoted (the Owner is protected and never demoted).
+- `OWNER_ADMIN_ROLES`: `{"owner", "admin"}`, the roles that count as federation staff for permission gates. Both sets live here so a new tier cannot land in the rank table and be missed by every set check.
 
 ### Effective-role resolution
 
@@ -518,7 +518,7 @@ privilege.
 - `get_effective_role(user_id: int, *, fresh: bool = False) -> str | None`
   Resolves the role through `effective_role_cache.get_or_fetch`
   (L1 60 s, L2 90 s). A failed lookup propagates instead of caching a
-  degraded result: a cached "founder" for a real database error would
+  degraded result: a cached "owner" for a real database error would
   silently bypass authorization until the TTL expired. With `fresh=True`
   the caches are bypassed and the row is read directly (the cache is
   refreshed with the result): enforcement gates use `fresh=True` so a
@@ -544,17 +544,17 @@ privilege.
 - `is_owner(user_id: int, *, fresh: bool = False) -> bool`
   `get_owner_id(fresh=fresh) == user_id`; cached, no database round trip on
   hits. Errors propagate so decorators keep their fail-closed retry reply.
-  Enforcement gates (promotion decisions, the founder-only users list) use
+  Enforcement gates (promotion decisions, the owner-only users list) use
   `fresh=True`.
 - `ensure_initial_owner(initial_id: int) -> None`
-  Inserts the founder when the community has no owner. The seed takes the
+  Inserts the owner when the community has no owner. The seed takes the
   same advisory lock as an ownership transfer and re-checks the owner row
   inside it, so two instances starting together cannot both write an owner.
   A lower role the configured owner already holds is revoked in the same
   transaction, because the one-active-role index would otherwise refuse the
   owner insert. A seed that still fails after the transaction re-reads the
   table: a competing seed is accepted silently, while a community left with
-  no owner is logged as an error instead of booting without its Founder.
+  no owner is logged as an error instead of booting without its Owner.
 - `set_owner(user_id: int) -> None`
   Replaces the owner in one transaction: every active assignment of the
   new owner and every active owner assignment is revoked, and the new
@@ -562,27 +562,27 @@ privilege.
   takes a PostgreSQL advisory lock, so two concurrent transfers serialise
   instead of interleaving: without the lock the two transactions could
   each revoke the other's owner row and leave the community with **no**
-  owner, which would leave the whole federation without a Founder until the
+  owner, which would leave the whole federation without a Owner until the
   next restart. The helper then verifies the single-row invariant loudly,
   puts the new ID in the owner cache, and calls
   `effective_role_cache.clear_all()` so no process keeps a stale
-  `"founder"` role after the transfer. A failed transfer rolls back, fails
+  `"owner"` role after the transfer. A failed transfer rolls back, fails
   closed, and logs operator guidance.
 - `transfer_ownership(previous_owner_id: int, new_owner_id: int) -> None`
   The atomic transfer used by `/transferowner`: it verifies the current
   owner under the advisory lock, swaps the owner assignment, and grants the
-  previous Founder the Admin role in the same transaction. A stale prompt
+  previous Owner the Admin role in the same transaction. A stale prompt
   raises instead of demoting a newer owner, and a failure leaves both roles
   untouched.
 
 ### Admin and custom role CRUD
 
 - `is_admin(user_id: int) -> bool`: existence check on an active `admin` assignment.
-- `is_staff(user_id: int, *, fresh: bool = False) -> bool`: `get_effective_role(user_id, fresh=fresh) in ("founder", "admin")`. Keeps the historical fail-open-to-`False` contract: lookup failures log at WARNING and return `False`; cancellation still propagates. Callers that need a retry hint on outage use `get_effective_role` directly (like the appeal-review path and decorators). Enforcement callers (disconnect, group-language write) use `fresh=True` so a demotion is never hidden for the 60 s TTL; display-only callers keep the cached path.
+- `is_staff(user_id: int, *, fresh: bool = False) -> bool`: `get_effective_role(user_id, fresh=fresh) in ("owner", "admin")`. Keeps the historical fail-open-to-`False` contract: lookup failures log at WARNING and return `False`; cancellation still propagates. Callers that need a retry hint on outage use `get_effective_role` directly (like the appeal-review path and decorators). Enforcement callers (disconnect, group-language write) use `fresh=True` so a demotion is never hidden for the 60 s TTL; display-only callers keep the cached path.
 - `add_admin(user_id: int, promoted_by: int) -> None`: grants the admin role. It revokes the role the target held before it in the same transaction, so the assignment that follows the grant is the only active one. Invalidates the target's effective role cache.
 - `all_admins() -> list[AdminDoc]`: all active admin assignments.
 - `admin_count() -> int`: `COUNT(*)`.
-- `set_role(user_id: int, role: str, assigned_by: int) -> None`: grants a developer or tester role. A role outside `VALID_ROLES` raises, so a stored "admin" or "founder" can never be written through this path.
+- `set_role(user_id: int, role: str, assigned_by: int) -> None`: grants a developer or moderator role. A role outside `VALID_ROLES` raises, so a stored "admin" or "owner" can never be written through this path.
 - `remove_role(user_id: int) -> bool`: revokes the active assignment of the user except the owner assignment, which only `set_owner` or `transfer_ownership` replaces.
 - `all_by_role(role: str) -> list[RoleRefDoc]`: all users holding a specific role.
 - `role_count(role: str) -> int`: `COUNT(*)` on the role filter.
@@ -1695,8 +1695,8 @@ ActionStatus = Literal[
 ScopeType = Literal["community", "chat"]
 ```
 
-The tier vocabulary is `users_roles.RoleName = Literal["founder", "admin",
-"developer", "tester"]`, the single role definition the handlers use.
+The tier vocabulary is `users_roles.RoleName = Literal["owner", "admin",
+"developer", "moderator"]`, the single role definition the handlers use.
 
 ## Startup wiring and shutdown
 

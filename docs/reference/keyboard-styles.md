@@ -69,7 +69,7 @@ or `_` as listed in each row below.
 | `cancel_appeal` | appeal submit | flat | Cancels an appeal submission from the instruction prompt. Produced by `appeal_cancel_kb()`. |
 | `promo_role:<role>:<target_id>[:<executor_id>]` | promote menu | role, target, optional executor | Inline role-selection menu shown when `/tcpromote` is run without a role argument. The trailing executor segment restricts the menu to the staffer who opened it; legacy three-part menus stay valid. |
 | `promo_role_cancel:<target_id>[:<executor_id>]` | promote menu | target, optional executor | Cancel the role-selection menu. |
-| `promo_approve:<request_id>` / `promo_reject:<request_id>` | Founder DM | request | Founder resolves a pending Admin promotion request. |
+| `promo_approve:<request_id>` / `promo_reject:<request_id>` | Owner DM | request | Owner resolves a pending Admin promotion request. |
 | `demote_confirm:<target_id>[:<executor_id>]` / `demote_cancel:<target_id>[:<executor_id>]` | demote prompt | target, optional executor | Confirm or cancel a demotion. The trailing executor segment restricts the prompt to the staffer who opened it; legacy two-part prompts stay valid. |
 | `checkme_detail:<ban_id>` / `checkme_back:<ban_id>` | `/checkme` | ban | Toggle the `/checkme` summary and detail views. |
 | `stats_main` / `stats_admins` / `stats_users:<page>` / `stats_user_item:<page>:<idx>[:stable]` / `stats_chats:<page>` / `stats_chat_item:<page>:<idx>[:stable]` / `stats_bans:<page>` / `stats_ban_item:<page>:<idx>[:stable]` | `/tcstats` | varies | Federation stats drill-downs (`Stats` class). |

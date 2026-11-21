@@ -101,7 +101,7 @@ def test_promote_execute_refuses_a_banned_target(
 ) -> None:
     """The promotion chokepoint must not grant rank to a banned user."""
     _install_ban(monkeypatch, ban={"_id": "b1"})
-    _install_executor_role(monkeypatch, "founder")
+    _install_executor_role(monkeypatch, "owner")
 
     granted: list[int] = []
 
@@ -114,7 +114,7 @@ def test_promote_execute_refuses_a_banned_target(
         promote_flow.Promote.execute(
             _bot(),
             1,
-            "Founder",
+            "Owner",
             42,
             "Target",
             "admin",
@@ -136,7 +136,7 @@ def test_promote_execute_rechecks_the_executor_rank(
     the demoted executor cannot assign the tier it no longer holds.
     """
     _install_ban(monkeypatch, ban=None)
-    _install_executor_role(monkeypatch, "tester")
+    _install_executor_role(monkeypatch, "moderator")
     granted: list[int] = []
 
     async def _add_admin(user_id: int, promoted_by: int) -> None:
@@ -148,7 +148,7 @@ def test_promote_execute_rechecks_the_executor_rank(
         promote_flow.Promote.execute(
             _bot(),
             1,
-            "Founder",
+            "Owner",
             42,
             "Target",
             "admin",
@@ -178,9 +178,7 @@ def test_promote_execute_fails_closed_on_a_role_lookup_error(
     monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
 
     ok, _text = asyncio.run(
-        promote_flow.Promote.execute(
-            _bot(), 1, "Founder", 42, "Target", "admin", "en-US"
-        )
+        promote_flow.Promote.execute(_bot(), 1, "Owner", 42, "Target", "admin", "en-US")
     )
     assert ok is False
     assert granted == []
@@ -191,7 +189,7 @@ def test_promote_execute_allows_a_clean_target(
 ) -> None:
     """A clean target still reaches the assignment path."""
     _install_ban(monkeypatch, ban=None)
-    _install_executor_role(monkeypatch, "founder")
+    _install_executor_role(monkeypatch, "owner")
     assigned: list[tuple[int, str]] = []
 
     async def _set_role(user_id: int, role: str, assigned_by: int) -> None:
@@ -205,7 +203,7 @@ def test_promote_execute_allows_a_clean_target(
         promote_flow.Promote.execute(
             _bot(),
             1,
-            "Founder",
+            "Owner",
             42,
             "Target",
             "developer",
@@ -222,14 +220,14 @@ def test_promote_execute_rechecks_the_target_rank(
     """A target promoted while the prompt was open is not overwritten.
 
     The command and the role picker read the target role before the grant.
-    A Founder promoting the target to Admin in that window must not be
+    A Owner promoting the target to Admin in that window must not be
     undone by an older Developer grant decided against the stale role.
     """
     _install_ban(monkeypatch, ban=None)
 
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
         _ = fresh
-        return "founder" if user_id == 1 else "admin"
+        return "owner" if user_id == 1 else "admin"
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     assigned: list[tuple[int, str]] = []
@@ -243,7 +241,7 @@ def test_promote_execute_rechecks_the_target_rank(
 
     ok, text = asyncio.run(
         promote_flow.Promote.execute(
-            _bot(), 1, "Founder", 42, "Target", "developer", "en-US"
+            _bot(), 1, "Owner", 42, "Target", "developer", "en-US"
         )
     )
 
@@ -255,7 +253,7 @@ def test_promote_execute_rechecks_the_target_rank(
 def test_promote_request_refuses_a_banned_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A banned user must not reach the Founder's approval card."""
+    """A banned user must not reach the Owner's approval card."""
     _install_ban(monkeypatch, ban={"_id": "b1"})
     enqueued: list[int] = []
 

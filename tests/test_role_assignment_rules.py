@@ -35,7 +35,7 @@ def _bot() -> Any:
 def _install_promote(
     monkeypatch: pytest.MonkeyPatch,
     *,
-    executor_role: str = "founder",
+    executor_role: str = "owner",
     current_role: str | None = None,
     banned: bool = False,
 ) -> dict[str, Any]:
@@ -91,24 +91,25 @@ def _install_promote(
 
 
 def test_available_roles_follow_the_executor_rank() -> None:
-    """The Founder assigns every role; an Admin only the sub-roles."""
-    assert promote_flow.Promote.available_roles_for("founder") == [
+    """The Owner assigns every role; an Admin only the sub-roles."""
+    assert promote_flow.Promote.available_roles_for("owner") == [
         "admin",
         "developer",
-        "tester",
+        "moderator",
     ]
-    assert promote_flow.Promote.available_roles_for("admin") == ["developer", "tester"]
+    assert promote_flow.Promote.available_roles_for("admin") == [
+        "developer",
+        "moderator",
+    ]
     assert promote_flow.Promote.available_roles_for("developer") == []
-    assert promote_flow.Promote.available_roles_for("tester") == []
+    assert promote_flow.Promote.available_roles_for("moderator") == []
 
 
-def test_founder_assigns_admin_directly(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A Founder promotion of Admin writes the admin record."""
+def test_owner_assigns_admin_directly(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Owner promotion of Admin writes the admin record."""
     seen = _install_promote(monkeypatch)
     ok, _text = asyncio.run(
-        promote_flow.Promote.execute(
-            _bot(), 1, "Founder", 42, "Target", "admin", "en-US"
-        )
+        promote_flow.Promote.execute(_bot(), 1, "Owner", 42, "Target", "admin", "en-US")
     )
     assert ok is True
     assert seen["added"] == [(42, 1)]
@@ -118,7 +119,7 @@ def test_founder_assigns_admin_directly(monkeypatch: pytest.MonkeyPatch) -> None
 def test_admin_promotion_to_admin_queues_a_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An Admin may not grant Admin; the request goes to the Founder."""
+    """An Admin may not grant Admin; the request goes to the Owner."""
     seen = _install_promote(monkeypatch, executor_role="admin")
     ok, _text = asyncio.run(
         promote_flow.Promote.execute(_bot(), 1, "Admin", 42, "Target", "admin", "en-US")
@@ -129,7 +130,7 @@ def test_admin_promotion_to_admin_queues_a_request(
 
 
 def test_admin_assigns_a_subrole_directly(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An Admin may grant Developer and Tester directly."""
+    """An Admin may grant Developer and Moderator directly."""
     seen = _install_promote(monkeypatch, executor_role="admin")
     ok, _text = asyncio.run(
         promote_flow.Promote.execute(
@@ -156,7 +157,7 @@ def test_developer_may_not_assign_any_role(monkeypatch: pytest.MonkeyPatch) -> N
             "Developer",
             42,
             "Target",
-            "tester",
+            "moderator",
             "en-US",
         )
     )
@@ -174,7 +175,7 @@ def test_promotion_refuses_a_higher_ranked_target(
         promote_flow.Promote.execute(
             _bot(),
             1,
-            "Founder",
+            "Owner",
             42,
             "Target",
             "developer",
@@ -185,14 +186,14 @@ def test_promotion_refuses_a_higher_ranked_target(
     assert seen["roles"] == []
 
 
-def test_promotion_refuses_the_founder(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The Founder role is never assignable through a promotion."""
-    seen = _install_promote(monkeypatch, current_role="founder")
+def test_promotion_refuses_the_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Owner role is never assignable through a promotion."""
+    seen = _install_promote(monkeypatch, current_role="owner")
     ok, _text = asyncio.run(
         promote_flow.Promote.execute(
             _bot(),
             1,
-            "Founder",
+            "Owner",
             42,
             "Target",
             "developer",
@@ -289,7 +290,7 @@ class _FakeMessage:
 def _transfer_update() -> Any:
     """Return an update carrying the current owner and the transfer command."""
     return SimpleNamespace(
-        effective_user=SimpleNamespace(id=1, first_name="Founder"),
+        effective_user=SimpleNamespace(id=1, first_name="Owner"),
         effective_message=_FakeMessage(),
     )
 
@@ -312,7 +313,7 @@ def test_transfer_grants_ownership_and_keeps_the_old_owner(
 
 
 def test_transfer_refuses_a_banned_target(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A banned user must never gain founder powers."""
+    """A banned user must never gain owner powers."""
     seen = _install_transfer(monkeypatch, banned=True)
     ctx = SimpleNamespace(bot=_bot())
     asyncio.run(
@@ -350,7 +351,7 @@ def test_transfer_refuses_a_bot_target(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_a_failed_transfer_keeps_the_current_owner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The swap and the previous Founder's grant are one atomic decision."""
+    """The swap and the previous Owner's grant are one atomic decision."""
     seen = _install_transfer(monkeypatch, add_admin_fails=True)
     ctx = SimpleNamespace(bot=_bot())
     asyncio.run(

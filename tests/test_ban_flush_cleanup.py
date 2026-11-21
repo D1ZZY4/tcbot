@@ -192,10 +192,10 @@ def test_done_proof_finally_guard_regression(
         registry[key] = first
         monkeypatch.setattr(ban_flow, "_execute_ban", _replace_while_executing)
 
-        async def _founder(uid: int, *, fresh: bool = False) -> str | None:
-            return "founder"
+        async def _owner(uid: int, *, fresh: bool = False) -> str | None:
+            return "owner"
 
-        monkeypatch.setattr(db.users_roles, "get_effective_role", _founder)
+        monkeypatch.setattr(db.users_roles, "get_effective_role", _owner)
         return await ban_flow.on_done_proof(update, ctx)  # type: ignore[arg-type]
 
     outcome = asyncio.run(_scenario())

@@ -26,7 +26,7 @@ flowchart TD
 
 Demotion removes a federation role from a user. Five invocation paths reach the same `Demote.execute` method (entry points plus pre-fan-out re-demotes share these paths):
 
-1. `/tcdemote`: manual demotion by Founder or Admin.
+1. `/tcdemote`: manual demotion by Owner or Admin.
 2. Ban executor (`_execute_ban`): demote a role-holding target before the federation ban.
 3. Kick executor (`execute_kick`): demote a role-holding target before the per-group kick.
 4. Mute executor (`_execute_mute`): demote a role-holding target before the per-group mute.
@@ -50,11 +50,11 @@ The command must originate in a federation chat: the bot PM, the primary group, 
 
 | Who | Targets they can demote |
 |---|---|
-| Founder | Admin / Developer / Tester |
-| Admin | Developer / Tester only |
-| Developer / Tester / no-role | N/A (rejected by `@staff_only`) |
+| Owner | Admin / Developer / Moderator |
+| Admin | Developer / Moderator only |
+| Developer / Moderator / no-role | N/A (rejected by `@staff_only`) |
 
-Founder is never demotable through this flow; ownership transfer uses `/transferowner`.
+Owner is never demotable through this flow; ownership transfer uses `/transferowner`.
 
 ## `Demote` class API
 
@@ -87,11 +87,11 @@ The federation log emitted by `messages.demoted(target_id, target_fname, role, b
 
 ## Manual demotion flow (`/tcdemote`)
 
-1. Founder or Admin runs `/tcdemote <target>`. The `@staff_only` decorator rejects non-staff executors.
+1. Owner or Admin runs `/tcdemote <target>`. The `@staff_only` decorator rejects non-staff executors.
 2. `cmd_demote` resolves the target via `extract_target` in parallel with the executor's effective role through the shared `targets.resolve_executor_target` helper (same helper backs `cmd_promote`). The executor role is read fresh, so a demotion in another process is not hidden by the role-cache TTL.
-3. The bot reads the target's effective role. Identity refusal fires first (`self`, this bot, Telegram, other bots, anonymous admin, and Founder all have dedicated refusal lines, e.g. Founder gets `... is the Founder - try /transferowner ...`).
+3. The bot reads the target's effective role. Identity refusal fires first (`self`, this bot, Telegram, other bots, anonymous admin, and Owner all have dedicated refusal lines, e.g. Owner gets `... is the Owner - try /transferowner ...`).
    - If the role is `None`/empty, the bot replies `That user doesn't hold a role that can be removed.` and stops.
-   - If the target is `"admin"` and the executor is not Founder, the bot replies `Only the Founder can demote an Admin.` and stops.
+   - If the target is `"admin"` and the executor is not Owner, the bot replies `Only the Owner can demote an Admin.` and stops.
 4. Otherwise the bot sends a confirmation card with `Confirm` / `Cancel` buttons via `keyboards.demote_confirm_kb(target_id)`.
 
 ### Confirmation callback
@@ -101,9 +101,9 @@ Callback data: `demote_confirm:<target_id>:<executor_id>` and `demote_cancel:<ta
 `on_demote_confirm`:
 
 1. New prompts carry the opener, so only that staffer can confirm; a different tapper gets an alert and the prompt stays live. Legacy taps act as the tapper.
-2. Re-checks the executor's effective role alongside `q.answer()` through the shared `_check_callback_staff` helper (same helper backs the promote role button); if no longer Founder/Admin, edits the perm-expired notice and removes the keyboard. Cancellation from either branch propagates.
+2. Re-checks the executor's effective role alongside `q.answer()` through the shared `_check_callback_staff` helper (same helper backs the promote role button); if no longer Owner/Admin, edits the perm-expired notice and removes the keyboard. Cancellation from either branch propagates.
 3. Then fetches the target role and the target's mention data (name + username) in a second parallel gather; cancellation from either branch propagates instead of rendering a fallback.
-4. Re-applies the Admin-only-Founder rule.
+4. Re-applies the Admin-only-Owner rule.
 5. Calls `Demote.execute(ctx.bot, target_id, target_fname, target_role, admin.id, admin.first_name, trigger=None)`.
 6. On a successful removal, edits the confirmation message to `Done. <mention> - <code id> has been removed from <Role>.` and clears the keyboard.
 7. If `Demote.execute` returns False (nothing was removed; the record was cleared by another path), edits to `Couldn't remove the role - it may have already been cleared.`
@@ -135,13 +135,13 @@ The warn-limit path above is an edge case; staff should not normally accumulate 
 
 ## Permission matrix
 
-The combined effect of `@staff_only` on `cmd_demote` plus the Admin-only-Founder check inside the callback:
+The combined effect of `@staff_only` on `cmd_demote` plus the Admin-only-Owner check inside the callback:
 
-| Executor | Demote Admin | Demote Developer / Tester |
+| Executor | Demote Admin | Demote Developer / Moderator |
 |---|---|---|
-| Founder | Yes | Yes |
-| Admin | No (Founder only) | Yes |
-| Developer / Tester / no-role | N/A | N/A |
+| Owner | Yes | Yes |
+| Admin | No (Owner only) | Yes |
+| Developer / Moderator / no-role | N/A | N/A |
 
 ## Logs
 
@@ -176,13 +176,13 @@ The helper invalidates the affected user's entry in `effective_role_cache` so th
 - DM and log channel sends are wrapped in `asyncio.gather(..., return_exceptions=True)`; a failed DM does not roll back the role removal.
 - Log and DM failures are logged asymmetrically in `Demote.execute`: a failed federation log send logs at error level (a silent audit gap ships to `LOG_ERRORS`), a DM refused with `Forbidden` or another benign Telegram error (target never started the bot, blocked it, or deleted the account) logs at info level, and any other DM failure logs at warning level.
 - Self-demotion is rejected by `cmd_demote` via identity refusal (`Demoting yourself? Bold. Ask a higher-up if you really mean it.`).
-- Founder demotion is rejected by identity refusal before the role check (`... is the Founder - try /transferowner ...`); the no-role message only fires for genuinely role-less targets.
+- Owner demotion is rejected by identity refusal before the role check (`... is the Owner - try /transferowner ...`); the no-role message only fires for genuinely role-less targets.
 - A demote failure never blocks the ban, kick, or mute: the moderation record already exists at that point, so the enforcement proceeds and the failure is logged loudly. Only the unban path fails closed on a demote failure.
 
 ## Behavior reference
 
-- `/tcdemote` blocks self-demotion and Founder demotion.
-- Admin cannot demote Admin; Founder is required.
+- `/tcdemote` blocks self-demotion and Owner demotion.
+- Admin cannot demote Admin; Owner is required.
 - Confirmation callback re-checks executor permission at click time.
 - Confirm revokes the active role assignment of the target.
 - Ban / kick / mute on a role-holding target removes the role before the destructive action.

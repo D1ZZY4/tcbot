@@ -185,10 +185,10 @@ the origin chat of a decision.
 
 | Command | Aliases | Purpose | Access |
 |---|---|---|---|
-| `/leaveall` | `/exitall`, `/tcleave` | Leave every non-primary connected group and mark them inactive. | Founder only |
+| `/leaveall` | `/exitall`, `/tcleave` | Leave every non-primary connected group and mark them inactive. | Owner only |
 | `/cleanup` | `/tcclean`, `/tcc` | Check active groups and deactivate ones the bot can no longer access. | Staff+ |
 | `/tcrepair` | `/tcr` | List unsettled enforcement runs, or re-drive the failed groups of one run. | Staff+ |
-| `/tcforget` | `/tcf` | Queue one Telegram-account erasure for the next cleanup sweep. | Founder only |
+| `/tcforget` | `/tcf` | Queue one Telegram-account erasure for the next cleanup sweep. | Owner only |
 
 Behavior:
 
@@ -215,7 +215,7 @@ Behavior:
   pending promotion requests, and invalidates the affected name, locale,
   and role cache entries after the transaction commits. The current
   federation owner is refused: transfer ownership first, otherwise the
-  sweep would leave the community without a Founder.
+  sweep would leave the community without a Owner.
 
 Database impact: `/leaveall` deactivates each `connected_chats` row in
 parallel with the leave and posts a `group_disconnected` log entry per
@@ -231,8 +231,8 @@ writes a pending `telegram_user_erasures` row.
 
 | Command | Aliases | Purpose | Access |
 |---|---|---|---|
-| `/ping` | `/p` | Telegram API round-trip latency in ms. | Founder only |
-| `/speedtest` | `/st` | Speed test (download, upload, ping, client/server details) against speedtest.net. Add `full` for a larger sample. | Founder only |
+| `/ping` | `/p` | Telegram API round-trip latency in ms. | Owner only |
+| `/speedtest` | `/st` | Speed test (download, upload, ping, client/server details) against speedtest.net. Add `full` for a larger sample. | Owner only |
 
 Behavior:
 
@@ -263,15 +263,15 @@ and [`roles/demote.md`](roles/demote.md).
 
 | Command | Aliases | Purpose | Access |
 |---|---|---|---|
-| `/tcpromote` | `/tcp` | Assign a federation role (or queue Founders-only promotions). | Staff+ |
+| `/tcpromote` | `/tcp` | Assign a federation role (or queue Owners-only promotions). | Staff+ |
 | `/tcdemote` | `/tcd` | Remove a federation role with a confirm/cancel prompt. | Staff+ |
-| `/transferowner` | `/tfowner` | Transfer Founder ownership. | Founder only |
-| `/tcpromoterequests` | `/tcreqs` | Submit a promotion request to the Founder. | Anyone |
+| `/transferowner` | `/tfowner` | Transfer Owner ownership. | Owner only |
+| `/tcpromoterequests` | `/tcreqs` | Submit a promotion request to the Owner. | Anyone |
 | `/tcpromotelist` | `/tcplist` | List pending promotion requests. | Staff+ |
 
 | Callback | Purpose |
 |---|---|
-| `promo_approve:<request_id>` / `promo_reject:<request_id>` | Founder verdict on a pending promotion request (DM card). |
+| `promo_approve:<request_id>` / `promo_reject:<request_id>` | Owner verdict on a pending promotion request (DM card). |
 | `promo_role:<role>:<target_id>:<executor_id>` (legacy without executor) | Choose a role in the `/tcpromote` inline menu; only the prompt opener may act. |
 | `promo_role_cancel:<target_id>:<executor_id>` (legacy without executor) | Cancel the role-selection menu; only the prompt opener may cancel. |
 | `demote_confirm:<target_id>:<executor_id>` / `demote_cancel:<target_id>:<executor_id>` (legacy without executor) | Confirm or cancel a demotion; only the prompt opener may act. |
@@ -287,7 +287,7 @@ requests), and `users_cache` on transfer; see the role docs for details.
 - Permission gates come from `decorators` (`staff_only`, `owner_only`,
   `mod_only`, `basic_mod_only`) and fail closed on role-lookup outages.
 - Every handler wears `@decorators.log_execution` for DEBUG entry/exit
-  traces and a `@decorators.ratelimiter` quota; the Founder bypasses
+  traces and a `@decorators.ratelimiter` quota; the Owner bypasses
   per-handler quotas.
 - Callback handlers pair `q.answer()` with `safe_edit_cb` / `answer_and_edit`
   so re-tapping the same view does not raise `Message is not modified`.

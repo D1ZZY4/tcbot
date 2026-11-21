@@ -52,10 +52,10 @@ IdentityKind = Literal[
     "other_bot",  # any other Telegram bot
     "telegram",  # Telegram service account
     "anon_admin",  # GroupAnonymousBot
-    "founder",  # the federation Founder
+    "owner",  # the federation Owner
     "admin",  # federation Admin (staff)
     "developer",  # federation Developer (custom role)
-    "tester",  # federation Tester (custom role)
+    "moderator",  # federation Moderator (custom role)
     "user",  # regular user, no federation role
 ]
 
@@ -100,20 +100,20 @@ async def classify(
 
     The role is read fresh rather than from the cache. The protected-target
     refusals are keyed on the role kind, so a cached role could show a
-    Founder as an ordinary user for the whole cache TTL and let the action
+    Owner as an ordinary user for the whole cache TTL and let the action
     reach its prompt.
 
     A role-lookup failure is raised, never degraded. The protected-target
     refusals are keyed on the role kind, so a target that resolved to
     ``"user"`` because of a database outage would silently lose the
-    protection that keeps a Founder from being moderated. Callers already
+    protection that keeps a Owner from being moderated. Callers already
     treat a failure as a refusal, so raising keeps the classification
     fail-closed without asking every caller for a second role read.
     Cancellation always propagates.
     """
     # * Both are independent reads; run them in parallel. The role is read
     # * fresh: the refusal table is keyed on the role kind, so a cached
-    # * role could show a Founder as an ordinary user for the whole cache
+    # * role could show a Owner as an ordinary user for the whole cache
     # * TTL and let the action reach its prompt.
     # * return_exceptions=True keeps the two failure modes apart: the name
     # * lookup is display-only and degrades, the role lookup decides
@@ -127,7 +127,7 @@ async def classify(
     if isinstance(role_result, BaseException):
         # ! CRITICAL: Never degrade an unresolved role into "no role".
         # ! The refusal table is keyed on the role kind, so a degraded
-        # ! classification would let a database outage turn a Founder
+        # ! classification would let a database outage turn a Owner
         # ! into an ordinary user and bypass the protection.
         raise role_result
     (cached_fname, target_username) = (
@@ -161,14 +161,14 @@ async def classify(
             "other_bot", target_id, target_fname, target_username, is_bot=True
         )
 
-    if role == "founder":
-        return Identity("founder", target_id, target_fname, target_username)
+    if role == "owner":
+        return Identity("owner", target_id, target_fname, target_username)
     if role == "admin":
         return Identity("admin", target_id, target_fname, target_username)
     if role == "developer":
         return Identity("developer", target_id, target_fname, target_username)
-    if role == "tester":
-        return Identity("tester", target_id, target_fname, target_username)
+    if role == "moderator":
+        return Identity("moderator", target_id, target_fname, target_username)
     return Identity("user", target_id, target_fname, target_username)
 
 
@@ -301,7 +301,7 @@ async def can_manage_group(
 # * ``user`` and lower-rank staff are never returned here; those go
 # * through the normal moderation flow. The reply is one short
 # * professional-but-friendly line.
-# * Staff roles (admin/developer/tester) are intentionally absent from the
+# * Staff roles (admin/developer/moderator) are intentionally absent from the
 # * ban/kick/mute tables: those entries demote the target via
 # * Demote.execute before enforcing, so refusing here would make the
 # * documented demote unreachable.
@@ -315,11 +315,11 @@ async def can_manage_group(
 # * Structure only (the prose lives in identity.toml); ``user`` and
 # * lower-rank staff are never listed here and flow through normally.
 _REFUSE_KEYS: dict[str, frozenset[IdentityKind]] = {
-    "ban": frozenset({"self", "this_bot", "telegram", "anon_admin", "founder"}),
-    "kick": frozenset({"self", "this_bot", "telegram", "anon_admin", "founder"}),
-    "mute": frozenset({"self", "this_bot", "telegram", "anon_admin", "founder"}),
+    "ban": frozenset({"self", "this_bot", "telegram", "anon_admin", "owner"}),
+    "kick": frozenset({"self", "this_bot", "telegram", "anon_admin", "owner"}),
+    "mute": frozenset({"self", "this_bot", "telegram", "anon_admin", "owner"}),
     "warn": frozenset(
-        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "owner"}
     ),
     "unban": frozenset(
         {
@@ -327,14 +327,14 @@ _REFUSE_KEYS: dict[str, frozenset[IdentityKind]] = {
             "this_bot",
             "telegram",
             "anon_admin",
-            "founder",
+            "owner",
             "admin",
             "developer",
-            "tester",
+            "moderator",
         }
     ),
     "unmute": frozenset(
-        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "owner"}
     ),
     "promote": frozenset(
         {
@@ -343,21 +343,21 @@ _REFUSE_KEYS: dict[str, frozenset[IdentityKind]] = {
             "telegram",
             "other_bot",
             "anon_admin",
-            "founder",
+            "owner",
             "admin",
         }
     ),
     "demote": frozenset(
-        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "owner"}
     ),
     "transfer": frozenset(
-        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "owner"}
     ),
     "unwarn": frozenset(
-        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "owner"}
     ),
     "resetwarns": frozenset(
-        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "founder"}
+        {"self", "this_bot", "telegram", "other_bot", "anon_admin", "owner"}
     ),
 }
 
@@ -401,7 +401,7 @@ def refuse_role(
 # ─────────── Recognition notes (read-only views) ──────────────── #
 # * Single owner for "who is this?" copy on read-only surfaces such as
 # * /check: moderation entries use refuse_message/staff_notice instead, so
-# * no caller builds these lines inline. Staff and Founder are absent on
+# * no caller builds these lines inline. Staff and Owner are absent on
 # * purpose: the profile Role line already labels them.
 _PROFILE_NOTE_KINDS: frozenset[IdentityKind] = frozenset(
     {"this_bot", "self", "telegram", "anon_admin"}
@@ -412,7 +412,7 @@ def profile_note(ident: Identity, locale: str | None = None) -> str | None:
     """Return a recognition note for special identities, or ``None``.
 
     ``None`` means the identity needs no note (regular users, staff, and
-    Founder: staff and Founder are already labeled by the profile Role
+    Owner: staff and Owner are already labeled by the profile Role
     line, so a note would only restate it).
     """
     if ident.kind not in _PROFILE_NOTE_KINDS:

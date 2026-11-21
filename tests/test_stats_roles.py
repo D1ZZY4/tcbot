@@ -91,4 +91,4 @@ def test_stats_main_uses_role_counts_not_docs(monkeypatch: pytest.MonkeyPatch) -
 
     assert called_all_by_role == []
     assert "Staff: *10*" in text
-    assert "Devs 2, Testers 3" in text
+    assert "Devs 2, Moderators 3" in text

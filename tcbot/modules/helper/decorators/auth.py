@@ -80,7 +80,7 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
                             # * the same request would read the role the
                             # * previous Founder still had, and an ownership
                             # * transfer would refuse its own target.
-                            db.users_roles.cache_effective_role(uid, "founder")
+                            db.users_roles.cache_effective_role(uid, "owner")
                     else:
                         # * Fresh read: a demotion in another process must
                         # * not stay hidden for the 60 s role TTL.

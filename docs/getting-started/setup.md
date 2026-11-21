@@ -126,7 +126,7 @@ PROOFS="-1001234567890"
 | Variable | Required | Format | Purpose |
 |---|---:|---|---|
 | `BOT_TOKEN` | Yes | string | Telegram bot token. Never commit it. |
-| `OWNER_ID` | Yes | positive integer | Initial Founder user ID. Startup fails if missing or invalid. |
+| `OWNER_ID` | Yes | positive integer | Initial Owner user ID. Startup fails if missing or invalid. |
 | `DATABASE_URL` | Yes | PostgreSQL URL | SQLAlchemy connection string, e.g. `postgresql://user:password@host:5432/tcbot`. The bot applies the schema migrations at startup, so the role needs permission to create tables. Never commit it. |
 | `COMMUNITY_NAME` | No | string | Display name in messages and logs. Defaults to `Bot`. |
 | `PREFIXES` | No | Python-style list or CSV | Command prefixes. Default is `["/", "!", "."]`. |

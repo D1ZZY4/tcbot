@@ -74,9 +74,9 @@ def _mute_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
         return []
 
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
-        # * The executor is a Tester; the target holds no role, so the
+        # * The executor is a Moderator; the target holds no role, so the
         # * enforcement-time rank check passes.
-        return "tester" if user_id == 1 else None
+        return "moderator" if user_id == 1 else None
 
     monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
     monkeypatch.setattr(db.groups_db, "active_groups", _no_groups)

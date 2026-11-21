@@ -53,7 +53,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
         name=__module_name__,
         overview=t("kicking.help.overview", locale),
         commands=t("kicking.help.commands.body", locale),
-        who=replies.perm_tester_above(locale, plain=False),
+        who=replies.perm_moderator_above(locale, plain=False),
         where=replies.where_connected_group(locale),
         what=t("kicking.help.what.body", locale),
         flow=t("kicking.help.flow.body", locale),
@@ -86,7 +86,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         update,
         ctx,
         action="kick",
-        min_role="tester",
+        min_role="moderator",
         allow_private=False,
         log_prefix="cmd_kick",
     )

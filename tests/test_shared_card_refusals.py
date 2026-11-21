@@ -88,7 +88,7 @@ def _install_promo_common(
 def test_promo_non_owner_tap_keeps_the_decision_card(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A reader of a shared card cannot remove the Founder's buttons."""
+    """A reader of a shared card cannot remove the Owner's buttons."""
     _install_promo_common(monkeypatch, is_owner=False, request=_request(42))
     query = _FakeQuery("promo_approve:req-1")
 
@@ -101,7 +101,7 @@ def test_promo_non_owner_tap_keeps_the_decision_card(
 
     assert query.edits == []
     assert query.answers[-1] == (
-        replies.perm_founder_only("en-US", plain=True),
+        replies.perm_owner_only("en-US", plain=True),
         True,
     )
 
@@ -126,7 +126,7 @@ def test_promo_owner_lookup_failure_keeps_the_decision_card(
     assert query.answers[-1][1] is True
 
 
-def test_promo_approve_refuses_the_current_founder(
+def test_promo_approve_refuses_the_current_owner(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A stale request for the new owner must not rewrite the owner role."""
@@ -134,7 +134,7 @@ def test_promo_approve_refuses_the_current_founder(
     resolved: list[str] = []
 
     async def _role(user_id: int, *, fresh: bool = False) -> str:
-        return "founder"
+        return "owner"
 
     async def _resolve(request_id: str, status: str, resolved_by: int) -> bool:
         _ = (status, resolved_by)
@@ -155,7 +155,7 @@ def test_promo_approve_refuses_the_current_founder(
     assert resolved == []
     assert query.edits == []
     assert query.answers[-1] == (
-        t("admins.promote.target_is_founder", "en-US", plain=True),
+        t("admins.promote.target_is_owner", "en-US", plain=True),
         True,
     )
 

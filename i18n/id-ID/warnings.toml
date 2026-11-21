@@ -16,8 +16,8 @@ body = """
 
 [help.who]
 body = """
-*/tcwarn*, */tcunwarn*, */resetwarns*: Tester ke atas (Founder / Admin / Developer / Tester).
-*/warns*: Tester ke atas (Founder / Admin / Developer / Tester)."""
+*/tcwarn*, */tcunwarn*, */resetwarns*: Moderator ke atas (Owner / Admin / Developer / Moderator).
+*/warns*: Moderator ke atas (Owner / Admin / Developer / Moderator)."""
 
 [help.what]
 body = """

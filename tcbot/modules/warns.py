@@ -100,7 +100,7 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         update,
         ctx,
         action="warn",
-        min_role="tester",
+        min_role="moderator",
         allow_private=False,
         log_prefix="cmd_warn",
         bot_check=True,
@@ -194,7 +194,7 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         update,
         ctx,
         action="unwarn",
-        min_role="tester",
+        min_role="moderator",
         log_prefix="cmd_unwarn",
         execute=execute_unwarn,
     )
@@ -235,7 +235,9 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    role_result = await resolve_and_check(msg, admin.id, target_id, min_role="tester")
+    role_result = await resolve_and_check(
+        msg, admin.id, target_id, min_role="moderator"
+    )
     # * resolve_and_check replies on rejection and returns (None, None).
     # * Read-only path: the rank check alone gates staff-history enumeration.
     if role_result[0] is None:
@@ -260,7 +262,7 @@ async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         update,
         ctx,
         action="resetwarns",
-        min_role="tester",
+        min_role="moderator",
         log_prefix="cmd_resetwarns",
         execute=execute_resetwarns,
     )

@@ -155,17 +155,17 @@ async def test_the_classification_reads_the_role_fresh(
     """The protected-target refusal table must not run on a cached role.
 
     The refusal table is keyed on the identity kind, so a cached role
-    could show a Founder as an ordinary user for the whole cache TTL and
+    could show a Owner as an ordinary user for the whole cache TTL and
     let the action reach its prompt.
     """
     calls: list[bool] = []
 
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
         calls.append(fresh)
-        return "founder"
+        return "owner"
 
     async def _name(user_id: int) -> tuple[str, str | None]:
-        return ("Founder", None)
+        return ("Owner", None)
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.users_cache, "get_user_mention_data", _name)
@@ -173,7 +173,7 @@ async def test_the_classification_reads_the_role_fresh(
     bot = SimpleNamespace(id=999)
     ident = await identity.classify(bot, 111, 222)  # type: ignore[arg-type]
 
-    assert ident.kind == "founder"
+    assert ident.kind == "owner"
     assert calls == [True]
 
 

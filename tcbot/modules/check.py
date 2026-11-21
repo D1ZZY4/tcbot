@@ -131,7 +131,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     fname = user.first_name or str(user.id)
 
     # * No identity.classify() call: executor == target always yields
-    # * kind="self", so its founder/admin branches could never fire;
+    # * kind="self", so its owner/admin branches could never fire;
     # * user_role below covers staff. No owner-ID fetch either: nothing
     # * below uses it.
     user_role, ban = await asyncio.gather(
@@ -184,7 +184,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log_label=f"checkme admin for user {user.id}",
         )
         return
-    if user_role in ("developer", "tester"):
+    if user_role in ("developer", "moderator"):
         role_label = db.users_roles.role_label(user_role)
         await safe_reply(
             msg,
