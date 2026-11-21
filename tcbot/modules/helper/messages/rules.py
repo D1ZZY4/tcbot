@@ -10,8 +10,17 @@ import hashlib
 from typing import Any
 
 from tcbot import database as db
-from tcbot.utils.formatter import bold, esc
-from tcbot.utils.i18n import t
+from tcbot.modules.helper.messages import rich
+from tcbot.utils.formatter import (
+    BULLET,
+    SECTION_RULE,
+    bold,
+    bullet_list,
+    code,
+    esc,
+    section,
+)
+from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 
 # * Telegram accepts 4096 UTF-16 units in a message; stay below it so the
@@ -80,9 +89,10 @@ def render_channel(
 ) -> list[tuple[str, int, str]]:
     """Render channel parts as ``(category, part_index, text)``.
 
-    Content is escaped here and never by the editor, so staff cannot inject
-    MarkdownV2. Each part carries the final text whose hash the publication
-    slot records.
+    Every value is escaped here and never by the editor, so staff cannot
+    inject MarkdownV2. ``published_at`` is a raw timestamp; ``fmt_dt_raw``
+    produces it and this renderer owns the escaping. Each part carries the
+    final text whose hash the publication slot records.
     """
     ordered = sorted(
         _grouped(items).items(),
@@ -93,10 +103,10 @@ def render_channel(
     result: list[tuple[str, int, str]] = []
     footer = ""
     if ordered:
-        footer = f"\n{esc(f'v{version_number}')} - {esc(published_at)}"
+        footer = esc(f"\nv{version_number} - {published_at}")
     for category, category_items in ordered:
         lines = [
-            f"{esc(f'{number}.')} {bold(esc(str(item['title'])))}\n{esc(str(item['body']))}"
+            f"{esc(f'{number}.')} {bold(str(item['title']))}\n{esc(str(item['body']))}"
             + (
                 f"\n{esc(str(item['reference_url']))}"
                 if item.get("reference_url")
@@ -118,7 +128,7 @@ def render_channel(
         chunks = split_utf16(body, budget)
         for index, chunk in enumerate(chunks):
             marker = f" ({index + 1}/{len(chunks)})" if len(chunks) > 1 else ""
-            text = f"{bold(esc(category))}{marker}\n{chunk}"
+            text = f"{bold(category)}{esc(marker)}\n{chunk}"
             if index == len(chunks) - 1:
                 text += footer
             result.append((category, index, text))
@@ -134,28 +144,28 @@ async def editor_panel(
     set_doc: dict[str, Any], version: dict[str, Any], locale: str | None
 ) -> str:
     """Render the editor panel text."""
-    header = esc(t("button.manage_rules", locale, plain=True))
+    header = t("button.manage_rules", locale, plain=True)
     body = t(
         "rules.editor.panel",
         locale,
-        name=esc(str(set_doc.get("name", "Rules"))),
-        status=esc(str(version.get("status", "draft"))),
-        count=len(version.get("items", [])),
+        name=Safe(code(str(set_doc.get("name", "Rules")))),
+        status=Safe(code(str(version.get("status", "draft")))),
+        count=Safe(code(str(len(version.get("items", []))))),
     )
-    text = f"{bold(header)}\n{body}"
+    text = section(header, bullet_list(body.splitlines()))
     try:
         counts = await db.rules_db.status_counts(int(set_doc["id"]))
         acks = 0
         if version.get("status") == "published":
             acks = await db.rules_db.acknowledgement_count(int(version["id"]))
-        text += "\n" + t(
+        text += f"\n{SECTION_RULE}\n" + t(
             "rules.editor.status",
             locale,
-            synced=counts.get("synced", 0),
-            failed=counts.get("failed", 0),
-            missing=counts.get("missing", 0),
-            retired=counts.get("retired", 0),
-            acks=acks,
+            synced=Safe(code(str(counts.get("synced", 0)))),
+            failed=Safe(code(str(counts.get("failed", 0)))),
+            missing=Safe(code(str(counts.get("missing", 0)))),
+            retired=Safe(code(str(counts.get("retired", 0)))),
+            acks=Safe(code(str(acks))),
         )
     except Exception:
         log.debug("Rules channel status lookup failed")
@@ -164,17 +174,17 @@ async def editor_panel(
 
 def category_list(categories: list[dict[str, Any]], locale: str | None) -> str:
     """Render the category list body."""
-    lines = [bold(esc("Categories"))]
-    lines.extend(f"- {esc(str(cat['title']))}" for cat in categories)
-    return "\n".join(lines)
+    lines = [f"{BULLET} {esc(str(cat['title']))}" for cat in categories]
+    return section(t("rules.editor.categories", locale, plain=True), "\n".join(lines))
 
 
 def item_list(items: list[dict[str, Any]], locale: str | None) -> str:
     """Render the item list of one category."""
-    lines = [bold(esc("Items"))]
-    for number, item in enumerate(items, start=1):
-        lines.append(f"{number}. {esc(str(item['title']))}")
-    return "\n".join(lines)
+    lines = [
+        f"{esc(str(number))}\\. {esc(str(item['title']))}"
+        for number, item in enumerate(items, start=1)
+    ]
+    return section(t("rules.editor.items", locale, plain=True), "\n".join(lines))
 
 
 async def preview(items: list[dict[str, Any]], locale: str | None) -> str:
@@ -198,9 +208,39 @@ def category_view(
         return f"{header}\n\n{t('rules.menu.no_rules', locale)}"
     lines = []
     for number, item in enumerate(items, start=1):
-        lines.append(f"{number}. {esc(str(item['title']))}")
+        lines.append(f"{esc(str(number))}\\. {esc(str(item['title']))}")
         lines.append(esc(str(item["body"])))
     return f"{header}\n\n" + "\n".join(lines)
+
+
+def rich_category_view(
+    category: str, items: list[dict[str, Any]], locale: str | None
+) -> dict[str, Any]:
+    """Build a rich-message category view with a real table.
+
+    The read-only category menu is the one surface where a table is clearly
+    better than a flat MarkdownV2 list: each rule has a number, a title, and
+    a body. It is sent as an InputRichMessage through PTB.
+    """
+    heading_text = t("rules.menu.category", locale, category=category)
+    if not items:
+        return rich.html_message(
+            rich.heading(heading_text),
+            rich.paragraph(t("rules.menu.no_rules", locale)),
+        )
+    headers = [
+        t("rules.rich.number", locale, plain=True),
+        t("rules.rich.rule", locale, plain=True),
+    ]
+    rows: list[list[str]] = []
+    for number, item in enumerate(items, start=1):
+        rows.append(
+            [str(number), f"{rich.bold(item['title'])}\n{rich.esc(item['body'])}"]
+        )
+    return rich.html_message(
+        rich.heading(heading_text),
+        rich.table(headers, rows, raw_cells=True, striped=True),
+    )
 
 
 def selected_summary(titles: list[str], note: str | None, locale: str | None) -> str:

@@ -24,6 +24,17 @@ def _item(item_id: int, category: str = "Conduct", *, order: int = 1) -> dict:
     }
 
 
+def test_rich_category_view_uses_a_real_table() -> None:
+    """The public category menu can render as a rich message with a table."""
+    payload = rules_msg.rich_category_view("Conduct", [_item(1)], "en-US")
+    assert set(payload) == {"html"}
+    assert "<h2>Rules: Conduct</h2>" in payload["html"]
+    assert "<table bordered striped>" in payload["html"]
+    assert "<th>No</th>" in payload["html"]
+    assert "<td>1</td>" in payload["html"]
+    assert "<b>Rule 1</b>" in payload["html"]
+
+
 def test_utf16_units_count_astral_characters_twice() -> None:
     """UTF-16 length counts an astral character as two code units."""
     assert rules_msg.utf16_len("abc") == 3
@@ -51,6 +62,24 @@ def test_render_channel_escapes_and_numbers_items() -> None:
     assert "1\\. " in parts[0][2]
     assert "2\\. " in parts[0][2]
     assert "v3" in parts[0][2]
+
+
+def test_render_channel_escapes_each_value_once() -> None:
+    """Punctuation in titles and the footer shows one escape, not two."""
+    item = _item(1, category="FAQ_v2")
+    item["title"] = "Rule_1"
+    item["body"] = "Body_1"
+    parts = rules_msg.render_channel(
+        [item],
+        version_number=2,
+        published_at="22-11-2026 | 14:30",
+    )
+    text = parts[0][2]
+    assert "*Rule\\_1*" in text
+    assert "*FAQ\\_v2*" in text
+    assert "Body\\_1" in text
+    assert "v2 \\- 22\\-11\\-2026 \\| 14:30" in text
+    assert "\\\\_" not in text
 
 
 def test_content_hash_changes_with_text() -> None:

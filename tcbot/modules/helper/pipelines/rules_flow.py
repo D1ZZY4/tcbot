@@ -31,6 +31,7 @@ from tcbot.modules.helper.messages import rules as rules_msg
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
+from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -376,16 +377,24 @@ def build_rules_conv() -> ConversationHandler:
         ],
         states={
             WAITING_CATEGORY_TITLE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, rules_editor.on_text)
+                MessageHandler(
+                    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, rules_editor.on_text
+                )
             ],
             WAITING_ITEM_TITLE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, rules_editor.on_text)
+                MessageHandler(
+                    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, rules_editor.on_text
+                )
             ],
             WAITING_ITEM_BODY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, rules_editor.on_text)
+                MessageHandler(
+                    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, rules_editor.on_text
+                )
             ],
             WAITING_ITEM_URL: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, rules_editor.on_text)
+                MessageHandler(
+                    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, rules_editor.on_text
+                )
             ],
             WAITING_CONFIRM_DISCARD: [
                 CallbackQueryHandler(

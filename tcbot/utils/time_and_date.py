@@ -28,15 +28,24 @@ def to_utc(dt: datetime) -> datetime:
     return dt.astimezone(UTC)
 
 
+def fmt_dt_raw(dt: datetime) -> str:
+    """Format dt as DD-MM-YYYY | HH:MM in UTC, without MarkdownV2 escaping.
+
+    Renderers that escape the whole message themselves use this variant, so
+    the separators are not escaped twice. An aware value in another offset is
+    converted to UTC first.
+    """
+    return to_utc(dt).strftime("%d-%m-%Y | %H:%M")
+
+
 def fmt_dt(dt: datetime) -> str:
     """Format dt as DD-MM-YYYY | HH:MM in UTC, escaped for MarkdownV2 text.
 
     Every caller embeds the result in a MarkdownV2 message, so the
     ``-`` and ``|`` separators come back pre-escaped from this single
-    source instead of at each call site. An aware value in another offset
-    is converted to UTC first; only the label is guaranteed otherwise.
+    source instead of at each call site.
     """
-    return esc(to_utc(dt).strftime("%d-%m-%Y | %H:%M"))
+    return esc(fmt_dt_raw(dt))
 
 
 # ──────────────────────── Measurement Helpers ──────────────────────── #

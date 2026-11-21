@@ -2,6 +2,8 @@
 # Templates stay raw; the engine escapes MarkdownV2 at render time.
 
 [editor]
+categories = "Categories"
+items = "Items"
 panel = "Rules editor\nSet: {name}\nStatus: {status}\nItems: {count}"
 ask_category = "Send the category title."
 ask_title = "Send the item title."
@@ -24,6 +26,10 @@ empty = "There are no published rules yet."
 category = "Rules: {category}"
 no_rules = "No rules in this category."
 preview = "Preview - not published yet."
+
+[rich]
+number = "No"
+rule = "Rule"
 
 [picker]
 prompt = "Select the rules that were broken. You can choose more than one."

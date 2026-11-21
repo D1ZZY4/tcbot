@@ -27,6 +27,7 @@ from tcbot.modules.helper.keyboards import reason_step_kb
 from tcbot.modules.helper.keyboards import rules as rules_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_reply
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines import rules_step
 from tcbot.modules.helper.pipelines.proof_flow import (
     PROOF_MEDIA_FILTER,
@@ -203,10 +204,11 @@ class _FlowBase:
         scope = flow_scope(ctx, update)
         chat_id = scope.get(self._prompt_chat_key)
         message_id = scope.get(self._prompt_id_key)
+        styled = apply_style(text)
         try:
             if chat_id is not None and message_id is not None:
                 await ctx.bot.edit_message_text(
-                    text,
+                    styled,
                     chat_id=chat_id,
                     message_id=message_id,
                     parse_mode="MarkdownV2",
@@ -216,7 +218,9 @@ class _FlowBase:
                 msg = update.effective_message
                 if msg is None:
                     return False
-                await msg.reply_text(text, parse_mode="MarkdownV2", reply_markup=markup)
+                await msg.reply_text(
+                    styled, parse_mode="MarkdownV2", reply_markup=markup
+                )
             return True
         except Exception as exc:
             log.debug("%s prompt edit failed: %s", self.action, exc)
@@ -523,7 +527,7 @@ class _ReasonStepMixin(_FlowBase):
         results = await asyncio.gather(
             q.answer(),
             q.edit_message_text(
-                prompt_txt,
+                apply_style(prompt_txt),
                 parse_mode="MarkdownV2",
                 reply_markup=self.proof.keyboard(locale),
             ),
@@ -649,13 +653,13 @@ class _RulesStepMixin(_FlowBase):
             await self._ignore_stale_callback(update)
             return None
         scope = flow_scope(ctx, update)
+        locale = await locale_for_update(update)
         if not scope.get(self._rules_key) and not scope.get(self._rules_note_key):
             await q.answer(
-                t("rules.picker.require_selection", None, plain=True), show_alert=True
+                t("rules.picker.require_selection", locale, plain=True), show_alert=True
             )
             return WAITING_RULES
         await q.answer()
-        locale = await locale_for_update(update)
         prompt_txt = self.proof.step_prompt(
             self._get_target(scope, locale),
             self.action,
@@ -679,7 +683,7 @@ class _RulesStepMixin(_FlowBase):
         if msg is not None:
             await safe_reply(
                 msg,
-                t("rules.picker.ask_note", None, plain=True),
+                t("rules.picker.ask_note", await locale_for_update(update), plain=True),
                 log_label=f"{self.action} rules-note",
                 parse_mode=None,
             )
@@ -692,17 +696,22 @@ class _RulesStepMixin(_FlowBase):
         if msg is None or not msg.text:
             return WAITING_RULES_NOTE
         note = msg.text.strip()
+        locale = await locale_for_update(update)
         if not note or len(note) > MAX_RULES_NOTE_LEN:
             await safe_reply(
                 msg,
-                t("rules.picker.bad_note", None, limit=MAX_RULES_NOTE_LEN, plain=True),
+                t(
+                    "rules.picker.bad_note",
+                    locale,
+                    limit=MAX_RULES_NOTE_LEN,
+                    plain=True,
+                ),
                 log_label=f"{self.action} rules-note-limit",
                 parse_mode=None,
             )
             return WAITING_RULES_NOTE
         scope = flow_scope(ctx, update)
         scope[self._rules_note_key] = note
-        locale = await locale_for_update(update)
         prompt_txt = self.proof.step_prompt(
             self._get_target(scope, locale),
             self.action,

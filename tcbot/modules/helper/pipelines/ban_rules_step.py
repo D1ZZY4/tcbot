@@ -26,6 +26,7 @@ from tcbot import database as db
 from tcbot.modules.helper.keyboards import rules as rules_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply
+from tcbot.modules.helper.messages.rich import apply_style
 from tcbot.modules.helper.pipelines import rules_step
 from tcbot.modules.helper.pipelines.ban_confirmation import stale_ban_callback
 from tcbot.modules.helper.pipelines.ban_flow import (
@@ -38,6 +39,7 @@ from tcbot.modules.helper.pipelines.reason_flow import MAX_RULES_NOTE_LEN
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
+from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 if TYPE_CHECKING:
     from telegram import InlineKeyboardMarkup
@@ -62,7 +64,7 @@ async def _render(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if q is not None:
         try:
             await q.edit_message_text(
-                rules_step.picker_text(items, selected, locale),
+                apply_style(rules_step.picker_text(items, selected, locale)),
                 parse_mode="MarkdownV2",
                 reply_markup=rules_kb.picker_kb(items, selected, locale),
             )
@@ -71,7 +73,7 @@ async def _render(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     elif update.effective_message is not None:
         try:
             await update.effective_message.reply_text(
-                rules_step.picker_text(items, selected, locale),
+                apply_style(rules_step.picker_text(items, selected, locale)),
                 parse_mode="MarkdownV2",
                 reply_markup=rules_kb.picker_kb(items, selected, locale),
             )
@@ -108,11 +110,11 @@ async def _show_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         if q is not None:
             await q.edit_message_text(
-                text, parse_mode="MarkdownV2", reply_markup=markup
+                apply_style(text), parse_mode="MarkdownV2", reply_markup=markup
             )
         elif update.effective_message is not None:
             sent = await update.effective_message.reply_text(
-                text, parse_mode="MarkdownV2", reply_markup=markup
+                apply_style(text), parse_mode="MarkdownV2", reply_markup=markup
             )
             scope["ban_prompt_msg_id"] = sent.message_id
             scope["ban_prompt_chat_id"] = update.effective_message.chat.id
@@ -167,7 +169,12 @@ async def on_ban_rules_done(
         return None
     if not scope.get("ban_rules") and not scope.get("ban_rules_note"):
         await q.answer(
-            t("rules.picker.require_selection", None, plain=True), show_alert=True
+            t(
+                "rules.picker.require_selection",
+                await locale_for_update(update),
+                plain=True,
+            ),
+            show_alert=True,
         )
         return WAITING_BAN_RULES
     await q.answer()
@@ -187,7 +194,7 @@ async def on_ban_rules_other(
     if update.effective_message is not None:
         await safe_reply(
             update.effective_message,
-            t("rules.picker.ask_note", None, plain=True),
+            t("rules.picker.ask_note", await locale_for_update(update), plain=True),
             parse_mode=None,
         )
     return WAITING_BAN_RULES_NOTE
@@ -202,7 +209,12 @@ async def on_ban_rules_note(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
     if not note or len(note) > MAX_RULES_NOTE_LEN:
         await safe_reply(
             msg,
-            t("rules.picker.bad_note", None, limit=MAX_RULES_NOTE_LEN, plain=True),
+            t(
+                "rules.picker.bad_note",
+                await locale_for_update(update),
+                limit=MAX_RULES_NOTE_LEN,
+                plain=True,
+            ),
             parse_mode=None,
         )
         return WAITING_BAN_RULES_NOTE
@@ -219,6 +231,6 @@ BAN_RULES_STATES: dict[int, list[Any]] = {
         CallbackQueryHandler(on_cancel_proof, pattern=r"^rules_step:cancel$"),
     ],
     WAITING_BAN_RULES_NOTE: [
-        MessageHandler(filters.TEXT & ~filters.COMMAND, on_ban_rules_note)
+        MessageHandler(filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, on_ban_rules_note)
     ],
 }

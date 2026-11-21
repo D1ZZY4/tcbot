@@ -2,6 +2,8 @@
 # Template tetap apa adanya; mesin escape MarkdownV2 saat render.
 
 [editor]
+categories = "Kategori"
+items = "Item"
 panel = "Editor aturan\nSet: {name}\nStatus: {status}\nItem: {count}"
 ask_category = "Kirim judul kategori."
 ask_title = "Kirim judul item."
@@ -24,6 +26,10 @@ empty = "Belum ada aturan yang diterbitkan."
 category = "Aturan: {category}"
 no_rules = "Tidak ada aturan di kategori ini."
 preview = "Pratinjau - belum diterbitkan."
+
+[rich]
+number = "No"
+rule = "Aturan"
 
 [picker]
 prompt = "Pilih aturan yang dilanggar. Bisa lebih dari satu."

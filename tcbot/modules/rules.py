@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
@@ -16,6 +16,7 @@ from tcbot.modules.helper import decorators
 from tcbot.modules.helper.keyboards import rules as rules_kb
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import rich as rich_msg
 from tcbot.modules.helper.messages import rules as rules_msg
 from tcbot.modules.helper.pipelines.rules_flow import (
     WAITING_CATEGORY_TITLE,
@@ -27,6 +28,7 @@ from tcbot.modules.helper.pipelines.rules_publish import publish_rules
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
+from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -43,9 +45,9 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
         name=t("button.rules", locale, plain=True),
         overview=t("rules.menu.body", locale, community=cfg.community_name),
         commands="/tcrules, /rules",
-        who=t("common.perm.staff_only", locale, plain=True),
+        who=replies.perm_staff_only(locale, plain=False),
         where=t("common.context.bot_or_group", locale),
-        what=t("rules.menu.rules", locale, plain=True),
+        what=t("rules.menu.rules", locale),
         target=False,
     )
 
@@ -122,18 +124,20 @@ async def _acknowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     if user is None or user.id != member_id:
         await query.answer(
-            t("rules.ack.wrong_member", None, plain=True), show_alert=True
+            t("rules.ack.wrong_member", await locale_for_update(update), plain=True),
+            show_alert=True,
         )
         return
+    locale = await locale_for_update(update)
     current = await db.rules_db.published_rules()
     if current is None or int(current["version"]["id"]) != version_id:
-        await query.answer(t("rules.ack.outdated", None, plain=True), show_alert=True)
+        await query.answer(t("rules.ack.outdated", locale, plain=True), show_alert=True)
         return
     if not current["set"].get("requires_acknowledgement"):
-        await query.answer(t("rules.ack.disabled", None, plain=True), show_alert=True)
+        await query.answer(t("rules.ack.disabled", locale, plain=True), show_alert=True)
         return
     if await db.rules_db.has_acknowledged(version_id, user.id):
-        await query.answer(t("rules.ack.already", None, plain=True), show_alert=True)
+        await query.answer(t("rules.ack.already", locale, plain=True), show_alert=True)
         return
     await db.rules_db.record_acknowledgement(
         version_id,
@@ -141,7 +145,7 @@ async def _acknowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         getattr(query.message, "chat_id", None),
         None,
     )
-    await query.answer(t("rules.ack.recorded", None, plain=True), show_alert=True)
+    await query.answer(t("rules.ack.recorded", locale, plain=True), show_alert=True)
 
 
 async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -149,22 +153,34 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     if query is None or query.data is None:
         return
+    await query.answer()
     key = query.data.split(":", 1)[-1]
     published = await db.rules_db.published_rules()
     if published is None:
-        await query.answer()
         return
     items = [item for item in published["items"] if item["category_key"] == key]
     category = next(
         (cat["title"] for cat in published["categories"] if cat["category_key"] == key),
         key,
     )
-    text = rules_msg.category_view(
-        str(category), items, await locale_for_update(update)
-    )
-    await safe_edit_cb(
-        query, text, parse_mode="MarkdownV2", reply_markup=rules_kb.category_back_kb()
-    )
+    locale = await locale_for_update(update)
+    text = rules_msg.category_view(str(category), items, locale)
+    markup = rules_kb.category_back_kb()
+    message = query.message
+    if message is not None and getattr(message, "chat", None) is not None:
+        try:
+            await rich_msg.edit_rich(
+                ctx.bot,
+                message.chat.id,
+                message.message_id,
+                rules_msg.rich_category_view(str(category), items, locale),
+                reply_markup=markup,
+                fallback_text=text,
+            )
+            return
+        except Exception as exc:
+            log.debug("Rich category view failed, using MarkdownV2: %s", exc)
+    await safe_edit_cb(query, text, parse_mode="MarkdownV2", reply_markup=markup)
 
 
 async def on_rules_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -172,6 +188,7 @@ async def on_rules_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     if query is None:
         return
+    await query.answer()
     text = rules_msg.rules_menu(await locale_for_update(update), cfg.community_name)
     published = await db.rules_db.published_rules()
     markup = rules_kb.rules_menu_kb(
@@ -209,6 +226,7 @@ async def on_rules_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     if query is None:
         return
     await query.answer()
+    locale = await locale_for_update(update)
     rule_set = await db.rules_db.get_or_create_community_set()
     draft = await db.rules_db.open_draft(int(rule_set["id"]), query.from_user.id)
     try:
@@ -218,7 +236,7 @@ async def on_rules_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     except Exception as exc:
         await safe_edit_cb(
             query,
-            t("rules.publish.error", None, error=str(exc)),
+            t("rules.publish.error", locale, error=str(exc)),
             parse_mode="MarkdownV2",
         )
         return
@@ -226,7 +244,7 @@ async def on_rules_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         query,
         t(
             "rules.publish.result",
-            None,
+            locale,
             synced=result["synced"],
             failed=len(result["failed"]),
         ),
@@ -276,9 +294,12 @@ async def on_rules_cat_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     )
 
 
+_TCRULES_CMDS = build_prefixed_filters("tcrules")
+_RULES_CMDS = build_prefixed_filters("rules")
+
 __handlers__ = [
-    CommandHandler("tcrules", cmd_tcrules),
-    CommandHandler("rules", cmd_rules),
+    MessageHandler(_TCRULES_CMDS, cmd_tcrules),
+    MessageHandler(_RULES_CMDS, cmd_rules),
     CallbackQueryHandler(_acknowledge, pattern=r"^rules_ack:\d+:\d+$"),
     CallbackQueryHandler(on_rules_show, pattern=r"^rules_show:"),
     CallbackQueryHandler(on_rules_menu, pattern=r"^rules_menu$"),

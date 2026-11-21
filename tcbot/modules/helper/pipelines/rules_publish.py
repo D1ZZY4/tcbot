@@ -12,7 +12,7 @@ from tcbot import cfg
 from tcbot.database import rules_db
 from tcbot.modules.helper.messages.rules import content_hash, render_channel
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import fmt_dt, utc_now
+from tcbot.utils.time_and_date import fmt_dt_raw, utc_now
 
 log = get_logger(__name__)
 
@@ -39,7 +39,7 @@ async def publish_rules(
         parts = render_channel(
             items,
             version_number=version_number,
-            published_at=fmt_dt(utc_now()),
+            published_at=fmt_dt_raw(utc_now()),
         )
         await rules_db.promote_version(version_id, user_id)
 
