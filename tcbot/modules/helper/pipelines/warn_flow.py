@@ -272,7 +272,7 @@ async def execute_warn(
             executor_fname=admin_fname,
         )
         if enforced_role == "owner":
-            # * The target was promoted to Founder after the staff exemption
+            # * The target was promoted to Owner after the staff exemption
             # * read. The role is protected, so the automatic ban must not
             # * proceed.
             await safe_reply(
@@ -281,9 +281,9 @@ async def execute_warn(
                     "warnings.exempt.failed",
                     locale,
                     user=Safe(user_ref(target_id, target_name)),
-                    role="Founder",
+                    role=db.users_roles.role_label("owner"),
                 ),
-                log_label="Warn threshold Founder protection",
+                log_label="Warn threshold Owner protection",
                 reply_markup=proof_kb,
             )
             return

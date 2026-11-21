@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import importlib
 import re
@@ -166,6 +167,43 @@ def test_no_catalog_key_is_orphaned() -> None:
                 continue
             orphans.append(f"{locale}:{key}")
     assert not orphans, "unused catalog entries: " + ", ".join(sorted(orphans))
+
+
+def test_every_literal_translation_key_exists() -> None:
+    """Reject a literal key passed to ``t()`` that no catalog defines.
+
+    The orphan check guards catalog entries that code no longer uses. This
+    guards the opposite direction: a renamed or mistyped key such as a
+    leftover ``stats.roster.founder`` after the role rename compiles, passes
+    the orphan check, and only surfaces as a raw ``[key]`` marker in a user
+    message at runtime. Keys built at runtime are not literals and are left
+    to the rendering tests.
+    """
+    catalog = _catalog()
+    defined = set(catalog[DEFAULT_LOCALE])
+    source_root = ROOT.parent / "tcbot"
+    missing: set[tuple[str, str, int]] = set()
+    for path in sorted(source_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            is_t = (isinstance(func, ast.Name) and func.id == "t") or (
+                isinstance(func, ast.Attribute) and func.attr == "t"
+            )
+            if not is_t or not node.args:
+                continue
+            first = node.args[0]
+            if (
+                isinstance(first, ast.Constant)
+                and isinstance(first.value, str)
+                and first.value not in defined
+            ):
+                missing.add((str(path), str(first.value), node.lineno))
+    assert not missing, "undefined translation keys: " + ", ".join(
+        f"{key} ({path}:{line})" for path, key, line in sorted(missing)
+    )
 
 
 # ──────────────────────── Catalog loading ───────────────────────── #

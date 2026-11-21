@@ -250,6 +250,10 @@ def test_staff_roster_resolves_live_on_numeric_fallback(
     assert "Sang Kucing" in text
     admins_section = text.split("Admins")[1].split("Developers")[0]
     assert "- 8679231509" not in admins_section
+    # * A stale role key used to render as a raw "[stats.roster.founder]"
+    # * marker and log an error; the renamed catalog key is "owner".
+    assert "Owner" in text
+    assert "stats.roster.founder" not in text.replace("\\", "")
 
 
 def test_circuit_decay_resets_lifetime_count() -> None:

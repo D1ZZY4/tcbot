@@ -283,7 +283,7 @@ class OverviewViews:
             + "\n"
         ]
         if owner_idx is not None:
-            lines.append(t("stats.roster.founder", locale))
+            lines.append(t("stats.roster.owner", locale))
             owner_fname, owner_uname = mention_data_map[owner_id_int]
             lines.append(
                 t(
