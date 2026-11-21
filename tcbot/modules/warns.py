@@ -43,7 +43,12 @@ log = get_logger(__name__)
 
 
 # * user_data keys for one warn flow; popped on prompt failure.
-_WARN_KEYS = ("warn_target_id", "warn_target_name")
+_WARN_KEYS = (
+    "warn_target_id",
+    "warn_target_name",
+    "warn_prompt_chat",
+    "warn_prompt_id",
+)
 
 
 # ────────────────────── Module & Help Message ───────────────────── #
@@ -150,13 +155,15 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if inline_reason:
         scope["warn_reason"] = inline_reason
         try:
-            await msg.reply_text(
+            prompt = await msg.reply_text(
                 proof.noted_prompt(
                     "warn", inline_reason, target_mention, locale=locale
                 ),
                 parse_mode="MarkdownV2",
                 reply_markup=proof.keyboard(locale),
             )
+            scope["warn_prompt_chat"] = msg.chat.id
+            scope["warn_prompt_id"] = prompt.message_id
         except Exception as exc:
             log.debug("cmd_warn proof-prompt reply failed: %s", exc)
             for key in (*_WARN_KEYS, "warn_reason"):
@@ -165,11 +172,13 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return WAITING_PROOF
 
     try:
-        await msg.reply_text(
+        prompt = await msg.reply_text(
             reason.prompt(target_mention, "warn", locale=locale),
             parse_mode="MarkdownV2",
             reply_markup=reason.keyboard(locale),
         )
+        scope["warn_prompt_chat"] = msg.chat.id
+        scope["warn_prompt_id"] = prompt.message_id
     except Exception as exc:
         log.debug("cmd_warn reason-prompt reply failed: %s", exc)
         for key in _WARN_KEYS:

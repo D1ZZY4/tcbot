@@ -31,6 +31,10 @@ from tcbot.modules.helper.messages import (
     safe_edit_message,
     safe_reply,
 )
+from tcbot.modules.helper.pipelines.ban_confirmation import (
+    on_ban_update_continue,
+    stale_ban_callback,
+)
 from tcbot.modules.helper.pipelines.demote_flow import (
     demote_before_enforcement,
 )
@@ -724,39 +728,6 @@ def proof_prompt_content(
     )
 
 
-# ─────────────────────── Re-ban confirmation ────────────────────── #
-
-
-async def on_ban_update_continue(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-    """Proceed from the re-ban confirmation to proof collection."""
-    q = update.callback_query
-    msg = update.effective_message
-    if q is None or msg is None or ctx.user_data is None:
-        return ConversationHandler.END
-    scope = flow_scope(ctx, update)
-    if not isinstance(msg, Message):
-        for key in BAN_USER_DATA_KEYS:
-            scope.pop(key, None)
-        return ConversationHandler.END
-    await q.answer()
-    tapper = update.effective_user
-    if tapper is None or not await guards.recheck_executor_rank(
-        msg, tapper.id, min_role="developer"
-    ):
-        for key in BAN_USER_DATA_KEYS:
-            scope.pop(key, None)
-        return ConversationHandler.END
-    target_id = int(scope.get("ban_target_id", 0) or 0)
-    reason = str(scope.get("ban_reason") or "")
-    if not target_id or not reason:
-        return ConversationHandler.END
-    # * The demote runs at enforcement time while the proof step stays
-    # * cancelable. Late import avoids a cycle with the rules step.
-    from tcbot.modules.helper.pipelines.ban_rules_step import show_ban_rules  # noqa: PLC0415
-
-    return await show_ban_rules(update, ctx)
-
-
 # ──────────────────── Proof collection handlers ─────────────────── #
 
 
@@ -796,11 +767,13 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
     return WAITING_PROOF
 
 
-async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int | None:
     """Flush collected proof immediately when the moderator taps Done."""
     q = update.callback_query
     if q is None or ctx.user_data is None:
         return ConversationHandler.END
+    if await stale_ban_callback(update, ctx):
+        return None
     chat = update.effective_chat
     user = update.effective_user
     key = (chat.id, user.id) if chat is not None and user is not None else None
@@ -895,12 +868,14 @@ async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     return WAITING_PROOF
 
 
-async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int | None:
     """Acknowledge the cancel button and end the proof-collection conversation."""
     q = update.callback_query
     if q is None:
         return ConversationHandler.END
     scope = flow_scope(ctx, update)
+    if await stale_ban_callback(update, ctx):
+        return None
     # * Once flushing has started the ban is executing; cancelling mid-
     # * _execute_ban would cancel the in-flight fan-out (partial ban, DB
     # * written, no summary). Ignore the tap and let execution finish.

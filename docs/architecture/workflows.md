@@ -18,6 +18,7 @@ Conversation and multi-step logic lives in `tcbot/modules/helper/pipelines/`. Ea
 - Workflow files own state constants, `ConversationHandler` factories, and execution adapters.
 - Shared reason/proof logic belongs in `reason_flow.py` and `proof_flow.py` (one module each, under the same budget rule).
 - Callback handlers must call `await q.answer()` before doing further work.
+- Conversations are keyed per `(chat, user)`, so a button left on an old prompt can reach a newer flow. Moderation callbacks record the prompt message id in the flow scope and use `scope.callback_is_current()` to ignore stale taps; a mismatch is answered without changing the live flow.
 - Timeout handling (`cfg.album_debounce`) is a per-action setting; the bot does not use job-queue or `ConversationHandler.TIMEOUT` states. Conversations end via escape commands, cancel, or explicit fallback handlers (e.g. `on_proof_timeout` in `ban_flow.py` fires when the moderator sends a command during the proof window).
 
 ## Shared proof builder: `proof_flow.py`
@@ -99,7 +100,7 @@ Ban differs from the shared reason flow:
 
 - The reason must be supplied in the command message.
 - Proof is required by UI (`skip_allowed=False`).
-- An active ban triggers a confirmation card (`WAITING_UPDATE_CONFIRM` with `View Log` / `View Proof` URLs and `Cancel` / `Continue`) before proof collection.
+- An active ban triggers a confirmation card (`WAITING_UPDATE_CONFIRM` with `View Log` / `View Proof` URLs and `Cancel` / `Continue`) before proof collection. Its handler and the ban callback freshness guard live in `ban_confirmation.py`, kept separate so `ban_flow.py` stays within the file budget.
 - Proof media accumulate in one session keyed by `(chat_id, user_id)` and flush on `Done`, after `cfg.album_debounce` seconds of silence, or at the 60 s collection cap; the flush claim is a synchronous check-and-set so Done and the timer can never double-execute.
 - `_execute_ban()` uploads proof, then writes the ban decision and posts the audit log (`_execute_ban_record` returns `(log_msg_id, db_ok, canonical_ban_id, enforcement_run_id)`). The decision and its `apply` run land together; a failed group is retried by the enforcement worker. When the database write fails the flow aborts before any run is delivered so no group is touched. Only after the record lands does it deliver the run, edit the prompt summary, and DM the appeal link.
 

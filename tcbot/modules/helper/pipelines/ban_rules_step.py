@@ -26,9 +26,11 @@ from tcbot import database as db
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_reply
 from tcbot.modules.helper.pipelines import rules_step
+from tcbot.modules.helper.pipelines.ban_confirmation import stale_ban_callback
 from tcbot.modules.helper.pipelines.ban_flow import (
     BAN_USER_DATA_KEYS,
     WAITING_PROOF,
+    on_cancel_proof,
     proof_prompt_content,
 )
 from tcbot.modules.helper.pipelines.reason_flow import MAX_RULES_NOTE_LEN
@@ -121,11 +123,15 @@ async def _show_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return WAITING_PROOF
 
 
-async def on_ban_rules_toggle(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def on_ban_rules_toggle(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> int | None:
     """Toggle one rule and redraw the picker."""
     q = update.callback_query
     if q is None or q.data is None:
         return WAITING_BAN_RULES
+    if await stale_ban_callback(update, ctx):
+        return None
     item_id = rules_step.item_id_from_callback(q.data)
     scope = flow_scope(ctx, update)
     if item_id is not None:
@@ -134,22 +140,30 @@ async def on_ban_rules_toggle(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     return await _render(update, ctx)
 
 
-async def on_ban_rules_clear(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def on_ban_rules_clear(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> int | None:
     """Clear the current selection."""
     q = update.callback_query
     if q is None:
         return WAITING_BAN_RULES
+    if await stale_ban_callback(update, ctx):
+        return None
     flow_scope(ctx, update)["ban_rules"] = []
     await q.answer()
     return await _render(update, ctx)
 
 
-async def on_ban_rules_done(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def on_ban_rules_done(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> int | None:
     """Accept a selection and continue to proof."""
     q = update.callback_query
     if q is None:
         return WAITING_BAN_RULES
     scope = flow_scope(ctx, update)
+    if await stale_ban_callback(update, ctx):
+        return None
     if not scope.get("ban_rules") and not scope.get("ban_rules_note"):
         await q.answer(
             t("rules.picker.require_selection", None, plain=True), show_alert=True
@@ -159,11 +173,15 @@ async def on_ban_rules_done(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
     return await _show_proof(update, ctx)
 
 
-async def on_ban_rules_other(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def on_ban_rules_other(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> int | None:
     """Ask for the optional Other note."""
     q = update.callback_query
     if q is None:
         return WAITING_BAN_RULES
+    if await stale_ban_callback(update, ctx):
+        return None
     await q.answer()
     if update.effective_message is not None:
         await safe_reply(
@@ -197,6 +215,7 @@ BAN_RULES_STATES: dict[int, list[Any]] = {
         CallbackQueryHandler(on_ban_rules_done, pattern=r"^rules_step:done$"),
         CallbackQueryHandler(on_ban_rules_other, pattern=r"^rules_step:other$"),
         CallbackQueryHandler(on_ban_rules_clear, pattern=r"^rules_step:clear$"),
+        CallbackQueryHandler(on_cancel_proof, pattern=r"^rules_step:cancel$"),
     ],
     WAITING_BAN_RULES_NOTE: [
         MessageHandler(filters.TEXT & ~filters.COMMAND, on_ban_rules_note)

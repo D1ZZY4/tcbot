@@ -44,10 +44,13 @@ All notable changes to this project are documented here. For workflow details, s
 - **An incident report is no longer lost when its rollover summary fails** (`tcbot/error_reporter.py`, `tests/test_error_reporter_throttle.py`): a transient failure sending the suppressed-error summary no longer discards the current report that triggered the rollover.
 - **Redis queue bound documentation matches the enforced limit** (`tcbot/database/cache/redis_io.py`): the queue comments now state that a revocation is dropped at the hard ceiling when no droppable operation can be evicted, matching the behavior the tests exercise. Behavior changes: none.
 - **Rules editor actions are re-authorized on every tap** (`tcbot/modules/rules.py`, `tcbot/modules/helper/pipelines/rules_flow.py`): category reorder, delete, rename, and draft text edits now re-check the `rules.manage` capability instead of trusting the command that opened the panel. Behavior changes: a user whose capability was revoked can no longer edit rules from an old panel.
+- **The rules picker Cancel button works in moderation flows** (`tcbot/modules/helper/pipelines/reason_flow.py`, `tcbot/modules/helper/pipelines/ban_rules_step.py`): the button sent a callback that no handler matched, so tapping it did nothing. Behavior changes: Cancel now aborts the active kick, mute, warn, or ban rules step.
+- **A stale button can no longer act on a newer moderation flow** (`tcbot/modules/helper/scope.py`, `tcbot/modules/helper/pipelines/reason_flow.py`, `tcbot/modules/helper/pipelines/ban_confirmation.py`, `tcbot/modules/warns.py`): conversations are keyed per chat and user, so a Cancel, rule picker, or Done button left on an old prompt could cancel, alter, or prematurely execute a newer action by the same moderator. Every moderation callback now records its prompt identity at entry and ignores taps from any other message. Behavior changes: taps on outdated prompts are acknowledged and discarded instead of changing the active action.
 
 ### Documentation
 
 - **Current guides use the shipped role vocabulary** (`README.md`, `AGENTS.md`, `replit.md`, `docs/architecture/helpers.md`): Owner and Moderator replace the former Founder and Tester names in live documentation. Historical release notes are unchanged.
+- **Architecture guides describe the new callback guard and cache marker** (`docs/architecture/workflows.md`, `docs/architecture/database.md`): the workflow guide explains stale-tap rejection and the ban confirmation module, and the database guide explains the local pending-invalidation marker.
 
 ## Releases
 

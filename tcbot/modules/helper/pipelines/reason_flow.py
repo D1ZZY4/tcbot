@@ -31,7 +31,11 @@ from tcbot.modules.helper.pipelines.proof_flow import (
     PROOF_MEDIA_FILTER,
     BuildProof,
 )
-from tcbot.modules.helper.scope import clear_flow_scope, flow_scope
+from tcbot.modules.helper.scope import (
+    callback_is_current,
+    clear_flow_scope,
+    flow_scope,
+)
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.formatter import bold, esc, user_ref
 from tcbot.utils.i18n import Safe, t
@@ -229,6 +233,25 @@ class _FlowBase:
             return ConversationHandler.END
         return WAITING_PROOF
 
+    def _callback_is_live(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> bool:
+        """Reject a tap on a button left behind by an earlier flow."""
+        return callback_is_current(
+            update,
+            flow_scope(ctx, update),
+            chat_key=self._prompt_chat_key,
+            message_key=self._prompt_id_key,
+        )
+
+    async def _ignore_stale_callback(self, update: Update) -> None:
+        """Acknowledge a stale tap without touching the current flow."""
+        query = update.callback_query
+        if query is None:
+            return
+        try:
+            await query.answer()
+        except Exception as exc:
+            log.debug("%s stale callback answer failed: %s", self.action, exc)
+
     def _clear_scope(self, ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> None:
         """Remove all action keys from the conversation scope.
 
@@ -265,10 +288,15 @@ class _FlowBase:
         self._clear_scope(ctx, update)
         return False
 
-    async def _on_cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def _on_cancel(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int | None:
         q = update.callback_query
         if q is None:
             return ConversationHandler.END
+        if not self._callback_is_live(update, ctx):
+            await self._ignore_stale_callback(update)
+            return None
         self._clear_scope(ctx, update)
         locale = await locale_for_update(update)
         results = await asyncio.gather(
@@ -325,11 +353,14 @@ class _ProofStepMixin(_FlowBase):
 
     async def _on_done_proof(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    ) -> int | None:
         """Execute with everything collected once the moderator taps Done."""
         q = update.callback_query
         if q is None or ctx.user_data is None:
             return ConversationHandler.END
+        if not self._callback_is_live(update, ctx):
+            await self._ignore_stale_callback(update)
+            return None
         scope = flow_scope(ctx, update)
         locale = await locale_for_update(update)
         msgs: list = scope.get(self._proof_msgs_key, [])
@@ -376,10 +407,13 @@ class _ProofStepMixin(_FlowBase):
 
     async def _on_skip_proof(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    ) -> int | None:
         q = update.callback_query
         if q is None or ctx.user_data is None:
             return WAITING_PROOF
+        if not self._callback_is_live(update, ctx):
+            await self._ignore_stale_callback(update)
+            return None
         scope = flow_scope(ctx, update)
         if scope.get(self._exec_key):
             try:
@@ -465,10 +499,13 @@ class _ReasonStepMixin(_FlowBase):
 
     async def _on_skip_reason(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    ) -> int | None:
         q = update.callback_query
         if q is None or ctx.user_data is None:
             return WAITING_REASON
+        if not self._callback_is_live(update, ctx):
+            await self._ignore_stale_callback(update)
+            return None
         if not await self._recheck_tapper(update, ctx):
             return ConversationHandler.END
         scope = flow_scope(ctx, update)
@@ -572,10 +609,13 @@ class _RulesStepMixin(_FlowBase):
 
     async def _on_rules_toggle(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    ) -> int | None:
         q = update.callback_query
         if q is None or q.data is None:
             return WAITING_RULES
+        if not self._callback_is_live(update, ctx):
+            await self._ignore_stale_callback(update)
+            return None
         item_id = rules_step.item_id_from_callback(q.data)
         scope = flow_scope(ctx, update)
         if item_id is not None:
@@ -587,20 +627,26 @@ class _RulesStepMixin(_FlowBase):
 
     async def _on_rules_clear(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    ) -> int | None:
         q = update.callback_query
         if q is None:
             return WAITING_RULES
+        if not self._callback_is_live(update, ctx):
+            await self._ignore_stale_callback(update)
+            return None
         flow_scope(ctx, update)[self._rules_key] = []
         await q.answer()
         return await self._render_picker(update, ctx)
 
     async def _on_rules_done(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    ) -> int | None:
         q = update.callback_query
         if q is None:
             return WAITING_RULES
+        if not self._callback_is_live(update, ctx):
+            await self._ignore_stale_callback(update)
+            return None
         scope = flow_scope(ctx, update)
         if not scope.get(self._rules_key) and not scope.get(self._rules_note_key):
             await q.answer(
@@ -620,10 +666,13 @@ class _RulesStepMixin(_FlowBase):
 
     async def _on_rules_other(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    ) -> int | None:
         q = update.callback_query
         if q is None:
             return WAITING_RULES
+        if not self._callback_is_live(update, ctx):
+            await self._ignore_stale_callback(update)
+            return None
         await q.answer()
         msg = update.effective_message
         if msg is not None:
@@ -727,6 +776,7 @@ class _ModActionFlow(_ReasonStepMixin, _RulesStepMixin, _ProofStepMixin, _FlowBa
                 CallbackQueryHandler(
                     self._on_rules_clear, pattern=r"^rules_step:clear$"
                 ),
+                CallbackQueryHandler(self._on_cancel, pattern=r"^rules_step:cancel$"),
                 CallbackQueryHandler(
                     self._on_cancel, pattern=rf"^{self.action}_cancel$"
                 ),

@@ -102,3 +102,34 @@ def clear_flow_scope(
             scopes.pop(key, None)
     if not scopes:
         user_data.pop(_SCOPES_KEY, None)
+
+
+def callback_is_current(
+    update: Update,
+    scope: dict[str, Any],
+    *,
+    chat_key: str,
+    message_key: str,
+) -> bool:
+    """Return True when a callback came from the flow's live prompt message.
+
+    Conversations are keyed per (chat, user), so a button left on an old
+    prompt can be delivered to a newer flow of the same moderator. Each
+    flow records its prompt identity at entry; a callback from any other
+    message is stale and must not mutate the newer flow. When no prompt
+    identity is recorded the check stays permissive.
+    """
+    query = update.callback_query
+    if query is None:
+        return False
+    live_chat = scope.get(chat_key)
+    live_msg = scope.get(message_key)
+    if not isinstance(live_chat, int) or not isinstance(live_msg, int):
+        return True
+    message = getattr(query, "message", None)
+    if message is None:
+        return False
+    return (
+        getattr(getattr(message, "chat", None), "id", None) == live_chat
+        and getattr(message, "message_id", None) == live_msg
+    )
