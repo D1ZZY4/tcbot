@@ -280,7 +280,7 @@ The Flask keep-alive server binds to `${BIND_HOST}:${PORT}` (`BIND_HOST` default
 
 - `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `PROOFS`, `API_ID`, or `API_HASH` errors on startup: the bot fails fast on missing identity, database, evidence, or MTProto settings. Set them in `config.env` or the host secret manager.
 - PostgreSQL connection failures: check the URL, network access, the host firewall, and the credentials.
-- `GET /health` returns 503: the database, scheduler, or a circuit breaker is degraded; read the JSON body to see which one. Redis is reported as `ok`-or-`error` but does not change the status code, because the cache is optional.
+- `GET /health` returns 503: the database, scheduler, or a circuit breaker is degraded; read the JSON body to see which one. Redis is reported as `disabled`, `unknown`, `ok`, or `error` but does not change the status code, because the cache is optional.
 
 ## Development
 
@@ -301,7 +301,8 @@ git diff --check
 - [Architecture map](docs/architecture/repository-map.md): startup flow, package ownership, and service boundaries.
 - [Module breakdown](docs/architecture/modules.md): command ownership and handler registration.
 - [Database layer](docs/architecture/database.md): tables, helpers, and indexes.
-- [Workflow overview](docs/features/workflow-overview.md): user-visible moderation, appeal, and role flows.
+- [Flow overview](docs/features/flow-overview.md): user-visible moderation, appeal, and role flows.
+- [Pipelines](docs/pipelines/banning.md): every flow diagram, starting with the full system and ban flow.
 - [Project guide](AGENTS.md): contributor and maintainer rules.
 
 ## Repo Activity

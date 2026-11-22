@@ -1,297 +1,115 @@
-# Miscellaneous Modules
+# Miscellaneous modules
 
-This document inventories the modules that do not have a dedicated feature
-page: `start`, `about`, `additional`, `privacy`, `help`, `broadcast`,
-`greeting`, `maintenance`, `netspeed`, and `admins` (the promote/demote
-flows themselves live in [`roles/roles.md`](roles/roles.md),
-[`roles/promote.md`](roles/promote.md), and [`roles/demote.md`](roles/demote.md)).
+This page covers the command modules that are not part of moderation, roles,
+language, or statistics. Each module owns its handlers and help entry where
+applicable. The shared entry registration is described in
+[modules](../architecture/modules.md).
 
-For shared helpers used by these modules, see
-[`../architecture/helpers.md`](../architecture/helpers.md). For the command
-prefix system, see [`../architecture/modules.md`](../architecture/modules.md).
-For the help index and runtime utilities, see
-[`../architecture/utilities.md`](../architecture/utilities.md).
+Related pages: [flow overview](flow-overview.md) and
+[helpers](../architecture/helpers.md).
 
-Stats and language have dedicated pages:
-[`statistics.md`](statistics.md) and [`language.md`](language.md).
+## Start and main menu
 
-## Start: `start.py`
+`tcbot/modules/start.py` owns `/start` (alias none) and the main-menu callbacks.
 
-`/start` is the entry point for private chats and groups.
+- In groups it replies with a minimal message and a PM deep-link button.
+- In private chat it shows the welcome panel with `main_menu_btn`, or dispatches
+  the `about` argument.
+- Appeal deep links of the form `/start appeal_<ref>` are handled by the appeal
+  ConversationHandler, not here.
+- `back_to_start`, `menu_groups`, `menu_groups_simple`, and
+  `menu_groups_details` render the welcome and shared group panels. A failed
+  group read shows an error and keeps the keyboard.
 
-| Command | Aliases | Purpose | Access |
-|---|---|---|---|
-| `/start` | none | Show welcome menu in PM; show PM deep-link card in groups. | Anyone |
+The command uses `ratelimiter(THROTTLE_READ)`; callbacks use
+`THROTTLE_CALLBACK` and `log_execution`.
 
-Behavior:
+## Help
 
-- PM context renders `main_menu_kb` (About, Help, Additional, Privacy,
-  Language rows).
-- Group / supergroup / forum context replies with a minimal card carrying
-  `group_start_kb`: an "Open in PM" deep link (`https://t.me/<bot>?start=menu`)
-  and a direct Help button (`help_menu_group`).
-- `/start about` renders the about page without opening a conversation.
-- `/start appeal_<id>` deep links are claimed by the appeal conversation
-  handler in `appeals.py`, not by this module.
-- Callbacks: `back_to_start` returns to the main menu; `menu_groups` /
-  `menu_groups_simple` and `menu_groups_details` toggle the connected-groups
-  list render (`groups_db.active_groups()`, simple vs fully detailed).
+`tcbot/modules/help.py` owns `/help` and the help callbacks. `_builder_help(locale)`
+imports every active module and calls `get_help(locale)`, skipping modules that
+do not expose one. Topics, overviews, section labels, and keyboards are rebuilt
+per request so they follow the tapper's locale. Section order and dynamic values
+stay in Python; prose comes from the catalog.
 
-Rate limits: commands 8 per 30 s, callbacks 15 per 30 s.
+Callbacks `help_menu`, `help_menu_group`, `helpc_main`, `help_topic`,
+`help_section`, `helps_<topic>:<page>`, and `helpcs_<topic>:<page>` navigate the
+menu. All use `THROTTLE_CALLBACK`.
 
-Database impact: only reads `active_groups()` for the groups menu. A failed
-read renders the load-failed card (never an empty list); an empty result
-renders the "no groups connected" card; both keep the `back_to_start`
-keyboard so re-tapping retries.
+## About, additional, and privacy
 
-## About: `about.py`
+These are callback-only panels reached from the start menu.
 
-No commands. A single callback renders the About page.
+| Module | Callback | Content |
+|---|---|---|
+| `about.py` | `about_menu` | Community description from `about_msg(locale)`. |
+| `additional.py` | `additional_menu` | Official channels and groups; link buttons are built from configured destinations. |
+| `privacy.py` | `privacy_menu`, `privacy_policy_menu`, `privacy_section_<n>` | Data-collection notice and six policy sections: collect, why, access, retention, rights, contact. |
 
-| Callback | Purpose |
-|---|---|
-| `about_menu` | Render the community description (from `about.toml`) with `back_to_start_kb`. |
+All three use `answer_and_edit()` so the callback is acknowledged and the
+message edited in parallel. A URL button is dropped when its resolved link is
+empty.
 
-Also reachable via `/start about`. Rate limit: 15 callbacks per 30 s.
+## Greeting and join events
 
-The page body is rendered by `about_msg(locale)` in
-`tcbot/modules/helper/messages/panels.py`, because the start menu reaches
-the same page.
-
-## Additional: `additional.py`
-
-No commands. A single callback renders the community links menu.
-
-| Callback | Purpose |
-|---|---|
-| `additional_menu` | Render `additional.msg.body` with `additional_menu_kb`. |
-
-`additional_menu_kb` shows the channel, group, appeal, and logs rows. It
-resolves each link from the configured chat ids (`MAIN_CHANNEL`,
-`MAIN_GROUP`, `APPEALS`, `LOGS`) through `community_links.resolve`, which
-prefers a chat username and falls back to an invite link. A chat with no
-public link is omitted rather than replaced by a built-in URL. The four
-lookups are independent and run in parallel. Rate limit: 15 callbacks per
-30 s. No database impact.
-
-## Privacy: `privacy.py`
-
-No commands. Callback-only module rendering the data-collection notice and
-the full privacy policy.
-
-| Callback | Purpose |
-|---|---|
-| `privacy_menu` | Render the data-collection notice with `privacy_kb`. |
-| `privacy_policy_menu` | Render the policy section index with `privacy_policy_sections_kb`. |
-| `privacy_section_<idx>` | Render one policy section with `back_to_privacy_policy_kb`. |
-
-Sections come from `_SECTION_KEYS` (`collect`, `why`, `access`, `retention`,
-`rights`, `contact`) with labels/bodies read per locale at render time.
-A callback with a non-numeric or out-of-range index (`idx < 0` or
-`idx >= len(_SECTION_KEYS)`) is answered with an alert and does not touch
-the message. Rate limit: 15 callbacks per 30 s. No database impact.
-
-## Help: `help.py`
-
-`/help` renders the in-bot help index built from every loaded module.
-
-| Command | Aliases | Purpose | Access |
-|---|---|---|---|
-| `/help` | none | Show the help index; `/help <module>` opens a module. | Anyone |
-
-| Callback | Purpose |
-|---|---|
-| `help_menu` / `help_menu_group` | Menu-path help index (start menu and group card link). |
-| `helpc_main` | Command-path help index (from `/help`, no back-to-start). |
-| `help_<mod>` / `helpc_<mod>` | Module overview (menu path / command path). |
-| `helps_<mod>:<idx>` / `helpcs_<mod>:<idx>` | One section of a module overview. |
-
-`_builder_help(locale)` collects `(name, overview, sections)` from every
-module's `get_help(locale)`; non-help modules are skipped. Content is rebuilt
-per request in the caller's locale, so every module renders its own copy in
-the viewer's language. Topics are sorted by display name; both the
-module slug and the display name resolve `/help <module>` lookup. Rate
-limits: commands 8 per 30 s, callbacks 15 per 30 s. No database impact.
-
-## Broadcasting: `broadcast.py`
-
-| Command | Aliases | Purpose | Access |
-|---|---|---|---|
-| `/tcbroadcast` | `/bc` | Send text or forward a replied-to message to every active connected group. | Staff+ |
-
-Behavior:
-
-- Accepts inline text or a reply-to-forward; a command with neither replies
-  with the no-content notice.
-- Fans out one send per active group through `fan_out` (bounded, matches the
-  dispatch cap), counting only transient errors as failures.
-- Text sends use MarkdownV2; a `can't parse entities` `BadRequest` retries
-  that group as plain text. Any other `BadRequest` re-raises so dead groups
-  are not double-called.
-- Posts `messages.broadcast_log` (caller, preview, ok/failed counts) to
-  `cfg.logs` and edits the status message in parallel.
-
-Rate limit: 3 per 60 s, `@staff_only`.
-
-Database impact: read-only (`groups_db.active_groups()`). A group-load
-failure replies with the generic load-failed error and aborts.
-
-## Greeting: `greeting.py`
-
-No commands. This module enforces federation bans and mutes on member joins
-and re-applies enforcement when join requests are approved.
+`tcbot/modules/greeting.py` is event driven and has no commands. It handles:
 
 | Handler | Trigger | Behavior |
 |---|---|---|
-| `on_new_member` | `NEW_CHAT_MEMBERS` | Enforces bans/mutes in every connected group; posts the join-ban notice and target DM everywhere, and welcomes only in primary groups. |
-| `on_join_request` | `ChatJoinRequest` | Declines the request silently when the requester has an active federation ban. |
-| `on_join_request_approved` | chat member update with `via_join_request` | Re-applies active ban or mute when a join request is approved. |
-| `on_left_member` | `LEFT_CHAT_MEMBER` | Announces non-bot member departures in primary groups only. |
-| `on_chat_migration` | `MIGRATE` | Migrates group and warn records from the basic group to the supergroup. |
+| `on_new_member` | `NEW_CHAT_MEMBERS` | Enforce active decisions in connected groups; greet only in the primary group. |
+| `on_join_request` | `ChatJoinRequest` | Decline banned users; fail closed on a ban-read error. |
+| `on_join_request_approved` | `CHAT_MEMBER` via approval | Re-apply a ban or mute. |
+| `on_left_member` | `LEFT_CHAT_MEMBER` | Cleanup and notices. |
+| `on_chat_migration` | `MIGRATE` | Repoint the chat id. |
 
-Key behavior:
+Member processing harvests identity and reads the active ban and mute in
+parallel under a global semaphore of 10. A cancelled read propagates; a failed
+enforcement read suppresses the welcome. Join-time enforcement is detailed in
+[connecting](moderation/connecting.md).
 
-- `_in_federation`: primary groups always qualify; other chats qualify only
-  while their connected row is active (`is_connected` with `fresh=True`, so
-  a disconnect stops join enforcement at once). A lookup outage returns
-  `None` so the caller stays silent instead of enforcing blind or greeting
-  an unverified joiner.
-- All concurrent join updates share one global `_join_sem`
-  (`_MAX_CONCURRENT_JOINS = 10`) so a batch invite-link join cannot spike
-  Database pool pressure or Telegram traffic.
-- `_handle_member` harvests identity and reads the active ban and mute in
-  parallel. On an enforcement-read failure the welcome is skipped (fail
-  closed: never greet an unverified user). A banned joiner is auto-demoted
-  (`trigger="ban"`) and banned in every connected group. The bot then posts a
-  group notice naming the user ID, first name, last name, username, and ban
-  ID, with `View Log` and `View Proof` on the first button row and
-  `Submit Appeal` below, and sends the target a separate DM with the ban
-  reason and the same buttons. A missing log or proof link drops only its
-  button. A muted joiner is auto-demoted (`trigger="mute"`) and restricted to
-  read-only for `until_date`. Only primary groups post the welcome message;
-  the ban notice is not suppressed in secondary groups.
-- `on_join_request_approved` uses `via_join_request` so the same join is
-  never double-enforced by `on_new_member`. It also re-checks the ban
-  because a ban created after the request decline (or a failed decline) must
-  still be enforced, and it sends the same group notice and target DM after
-  the ban succeeds.
+## Broadcast
 
-Database impact: `users_cache.harvest_user_identity` (opportunistic, skips
-the write on unchanged identity), reads `bans_db.get_active_ban` and
-`mutes_db.get_active_mute`, and on migration `groups_db.migrate_group`, which
-moves the whole group in one transaction: the registry, the configuration,
-the membership, the open request, and the decisions of the group, including
-the origin chat of a decision.
+`tcbot/modules/broadcast.py` owns `/tcbroadcast` (alias `/bc`), restricted to
+staff with `ratelimiter(THROTTLE_FEDERATION)`. It sends a message to managed
+groups through the bounded dispatch layer, records outcomes through the
+broadcast tables, and posts a `messages.broadcast_log()` summary. Per-group
+results are counted so one refusal does not abort the campaign.
 
-## Maintenance: `maintenance.py`
+## Maintenance
 
-| Command | Aliases | Purpose | Access |
+`tcbot/modules/maintenance.py` owns five operator commands:
+
+| Command | Alias | Access | Purpose |
 |---|---|---|---|
-| `/leaveall` | `/exitall`, `/tcleave` | Leave every non-primary connected group and mark them inactive. | Owner only |
-| `/cleanup` | `/tcclean`, `/tcc` | Check active groups and deactivate ones the bot can no longer access. | Staff+ |
-| `/tcrepair` | `/tcr` | List unsettled enforcement runs, or re-drive the failed groups of one run. | Staff+ |
-| `/tcforget` | `/tcf` | Queue one Telegram-account erasure for the next cleanup sweep. | Owner only |
+| `/tcleaveall` | `/leaveall`, `/exitall` | Owner (`THROTTLE_CRITICAL`) | Leave every managed group. |
+| `/cleanup` | `/tcclean`, `/tcc` | Staff (`THROTTLE_FEDERATION`) | Remove stale groups after a membership probe. |
+| `/tcrepair` | `/tcr` | Staff (`THROTTLE_FEDERATION`) | List unsettled enforcement runs and redrive failed targets. |
+| `/tcforget` | `/tcf` | Owner (`THROTTLE_FEDERATION`) | Queue account erasure. |
 
-Behavior:
+`_leave_one()` stops the bot cleanly per chat. `_should_remove()` probes
+membership before cleanup. `/tcrepair` uses `enforcement_db.list_unsettled_runs()`
+and `redrive_run()` so a repair never files a second decision. Erasure is
+queued through `erasure_db.request_erasure()` and drained by a scheduled job.
 
-- Primary groups (`main_group`) are never touched by `/leaveall` or
-  `/cleanup`; they are guarded at every call site by
-  `cfg.is_primary_group`.
-- `/leaveall` is rate limited to 1 per 300 s and runs bounded per-group
-  leave + deactivate. A group counts as failed when either the leave or the
-  deactivate fails (a successful `leave_chat` with a failed deactivate would
-  leave a "ghost" active row).
-- `/cleanup` is rate limited to 3 per 60 s and uses bounded membership
-  checks with `_MEMBERSHIP_CHECK_TIMEOUT = 3.0` per check.
-- `/tcrepair` lists the enforcement runs still `queued`, `running`,
-  `partial`, or `failed`, with the applied, failed, and exhausted counts of
-  each. `/tcrepair retry <run_id> [chat_id]` brings the failed target (or
-  one requested chat) forward and hands the existing run to the worker.
-  The command never files a new moderation decision, and it refuses a run
-  that a worker already owns or that was cancelled.
+## Network tools
 
-- `/tcforget <user_id> <reason>` queues an erasure through
-  `request_user_erasure`; the ten-minute erasure sweep (and the daily
-  cleanup as a fallback) anonymises the profile, revokes live roles and
-  moderation actions, withdraws open appeals and review slots, cancels
-  pending promotion requests, and invalidates the affected name, locale,
-  and role cache entries after the transaction commits. The current
-  federation owner is refused: transfer ownership first, otherwise the
-  sweep would leave the community without an Owner.
+`tcbot/modules/netspeed.py` owns `/ping` (alias `/p`) and `/speedtest` (alias
+`/st`), both Owner-only with `THROTTLE_FEDERATION`. They measure Telegram API
+latency and network throughput and are intended for operator diagnostics on a
+hosted runner. Results are logged and reported to the invoking Owner.
 
-Database impact: `/leaveall` deactivates each `connected_chats` row in
-parallel with the leave and posts a `group_disconnected` log entry per
-group to `cfg.logs` (a leave counts as failed unless both `leave_chat` and
-`deactivate_group` succeed). `/cleanup` deactivates rows whose membership
-check reports the bot as `left` or `kicked`; a failed membership check
-keeps the group (fail closed). `/tcrepair` reads
-`moderation_enforcement_runs` and its targets, then updates the failed
-targets and returns the run to `queued` in one transaction. `/tcforget`
-writes a pending `telegram_user_erasures` row.
+## Shared patterns
 
-## Netspeed: `netspeed.py`
+All modules above:
 
-| Command | Aliases | Purpose | Access |
-|---|---|---|---|
-| `/ping` | `/p` | Telegram API round-trip latency in ms. | Owner only |
-| `/speedtest` | `/st` | Speed test (download, upload, ping, client/server details) against speedtest.net. Add `full` for a larger sample. | Owner only |
+- resolve the locale once through `helper.locale`;
+- send messages through the rich transport with no parse mode;
+- build keyboards in `helper/buttons/`;
+- read and write through `tcbot/database/` helpers;
+- log through a module logger without secrets or private chat contents.
 
-Behavior:
+## Validation hints
 
-- `/ping` replies "Pinging…", measures the elapsed time, and edits the
-  message to the latency (single round-trip read).
-- `/speedtest` replies "Running…", fetches config and the server list,
-  prefers the client's own country when it has enough servers, picks the
-  lowest-latency server among the ten closest, then measures
-  download and upload concurrently in an executor thread bounded by
-  `_SPEEDTEST_TIMEOUT = 180` s, and edits the result.
-- `/speedtest full` (or `/st full`) uses a larger sample and four
-  connections per direction, bounded by `_SPEEDTEST_TIMEOUT_FULL = 300` s.
-  The quick mode deliberately keeps the payload small so the measurement
-  does not starve Telegram traffic; a quick result is a diagnostic, not a
-  line-rate benchmark.
-- The timestamp is epoch seconds, and the ping is rounded to one decimal.
-  Timeouts and unparseable results edit a dedicated notice instead of
-  raising. The result keeps the same detail fields without a share image;
-  unavailable geodata renders "N/A".
-
-Rate limit: 3 per 60 s for both commands, `@owner_only`. No database impact.
-
-## Admin module surface: `admins.py`
-
-The admin module owns the role-management command surface; the flows are
-documented in [`roles/roles.md`](roles/roles.md), [`roles/promote.md`](roles/promote.md),
-and [`roles/demote.md`](roles/demote.md).
-
-| Command | Aliases | Purpose | Access |
-|---|---|---|---|
-| `/tcpromote` | `/tcp` | Assign a federation role (or queue Owners-only promotions). | Staff+ |
-| `/tcdemote` | `/tcd` | Remove a federation role with a confirm/cancel prompt. | Staff+ |
-| `/transferowner` | `/tfowner` | Transfer Owner ownership. | Owner only |
-| `/tcpromoterequests` | `/tcreqs` | Submit a promotion request to the Owner. | Anyone |
-| `/tcpromotelist` | `/tcplist` | List pending promotion requests. | Staff+ |
-
-| Callback | Purpose |
-|---|---|
-| `promo_approve:<request_id>` / `promo_reject:<request_id>` | Owner verdict on a pending promotion request (DM card). |
-| `promo_role:<role>:<target_id>:<executor_id>` (legacy without executor) | Choose a role in the `/tcpromote` inline menu; only the prompt opener may act. |
-| `promo_role_cancel:<target_id>:<executor_id>` (legacy without executor) | Cancel the role-selection menu; only the prompt opener may cancel. |
-| `demote_confirm:<target_id>:<executor_id>` / `demote_cancel:<target_id>:<executor_id>` (legacy without executor) | Confirm or cancel a demotion; only the prompt opener may act. |
-
-Rate limits: promote/demote/list queries 5 per 60 s; transfer and promote
-requests 3 per 300 s; role and decision callbacks 10 per 30 s.
-
-Database impact: `users_roles` (promote/demote), `queues_db` (promotion
-requests), and `users_cache` on transfer; see the role docs for details.
-
-## Shared module conventions
-
-- Permission gates come from `decorators` (`staff_only`, `owner_only`,
-  `mod_only`, `basic_mod_only`) and fail closed on role-lookup outages.
-- Every handler wears `@decorators.log_execution` for DEBUG entry/exit
-  traces and a `@decorators.ratelimiter` quota; the Owner bypasses
-  per-handler quotas.
-- Callback handlers pair `q.answer()` with `safe_edit_cb` / `answer_and_edit`
-  so re-tapping the same view does not raise `Message is not modified`.
-- All user-facing prose renders MarkdownV2 through the formatter helpers and
-  the locale engine (`helper.locale.locale_for_update`).
+Relevant tests include `tests/test_broadcasting.py`, `tests/test_netspeed.py`,
+`tests/test_repair_command.py`, `tests/test_erasure_command.py`, and
+`tests/test_startup_logging.py`.

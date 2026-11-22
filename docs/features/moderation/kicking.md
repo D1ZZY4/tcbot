@@ -1,194 +1,99 @@
 # Kicking
 
-This document describes the current group kick behavior implemented by `tcbot/modules/kick.py` (the `/tckick` entry point and decorators), `tcbot/modules/helper/pipelines/kick_flow.py` (the `execute_kick` executor and conversation factory), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation invoked by kick), and `tcbot/database/kicks_db.py` (the persistent kick log).
+This page describes the current-chat kick implemented by `tcbot/modules/kick.py`
+and `helper/pipelines/kick_flow.py`. The flow is drawn in
+[the kicking diagram](../../pipelines/kicking.md).
 
-For the ban flow, see [`banning.md`](banning.md). For the mute flow, see
-[`muting.md`](muting.md). For role auto-demotion on kick, see
-[`../roles/demote.md`](../roles/demote.md). For warnings and kicks, see
-[`check.md`](check.md). For shared helpers, see
-[`../../architecture/helpers.md`](../../architecture/helpers.md). For the
-database layer, see [`../../architecture/database.md`](../../architecture/database.md).
+Related pages: [banning](banning.md), [muting](muting.md), and
+[shared helpers](../../architecture/helpers.md).
 
-```mermaid
-flowchart TD
-    Cmd[/tckick command/] --> Perm{Moderator+ rank check}
-    Perm -->|denied| End1[Reject]
-    Perm -->|allowed| Target[Resolve target]
-    Target --> Ident{Self / bot / Owner?}
-    Ident -->|self or bot| Refuse[identity.refuse_message]
-    Ident -->|allowed| ReasonStep[Inline reason present?]
-    ReasonStep -->|yes| ProofStep[WAITING_PROOF]
-    ReasonStep -->|no| ReasonPrompt[WAITING_REASON]
-    ReasonPrompt --> ProofStep
-    ProofStep --> Exec[execute_kick: ban + unban]
-    Exec --> LogDB[log_kick DB write]
-    Exec --> LogChan[Post kick log]
-    Exec --> Reply[Reply with summary]
-    Exec -.->|unban failed| Warning[Append WARNING line to reply]
-```
+## Purpose and ownership
 
-## Purpose
+A kick acts only in the current chat. It is implemented as a Telegram ban
+immediately followed by an unban with `only_if_banned=True`, which lets the
+user rejoin. Because Telegram rejects bans in private chats, the command
+refuses private origins. Proof is optional. The flow writes an audit row before
+enforcement and uses a durable reconcile run to repair a failed rejoin.
 
-A kick removes a user from the current group only, not from the federation. The implementation ban-then-unbans the user in the current chat so they can rejoin via invite link; federation-wide enforcement is reserved for `/tcban`. The kick flow accepts an optional inline reason, supports optional proof, posts a kick log, and writes an audit decision to `moderation_actions` with `action_type = 'kick'`. Targets that hold a federation role are auto-demoted when the kick is enforced, which preserves the role-vs-state invariant.
+Ownership: `kick.py` validates and starts the conversation; `kick_flow.py`
+builds it through `reason_flow.build_modaction_conv()` and owns the executor;
+`kicks_db.py` writes audit rows; `enforcement_db.py` and
+`enforcement_worker.py` own the reconcile run.
 
-## Commands and aliases
+## Commands and access
 
-| Command | Alias | Purpose | Access |
+| Command | Alias | Access | Origin |
 |---|---|---|---|
-| `/tckick` | `/tck` | Remove a user from the current group. | Moderator and above via `basic_mod_only`. |
+| `/tckick <target> <reason>` | `/tck` | Moderator and above (`basic_mod_only`) | Connected group only. |
 
-Commands use the project's configured prefixes; slash commands are examples.
+The handler uses `ratelimiter(THROTTLE_MODERATION)`, then `basic_mod_only`, then
+`log_execution`. Target resolution uses `min_role="moderator"` and
+`allow_private=False`. An inline reason skips the reason prompt and goes
+straight to proof collection; overlong reasons fail fast.
 
-Federation origin: `/tckick` requires a connected or primary group; private chats and disconnected groups are refused. A connection-state outage blocks the action with a retry notice instead of proceeding.
+## Conversation and callbacks
 
-## `/tckick` flow
+The kick conversation uses the shared states from `reason_flow.py`:
 
-The kick command is a `ConversationHandler` built by `reason_flow.build_modaction_conv(reason, proof, ...)` so it reuses the standard reason/proof state machine.
+| State | Value | Meaning |
+|---|---|---|
+| `WAITING_REASON` | 0 | Awaiting the typed reason. |
+| `WAITING_PROOF` | 1 | Collecting optional proof. |
+| `WAITING_RULES` | 2 | Picking published rules. |
+| `WAITING_RULES_NOTE` | 3 | Entering an optional note. |
 
-1. A moderator runs `/tckick <target> <reason>` or replies to a message with `/tck <reason>`.
-2. The bot resolves the executor role and target in parallel.
-3. The executor must have at least Moderator rank.
-4. The target must resolve to a Telegram user ID.
-5. The bot rejects attempts to kick itself or the executor's own account via `identity.refuse_message`.
-6. If an inline reason was supplied, the bot skips directly to proof collection (`WAITING_PROOF`). Otherwise it prompts for a reason (`WAITING_REASON`).
-7. A reason is required. The reason prompt offers text input and `Cancel`, but no `Skip`; the moderator must supply the reason before proof collection.
-8. Proof is skippable via the `Skip` button. When supplied, photos, videos, animations, and files upload to `cfg.proofs` through `proof_flow.upload_proof_for_action`, and the landed items are archived with the kick decision.
-9. `execute_kick` re-runs the fresh rank gate after the upload, ban-then-unbans the target in the current chat, writes a `kicks_db.log_kick(...)` audit row, posts a kick log to `cfg.logs`, and replies with the summary.
+Callbacks are `kick_cancel`, `kick_done_proof`, `kick_skip_proof`, and the
+shared `rules_step:*` set. Done and Skip claim the `kick_executing` flag before
+their first await, so a double tap cannot run the executor twice. The tapper's
+rank is rechecked with `recheck_executor_rank(min_role="moderator")`.
 
-## Target resolution and reason parsing
+## Enforcement and delivery
 
-The target can be specified by:
+`execute_kick()` runs `enforcement_refusal(min_role="moderator")` twice: once
+before proof upload and audit, and again immediately before the audit record.
+Proof upload failure is logged and degrades to a kick without evidence. The
+audit row is written with status `completed` before enforcement, then moved to
+`failed` if the ban or its follow-up unban fails.
 
-- Replying to a message from the target.
-- Passing a numeric user ID after the command.
-- Passing an `@username` after the command, when resolvable by the project's extraction helper.
-
-Reason parsing in `cmd_kick` uses `reason_flow.parse_inline_reason(args, has_explicit_target=...)` so:
-
-```text
-/tckick @username being disruptive
-# target: @username
-# reason: being disruptive
-
-/tckick 123456789
-# target: 123456789
-# reason: empty - bot prompts
-
-# Reply to a message:
-/tck flooding the chat
-# target: replied user
-# reason: flooding the chat
-```
-
-When no inline reason remains after parsing, the bot enters `WAITING_REASON` and asks for text or `Skip`.
-
-When the command replies to a user message, the quoted sender is the default target, with one exception: a leading numeric ID or `@username` that verifies as a real user different from the quoted sender overrides the reply, because a typed ID is deliberate intent while a quote is often just context. That override token is consumed as the target, so reply + `/tck 12345 spamming` aimed at 12345 kicks with reason `spamming`. Anything unverified (a reason starting with a number, an unknown ID) or fuzzy (partial-name search) keeps the reply target, and a restated ID naming the quoted user themself is still dropped from the reason as a duplicate. The shared `extraction.extract_mod_target(update, args, bot)` helper owns both the resolution and the consumed-or-reason decision and is used by the kick, mute, warn, and ban entries.
-
-Inline reasons share the same 1000-character cap as typed reasons (`reason_flow.MAX_REASON_LEN`). Overlong inline input fails fast with the shared retry notice before any role lookup or demote work; typed input exceeding the cap stays in `WAITING_REASON` with the same text.
-
-## Reason and proof behavior
-
-The kick conversation uses `BuildReason("kick", skip_allowed=False)` and `BuildProof("kick")`. The reason keyboard therefore has no `Skip`; the proof keyboard exposes `Skip`, `Done`, and `Cancel`:
-
-- Reason: text, `Cancel`.
-- Proof: photo, video, GIF, file, `Skip`, `Done`, `Cancel`.
-
-The reason keyboard is built by `reason.keyboard()` and the proof keyboard by `proof.keyboard()`; each only contains `Skip` when its builder allows skipping.
-
-`WAITING_REASON` and `WAITING_PROOF` use the `_ModActionFlow` class in `reason_flow.py`. Its key invariants:
-
-- `_on_proof` buffers every proof item (album parts and sequential sends alike) and the executor runs only when the moderator taps `Done`. A second concurrent update while executing returns `ConversationHandler.END` immediately.
-- Tapping `Done` with nothing collected answers with a retry alert and stays in `WAITING_PROOF` instead of executing an empty proof.
-- The proof prompt message ID is stashed in the conversation scope so the reason step can edit it in place when transitioning to `WAITING_PROOF`.
-- The fallback filter swallows any other command during the conversation unless the user types a recognized command, in which case the conversation ends with `<action> operation cancelled.`
-
-## Auto-demote at kick time
-
-If the target holds a federation role, the role is removed when the kick is enforced, not when the command starts. `execute_kick` calls `demote_before_enforcement(..., trigger="kick")` right before the ban-then-unban fan-out, after the kick audit row is written.
-
-The demote runs at enforcement time because the reason and proof steps are still cancelable. A demote at the entry would strip the target's role, post the federation demote log, and DM the target that they were kicked even when the moderator cancelled the flow and no kick ever happened.
-
-`demote_before_enforcement` revokes the active role assignment of the target, posts the federation demote log, and DMs the target. The step is best-effort: a role lookup or demote failure is logged loudly and the kick proceeds, because the kick audit row has already been written. The target keeps their rank only until a later join-time enforcement pass removes it.
-
-## `execute_kick` behavior
-
-`execute_kick(update, ctx, target_id, target_name, reason_text, proof_msgs, prompt_chat=None, prompt_id=None)` lives in `tcbot/modules/helper/pipelines/kick_flow.py`. The prompt chat/ID are stashed by the entry (`kick_prompt_chat`, `kick_prompt_id`) so the summary edits the proof prompt in place. The implementation is a single Telegram `ban_chat_member` followed by `unban_chat_member(chat_id, target_id, only_if_banned=True)`. The "kick" is therefore not a separate Telegram primitive, but the visible effect of ban-then-unban in the same chat.
-
-Execution order:
-
-1. Write the audit row with `db.kicks_db.log_kick(target_id, chat_id, reason_text, admin_id)` first; it returns the decision id used by the repair run. A failed write aborts with a retry reply and no group is touched, so an enforced kick is never missing from `/check` history.
-2. When `proof_msgs` is non-empty, start the proof upload to `cfg.proofs` as a background task (caption `messages.proof_caption_new`). If upload fails, the kick still proceeds with no proof link.
-3. Remove the target's effective role via `demote_before_enforcement(..., trigger="kick")` (best-effort; the kick proceeds even if the demote fails). The demote runs before the ban so a role-holding target never keeps federation rank while the ban is live.
-4. Call `ctx.bot.ban_chat_member(chat_id, target_id)` to remove the user immediately, without waiting for the proof-channel round trip. On ban failure the in-flight upload is cancelled and the executor replies with a permissions/retry hint.
-5. Await the upload and build the proof keyboard from the resulting link.
-6. Fan two independent side-effects in parallel with `asyncio.gather(..., return_exceptions=True)`:
-   - `unban_chat_member(chat_id, target_id, only_if_banned=True)` - the "user can rejoin" step.
-   - `ctx.bot.send_message(cfg.logs, kick_log, ..., reply_markup=proof_kb)` - federation log post. The audit write already landed before enforcement, so a failure here can never leave an unaudited kick.
-7. If the unban call raises, one bounded retry runs. If that also fails, the decision moves to `failed` and the executor queues `enforcement_db.queue_kick_unban_repair(kick_action_id, chat_id, admin_id)`, a durable `reconcile` run that keeps retrying the unban. The reply appends a `WARNING:` line so the moderator knows the user is still banned in this chat. When the repair lands, the worker moves the decision back to `completed`.
-8. Edit the proof prompt in place with the kick summary (same pattern as the mute executor), falling back to a fresh reply when the prompt is gone. No more double message.
-9. The reply reads `<user> has been kicked. Reason: <reason>. They can rejoin via invite link.` plus the optional `WARNING:` line. The kicked user's ID is a Telegram deep-link for quick re-ban; the text is rendered from the localized `kicking.summary.body` / `kicking.warn.unban` / `kicking.rejoin.body` blocks in the moderator's locale.
-
-If `ban_chat_member` itself raises (the chat-level exception, not the parallelized children), `execute_kick` catches it, marks the decision `failed`, logs the full traceback, and replies with a generic permissions/retry hint (raw error text is never echoed to the chat).
+`demote_before_enforcement(trigger="kick")` runs best effort after proof. The
+current chat is banned and unbanned; the unban and federation log post run in
+parallel. The user-facing summary is composed only after the unban result is
+known, so the moderator never sees a success while the target is still banned.
 
 ## Database impact
 
-Kick audit decisions are stored in `moderation_actions` with `action_type = 'kick'` and `scope_type = 'chat'`. Each decision contains:
+The audit row lives in the kick domain helper (`kicks_db.py`) and records the
+chat, target, actor, reason, optional proof archive, and status. The reason,
+rules, and proof are archived through `moderation_db` on the same transaction
+as the audit row. A failed rejoin queues a `reconcile` enforcement run with
+idempotency key `moderation:{action_id}:kick-unban:v1` and exactly one target:
+the kick's own chat. The worker accepts the run only for a `kick` action in
+`completed` or `failed` status and cancels it when an active federation ban
+now holds the target. A successful repair moves the row back to `completed`.
 
-| Field | Meaning |
-|---|---|
-| `target_user_id` | Telegram user ID of the kicked user. |
-| `chat_id` | Group chat ID where the kick happened. |
-| `reason` | Moderator-provided reason or localized `replies.no_reason(locale)` text when skipped. |
-| `actor_user_id` | Telegram user ID of the moderator who issued the kick. |
-| `created_at` | UTC kick creation time. |
-| `status` | `completed` for a delivered kick, `failed` while the ban or rejoin step did not land. A durable repair moves failed back to completed. |
+## Logging
 
-`kicks_db.log_kick` is the only insert path. `kicks_db.mark_kick_failed` and `kicks_db.mark_kick_completed` record the delivery outcome, and the schema guard accepts only those kick transitions. `kicks_db.user_kicks` and `kicks_db.user_kick_count` power the `/check` profile drill-down.
-
-Indexes are ensured for:
-
-- `moderation_actions`: `(target_user_id, created_at desc)` for the per-user history and `(chat_id)` for per-group kick queries.
-
-## Logs and keyboards
-
-Kick-related templates are defined in `messages/` (`audit_logs.py`):
-
-| Template | Used for |
-|---|---|
-| `proof_caption_new` | Caption on kick proof uploads. |
-| `kick_log` | Federation log entry posted by `execute_kick`. |
-
-The reply and federation log use `keyboards.action_proof_kb(target_id, proof_link)`. The keyboard exposes a single `Proof <target_id>` URL button when a proof link was generated; the button is omitted when no proof was uploaded.
+`messages.kick_log()` builds the federation log posted to `cfg.logs` with a
+proof button when evidence landed. Reason and proof prompts use the rich
+transport with no parse mode. Module and flow failures log through the module
+logger with the target and action identifiers.
 
 ## Edge cases
 
-- A kick in a chat where the user has never been a member is a no-op for `ban_chat_member` and a true no-op for the post-ban `unban_chat_member` (with `only_if_banned=True`).
-- Proof upload failures are caught and logged; the kick still proceeds.
-- A DB `log_kick` failure aborts the kick with a retry reply before any group is touched, so an enforced kick is never missing from `/check` history.
-- Federation log send failure does not stop the kick reply.
-- If the post-ban `unban_chat_member` fails after one retry, the user is effectively banned in this chat. The decision becomes `failed`, a durable reconcile run is queued, and the reply appends a `WARNING:` line; the scheduled enforcement worker retries the unban without a new kick decision and restores `completed` when it lands. The repair is cancelled when a federation ban now holds the target, so it cannot lift the newer ban.
-- A demote failure is logged loudly and the kick still proceeds; the target's rank is repaired by a later join-time enforcement pass.
-- The reason and proof conversation is per-chat and per-user, so simultaneous kick flows are isolated.
-- The kick command is **group-only**: the entry rejects a private chat with the localized `replies.err_group_only(locale)` notice (English default: `Use this command in a group.`) before any role or target I/O, and `execute_kick` acts on the current chat (`ban_chat_member` then `unban_chat_member` in `effective_chat.id`). Rank gating is Moderator or above via `basic_mod_only`; the decorator itself performs no group-membership check beyond the entry's private-chat guard.
-- The `/tckick` executor is not gated on `mod_only`; any Moderator or higher can issue it.
+- A failed ban cancels any in-flight proof upload, marks the audit row failed,
+  and replies with the kick error.
+- A failed unban gets one bounded retry. If it still fails with a benign
+  Telegram refusal, the summary carries a warning; otherwise the row is marked
+  failed and the reconcile run is queued.
+- A kick never creates a federation ban, so the reconcile run is the only
+  durable repair for a target left banned.
+- Self, bot, Telegram, anonymous-admin, and Owner targets are refused by
+  `identity.classify()`, with lower staff roles demoted first.
 
-## Behavior reference
+## Validation hints
 
-Key behaviors to keep in mind:
+Relevant tests include `tests/test_kick_guard.py` and `tests/test_kick_summary.py`.
 
-1. `/tckick` works in the current group only; no fan-out, no federation-wide ban.
-2. `/tckick` requires Moderator rank.
-3. `/tckick` without a target is rejected with `replies.err_cannot_resolve(locale)`.
-4. Self-kick and bot-kick attempts are rejected by `identity.refuse_message`.
-5. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
-6. Role-holding targets are auto-demoted when the kick is enforced.
-7. A reason is required; there is no `Skip` on the reason prompt.
-8. Proof is optional for a kick. When supplied, the landed items are archived with the decision as a non-required evidence batch, so the audit record points at the real media instead of only a channel message.
-9. The `WAITING_PROOF` step accepts photos, videos, GIFs, and files; other messages bounce with a friendly prompt.
-10. Proof items accumulate until the moderator taps `Done` (an empty `Done` answers with a retry alert); the executor then runs once with everything collected.
-11. The proof prompt edits in place across the reason-to-proof transition when a prompt ID is stashed in `ctx.user_data`.
-12. `execute_kick` runs `ban_chat_member` then `unban_chat_member(..., only_if_banned=True)` so the user can rejoin via invite link.
-13. The DB `log_kick` audit write runs first and aborts the kick on failure; the federation log post then runs in parallel with the post-ban unban, so partial failures are logged but the kick still completes. A failed ban or rejoin marks the decision `failed` so history never reports a delivered kick.
-14. A failed post-ban unban adds a `WARNING:` line to the reply and queues a durable reconcile run; the scheduled worker keeps retrying the unban and moves the decision back to `completed`.
-15. `/tcban` and `/tckick` are distinct: only `/tcban` creates a federation-wide ban record and appeal path.
-16. The reply always reads `They can rejoin via invite link.` because the post-ban unban is part of the contract.
+```bash
+uv run pytest tests/ -q -k kick
+```

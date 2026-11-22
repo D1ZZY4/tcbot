@@ -77,7 +77,7 @@ As of 2026-11-10, TCF Bot uses:
 
 Recent project additions to keep accurate when editing docs:
 
-- Smart mention system in `tcbot/utils/formatter.py`
+- Smart mention system in `tcbot/utils/i18n.py`
   (`user_ref(user_id, name, username=None)`) with ID-based `tg://user?id=...`
   links. Usernames are never used in the rendered link (the numeric ID is
   the single source of truth); the `username` parameter is accepted for

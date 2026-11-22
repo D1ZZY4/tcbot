@@ -36,9 +36,9 @@ async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     record = await db.users_cache.get_user(user.id)
     label = esc(record.get("first_name", user.first_name) if record else user.first_name)
 
-    await msg.reply_text(
+    await reply_rich(
+        msg,
         f"User: {label}\nID: {code(str(user.id))}",
-        parse_mode="MarkdownV2",
     )
 ```
 
@@ -201,7 +201,7 @@ if query is None:
     return
 
 await query.answer()
-await query.edit_message_text("Processing complete.", parse_mode="MarkdownV2")
+await safe_edit_cb(query, "Processing complete.")
 ```
 
 This avoids Telegram client spinners and keeps UX responsive.

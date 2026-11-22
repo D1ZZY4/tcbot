@@ -33,8 +33,9 @@ Suggested reading path:
 2. [`docs/README.md`](docs/README.md) as the index, then the
    [repository map](docs/architecture/repository-map.md) for structure,
    ownership, and startup flow.
-3. The [workflow overview](docs/features/workflow-overview.md) plus the
-   feature guide for the area you plan to change (moderation, roles,
+3. The [flow overview](docs/features/flow-overview.md) and the
+   [pipelines folder](docs/pipelines/banning.md) for every flow diagram, plus
+   the feature guide for the area you plan to change (moderation, roles,
    appeals, or statistics).
 4. [`CHANGELOG.md`](CHANGELOG.md) for what changed recently and why.
 

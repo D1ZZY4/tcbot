@@ -1,187 +1,117 @@
-# Backup and Restore Runbook
+# Backup and restore
 
-Federation bans, staff roles, and connected groups are irreplaceable operational
-data. Loss of any of these tables requires manual reconstruction from
-moderator memory and audit logs. This document describes how to protect and
-recover that data.
+This page describes how to protect and restore the PostgreSQL state that TCF
+Bot depends on. The bot has no built-in backup command, so operators own the
+backup schedule and storage. The procedures below use standard PostgreSQL
+tools.
 
-## Critical tables
+Related pages: [database layer](../architecture/database.md),
+[setup](../getting-started/setup.md), and
+[persistence](../pipelines/persistance.md).
 
-| Table | Contents | Loss impact |
+## What must be backed up
+
+The authoritative state is the schema selected by `DB_SCHEMA`:
+
+| Schema | Back it up? | Reason |
 |---|---|---|
-| `moderation_actions` | All active and historical ban, mute, warn, and kick decisions | Critical: bans cannot be reconstructed from Telegram |
-| `moderation_cases` | The investigations the decisions belong to | Critical: the evidence trail of every decision |
-| `role_assignments` | Staff role assignments | Critical: roles must be re-granted manually |
-| `connected_chats` | Connected group registry | High: reconnecting requires each group admin to re-run `/tcconnect` |
-| `moderation_appeals` | The appeal history of every ban | High: the decision trail of the review process |
-| `telegram_users` | The Telegram identity registry | High: names and mentions stop resolving |
-| `audit_events` | The immutable cross-domain event log | High: the audit trail of who decided what |
-| `apscheduler_jobs` | Persistent scheduler data (APScheduler `SQLAlchemyJobStore`) | Medium: scheduler state may need verification after restore |
+| `public` | Yes, in deployment | The deployment's tables, data, and `alembic_version`. |
+| `development` | Yes, if used | Operator work against a shared server. |
+| `test` | No | Rebuilt and emptied by the test suite. |
 
----
+Back up the whole schema, including reference data from `seed.sql` objects,
+role assignments, moderation history, enforcement ledger tables, rules
+publications, and `alembic_version`. The APScheduler job store
+(`apscheduler_jobs`) is also in the schema; restoring it is optional, because
+the bot reconciles schedules at startup.
 
-## Managed PostgreSQL or another hosted provider
+Redis is a cache with no authoritative data. Do not back it up. After a Redis
+loss the bot repopulates L1 and L2 from PostgreSQL.
 
-Managed backup products (Neon, Supabase, RDS, Cloud SQL, and similar) or
-scheduled `pg_dump` archives can protect the database. The exact backup
-features, retention, and eligible tiers depend on the provider and plan.
+## Before a backup
 
-### Enable backup
+- Record the configured `DB_SCHEMA` and the deployed revision from
+  `alembic_version`.
+- Note the values of `MAIN_GROUP`, `MAIN_CHANNEL`, `PROOFS`, `LOGS`,
+  `LOGS_ERRORS`, and `APPEALS`. These are runtime configuration, not database
+  rows, and must exist in the target environment.
+- Keep the credentials and the dump file out of the repository and out of
+  public artifacts.
 
-1. Open the cluster's backup or snapshots page in the provider console.
-2. Enable the backup option available for the plan.
-3. Choose retention that matches the recovery requirements of your deployment.
-4. Verify that backup is **Active** in the cluster overview.
+## Create a logical backup
 
-### Point-in-time restore
-
-1. Select the desired restore point in the provider console.
-2. Choose **Restore to this cluster** (overwrites existing) or
-   **Restore to new cluster** (safer, then swap the connection string).
-3. Monitor progress in the provider's restore job view.
-4. After restore, verify counts:
-   ```sql
-   SELECT 'moderation_actions', count(*) FROM moderation_actions
-   UNION ALL SELECT 'moderation_cases', count(*) FROM moderation_cases
-   UNION ALL SELECT 'role_assignments', count(*) FROM role_assignments
-   UNION ALL SELECT 'connected_chats', count(*) FROM connected_chats
-   UNION ALL SELECT 'telegram_users', count(*) FROM telegram_users
-   UNION ALL SELECT 'audit_events', count(*) FROM audit_events;
-   ```
-
----
-
-## Scheduled `pg_dump` archives
-
-For deployments without a suitable managed backup, schedule a nightly
-`pg_dump` or use the backup tooling provided by your database host.
-
-### Prerequisites
+For the deployment schema, a schema-scoped custom-format dump is the usual
+choice:
 
 ```bash
-# Debian / Ubuntu
-sudo apt-get install -y postgresql-client
+pg_dump "$DATABASE_URL" \
+  --schema=public \
+  --format=custom \
+  --file=tcbot-public.backup
 ```
 
-### Backup script
-
-Create `/opt/tcbot/backup.sh`:
+For a non-public schema, replace `public` with the configured `DB_SCHEMA` value
+(such as `development`). A plain SQL dump is also valid:
 
 ```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-DATABASE_URL="${DATABASE_URL:?DATABASE_URL is not set}"
-BACKUP_DIR="/opt/tcbot/backups"
-TIMESTAMP="$(date +%Y%m%dT%H%M%S)"
-DEST="${BACKUP_DIR}/${TIMESTAMP}.dump"
-
-mkdir -p "${BACKUP_DIR}"
-
-# * --format=custom is a compressed archive that pg_restore can restore
-# * selectively. --clean makes the restore drop the existing objects first.
-pg_dump --dbname="${DATABASE_URL}" --format=custom --file="${DEST}"
-
-# * Retain only the last 14 backups
-find "${BACKUP_DIR}" -maxdepth 1 -name "*.dump" -printf '%T@ %p\n' \
-  | sort -n | head -n -14 | awk '{print $2}' | xargs -r rm -f
-
-echo "[$(date -Iseconds)] Backup complete: ${DEST}"
+pg_dump "$DATABASE_URL" --schema=public --file=tcbot-public.sql
 ```
 
-Make it executable:
+If the deployment uses pg_cron, capture its job definitions separately from
+`cron.job`, because they live outside the application schema. Record the
+`PG_CRON_ENABLED` setting as well.
+
+## Restore
+
+Restore into an empty or freshly reset target schema. Verify the target schema
+name before running destructive steps.
 
 ```bash
-chmod +x /opt/tcbot/backup.sh
+pg_restore --dbname="$TARGET_DATABASE_URL" \
+  --schema=public \
+  --clean --if-exists \
+  tcbot-public.backup
 ```
 
-### Schedule with cron
+For a plain SQL dump, apply it with `psql` against the target database. After
+the restore, query the `alembic_version` table and compare its value with the
+newest revision in `alembic/versions/` (currently `0013`). The bot applies any
+pending revisions at startup, so a restored database behind the code head is
+upgraded automatically.
 
-```bash
-crontab -e
-```
+## Post-restore checks
 
-Add a line to run nightly at 02:00 UTC:
+1. Start the bot against the restored database with the same `DB_SCHEMA`.
+2. Confirm `/start` responds in private chat and the main menu renders.
+3. Confirm `/tcgroups` lists the connected groups.
+4. Confirm `/checkme` for the configured Owner shows the Owner role.
+5. Confirm a read-only `/check` and `/tcstats` render without degraded notices.
+6. Confirm the proof and log destinations receive a test action.
+7. Verify that active bans and mutes are still reflected in the connected
+   groups; replay can be forced by reconnecting a group if needed.
 
-```cron
-0 2 * * * /opt/tcbot/backup.sh >> /var/log/tcbot-backup.log 2>&1
-```
+## Consistency notes
 
-### Offsite copy (optional but strongly recommended)
+- The decision and its enforcement run commit in one transaction, so a logical
+  backup taken outside a transaction may capture a decision without its run.
+  Use `pg_dump` consistency and recheck unsettled runs with `/tcrepair` after a
+  restore.
+- Notification outbox rows are durable edits; a restored pending row is
+  retried by the notification worker.
+- A restore does not move Telegram state. Proof media and log posts remain in
+  Telegram, and the database references to them remain valid as long as the
+  target chat ids match.
 
-Pipe the archive to S3, Backblaze B2, or any rclone remote:
+## Security
 
-```bash
-# After the pg_dump line in backup.sh, add:
-rclone copy "${DEST}" remote:tcbot-backups/
-```
+- Encrypt backup files at rest and in transit.
+- Do not include secrets, tokens, or private chat ids in log excerpts or
+  documentation.
+- Restrict access to dumps to the operators who need them.
+- Test a restore periodically into the `development` schema rather than
+  trusting an untested backup.
 
----
+## Validation hints
 
-## Restore from a `pg_dump` archive
-
-```bash
-# 1. Restore into an empty database (pg_restore creates the objects)
-pg_restore --dbname="${DATABASE_URL}" --clean --if-exists --no-owner \
-  /opt/tcbot/backups/20260101T020000.dump
-
-# 2. To restore into a fresh database instead, create it first:
-createdb --host=<host> --username=<user> tcbot_restored
-pg_restore --dbname="postgresql://<user>:<password>@<host>:5432/tcbot_restored" \
-  --no-owner /opt/tcbot/backups/20260101T020000.dump
-```
-
-Stop the bot before restoring. It applies the schema migrations at startup,
-so a restore into a database that still holds the old tables is safe, but a
-restore into a database with a newer schema version may conflict with the
-migration the bot applies on the next boot.
-
----
-
-## Post-restore checklist
-
-After any restore, verify the bot starts cleanly and all subsystems are healthy:
-
-```bash
-uv run python -m tcbot &
-curl http://localhost:${PORT:-5000}/health
-```
-
-Expected response shape (HTTP 200 when all core subsystems are ready):
-```json
-{
-  "status": "ok",
-  "database": "ok",
-  "redis": "ok",
-  "scheduler": "ok",
-  "circuit_telegram": "closed",
-  "circuit_database": "closed",
-  "update_queue": 0,
-  "ts": "2026-01-01T02:00:00+00:00"
-}
-```
-
-`update_queue` is the PTB update-queue depth (`null` before the webhook
-receiver is wired): a climbing value means the event loop is not keeping up
-with Telegram, so watchdogs should page on it.
-
-`redis` is `"disabled"` when `REDIS_URL` is not configured. A degraded response
-uses HTTP `503`; inspect the individual fields before deciding whether a
-restore or a restart is required. Note that `redis` is informational only:
-the overall status (and the HTTP code) depends on the database, the scheduler,
-and the circuit breakers, so `"redis": "error"` alone still returns 200.
-The current ban command does not create
-timed-ban schedules, so do not assume that every restore contains unban jobs.
-
----
-
-## Schema migration note
-
-The bot applies the pending Alembic revisions at startup, so a restored
-database is brought to the current schema before the first handler query
-reaches it. Run `uv run alembic current` against the restored database to
-confirm the revision it is on, and `uv run alembic upgrade head` to apply
-anything the restore left behind.
-
-Protect the database account and backup archives with least-privilege access
-and network restrictions.
+Relevant tests include `tests/test_migrations.py`,
+`tests/test_migration_bootstrap.py`, and `tests/test_schema_*.py`.

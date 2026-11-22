@@ -1,166 +1,121 @@
-# Modules and Handler Registration
+# Modules
 
-Command and callback modules live in `tcbot/modules/`. They define user-facing entry points, attach decorators, and export PTB handlers through `__handlers__`.
+This page describes how Telegram command modules are discovered, filtered, and
+registered, and which module owns each command. It covers the `tcbot/modules/`
+layer only. Shared code lives in [the helper package](helpers.md), and the
+conversation flow implementations are drawn in [the pipelines](../pipelines/banning.md).
 
-For shared helpers consumed by these modules, see [`helpers.md`](helpers.md).
-For conversation flows, see [`workflows.md`](workflows.md). For database
-access, see [`database.md`](database.md). For runtime utilities, see
-[`utilities.md`](utilities.md).
+## Module discovery and registration
 
-## Dynamic discovery
+`tcbot/modules/__init__.py` is the single owner of module discovery. It finds
+every `*.py` file in `tcbot/modules/` except `__init__.py`, plus every
+subdirectory with an `__init__.py` except `helper` and `__pycache__`. Names are
+sorted so registration order is deterministic across filesystems.
 
-`tcbot/modules/__init__.py` discovers every top-level module in `tcbot/modules/`: plain `.py` files plus packages (directories with `__init__.py`, except `helper/`), both sorted so registration order is deterministic across filesystems (`Path.glob` order is OS-dependent and PTB resolves overlapping filters in registration order). A command module may therefore grow into a package without changing its dotted path, help topic, or filter names.
+`MODULES_LOAD` and `MODULES_NO_LOAD` are applied here. Both lists are validated
+against the discovered set; an invalid name exits startup with an error. When
+`MODULES_LOAD` is set it acts as an allowlist, and `MODULES_NO_LOAD` then
+removes names from the result.
 
-```mermaid
-flowchart TD
-    Start[tcbot.__main__] --> Discover[modules.__init__._discover_modules]
-    Discover --> Filter{MODULES_LOAD<br/>or MODULES_NO_LOAD?}
-    Filter -->|filter applied| Active[Active module list]
-    Filter -->|no filter| Active
-    Active --> Import[Import each module]
-    Import --> Collect[Collect __handlers__]
-    Collect --> Register[Register on PTB Application]
-    Register --> Transport[Start webhook or polling transport]
-```
+`get_handlers()` imports every active module and collects its `__handlers__`
+list. Imports run first so all failures are reported together; collection then
+follows the same sorted order. Each module exposes its handlers as
+`__handlers__`, a list of PTB handler objects.
 
-Environment filters:
+`register_handlers()` in `tcbot/__main__.py` attaches, in order:
 
-| Variable | Behavior |
-|---|---|
-| `MODULES_LOAD` | Comma-separated allowlist. If set, only these module names load. Invalid names stop startup. |
-| `MODULES_NO_LOAD` | Comma-separated denylist. Removes matching names from the discovered list. |
+1. The global rate-limit `TypeHandler(Update, global_rate_limit_handler)` at
+   handler group `-1`.
+2. The collected module handlers.
+3. The member-cache harvester at group `10`.
+4. The application error handler.
 
-A module name is the filename without `.py`, for example `bans` or `stats`.
+## Handler anatomy
 
-`get_handlers()` imports active modules and returns the combined list of each module's `__handlers__` as `list[BaseHandler[Any, Any, Any]]`. Imports run first so every failure is reported together before the fail-fast exit; collection then follows `ALL_MODULES` order. The caller (`tcbot/__main__.py`) registers the returned handlers on the PTB application.
+Handlers are small orchestration functions. A typical command handler:
 
-## Module contract
+- guards `effective_message`, `effective_user`, and `effective_chat`;
+- resolves the locale once with `helper.locale.locale_for_update`;
+- delegates authorization to decorators and guards;
+- delegates persistence to `tcbot/database/*_db.py` helpers;
+- delegates multi-step work to a flow in `helper/pipelines/`;
+- sends replies through `messages/reply_rich`.
 
-Visible help modules expose one unified `__help__` entry (see
-[`helpers.md`](helpers.md) for the `HelpEntry` shape):
+Decorator order is fixed: `ratelimiter()` outermost, the required
+authorization guard second, and `log_execution` innermost. Message-event
+handlers are exempt from per-handler rate limits. Callback-query handlers
+answer the query before visible work.
 
-```python
-__help__: replies.HelpEntry = {
-    "name": "Ban",
-    "overview": "Issues a federation-wide ban...",
-    "sections": [...],
-}
-__handlers__ = [...]
-```
+## Command ownership
 
-The help builder includes a module only when it exposes a `get_help(locale)`
-builder that returns a non-empty entry. Modules without one are therefore
-omitted from `/help`; this is a help-discovery convention, not a
-handler-registration switch.
+Commands are matched by `build_prefixed_filters()` against all configured
+prefixes (`/`, `!`, and `.` by default). Short aliases are intentional.
 
-## Command-module isolation
-
-A command module must not import another command module. Two modules
-importing each other is a cycle in the making, and it also defeats
-`MODULES_NO_LOAD`: the filter stops a module from registering its
-handlers, but an import still pulls it in.
-
-The shared code that two command modules need belongs in
-`tcbot/modules/helper/`. The panel renderers the start menu and the About
-and Groups commands share are the worked example: they live in
-`helper/messages/panels.py`, so both sides reach the same renderer
-without depending on each other.
-
-The rule is checked by `tests/test_layering.py` together with the rest of
-the layer boundaries.
-
-## Command modules
-
-| Module | Visible help topic | Main handlers/commands | Notes |
-|---|---|---|---|
-| `admins.py` | `Admins` | `/tcpromote`, `/tcp`, `/tcdemote`, `/tcd`, `/transferowner`, `/tfowner`, `/tcpromoterequests`, `/tcreqs`, `/tcpromotelist`, `/tcplist` | Role assignment, demotion confirmation, owner transfer, promotion queue callbacks. |
-| `appeals.py` | `Appeal` | `/start appeal_<ban_id>` plus appeal decision callbacks | Registers `appeal.build_handler()` and approve/reject callbacks. |
-| `bans.py` | `Ban` | `/tcban`, `/tcb` | Validates Developer+ access, auto-demotes role holders, enters `ban_flow`. |
-| `broadcast.py` | `Broadcast` | `/tcbroadcast`, `/bc` | Sends a message to all active groups and logs results. |
-| `check.py` | `Check` | `/checkme`, `/cme`, `/check`, `/c` | Ban status lookup (`/checkme`) and comprehensive user profile (`/check`) with bans/warns/kicks/mutes/appeals drill-down. |
-| `connect.py` | `Connect` | `/tcconnect`, `/tccon`, bot-added updates, connect/cancel callbacks | Group connection approval and permission checks. |
-| `disconnecting.py` | `Disconnect` | `/tcdisconnect`, `/tcdiscon`, `/rmtc` | Group-owner disconnect and staff remote disconnect. |
-| `groups.py` | `Groups` | `/tcgroups`, `/tcg` | Connected group list and details toggle. |
-| `kick.py` | `Kick` | `/tckick`, `/tck` | Moderator+ current-group kick through shared reason/proof flow. |
-| `language.py` | `Language` | `/language`, `/lang`, `/langs` plus `language_menu`, `lang:list:*`, `lang:set:*` callbacks | Per-user (PM) and per-group locale selection. Group changes require the group creator or federation staff; the selected locale drives all following replies. |
-| `maintenance.py` | `Maintenance` | `/leaveall`, `/exitall`, `/tcleave`, `/cleanup`, `/tcclean`, `/tcc`, `/tcrepair`, `/tcr` | Emergency leave-all, staff cleanup, and enforcement-run repair. |
-| `mute.py` | `Mute` | `/tcmute`, `/tcm`, `/tcunmute`, `/tcunm`, `/tcum` | Federation-wide mute conversation and direct unmute. |
-| `stats.py` | `Stats` | `/tcstats`, `/tcs` plus stats callbacks | Summary, staff list, active bans, connected chats, search/detail callbacks. |
-| `unban.py` | `Unban` | `/tcunban`, `/tcunb` | Developer+ federation unban. |
-| `warns.py` | `Warnings` | `/tcwarn`, `/tcw`, `/tcunwarn`, `/tcunw`, `/warns`, `/warnlist`, `/resetwarns`, `/clearwarns` | Warning conversation and direct warning management commands. |
-| `netspeed.py` | `Netspeed` | `/ping`, `/p`, `/speedtest`, `/st` | Owner-only network diagnostics: API round-trip latency ping and full bandwidth speed test against speedtest.net in a thread executor. |
-
-## Internal/menu modules
-
-| Module | Purpose |
-|---|---|
-| `about.py` | Start-menu About page callback. |
-| `additional.py` | Start-menu Additional page callback. |
-| `greeting.py` | New/left member status handlers for watched groups; also monitors bot own-membership changes (left/kicked triggers group deactivation; member/restricted demotion sends a warning to the mod log channel). |
-| `help.py` | `/help` command and help-menu callbacks generated from loaded modules. |
-| `privacy.py` | Start-menu Privacy and Privacy Policy callbacks. Privacy Policy uses per-section navigation: an index page lists six sections (What We Collect, Why We Collect It, Who Can Access It, How Long We Keep It, Your Rights, Contact), each rendered individually via `privacy_section_<idx>` callbacks with a back button to the index. |
-| `start.py` | `/start` menu and group-PM handoff callbacks. |
-
-These modules usually set `__module_name__ = None` so they are not listed as separate `/help` topics.
-
-## Handler patterns
-
-### Message commands
-
-Most commands use `build_prefixed_filters()` so `/`, `!`, `.`, and configured prefixes work consistently. Command matching is case-sensitive and lowercase-only, and `@BotName` suffixes are accepted only when they target the current bot.
-
-```python
-_BAN_CMDS = build_prefixed_filters("tcban") | build_prefixed_filters("tcb")
-__handlers__ = [ban_conversation(cmd_ban_start, _BAN_CMDS)]
-```
-
-### Conversation entry points
-
-Command modules pass their entry function and command filter into workflow factories:
-
-- `ban_conversation(cmd_ban_start, _BAN_CMDS)`
-- `kick_conversation(cmd_kick, _KICK_CMDS)`
-- `mute_conversation(cmd_mute, _MUTE_CMDS, escape_filter=_UNMUTE_CMDS)`
-- `warn_conversation(cmd_warn, _WARN_CMDS, escape_filter=_WARN_ESCAPE_CMDS)`
-
-### Callback handlers
-
-Callback data should be namespace-prefixed and matched with explicit regexes:
-
-```python
-CallbackQueryHandler(on_demote_confirm, pattern=r"^demote_confirm:\d+(:\d+)?$")
-```
-
-Always call `await q.answer()` at the beginning of callback handlers.
-
-## Permission conventions
-
-| Decorator | Minimum effective role | Typical modules |
+| Module | Commands | Access |
 |---|---|---|
-| `owner_only` | Owner | Owner transfer, leave-all. |
-| `staff_only` | Owner/Admin | Broadcast, cleanup, promotion requests. |
-| `mod_only` | Developer+ | Ban and unban. |
-| `basic_mod_only` | Moderator+ | Kick, mute, warn. |
+| `bans.py` | `/tcban`, `/tcb` | Developer and above. |
+| `unban.py` | `/tcunban`, `/tcunb` | Developer and above. |
+| `kick.py` | `/tckick`, `/tck` | Moderator and above. |
+| `mute.py` | `/tcmute`, `/tcm`, `/tcunmute`, `/tcunm`, `/tcum` | Moderator and above. |
+| `warns.py` | `/tcwarn`, `/tcw`, `/tcunwarn`, `/tcunw`, `/warns`, `/warnlist`, `/resetwarns`, `/clearwarns` | Moderator and above. |
+| `check.py` | `/check`, `/c`, `/checkme`, `/cme` | Anyone. |
+| `appeals.py` | `/start appeal_<ref>` deep link, `#appeal` in the main group, `appeal_approve_*`, `appeal_reject_*` | Banned member or staff. |
+| `connect.py` | `/tcconnect`, `/tccon`, plus `MY_CHAT_MEMBER` events | Group admins and the bot-added flow. |
+| `disconnecting.py` | `/tcdisconnect`, `/rmtc` | Group creator or federation staff. |
+| `groups.py` | `/tcgroups`, `/tcg` | Anyone. |
+| `rules.py` | `/tcrules`, `/rules`, rule callbacks | Staff editor and public reader. |
+| `admins.py` | `/tcpromote`, `/tcp`, `/tcdemote`, `/tcd`, `/transferowner`, `/tfowner`, `/tcpromoterequests`, `/tcreqs`, `/tcpromotelist`, `/tcplist`, promotion callbacks | Staff and Owner. |
+| `language.py` | `/language`, `/lang`, `/langs`, language callbacks | Anyone; group scope requires manage rights. |
+| `stats.py` | `/tcstats`, `/tcs`, stats callbacks | Anyone; drill-downs check rank. |
+| `start.py` | `/start`, main-menu callbacks | Anyone. |
+| `help.py` | `/help`, help callbacks | Anyone. |
+| `about.py` | `about_menu` callback | Anyone. |
+| `additional.py` | `additional_menu` callback | Anyone. |
+| `privacy.py` | privacy callbacks | Anyone. |
+| `greeting.py` | New-member, join-request, left-member, and migration events | Event driven. |
+| `broadcast.py` | `/tcbroadcast`, `/bc` | Staff. |
+| `maintenance.py` | `/tcleaveall`, `/leaveall`, `/exitall`, `/cleanup`, `/tcclean`, `/tcc`, `/tcforget`, `/tcf`, `/tcrepair`, `/tcr` | Staff and Owner. |
+| `netspeed.py` | `/ping`, `/p`, `/speedtest`, `/st` | Owner. |
 
-Use role helpers from `users_roles` and `guards.resolve_and_check`; avoid manual chains of `is_owner()` + `is_admin()` checks.
+## Help entries
 
-The schema also carries a permission catalog: `permission_definitions`
-names the capabilities, `role_permissions` says which role holds which
-one, and `users_roles.has_permission(user_id, permission_key)` asks the
-database whether a user holds one. The handlers gate on a tier instead,
-so the catalog and the tier model have to agree.
-`tests/test_rbac_catalog.py` pins that agreement: it names the
-capability and the tier of every gated command, and it fails when the
-seeded grants no longer match the tier model. A change to either side has
-to be a change to both.
+Modules that describe themselves expose `get_help(locale)` returning a
+`HelpEntry`. `__help__` remains the default-locale entry for tests and
+fallbacks. `help.py` rebuilds topics, overviews, sections, and keyboards per
+request so the help follows the tapper's locale. Panel-only modules such as
+`about`, `additional`, `privacy`, and `start` set `__module_name__ = None` and
+do not expose a help entry.
 
-## Module implementation checklist
+Both `en-US` wording and other locales live in `i18n/<locale>/*.toml`; Python
+holds structure and stable keys, not user-facing prose.
 
-- Use `from __future__ import annotations` as the first non-comment line.
-- Keep imports grouped: standard library, third-party, internal.
-- Name async command handlers `cmd_*` and event handlers `on_*`.
-- Define command filters near the bottom.
-- Export `__handlers__` at the bottom.
-- Use database helper modules instead of raw SQL access.
-- Put new conversation logic in `tcbot/modules/helper/pipelines/*_flow.py` modules (one module per flow, split into a `*_flow/` package only when a flow outgrows the file budget).
-- Render user-facing messages through `tcbot.utils.i18n.t()` with a resolved locale so they are MarkdownV2-safe automatically; use `plain=True` for callback alerts and other contexts Telegram never parses.
+## Authorization layers
+
+Two layers are both required and neither substitutes for the other:
+
+- Decorators answer "may this user run this command at all": `owner_only`,
+  `staff_only`, `mod_only`, `basic_mod_only`, and `permission_only(key)`.
+- Guards in `helper/guards.py` answer "may this executor act on this specific
+  target": `resolve_and_check`, `classify_and_check`, `enforcement_refusal`,
+  and the demote gates.
+
+All fresh role reads fail closed: a lookup error refuses the action. See
+[permissions](../pipelines/permissions.md).
+
+## Module boundaries and dead paths
+
+- Feature modules must not build SQLAlchemy statements or write to the
+  database directly.
+- Keyboard builders belong only in `helper/buttons/`.
+- Conversation flows belong only in `helper/pipelines/*_flow.py`.
+- Message formatting belongs only in `helper/messages/` and `utils/i18n.py`.
+- There is no separate MarkdownV2 fallback send path. The rich transport
+  keeps the inline keyboard as a fallback only where a button cell cannot be
+  converted to a rich button.
+
+## Validation hints
+
+Check that a new module exposes `__handlers__`, that it is not named `helper`,
+and that `get_help` returns localized content. `tests/test_layering.py` guards
+import boundaries, and `tests/test_keyboard_locale_contract.py` checks that
+button labels come from the catalog.

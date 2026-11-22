@@ -150,7 +150,7 @@ Detailed failure propagation, concurrency, cancellation, and timeout behavior fo
 ### Message Formatting
 
 - Bot messages render in the viewer's locale, with `en-US` as the default locale.
-- User-facing messages use `parse_mode="MarkdownV2"`.
+- User-facing messages are sent as rich messages through the `messages/` helpers; no parse mode is selected.
 - Never use HTML parse mode.
 - Never hardcode user-facing wording in Python. Follow the [Internationalization](#internationalization-i18n) rules.
 - Escape user-provided text with `esc()`.
@@ -240,7 +240,7 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 - Section labels and scope bodies are shared through `common.toml` sections such as `[section]`, `[context]`, and `[target]`.
 - Section labels render as raw text, while section bodies render as MarkdownV2.
 - Use `who_section`, `where_section`, and `target_section` with the resolved locale.
-- Every locale-dependent keyboard builder in `keyboards/` takes `locale` and reads button labels from `button.toml`.
+- Every locale-dependent keyboard builder in `buttons/` takes `locale` and reads button labels from `button.toml`.
 - `help_topics_kb` is locale-independent.
 - Thread the handler locale through every relevant call site.
 
@@ -281,8 +281,8 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 
 ### Keyboards and Formatting
 
-- Define inline keyboard builders only in `tcbot/modules/helper/keyboards/`.
-- Use formatter helpers from `tcbot/utils/formatter.py`.
+- Define inline keyboard builders only in `tcbot/modules/helper/buttons/`.
+- Use formatter helpers from `tcbot/utils/i18n.py`.
 - Reuse existing keyboard and formatting helpers rather than duplicating button construction or formatting behavior.
 - Keep keyboard construction separate from conversation-state management.
 - Pass locale explicitly to locale-dependent keyboard builders.
@@ -351,7 +351,7 @@ The following patterns are forbidden:
 
 - Creating `*_conv.py` files.
 - Writing to the database from command or feature modules.
-- Adding keyboard builders outside `tcbot/modules/helper/keyboards/`.
+- Adding keyboard builders outside `tcbot/modules/helper/buttons/`.
 - Using HTML parse mode.
 - Duplicating reason or proof workflow state handlers.
 - Calling raw `col()` from feature modules.

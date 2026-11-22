@@ -1,106 +1,116 @@
 # Community rules
 
+This page describes the rules editor, publication, member acknowledgment, and
+the shared moderation picker. The draft model, publication sequence, and
+acknowledgment path are drawn in [the rules diagram](../../pipelines/rules.md).
+
+Related pages: [banning](banning.md), [language](../language.md), and
+[the database layer](../../architecture/database.md).
+
 ## Purpose and ownership
 
-Community rules let staff maintain one canonical rule set inside the bot and
-publish it to the main channel. The database is the source of truth; the
-channel is a representation that a later publish reconciles. The feature owns
-four surfaces: the staff editor, the channel representation, the moderation
-picker, and member acknowledgement.
+A rule set owns categories and immutable published versions. Staff edit a
+draft in the bot DM, publish it to the main channel, and members can
+acknowledge a version in the welcome message. Moderation flows can cite
+published rules through a shared picker.
 
-- `tcbot/modules/rules.py`: `/tcrules`, `/rules`, and callback registration.
-- `tcbot/modules/helper/pipelines/rules_flow.py`: editor conversation.
-- `tcbot/modules/helper/pipelines/rules_publish.py`: publish and channel sync.
-- `tcbot/database/rules_db/`: set, draft, category, item, publication, run,
-  and acknowledgement helpers.
-- `tcbot/modules/helper/messages/rules.py`: channel and menu renderers.
-- `i18n/<locale>/rules.toml`: editor, picker, publish, and acknowledgement text.
+Ownership: `rules.py` owns the commands and read-only callbacks;
+`rules_flow.py` owns the editor conversation; `rules_publish.py` owns channel
+publication; `rules_db/` owns drafts, items, versions, publications, and
+acknowledgments; `greeting.py` owns the welcome-time ack button.
 
-## Configuration
+## Commands and access
 
-`MAIN_CHANNEL` is the numeric chat id of the main channel and the publication
-target. It must be negative; a positive value is treated as unset. When it is
-empty, a draft can still be edited but publish refuses with a clear message.
-The bot needs `can_post_messages`, `can_edit_messages`, and, when a category
-or part is removed, `can_delete_messages`.
+| Command | Alias | Access | Scope |
+|---|---|---|---|
+| `/tcrules` | none | Staff with `rules.manage` | Private chat only. |
+| `/rules` | none | Anyone | Private chat only. |
 
-The community menu links are derived from `MAIN_CHANNEL`, `MAIN_GROUP`,
-`LOGS`, and `APPEALS` through `tcbot/utils/community_links.py`. A chat username
-wins, otherwise its invite link is used; a chat with neither drops its button.
-The former `COMMUNITY_*_URL` variables are gone.
+`/tcrules` uses `ratelimiter(THROTTLE_STAFF)` and `permission_only("rules.manage")`.
+`/rules` uses `ratelimiter(THROTTLE_READ)`. Both refuse group contexts and ask
+the user to open the bot DM.
 
-## Staff flow
+## Editor conversation
 
-`/tcrules` requires `rules.manage`. In a group it replies with a prompt to use
-the command in private chat so the panel does not flood the group. The panel
-shows the set, the current published version, the draft state, and the channel
-slot counts. The editor supports adding and renaming categories, adding items
-with a title, plain-text body, and optional http(s) reference URL, previewing
-the rendered channel text, publishing, and discarding the draft.
+The single entry is the `rules_edit_draft` callback. Five states cover three
+text inputs, a URL input, and a discard confirmation:
 
-A draft is cloned from the current published version. The clone snapshots the
-category titles and orders, so renaming or reordering categories later cannot
-change an older published version. Only one draft per set and locale can exist
-at a time. Publishing supersedes the previous published version and requires
-at least one item.
+| State | Value | Input |
+|---|---|---|
+| `WAITING_CATEGORY_TITLE` | 1 | Category title. |
+| `WAITING_ITEM_TITLE` | 2 | Item title. |
+| `WAITING_ITEM_BODY` | 3 | Item body. |
+| `WAITING_ITEM_URL` | 4 | URL or empty. |
+| `WAITING_CONFIRM_DISCARD` | 5 | Discard yes or no. |
 
-A new community set starts with a small default catalogue (Conduct, Spam and
-Advertising, Content, Safety, Other). These are editable content, not fixed
-policy: staff can rename, reorder, retire, and add categories.
+Limits are title 200, body 3500, and URL 500 characters; URLs must start with
+`https://` or `http://`. Category slugs match `^[a-z0-9][a-z0-9._-]*$` and are
+capped at 40 characters so callbacks stay within Telegram's 64-byte limit.
+`editor_allowed()` rechecks `rules.manage` on every editor surface and fails
+closed.
 
-## Publish and channel sync
+Editor callbacks include `rules_edit_draft`, `rules_preview`, `rules_publish`,
+`rules_discard`, `rules_discard_yes`, `rules_discard_no`, `rules_cat:<key>`,
+`rules_cat_(rename|up|down|del):<key>`, `rules_cat_add`, `rules_item:<id>`,
+`rules_item_add`, `rules_categories`, `rules_panel`, and the fallback
+`rules_step:cancel`. The read-only menu uses `rules_menu`, `rules_page:<n>`,
+and `rules_show:<key>`.
 
-Publish first acquires a short-lived run for the set and channel; a live run
-refuses a second concurrent publish. The database transition commits before
-Telegram is touched. Each rendered part becomes one channel message identified
-by its stored message id. A part whose content hash is unchanged is edited in
-place; a new part is sent, and an unused part is retired. A failed channel
-operation is recorded on its slot and reported to staff; the next publish
-reconciles it. There is no sync command, rebuild command, or background retry.
+## Publication
 
-Because Telegram edits cannot move an already-sent message, reordering
-categories does not move old channel messages. The first published order is
-stable and new categories append at the end. A crash between Telegram send and
-the message-id write can produce a duplicate on the next publish; exactly-once
-delivery is not promised.
+`publish_rules()` runs under a database lease. `runs.reclaim_expired()` marks
+stale running rows after a 300-second lease, then `runs.acquire()` inserts a
+running row guarded by a partial unique index; a concurrent publish fails
+immediately. `MAIN_CHANNEL` must be configured or publication is refused.
 
-## Moderation picker
+The channel text is split into parts of at most 4000 UTF-16 units, grouped by
+category with a version and timestamp footer. Each part is hashed with SHA-256
+and stored on its slot. A slot with a matching message id and hash is edited in
+place; a changed or missing message is sent fresh. `mark_failed(missing=True)`
+clears a stale id. Run states are `running`, `completed`, `partial`, and
+`failed`; slot states are `pending`, `synced`, `missing`, `failed`, and
+`retired`.
 
-The shared step in `rules_step.py` drives a multi-select picker over published
-items; its keyboard is built by `keyboards/rules.py`. A flow keeps the chosen item ids and an optional "Other / Not covered"
-note in its conversation scope and passes them to the decision writer, which
-attaches them to the case through `moderation_db.link_case_rules` in the same
-transaction as the decision. Draft items are refused by the schema; items from
-a superseded version remain linkable so a publish during a flow cannot break
-the action. When no rules are published the step is skipped so moderation is
-never blocked.
+## Acknowledgment and picker
 
-The linked rule titles are also shown on `/check` ban details and on the staff
-appeal review card, so a reviewer sees the exact rules the case cited rather
-than a newer version's wording. A changelog entry records the change.
+`greeting.py` attaches an "I agree" button in the primary group when the
+published set requires acknowledgment and the member has not accepted that
+exact version. The callback is `rules_ack:<version>:<member>`; `_acknowledge()`
+verifies the tapper, the current version, the enabled flag, and the absence of
+a prior record. The insert is `ON CONFLICT DO NOTHING`, so duplicate taps are
+safe. A rules read failure never blocks the welcome.
 
-## Federation origin of the main group
+The shared picker in `rules_step.py` uses `rules_step:pick:<id>`, `done`,
+`other`, `clear`, and `cancel`. Ban has a dedicated step with
+`WAITING_BAN_RULES` (2) and `WAITING_BAN_RULES_NOTE` (3); kick, mute, and warn
+share the generic step. Selections are linked to the case through
+`moderation_db.link_case_rules()`.
 
-The main group, main channel, proof archive, and the log and appeal
-destinations are deployment infrastructure. They are never connected through
-`/tcconnect` or the bot-added flow, even when one of them is a group. The main
-group is still a valid origin for moderation commands: the origin gate
-accepts `MAIN_GROUP` as the primary group without reading connection state.
-`MAIN_CHANNEL` must be a negative chat id.
+## Database impact
 
-## Member acknowledgement
+Drafts and published data live in `rule_sets`, `rule_versions`,
+`rule_categories`, `rule_items`, `rule_publication_runs`, `rule_publications`,
+and `rule_acknowledgements`. Published versions are immutable; every mutation
+touches a draft. Publication commits to the database before touching Telegram.
 
-The `I agree` button appears only on the greeting of a new member in the
-primary group. It carries the version id and the member id; the handler refuses
-a tap from another member, a stale version, a disabled flag, or a duplicate,
-and answers exactly once. Acknowledgements are per published version and are
-retained as history. A member who misses the greeting cannot acknowledge until
-joining again; there is no DM prompt or automatic retry.
+## Logging
 
-## Limitations
+Category views render as rich tables where supported. `rules.publish.result`
+reports synced and failed slot counts. Editor authorization failures and
+publication errors are logged with the set id and operator id.
 
-- Published content is en-US. Button and navigation labels follow the viewer.
-- Rules bodies are plain text; no raw Markdown is accepted from staff.
-- Acknowledgement is greeting-only, so the recorded count is a lower bound of
-  actual acceptance, not a percentage of the community.
-- Channel message order is fixed at first publish.
+## Edge cases
+
+- A crashed publish is reclaimed by the lease and reconciled by the next run.
+- A deleted channel post is treated as missing and re-sent.
+- A rules read failure in the greeting path sends the welcome without a button.
+- A stale acknowledgment tap is refused with a localized alert.
+
+## Validation hints
+
+Relevant tests include `tests/test_rules_*.py` and
+`tests/test_keyboard_locale_contract.py`.
+
+```bash
+uv run pytest tests/ -q -k rules
+```

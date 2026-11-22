@@ -1,123 +1,118 @@
-# Language Preferences
+# Language
 
-This document describes the per-user and per-group locale system: the TOML
-translation catalog, the `utils/i18n.py` engine, locale persistence, the
-`/language` command and selection flow, the start-menu entry point, and
-how every user-facing surface renders in the resolved locale.
+This page describes locale selection and the translation catalog. The
+resolution tiers and rendering rules are implemented in `utils/i18n.py`,
+`modules/helper/locale.py`, `modules/helper/settings_db` access, and
+`tcbot/modules/language.py`.
 
-For shared helpers, see [`../architecture/helpers.md`](../architecture/helpers.md).
-For runtime utilities, see [`../architecture/utilities.md`](../architecture/utilities.md).
-For the database layer, see [`../architecture/database.md`](../architecture/database.md).
+Related pages: [helpers](../architecture/helpers.md),
+[utilities](../architecture/utilities.md), and
+[transport](../pipelines/transport.md).
 
-## Purpose
+## Purpose and ownership
 
-Users set a personal locale (used in private chats); groups hold their own
-locale (used for group-visible messages), changeable only by the group
-owner or federation staff. `en-US` and `id-ID` (Bahasa Indonesia) ship
-today; new locales land as data files with no Python changes.
+Every user-facing message renders in a resolved locale. Locale preferences can
+be set per user and per group, and a community default is available. User
+wording lives in TOML files under `i18n/<locale>/`, with `en-US` as the source
+of truth. Python code holds structure and stable keys, not prose.
 
-## Commands and callbacks
+Ownership: `utils/i18n.py` loads catalogs and renders templates;
+`helper/locale.py` resolves a locale for one update; `database/settings_db.py`
+persists preferences; `modules/language.py` owns the command and callbacks;
+`buttons/language.py` builds the keyboards.
 
-| Command | Alias | Purpose | Access |
-|---|---|---|---|
-| `/language` | `/lang`, `/langs` | Show the language panel for this chat. | Anyone (own preference); group changes need owner/staff. |
+## Catalog structure
 
-| Callback | Purpose |
-|---|---|
-| `language_menu` | Open the personal panel from the start menu. |
-| `lang:list:<scope>` | Re-render the option list (`scope` is `user` or `group`). A group list tap requires group-management permission. |
-| `lang:set:<scope>:<locale>` | Save the locale and edit the panel into a confirmation. |
+```text
+i18n/
+├── en-US/            Source of truth, must hold every key.
+│   ├── common.toml   Shared notices and section labels.
+│   ├── button.toml   Every button label, never duplicated.
+│   ├── language.toml Language flow strings.
+│   ├── help.toml     Help index header.
+│   └── <domain>.toml One file per feature.
+├── id-ID/            Indonesian catalog.
+└── README.md         Translator contract.
+```
 
-The start menu (`main_menu_kb`) carries a bottom-row `Language` button
-wired to the same panel renderer as the command; there is no second
-implementation.
-
-## User flow and staff flow
-
-1. The caller runs `/lang` (or taps `Language`): in PM the personal
-   panel renders in the user locale, in groups the group panel renders
-   in the group locale, each with one button per available locale.
-2. Tapping a language validates the code, checks group permission when
-   the scope is `group`, persists the choice, and edits the panel into
-   a confirmation in the newly chosen language.
-3. Unknown locale taps answer with the unavailable notice; denied group
-   taps (list or save) answer with the permission notice. Neither edits
-   the panel.
+The file name is the key prefix: `banning.toml` holding `done` registers
+`banning.done`. Section tables extend the prefix. The `id` code still resolves
+to `id-ID` for stored preferences and in-flight callbacks; new saves use
+`id-ID`.
 
 ## Locale resolution
 
-`resolve_locale()` in `tcbot/utils/i18n.py` owns precedence: explicit
-locale first, then the user locale in private chats or the group locale
-in group-like chats, then the community default
-(`community_settings.default_locale`), then `en-US`. Unknown or absent
-values fall through to the next tier; resolution never raises.
+`locale_for_update(update)` resolves once per handler:
 
-Handlers resolve once per update via `helper.locale.locale_for_update`
-(PM reads the sender, groups read the group row); direct messages use
-`locale_for_user`, updateless event paths use `locale_for_chat`. The user
-locale, the group locale, and the community default read through shared
-two-level caches with the generation guard, so a language change in one
-process invalidates the value in every other process; the L1 TTL is 300 s
-and the Redis TTL is 600 s. The community default is read only when the
-chat-specific preference is absent or unknown. Flows carry the moderator
-locale in conversation state and resolve the target locale fresh for user
-DMs.
+| Context | Source |
+|---|---|
+| Private chat | The sender's locale. |
+| Group | The group locale, so a shared audience reads one language. |
+| Direct message to one user | `locale_for_user`. |
+| Event without update | `locale_for_chat`. |
 
-## Coverage
+`resolve_locale()` applies explicit precedence first, then the context locale,
+then the community default, then `en-US`. Unknown or absent values fall
+through, and resolution never raises. Every `t()` call passes the resolved
+locale explicitly. The default is for tests and golden checks, not as a
+shortcut in handlers.
 
-Every user-facing surface renders in the resolved locale: command
-replies and alerts, conversation prompts and keyboards, executor
-summaries and result cards, profile and drill-down views, the `/help`
-system (per-request rebuild via each module's `get_help(locale)`),
-identity refusals and notices, and all button labels (`button.toml`
-owns every label exactly once).
+Flows carry the moderator locale in conversation state using `{action}_locale`
+keys, and a direct message to the target resolves that target's locale freshly.
 
-Stays English by design: audit-log channel posts, staff operational
-messages (demotion warnings, enforcement logs), infra error reports,
-and log labels. Reason and proof records store the moderator's raw
-text; only the surrounding prose translates.
+## Templates and rendering
 
-## Database impact
+Templates are stored raw. In rich mode, literal text is HTML-escaped and the
+backtick code and asterisk bold mini-markup spans become `<code>` and `<b>`
+tags. Placeholders must be bare names such as `{user}` and `{count}`, with no
+format specifications or conversions, and mini-markup spans must be balanced,
+unnested, and free of braces.
 
-- `user_settings` table (`user_id`, unique): one row per user with an
-  explicit preference. Clearing sets `locale` to `NULL` and keeps the row,
-  so the other preferences of the user survive. Never touches
-  `telegram_users`, so preference-only users cannot inflate user counts
-  or appear in listings. The unique index on `user_id` is declared in
-  `tcbot/database/base/settings.py` and shipped with an Alembic revision.
-- `chat_settings.locale`: optional column on the group configuration row
-  (no new index; reads filter on the indexed `chat_id`). A trigger creates
-  the configuration row when a group is connected, so every connected
-  group has one. Clearing unsets the field. Groups without a row cannot
-  hold a locale.
-- Both helpers store codes verbatim; validity is enforced at the
-  command layer and defensively at resolution time.
+`Safe` marks preformatted fragments from helpers such as `user_ref()`,
+`code()`, and `bold()` so `t()` inserts them verbatim. Raw data is escaped.
+`plain=True` keeps raw text for callback alerts, which Telegram never parses.
+A rendering-mode mismatch shows raw escape characters or breaks parsing, so
+keys document their send path.
 
-## Logging behavior
+## Command and callbacks
 
-Missing translation keys log at error level and render as `[key]`
-(never empty, never an exception). Placeholder mismatches and `None`
-values raise `I18nError`. DB failures log at debug/exception level and
-surface the generic retry notice.
+| Command | Alias | Access |
+|---|---|---|
+| `/language` | `/lang`, `/langs` | Anyone. Personal scope in PM, group scope in groups. |
+
+| Callback | Effect |
+|---|---|
+| `language_menu` | Open the personal language panel from the start menu. |
+| `lang:list:(user\|group)` | Re-render the option list. |
+| `lang:set:(user\|group):<code>` | Save the locale and show a confirmation. |
+
+Changing the group scope requires `can_manage_group(..., fresh=True)` and a
+connected group. Group preference writes use `groups_db.set_group_locale()`;
+personal writes use `settings_db.set_user_locale()`. Both cache layers are
+invalidated so the change reaches every process. Alerts render in the
+tapper's current locale, not the target locale, because the target may be
+unknown or denied.
+
+## Help content
+
+Each module exposes `get_help(locale)` returning a `HelpEntry`. `__help__` is
+the default-locale entry for tests and fallbacks. `help.py` rebuilds topics,
+overviews, sections, and keyboards per request. Section labels and scope bodies
+are shared through `common.toml` tables; labels render as plain text and bodies
+render as rich markup. Module display names stay English identifiers.
 
 ## Edge cases
 
-- Unknown locale codes (including stale DB values for removed locales)
-  resolve to `en-US`.
-- Crafted cross-scope taps (`user` scope in a group and vice versa) are
-  answered and ignored.
-- Non-connected groups cannot hold a locale; the command explains why.
-- Anonymous-admin senders fail the creator check and are denied like
-  any non-privileged user (fail closed).
-- Malformed TOML fails fast at load with the file and reason named.
+- A missing key falls back to `en-US` per key; a key missing everywhere logs an
+  error and renders as a bracketed key.
+- A stale locale in a callback is checked against the actual scope and refused.
+- A locale change in one process reaches the others through the Redis L2 cache.
 
 ## Validation hints
 
-```bash
-uv run --with pytest pytest tests/test_i18n.py -q
-```
+`tests/test_i18n.py` checks placeholder sets and markup balance, and
+`tests/test_keyboard_locale_contract.py` checks button labels.
 
-The suite locks catalog loading, fallback, placeholder escaping and
-`Safe` passthrough, resolution precedence, persistence round-trips and
-isolation, permission matrix, aliases, callback shapes, the start-menu
-button row, and MarkdownV2-clean rendering of every template.
+```bash
+uv run pytest tests/ -q -k i18n
+```

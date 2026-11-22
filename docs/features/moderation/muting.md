@@ -1,282 +1,108 @@
 # Muting
 
-This document describes the current federation mute and unmute behavior implemented by `tcbot/modules/mute.py` (the `/tcmute` and `/tcunmute` entry points), `tcbot/modules/helper/pipelines/mute_flow.py` (the `_execute_mute` and `execute_unmute` executors), `tcbot/utils/time_and_date.py` (the duration helpers), `tcbot/modules/helper/pipelines/reason_flow.py` (the shared proof/reason conversation), and `tcbot/database/mutes_db.py` (the mute decisions in `moderation_actions` and the `active_mutes` view).
+This page describes the group mute and unmute implemented by
+`tcbot/modules/mute.py` and `helper/pipelines/mute_flow.py`. The state machine
+and replay are drawn in [the muting diagram](../../pipelines/muting.md).
 
-For the ban flow, see [`banning.md`](banning.md). For the kick flow, see
-[`kicking.md`](kicking.md). For role auto-demotion on mute, see
-[`../roles/demote.md`](../roles/demote.md). For shared helpers, see
-[`../../architecture/helpers.md`](../../architecture/helpers.md). For the
-database layer, see [`../../architecture/database.md`](../../architecture/database.md).
+Related pages: [banning](banning.md), [kicking](kicking.md), and
+[connection](connecting.md).
 
-```mermaid
-flowchart TD
-    Cmd[/tcmute command/] --> Perm{Moderator+ rank check}
-    Perm -->|denied| End1[Reject]
-    Perm -->|allowed| Duration[Parse optional duration token]
-    Duration --> Target[Resolve target]
-    Target --> Ident{Self / bot / Owner?}
-    Ident -->|self or bot| Refuse[identity.refuse_message]
-    Ident -->|allowed| ReasonStep[Inline reason present?]
-    ReasonStep -->|yes| ProofStep[WAITING_PROOF]
-    ReasonStep -->|no| ReasonPrompt[WAITING_REASON]
-    ReasonPrompt --> ProofStep
-    ProofStep --> Exec[execute_mute: upload proof, rank gate, persist record]
-    Exec --> Store[record_mute DB write]
-    Store -->|write failed| AbortM[Retry notice, no group touched]
-    Store -->|stored| FanOut[enforcement worker restricts each group]
-    FanOut --> Log[log channel post]
-    FanOut --> Reply[Edit prompt to summary]
-    Unmute[/tcunmute command/] --> ExecU[execute_unmute]
-    ExecU --> Guard{get_active_mute present?}
-    Guard -->|no| NoMute[Reply: no active mute]
-    Guard -->|yes| Fetch[Fetch active groups plus primary]
-    Fetch --> Decide[revoke_mute_and_queue_unmute]
-    Decide --> Run[revoke enforcement run per group]
-    Run --> Deliver[Worker restores the permission]
-    Deliver --> Report[Reply: full, partial, or queued]
-```
+## Purpose and ownership
 
-## Purpose
+A mute restricts a member's ability to send messages in every active connected
+group. It may be permanent or timed. A timed mute expires at query time, so no
+sweep is needed to produce an honest active view. Join handling and group
+connection replay active mutes so the restriction survives re-entry and new
+groups.
 
-A federation mute restricts a user from sending messages, media, stickers, and polls across all active connected groups at once, plus the primary groups (`cfg.main_group`). Mutes may be timed (with a duration token) or permanent (`until_date=None`). The mute flow accepts an optional inline reason and optional proof, posts a federation mute log, and writes one mute decision to `moderation_actions`; the `active_mutes` view projects the decisions that are in force, so unmute and group-connect replay can find them. Targets that hold a federation role are auto-demoted when the mute is enforced.
+Ownership: `mute.py` parses duration and starts the conversation;
+`mute_flow.py` owns the apply and revoke executors; `mutes_db.py` owns the
+decision helpers; `enforcement_worker.py` delivers restrictions.
 
-`/tcunmute` clears the active-mute record and restores full send permissions across the same set of groups.
+## Commands and access
 
-## Commands and aliases
-
-| Command | Alias | Purpose | Access |
+| Command | Alias | Access | Origin |
 |---|---|---|---|
-| `/tcmute` | `/tcm` | Apply a federation-wide mute to a user. | Moderator and above via `basic_mod_only`. |
-| `/tcunmute` | `/tcunm`, `/tcum` | Restore full send permissions across all connected groups. | Moderator and above via `basic_mod_only`. |
+| `/tcmute <target> [duration] <reason>` | `/tcm` | Moderator and above (`basic_mod_only`) | Connected group only. |
+| `/tcunmute <target>` | `/tcunm`, `/tcum` | Moderator and above | Connected group only. |
 
-Commands use the project's configured prefixes; slash commands are examples.
+The command uses `ratelimiter(THROTTLE_MODERATION)`, then `basic_mod_only`, then
+`log_execution`. After target resolution it strips a restated reply target,
+then tries the first remaining token with `parse_duration()`. A token is
+popped only when it parses; an unparsable token stays in the reason text so
+nothing is silently dropped. Accepted suffixes are `s`, `m`, `h`, `d`, `w`,
+`mo`, and `ye`, with a 100-year cap.
 
-Federation origin: `/tcmute`, `/tcunmute`, `/tckick`, and the warn family require a connected or primary group; private chats and disconnected groups are refused. A connection-state outage blocks the action with a retry notice instead of proceeding.
+`cmd_unmute` is a single-action command that delegates to
+`targets.run_staff_action(action="unmute", ...)`. An escape filter keeps
+`/tcunmute` from being swallowed as reason text by the mute conversation.
 
-## `/tcmute` flow
+## Conversation and callbacks
 
-The mute command is a `ConversationHandler` built by `reason_flow.build_modaction_conv(reason, proof, ...)` and inherits all reason/proof state machine semantics from the shared factory. The mute conversation factory is wired with `escape_filter=_UNMUTE_CMDS` so that `/tcunmute` typed during a mute conversation is delivered to the unmute handler instead of being swallowed by the mute fallback.
+The mute conversation uses the shared `reason_flow.py` states
+`WAITING_REASON` (0), `WAITING_PROOF` (1), `WAITING_RULES` (2), and
+`WAITING_RULES_NOTE` (3). Callbacks are `mute_cancel`, `mute_done_proof`,
+`mute_skip_proof`, and the shared `rules_step:*` set. Done and Skip claim the
+execution slot before their first await and recheck the tapper's rank.
 
-1. A moderator runs `/tcmute <target> [duration] [reason]` or replies to a message with `/tcm [duration] [reason]`.
-2. The bot resolves the executor role and target in parallel.
-3. The executor must have at least Moderator rank.
-4. The target must resolve to a Telegram user ID.
-5. The bot rejects attempts to mute itself or the executor's own account via `identity.refuse_message`.
-6. The bot parses an optional duration token from the first remaining argument.
-7. If an inline reason was supplied, the bot skips directly to proof collection (`WAITING_PROOF`). Otherwise it prompts for a reason (`WAITING_REASON`).
-8. A reason is required; the reason prompt offers text input and `Cancel`, but no `Skip`.
-9. Proof is skippable via the `Skip` button.
-10. `_execute_mute` restricts the target across all active connected groups plus primary groups, writes the active-mute record, posts the mute log, and edits the prompt to a summary.
+## Apply, revoke, and replay
 
-## Duration token format
+`_execute_mute()` computes `until = utc_now() + duration` for a timed mute or
+`None` for a permanent one, builds `ChatPermissions(can_send_messages=False)`,
+and runs the enforcement gate twice at `min_role="moderator"`, before and
+after proof. `mutes_db.record_mute()` writes the decision, case, optional
+proof archive, rule links, and apply run in one transaction with idempotency
+key `moderation:{action_id}:apply:v1`. `demote_before_enforcement(trigger="mute")`
+runs best effort after the record commits.
 
-The duration regex is `_DURATION_RE` in `tcbot/utils/time_and_date.py`:
+A later mute supersedes the prior one: a new permanent mute clears the expiry,
+and a new timed mute keeps the later of the new and stored deadlines. The
+stored `duration_seconds` is the remaining lifetime while the original request
+is kept in metadata.
 
-```python
-_DURATION_RE = re.compile(r"^(\d+)(ye|mo|[smhdw])$", re.IGNORECASE)
-```
+`execute_unmute()` loads the active mute, fetches groups before revoking, and
+calls `mutes_db.revoke_mute_and_queue_unmute()` in one transaction with
+idempotency key `moderation:{action_id}:revoke:manual:v1`. The worker restores
+full permissions with `ChatPermissions.all_permissions()`. `revoked == 0` is an
+idempotent "no active mute" reply.
 
-| Token | Unit |
-|---|---|
-| `s` | seconds |
-| `m` | minutes |
-| `h` | hours |
-| `d` | days |
-| `w` | weeks (7 days) |
-| `mo` | months (30 days) |
-| `ye` | years (365 days) |
-
-`parse_duration("3d")` returns `timedelta(days=3)`. A token that fails the regex never matches the duration guard and stays in the reason text. A regex-valid but unparsable token (timedelta overflow or above the 100-year `_MAX_DURATION_DAYS=36500` cap) makes `parse_duration` return `None`, and the token is kept as reason text as well: it is popped from the arg list only after a successful parse, so moderator input is never silently dropped. The requested duration is stored as decision metadata beside the remaining lifetime, so a superseding mute cannot erase what the moderator originally asked for. The mute drill-down in `/check` renders both values (`Requested` and `Stored`) for each record.
-
-`fmt_duration(td, locale)` renders:
-
-- `total < 60` -> `Ns`
-- `< 1 hour` -> `Nm`
-- `< 1 day` -> `Nh`
-- `< 7 days` -> `Nd`
-- `< 30 days` -> `Nw`
-- `< 1 year` -> `Nmo`
-- else -> `Nye`
-
-A `None` duration renders as the localized `muting.duration.permanent` label (English default: `permanently`) and is passed to `restrict_chat_member` with `until_date=None`, producing a permanent restriction.
-
-## Target resolution and reason parsing
-
-The target can be specified by:
-
-- Replying to a message from the target.
-- Passing a numeric user ID after the command.
-- Passing an `@username` after the command, when resolvable.
-
-`cmd_mute` strips the target token first, then attempts to parse the duration token from the head of the remaining list. When a reply restates the quoted target (`/tcmute @alice 10m spam` or `/tcmute 123456789 10m spam`), that duplicate is stripped before the duration parse, so the mute keeps its intended lifetime. Anything left after the duration is the inline reason:
-
-```text
-/tcmute @username 3d spamming in chat
-# target: @username
-# duration: 3d
-# reason: spamming in chat
-
-/tcm 123456789 1w
-# target: 123456789
-# duration: 1w
-# reason: empty - bot prompts
-
-/tcmute @username
-# target: @username
-# duration: none (permanent)
-# reason: empty - bot prompts
-```
-
-The reason prompt and proof prompt are stamped with `extra_info` (`<code id>: <duration>`) so the moderator sees the duration even when no reason was typed inline.
-
-When the command replies to a user message, the quoted sender is the default target, with one exception: a leading numeric ID or `@username` that verifies as a real user different from the quoted sender overrides the reply, because a typed ID is deliberate intent while a quote is often just context. That override token is consumed as the target before duration parsing. Anything unverified (a reason starting with a number, an unknown ID) or fuzzy (partial-name search) keeps the reply target. A restated numeric ID or `@username` naming the quoted user themself is dropped before the duration parse, so it is not mistaken for a reason or a permanent duration. The shared `extraction.extract_mod_target(update, args, bot)` helper owns the resolution; `extraction.restates_reply_target()` owns the duplicate check.
-
-Inline reasons share the same 1000-character cap as typed reasons (`reason_flow.MAX_REASON_LEN`). Overlong inline input fails fast with the shared retry notice before any prompt is sent; typed input exceeding the cap stays in `WAITING_REASON` with the same text.
-
-## Reason and proof behavior
-
-The mute conversation uses `BuildReason("mute", skip_allowed=False)` and `BuildProof("mute")`. The reason keyboard therefore has no `Skip`; the proof keyboard exposes `Skip`, `Done`, and `Cancel`:
-
-- Reason: text, `Cancel`.
-- Proof: photo, video, GIF, file, `Skip`, `Done`, `Cancel`.
-
-The `_ModActionFlow` class in `reason_flow.py` enforces the same race-safe semantics described in [`kicking.md`](kicking.md): proof buffering until `Done`, double-submit guard via the `mute_executing` key of the conversation scope, fallback cancel on any unrecognized command.
-
-## Auto-demote at mute time
-
-If the target holds a federation role, the role is removed when the mute is enforced, not when the command starts. `_execute_mute` calls `demote_before_enforcement(..., trigger="mute")` right before the restriction fan-out.
-
-The demote runs at enforcement time because the reason and proof steps are still cancelable. A demote at the entry would strip the target's role, post the federation demote log, and DM the target that they were muted even when the moderator cancelled the flow and no mute ever happened.
-
-`demote_before_enforcement` removes the role record, posts the federation demote log, and DMs the target. The step is best-effort: a role lookup or demote failure is logged loudly and the mute proceeds, because the mute record is already stored. The target keeps their rank only until a later join-time enforcement pass removes it.
-
-## `execute_mute` behavior
-
-`_execute_mute(bot, update, meta)` lives in `tcbot/modules/helper/pipelines/mute_flow.py`. The executor reads target ID, name, reason, admin, duration, proof messages, and the prompt chat/ID from the `meta` dict.
-
-Execution order:
-
-1. Resolve the origin chat from the update; abort before any side effect when it is absent.
-2. Build the active-groups list: `groups_db.active_groups()` plus any primary groups (`cfg.main_group`) that are not already present. A fetch outage aborts with a retry notice and no group is touched.
-3. Upload proof to `cfg.proofs` with the `messages.proof_caption_new` caption and archive the landed items. An upload failure degrades to no proof link without aborting the mute.
-4. Build the restriction `ChatPermissions(can_send_messages=False)` and the `until_date` value (`utc_now() + duration` or `None` for permanent), then re-run the fresh rank gate because the proof upload can outlive a demotion or a target promotion.
-5. Persist `db.mutes_db.record_mute(...)` with the proof items and the enforcement chat list. A failing write aborts with a retry notice and no group is touched (fail-closed, mirroring the ban flow and the warn auto-ban): enforcing chats without a stored decision would leave a restriction that `/tcunmute` refuses to lift.
-6. Remove the target's effective role via `demote_before_enforcement(..., trigger="mute")` (best-effort; the mute proceeds even if the demote fails), then deliver the queued `apply` run. Failed targets are counted and retried by the enforcement worker.
-7. Run two parallel side-effects via `asyncio.gather(..., return_exceptions=True)`:
-    - `bot.send_message(cfg.logs, mute_log, ..., reply_markup=proof_kb)`.
-    - `bot.edit_message_text(summary, chat_id=prompt_chat, message_id=prompt_id, ..., reply_markup=proof_kb)` so the moderator sees the result inline.
-8. If the prompt edit fails, a fallback `msg.reply_text(summary, ..., reply_markup=proof_kb)` is issued.
-
-The summary text reads `<user> has been muted <duration>. Reason: <reason>. Applied to <ok>/<total> groups.` Only a group whose delivery settled as succeeded or skipped counts in `<ok>`; a group still awaiting delivery is reported as pending and retried automatically. A partial mute appends `WARNING: the mute did not land in <n> group(s): <titles>`, naming up to five failed groups, so a partial enforcement is not read as a total one.
-
-The fan-out errors are counted but do not roll back the DB mute record; the failed groups remain in the enforcement run and are retried by the scheduled worker. A group that refuses because the bot lost its admin rights is a permanent failure and stays visible instead of being treated as applied.
-
-## `/tcunmute` flow
-
-`cmd_unmute(update, ctx)` is registered as a plain `MessageHandler` rather than a `ConversationHandler` step. The flow is:
-
-1. Resolve target.
-2. Reject unresolved target with `replies.err_cannot_resolve(locale)`.
-3. Run `identity.classify` and `resolve_and_check` in parallel (Moderator minimum). If the executor is outranked or the target is self/bot, `identity.refuse_message` short-circuits.
-4. Emit `identity.staff_notice("unmute", ident, cfg.community_name)` when applicable so staff-only targets see the heads-up.
-5. Delegate to `execute_unmute(update, ctx, target_id, target_name)`.
-
-`execute_unmute` is the unmute executor:
-
-1. Guard: `db.mutes_db.get_active_mute(target_id)` must return a record. If `None`, reply `<user> has no active federation mute.` and stop. This guard prevents a misleading "restored N/N groups" reply for a no-op. A failed read fails closed with a retry reply instead of refusing a real unmute.
-2. Fetch active groups with `db.groups_db.active_groups()`. A fetch outage aborts with a retry reply before anything is touched, so the active record stays and a retry works.
-3. Call `db.mutes_db.revoke_mute_and_queue_unmute(target_id, admin_id, chat_ids)`. The revocation and one `revoke` enforcement run with a target per group commit together, so a partial restore keeps every group it still has to reach even though the record is already revoked. A lost race returns `(0, None)` and replies with the no-active-mute notice.
-4. Deliver the run immediately through `enforcement_worker.deliver_queued_run`. A failed claim only means the scheduled worker owns it; the groups stay in the ledger.
-5. Read `db.enforcement_db.run_report(run_id)` to build the reply: full success, the names of the failed groups, or a queued notice while the run is still pending or while a requested group left the federation before its target was queued.
-6. Post the unmute log and reply in parallel via `asyncio.gather(..., return_exceptions=True)`.
-
-The reply reads `<user> has been unmuted.` followed by the applied line, which names how many groups were restored.
-
-### Unmute failure reporting
-
-The fan-out outcome is reported through the shared `replies.applied_summary` helper, the same one the ban and the warn threshold ban use, so the four federation executors report a partial enforcement the same way.
-
-- A complete unmute renders the `muting.applied.full` line: `Restored in <total>/<total> groups.`
-- A partial unmute renders `muting.note.unmute_partial`, which says the user was unmuted in some groups only and names the groups that failed, followed by the `muting.applied.partial` line with the restored and failed counts. The failed groups remain in the run and are retried automatically.
-- A total failure renders `muting.note.unmute_failed` followed by the `muting.applied.none` line, which names every group that refused and points at the bot's admin rights. The run keeps every target for the retry.
-- A run that has not settled yet renders `muting.note.unmute_queued` with the group count, so the moderator does not have to guess whether the request was recorded.
-
-A benign Telegram refusal (the user was never in the chat, the chat is gone) counts as applied: there was nothing to restore there.
+Join handling replays active mutes through `active_mute_docs()`. When a group
+connects, `enforcement_db.queue_connect_replay()` queues one bounded apply run
+per active ban or mute for that chat.
 
 ## Database impact
 
-A mute is one row in `moderation_actions` with `action_type = 'mute'`. The live state and the history are the same row: an active mute is a decision whose `status` is `active`, and lifting it moves the row to `revoked`. The `active_mutes` view projects the rows that are in force.
+A mute is one `moderation_actions` row with `action_type = 'mute'` and a
+partial unique index allowing one active mute per target. Fields include
+`expires_at`, `duration_seconds`, `case_id`, `evidence_upload_id`, and
+`metadata`. The apply and revoke runs are durable work in the enforcement
+tables, with per-target statuses and up to three attempts.
 
-`record_mute` writes the decision and the case that holds it in one transaction, so a mute without an investigation cannot exist. A second mute of an already-muted user is a new decision that supersedes the old one: the history keeps the first mute and its reason, and only the newest decision is in force. The stored deadline never moves backwards, so a timed mute cannot shorten a longer restriction and a permanent mute is never downgraded to a timed one.
+## Logging
 
-`MuteDoc` document fields:
-
-| Field | Meaning |
-|---|---|
-| `target_user_id` | Muted Telegram user ID. |
-| `chat_id` | Group chat ID where the mute command was issued. |
-| `reason` | Moderator-provided reason or localized `replies.no_reason(locale)` text. |
-| `actor_user_id` | Telegram user ID of the moderator. |
-| `timestamp` | UTC mute creation time. |
-| `duration_secs` | Optional; total seconds when the mute is timed, absent for a permanent one. |
-
-`ActiveMuteDoc` document fields (the `active_mutes` view):
-
-| Field | Meaning |
-|---|---|
-| `user_id` | Muted Telegram user ID. |
-| `until_date` | UTC datetime when the restriction expires, or `None` for permanent. |
-| `timestamp` | UTC decision-write time. |
-
-The `active_mutes` view filters on `status = 'active'` and on the deadline (`expires_at IS NULL OR expires_at > now()`), so an expired timed mute is not in force even before the daily sweep moves it to its expired state.
-
-The active mute is consumed by:
-
-- `execute_unmute` to decide whether to proceed.
-- `on_bot_added` -> `connection.complete_join` -> `mutes_db.active_mute_docs()` so newly connected groups replay the mute immediately via `restrict_chat_member`.
-
-## Logs and keyboards
-
-Mute-related templates are defined in `messages/` (`audit_logs.py`):
-
-| Template | Used for |
-|---|---|
-| `proof_caption_new` | Caption on mute proof uploads. |
-| `mute_log` | Federation log entry posted by `execute_mute`. |
-| `unmute_log` | Federation log entry posted by `execute_unmute`. |
-
-The reply and federation log use `keyboards.action_proof_kb(target_id, proof_link)`. The keyboard exposes a single `Proof <target_id>` URL button when a proof link was generated; the button is omitted when no proof was uploaded.
+`messages.mute_log()`, `messages.unmute_log()`, and the proof caption builders
+produce federation log posts. The moderator prompt is edited with a delivery
+summary. Duration display uses `fmt_duration()` from `time_and_date.py`. All
+user-facing text comes from the catalog, and messages are sent through the
+rich transport with no parse mode.
 
 ## Edge cases
 
-- A token that fails the duration regex stays in the reason text; it is never silently discarded.
-- A demote failure is logged loudly and the mute still proceeds; the target's rank is repaired by a later join-time enforcement pass.
-- `execute_unmute` with no active mute record replies `<user> has no active federation mute.` and queues no delivery.
-- A failed active-mute read fails closed with a retry notice instead of being treated as "no active mute".
-- A failed group-list fetch inside `execute_unmute` aborts with the same retry notice before any group is touched, so the active record stays and a retry works; the unmute never ends silently.
-- The revocation and its per-group run are one transaction, so a process crash after the commit still retries the groups the first delivery did not reach.
-- `get_active_mute` filters out expired timed mutes at query time, so a stale `active_mutes` row never produces a misleading "restored N/N groups" success.
-- The `_UNMUTE_CMDS` filter is passed to the mute conversation factory as `escape_filter`, so `/tcunmute` typed during `WAITING_REASON` or `WAITING_PROOF` reaches the unmute handler instead of cancelling the mute conversation.
-- `restrict_chat_member` with `until_date=None` produces a permanent restriction on Telegram's side; the bot does not schedule a timed unban through APScheduler.
-- Mute enforcement in newly connected groups is handled at connect time by `connection.complete_join` -> `active_mute_docs`, not by a scheduler job.
+- A mute whose deadline passes while its apply run waits is cancelled rather
+  than served late.
+- A revoke run with `newer_active` true is cancelled so a replayed restriction
+  cannot undo a newer decision.
+- An unparsable or out-of-range duration token remains in the reason and the
+  mute becomes permanent.
+- A timed mute that expires needs no row rewrite; the active views read the
+  deadline at query time.
+- Self, bot, Telegram, and protected targets are refused; lower staff roles
+  are demoted at enforcement time.
 
-## Behavior reference
+## Validation hints
 
-Key behaviors to keep in mind:
+Relevant tests include `tests/test_mute_*.py` and `tests/test_time_and_date.py`.
 
-1. `/tcmute` requires Moderator rank.
-2. `/tcmute <target> <duration> <reason>` parses the duration token before the reason text.
-3. `/tcmute` without a target is rejected with `replies.err_cannot_resolve(locale)`.
-4. Self-mute and bot-mute attempts are rejected by `identity.refuse_message`.
-5. Higher-rank or equal-rank targets are rejected by `resolve_and_check`.
-6. Role-holding targets are auto-demoted when the mute is enforced.
-7. A reason is required; there is no `Skip` on the reason prompt.
-8. Proof is skippable; skipped proof records nothing.
-9. The `_UNMUTE_CMDS` filter is excluded from the mute conversation fallback so unmute can interrupt a pending mute conversation.
-10. `execute_mute` restricts across `active_groups()` plus `cfg.main_group`, deduplicated.
-11. `execute_mute` writes the mute decision before it restricts any group, so group connect can replay an active mute.
-12. `execute_unmute` refuses to queue a restore when no active mute record exists.
-13. The `until_date` value matches the value passed to `restrict_chat_member`; `None` means permanent.
-14. Expired timed mutes are excluded from `get_active_mute` and `active_mute_docs` by query-time filtering, and the daily sweep moves the expired decisions to their expired state.
-15. Federation log send failure does not roll back the mute.
-16. Newly connected groups reapply active mutes on connect via `connection.complete_join`.
+```bash
+uv run pytest tests/ -q -k mute
+```

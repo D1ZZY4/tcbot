@@ -1,252 +1,107 @@
 # Check
 
-This document describes the `/check` user-profile command implemented by `tcbot/modules/check.py` (command + callback handlers) and `tcbot/modules/helper/pipelines/check_flow.py` (the `Check` class that builds every view).
+This page describes `/checkme` and `/check` as implemented in
+`tcbot/modules/check.py` with `helper/ban_info.py` and
+`helper/pipelines/check_flow.py`. The drill-down structure is listed in
+[callbacks](../../pipelines/callbacks.md).
 
-For ban data shown in check, see [`banning.md`](banning.md). For warnings
-shown in check, see [`warnings.md`](warnings.md). For the stats command, see
-[`../statistics.md`](../statistics.md). For shared helpers, see
-[`../../architecture/helpers.md`](../../architecture/helpers.md). For database
-batch query patterns, see [`../../architecture/database.md`](../../architecture/database.md).
+Related pages: [banning](banning.md), [appeals](appeals.md), and
+[statistics](../statistics.md).
 
-```mermaid
-flowchart TD
-    Cmd[/check command/] --> Resolve[Resolve target]
-    Resolve --> Parallel[Parallel batch DB reads]
-    Parallel --> Bans[bans_db]
-    Parallel --> Warns[warns_db]
-    Parallel --> Kicks[kicks history]
-    Parallel --> Mutes[mutes history]
-    Parallel --> Appeals[bans_db appeal records]
-    Bans & Warns & Kicks & Mutes & Appeals --> Compose[Compose profile view]
-    Compose --> Render[Send with drill-down keyboard]
-    Render --> Callback{User clicks drill-down}
-    Callback --> SubView[Render sub-view with pagination]
-```
+## Purpose and ownership
 
-## Purpose
+`/checkme` shows the caller's own federation status with an appeal link when
+banned. `/check` builds a comprehensive profile of any user: identity, role,
+active ban, ban history, warnings by group, kicks, mutes, and appeals. Both are
+read-only and use fuzzy target matching because they cannot mutate state.
 
-`/check` returns a comprehensive federation profile for any user: identity, role and assignment metadata, active ban, total ban history, warning counts per group, kick records, mute records, and appeal history. Each section opens a paginated drill-down keyboard so staff can inspect individual records.
+Ownership: `check.py` owns commands and callbacks; `check_flow.py` owns the
+view builders and pagination; `ban_info.py` owns the shared ban summary and
+detail; `buttons/check.py` owns the keyboards.
 
-`/checkme` remains the self-only ban-status command and is unaffected by this rebuild.
+## Commands and access
 
-## Command surface
-
-| Command | Aliases | Who can use | Where |
+| Command | Alias | Access | Scope |
 |---|---|---|---|
-| `/checkme` | `/cme` | Anyone (for themselves) | Bot PM, the main group, any connected group |
-| `/check` | `/c` | Anyone | Bot PM, the main group, any connected group |
+| `/checkme` | `/cme` | Anyone | The caller. |
+| `/check <target>` | `/c` | Anyone | A resolved user. |
 
-`/check` is public by design: anyone may look up any user's federation
-history. The staff-only warn list (`/warns`) stays staff-gated because it is
-an operational tool, while `/check` is the community-facing directory. The
-profile shows `Assigned by` / `Assigned at` metadata to every viewer; treat
-that as public federation transparency, not a privacy boundary.
+Both use `ratelimiter(THROTTLE_READ)` and `log_execution`. There is no
+authorization guard. Bots and the anonymous-admin placeholder are short-circuited
+for `/checkme` because they hold no federation records.
 
-The target is resolved by `extraction.extract_target` with `prefer_explicit=True`: a typed user ID, `@username`, or partial-name match wins over the quoted sender, so `/check` shows who was asked about, never who was quoted. When the argument resolves to nobody, the reply target still stands. The old `/checkban` and `/cban` aliases have been removed; `/check` now covers and extends that surface.
+## `/checkme`
 
-## Top-level profile view
+The handler fetches the caller's role and active ban in parallel. Role-aware
+replies cover Owner, Admin, Developer, and Moderator; a regular user with no
+ban sees a clean notice. An active ban produces a summary with the user
+mention and ID, reason, actor, commit date, and buttons for Details, optional
+Proof, and Appeal. The appeal button uses the same deep link as the ban log.
 
-`Check.profile(bot, target_id, *, executor_id=None)` returns `(text, keyboard)` shaped like:
-
-```text
-That's me - ... / That's you - ...   <- recognition note, special identities only
-Profile
-
-Name: <mention>
-ID: <code id>
-Username: @username or (none)
-Role: <Role>
-   Assigned by: <mention>
-   Assigned at: dd-mm-yyyy | HH:MM
-
-Federation Activity
-
-Active Ban: Yes (<code ban_id>) / No
-Active Mute: Yes / No
-Total Bans: <n>
-Warnings: <n> active across <m> group(s) (<total> total historical)
-Kicks: <n>
-Mutes: <n>
-Appeals: <n>
-```
-
-Inline keyboard:
-
-```text
-[ Bans (n) ] [ Appeals (n) ]
-[ Warnings (n active)      ]
-[ Kicks (n) ] [ Mutes (n)  ]
-```
-
-Owner targets show only `Role: Owner` (no `Assigned by` / `Assigned at`; the owner assignment does not record metadata).
-
-## Identity recognition
-
-When the caller passes `executor_id` (both `cmd_check` and the `check_main` back-button handler do, using the command author / tapper), the profile classifies the target relative to the viewer via `identity.classify` in the same parallel batch and prepends a recognition note for special identities. Note copy is owned by `identity.profile_note` (single source; moderation entries keep using `refuse_message` / `staff_notice`):
-
-| Target | Note |
+| Callback | Effect |
 |---|---|
-| This bot (`target_id == bot.id`) | `That's me - this bot. I run moderation here, not collect bans.` |
-| Self (`target_id == executor_id`) | `That's you - checking your own record, good habit.` |
-| Telegram service account | `That's Telegram itself - outside federation jurisdiction.` |
-| Anonymous-admin placeholder | `That's the anonymous-admin placeholder, not an individual user.` |
-| Owner / Admin / Developer / Moderator | No note; the `Role:` line already labels them. |
-| Anyone else | No note. |
+| `checkme_detail:<ban_id>` | Load the active ban and edit to the full detail view. |
+| `checkme_back:<ban_id>` | Edit back to the summary view. |
 
-`/checkme` from a bot sender is refused outright (localized `checking.error.bot_sender`, English default: `Bots and anonymous senders don't hold federation records, so there is nothing to check.`). The guard checks `user.is_bot` only; the anonymous-admin placeholder (ID 1087968824) is not a bot and is checked like any other sender.
+A failed ban lookup leaves the live card untouched and shows a retry alert. If
+the ban is no longer active when Details is tapped, the alert says so.
 
-Previously the bot itself rendered as `Role: Regular user` with bare counts because the profile never classified the target. Counts, drill-downs, and the keyboard are identical with or without a note; a failed identity lookup degrades to no note instead of failing the card (the command is read-only, so there is nothing to fail closed).
+## `/check`
 
-## Drill-down views
+The target resolves by reply, numeric ID, `@username`, or partial name. A
+typed ID or username that verifies as a real user different from the quoted
+sender overrides the reply; `/check` additionally prefers any resolving
+argument, including a partial-name match, because it is read-only.
 
-Every drill-down keyboard ends with `« Back` which re-renders the profile via `Check.profile`.
+The opening profile shows identity, role, and the active-ban summary. Each
+section opens a paged drill-down:
 
-### Bans (`check_bans:<target_id>:<page>`)
-
-`Check.bans_list` lists every ban (active and inactive), newest first, 5 per page. Each line shows status (`Active` / `Inactive`), Ban ID, timestamp, and a 60-character reason snippet. Numbered buttons open `Check.ban_detail` for the full ban card.
-
-```text
-Bans: N total, page p/P
-
-1. Active | <code ban_id> | dd-mm-yyyy HH:MM
-   spam in connected groups
-2. Inactive | <code ban_id> | ...
-   ...
-```
-
-`Check.ban_detail(target_id, ban_id)` re-uses `helper/ban_info.build_ban_detail` so the rendered card matches `/checkme` and `/tcstats` ban-detail views. The keyboard exposes `View Proof` and `View Appeal` URL buttons when those are available.
-
-### Appeals (`check_appeals:<target_id>:<page>`)
-
-`Check.appeals_list` fetches `user_appealable_bans` (server-side appeal filter on the sparse index), then paginates them. Each line shows whether the appeal was approved (the ban is now inactive) or is still pending / was rejected (the ban is still active). Numbered buttons open the same `Check.ban_detail` view as the Bans drill-down.
-
-### Warnings (`check_warns:<target_id>` and `check_warn_chat:<target_id>:<chat_id>:<page>`)
-
-Two-level drill-down because warnings are per-group:
-
-1. `Check.warns_by_group` lists groups where the user has warns, with the count and a button per group. Group titles come from `groups_db.get_group_titles`. A database failure renders the `checking.warns.db_fail` retry card instead of the empty list, so an outage is never mistaken for a clean record.
-2. `Check.warns_in_group` paginates the individual warnings inside the chosen chat: timestamp, reason snippet, and the admin who issued the warning.
-
-Bans, appeals, per-chat warns, kicks, and mutes lists append the shared `checking.profile.caveat` incomplete-counters note whenever the total read fails, so staff know the header total may be short. Healthy-database rendering is unchanged.
-
-### Kicks (`check_kicks:<target_id>:<page>`)
-
-`Check.kicks_list` paginates every kick record (`kicks_db.user_kicks`). Each line shows timestamp, group title, reason snippet, and admin. A kick whose ban or rejoin step did not land carries the `failed` status and an explanatory line, while a repair that succeeds restores `completed`.
-
-### Mutes (`check_mutes:<target_id>:<page>`)
-
-`Check.mutes_list` paginates every mute record (`mutes_db.user_mutes`) with the same shape as kicks.
-
-## Callback routing
-
-All callbacks are registered in `tcbot/modules/check.py` and run safely on repeated taps thanks to `safe_edit_cb` swallowing benign `BadRequest` errors (e.g. `Message is not modified`).
-
-| Callback data | Handler |
+| Callback family | Section |
 |---|---|
-| `check_main:<uid>` | `on_check_main`: re-renders the profile (used by all `« Back` buttons). |
-| `check_bans:<uid>:<page>` | `on_check_bans` |
-| `check_ban_item:<uid>:<ban_id>` | `on_check_ban_item` |
-| `check_warns:<uid>` | `on_check_warns` (warns-by-group view). |
-| `check_warn_chat:<uid>:<chat_id>:<page>` | `on_check_warn_chat` |
-| `check_kicks:<uid>:<page>` | `on_check_kicks` |
-| `check_mutes:<uid>:<page>` | `on_check_mutes` |
-| `check_appeals:<uid>:<page>` | `on_check_appeals` |
+| `check_main:<user>` | Return to the profile. |
+| `check_bans:<user>:<page>` | Ban history. |
+| `check_ban_item:<user>:<ref>` | One ban detail with a proof button. |
+| `check_warns:<user>` and `check_warn_chat:` | Warnings by group. |
+| `check_kicks:<user>:<page>` | Kick history. |
+| `check_mutes:<user>:<page>` | Mute history. |
+| `check_appeals:<user>:<page>` | Appeal history. |
 
-## Database helpers used
+Detail callbacks carry a stable identifier so a tap from a stale page is
+refused. Pagination uses `utils/pagination.py`.
 
-`/check` aggregates data from across the database layer. New per-user helpers were added specifically for this command:
+Special cases: the bot itself is reported clean with a recognition note; the
+Owner cannot be banned and is reported clean; staff targets are reported as
+staff with no active ban. `/check` does not provide an appeal button because
+it is a third-party lookup.
 
-| Helper | Purpose |
-|---|---|
-| `users_cache.get_user(uid)` | Cached profile snapshot: first name, username, last name. |
-| `users_roles.role_meta(uid)` | `(role, assigned_by, assigned_at)` for the Role line. |
-| `users_cache.get_first_name(uid, fallback)` | Cache-only name lookup used for admin attribution in drill-down lists. |
-| `bans_db.get_active_ban(uid)` | Current active ban, if any. |
-| `mutes_db.get_active_mute(uid)` | Current active federation mute, if any. Drives `Active Mute: Yes / No`. |
-| `bans_db.user_bans(uid)` | Every ban record (active + inactive), newest first. |
-| `bans_db.user_ban_count(uid)` | Count of bans on this user. |
-| `bans_db.user_appeal_count(uid)` | Count of bans on this user that ever had an appeal submitted. |
-| `warns_db.user_total_warns(uid)` | Total warning rows across all groups. |
-| `warns_db.user_warn_groups(uid)` | `[(chat_id, count), ...]` for the per-group breakdown. |
-| `warns_db.get_warns(uid, chat_id)` | Individual warnings inside one chat. |
-| `kicks_db.user_kicks(uid)` | Kick records, newest first. |
-| `kicks_db.user_kick_count(uid)` | Kick count. |
-| `mutes_db.user_mutes(uid)` | Mute records, newest first. |
-| `mutes_db.user_mute_count(uid)` | Mute count. |
-| `groups_db.get_group_titles([chat_ids])` | Bulk title lookup for kicks / mutes / warnings lists. |
+## Database impact
 
-## Async behavior and parallel reads
+The views read `moderation_actions`, `moderation_messages`,
+`moderation_appeals`, `warns_db`, `kicks_db`, `mutes_db`, `users_roles`, and
+`users_cache`. Expired warnings and mutes are excluded at query time. All
+reads use `db_call`; independent counts are gathered in parallel where safe.
 
-The profile view performs ten independent reads plus an optional eleventh identity classification in a single `asyncio.gather`:
+## Logging and rendering
 
-```python
-(
-    (fname, uname),
-    (role, role_by_id, role_at),
-    active_ban,
-    active_mute,
-    ban_total,
-    appeal_total,
-    warn_total,
-    warn_groups,
-    kick_total,
-    mute_total,
-) = await asyncio.gather(
-    _resolve_user_info(bot, target_id),
-    db.users_roles.role_meta(target_id),
-    db.bans_db.get_active_ban(target_id),
-    db.mutes_db.get_active_mute(target_id),
-    db.bans_db.user_ban_count(target_id),
-    db.bans_db.user_appeal_count(target_id),
-    db.warns_db.user_total_warns(target_id),
-    db.warns_db.user_warn_groups(target_id),
-    db.kicks_db.user_kick_count(target_id),
-    db.mutes_db.user_mute_count(target_id),
-    # only when executor_id is known:
-    # identity.classify(bot, executor_id, target_id),
-    return_exceptions=True,
-)
-```
-
-The federation warning total is the sum of the per-group counts that
-`user_warn_groups` already returned, so the profile does not read the same
-rows a second time.
-
-Per-record renderers in `kicks_list`, `mutes_list`, and `warns_in_group` also gather admin-name lookups and group-title lookups up front so the line loop is purely synchronous string-building.
-
-`_resolve_user_info` renders instantly from cache while a background sync
-refreshes the stored identity for the next view (zero added latency).
-Refreshes are gated by `identity_needs_refresh` (sparse or older than
-`_SYNC_MAX_AGE_S`, 7 days); the live fetch itself is one bounded
-`bot.get_chat` call plus, only when needed, a group sweep bounded by
-`_RESOLVE_SWEEP_TIMEOUT`, so a stalled Telegram lookup never blocks the
-user.
-
-## Indexes
-
-The indexes declared in `tcbot/database/base/` make this view fast:
-
-| Table | Index | Powers |
-|---|---|---|
-| `moderation_actions` | `(target_user_id, created_at desc)` | the per-user decision history |
-| `moderation_actions` | `(action_type, status)` | the active-ban, active-mute, and warn filters |
-| `moderation_appeals` | `(action_id)` and `(action_id, appellant_user_id)` | the appeal list of a ban |
-| `telegram_users` | `(user_id)` unique | `get_user` / `get_first_name` lookups |
+Profiles are rendered with `ban_info.build_ban_summary()` and
+`ban_info.build_ban_detail()`, using the rich transport. User-facing wording
+comes from the `checking` catalog domain. Failed reads log at warning level
+with the target id and show a localized retry notice. No parse mode is
+selected.
 
 ## Edge cases
 
-- A user that has never interacted with the bot and has no public profile resolves to their numeric user ID (e.g. `123456789`) as the fallback display name, not `User 123456789`. This allows callers to detect a numeric fallback via `str(name) == str(uid)` comparison. Before falling back, live identity sync tries one MTProto peer resolve ahead of the multi-group sweep.
-- The bans list shows both active and inactive bans; the active record (if any) appears at the top because of the timestamp-desc sort.
-- The appeals list filters bans by the presence of `appeal_log_msg_id`; rejected appeals stay in the list with `Pending / Rejected` status until the ban is overturned, at which point the same record shows `Approved (unbanned)`.
-- The warnings-by-group view shows only groups whose `warn_counts` view entry is non-zero; the view derives the count from the decisions still in force, so there is no counter row to clean.
-- All inline edits go through `safe_edit_cb`, so re-tapping a button you are already on no longer reports a `Message is not modified` error.
+- A lookup outage never renders an empty history that would claim zero
+  records; it shows an error and keeps the keyboard for a re-tap.
+- A stale callback is acknowledged and discarded rather than editing the wrong
+  page.
+- Active-ban reads use the same expiry condition as the active-bans view.
 
-## Behavior reference
+## Validation hints
 
-- A user with no records shows zero counts and friendly empty-state messages in each drill-down.
-- Pagination clamps to the last page when the page index exceeds the available pages.
-- The Role line collapses to `Role: Owner` for the owner (no `Assigned by` / `Assigned at`).
-- The Role line shows `Assigned by` + `Assigned at` for Admin, Developer, and Moderator, read from the active `role_assignments` row.
-- The `View Proof` button only appears when a ban has a `proof_message_id`.
-- The `View Appeal` button only appears when a ban has a non-empty `appeal_link`.
-- Tapping a button you are already viewing does not raise a Telegram error.
+Relevant tests include `tests/test_check_*.py`, `tests/test_checkme_owner.py`,
+and `tests/test_formatter.py`.
+
+```bash
+uv run pytest tests/ -q -k check
+```

@@ -1,253 +1,124 @@
-# Repository Map
+# Repository map
 
-For the project overview, see [`../../README.md`](../../README.md). For the
-documentation index, see [`../README.md`](../README.md). For module breakdown,
-see [`modules.md`](modules.md). For the database layer, see
-[`database.md`](database.md). For shared helpers, see [`helpers.md`](helpers.md).
-For runtime utilities, see [`utilities.md`](utilities.md). For contribution
-workflow, see [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md).
-
-This page maps the repository structure and the service boundaries between packages.
+This page describes the physical layout of the repository, what each package
+owns, and how the process comes up. It is the orientation page for new
+contributors. For the runtime flow drawn as diagrams, see
+[the system spine](../pipelines/banning.md).
 
 ## Top-level layout
 
 ```text
 <project root>/
-├── tcbot/                  Main Python package
-├── docs/                   Documentation grouped by purpose
-├── i18n/                   Translation catalogs (en-US source, id-ID mirror)
-├── tests/                  Pytest test suite
-├── .github/                GitHub Actions workflows + dependabot config
-├── .agents/                Maintainer and agent rules
-├── pyproject.toml          Dependencies and Ruff config
-├── pyrightconfig.json      Pyright type checker configuration
-├── uv.lock                 Locked dependency graph
-├── .python-version         Pinned Python for uv (3.14)
-├── config.env.example      Environment variable template
-├── README.md               Project overview
-├── CONTRIBUTING.md         Contribution workflow and review checklist
-├── AGENTS.md               Maintainer and agent project guide
-├── CLAUDE.md               Symlink to AGENTS.md
-├── SECURITY.md             Security policy
-├── replit.md               Replit deployment notes
-├── CHANGELOG.md            Version history
-├── docker-compose.yml      Bot + PostgreSQL + Redis local stack
-├── alembic.ini             Alembic migration configuration
-├── alembic/                Alembic environment and versioned migrations
-└── Dockerfile              Container image
+├── tcbot/                    Application package
+├── alembic/                  Alembic migration scripts and revisions
+├── i18n/                     TOML translation catalogs (en-US is the source)
+├── tests/                    Pytest suite
+├── scripts/                  One-shot operator tools
+├── .github/workflows/        CI and deployment workflows
+├── .agents/rules/            Agent and contributor rules
+├── docs/                     This documentation set
+├── config.env.example        Environment variable template
+├── docker-compose.yml        Local bot, PostgreSQL, and Redis stack
+├── Dockerfile                Container image definition
+├── pyproject.toml            Dependencies and tool configuration
+├── uv.lock                   Locked dependency graph
+├── pyrightconfig.json        Static type checker configuration
+└── AGENTS.md                 Top-level repository guide
 ```
 
-Repository maintenance guidance lives under `.agents/`. Its six canonical
-rule files are `rules/code-style.md`, `rules/comment-style.md`,
-`rules/docs-sync.md`, `rules/changelog-style.md`, `rules/security-rules.md`,
-and `rules/asyncio-gather-rules.md`.
+## The `tcbot/` package
 
-## Documentation structure
-
-| Category | Scope |
+| Path | Responsibility |
 |---|---|
-| `getting-started/` | Local, Docker, and hosted setup instructions. |
-| `architecture/` | Repository boundaries, modules, database, helpers, utilities, and workflow internals. |
-| `features/` | User-visible flows and detailed moderation, role, appeal, and statistics behavior. |
-| `operations/` | Backup and restore, CI/CD, and performance guidance. |
-| `reference/` | Stable UI and callback conventions such as keyboard styles. |
-| `releases/` | Published release notes, one document per version. |
+| `tcbot/__init__.py` | Environment parsing and the immutable `Configs` model. `cfg` is built on first access. |
+| `tcbot/__main__.py` | Application lifecycle, builder, handler registration, webhook or polling transport, and shutdown drains. |
+| `tcbot/alive.py` | Flask keep-alive server, `/health`, `/metrics`, and the `/webhook` receiver. |
+| `tcbot/error_reporter.py` | Error classification, scrubbing, deduplication, throttling, and shipping to the configured error destination. |
+| `tcbot/enforcement_worker.py` | Deliver queued `apply`, `revoke`, and `reconcile` enforcement runs to Telegram. |
+| `tcbot/notification_worker.py` | Retry review-card edits from the durable notification outbox. |
+| `tcbot/database/` | PostgreSQL schemas, tables, helpers, migrations, cache, scheduler, and MTProto store. |
+| `tcbot/modules/` | Telegram command, callback, and event modules plus the `helper/` subpackage. |
+| `tcbot/utils/` | Cross-cutting runtime utilities. |
 
-## Runtime package map
+### Database package
 
-```text
-tcbot/
-├── __init__.py             Config loader, env parsing, immutable Configs model
-├── __main__.py             App lifecycle, builder, errors, and main startup
-├── error_reporter.py       Telegram error classification and shipping to LOGS_ERRORS
-├── alive.py                Flask health endpoint and webhook receiver
-├── enforcement_worker.py   Claims queued enforcement runs and delivers their per-group effects
-├── notification_worker.py  Retries review-card edits through the durable outbox
-├── database/
-│   ├── base/               Table, column, constraint, and index definitions (schema source of truth)
-│   │   ├── identity.py       Telegram users, chats, membership, connected groups, join requests
-│   │   ├── settings.py       Group and user configuration
-│   │   ├── community.py      The community profile singleton
-│   │   ├── rbac.py           Role catalog, permission catalog, role assignments, promotion requests
-│   │   ├── rules.py          Rule sets, versions, items, acknowledgements
-│   │   ├── moderation.py     Cases, actions, appeals, messages, evidence
-│   │   ├── enforcement.py    Enforcement runs, targets, attempts
-│   │   ├── automation.py     Automation policies, versions, events, runs, steps
-│   │   ├── broadcast.py      Broadcast campaigns, targets, attempts
-│   │   ├── jobs.py           Scheduled job registry, job runs, retention policies, erasure queue
-│   │   └── runtime.py        MTProto state and the APScheduler job table
-│   ├── schema/             The SQL objects SQLAlchemy cannot express
-│   │   ├── views.sql          The derived views of the community
-│   │   ├── functions.sql      The functions, including the authorization primitive
-│   │   ├── triggers.sql       The triggers that protect the invariants
-│   │   ├── policies.sql       The row-level security policies
-│   │   └── seed.sql           The role, permission, retention, and job reference data
-│   ├── engine.py            Async engine, session boundary, circuit-breaker guard, query helpers
-│   ├── connection_options.py libpq search_path and UTC options shared by every engine
-│   ├── migrations.py        Alembic wiring: applies the pending revisions at startup
-│   ├── bans_db/             Federation ban decisions and their appeal lifecycle
-│   │   ├── _queries.py         Reads: active ban, ban by reference, per-user history
-│   │   ├── _writes.py          Writes: create, update, review slot, appeal, decision
-│   │   ├── _lifecycle.py       Revoke and appeal approval with their delivery run
-│   │   └── _compose.py         Joins a decision with its messages and appeals
-│   ├── moderation_db.py     Shared write path of the decisions: case, proof, closing
-│   ├── enforcement_db.py   Queue, claim, report, and requeue the enforcement runs
-│   ├── notifications_db.py Durable review-card edit outbox
-│   ├── erasure_db.py       Queue a Telegram-account erasure
-│   ├── groups_db.py        Connected groups, group configuration, join requests
-│   ├── pg_cron.py          Optional pg_cron ownership of database-only jobs
-│   ├── users_cache.py      Telegram identity cache operations
-│   ├── users_roles.py      Role assignments, effective-role resolution, the permission catalog
-│   ├── warns_db.py         Warning decisions and the per-group counters
-│   ├── kicks_db.py         Kick decisions and the per-user history
-│   ├── mutes_db.py         Mute decisions and the live active-mute view
-│   ├── queues_db.py        Promotion request queue
-│   ├── cache/              TwoLevelCache: codec, L1 memory, Redis boundary, singletons, twolevel
-│   ├── redis_client.py     Optional async Redis client (owns the connect/degrade decision)
-│   ├── scheduler/          APScheduler lifecycle, schedule catalog, and maintenance jobs
-│   ├── mtproto.py          Bot-token MTProto client: resolve + member harvest
-│   ├── mtproto_store.py    PostgreSQL-backed Kurigram storage engine
-│   ├── settings_db.py      Per-user settings (locale and timezone preferences)
-│   ├── documents.py        TypedDict document shapes
-│   └── types.py            NewType ID primitives and integer coercion
-├── modules/
-│   ├── __init__.py         Dynamic module discovery and handler collection
-│   ├── *.py                Command and callback modules
-│   └── helper/
-│       ├── ban_info.py     Ban detail renderer
-│       ├── decorators/     Auth, per-handler rate limits, tracing
-│       ├── guards.py       Permission gates: may the executor act, and on whom
-│       ├── targets.py      Target resolution: who the command acts on
-│       ├── extraction/     Target resolution and live identity refresh
-│       ├── identity.py     Identity classification, group-permission checks, refusal messages
-│       ├── keyboards/      Inline keyboard factories
-│       │   └── nav.py         Previous/next row for paged views
-│       ├── locale.py       Render-locale resolution shared by handlers, callbacks, flows
-│       ├── messages/       Safe edits, channel delivery, and federation log renderers
-│       │   ├── safe_edits.py    Safe-edit transport helpers
-│       │   ├── audit_logs.py    Audit-log builders (LogBuilder + per-event logs)
-│       │   ├── links.py         Telegram link builders (`t.me/c/...`, appeal deep links)
-│       │   ├── rich.py          Rich messages: tables, blocks, buttons, layout, PTB transport
-│       │   └── replies.py       Shared localized reply and help-text strings, HelpEntry shape
-│       ├── scope.py        Per-conversation payload scope for the moderation flows
-│       └── pipelines/
-│           ├── proof_session.py  Live proof sessions and their shutdown drain
-│           └── *_flow.py modules   Conversation factories, plus Promote / Demote / Check classes
-└── utils/
-    ├── circuit_breaker.py  Async circuit breaker for Telegram + PostgreSQL
-    ├── dispatch.py         Bounded concurrent fan-out (integrates Telegram circuit)
-    ├── formatter.py        MarkdownV2 escaping and formatting (single source of truth)
-    ├── i18n.py             TOML locale catalogs, lookup, and interpolation
-    ├── logger.py           Console formatter and error log handler
-    ├── metrics.py          Optional Prometheus cache and Redis counters
-    ├── pagination.py       Shared clamp_page() page arithmetic
-    ├── prefixes.py         Prefix parsing and command filters
-    ├── secrets.py          Constant-time secret comparison for inbound credentials
-    ├── tasks.py            Background task lifecycle owner (TaskTracker)
-    ├── time_and_date.py    Central clock: UTC store/display + measure + durations + date_or_unknown()
-    ├── transport.py        Shared PTB HTTP timeouts, pool size, and lookup budget
-    └── update_processor.py Per-conversation update serialization for PTB
-```
+`tcbot/database/__init__.py` imports submodules lazily so schema and migration
+tools can read table definitions without loading the whole application. The
+main areas are:
 
-## Ownership boundaries
+- `base/`: SQLAlchemy table and column definitions grouped by domain.
+- `schema/`: SQL views, functions, triggers, policies, and seed data, applied
+  in that order by `schema/loader.py`.
+- `cache/`: the two-level cache, tagged JSON codec, Redis boundary, and shared
+  singletons.
+- `scheduler/`: APScheduler task wiring and the scheduled maintenance jobs.
+- `bans_db/` and `rules_db/`: domain packages split into focused submodules
+  with a thin re-exporting `__init__.py`.
+- `engine.py`: the async engine, session boundary, and `db_call` /
+  `run_transaction` guard.
+- `*_db.py` helpers: one module per domain, such as `groups_db.py`,
+  `warns_db.py`, `users_roles.py`, and `enforcement_db.py`.
 
-| Area | Owns | Must not own |
+See [the database layer](database.md).
+
+### Modules and helpers
+
+`tcbot/modules/*.py` are the command modules. `tcbot/modules/__init__.py`
+discovers them, applies `MODULES_LOAD` and `MODULES_NO_LOAD`, and collects each
+module's `__handlers__` list. `helper/` holds shared code and never registers
+handlers directly.
+
+The helper subpackage is split by responsibility:
+
+- `decorators/`: authorization and throttle decorators.
+- `guards.py`, `identity.py`, `targets.py`, `extraction/`: who may act, on whom.
+- `scope.py`, `locale.py`: per-conversation payload scope and locale resolution.
+- `pipelines/`: `*_flow.py` ConversationHandler factories and their steps.
+- `buttons/`: all inline keyboard builders.
+- `messages/`: the rich-message transport, formatters, panels, links, and
+  audit-log builders.
+
+See [modules](modules.md) and [the helper package](helpers.md).
+
+## Startup sequence
+
+`main()` in `tcbot/__main__.py` owns startup:
+
+1. Set up logging from `cfg.log_level` and initialize Sentry when a DSN is
+   configured.
+2. Start the Flask keep-alive server on `cfg.bind_host` and `cfg.port`. The
+   port is probed first so a bind failure fails fast.
+3. Build the PTB `Application` with shared HTTP timeouts, the `AIORateLimiter`,
+   and a keyed update processor that serializes updates per `(chat, user)`.
+4. Register handlers: the global rate-limit `TypeHandler` at group `-1`, all
+   module handlers, the member-cache harvester at group `10`, and the error
+   handler.
+5. Run either webhook mode or polling mode. Webhook mode calls
+   `set_webhook`, verifies the registered URL, and wires the Flask receiver.
+6. `post_init` connects PostgreSQL, applies migrations, seeds the initial
+   Owner, registers infrastructure destinations, connects Redis and MTProto,
+   attaches the error reporter, starts the scheduler, and warms hot caches.
+
+Shutdown drains Bot-dependent work in `post_stop` while the Bot client is
+still available, then closes external clients in `post_shutdown`.
+
+## Service boundaries
+
+| Service | Owner | Notes |
 |---|---|---|
-| `tcbot/__main__.py` | App lifecycle, handler wiring, DB init, and webhook transport (polling fallback for local dev only) | Feature business logic |
-| `tcbot/alive.py` | Flask health endpoint and the webhook receiver | Feature business logic |
-| `tcbot/modules/*.py` | Command entry points, handler registration, user-facing permissions | Raw SQL writes, duplicate conversation state handlers |
-| `tcbot/modules/helper/` | Shared handler helpers and keyboard factories | Top-level command registration |
-| `tcbot/modules/helper/pipelines/*_flow.py` | Conversation factories, state transitions, flow executors | Module discovery or `__handlers__` exports |
-| `tcbot/database/*_db.py` | Table-specific DB operations | Telegram API calls |
-| `tcbot/database/base/` | Table, column, constraint, and index definitions | Telegram API calls, module discovery |
-| `tcbot/database/schema/` | Views, functions, triggers, policies, and reference data | Telegram API calls, module discovery |
-| `tcbot/utils/` | Runtime infrastructure utilities | Feature-specific moderation policy |
+| Telegram transport | PTB `Application` | Webhook is the production path. Polling is the local fallback. |
+| HTTP health and webhook | Flask in a daemon thread | Updates cross into the asyncio loop through `asyncio.run_coroutine_threadsafe`. |
+| PostgreSQL | `database/engine.py` | Every call runs through `db_call` with a circuit breaker and timeout. |
+| Cache | `database/cache/` | In-memory L1 always, optional Redis L2. |
+| Scheduling | `database/scheduler/` | APScheduler with a SQLAlchemy job store; optional pg_cron ownership for database-only jobs. |
+| MTProto | `database/mtproto.py` | Bot-token identity lookups with PostgreSQL-backed session storage. |
 
-```mermaid
-graph TD
-    Main[__main__.py] -->|registers handlers from| Mods[modules/*.py]
-    Main -->|initialises| DB[database/]
-    Main -->|starts| Alive[alive.py]
-    Mods -->|calls helpers from| Helper[modules/helper/]
-    Mods -->|calls flows from| Flows[helper/pipelines/*_flow.py]
-    Helper -->|reads/writes via| DB
-    Flows -->|reads/writes via| DB
-    Flows -->|fan-out via| Utils[utils/dispatch.py]
-    Utils -->|guarded by| CB[utils/circuit_breaker.py]
-    CB -->|Telegram API| TG[Telegram]
-    Mods -->|Telegram API| TG
-    Alive[alive.py] -->|reads state from| CB
-```
+## Conventions
 
-## Startup flow
+- Source files stay at or below 1,000 lines. Oversized modules are split into
+  a same-named package with a re-exporting `__init__.py`.
+- Python 3.14 syntax, four-space indentation, and Ruff formatting.
+- Configuration is parsed once in `tcbot/__init__.py`.
+- All user-facing wording lives in `i18n/<locale>/*.toml`.
 
-```mermaid
-sequenceDiagram
-    participant Proc as uv run python -m tcbot
-    participant Config as tcbot.__init__
-    participant Main as tcbot.__main__
-    participant Alive as tcbot.alive
-    participant DB as database.engine
-    participant Mods as tcbot.modules
-    participant PTB as PTB Application
-
-    Proc->>Config: load env into cfg
-    Proc->>Main: call main()
-    Main->>Main: setup logging
-    Main->>Alive: start Flask health thread
-    Main->>PTB: build Application (post_init registered as callback)
-    Main->>Mods: get_handlers()
-    Mods->>Mods: discover, filter, import modules
-    Mods-->>Main: handlers
-    Main->>PTB: add handlers and error handler
-    Main->>PTB: initialize() + post_init (explicit; not called by PTB in webhook mode)
-    Main->>DB: connect() (apply Alembic revisions, create engine, ping)
-    par parallel setup
-        Main->>DB: ensure_initial_owner()
-        Main->>DB: ensure_primary_group()
-        Main->>Main: connect Redis (optional)
-        Main->>Main: start MTProto (fail fast without API_ID/API_HASH)
-    end
-    Main->>Main: start APScheduler
-    Main->>Main: warm hot caches (background task)
-    Main->>Main: attach error_reporter + asyncio exception handler
-    Main->>Alive: register_webhook() wire Flask /webhook -> PTB queue
-    Main->>PTB: set_webhook() + get_webhook_info() verify
-    PTB->>PTB: await updates from Flask webhook receiver
-```
-
-## Dynamic module discovery
-
-`tcbot/modules/__init__.py` discovers every top-level `tcbot/modules/*.py` file and every package directory with an `__init__.py`, except `__init__.py` and the `helper/` package. Discovery is sorted for deterministic registration order.
-
-Filtering order:
-
-1. If `MODULES_LOAD` is set, only those module names are loaded. Invalid names cause startup to exit.
-2. If `MODULES_NO_LOAD` is set, matching names are removed from the discovered list.
-3. `get_handlers()` imports active modules and extends the application handler list with each module's `__handlers__`.
-
-Module names are filenames without `.py`, for example `bans`, `appeals`, or `maintenance`.
-
-## Request handling layers
-
-```mermaid
-flowchart TD
-    Update[Telegram update] --> GlobalRate[global_rate_limit_handler group -1]
-    GlobalRate --> ModuleHandler[Module handler]
-    ModuleHandler --> Decorators[ratelimiter + role decorator + log_execution]
-    Decorators --> Entry[cmd_* or on_* function]
-    Entry --> Helper[helper functions]
-    Helper --> DB[database helper]
-    Entry --> Flow[workflow executor if needed]
-    Flow --> FanOut[utils.dispatch.fan_out]
-    FanOut --> Telegram[Telegram API]
-```
-
-## Cross-links
-
-- Setup and environment: [Setup guide](../getting-started/setup.md)
-- Command modules: [Modules](modules.md)
-- Workflows: [Workflow overview](../features/workflow-overview.md) and [Workflow internals](workflows.md)
-- Database layer: [Database layer](database.md)
-- Shared helpers: [Helper package](helpers.md)
-- Runtime utilities: [Runtime utilities](utilities.md)
+Validation commands are listed in the [setup guide](../getting-started/setup.md).

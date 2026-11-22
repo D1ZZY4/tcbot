@@ -1,391 +1,112 @@
 # Warnings
 
-This document describes the current warning behavior implemented by `tcbot/modules/warns.py`, `tcbot/modules/helper/pipelines/warn_flow.py`, `tcbot/modules/helper/pipelines/reason_flow.py`, and `tcbot/database/warns_db.py`.
+This page describes the warning system implemented by `tcbot/modules/warns.py`
+and `helper/pipelines/warn_flow.py`. Thresholds, exemption, and clearing are
+drawn in [the warning diagram](../../pipelines/warning.md).
 
-For the ban flow triggered by a warning limit, see [`banning.md`](banning.md).
-For the check command showing warning history, see [`check.md`](check.md). For
-shared helpers, see [`../../architecture/helpers.md`](../../architecture/helpers.md).
-For the database layer, see [`../../architecture/database.md`](../../architecture/database.md).
+Related pages: [banning](banning.md), [roles](../roles/roles.md), and
+[check](check.md).
 
-```mermaid
-flowchart TD
-    Cmd[/tcwarn command/] --> Permission{Moderator+ check}
-    Permission -->|denied| End1[Reject]
-    Permission -->|allowed| Reason[WAITING_REASON]
-    Reason --> Proof[WAITING_PROOF]
-    Proof --> AddWarn[warns_db.add_warn<br/>decision + case]
-    AddWarn --> CheckPerGroup{count >= cfg.warn_limit?}
-    CheckPerGroup -->|yes| RoleCheck{target holds federation role?}
-    RoleCheck -->|yes| Exempt[Auto-demote target, exempt from auto-ban]
-    RoleCheck -->|no| AutoBan[Federation-wide auto-ban via durable apply run]
-    CheckPerGroup -->|no| CheckFed{FED_WARN_LIMIT > 0<br/>and fed_count >= limit?}
-    CheckFed -->|yes| RoleCheck
-    CheckFed -->|no| Notify[Send warn notice]
-    Notify --> Log[Log entry]
-    AutoBan --> Log
-    Exempt --> Log
-```
+## Purpose and ownership
 
-## Purpose
+A warning records a per-group incident and can escalate to an automatic
+federation ban when a threshold is reached. Warnings are scoped to the origin
+group; a federation-wide threshold can also be configured. Clearing moves
+rows to `revoked` rather than deleting them, preserving the audit trail.
 
-Warnings are per-group moderation records. Each warn is keyed by `(user_id, chat_id)`. Two automatic federation-ban thresholds exist:
+Ownership: `warns.py` owns command entries; `warn_flow.py` owns filing,
+threshold evaluation, and the auto-ban; `warns_db.py` owns locked writes and
+the live count views.
 
-1. **Per-group threshold** (`cfg.warn_limit`, env var `WARN_LIMIT`, default 3, minimum 1): fires when a user's warn count in the current group reaches or exceeds `cfg.warn_limit`. Uses `>=` so a retry after a total enforcement failure still fires: warns are cleared only after successful enforcement, so a 0/N fan-out leaves the count at the limit and the next warn must re-drive the ban instead of wedging above the threshold. The `already_banned` guard skips re-creation when the ban record already exists.
-2. **Federation-wide threshold** (`FED_WARN_LIMIT`, env var, default 0 = disabled): fires when the user's total warns across all groups reaches or exceeds the configured value, even if no single group has reached its per-group limit. Uses `>=` because the cross-group aggregate is a separate DB read with no atomicity guarantee. Set to a positive integer to close the evasion path of spreading warns thinly across many groups.
+## Commands and access
 
-In both cases a non-staff user is issued a **federation-wide ban** across all active connected groups, a ban decision is created in `moderation_actions` (appealable), and the warnings of the groups where the ban landed are revoked (`clear_all_warns` on complete enforcement, `clear_warns_for_chats` on partial enforcement). A target holding a federation role is auto-demoted and exempted from the auto-ban instead (staff are never auto-banned via warnings); the threshold warn itself is still recorded.
-
-The per-group limit is read from the `WARN_LIMIT` environment variable (default 3, minimum 1) and exposed as `cfg.warn_limit`.
-
-## Commands and aliases
-
-| Command | Alias | Purpose | Access |
+| Command | Alias | Access | Scope |
 |---|---|---|---|
-| `/tcwarn` | `/tcw` | Add a warning in the current group. | Moderator and above. |
-| `/tcunwarn` | `/tcunw` | Remove the most recent warning in the current group. | Moderator and above via `basic_mod_only`. |
-| `/warns` | `/warnlist` | Show warning count and reasons for a target in the current group. | Moderator and above via `basic_mod_only`. |
-| `/resetwarns` | `/clearwarns` | Clear all warnings for a target in the current group. | Moderator and above via `basic_mod_only`. |
+| `/tcwarn <target> <reason>` | `/tcw` | Moderator and above (`basic_mod_only`) | Connected group only. |
+| `/tcunwarn <target>` | `/tcunw` | Moderator and above | Current group. |
+| `/warns <target>` | `/warnlist` | Moderator and above (`THROTTLE_READ`) | Read-only history. |
+| `/resetwarns <target>` | `/clearwarns` | Moderator and above | Current group. |
 
-Commands use configured prefixes; slash commands are examples.
+The warn command resolves with `bot_check=True`, because a proven bot cannot
+accumulate meaningful warnings. A staff target emits a notice but the warning
+still proceeds. Escape filters keep the management commands out of the warn
+conversation fallback.
 
-Federation origin: the warn family requires a connected or primary group; private chats and disconnected groups are refused. A connection-state outage blocks the action with a retry notice instead of proceeding.
+## Conversation and callbacks
 
-## Scope
+The warn conversation uses the shared `reason_flow.py` states
+`WAITING_REASON` (0), `WAITING_PROOF` (1), `WAITING_RULES` (2), and
+`WAITING_RULES_NOTE` (3). Callbacks are `warn_cancel`, `warn_done_proof`,
+`warn_skip_proof`, and the shared `rules_step:*` set. An inline reason skips
+to proof collection.
 
-Warnings are keyed by `(user_id, chat_id)`.
+## Filing and thresholds
 
-This means:
+`execute_warn()` runs the enforcement gate twice at `min_role="moderator"`
+and uploads optional proof before filing. `warns_db.add_warn()` takes a
+user-wide advisory lock and then a per-chat lock, in that fixed order, so a
+filing and a clear cannot deadlock. It opens a case, archives proof, inserts a
+completed `warn` decision with an expiry derived from `cfg.warn_expiry_days`,
+links rules, closes the case, and reads the count from the `warn_counts` view
+in the same transaction.
 
-- Warning count is calculated per group (current chat only) for the per-group `cfg.warn_limit` threshold.
-- When `FED_WARN_LIMIT > 0`, the bot also checks the user's total warns across all connected groups after each `/tcwarn`; reaching that limit triggers the same federation-wide auto-ban regardless of any single group's count.
-- Auto-ban at either threshold issues a **federation-wide ban** through a durable `apply` run to all active connected groups plus primary groups.
-- `/tcunwarn`, `/warns`, and `/resetwarns` operate on the current group only.
+Threshold evaluation:
 
-## `/tcwarn` flow
+- Per group: `count >= cfg.warn_limit` (default 3, minimum 1) triggers an
+  automatic federation ban with notice `warnings.autoban.notice_per_group`.
+- Federation: when `cfg.fed_warn_limit > 0` (default 0, disabled), a live
+  cross-group sum at or above the limit triggers the same ban.
+- Otherwise the reply is the plain issued notice.
 
-The warning command uses the shared reason/proof conversation infrastructure.
+A failed federation count or role lookup aborts with an honest failure reply.
+Staff members are exempt: `Demote.execute(trigger="warn")` removes the role,
+then `demote_before_enforcement(trigger="warn")` runs again immediately before
+the ban so a promotion between the two cannot survive. An Owner verdict stops
+the automatic ban.
 
-1. A moderator runs `/tcwarn <target> [reason]` or replies to a user with `/tcw [reason]`.
-2. The bot resolves the executor role and target in parallel.
-3. The executor must have at least Moderator rank.
-4. The target must resolve to a Telegram user ID.
-5. The bot rejects attempts to warn itself.
-6. The target role is checked against the executor role.
-7. If a reason was supplied inline, the bot skips directly to proof collection.
-8. If no reason was supplied, the bot asks for a reason.
-9. Proof is optional; the moderator can send photo/video/GIF/file proof then tap `Done`, or tap `Skip`.
-10. The bot writes the warning, sends a federation log, and replies with the new count or auto-ban result.
+## Clearing rules
 
-## Target resolution and reason parsing
+For a threshold ban, the scope is the connected groups, the primary group, and
+the origin group. When no ban is active, `bans_db.create_ban(action_origin="automated", ...)`
+files the ban with the warn proof attached but not required. Clearing is
+conservative:
 
-Target resolution supports:
+- A complete enforcement with all groups landed calls `clear_all_warns()`.
+- A partial enforcement calls `clear_warns_for_chats()` only for landed groups;
+  failed groups keep their warnings so the threshold can fire again.
+- A reduced scope is never complete, even if every known group accepted.
 
-- Replying to a user's message.
-- Passing a numeric user ID.
-- Passing a resolvable `@username`.
-
-Inline reason parsing mirrors other moderation actions:
-
-```text
-/tcwarn @username off-topic spam
-# target: @username
-# reason: off-topic spam
-
-/tcw 123456789 repeated flooding
-# target: 123456789
-# reason: repeated flooding
-
-# Reply to a message:
-/tcw insulting other members
-# target: replied user
-# reason: insulting other members
-```
-
-If no inline reason is present, the bot prompts for a reason. Warning reasons are required, so the reason keyboard does not include `Skip` for `/tcwarn`.
-
-When the command replies to a user message, the quoted sender is the default target, with one exception: a leading numeric ID or `@username` that verifies as a real user different from the quoted sender overrides the reply, because a typed ID is deliberate intent while a quote is often just context. That override token is consumed as the target. Anything unverified (a reason starting with a number, an unknown ID) or fuzzy (partial-name search) keeps the reply target, and a restated ID naming the quoted user themself is still dropped from the reason as a duplicate. The shared `extraction.extract_mod_target(update, args, bot)` helper owns both the resolution and the consumed-or-reason decision.
-
-Inline reasons share the same 1000-character cap as typed reasons (`reason_flow.MAX_REASON_LEN`). Overlong inline input fails fast with the shared retry notice before any role lookup; typed input exceeding the cap stays in `WAITING_REASON` with the same text.
-
-## Proof behavior
-
-Warning proof is optional. The proof step uses `BuildProof("warn")`, which allows `Skip` by default.
-
-Proof options:
-
-- Send photos, videos, GIFs, or files (one album or one by one), then tap `Done`.
-- Tap `Skip` to warn without proof.
-- Tap `Cancel` to stop the operation.
-
-When proof is provided, `execute_warn` uploads it to the proof channel (`cfg.proofs`) before the warn write. The landed items are archived with the warning decision, and the resulting URL is attached as a `keyboards.action_proof_kb()` inline keyboard button to all outgoing messages (the warning reply, the warning log, and, if the warn triggers an auto-ban, the auto-ban log and auto-ban notice). If the upload fails, the warning still lands and outgoing messages send without a proof button. When proof is skipped, no upload is attempted and no proof button is shown.
-
-## Role hierarchy and target protection
-
-Warnings use the same effective role rank table as other moderation actions:
-
-| Role | Rank |
-|---|---:|
-| Owner | 4 |
-| Admin | 3 |
-| Developer | 2 |
-| Moderator | 1 |
-| No role | 0 |
-
-Rules for `/tcwarn`:
-
-- Executor must be Moderator or higher.
-- Owner targets are protected.
-- Targets with rank equal to or higher than the executor are protected.
-- A higher-ranked executor can warn a lower-ranked staff target.
-- A single warning below the warn limit does not auto-demote the target. However, if the target holds a federation role when their warn count reaches or exceeds `cfg.warn_limit` (checked with `>=`, so a post-failure retry still demotes), the auto-demote (`Demote.execute(trigger="warn")`) fires and the staff target is exempted from the auto-ban; the warn itself is still recorded. Staff are never auto-banned via warnings.
-
-`/tcunwarn` and `/resetwarns` handle staff targets differently:
-
-- Owner target: command replies that there are no warnings to remove/clear.
-- Admin/Developer/Moderator target: command sends a heads-up message but proceeds with unwarn/reset.
-- Bot target: command replies that there is nothing to remove/clear.
-
-`/warns` requires Moderator or above (`basic_mod_only` plus the executor-vs-target rank check in `resolve_and_check`); the read-only path has no identity refusal.
+`any_ban_ok` is true when a ban row exists, one group accepted the ban, or a
+delivery is still pending. A pending delivery is not a creation failure.
 
 ## Database impact
 
-Warnings use one table and one view:
+Warnings are `moderation_actions` rows with `action_type = 'warn'` and
+`scope_type = 'chat'`. `warns_db` owns `add_warn`, `federation_warn_count`,
+`clear_all_warns`, and `clear_warns_for_chats`. The `warn_counts` view,
+`get_warns()`, and `remove_last_warn()` exclude expired decisions at query
+time. `cfg.warn_expiry_days = 0` disables expiry. Clearing writes `revoked`,
+never a delete.
 
-| Object | Purpose |
-|---|---|
-| `moderation_actions` (`action_type = 'warn'`) | Stores the individual warning decisions. A warning is a chat-scoped decision, so the row names the group it belongs to. |
-| `warn_counts` (view) | Derives the current counter for each `(user_id, chat_id)` pair from the warning decisions that are still in force. |
+## Logging
 
-A warning row contains:
-
-| Field | Meaning |
-|---|---|
-| `target_user_id` | Warned Telegram user ID. |
-| `reason` | Warning reason text. |
-| `actor_user_id` | Moderator Telegram user ID. |
-| `chat_id` | Group where the warning was issued. |
-| `created_at` | Warning creation time. |
-| `status` | `completed` while the warning is in force, `revoked` once it was removed. |
-
-The counter view contains:
-
-| Field | Meaning |
-|---|---|
-| `user_id` | Warned Telegram user ID. |
-| `chat_id` | Group ID. |
-| `count` | Current warning count for this user/group pair. |
-| `updated_at` | Time of the newest warning in the pair. |
-
-The counter is derived, not stored: a stored counter can drift from the
-history it counts, and the drift would delay the ban a warning earned.
-The view counts the warnings whose status is `completed` and whose expiry
-has not passed, so an expired warning stops counting without a cleanup
-job, and the history row stays readable.
-
-## Counter behavior
-
-`warns_db.add_warn(...)` writes the warning decision and its case in one
-transaction, so a warning never exists without the investigation it
-belongs to. The count is read from the view, so two moderators warning
-the same user in the same group at the same moment both count.
-
-Every warning mutation of one target takes the same user-wide transaction
-advisory lock, and the filing adds the per-group lock on top. A clear spans
-groups, so a per-group lock alone would let a concurrent warning read a
-count that a clear was already revoking and fire the threshold on fewer
-live warnings than the limit. The user lock is always taken first, so a
-filing and a clear cannot deadlock.
-
-If the write fails, the transaction rolls back and the exception is
-re-raised. This avoids creating a warning without the record that makes
-it readable.
-
-`warns_db.warn_count(...)` reads the `warn_counts` view, which counts the
-warning decisions that are still in force.
-
-`warns_db.clear_warns(...)` revokes the active warnings of the user/chat
-pair. The history stays: a revoked decision is still a decision. A write
-failure raises instead of returning 0, so callers never misreport an
-outage as "no warnings to clear".
-
-Executor database reads fail closed with a retry notice instead of ending the conversation silently: a failed warn insert, count read, warn list, reset clear, or federation aggregate replies `I couldn't reach the database right now.` (the warn itself stays recorded when the insert already landed, and the threshold re-check is left to a retry).
-
-`warns_db.remove_last_warn(...)` revokes the newest warning that is still in force. It applies the same expiry rule as the counter and the warn list, so `/tcunwarn` never revokes an expired decision and reports a removal while the live count stays the same. A failure raises instead of returning `False`, so `/tcunwarn` replies with the database-retry notice instead of misreporting an outage as "no warnings".
-
-## Warning auto-ban behavior
-
-When `execute_warn(...)` adds a warning, it receives the new warning count. Two thresholds are then evaluated in order:
-
-**Step 1: Per-group check.** If `count >= cfg.warn_limit`, the auto-ban trigger is set to `"per_group"`. The `>=` operator (not `==`) ensures a retry after a total enforcement failure still fires: warns are cleared only on success, so a 0/N fan-out leaves the count at the limit and the next warn re-drives the ban; the `already_banned` guard skips re-creation when the record already exists, and the one-active-ban index keeps the record canonical.
-
-**Step 2: Federation-wide check (only if step 1 did not fire).** If `cfg.fed_warn_limit > 0`, the bot reads `federation_warn_count(target_id)` (total warns across all groups). If `fed_count >= cfg.fed_warn_limit`, the auto-ban trigger is set to `"fed_global"`. This `>=` is intentional: the aggregate is not atomic across groups, so `>=` ensures no trigger is missed; the already-banned guard prevents double bans.
-
-If `auto_ban_trigger is None` (both checks below threshold):
-
-1. A warning log is sent to `cfg.logs`.
-2. The group receives a reply such as `<target> has been warned (1/3) - <reason>`.
-3. If proof was supplied, the reply includes a proof description line.
-
-If `auto_ban_trigger == "per_group"` or `auto_ban_trigger == "fed_global"`:
-
-The trigger uses `>=` for per-group (retry-safe after total enforcement failure) and `>=` for federation-wide (cross-group aggregate with no atomicity guarantee).
-
-1. The target role is re-read for the auto-ban decision. A role-lookup failure aborts the auto-ban with a retry reply instead of proceeding as non-staff; the persisted warn count re-fires the `>=` threshold on the next warn. Immediately before the ban record is written, `demote_before_enforcement` reads the role again and demotes a staff holder: a target promoted after the exemption check would otherwise keep federation rank while the automatic ban lands.
-2. Active federation groups, any existing active ban, and the audit log are fetched/sent in parallel via `asyncio.gather`.
-3. If the user does not already hold an active federation ban, `bans_db.create_ban()` creates a ban decision in `moderation_actions` (the same record used by `/tcban`), reusing the warn proof upload as the ban `proof_message_id` when one was collected so `/check` shows View Proof. This makes the ban appealable via the standard appeal flow. If the write fails, the auto-ban aborts before any group is touched (fail-closed, mirroring `execute_unban`): the threshold warn stays recorded and the admin is told to ban manually with `/tcban` once the database recovers.
-4. The ban decision's `apply` run delivers `ban_chat_member` to all active connected groups plus MAIN_GROUP; failed targets are retried by the enforcement worker.
-5. Per-group failures are logged at WARNING level with group title, chat_id, and exception.
-6. An applied-to summary is computed: "Applied to X/Y groups", "Applied to X/Y groups (Z failed: ...)", or "WARNING: ban not enforced in any group" when all fail. A delivery that is still pending is reported as progress and retried automatically instead of being counted as applied, and a group that refused because the bot lost its admin rights is a permanent failure named in the summary. When the group-list fetch itself fails, the reply gains a reduced-scope WARNING suffix (and an error is logged) instead of reporting full success over the reachable subset.
-7. The warning slate is cleared only where the ban landed. A complete enforcement over the full connected-group scope calls `warns_db.clear_all_warns(target_id)` so a later unban does not re-ban on stale counts. A partial enforcement, or any enforcement whose connected-group list could not be loaded, calls `warns_db.clear_warns_for_chats(target_id, landed_chats)` instead: the groups where the ban failed or was never attempted keep their warnings, so their threshold can fire again. Clearing everything after a partial or reduced scope would leave those groups with no warning and no ban.
-8. The originating group receives a reply that the user hit the warn limit and has been federation-banned, including the applied-to summary.
-9. If the user already holds an active federation ban, a new ban decision is not created; the existing decision's apply scope is re-driven to ensure enforcement in any newly connected groups.
-10. A newly created ban decision is the only active ban of the target: a partial unique index refuses a second one, so `/check` and the appeal deep link always agree on the same record.
-
-Both auto-ban branches behave as follows:
-
-- On complete enforcement, warnings are cleared across all groups.
-- On partial enforcement or a reduced group scope, warnings are cleared only in the groups where the ban landed; the failed and unattempted groups keep them and the next warn re-fires the auto-ban via the `>=` per-group check.
-- On complete fan-out failure, no warning is cleared and the next warn re-fires the auto-ban via the `>=` per-group check.
-
-## `/tcunwarn` behavior
-
-`/tcunwarn` removes the most recent warning for the target in the current group.
-
-Flow:
-
-1. Resolve target.
-2. Reject unresolved target.
-3. Handle bot/Owner/staff messages as described above.
-4. Read current warning count.
-5. If count is zero, reply that the target has no warnings in this group.
-6. Remove the newest warning decision with `warns_db.remove_last_warn(...)`.
-7. Send an `unwarn_log` to `cfg.logs`.
-8. Reply with the new count.
-
-The newest warning is selected by `created_at` descending, then `id` descending.
-
-## `/warns` / `/warnlist` behavior
-
-`/warns` shows the warnings that are still in force for the target in the
-current group.
-
-Flow:
-
-1. Resolve target.
-2. If unresolved, ask for a target.
-3. Fetch the 50 most recent in-force warnings with
-   `warns_db.get_warns(target_id, chat_id, newest_first=True, limit=50)`.
-   Expired decisions stay in the database history but are not rendered.
-4. If none exist, reply that the target has no warnings in this group.
-5. Otherwise, reply with the total count from `warns_db.warn_count(...)` and
-   a numbered reason list of the newest warnings first.
-
-The header count is the derived `warn_counts` total, so a history longer than
-the rendered page still reports the real number of warnings in force.
-
-## `/resetwarns` behavior
-
-`/resetwarns` clears all warnings for the target in the current group without triggering the auto-ban threshold.
-
-Flow:
-
-1. Resolve target.
-2. Reject unresolved target.
-3. Handle bot/Owner/staff messages as described above.
-4. Revoke the matching warning decisions with `warns_db.clear_warns(...)`; the
-   count view drops them without deleting the history.
-5. If nothing was revoked, reply that there are no warnings to clear.
-6. Otherwise, send an audit log to the federation log channel and reply with how many warning decisions were revoked. Both actions run in parallel via `asyncio.gather`.
-
-## Logs
-
-Warning-related log templates are in `messages/` (`audit_logs.py`):
-
-| Template | Trigger |
-|---|---|
-| `warn_log` | Every warning, including the warning that reaches the auto-ban threshold. |
-| `unwarn_log` | Removing the latest warning with `/tcunwarn`. |
-| `resetwarns_log` | Clearing all warnings with `/resetwarns` when at least one warning was removed. |
-
-`warn_log` includes:
-
-- Community name.
-- Moderator mention.
-- Target mention and user ID.
-- Reason.
-- Warning count such as `2/3` or `3/3`.
-- Group title and chat ID.
-- Date.
-
-`unwarn_log` includes:
-
-- Community name.
-- Moderator mention.
-- Target mention and user ID.
-- New warning count.
-- Group title and chat ID.
-- Date.
-
-`resetwarns_log` includes:
-
-- Community name.
-- Moderator mention.
-- Target mention and user ID.
-- Number of warnings cleared.
-- Group title and chat ID.
-- Date.
-
-## Callbacks
-
-The warning conversation uses callback buttons from the shared reason/proof builders:
-
-| State | Button | Callback data | Behavior |
-|---|---|---|---|
-| Reason | `Cancel` | `warn_cancel` | Cancels the warning. |
-| Proof | `Skip` | `warn_skip_proof` | Executes the warning without proof. |
-| Proof | `Done` | `warn_done_proof` | Executes the warning with everything collected. Empty tap answers with a retry alert. |
-| Proof | `Cancel` | `warn_cancel` | Cancels the warning. |
-
-There is no `warn_skip_reason` callback because warning reasons are required.
-
-The conversation fallback excludes `/tcunwarn`, `/warns`, `/warnlist`, `/resetwarns`, and `/clearwarns` so those commands are not swallowed by an active warning conversation.
-
-## Timeouts and fallbacks
-
-The warning conversation does not have a timeout handler; conversations end only via the configured escape commands or an explicit cancel.
-
-A recognized command during the conversation cancels the warning operation unless it is one of the configured escape commands listed above.
-
-Cancel edits the prompt to say no action was taken.
+`messages.warn_log()`, `messages.unwarn_log()`, and `messages.resetwarns_log()`
+build the federation log posts. Threshold notices and issued replies use
+catalog keys. Failures log with the target and chat identifiers.
 
 ## Edge cases
 
-- Warning proof is optional and attached as a button on the outgoing messages; when the warn triggers an auto-ban, the uploaded proof id is stored as the ban `proof_message_id`.
-- Warning auto-ban creates a federation ban record via `bans_db.create_ban()` (same as `/tcban`), making it appealable through the standard appeal flow. If the user already holds an active federation ban, the record creation is skipped but the durable apply run still covers newly connected groups.
-- If auto-ban fails at 3 warnings, warning history is deliberately kept so moderators can retry or investigate.
-- If sending the warning log fails, the warning action still completes and the error is logged.
-- If clearing warnings after a successful auto-ban fails, the error is logged; the user has still been banned across the federation.
-- `/warns` requires Moderator or above (same gate as `/tcunwarn` and `/resetwarns`), but it only reads warnings in the current group.
-- `/tcunwarn` removes the latest warning only; use `/resetwarns` to clear all warnings.
-- Staff targets are protected only against `/tcwarn` when equal/higher ranked. Unwarn/reset proceed for Admin/Developer/Moderator after a heads-up.
+- A total enforcement failure leaves warnings in place and reports a threshold
+  failure notice.
+- A ban delivery still pending is reported as pending, not failed.
+- Expired warnings remain in history but no longer count toward a threshold.
+- The `>=` limit is deliberate: after a total failure the count still equals
+  the limit, so the next warning re-fires the auto-ban.
 
-## Behavior reference
+## Validation hints
 
-Key warning behaviors to keep in mind:
+Relevant tests include `tests/test_warn_*.py`.
 
-1. Moderator/Admin/Owner can start `/tcwarn`; unroled users cannot.
-2. `/tcwarn` without a target is rejected.
-3. `/tcwarn` with inline reason skips the reason prompt and asks for proof.
-4. `/tcwarn` without inline reason asks for a reason and does not offer `Skip` for reason.
-5. Proof step offers `Skip`, `Done`, and `Cancel`.
-6. The warning count is derived per `(user_id, chat_id)` from the warning decisions still in force.
-7. Warning counts are per group, but two auto-ban thresholds exist: `cfg.warn_limit` (env var `WARN_LIMIT`, per-group, default 3, minimum 1, uses `>=` so a post-failure retry still fires) and `FED_WARN_LIMIT` (federation-wide, default 0 = disabled, uses `>=` because the cross-group aggregate is not atomic).
-8. `/warns` lists the newest reasons first, capped at 50 entries.
-9. `/tcunwarn` revokes the newest warning; the count view reflects the lower number.
-10. `/resetwarns` revokes every active warning in the group without banning.
-11. At `cfg.warn_limit` per-group, successful federation-wide auto-ban clears warnings across all groups.
-12. At `cfg.warn_limit`, failed auto-ban (all groups) keeps warnings and tells moderators to ban manually; the next warn re-fires the auto-ban.
-13. When `FED_WARN_LIMIT > 0`: if `federation_warn_count(target_id)` reaches or exceeds the limit (but the per-group limit was not hit), the same federation-wide auto-ban fires via the `"fed_global"` trigger path.
-14. Equal/higher staff targets are protected from `/tcwarn`.
-15. Lower-ranked staff targets can be warned by higher-ranked executors. A single warning below the limit does not auto-demote them. At the warn limit, if the target holds a federation role, they are auto-demoted (`trigger="warn"`) and exempted from the auto-ban; the warn itself is still recorded.
-16. Warning log send failures do not roll back the warning record.
+```bash
+uv run pytest tests/ -q -k warn
+```
