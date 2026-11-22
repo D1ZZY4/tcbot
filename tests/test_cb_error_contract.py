@@ -28,6 +28,8 @@ import asyncio
 import inspect
 from pathlib import Path
 
+from telegram import InlineKeyboardMarkup
+
 from tcbot.modules.helper.messages.rich_edit import cb_error_edit
 
 _TCBOT_ROOT = Path(__file__).resolve().parent.parent / "tcbot"
@@ -113,7 +115,9 @@ def test_cb_error_edit_clears_the_keyboard_and_swallows_failures() -> None:
     asyncio.run(cb_error_edit(_FakeQuery(), "nope", log_label="test"))  # type: ignore[arg-type]
 
     assert len(calls) == 1
-    assert calls[0]["reply_markup"] is None
+    markup = calls[0]["reply_markup"]
+    assert isinstance(markup, InlineKeyboardMarkup)
+    assert not markup.inline_keyboard
     assert "parse_mode" not in calls[0]
 
 

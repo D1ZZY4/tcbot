@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import socket
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
@@ -466,3 +467,52 @@ def test_webhook_500_when_queue_put_raises(
     body, code = _call_webhook(json_data={"update_id": 1})
     assert code == 500
     assert body == "Internal error"
+
+
+def test_webhook_body_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An oversized POST is refused before JSON parsing can allocate from it."""
+    limit = alive_mod._app.config.get("MAX_CONTENT_LENGTH")
+    assert isinstance(limit, int) and 0 < limit <= 8 * 1024 * 1024
+    _wire_webhook(monkeypatch, queue=_FakeWhQueue(), loop=object(), bot=object())
+    with alive_mod._app.test_client() as client:
+        response = client.post(
+            "/webhook",
+            data=b"x" * (limit + 1),
+            content_type="application/json",
+            headers={"X-Telegram-Bot-Api-Secret-Token": _WH_SECRET},
+        )
+    assert response.status_code == 413
+
+
+def test_start_keepalive_reuses_address(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The startup probe matches Werkzeug's SO_REUSEADDR bind behavior."""
+    calls: list[object] = []
+
+    class _FakeSocket:
+        def setsockopt(self, level: int, optname: int, value: int) -> None:
+            calls.append((level, optname, value))
+
+        def bind(self, address: tuple[str, int]) -> None:
+            calls.append(("bind", address))
+
+        def close(self) -> None:
+            calls.append("close")
+
+    class _FakeThread:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def start(self) -> None:
+            calls.append("start")
+
+    monkeypatch.setattr(alive_mod.socket, "socket", lambda *_a: _FakeSocket())
+    monkeypatch.setattr(alive_mod.threading, "Thread", _FakeThread)
+    monkeypatch.setattr(
+        alive_mod, "cfg", SimpleNamespace(bind_host="127.0.0.1", port=5000)
+    )
+
+    alive_mod.start_keepalive()
+
+    assert (socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) in calls
+    assert ("bind", ("127.0.0.1", 5000)) in calls
+    assert "start" in calls

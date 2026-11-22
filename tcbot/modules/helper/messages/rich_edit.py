@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from telegram import Bot
+from telegram import Bot, InlineKeyboardMarkup
 from telegram.error import BadRequest
 
 from tcbot import cfg
@@ -335,12 +335,17 @@ async def cb_error_edit(
     parse_mode: Any = None,
     log_level: str = "warning",
 ) -> None:
-    """Replace a callback message with a notice and drop its keyboard."""
+    """Replace a callback message with a notice and drop its keyboard.
+
+    PTB drops ``None`` values from the outgoing request, so a plain ``None``
+    leaves the old keyboard attached. An explicitly empty markup serializes
+    to ``{"inline_keyboard": []}``, which Telegram uses to remove it.
+    """
     await safe_edit_cb(
         q,
         text,
         parse_mode=parse_mode,
-        reply_markup=None,
+        reply_markup=InlineKeyboardMarkup([]),
         log_level=log_level,
         log_label=log_label,
         catch_all=True,

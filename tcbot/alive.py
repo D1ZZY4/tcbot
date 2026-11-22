@@ -37,6 +37,12 @@ log = get_logger(__name__)
 # ───────────────────────── Flask App Setup ──────────────────────── #
 _app = Flask(__name__)
 
+# * An update is a small JSON envelope of ids and text, never media bytes.
+# * Bound it before parsing so one authenticated sender cannot exhaust the
+# * process with a single POST. Flask answers oversized bodies with HTTP 413.
+_MAX_WEBHOOK_BODY_BYTES: int = 1024 * 1024
+_app.config["MAX_CONTENT_LENGTH"] = _MAX_WEBHOOK_BODY_BYTES
+
 
 # ──────────────────── Optional Prometheus metrics ───────────────── #
 # * prometheus-client is optional (the observability extra); the endpoint
@@ -310,6 +316,10 @@ def start_keepalive() -> None:
     """
     probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
+        # * Werkzeug binds with SO_REUSEADDR. Without it the probe fails on a
+        # * port left in TIME_WAIT by a restart even though the real bind
+        # * would have succeeded, aborting bot startup for no real conflict.
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         probe.bind((cfg.bind_host, cfg.port))
     except OSError as exc:
         raise RuntimeError(f"Keep-alive port {cfg.port} is unavailable: {exc}") from exc
