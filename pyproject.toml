@@ -40,8 +40,6 @@ dependencies = [
     # Event loop: directly imported by the application on Linux
     "uvloop>=0.23,<0.24; sys_platform == 'linux'",
 
-    # DNS resolver: directly imported by the database resolver fallback
-    "dnspython>=2.7,<3",
 ]
 
 
