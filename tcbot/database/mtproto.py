@@ -254,6 +254,17 @@ async def stop() -> None:
     if task is not None and not task.done():
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+    # ! CRITICAL: Disconnect before releasing the lease. A free lease with a
+    # ! still-connected client lets a rolling-restart peer claim it and reuse
+    # ! the shared auth key, which Telegram rejects as AUTH_KEY_DUPLICATED.
+    c, _client = _client, None
+    if c is not None:
+        try:
+            await c.stop()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug("MTProto stop failed (non-fatal): %s", exc)
     owner = _lease_owner
     _lease_owner = None
     if owner is not None:
@@ -265,15 +276,6 @@ async def stop() -> None:
             pass
         else:
             await _release_lease_quietly(PostgresStorage(cfg.mtproto_session), owner)
-    c, _client = _client, None
-    if c is None:
-        return
-    try:
-        await c.stop()
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.debug("MTProto stop failed (non-fatal): %s", exc)
 
 
 def is_auth_dead() -> bool:
