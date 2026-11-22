@@ -13,7 +13,7 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, extraction, keyboards
+from tcbot.modules.helper import buttons, decorators, extraction
 from tcbot.modules.helper.ban_info import build_ban_detail, build_ban_summary
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
@@ -24,13 +24,12 @@ from tcbot.modules.helper.messages import (
     callback_numbers,
     cb_error_edit,
     replies,
+    reply_rich,
     safe_edit_cb,
-    safe_reply,
 )
 from tcbot.modules.helper.pipelines.check_flow import Check
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -121,7 +120,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * without this guard an anonymous-admin /checkme would get a misleading
     # * "You're clean" verdict for an ID that can never be banned or staffed.
     if user.is_bot:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("checking.error.bot_sender", locale, plain=True),
             log_label="checkme bot-sender",
@@ -149,7 +148,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * this path because nothing about the caller could be verified.
     if isinstance(ban, BaseException):
         log.warning("checkme ban lookup failed for user=%d: %s", user.id, ban)
-        await safe_reply(
+        await reply_rich(
             msg,
             t("checking.error.status_retry", locale, plain=True),
             log_label=f"checkme retry for user {user.id}",
@@ -163,18 +162,18 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * would otherwise tell them "you're fine" while they are banned.
     if ban is not None:
         text, proof_link = await build_ban_summary(ban, user.id, fname, None, locale)
-        await safe_reply(
+        await reply_rich(
             msg,
             text,
             log_label="checkme banned-staff",
-            reply_markup=keyboards.checkme_ban_kb(
+            reply_markup=buttons.checkme_ban_btn(
                 ctx.bot.username or "", str(ban.get("ban_id", "")), proof_link, locale
             ),
         )
         return
 
     if user_role == "admin":
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "checking.checkme.staff_admin",
@@ -186,7 +185,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if user_role in ("developer", "moderator"):
         role_label = db.users_roles.role_label(user_role)
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "checking.checkme.staff_role",
@@ -203,7 +202,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * so the second ban-detail block that used to follow was unreachable
     # * dead code (removed). The clean reply below is live for non-staff,
     # * non-banned callers.
-    await safe_reply(
+    await reply_rich(
         msg,
         t("checking.checkme.clean", locale, community=cfg.community_name, plain=True),
         log_label=f"checkme clean for user {user.id}",
@@ -253,7 +252,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     await safe_edit_cb(
         q,
         text,
-        reply_markup=keyboards.checkme_detail_back_kb(ban_id, proof_link, locale),
+        reply_markup=buttons.checkme_detail_back_btn(ban_id, proof_link, locale),
     )
 
 
@@ -300,7 +299,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     await safe_edit_cb(
         q,
         text,
-        reply_markup=keyboards.checkme_ban_kb(
+        reply_markup=buttons.checkme_ban_btn(
             ctx.bot.username or "", ban_id, proof_link, locale
         ),
     )
@@ -326,7 +325,7 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         update, args, ctx.bot, prefer_explicit=True
     )
     if not target_id:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_cannot_resolve(locale, plain=True),
             log_label="check resolve-fail",
@@ -355,7 +354,7 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         executor_id=user.id if user is not None else None,
         locale=locale,
     )
-    await safe_reply(
+    await reply_rich(
         msg, text, log_label=f"check for target={target_id}", reply_markup=kb
     )
 

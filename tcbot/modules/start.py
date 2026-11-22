@@ -13,19 +13,18 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     about_msg,
     answer_and_edit,
     render_groups,
     replies,
+    reply_rich,
     safe_edit_cb,
-    safe_reply,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, bold, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -86,29 +85,29 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * A forum is a supergroup in Telegram; "forum" is not a chat type.
     if chat.type in ("group", "supergroup"):
         bot_username = ctx.bot.username or ""
-        await safe_reply(
+        await reply_rich(
             msg,
             _group_start_text(botname, locale),
             log_label="cmd_start group",
-            reply_markup=keyboards.group_start_kb(bot_username, locale),
+            reply_markup=buttons.group_start_btn(bot_username, locale),
         )
         return
 
     if arg == "about":
-        await safe_reply(
+        await reply_rich(
             msg,
             about_msg(locale),
             log_label="cmd_start about",
-            reply_markup=keyboards.back_to_start_kb(locale),
+            reply_markup=buttons.back_to_start_btn(locale),
         )
         return
 
     # * appeal<ban_id> deep links are handled by the ConversationHandler in appeals.py
-    await safe_reply(
+    await reply_rich(
         msg,
         _private_start_text(botname, locale),
         log_label="cmd_start PM",
-        reply_markup=keyboards.main_menu_kb(locale),
+        reply_markup=buttons.main_menu_btn(locale),
     )
 
 
@@ -128,7 +127,7 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     await answer_and_edit(
         q,
         _private_start_text(botname, locale),
-        reply_markup=keyboards.main_menu_kb(locale),
+        reply_markup=buttons.main_menu_btn(locale),
     )
 
 
@@ -148,7 +147,7 @@ async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> N
         await safe_edit_cb(
             q,
             replies.err_groups_load_failed(locale, plain=False),
-            reply_markup=keyboards.back_to_start_kb(locale),
+            reply_markup=buttons.back_to_start_btn(locale),
             log_level="debug",
             log_label="_show_groups load-failed",
             catch_all=True,
@@ -169,7 +168,7 @@ async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> N
                 plain=True,
             ),
             parse_mode=None,
-            reply_markup=keyboards.back_to_start_kb(locale),
+            reply_markup=buttons.back_to_start_btn(locale),
             log_level="debug",
             log_label="_show_groups no-groups",
             catch_all=True,
@@ -178,7 +177,7 @@ async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> N
     await safe_edit_cb(
         q,
         render_groups(groups, detailed=detailed, locale=locale),
-        reply_markup=keyboards.groups_menu_kb(detailed=detailed, locale=locale),
+        reply_markup=buttons.groups_menu_btn(detailed=detailed, locale=locale),
         log_level="debug",
         log_label="_show_groups list",
         catch_all=True,

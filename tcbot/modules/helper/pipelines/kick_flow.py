@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING, Any
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import guards, keyboards, messages
+from tcbot.modules.helper import buttons, guards, messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply, send_log
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import replies, reply_rich, send_log
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import (
     BuildProof,
@@ -28,8 +28,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
 )
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
@@ -86,7 +85,7 @@ async def execute_kick(
         locale=locale,
     )
     if refusal is not None:
-        await safe_reply(
+        await reply_rich(
             msg,
             refusal,
             log_label="execute_kick rank-refusal",
@@ -124,7 +123,7 @@ async def execute_kick(
         locale=locale,
     )
     if refusal is not None:
-        await safe_reply(
+        await reply_rich(
             msg,
             refusal,
             log_label="execute_kick rank-refusal after proof",
@@ -155,7 +154,7 @@ async def execute_kick(
         )
     except Exception:
         log.exception("log_kick DB write failed for target=%d", target_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="execute_kick log-failed",
@@ -181,7 +180,7 @@ async def execute_kick(
             timeout=TELEGRAM_LOOKUP_TIMEOUT,
         )
         proof_link: str | None = proof_upload.link if proof_upload else None
-        proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
+        proof_btn = buttons.action_proof_btn(target_id, proof_link, locale)
         chat_title = effective_chat.title or str(chat_id)
         log_text = messages.kick_log(
             target_id,
@@ -204,7 +203,7 @@ async def execute_kick(
             send_log(
                 ctx.bot,
                 log_text,
-                reply_markup=proof_kb,
+                reply_markup=proof_btn,
             ),
             return_exceptions=True,
         )
@@ -288,22 +287,22 @@ async def execute_kick(
         if prompt_chat is not None and prompt_id is not None:
             try:
                 await ctx.bot.edit_message_text(
-                    apply_style(summary),
+                    style(summary),
                     chat_id=prompt_chat,
                     message_id=prompt_id,
-                    parse_mode="MarkdownV2",
-                    reply_markup=proof_kb,
+                    parse_mode=None,
+                    reply_markup=proof_btn,
                 )
             except Exception as exc:
                 log.debug("Kick summary prompt edit failed: %s", exc)
-                await safe_reply(
+                await reply_rich(
                     msg,
                     summary,
                     log_label="Kick summary fallback",
-                    reply_markup=proof_kb,
+                    reply_markup=proof_btn,
                 )
         else:
-            await safe_reply(msg, summary, log_label="Kick", reply_markup=proof_kb)
+            await reply_rich(msg, summary, log_label="Kick", reply_markup=proof_btn)
     except Exception:
         # * Ban failed while the proof upload may still be in flight: cancel
         # * it so no orphan upload outlives this executor.
@@ -316,7 +315,7 @@ async def execute_kick(
                 await db.kicks_db.mark_kick_failed(kick_action_id)
             except Exception:
                 log.exception("Kick status update failed for action=%s", kick_action_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "kicking.error.body",

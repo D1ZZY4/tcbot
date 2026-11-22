@@ -43,11 +43,15 @@ _OWNER_IDS: tuple[int, ...] = (
 
 @pytest.fixture
 async def owner_db(postgres_db: str) -> AsyncIterator[str]:
-    """Start from an empty role assignment table."""
+    """Start from an empty role assignment table with a clean owner cache."""
+    users_roles.owner_id_cache.invalidate(_OWNER_KEY)
     await reset_community()
     await seed_users(*_OWNER_IDS)
     yield postgres_db
     await reset_community()
+    # * set_owner publishes into the process-wide owner cache. Reset it here
+    # * so a test that forgets its own invalidate cannot poison later tests.
+    users_roles.owner_id_cache.invalidate(_OWNER_KEY)
 
 
 class _FailingCleanupSession:

@@ -24,8 +24,7 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_edit
-from tcbot.utils.formatter import code
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, code, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.time_and_date import elapsed_ms, monotonic, utc_now

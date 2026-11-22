@@ -16,11 +16,10 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, messages
 from tcbot.modules.helper.identity import can_manage_group, is_anon_admin
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply, send_log
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import replies, reply_rich, send_log
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import code
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, code, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -76,7 +75,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     locale = await locale_for_update(update)
 
     if chat.type == "private":
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_group_only(locale, plain=True),
             log_label="cmd_tcdisconnect group-only",
@@ -89,7 +88,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     # * must never be disconnected by the group owner; the bot would
     # * lose primary-group enforcement and log delivery.
     if cfg.is_primary_group(chat.id):
-        await safe_reply(
+        await reply_rich(
             msg,
             t("disconnecting.state.primary_refused", locale, plain=True),
             log_label="cmd_tcdisconnect primary-group",
@@ -101,7 +100,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         is_connected = await db.groups_db.is_connected(chat.id, fresh=True)
     except Exception as exc:
         log.warning("is_connected check failed for chat=%d: %s", chat.id, exc)
-        await safe_reply(
+        await reply_rich(
             msg,
             t("disconnecting.state.status_failed", locale, plain=True),
             log_label="cmd_tcdisconnect status-check-failed",
@@ -109,7 +108,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
     if not is_connected:
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "disconnecting.state.not_connected",
@@ -127,7 +126,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             msg_text = t("disconnecting.state.anon_admin", locale, plain=True)
         else:
             msg_text = t("disconnecting.state.not_authorized", locale, plain=True)
-        await safe_reply(
+        await reply_rich(
             msg, msg_text, log_label="cmd_tcdisconnect not-authorized", parse_mode=None
         )
         return
@@ -142,7 +141,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         deactivated = False
     if not deactivated:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("disconnecting.state.deactivate_failed", locale, plain=True),
             log_label="cmd_tcdisconnect deactivate-failed",
@@ -196,7 +195,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     args = parse_cmd_args(msg.text)
     if not args:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("disconnecting.state.usage", locale, plain=True),
             log_label="cmd_rmtc usage",
@@ -206,7 +205,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         chat_id = int(args[0])
     except ValueError:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("disconnecting.state.usage", locale, plain=True),
             log_label="cmd_rmtc usage",
@@ -219,7 +218,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * must never be force-disconnected by /rmtc; the bot would lose
     # * primary-group enforcement and log delivery.
     if cfg.is_primary_group(chat_id):
-        await safe_reply(
+        await reply_rich(
             msg,
             t("disconnecting.state.primary_refused", locale, plain=True),
             log_label="cmd_rmtc primary-group",
@@ -233,7 +232,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         removed = await db.groups_db.deactivate_group(chat_id)
     except Exception:
         log.exception("deactivate_group failed for chat %d during rmtc", chat_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             t("disconnecting.state.rmtc_failed", locale, plain=True),
             log_label="cmd_rmtc deactivate-failed",
@@ -254,7 +253,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ),
             ctx.bot.leave_chat(chat_id),
             msg.reply_text(
-                apply_style(
+                style(
                     t(
                         "disconnecting.removed.body",
                         locale,
@@ -262,7 +261,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                         community=cfg.community_name,
                     )
                 ),
-                parse_mode="MarkdownV2",
+                parse_mode=None,
             ),
             return_exceptions=True,
         )
@@ -274,7 +273,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if isinstance(reply_r, BaseException):
             log.debug("rmtc reply failed for chat %d: %s", chat_id, reply_r)
     else:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_group_not_found(locale, plain=True),
             log_label="cmd_rmtc not-found",

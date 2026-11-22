@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Paginated drill-down lists and stats search keyboards."""
+"""Paginated drill-down lists and stats search buttons."""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.keyboards.nav import nav_row
+from tcbot.modules.helper.buttons.nav import nav_row
 from tcbot.utils.i18n import t
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-def paged_drill_kb(
+def paged_drill_btn(
     items: Sequence[tuple[str, str]],
     *,
     page: int,
@@ -58,7 +58,7 @@ def paged_drill_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def stats_list_kb(
+def stats_list_btn(
     page: int,
     total_pages: int,
     n_items: int,
@@ -82,7 +82,7 @@ def stats_list_kb(
             return f"{base}:{item_ids[i]}"
         return base
 
-    return paged_drill_kb(
+    return paged_drill_btn(
         [(str(i + 1), _callback(i)) for i in range(n_items)],
         page=page,
         total_pages=total_pages,
@@ -94,7 +94,7 @@ def stats_list_kb(
     )
 
 
-def stats_search_panel_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+def stats_search_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Search panel keyboard: Cancel only."""
     return InlineKeyboardMarkup(
         [
@@ -119,7 +119,7 @@ def stats_search_row(locale: str | None = None) -> list[InlineKeyboardButton]:
     ]
 
 
-def stats_search_results_kb(
+def stats_search_results_btn(
     n: int, locale: str | None = None, *, item_ids: list[str] | None = None
 ) -> InlineKeyboardMarkup:
     """Numbered search-result buttons plus New Search / Cancel row.

@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Ban, proof, and generic detail keyboards."""
+"""Ban, proof, and generic detail buttons."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from tcbot.modules.helper.messages import appeal_deep_link
 from tcbot.utils.i18n import t
 
 
-def ban_log_kb(
+def ban_log_btn(
     target_id: int,
     proof_link: str,
     appeal_url: str,
@@ -59,7 +59,7 @@ def ban_log_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def ban_update_confirm_kb(
+def ban_update_confirm_btn(
     log_url: str | None,
     proof_url: str | None,
     locale: str | None = None,
@@ -98,7 +98,7 @@ def ban_update_confirm_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def appeal_button_kb(
+def appeal_button_btn(
     bot_username: str,
     ban_id: str,
     locale: str | None = None,
@@ -119,7 +119,7 @@ def appeal_button_kb(
     )
 
 
-def action_proof_kb(
+def action_proof_btn(
     target_id: int,
     proof_link: str | None,
     locale: str | None = None,
@@ -140,7 +140,7 @@ def action_proof_kb(
     )
 
 
-def join_ban_kb(
+def join_ban_btn(
     log_url: str | None,
     proof_url: str | None,
     appeal_url: str | None,
@@ -180,7 +180,7 @@ def join_ban_kb(
     return InlineKeyboardMarkup(rows) if rows else None
 
 
-def detail_kb(
+def detail_btn(
     *,
     back_callback: str,
     proof_link: str | None = None,

@@ -17,10 +17,9 @@ from tcbot import database as db
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.locale import locale_for_user
 from tcbot.modules.helper.messages import send_log
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
-from tcbot.utils.formatter import bold
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, bold, t
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -176,7 +175,7 @@ class Demote:
                 bot,
                 log_text,
             ),
-            bot.send_message(target_id, apply_style(user_msg), parse_mode="MarkdownV2"),
+            bot.send_message(target_id, style(user_msg), parse_mode=None),
             return_exceptions=True,
         )
         throw_if_cancelled((log_result, dm_result))

@@ -17,11 +17,10 @@ from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, guards, messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply, send_log
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import replies, reply_rich, send_log
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
-from tcbot.utils.formatter import code
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, code, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -87,7 +86,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     has_reply = bool(msg.reply_to_message)
     if not broadcast_text and not has_reply:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("broadcasting.send.no_content", locale),
             log_label="cmd_broadcast no-content",
@@ -98,14 +97,14 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         groups = await db.groups_db.active_groups()
     except Exception:
         log.exception("active_groups failed during broadcast")
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_groups_load_failed(locale, plain=False),
             log_label="cmd_broadcast groups-failed",
         )
         return
     if not groups:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_no_connected_groups(locale, plain=False),
             log_label="cmd_broadcast no-groups",
@@ -133,7 +132,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         elif broadcast_text:
             try:
                 await ctx.bot.send_message(
-                    chat_id, apply_style(broadcast_text), parse_mode="MarkdownV2"
+                    chat_id, style(broadcast_text), parse_mode=None
                 )
             except BadRequest as exc:
                 # * Retry as plain text only for MarkdownV2 parse failures. Any
@@ -173,7 +172,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if status is not None:
         edit_r, log_r = await asyncio.gather(
             status.edit_text(
-                apply_style(
+                style(
                     t(
                         "broadcasting.send.done",
                         locale,
@@ -181,7 +180,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                         failed=Safe(code(str(failed))),
                     )
                 ),
-                parse_mode="MarkdownV2",
+                parse_mode=None,
             ),
             log_coro,
             return_exceptions=True,

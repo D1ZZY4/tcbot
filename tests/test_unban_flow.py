@@ -16,8 +16,7 @@ from tcbot import database as db
 from tcbot.modules import unban
 from tcbot.modules.helper.identity import Identity
 from tcbot.modules.helper.pipelines import unban_flow
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 
 
 class _FakeMsg:

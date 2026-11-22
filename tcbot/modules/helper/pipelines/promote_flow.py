@@ -11,14 +11,13 @@ from typing import TYPE_CHECKING
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import keyboards, messages
+from tcbot.modules.helper import buttons, messages
 from tcbot.modules.helper.guards import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_user
 from tcbot.modules.helper.messages import send_log
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -228,9 +227,9 @@ async def request_admin(
         try:
             await bot.send_message(
                 owner_id,
-                apply_style(req_text),
-                parse_mode="MarkdownV2",
-                reply_markup=keyboards.promo_decision_kb(request_id),
+                style(req_text),
+                parse_mode=None,
+                reply_markup=buttons.promo_decision_btn(request_id),
             )
             notified = True
         except Exception as exc:
@@ -240,7 +239,7 @@ async def request_admin(
             await send_log(
                 bot,
                 req_text,
-                reply_markup=keyboards.promo_decision_kb(request_id),
+                reply_markup=buttons.promo_decision_btn(request_id),
             )
         except Exception:
             log.exception("Promo request notify failed")

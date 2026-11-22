@@ -28,7 +28,7 @@ import asyncio
 import inspect
 from pathlib import Path
 
-from tcbot.modules.helper.messages.safe_edits import cb_error_edit
+from tcbot.modules.helper.messages.rich_edit import cb_error_edit
 
 _TCBOT_ROOT = Path(__file__).resolve().parent.parent / "tcbot"
 
@@ -114,13 +114,13 @@ def test_cb_error_edit_clears_the_keyboard_and_swallows_failures() -> None:
 
     assert len(calls) == 1
     assert calls[0]["reply_markup"] is None
-    assert calls[0]["parse_mode"] == "MarkdownV2"
+    assert "parse_mode" not in calls[0]
 
 
 def test_cb_error_edit_default_render_mode_is_markdown() -> None:
-    """The default render mode must match the MarkdownV2 notice convention."""
+    """The helper never selects a parse mode; rich messages own formatting."""
     signature = inspect.signature(cb_error_edit)
-    assert signature.parameters["parse_mode"].default == "MarkdownV2"
+    assert signature.parameters["parse_mode"].default is None
 
 
 def test_cb_error_edit_call_sites_only_pass_accepted_keywords() -> None:
@@ -178,7 +178,7 @@ def test_cb_error_edit_render_mode_matches_the_notice_text() -> None:
 # * The same rule applies to every safe delivery helper, so the check runs
 # * over the whole package instead of one helper.
 _SAFE_HELPERS = frozenset(
-    {"safe_edit", "safe_edit_cb", "safe_edit_message", "safe_reply"}
+    {"safe_edit", "safe_edit_cb", "safe_edit_message", "reply_rich"}
 )
 
 

@@ -25,16 +25,15 @@ from telegram.ext import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import messages
-from tcbot.modules.helper.keyboards import appeal_cancel_kb, appeal_review_kb
+from tcbot.modules.helper.buttons import appeal_cancel_btn, appeal_review_btn
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import message_link, safe_reply, send_log
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import message_link, reply_rich, send_log
+from tcbot.modules.helper.messages.links import display as display_community_link
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.appeal_review_flow import AppealReviewMixin
 from tcbot.modules.helper.scope import flow_scope
-from tcbot.utils.community_links import display as display_community_link
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import pre
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import pre, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.time_and_date import to_utc, utc_now
@@ -158,7 +157,7 @@ async def handle_group_appeal(
         ban = None
     bid = str(ban.get("ban_id", "")) if ban else ""
     if not ban or not bid:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("appeals.submit.invalid_link", locale, plain=True),
             log_label="Appeal group no-ban",
@@ -193,7 +192,7 @@ class SubmitMessageMixin:
         text = msg.text.strip()
         locale = await locale_for_update(update)
         if not starts_with_appeal_tag(text):
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t("appeals.submit.unexpected", locale, plain=True),
                 log_label="Appeal unexpected-text",
@@ -201,7 +200,7 @@ class SubmitMessageMixin:
             )
             return WAITING_APPEAL
         if len(text) > _MAX_APPEAL_LEN:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "appeals.submit.too_long",
@@ -220,7 +219,7 @@ class SubmitMessageMixin:
         ban_id = scope.get("appeal_ban_id")
         log_msg_id = scope.get("appeal_log_msg_id", 0)
         if not ban_id:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t("appeals.submit.session_expired", locale, plain=True),
                 log_label="Appeal _on_message session-expired",
@@ -233,7 +232,7 @@ class SubmitMessageMixin:
             log.exception("Appeal _on_message get_ban failed for %s", ban_id)
             fresh_ban = None
         if not fresh_ban or not fresh_ban.get("is_active"):
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t("appeals.submit.session_expired", locale, plain=True),
                 log_label="Appeal _on_message expired-ban",
@@ -250,7 +249,7 @@ class SubmitMessageMixin:
         # * decision from the entry to this step, so the check is repeated
         # * where the appeal is actually filed.
         if fresh_ban.get("target_user_id") != user.id:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t("appeals.submit.wrong_account", locale, plain=True),
                 log_label="Appeal _on_message wrong-account",
@@ -287,7 +286,7 @@ class SubmitMessageMixin:
                     _clear_appeal_state(scope)
                     return ConversationHandler.END
             else:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t(
                         "appeals.submit.pending_review",
@@ -302,7 +301,7 @@ class SubmitMessageMixin:
                 return ConversationHandler.END
         remaining_h = _cooldown_remaining_h(fresh_ban.get("rejected_at"))
         if remaining_h is not None:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "appeals.submit.cooldown",
@@ -319,7 +318,7 @@ class SubmitMessageMixin:
         if not log_msg_id:
             log_msg_id = fresh_ban.get("log_message_id", 0)
         if log_msg_id and not text_references_log_message(text, log_msg_id):
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t("appeals.submit.invalid_log", locale, plain=True),
                 log_label="Appeal _on_message invalid-log",
@@ -375,7 +374,7 @@ async def post_appeal(
     # * decide the appeal that replaced it.
     try:
         rv = await ctx.bot.send_message(
-            cfg.main_group, apply_style(review_text), parse_mode="MarkdownV2"
+            cfg.main_group, style(review_text), parse_mode=None
         )
     except Exception:
         log.exception("Appeal review post failed")
@@ -384,14 +383,14 @@ async def post_appeal(
     appeals_review_id: int | None = None
     appeal_log_sent_id: int | None = None
     if review_msg_id is not None:
-        review_kb = appeal_review_kb(ban_id, review_msg_id)
+        review_btn = appeal_review_btn(ban_id, review_msg_id)
         rv_appeals, sent_log, markup = await asyncio.gather(
             ctx.bot.send_message(
                 appeal_chat,
-                apply_style(review_text),
-                parse_mode="MarkdownV2",
+                style(review_text),
+                parse_mode=None,
                 message_thread_id=appeal_thread,
-                reply_markup=review_kb,
+                reply_markup=review_btn,
             ),
             send_log(
                 ctx.bot,
@@ -402,7 +401,7 @@ async def post_appeal(
             ctx.bot.edit_message_reply_markup(
                 chat_id=cfg.main_group,
                 message_id=review_msg_id,
-                reply_markup=review_kb,
+                reply_markup=review_btn,
             ),
             return_exceptions=True,
         )
@@ -469,7 +468,7 @@ async def post_appeal(
                     log.debug(
                         "Appeal orphan APPEALS delete failed for %s: %s", ban_id, exc
                     )
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "appeals.submit.pending_review",
@@ -578,7 +577,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
         uid = user.id
         locale = await locale_for_update(update)
         if update.effective_chat is None or update.effective_chat.type != "private":
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t("appeals.submit.not_private", locale, plain=True),
                 log_label="Appeal not-private",
@@ -595,7 +594,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
                 )
             return ConversationHandler.END
         if not ban or not ban.get("is_active"):
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t("appeals.submit.invalid_link", locale, plain=True),
                 log_label=f"Appeal invalid-link for ban_id={ban_id}",
@@ -603,7 +602,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
             )
             return ConversationHandler.END
         if ban.get("target_user_id") != uid:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t("appeals.submit.wrong_account", locale, plain=True),
                 log_label=f"Appeal wrong-account for user {uid}",
@@ -642,7 +641,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
                     uid,
                 )
             else:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t(
                         "appeals.submit.pending_review",
@@ -656,7 +655,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
                 return ConversationHandler.END
         remaining_h = _cooldown_remaining_h(ban.get("rejected_at"))
         if remaining_h is not None:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "appeals.submit.cooldown",
@@ -678,9 +677,9 @@ class AppealSubmitMixin(SubmitMessageMixin):
         try:
             log_display = await display_community_link(ctx.bot, self.log_channel)
             instr = await msg.reply_text(
-                apply_style(self.instruction_text(locale, log_display)),
-                parse_mode="MarkdownV2",
-                reply_markup=appeal_cancel_kb(
+                style(self.instruction_text(locale, log_display)),
+                parse_mode=None,
+                reply_markup=appeal_cancel_btn(
                     t("button.cancel", locale, plain=True),
                     self.cancel_callback,
                     locale,
@@ -740,7 +739,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
         _clear_appeal_state(flow_scope(ctx, update))
         msg = update.effective_message
         if msg:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "appeals.submit.session_ended",
@@ -758,7 +757,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
         """Non-text message handler; nudge back to text."""
         msg = update.effective_message
         if msg is not None:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "appeals.submit.unexpected",

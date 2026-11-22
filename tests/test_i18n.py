@@ -44,20 +44,23 @@ from tcbot.modules import (
     warns,
 )
 from tcbot.modules import help as helpmod
-from tcbot.modules.helper import keyboards
+from tcbot.modules.helper import buttons
 from tcbot.modules.helper.identity import can_manage_group
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
 from tcbot.modules.helper.messages import replies
 from tcbot.modules.helper.pipelines.appeal_review_flow import LOCK_HOURS
-from tcbot.utils.formatter import bold, code, esc, pre
 from tcbot.utils.i18n import (
     DEFAULT_LOCALE,
     I18nError,
     Safe,
     available_locales,
+    bold,
+    code,
     display_name,
+    esc,
     is_known_locale,
     load_catalog,
+    pre,
     resolve_locale,
     t,
 )
@@ -65,8 +68,6 @@ from tcbot.utils.prefixes import _PrefixedCommandFilter
 from tests.postgres_support import reset_community, seed_users
 
 ROOT = Path(__file__).resolve().parent.parent / "i18n"
-
-_V2_SPECIAL = "_*[]()~`>#+-=|{}.!"
 
 
 def placeholders(template: str) -> set[str]:
@@ -76,28 +77,6 @@ def placeholders(template: str) -> set[str]:
         if name:
             names.add(name.split(".", 1)[0].split("[", 1)[0])
     return names
-
-
-def find_unescaped(text: str) -> list[str]:
-    """Return descriptions of unescaped MarkdownV2 specials in rendered text."""
-    problems: list[str] = []
-    i, n = 0, len(text)
-    while i < n:
-        ch = text[i]
-        if ch in _V2_SPECIAL:
-            if ch == "\\" and i + 1 < n and text[i + 1] in _V2_SPECIAL:
-                i += 1
-            else:
-                backslashes = 0
-                j = i - 1
-                while j >= 0 and text[j] == "\\":
-                    backslashes += 1
-                    j -= 1
-                if backslashes % 2 == 0:
-                    context = text[max(0, i - 14) : i + 8].replace("\n", "\\n")
-                    problems.append(f"unescaped {ch!r} near ...{context}...")
-        i += 1
-    return problems
 
 
 def _catalog() -> dict[str, dict[str, str]]:
@@ -253,16 +232,16 @@ def test_t_default_and_explicit() -> None:
 
 def test_t_escapes_string_values() -> None:
     out = t("language.current_user", "en-US", catalog=_catalog(), language="A_B (x).")
-    assert out == "Your language: A\\_B \\(x\\)\\.\\."
+    assert out == "Your language: A_B (x).."
 
 
 def test_t_passes_safe_and_numbers_through() -> None:
     catalog = _catalog()
     marked = Safe("[x](tg://user?id=1)")
     out = t("language.current_user", "en-US", catalog=catalog, language=marked)
-    assert out == "Your language: [x](tg://user?id=1)\\."
+    assert out == "Your language: [x](tg://user?id=1)."
     synthetic = {"en-US": {"n": "Count {n}."}}
-    assert t("n", "en-US", catalog=synthetic, n=5) == "Count 5\\."
+    assert t("n", "en-US", catalog=synthetic, n=5) == "Count 5."
 
 
 def test_t_plain_mode_leaves_text_verbatim() -> None:
@@ -289,7 +268,7 @@ def test_t_rejects_specs_and_positional() -> None:
 def test_missing_key_returns_marker() -> None:
     # * The marker is rendered as message text, so MarkdownV2 mode escapes
     # * the brackets and dots; plain mode (callback alerts) keeps them.
-    assert t("no.such.key", "en-US", catalog=_catalog()) == "\\[no\\.such\\.key\\]"
+    assert t("no.such.key", "en-US", catalog=_catalog()) == "[no.such.key]"
     assert t("no.such.key", "en-US", catalog=_catalog(), plain=True) == "[no.such.key]"
 
 
@@ -322,45 +301,11 @@ def test_all_templates_render_v2_clean() -> None:
             _assert_v2_render_clean(rendered, f"{locale}:{key}")
 
 
-def _strip_code_spans(text: str) -> tuple[str, list[str]]:
-    """Remove balanced code spans, returning (remainder, innards)."""
-    innards: list[str] = []
-    out: list[str] = []
-
-    i, n = 0, len(text)
-    while i < n:
-        if text[i] == "`":
-            j = text.find("`", i + 1)
-            assert j > i, "unbalanced code span in rendered output"
-            innards.append(text[i + 1 : j])
-            out.append("X")
-            i = j + 1
-        else:
-            out.append(text[i])
-            i += 1
-    return "".join(out), innards
-
-
 def _assert_v2_render_clean(rendered: str, where: str) -> None:
-    """Assert engine output is valid MarkdownV2, markup spans included.
-
-    Code-span innards may only carry doubled backslashes or escaped
-    backticks (the engine emits nothing else); bold-span innards and
-    the remaining literal text must be fully escaped.
-    """
-    no_code, code_innards = _strip_code_spans(rendered)
-    for inner in code_innards:
-        assert "`" not in inner, where
-        stripped = re.sub(r"\\\\", "", inner)
-        stripped = stripped.replace("\\`", "")
-        assert "\\" not in stripped, where
-    parts = re.split(r"(?<!\\)\*", no_code)
-    assert len(parts) % 2 == 1, f"{where}: unbalanced bold markers"
-    for idx, part in enumerate(parts):
-        if idx % 2 == 1:
-            assert find_unescaped(part) == [], f"{where}: bold inner"
-        else:
-            assert find_unescaped(part) == [], f"{where}: literal"
+    """Assert engine output is rich HTML with no stray MarkdownV2 escapes."""
+    assert "\\" not in rendered, where
+    assert rendered.count("<b>") == rendered.count("</b>"), where
+    assert rendered.count("<code>") == rendered.count("</code>"), where
 
 
 def test_non_default_locales_subset_default_keys() -> None:
@@ -596,8 +541,8 @@ def test_chat_scope() -> None:
 
 
 def test_start_menu_has_language_bottom_row() -> None:
-    kb = keyboards.main_menu_kb()
-    rows = kb.inline_keyboard
+    btn = buttons.main_menu_btn()
+    rows = btn.inline_keyboard
     assert rows
     bottom = rows[-1]
     assert len(bottom) == 1
@@ -606,15 +551,15 @@ def test_start_menu_has_language_bottom_row() -> None:
 
 
 def test_language_list_marks_selected_locale() -> None:
-    kb = keyboards.language_list_kb(
+    btn = buttons.language_list_btn(
         "user",
         [("English (US)", "en-US"), ("Bahasa Indonesia", "id-ID")],
         selected="en-US",
     )
-    texts = [row[0].text for row in kb.inline_keyboard]
+    texts = [row[0].text for row in btn.inline_keyboard]
     assert texts[0] == "✓ English (US)"
     assert texts[1] == "Bahasa Indonesia"
-    assert kb.inline_keyboard[0][0].callback_data == "lang:set:user:en-US"
+    assert btn.inline_keyboard[0][0].callback_data == "lang:set:user:en-US"
 
 
 # ─────── Help rollout: broadcast/connect/groups ─────── #
@@ -848,7 +793,7 @@ def test_netspeed_pong_and_fields_v2_clean() -> None:
         DEFAULT_LOCALE,
         latency=Safe(code("12.3 ms")),
     )
-    assert body == f"Pong\\! Round\\-trip: {code('12.3 ms')}"
+    assert body == f"Pong! Round-trip: {code('12.3 ms')}"
     _assert_v2_render_clean(body, "netspeed.pong")
     for key in (
         "ping",
@@ -913,27 +858,27 @@ def test_replies_errors_golden() -> None:
         assert got == want
     assert (
         replies.err_group_only(DEFAULT_LOCALE, plain=False)
-        == "Use this command in a group\\."
+        == "Use this command in a group."
     )
     assert (
         replies.err_groups_load_failed(DEFAULT_LOCALE, plain=False)
-        == "Could not load the group list\\. Please try again\\."
+        == "Could not load the group list. Please try again."
     )
 
 
 def test_replies_tiers_golden() -> None:
-    assert replies.perm_owner_only(DEFAULT_LOCALE, plain=False) == "Owner only\\."
+    assert replies.perm_owner_only(DEFAULT_LOCALE, plain=False) == "Owner only."
     assert (
         replies.perm_staff_only(DEFAULT_LOCALE, plain=False)
-        == "TC Staff \\(Admin and above\\)\\."
+        == "TC Staff (Admin and above)."
     )
     assert (
         replies.perm_dev_above(DEFAULT_LOCALE, plain=False)
-        == "Developer and above \\(Owner / Admin / Developer\\)\\."
+        == "Developer and above (Owner / Admin / Developer)."
     )
     assert (
         replies.perm_moderator_above(DEFAULT_LOCALE, plain=False)
-        == "Moderator and above \\(Owner / Admin / Developer / Moderator\\)\\."
+        == "Moderator and above (Owner / Admin / Developer / Moderator)."
     )
     assert (
         replies.rate_limit_text(7, DEFAULT_LOCALE, plain=True)
@@ -985,14 +930,14 @@ def test_builder_help_is_deterministic() -> None:
 def test_panel_renders_v2_clean() -> None:
     for scope in ("user", "group"):
         text = language._panel_text(scope, "en-US")
-        assert find_unescaped(text) == []
+        _assert_v2_render_clean(text, f"language panel {scope}")
         assert "en-US" not in text
     confirm = language._confirmation_text("user", "en-US")
-    assert find_unescaped(confirm) == []
+    _assert_v2_render_clean(confirm, "language confirmation")
 
 
 def test_esc_import_used_by_engine() -> None:
-    assert esc("a_b") == "a\\_b"
+    assert esc("a_b") == "a_b"
 
 
 # ─────────────────────── Mini-markup ──────────────────────── #
@@ -1001,18 +946,19 @@ def test_esc_import_used_by_engine() -> None:
 def test_markup_code_and_bold() -> None:
     catalog = {"en-US": {"m": "Run `/tcban` then tap *Done*."}}
     out = t("m", "en-US", catalog=catalog)
-    assert out == "Run `/tcban` then tap *Done*\\."
+    assert out == "Run <code>/tcban</code> then tap <b>Done</b>."
 
 
 def test_markup_code_span() -> None:
     catalog = {"en-US": {"m": "Tap `/tcb reason here`."}}
-    assert t("m", "en-US", catalog=catalog) == "Tap `/tcb reason here`\\."
+    assert t("m", "en-US", catalog=catalog) == "Tap <code>/tcb reason here</code>."
 
 
 def test_markup_bold_span() -> None:
     catalog = {"en-US": {"m": "A *federation-wide ban* on the target."}}
     assert (
-        t("m", "en-US", catalog=catalog) == "A *federation\\-wide ban* on the target\\."
+        t("m", "en-US", catalog=catalog)
+        == "A <b>federation-wide ban</b> on the target."
     )
 
 
@@ -1044,7 +990,7 @@ def test_markup_sequential_pairs_parse() -> None:
     # * First-close-wins pairing (standard Markdown interpretation):
     # * bold, literal, bold. Telegram parses the same shape.
     catalog = {"en-US": {"m": "*a *b* c*"}}
-    assert t("m", "en-US", catalog=catalog) == "*a *b* c*"
+    assert t("m", "en-US", catalog=catalog) == "<b>a </b>b<b> c</b>"
 
 
 def test_markup_brace_in_span_rejected() -> None:
@@ -1055,7 +1001,7 @@ def test_markup_brace_in_span_rejected() -> None:
 def test_markup_placeholder_beside_spans() -> None:
     catalog = {"en-US": {"m": "Banned {user} - see *details* in `/log`."}}
     out = t("m", "en-US", catalog=catalog, user="A_B")
-    assert out == "Banned A\\_B \\- see *details* in `/log`\\."
+    assert out == "Banned A_B - see <b>details</b> in <code>/log</code>."
 
 
 def test_markup_stray_brace_rejected() -> None:
@@ -1067,7 +1013,7 @@ def test_markup_stray_brace_rejected() -> None:
 
 def test_markup_escaped_braces_literal() -> None:
     catalog = {"en-US": {"m": "Use {{x}} literally."}}
-    assert t("m", "en-US", catalog=catalog) == "Use \\{x\\} literally\\."
+    assert t("m", "en-US", catalog=catalog) == "Use {x} literally."
 
 
 # ─────────────────── Ban help pilot (Opsi B) ─────────────────── #
@@ -1075,21 +1021,23 @@ def test_markup_escaped_braces_literal() -> None:
 
 def test_ban_help_overview_golden() -> None:
     assert t("banning.help.overview") == (
-        "Issues a *federation\\-wide ban* on a user, applied across every "
-        "connected group at once\\. Demotes staff targets and stores "
-        "proof with the ban record\\."
+        "Issues a <b>federation-wide ban</b> on a user, applied across every "
+        "connected group at once. Demotes staff targets and stores "
+        "proof with the ban record."
     )
 
 
 def test_ban_help_commands_golden() -> None:
-    assert t("banning.help.commands.body") == "`/tcban` \\(alias: `/tcb`\\)"
+    assert t("banning.help.commands.body") == (
+        "<code>/tcban</code> (alias: <code>/tcb</code>)"
+    )
 
 
 def test_ban_help_examples_golden() -> None:
     assert t("banning.help.examples.body") == (
-        "`/tcban @username spamming in connected groups`\n"
-        "`/tcban 123456789 scamming members`\n"
-        "Or reply to a message and run `/tcb reason here`\\."
+        "<code>/tcban @username spamming in connected groups</code>\n"
+        "<code>/tcban 123456789 scamming members</code>\n"
+        "Or reply to a message and run <code>/tcb reason here</code>."
     )
 
 
@@ -1135,7 +1083,7 @@ def test_kicking_help_golden() -> None:
 
     assert kick.__help__["overview"] == t("kicking.help.overview")
     assert t("kicking.help.overview") == (
-        "Removes a user from the *current group only*\\. Demotes staff targets\\."
+        "Removes a user from the <b>current group only</b>. Demotes staff targets."
     )
     sections = _module_sections(kick)
     assert sections["Commands & Aliases"] == t("kicking.help.commands.body")
@@ -1154,15 +1102,15 @@ def test_muting_help_golden() -> None:
     assert sections["Time format"] == t("muting.help.time.body")
     assert sections["Examples"] == t("muting.help.examples.body")
     assert t("muting.help.time.body") == (
-        "Place the duration before the reason\\. Omit a duration to apply "
-        "a permanent mute\\.\n\n"
-        "\\- `s` Seconds: `30s` \\= 30 seconds\n"
-        "\\- `m` Minutes: `15m` \\= 15 minutes\n"
-        "\\- `h` Hours: `2h` \\= 2 hours\n"
-        "\\- `d` Days: `7d` \\= 7 days\n"
-        "\\- `w` Weeks: `2w` \\= 2 weeks\n"
-        "\\- `mo` Months: `3mo` \\= 3 months\n"
-        "\\- `ye` Years: `2ye` \\= 2 years"
+        "Place the duration before the reason. Omit a duration to apply "
+        "a permanent mute.\n\n"
+        "- <code>s</code> Seconds: <code>30s</code> = 30 seconds\n"
+        "- <code>m</code> Minutes: <code>15m</code> = 15 minutes\n"
+        "- <code>h</code> Hours: <code>2h</code> = 2 hours\n"
+        "- <code>d</code> Days: <code>7d</code> = 7 days\n"
+        "- <code>w</code> Weeks: <code>2w</code> = 2 weeks\n"
+        "- <code>mo</code> Months: <code>3mo</code> = 3 months\n"
+        "- <code>ye</code> Years: <code>2ye</code> = 2 years"
     )
 
 
@@ -1191,8 +1139,8 @@ def test_warnings_help_golden() -> None:
 def test_checking_help_golden() -> None:
     assert check.__help__["overview"] == t("checking.help.overview")
     assert t("checking.help.overview") == (
-        "Look up your own ban status with `/checkme`, or pull a full "
-        "federation activity profile for any user with `/check`\\."
+        "Look up your own ban status with <code>/checkme</code>, or pull a full "
+        "federation activity profile for any user with <code>/check</code>."
     )
     sections = _module_sections(check)
     assert sections["Commands & Aliases"] == t("checking.help.commands.body")
@@ -1223,7 +1171,7 @@ def test_admins_help_golden() -> None:
     assert admins.__help__["overview"] == t("admins.help.overview")
     assert t("admins.help.overview") == (
         "Promote and demote staff, transfer ownership, and manage "
-        "promotion requests across the federation\\."
+        "promotion requests across the federation."
     )
     sections = _module_sections(admins)
     assert sections["Commands & Aliases"] == t("admins.help.commands.body")
@@ -1346,8 +1294,8 @@ def test_cmd_language_pm_panel(monkeypatch: pytest.MonkeyPatch) -> None:
         await language.cmd_language(update, SimpleNamespace(user_data={}))
         assert len(message.sent) == 1
         text, kwargs = message.sent[0]
-        assert kwargs.get("parse_mode", "MarkdownV2") == "MarkdownV2"
-        assert find_unescaped(text) == []
+        assert kwargs.get("parse_mode") is None
+        _assert_v2_render_clean(text, "language command panel")
         assert kwargs["reply_markup"] is not None
 
     asyncio.run(run())
@@ -1395,8 +1343,8 @@ async def test_on_lang_set_user_saves(
     assert query.answers
     assert len(query.edits) == 1
     text, kwargs = query.edits[0]
-    assert kwargs.get("parse_mode") == "MarkdownV2"
-    assert find_unescaped(text) == []
+    assert kwargs.get("parse_mode") is None
+    _assert_v2_render_clean(text, "language set confirmation")
     assert await settings_db.get_user_locale(1) == "en-US"
 
 

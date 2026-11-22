@@ -40,8 +40,8 @@ def _install(monkeypatch: pytest.MonkeyPatch, log: _ReplyLog) -> None:
         await log.reply(msg, text, **kwargs)
 
     monkeypatch.setattr(guards, "effective_locale", _locale)
-    monkeypatch.setattr(guards, "safe_reply", _safe_reply)
-    monkeypatch.setattr(targets, "safe_reply", _safe_reply)
+    monkeypatch.setattr(guards, "reply_rich", _safe_reply)
+    monkeypatch.setattr(targets, "reply_rich", _safe_reply)
 
 
 def test_primary_group_is_a_federation_origin_without_being_connected(

@@ -287,8 +287,12 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
         if error_reporter._is_benign(exc):
             log.debug("[asyncio] benign (not reported): %s", exc)
             return
-        # * Attaching the exception makes this record and the report_exc call
-        # * below share one fingerprint, so a single incident ships once.
+        # * The log record reports this incident. An attached exception makes
+        # * report_exc share its fingerprint and dedupe to nothing, so the
+        # * explicit call keeps the real exception as the report subject even
+        # * when the log sink is not attached. With no exception, a synthetic
+        # * RuntimeError would fingerprint differently and ship a duplicate,
+        # * so the log record alone covers that case.
         log.error(
             "[asyncio] %s%s",
             detail,
@@ -304,9 +308,8 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
                 log.debug("[asyncio] dead MTProto auth key suppressed.")
                 return
             _asyncio_report_tasks.spawn(mtproto_mod.handle_auth_failure())
-        _asyncio_report_tasks.spawn(
-            error_reporter.report_exc(exc or RuntimeError(detail), context=detail)
-        )
+        if exc is not None:
+            _asyncio_report_tasks.spawn(error_reporter.report_exc(exc, context=detail))
 
     return handler
 
@@ -528,7 +531,11 @@ async def _run_webhook_mode(app: Application) -> None:
                 url=full_url,
                 secret_token=secret,
                 allowed_updates=list(Update.ALL_TYPES),
-                drop_pending_updates=True,
+                # * The outgoing process refuses in-flight POSTs with 503 so
+                # * Telegram retries them here. Dropping pending updates would
+                # * discard those retried moderation and greeting events.
+                # * Delivery is idempotent, so re-delivery is safe.
+                drop_pending_updates=False,
             )
             webhook_set = True
             info = await app.bot.get_webhook_info()
@@ -653,6 +660,8 @@ def _init_sentry() -> None:
             dsn=cfg.sentry_dsn,
             integrations=[LoguruIntegration(level_include="ERROR")],
             traces_sample_rate=0.0,
+            send_default_pii=False,
+            before_send=error_reporter.scrub_sentry_event,
         )
     except Exception as exc:
         log.warning("Sentry initialisation failed (non-fatal): %s", exc)

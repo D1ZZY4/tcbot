@@ -9,7 +9,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.keyboards import paged_drill_kb, stats_list_kb
+from tcbot.modules.helper.buttons import paged_drill_btn, stats_list_btn
 
 
 def _texts(markup) -> list[list[str]]:  # type: ignore[no-untyped-def]
@@ -23,28 +23,28 @@ def _styles(markup) -> list[list[object]]:  # type: ignore[no-untyped-def]
 
 
 def test_grid_chunks_three_per_row_with_nav_and_back() -> None:
-    kb = paged_drill_kb(
+    btn = paged_drill_btn(
         [(str(i), f"cb:{i}") for i in range(1, 6)],
         page=0,
         total_pages=3,
         nav_prefix="cb",
         back_callback="main",
     )
-    assert _texts(kb) == [["1", "2", "3"], ["4", "5"], ["Next »"], ["« Back"]]
-    assert _styles(kb)[0] == [KeyboardButtonStyle.PRIMARY] * 3
-    assert _styles(kb)[-1] == [None]
+    assert _texts(btn) == [["1", "2", "3"], ["4", "5"], ["Next »"], ["« Back"]]
+    assert _styles(btn)[0] == [KeyboardButtonStyle.PRIMARY] * 3
+    assert _styles(btn)[-1] == [None]
 
 
 def test_single_page_omits_nav_row() -> None:
-    kb = paged_drill_kb(
+    btn = paged_drill_btn(
         [("1", "cb:0")], page=0, total_pages=1, nav_prefix="cb", back_callback="main"
     )
-    assert _texts(kb) == [["1"], ["« Back"]]
+    assert _texts(btn) == [["1"], ["« Back"]]
 
 
 def test_extra_rows_land_before_back() -> None:
     extra = [[InlineKeyboardButton("Search", callback_data="search")]]
-    kb = paged_drill_kb(
+    btn = paged_drill_btn(
         [],
         page=0,
         total_pages=1,
@@ -52,14 +52,14 @@ def test_extra_rows_land_before_back() -> None:
         back_callback="main",
         extra_rows=extra,
     )
-    assert _texts(kb) == [["Search"], ["« Back"]]
+    assert _texts(btn) == [["Search"], ["« Back"]]
 
 
-def test_stats_list_kb_keeps_shape_and_callbacks() -> None:
-    kb = stats_list_kb(
+def test_stats_list_btn_keeps_shape_and_callbacks() -> None:
+    btn = stats_list_btn(
         0, 2, 4, cb_prefix="stats_users", item_cb_prefix="stats_user_item"
     )
-    rows = kb.inline_keyboard
+    rows = btn.inline_keyboard
     assert [b.callback_data for b in rows[0]] == [
         "stats_user_item:0:0",
         "stats_user_item:0:1",

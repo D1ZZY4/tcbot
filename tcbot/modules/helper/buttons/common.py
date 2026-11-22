@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Shared private helpers for the keyboards package."""
+"""Shared private helpers for the buttons package."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from telegram.constants import KeyboardButtonStyle
 
 from tcbot.utils.i18n import t
 
-# * Button colors follow docs/reference/keyboard-styles.md: SUCCESS approves,
+# * Button colors follow docs/reference/button-styles.md: SUCCESS approves,
 # * DANGER rejects or confirms destruction, PRIMARY continues a flow. Older
 # * clients ignore the style field, so color is purely additive.
 
@@ -23,7 +23,7 @@ def back_row(
 
     Single owner for the Back button: every view that returns somewhere
     renders the label from the shared button catalog, so the wording and
-    the callback stay consistent across the keyboards.
+    the callback stay consistent across the buttons.
     """
     return [
         InlineKeyboardButton(

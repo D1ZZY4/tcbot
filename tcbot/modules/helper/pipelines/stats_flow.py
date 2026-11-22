@@ -19,24 +19,23 @@ from telegram import (
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
+from tcbot.modules.helper.buttons import (
+    back_to_module_btn,
+    detail_btn,
+    stats_back_btn,
+    stats_list_btn,
+    stats_main_btn,
+    stats_search_panel_btn,
+    stats_search_results_btn,
+    stats_search_row,
+)
 from tcbot.modules.helper.extraction import (
     identity_needs_refresh,
     launch_identity_refresh,
     sync_user_identity,
 )
-from tcbot.modules.helper.keyboards import (
-    back_to_module_kb,
-    detail_kb,
-    stats_back_kb,
-    stats_list_kb,
-    stats_main_kb,
-    stats_search_panel_kb,
-    stats_search_results_kb,
-    stats_search_row,
-)
 from tcbot.utils.dispatch import gather_bounded, throw_if_cancelled
-from tcbot.utils.formatter import bold, code, esc, user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, bold, code, esc, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page, paginate
 from tcbot.utils.tasks import TaskTracker
@@ -207,7 +206,7 @@ class OverviewViews:
         )
         if degraded:
             text += f"\n\n{t('stats.main.degraded', locale)}"
-        return text, stats_main_kb(
+        return text, stats_main_btn(
             show_users=show_users, show_staff=show_staff, locale=locale
         )
 
@@ -320,7 +319,7 @@ class OverviewViews:
         _section("Admins", admins)
         _section("Developers", developers)
         _section("Moderators", moderators)
-        return "\n".join(lines).rstrip(), stats_back_kb(locale)
+        return "\n".join(lines).rstrip(), stats_back_btn(locale)
 
 
 # ────────────────────────── Member lists ────────────────────────── #
@@ -344,9 +343,9 @@ class PeopleViews:
             raise
         except Exception as exc:
             log.warning("stats users_list read failed: %s", exc)
-            return t("stats.error.db_fail", locale), stats_back_kb(locale)
+            return t("stats.error.db_fail", locale), stats_back_btn(locale)
         if total == 0:
-            return t("stats.users.empty", locale), stats_back_kb(locale)
+            return t("stats.users.empty", locale), stats_back_btn(locale)
         lines = [
             t(
                 "stats.users.header",
@@ -370,7 +369,7 @@ class PeopleViews:
                     user=Safe(user_ref(uid, fname, uname)),
                 )
             )
-        return "\n".join(lines), stats_list_kb(
+        return "\n".join(lines), stats_list_btn(
             page,
             total_pages,
             len(chunk),
@@ -395,13 +394,13 @@ class PeopleViews:
         )
         if idx < 0 or idx >= len(chunk):
             text = t("stats.error.user_not_found", locale)
-            kb = back_to_module_kb(f"stats_users:{page}", locale)
+            kb = back_to_module_btn(f"stats_users:{page}", locale)
             return text, kb
         u = chunk[idx]
         uid = u.get("user_id", 0)
         if stable is not None and str(uid) != stable:
             text = t("stats.error.user_not_found", locale)
-            kb = back_to_module_kb(f"stats_users:{page}", locale)
+            kb = back_to_module_btn(f"stats_users:{page}", locale)
             return text, kb
         fname = u.get("first_name") or str(uid)
         uname = u.get("username")
@@ -425,7 +424,7 @@ class PeopleViews:
             f"{t('stats.user_detail.last_seen', locale, date=Safe(seen))}\n\n"
             f"{t('stats.user_detail.check_hint', locale, command=Safe(code(f'/check {uid}')))}"
         )
-        kb = back_to_module_kb(f"stats_users:{page}", locale)
+        kb = back_to_module_btn(f"stats_users:{page}", locale)
         return text, kb
 
 
@@ -446,10 +445,10 @@ class ChatViews:
             raise
         except Exception as exc:
             log.warning("stats chats_list read failed: %s", exc)
-            return t("stats.error.db_fail", locale), stats_back_kb(locale)
+            return t("stats.error.db_fail", locale), stats_back_btn(locale)
         chunk, total_pages, page = paginate(groups, page, _PAGE_SIZE)
         if not groups:
-            return t("stats.chats.empty", locale), stats_back_kb(locale)
+            return t("stats.chats.empty", locale), stats_back_btn(locale)
         lines = [
             t(
                 "stats.chats.header",
@@ -471,7 +470,7 @@ class ChatViews:
                     id=Safe(code(str(grp.get("chat_id", 0)))),
                 )
             )
-        return "\n".join(lines), stats_list_kb(
+        return "\n".join(lines), stats_list_btn(
             page,
             total_pages,
             len(chunk),
@@ -495,13 +494,13 @@ class ChatViews:
         chunk, _total, page = paginate(groups, page, _PAGE_SIZE)
         if idx < 0 or idx >= len(chunk):
             text = t("stats.error.group_not_found", locale)
-            kb = back_to_module_kb(f"stats_chats:{page}", locale)
+            kb = back_to_module_btn(f"stats_chats:{page}", locale)
             return text, kb
         grp = chunk[idx]
         chat_id = grp.get("chat_id", 0)
         if stable is not None and str(chat_id) != stable:
             text = t("stats.error.group_not_found", locale)
-            kb = back_to_module_kb(f"stats_chats:{page}", locale)
+            kb = back_to_module_btn(f"stats_chats:{page}", locale)
             return text, kb
         title = grp.get("title", "Unknown")
         launch_group_title_refresh(bot, chat_id)
@@ -515,7 +514,7 @@ class ChatViews:
             f"{t('stats.chat_detail.connected_by', locale, user=Safe(user_ref(added_by, adder_fname, adder_uname)))}\n"
             f"{t('stats.chat_detail.date', locale, date=Safe(date_str))}"
         )
-        kb = back_to_module_kb(f"stats_chats:{page}", locale)
+        kb = back_to_module_btn(f"stats_chats:{page}", locale)
         return text, kb
 
 
@@ -538,9 +537,9 @@ class BanViews:
             raise
         except Exception as exc:
             log.warning("stats bans_list read failed: %s", exc)
-            return t("stats.error.db_fail", locale), stats_back_kb(locale)
+            return t("stats.error.db_fail", locale), stats_back_btn(locale)
         if total == 0:
-            return t("stats.bans_view.empty", locale), stats_back_kb(locale)
+            return t("stats.bans_view.empty", locale), stats_back_btn(locale)
         uids = [b.get("target_user_id", 0) for b in chunk]
         fname_map = await db.users_cache.get_first_names_batch(uids) if uids else {}
         lines = [
@@ -567,7 +566,7 @@ class BanViews:
                 )
             )
         search_row = stats_search_row(locale)
-        return "\n".join(lines), stats_list_kb(
+        return "\n".join(lines), stats_list_btn(
             page,
             total_pages,
             len(chunk),
@@ -591,17 +590,17 @@ class BanViews:
             ban = await db.bans_db.get_ban(stable)
             if not ban or not ban.get("is_active"):
                 text = t("stats.error.ban_not_found", locale)
-                kb = back_to_module_kb(f"stats_bans:{page}", locale)
+                kb = back_to_module_btn(f"stats_bans:{page}", locale)
                 return text, kb
             text, proof_link = await build_ban_detail(ban, locale=locale)
-            return text, detail_kb(
+            return text, detail_btn(
                 back_callback=f"stats_bans:{page}",
                 proof_link=proof_link,
                 locale=locale,
             )
         return (
             t("stats.error.ban_not_found", locale),
-            back_to_module_kb(f"stats_bans:{page}", locale),
+            back_to_module_btn(f"stats_bans:{page}", locale),
         )
 
 
@@ -612,16 +611,16 @@ class SearchViews:
     """Search prompt lifecycle and result rendering for active bans."""
 
     @staticmethod
-    def _search_panel_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+    def _search_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
         """Search panel keyboard."""
-        return stats_search_panel_kb(locale)
+        return stats_search_panel_btn(locale)
 
     @staticmethod
-    def _search_results_kb(
+    def _search_results_btn(
         n: int, locale: str | None = None, *, item_ids: list[str] | None = None
     ) -> InlineKeyboardMarkup:
         """Numbered search results."""
-        return stats_search_results_kb(n, locale, item_ids=item_ids)
+        return stats_search_results_btn(n, locale, item_ids=item_ids)
 
     @classmethod
     def open_search(
@@ -634,12 +633,12 @@ class SearchViews:
         text = t("stats.search.title", locale)
         msg = q.message
         if not isinstance(msg, Message):
-            return text, cls._search_panel_kb(locale)
+            return text, cls._search_panel_btn(locale)
         ud = cast("dict[str, object]", ctx.user_data)
         ud[SEARCH_KEY] = True
         ud[MSG_KEY] = msg.message_id
         ud[CHAT_KEY] = msg.chat_id
-        return text, cls._search_panel_kb(locale)
+        return text, cls._search_panel_btn(locale)
 
     @staticmethod
     def clear_search(ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -671,7 +670,7 @@ class SearchViews:
         """Render search results: empty state or numbered hits."""
         if not results:
             text = t("stats.search.empty", locale, query=query)
-            return text, cls._search_results_kb(0, locale)
+            return text, cls._search_results_btn(0, locale)
         uids = [b.get("target_user_id", 0) for b in results]
         fname_map = await db.users_cache.get_first_names_batch(uids)
         lines = [t("stats.search.header", locale, query=query, n=len(results)) + "\n"]
@@ -687,7 +686,7 @@ class SearchViews:
                     id=Safe(code(str(uid))),
                 )
             )
-        return "\n".join(lines), cls._search_results_kb(
+        return "\n".join(lines), cls._search_results_btn(
             len(results),
             locale,
             item_ids=[str(ban.get("ban_id", "")) for ban in results],
@@ -704,15 +703,15 @@ class SearchViews:
         """Detail card for a single search hit."""
         if idx < 0 or idx >= len(results):
             text = t("stats.error.result_unavailable", locale)
-            kb = back_to_module_kb("stats_search_back")
+            kb = back_to_module_btn("stats_search_back")
             return text, kb
         ban = results[idx]
         if stable is not None and str(ban.get("ban_id", "")) != stable:
             text = t("stats.error.result_unavailable", locale)
-            kb = back_to_module_kb("stats_search_back")
+            kb = back_to_module_btn("stats_search_back")
             return text, kb
         text, proof_link = await build_ban_detail(ban, locale=locale)
-        return text, detail_kb(
+        return text, detail_btn(
             back_callback="stats_search_back",
             proof_link=proof_link,
             locale=locale,

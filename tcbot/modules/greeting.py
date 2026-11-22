@@ -21,19 +21,18 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import decorators, keyboards
-from tcbot.modules.helper.keyboards import rules as rules_kb
+from tcbot.modules.helper import buttons, decorators
+from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.locale import locale_for_chat, locale_for_update
 from tcbot.modules.helper.messages import (
     appeal_deep_link,
     message_link,
-    safe_reply,
+    reply_rich,
 )
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import code, user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, code, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
@@ -105,7 +104,7 @@ async def _send_join_ban_notices(
     appeal_url = (
         appeal_deep_link(bot.username, ban_id) if bot.username and ban_id else None
     )
-    keyboard = keyboards.join_ban_kb(log_url, proof_url, appeal_url, locale)
+    keyboard = buttons.join_ban_btn(log_url, proof_url, appeal_url, locale)
     group_text = t(
         "greeting.notice.banned_group",
         locale,
@@ -118,15 +117,15 @@ async def _send_join_ban_notices(
     )
     if reply_to is not None:
         group_send = reply_to.reply_text(
-            apply_style(group_text),
-            parse_mode="MarkdownV2",
+            style(group_text),
+            parse_mode=None,
             reply_markup=keyboard,
         )
     else:
         group_send = bot.send_message(
             chat.id,
-            apply_style(group_text),
-            parse_mode="MarkdownV2",
+            style(group_text),
+            parse_mode=None,
             reply_markup=keyboard,
         )
     dm_text = t(
@@ -139,8 +138,8 @@ async def _send_join_ban_notices(
     )
     dm_send = bot.send_message(
         member.id,
-        apply_style(dm_text),
-        parse_mode="MarkdownV2",
+        style(dm_text),
+        parse_mode=None,
         reply_markup=keyboard,
     )
     group_result, dm_result = await asyncio.gather(
@@ -179,7 +178,7 @@ async def _ack_markup(member_id: int, locale: str) -> object | None:
         version_id = int(published["version"]["id"])
         if await db.rules_db.has_acknowledged(version_id, member_id):
             return None
-        return rules_kb.ack_kb(version_id, member_id, locale)
+        return rules_btn.ack_btn(version_id, member_id, locale)
     except Exception as exc:
         log.debug("Greeting acknowledgement lookup failed for %d: %s", member_id, exc)
         return None
@@ -302,7 +301,7 @@ async def _handle_member(
 
     if greet and not _enforcement_blind:
         markup = await _ack_markup(member.id, locale)
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "greeting.welcome.body",
@@ -589,7 +588,7 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
     member = msg.left_chat_member
     if member and not member.is_bot:
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "greeting.left.body",

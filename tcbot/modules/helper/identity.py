@@ -12,8 +12,7 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 from tcbot import database as db
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 

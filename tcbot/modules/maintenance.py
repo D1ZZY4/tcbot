@@ -18,10 +18,9 @@ from tcbot.database.documents import GroupDoc
 from tcbot.database.types import as_int
 from tcbot.modules.helper import decorators, messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply, send_log
+from tcbot.modules.helper.messages import replies, reply_rich, send_log
 from tcbot.utils.dispatch import fan_out, gather_bounded, throw_if_cancelled
-from tcbot.utils.formatter import bold, code
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, bold, code, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
@@ -181,7 +180,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.exception("active_groups failed during leaveall")
         status_msg = update.effective_message
         if status_msg is not None:
-            await safe_reply(
+            await reply_rich(
                 status_msg,
                 replies.err_groups_load_failed(locale, plain=False),
                 log_label="leaveall groups-failed",
@@ -194,7 +193,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not groups:
         status_msg = update.effective_message
         if status_msg is not None:
-            await safe_reply(
+            await reply_rich(
                 status_msg,
                 replies.err_no_connected_groups(locale, plain=False),
                 log_label="leaveall no-groups",
@@ -210,7 +209,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             status = await status_msg.reply_text(
                 t("maintenance.status.sending", locale, n=len(groups)),
-                parse_mode="MarkdownV2",
+                parse_mode=None,
             )
         except Exception as exc:
             log.debug("leaveall status reply failed: %s", exc)
@@ -251,7 +250,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     failed=Safe(code(str(failed))),
                     detail=Safe(detail),
                 ),
-                parse_mode="MarkdownV2",
+                parse_mode=None,
             )
         except Exception:
             log.exception("Leaveall status edit failed")
@@ -306,7 +305,7 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         groups = await db.groups_db.active_groups()
     except Exception:
         log.exception("active_groups failed during cleanup")
-        await safe_reply(
+        await reply_rich(
             reply_msg,
             replies.err_groups_load_failed(locale, plain=False),
             log_label="cleanup groups-failed",
@@ -340,7 +339,7 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         deactivated = 0
 
-    await safe_reply(
+    await reply_rich(
         reply_msg,
         t(
             "maintenance.cleanup.done",
@@ -385,7 +384,7 @@ async def _reply_repair_list(msg: Message, locale: str) -> None:
         runs = await db.enforcement_db.list_unsettled_runs()
     except Exception:
         log.exception("list_unsettled_runs failed during tcrepair")
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="tcrepair list-failed",
@@ -393,14 +392,14 @@ async def _reply_repair_list(msg: Message, locale: str) -> None:
         )
         return
     if not runs:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("maintenance.repair.none", locale, plain=True),
             log_label="tcrepair none",
             parse_mode=None,
         )
         return
-    await safe_reply(
+    await reply_rich(
         msg,
         _repair_lines(runs, locale),
         log_label="tcrepair list",
@@ -428,7 +427,7 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await _reply_repair_list(msg, locale)
         return
     if args[0].lower() != "retry" or len(args) > 3:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("maintenance.repair.usage", locale, plain=True),
             log_label="tcrepair usage",
@@ -436,7 +435,7 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if len(args) < 2:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("maintenance.repair.usage", locale, plain=True),
             log_label="tcrepair usage",
@@ -446,7 +445,7 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     run_id = as_int(args[1])
     chat_id = as_int(args[2]) if len(args) == 3 else None
     if run_id <= 0 or (len(args) == 3 and chat_id in (None, 0)):
-        await safe_reply(
+        await reply_rich(
             msg,
             t("maintenance.repair.usage", locale, plain=True),
             log_label="tcrepair invalid",
@@ -457,7 +456,7 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         result = await db.enforcement_db.redrive_run(run_id, chat_id=chat_id)
     except Exception:
         log.exception("redrive_run failed for run=%d", run_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="tcrepair retry-failed",
@@ -475,7 +474,7 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             raise
         except Exception:
             log.exception("Repair delivery failed for run=%d; it stays queued", run_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "maintenance.repair.queued",
@@ -492,7 +491,7 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "cancelled": "maintenance.repair.cancelled",
         "missing": "maintenance.repair.missing",
     }.get(result.state)
-    await safe_reply(
+    await reply_rich(
         msg,
         t(key or "maintenance.repair.missing", locale, run=run_ref),
         log_label=f"tcrepair {result.state} run {run_id}",
@@ -513,7 +512,7 @@ async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     locale = await locale_for_update(update)
     args = parse_cmd_args(msg.text)
     if len(args) < 2:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("maintenance.forget.usage", locale, plain=True),
             log_label="tcforget usage",
@@ -526,7 +525,7 @@ async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         user_id = 0
     reason = " ".join(args[1:]).strip()
     if user_id <= 0 or not reason:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("maintenance.forget.usage", locale, plain=True),
             log_label="tcforget invalid",
@@ -537,7 +536,7 @@ async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         owner_id = await db.users_roles.get_owner_id(fresh=True)
     except Exception:
         log.exception("tcforget owner lookup failed")
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="tcforget owner-lookup-failed",
@@ -548,7 +547,7 @@ async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # ! CRITICAL: erasing the Owner would revoke the only owner row,
         # ! and the boot seed could recreate it for the erased account. The
         # ! operator must transfer ownership before erasing that account.
-        await safe_reply(
+        await reply_rich(
             msg,
             t("maintenance.forget.owner", locale, plain=True),
             log_label="tcforget current-owner",
@@ -559,14 +558,14 @@ async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         request_id = await db.erasure_db.request_erasure(user_id, reason)
     except Exception:
         log.exception("tcforget request failed for user=%d", user_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             t("maintenance.forget.failed", locale, plain=True),
             log_label="tcforget failed",
             parse_mode=None,
         )
         return
-    await safe_reply(
+    await reply_rich(
         msg,
         t(
             "maintenance.forget.queued",

@@ -66,7 +66,7 @@ async def publish_rules(
                         text,
                         chat_id=cfg.main_channel,
                         message_id=slot["message_id"],
-                        parse_mode="MarkdownV2",
+                        parse_mode=None,
                         disable_web_page_preview=True,
                     )
                     message_id = int(slot["message_id"])
@@ -74,7 +74,7 @@ async def publish_rules(
                     sent = await bot.send_message(
                         cfg.main_channel,
                         text,
-                        parse_mode="MarkdownV2",
+                        parse_mode=None,
                         disable_web_page_preview=True,
                     )
                     message_id = int(sent.message_id)

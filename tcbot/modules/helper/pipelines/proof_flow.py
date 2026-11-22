@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Proof-step infrastructure: keyboards, prompts, media recording, and channel upload."""
+"""Proof-step infrastructure: buttons, prompts, media recording, and channel upload."""
 
 from __future__ import annotations
 
@@ -21,11 +21,10 @@ from telegram.ext import filters
 from telegram.ext.filters import BaseFilter
 
 from tcbot import cfg
-from tcbot.modules.helper.keyboards import proof_step_kb
+from tcbot.modules.helper.buttons import proof_step_btn
 from tcbot.modules.helper.messages.audit_logs import proof_caption_new
 from tcbot.modules.helper.messages.links import message_link
-from tcbot.utils.formatter import bold
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, bold, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
@@ -64,10 +63,12 @@ class BuildProof:
         Done executes with everything collected so far (albums in one
         send and sequential sends alike); without it the ban path
         auto-flushes after a silence window instead. Markup lives in
-        :func:`keyboards.proof_step_kb`; this stays as a thin delegating
+        :func:`buttons.proof_step_btn`; this stays as a thin delegating
         step so existing call sites keep working.
         """
-        return proof_step_kb(self.action, skip_allowed=self.skip_allowed, locale=locale)
+        return proof_step_btn(
+            self.action, skip_allowed=self.skip_allowed, locale=locale
+        )
 
     def _skip_hint(self, locale: str | None) -> Safe:
         if not self.skip_allowed:
@@ -317,7 +318,7 @@ async def upload_proof_items(
                 proof_chat,
                 source.file_id,
                 caption=cap,
-                parse_mode="MarkdownV2",
+                parse_mode=None,
                 message_thread_id=proof_thread,
             )
         if source.send_kind == "video":
@@ -325,7 +326,7 @@ async def upload_proof_items(
                 proof_chat,
                 source.file_id,
                 caption=cap,
-                parse_mode="MarkdownV2",
+                parse_mode=None,
                 message_thread_id=proof_thread,
             )
         if source.send_kind == "animation":
@@ -333,14 +334,14 @@ async def upload_proof_items(
                 proof_chat,
                 source.file_id,
                 caption=cap,
-                parse_mode="MarkdownV2",
+                parse_mode=None,
                 message_thread_id=proof_thread,
             )
         return await bot.send_document(
             proof_chat,
             source.file_id,
             caption=cap,
-            parse_mode="MarkdownV2",
+            parse_mode=None,
             message_thread_id=proof_thread,
         )
 
@@ -366,7 +367,7 @@ async def upload_proof_items(
                             caption=caption
                             if chunk_start == 0 and index == 0
                             else None,
-                            parse_mode="MarkdownV2",
+                            parse_mode=None,
                         )
                         if source.send_kind == "photo"
                         else InputMediaVideo(
@@ -374,7 +375,7 @@ async def upload_proof_items(
                             caption=caption
                             if chunk_start == 0 and index == 0
                             else None,
-                            parse_mode="MarkdownV2",
+                            parse_mode=None,
                         )
                         for index, source in enumerate(chunk)
                     ]

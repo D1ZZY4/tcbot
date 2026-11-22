@@ -25,8 +25,8 @@ from tcbot.modules.helper.messages import (
     callback_args_optional,
     callback_numbers,
     replies,
+    reply_rich,
     safe_edit_message,
-    safe_reply,
 )
 from tcbot.modules.helper.pipelines.stats_flow import (
     CHAT_KEY,
@@ -157,7 +157,7 @@ async def _require_staff_input(msg: Message, update: Update) -> str | None:
         tapper.id if tapper is not None else None, min_role="moderator"
     )
     if access is guards.StaffAccess.LOOKUP_FAILED:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("stats.error.access_retry", locale, plain=True),
             log_label="stats search access-fail",
@@ -165,7 +165,7 @@ async def _require_staff_input(msg: Message, update: Update) -> str | None:
         )
         return None
     if access is not guards.StaffAccess.ALLOWED:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("stats.error.staff_only", locale, plain=True),
             log_label="stats search staff-only",
@@ -183,11 +183,11 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None:
         return
     user = update.effective_user
-    text, kb = await Stats.main(
+    text, btn = await Stats.main(
         viewer_id=user.id if user is not None else None,
         locale=await locale_for_update(update),
     )
-    await safe_reply(msg, text, log_label="cmd_stats", reply_markup=kb)
+    await reply_rich(msg, text, log_label="cmd_stats", reply_markup=btn)
 
 
 def _parse_item_callback(
@@ -197,7 +197,7 @@ def _parse_item_callback(
 
     Four-part callbacks carry the stable entity ID so detail views can
     reject a record shifted by a concurrent list mutation. Three-part
-    callbacks from older keyboards keep working without the check.
+    callbacks from older buttons keep working without the check.
     """
     args = callback_args_optional(q, 3)
     if args is None:
@@ -223,8 +223,8 @@ async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     locale = await _require_staff_pane(q, update)
     if locale is None:
         return
-    text, kb = Stats.open_search(ctx, q, locale)
-    await answer_and_edit(q, text, reply_markup=kb)
+    text, btn = Stats.open_search(ctx, q, locale)
+    await answer_and_edit(q, text, reply_markup=btn)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
@@ -283,7 +283,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
                 await ctx.bot.send_message(
                     msg.chat_id,
                     t("stats.error.db_fail", locale),
-                    parse_mode="MarkdownV2",
+                    parse_mode=None,
                 )
             except Exception as exc:
                 log.debug("Stats search error notice failed: %s", exc)
@@ -294,22 +294,22 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 
     chat_id = ctx.user_data.get(CHAT_KEY)
     msg_id = ctx.user_data.get(MSG_KEY)
-    text, kb = await Stats.search_results(query, results, locale)
+    text, btn = await Stats.search_results(query, results, locale)
     if chat_id is not None and msg_id is not None:
         await safe_edit_message(
             ctx.bot,
             chat_id,
             msg_id,
             text,
-            reply_markup=kb,
+            reply_markup=btn,
             log_level="debug",
             log_label="Stats search result",
             catch_all=True,
         )
     else:
         # * No result card to edit: reply with results instead of dropping them.
-        await safe_reply(
-            msg, text, log_label="Stats search result fallback", reply_markup=kb
+        await reply_rich(
+            msg, text, log_label="Stats search result fallback", reply_markup=btn
         )
 
 
@@ -349,8 +349,8 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         return
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
     if not results:
-        text, kb = Stats.open_search(ctx, q, locale)
-        await answer_and_edit(q, text, reply_markup=kb)
+        text, btn = Stats.open_search(ctx, q, locale)
+        await answer_and_edit(q, text, reply_markup=btn)
     else:
         previous_query = (
             ctx.user_data.get("stats_last_query", "") if ctx.user_data else ""

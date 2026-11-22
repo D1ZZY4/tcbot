@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
-from tcbot.utils import community_links
+from tcbot.modules.helper.messages import links as community_links
 
 if TYPE_CHECKING:
     from telegram import Bot

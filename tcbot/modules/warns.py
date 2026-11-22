@@ -14,8 +14,8 @@ from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, guards, identity, targets
 from tcbot.modules.helper.guards import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import replies, reply_rich
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.reason_flow import (
     WAITING_PROOF,
     WAITING_REASON,
@@ -32,8 +32,7 @@ from tcbot.modules.helper.pipelines.warn_flow import (
     warn_conversation,
 )
 from tcbot.modules.helper.scope import flow_scope
-from tcbot.utils.formatter import bold, user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, bold, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -131,7 +130,7 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * Fail fast on overlong inline reasons with the shared cap and text,
     # * before any role I/O or notice work.
     if inline_reason and is_reason_too_long(inline_reason):
-        await safe_reply(
+        await reply_rich(
             msg,
             reason_too_long_text(len(inline_reason), locale),
             log_label="cmd_warn reason-too-long",
@@ -141,7 +140,7 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     notice = identity.staff_notice("warn", ident, cfg.community_name, locale)
     if notice is not None:
-        await safe_reply(msg, notice, log_label="cmd_warn staff notice")
+        await reply_rich(msg, notice, log_label="cmd_warn staff notice")
 
     scope = flow_scope(ctx, update)
     scope.update(
@@ -157,12 +156,12 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         scope["warn_reason"] = inline_reason
         try:
             prompt = await msg.reply_text(
-                apply_style(
+                style(
                     proof.noted_prompt(
                         "warn", inline_reason, target_mention, locale=locale
                     )
                 ),
-                parse_mode="MarkdownV2",
+                parse_mode=None,
                 reply_markup=proof.keyboard(locale),
             )
             scope["warn_prompt_chat"] = msg.chat.id
@@ -176,8 +175,8 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         prompt = await msg.reply_text(
-            apply_style(reason.prompt(target_mention, "warn", locale=locale)),
-            parse_mode="MarkdownV2",
+            style(reason.prompt(target_mention, "warn", locale=locale)),
+            parse_mode=None,
             reply_markup=reason.keyboard(locale),
         )
         scope["warn_prompt_chat"] = msg.chat.id
@@ -239,7 +238,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_warnlist no-target",

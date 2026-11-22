@@ -11,7 +11,7 @@ from typing import Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.keyboards.common import back_row
+from tcbot.modules.helper.buttons.common import back_row
 from tcbot.utils.i18n import t
 
 # * Callback payloads of the moderation rules picker, shared by the ban and
@@ -23,7 +23,7 @@ PICKER_CLEAR = "rules_step:clear"
 PICKER_CANCEL = "rules_step:cancel"
 
 
-def picker_kb(
+def picker_btn(
     items: list[dict[str, Any]], selected: list[int], locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Build the moderation rules picker with toggles and control buttons."""
@@ -74,7 +74,7 @@ def _button(text: str, data: str) -> InlineKeyboardButton:
     )
 
 
-def editor_panel_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+def editor_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Build the main editor panel with edit, preview, and publish actions."""
     return InlineKeyboardMarkup(
         [
@@ -91,7 +91,7 @@ def editor_panel_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     )
 
 
-def categories_kb(
+def categories_btn(
     categories: list[dict[str, Any]], locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Build the category list with add and back actions."""
@@ -116,7 +116,7 @@ def categories_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def items_kb(
+def items_btn(
     items: list[dict[str, Any]], locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Build the item list of one category."""
@@ -128,7 +128,7 @@ def items_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def confirm_kb(
+def confirm_btn(
     yes_callback: str, no_callback: str, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Build a two-button confirmation for a destructive editor step."""
@@ -142,7 +142,7 @@ def confirm_kb(
     )
 
 
-def rules_menu_kb(
+def rules_menu_btn(
     categories: list[dict[str, Any]], locale: str | None = None, *, page: int = 0
 ) -> InlineKeyboardMarkup:
     """Build a two-per-row category grid with an optional More page."""
@@ -162,12 +162,12 @@ def rules_menu_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def category_back_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+def category_back_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Build the Back button from a category view to the rules menu."""
     return InlineKeyboardMarkup([back_row("rules_menu", locale)])
 
 
-def ack_kb(
+def ack_btn(
     version_id: int, member_id: int, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Build the single I agree button attached to a new member's greeting."""

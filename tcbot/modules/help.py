@@ -17,11 +17,10 @@ from telegram.ext import (
 
 from tcbot import cfg
 from tcbot.modules import ALL_MODULES
-from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import answer_and_edit, safe_reply
-from tcbot.utils.formatter import bold, code
-from tcbot.utils.i18n import Safe, t
+from tcbot.modules.helper.messages import answer_and_edit, reply_rich
+from tcbot.utils.i18n import Safe, bold, code, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -176,12 +175,12 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             mod_slug = help_key[5:]
             if sections:
                 section_btns = _section_buttons(mod_slug, sections, is_menu_path=False)
-                kb = keyboards.module_help_kb(
+                kb = buttons.module_help_btn(
                     section_btns, back_callback="helpc_main", locale=locale
                 )
             else:
-                kb = keyboards.back_to_help_cmd_kb(locale)
-            await safe_reply(
+                kb = buttons.back_to_help_cmd_btn(locale)
+            await reply_rich(
                 msg,
                 _module_text(name, overview, locale),
                 log_label="cmd_help module",
@@ -205,7 +204,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             if suggestion
             else Safe("")
         )
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "help.not_found.body",
@@ -214,17 +213,17 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 hint=hint,
             ),
             log_label="cmd_help not-found",
-            reply_markup=keyboards.help_topics_kb(
+            reply_markup=buttons.help_topics_btn(
                 _topics_for_locale(locale, menu=False)
             ),
         )
         return
 
-    await safe_reply(
+    await reply_rich(
         msg,
         _help_index_text(botname, locale),
         log_label="cmd_help index",
-        reply_markup=keyboards.help_topics_kb(_topics_for_locale(locale, menu=False)),
+        reply_markup=buttons.help_topics_btn(_topics_for_locale(locale, menu=False)),
     )
 
 
@@ -242,9 +241,9 @@ async def _render_help_index(
     botname = ctx.bot.first_name or ""
     locale = await locale_for_update(update)
     kb = (
-        keyboards.help_topics_menu_kb(_topics_for_locale(locale, menu=True), locale)
+        buttons.help_topics_menu_btn(_topics_for_locale(locale, menu=True), locale)
         if with_back_to_start
-        else keyboards.help_topics_kb(_topics_for_locale(locale, menu=False))
+        else buttons.help_topics_btn(_topics_for_locale(locale, menu=False))
     )
     await answer_and_edit(q, _help_index_text(botname, locale), reply_markup=kb)
 
@@ -260,15 +259,15 @@ async def _show_module(
     locale = await locale_for_update(update)
     content = _builder_help(locale)
     if menu_key not in content:
-        back_kb = (
-            keyboards.back_to_help_kb(locale)
+        back_btn = (
+            buttons.back_to_help_btn(locale)
             if is_menu_path
-            else keyboards.back_to_help_cmd_kb(locale)
+            else buttons.back_to_help_cmd_btn(locale)
         )
         await answer_and_edit(
             q,
             t("help.error.topic_not_found", locale, plain=False),
-            reply_markup=back_kb,
+            reply_markup=back_btn,
         )
         return
 
@@ -278,14 +277,12 @@ async def _show_module(
     back_cb = "help_menu" if is_menu_path else "helpc_main"
     if sections:
         section_btns = _section_buttons(mod_slug, sections, is_menu_path=is_menu_path)
-        kb = keyboards.module_help_kb(
-            section_btns, back_callback=back_cb, locale=locale
-        )
+        kb = buttons.module_help_btn(section_btns, back_callback=back_cb, locale=locale)
     else:
         kb = (
-            keyboards.back_to_help_kb(locale)
+            buttons.back_to_help_btn(locale)
             if is_menu_path
-            else keyboards.back_to_help_cmd_kb(locale)
+            else buttons.back_to_help_cmd_btn(locale)
         )
 
     await answer_and_edit(q, _module_text(name, overview, locale), reply_markup=kb)
@@ -309,7 +306,7 @@ async def _show_section(
         await answer_and_edit(
             q,
             t("help.error.topic_not_found", locale, plain=False),
-            reply_markup=keyboards.back_to_module_kb(back_module_cb, locale),
+            reply_markup=buttons.back_to_module_btn(back_module_cb, locale),
         )
         return
 
@@ -318,7 +315,7 @@ async def _show_section(
         await answer_and_edit(
             q,
             t("help.error.section_not_found", locale, plain=False),
-            reply_markup=keyboards.back_to_module_kb(back_module_cb, locale),
+            reply_markup=buttons.back_to_module_btn(back_module_cb, locale),
         )
         return
 
@@ -330,7 +327,7 @@ async def _show_section(
         content=Safe(section_content),
     )
     await answer_and_edit(
-        q, body, reply_markup=keyboards.back_to_module_kb(back_module_cb, locale)
+        q, body, reply_markup=buttons.back_to_module_btn(back_module_cb, locale)
     )
 
 

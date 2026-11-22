@@ -2,14 +2,14 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Check-profile dashboard, warn lists, and check-me detail keyboards."""
+"""Check-profile dashboard, warn lists, and check-me detail buttons."""
 
 from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.keyboards.common import back_row
+from tcbot.modules.helper.buttons.common import back_row
 from tcbot.modules.helper.messages import appeal_deep_link
 from tcbot.utils.i18n import t
 
@@ -51,7 +51,7 @@ def check_paged_markup(
     return InlineKeyboardMarkup(rows)
 
 
-def check_warn_groups_kb(
+def check_warn_groups_btn(
     target_id: int,
     groups: list[tuple[str, int, int]],
     locale: str | None = None,
@@ -77,7 +77,7 @@ def check_warn_groups_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def check_profile_kb(
+def check_profile_btn(
     target_id: int,
     *,
     ban_total: int,
@@ -145,7 +145,7 @@ def check_profile_kb(
     )
 
 
-def checkme_ban_kb(
+def checkme_ban_btn(
     bot_username: str,
     ban_id: str,
     proof_link: str | None = None,
@@ -184,7 +184,7 @@ def checkme_ban_kb(
     )
 
 
-def checkme_detail_back_kb(
+def checkme_detail_back_btn(
     ban_id: str,
     proof_link: str | None = None,
     locale: str | None = None,

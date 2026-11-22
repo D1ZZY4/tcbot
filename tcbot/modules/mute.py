@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot.modules.helper import decorators, extraction, targets
-from tcbot.modules.helper.messages import replies, safe_reply
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import replies, reply_rich
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.mute_flow import (
     execute_unmute,
     mute_conversation,
@@ -27,8 +27,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
     reason_too_long_text,
 )
 from tcbot.modules.helper.scope import flow_scope
-from tcbot.utils.formatter import code, esc, user_ref
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import code, esc, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
 from tcbot.utils.time_and_date import fmt_duration, parse_duration
@@ -158,7 +157,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * the demote below so an aborted command never strips a role,
     # * matching /tcban and /tckick.
     if inline_reason and is_reason_too_long(inline_reason):
-        await safe_reply(
+        await reply_rich(
             msg,
             reason_too_long_text(len(inline_reason), locale),
             log_label="cmd_mute reason-too-long",
@@ -192,7 +191,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         scope["mute_reason"] = inline_reason
         try:
             prompt = await msg.reply_text(
-                apply_style(
+                style(
                     proof.noted_prompt(
                         "mute",
                         inline_reason,
@@ -201,7 +200,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                         locale=locale,
                     )
                 ),
-                parse_mode="MarkdownV2",
+                parse_mode=None,
                 reply_markup=proof.keyboard(locale),
             )
             scope["mute_prompt_id"] = prompt.message_id
@@ -214,12 +213,12 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         prompt = await msg.reply_text(
-            apply_style(
+            style(
                 reason.prompt(
                     target_mention, "mute", extra_info=extra_info, locale=locale
                 )
             ),
-            parse_mode="MarkdownV2",
+            parse_mode=None,
             reply_markup=reason.keyboard(locale),
         )
         scope["mute_prompt_id"] = prompt.message_id

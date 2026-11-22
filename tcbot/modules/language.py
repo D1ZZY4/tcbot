@@ -13,14 +13,14 @@ from telegram import InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import database as db
-from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.identity import can_manage_group
 from tcbot.modules.helper.locale import effective_locale
 from tcbot.modules.helper.messages import (
     answer_ack,
     replies,
+    reply_rich,
     safe_edit_cb,
-    safe_reply,
 )
 from tcbot.utils.i18n import (
     available_locales,
@@ -75,11 +75,11 @@ def _chat_scope(chat_type: str | None) -> str:
     return "user" if chat_type == "private" else "group"
 
 
-def _options_kb(scope: str, locale: str) -> InlineKeyboardMarkup:
+def _options_btn(scope: str, locale: str) -> InlineKeyboardMarkup:
     """Build the locale-option keyboard for ``scope`` in display ``locale``."""
     items = [(display_name(code_), code_) for code_ in available_locales()]
     back = t("button.back", locale, plain=True)
-    return keyboards.language_list_kb(scope, items, back_label=back, selected=locale)
+    return buttons.language_list_btn(scope, items, back_label=back, selected=locale)
 
 
 def _panel_text(scope: str, locale: str) -> str:
@@ -121,11 +121,11 @@ async def cmd_language(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         permitted = True
     if permitted:
-        kb: InlineKeyboardMarkup | None = _options_kb(scope, locale)
+        btn: InlineKeyboardMarkup | None = _options_btn(scope, locale)
     else:
-        kb = None
-    await safe_reply(
-        msg, _panel_text(scope, locale), log_label="cmd_language", reply_markup=kb
+        btn = None
+    await reply_rich(
+        msg, _panel_text(scope, locale), log_label="cmd_language", reply_markup=btn
     )
 
 
@@ -148,7 +148,7 @@ async def on_language_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     await safe_edit_cb(
         q,
         _panel_text("user", locale),
-        reply_markup=keyboards.language_list_kb(
+        reply_markup=buttons.language_list_btn(
             "user",
             [(display_name(code_), code_) for code_ in available_locales()],
             back_label=t("button.back", locale, plain=True),
@@ -199,7 +199,7 @@ async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await safe_edit_cb(
         q,
         _panel_text(scope, locale),
-        reply_markup=keyboards.language_list_kb(
+        reply_markup=buttons.language_list_btn(
             scope,
             [(display_name(code_), code_) for code_ in available_locales()],
             back_label=t("button.back", locale, plain=True),
@@ -264,7 +264,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not connected:
             await answer_ack(q)
             if msg is not None:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t("language.not_connected", tapper_locale),
                     log_label="language not-connected",
@@ -276,7 +276,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.exception("set_group_locale failed for chat %d", chat.id)
             await answer_ack(q)
             if msg is not None:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t("common.retry", tapper_locale),
                     log_label="language group-save-fail",
@@ -289,7 +289,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.exception("set_user_locale failed for user %d", user.id)
             await answer_ack(q)
             if msg is not None:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t("common.retry", tapper_locale),
                     log_label="language user-save-fail",
@@ -299,7 +299,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await safe_edit_cb(
         q,
         _confirmation_text(scope, locale),
-        reply_markup=keyboards.back_to_module_kb(f"lang:list:{scope}", locale),
+        reply_markup=buttons.back_to_module_btn(f"lang:list:{scope}", locale),
         log_level="debug",
         log_label="language confirm",
         catch_all=True,

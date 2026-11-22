@@ -2,11 +2,11 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""MarkdownV2 formatter escaping and entity shapes."""
+"""Rich HTML escaping and entity shapes used by catalog rendering."""
 
 from __future__ import annotations
 
-from tcbot.utils.formatter import (
+from tcbot.utils.i18n import (
     BULLET,
     SECTION_RULE,
     bold,
@@ -24,52 +24,48 @@ from tcbot.utils.formatter import (
 )
 
 
-def test_esc_escapes_v2_specials() -> None:
-    assert esc("_*[\\`") == "\\_\\*\\[\\\\\\`"
-    assert esc("a]b") == "a\\]b"
-    assert esc("plain. text! (with) - dashes -") == (
-        "plain\\. text\\! \\(with\\) \\- dashes \\-"
-    )
+def test_esc_escapes_html_metacharacters() -> None:
+    assert esc('<b>&"') == "&lt;b&gt;&amp;&quot;"
+    assert esc("plain. text! (with) - dashes -") == "plain. text! (with) - dashes -"
     assert esc("") == ""
 
 
 def test_bold_wraps_and_escapes() -> None:
-    assert bold("hi") == "*hi*"
-    assert bold("a_b*c") == "*a\\_b\\*c*"
+    assert bold("hi") == "<b>hi</b>"
+    assert bold("a<b") == "<b>a&lt;b</b>"
     assert bold("") == ""
 
 
 def test_italic_wraps_and_escapes() -> None:
-    assert italic("hi") == "_hi_"
-    assert italic("Tall_12") == "_Tall\\_12_"
+    assert italic("hi") == "<i>hi</i>"
+    assert italic("Tall_12") == "<i>Tall_12</i>"
     assert italic("") == ""
 
 
 def test_code_keeps_inner_text_literal() -> None:
-    assert code("a_b") == "`a_b`"
-    assert code("a`b\\c") == "`a\\`b\\\\c`"
+    assert code("a_b") == "<code>a_b</code>"
     assert code("") == ""
 
 
-def test_pre_wraps_triple_backticks() -> None:
-    assert pre("x_y") == "```x_y```"
+def test_pre_wraps_a_code_block() -> None:
+    assert pre("x_y") == "<pre><code>x_y</code></pre>"
     assert pre("") == ""
 
 
-def test_link_escapes_text_and_parens_in_url() -> None:
-    assert link("a_b", "https://t.me/x?a=b)") == "[a\\_b](https://t.me/x?a=b\\))"
-    assert link("Go", "https://t.me/x") == "[Go](https://t.me/x)"
+def test_link_escapes_both_parts() -> None:
+    assert link("a&b", "https://t.me/x?a=1&b=2") == (
+        '<a href="https://t.me/x?a=1&amp;b=2">a&amp;b</a>'
+    )
+    assert link("Go", "https://t.me/x") == '<a href="https://t.me/x">Go</a>'
 
 
 def test_user_ref_uses_id_link_and_ignores_username() -> None:
-    assert user_ref(123, "A_B") == "[A\\_B](tg://user?id=123)"
-    assert user_ref(123, "Ann", "ann_x") == "[Ann](tg://user?id=123)"
-    assert user_ref(123, "Ann") == user_ref(123, "Ann")
+    assert user_ref(123, "A_B") == '<a href="tg://user?id=123">A_B</a>'
+    assert user_ref(123, "Ann", "ann_x") == '<a href="tg://user?id=123">Ann</a>'
 
 
 def test_user_ref_without_an_account_renders_bold_text() -> None:
-    """An anonymous admin is attributed with ID 0, which has no profile."""
-    assert user_ref(0, "anonymous admin") == "*anonymous admin*"
+    assert user_ref(0, "anonymous admin") == "<b>anonymous admin</b>"
 
 
 def test_safe_username_shape() -> None:
@@ -79,36 +75,15 @@ def test_safe_username_shape() -> None:
     assert safe_username(None) is None
 
 
-def test_esc_covers_full_v2_set_multiline_unicode() -> None:
-    assert esc("~>#+-=|{}.!") == "\\~\\>\\#\\+\\-\\=\\|\\{\\}\\.\\!"
+def test_esc_keeps_unicode_and_newlines() -> None:
     assert esc("line one\nline two") == "line one\nline two"
-    assert esc("Halo, apa kabar? Baik-baik saja.") == (
-        "Halo, apa kabar? Baik\\-baik saja\\."
-    )
+    assert esc("Halo, apa kabar? Baik-baik saja.") == "Halo, apa kabar? Baik-baik saja."
     assert esc("emoji \U0001f600 stays") == "emoji \U0001f600 stays"
 
 
-def test_esc_escapes_backslash_itself() -> None:
-    assert esc("a\\b") == "a\\\\b"
-    assert esc("C:\\new") == "C:\\\\new"
-
-
-def test_no_double_escape_when_helpers_nest_raw() -> None:
-    # * Helpers escape, so pre-escaped input doubles up: callers must
-    # * pass raw text and let the outermost helper escape exactly once.
-    assert bold(esc("a_b")) == "*a\\\\\\_b*"
-    assert esc("a\\.b") == "a\\\\\\.b"
-
-
-def test_code_and_pre_leave_v2_punctuation_literal() -> None:
-    assert code("a.b (x) - y!") == "`a.b (x) - y!`"
-    assert pre("a_b") == "```a_b```"
-    assert pre("x`y\\z") == "```x\\`y\\\\z```"
-
-
 def test_underline_and_strike_escape_their_content() -> None:
-    assert underline("a_b") == "__a\\_b__"
-    assert strike("a~b") == "~a\\~b~"
+    assert underline("a&b") == "<u>a&amp;b</u>"
+    assert strike("a<b") == "<s>a&lt;b</s>"
     assert underline("") == ""
     assert strike("") == ""
 
@@ -117,11 +92,4 @@ def test_section_and_bullets_use_the_shared_vocabulary() -> None:
     body = bullet_list(["one", "two"])
     assert body == f"{BULLET} one\n{BULLET} two"
     rendered = section("Heading", body)
-    assert rendered == f"*Heading*\n{SECTION_RULE}\n{BULLET} one\n{BULLET} two"
-
-
-def test_link_keeps_query_intact_escapes_parens() -> None:
-    assert link("a(b)", "https://t.me/c/1/2?x=1&y=2") == (
-        "[a\\(b\\)](https://t.me/c/1/2?x=1&y=2)"
-    )
-    assert link("a)b\\c", "https://t.me/x") == "[a\\)b\\\\c](https://t.me/x)"
+    assert rendered == f"<b>Heading</b>\n{SECTION_RULE}\n{BULLET} one\n{BULLET} two"

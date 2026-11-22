@@ -10,18 +10,18 @@ import importlib
 import inspect
 import pkgutil
 
-import tcbot.modules.helper.keyboards as keyboards
+import tcbot.modules.helper.buttons as buttons
 
 
 def test_keyboard_builders_take_a_locale() -> None:
-    neutral = {"help_topics_kb"}
+    neutral = {"help_topics_btn"}
     missing: list[str] = []
-    for module_info in pkgutil.iter_modules(keyboards.__path__):
-        module = importlib.import_module(f"{keyboards.__name__}.{module_info.name}")
+    for module_info in pkgutil.iter_modules(buttons.__path__):
+        module = importlib.import_module(f"{buttons.__name__}.{module_info.name}")
         for name, value in vars(module).items():
             if not inspect.isfunction(value) or value.__module__ != module.__name__:
                 continue
-            if not name.endswith(("_kb", "_keyboard")):
+            if not name.endswith(("_btn", "_keyboard")):
                 continue
             if name in neutral:
                 continue

@@ -343,3 +343,22 @@ def test_no_public_url_falls_back_to_polling(monkeypatch: pytest.MonkeyPatch) ->
     loaded = _load(monkeypatch)
     assert loaded.webhook_url == ""
     assert loaded.is_webhook_mode is False
+
+
+def test_config_repr_does_not_expose_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A config dump must never print credentials into logs or tracebacks."""
+    loaded = _load(
+        monkeypatch,
+        DATABASE_URL="postgresql://user:dbpassword@localhost/tcbot",
+        WEBHOOK_SECRET="whsec_secret_value_123",
+        API_HASH="apihash_secret_value",
+        SENTRY_DSN="https://public@sentry.example.com/1",
+    )
+    rendered = repr(loaded)
+
+    assert loaded.bot_token not in rendered
+    assert "dbpassword" not in rendered
+    assert loaded.webhook_secret not in rendered
+    assert loaded.api_hash not in rendered
+    assert loaded.sentry_dsn not in rendered
+    assert "initial_owner_id" in rendered

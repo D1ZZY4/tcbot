@@ -99,7 +99,7 @@ def _wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(db.warns_db, "add_warn", _add_warn)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(warn_flow, "locale_for_update", _locale)
-    monkeypatch.setattr(warn_flow, "safe_reply", _reply)
+    monkeypatch.setattr(warn_flow, "reply_rich", _reply)
     monkeypatch.setattr(Demote, "execute", staticmethod(_fake_demote))
     return record
 

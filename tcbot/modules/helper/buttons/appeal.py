@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Appeal submit-prompt and staff review keyboards."""
+"""Appeal submit-prompt and staff review buttons."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from telegram.constants import KeyboardButtonStyle
 from tcbot.utils.i18n import t
 
 
-def appeal_cancel_kb(
+def appeal_cancel_btn(
     label: str | None = None,
     callback: str = "cancel_appeal",
     locale: str | None = None,
@@ -32,7 +32,7 @@ def appeal_cancel_kb(
     )
 
 
-def appeal_review_kb(
+def appeal_review_btn(
     ban_id: str, review_message_id: int, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Approve / Reject keyboard bound to the review card it belongs to.

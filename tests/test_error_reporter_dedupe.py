@@ -55,6 +55,14 @@ def test_the_dedupe_map_stays_bounded() -> None:
     assert len(error_reporter._recent) <= error_reporter._RECENT_MAX
 
 
+def test_owner_dedupe_map_stays_bounded_when_all_entries_are_fresh() -> None:
+    """A flood of distinct fingerprints evicts the oldest tenth, not nothing."""
+    for index in range(error_reporter._OWNER_MAX + 200):
+        error_reporter._owner_suppressed(("exc", f"conflict-{index}"))
+
+    assert len(error_reporter._owner_sent) <= error_reporter._OWNER_MAX
+
+
 def test_an_expired_fingerprint_is_reported_again() -> None:
     """A failure outside the window ships again."""
     fingerprint = ("exc", "recurring")

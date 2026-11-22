@@ -19,13 +19,12 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ownership_transferred,
     replies,
-    safe_reply,
+    reply_rich,
     send_log,
 )
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import parse_cmd_args
 
@@ -55,7 +54,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         target_id, target_fname = await extract_target(update, args, ctx.bot)
     except Exception:
         log.exception("extract_target failed during transfer")
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
             log_label="cmd_transfer extract-failed",
@@ -63,7 +62,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
     if not target_id:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_cannot_resolve(locale, plain=True),
             log_label="cmd_transfer no-target",
@@ -77,7 +76,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
     except Exception:
         log.exception("identity.classify failed during transfer")
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
             log_label="cmd_transfer classify-failed",
@@ -86,7 +85,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
     refusal = identity.refuse_message("transfer", ident, locale)
     if refusal is not None:
-        await safe_reply(msg, refusal, log_label="cmd_transfer refusal")
+        await reply_rich(msg, refusal, log_label="cmd_transfer refusal")
         return
 
     # * A bot owner would brick federation leadership, so transfer fails
@@ -94,7 +93,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     # * Promotion keeps the best-effort gate where unknown stays allowed.
     verified_human = await identity.verify_not_bot(update, target_id, ctx.bot)
     if verified_human is False:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.bot_target", locale, plain=True),
             log_label="cmd_transfer bot-target",
@@ -102,7 +101,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
     if verified_human is None:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
             log_label="cmd_transfer unverified-target",
@@ -118,7 +117,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         raise
     except Exception:
         log.exception("cmd_transfer ban lookup failed for %d", target_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
             log_label="cmd_transfer ban-lookup-failed",
@@ -126,7 +125,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
     if target_ban is not None:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.banned_target", locale, plain=True),
             log_label="cmd_transfer banned-target",
@@ -146,7 +145,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         raise
     except Exception:
         log.exception("cmd_transfer owner re-check failed")
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
             log_label="cmd_transfer owner-check-failed",
@@ -154,7 +153,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
     if not still_owner:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_perm_expired(locale, plain=True),
             log_label="cmd_transfer owner-changed",
@@ -175,7 +174,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         await db.users_roles.transfer_ownership(current_owner.id, target_id)
     except Exception:
         log.exception("cmd_transfer failed for target %d", target_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.transfer.set_owner_fail", locale, plain=True),
             log_label="cmd_transfer transfer-failed",
@@ -220,8 +219,8 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             log_text,
         ),
         msg.reply_text(
-            apply_style(transfer_note),
-            parse_mode="MarkdownV2",
+            style(transfer_note),
+            parse_mode=None,
         ),
         return_exceptions=True,
     )

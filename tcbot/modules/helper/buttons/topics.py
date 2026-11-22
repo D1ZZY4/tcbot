@@ -2,14 +2,14 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Help index, module help, and privacy keyboards."""
+"""Help index, module help, and privacy buttons."""
 
 from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.keyboards.common import (
+from tcbot.modules.helper.buttons.common import (
     _build_topic_rows,
     back_markup,
     back_row,
@@ -18,7 +18,7 @@ from tcbot.modules.helper.keyboards.common import (
 from tcbot.utils.i18n import t
 
 
-def help_topics_menu_kb(
+def help_topics_menu_btn(
     topics: list[tuple[str, str]], locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Help index from the start menu: topics plus Back to start."""
@@ -26,24 +26,24 @@ def help_topics_menu_kb(
     return InlineKeyboardMarkup(with_back_row(rows, "back_to_start", locale))
 
 
-def help_topics_kb(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+def help_topics_btn(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     """Help index from /help: topics only, no Back to start."""
     return InlineKeyboardMarkup(
         _build_topic_rows(topics, style=KeyboardButtonStyle.PRIMARY)
     )
 
 
-def back_to_help_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+def back_to_help_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Back to the menu-path help index (help_menu)."""
     return back_markup("help_menu", locale)
 
 
-def back_to_help_cmd_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+def back_to_help_cmd_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Back to the command-path help index (helpc_main)."""
     return back_markup("helpc_main", locale)
 
 
-def module_help_kb(
+def module_help_btn(
     section_buttons: list[tuple[str, str]],
     back_callback: str,
     locale: str | None = None,
@@ -53,14 +53,14 @@ def module_help_kb(
     return InlineKeyboardMarkup(with_back_row(rows, back_callback, locale))
 
 
-def back_to_module_kb(
+def back_to_module_btn(
     module_callback: str, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Single Back button returning to the module help view."""
     return back_markup(module_callback, locale)
 
 
-def privacy_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+def privacy_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Privacy section: policy link plus Back to start."""
     return InlineKeyboardMarkup(
         [
@@ -76,7 +76,7 @@ def privacy_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     )
 
 
-def privacy_policy_sections_kb(
+def privacy_policy_sections_btn(
     section_labels: list[str], locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Policy index: one button per section plus Back to privacy."""
@@ -87,6 +87,6 @@ def privacy_policy_sections_kb(
     return InlineKeyboardMarkup(with_back_row(rows, "privacy_menu", locale))
 
 
-def back_to_privacy_policy_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+def back_to_privacy_policy_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Back to the privacy policy section index."""
     return back_markup("privacy_policy_menu", locale)

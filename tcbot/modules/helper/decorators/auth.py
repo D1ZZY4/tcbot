@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 from tcbot import database as db
 from tcbot.modules.helper.identity import is_anon_admin
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply
+from tcbot.modules.helper.messages import replies, reply_rich
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -54,7 +54,7 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
             locale = await locale_for_update(update)
             if is_anon_admin(update.effective_user):
                 if update.effective_message:
-                    await safe_reply(
+                    await reply_rich(
                         update.effective_message,
                         replies.refuse_anon_admin(locale, plain=True),
                         log_label=f"{label} anon-admin",
@@ -92,7 +92,7 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
                 except Exception as exc:
                     log.warning("%s role lookup failed for %s: %s", label, uid, exc)
                     if update.effective_message:
-                        await safe_reply(
+                        await reply_rich(
                             update.effective_message,
                             replies.refuse_role_lookup(locale, plain=True),
                             log_label=f"{label} lookup-fail",
@@ -102,7 +102,7 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
                 if authorized:
                     return await func(update, ctx)
             if update.effective_message:
-                await safe_reply(
+                await reply_rich(
                     update.effective_message,
                     _REFUSAL_BY_LABEL[refusal](locale, plain=True),
                     log_label=f"{label} refusal",
@@ -140,7 +140,7 @@ def permission_only(permission_key: str) -> Callable:
             locale = await locale_for_update(update)
             if is_anon_admin(update.effective_user):
                 if update.effective_message:
-                    await safe_reply(
+                    await reply_rich(
                         update.effective_message,
                         replies.refuse_anon_admin(locale, plain=True),
                         log_label="permission anon-admin",
@@ -163,7 +163,7 @@ def permission_only(permission_key: str) -> Callable:
                         exc,
                     )
                     if update.effective_message:
-                        await safe_reply(
+                        await reply_rich(
                             update.effective_message,
                             replies.refuse_role_lookup(locale, plain=True),
                             log_label="permission lookup-fail",
@@ -173,7 +173,7 @@ def permission_only(permission_key: str) -> Callable:
                 if authorized:
                     return await func(update, ctx)
             if update.effective_message:
-                await safe_reply(
+                await reply_rich(
                     update.effective_message,
                     replies.refuse_permission(locale, plain=True),
                     log_label="permission refusal",

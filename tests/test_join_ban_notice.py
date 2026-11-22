@@ -15,7 +15,7 @@ import pytest
 from tcbot import database as db
 from tcbot.database.types import BanId
 from tcbot.modules import greeting
-from tcbot.modules.helper.keyboards import join_ban_kb
+from tcbot.modules.helper.buttons import join_ban_btn
 
 if TYPE_CHECKING:
     from telegram import Bot, Chat, Message, User
@@ -84,7 +84,7 @@ def _cfg() -> SimpleNamespace:
 
 
 def test_join_ban_keyboard_puts_evidence_first_and_appeal_below() -> None:
-    keyboard = join_ban_kb(
+    keyboard = join_ban_btn(
         "https://t.me/c/123/55?thread=8",
         "https://t.me/c/456/77?thread=7",
         "https://t.me/tcbot?start=appeal_BAN-0001",
@@ -98,7 +98,7 @@ def test_join_ban_keyboard_puts_evidence_first_and_appeal_below() -> None:
 
 
 def test_join_ban_keyboard_drops_a_missing_link() -> None:
-    keyboard = join_ban_kb(None, "https://t.me/c/456/77", None, "en-US")
+    keyboard = join_ban_btn(None, "https://t.me/c/456/77", None, "en-US")
 
     assert keyboard is not None
     assert [button.text for button in keyboard.inline_keyboard[0]] == ["View Proof"]

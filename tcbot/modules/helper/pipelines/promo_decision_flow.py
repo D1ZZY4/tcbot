@@ -25,10 +25,9 @@ from tcbot.modules.helper.messages import (
     safe_edit_cb,
     send_log,
 )
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import esc
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import esc, t
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -244,7 +243,7 @@ async def execute_promo_decision(
         target_locale = await locale_for_user(target_id)
         notify_results = await asyncio.gather(
             q.edit_message_text(
-                apply_style(
+                style(
                     existing_text
                     + t(
                         "admins.decision.approved_suffix",
@@ -252,7 +251,7 @@ async def execute_promo_decision(
                         name=admin.first_name,
                     )
                 ),
-                parse_mode="MarkdownV2",
+                parse_mode=None,
                 reply_markup=None,
             ),
             ctx.bot.send_message(
@@ -306,7 +305,7 @@ async def execute_promo_decision(
         target_locale = await locale_for_user(target_id)
         reject_results = await asyncio.gather(
             q.edit_message_text(
-                apply_style(
+                style(
                     existing_text
                     + t(
                         "admins.decision.rejected_suffix",
@@ -314,7 +313,7 @@ async def execute_promo_decision(
                         name=admin.first_name,
                     )
                 ),
-                parse_mode="MarkdownV2",
+                parse_mode=None,
                 reply_markup=None,
             ),
             ctx.bot.send_message(

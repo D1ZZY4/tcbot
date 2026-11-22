@@ -24,9 +24,9 @@ from telegram.ext import (
 )
 
 from tcbot import database as db
-from tcbot.modules.helper.keyboards import rules as rules_kb
+from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_edit_cb, safe_reply
+from tcbot.modules.helper.messages import replies, reply_rich, safe_edit_cb
 from tcbot.modules.helper.messages import rules as rules_msg
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
@@ -78,7 +78,7 @@ async def refuse_editor(update: Update) -> None:
             log.debug("editor refusal answer failed: %s", exc)
     msg = query.message if query is not None else update.effective_message
     if msg is not None:
-        await safe_reply(
+        await reply_rich(
             cast("Any", msg),
             replies.refuse_permission(await locale_for_update(update), plain=True),
             log_label="rules editor refusal",
@@ -86,10 +86,16 @@ async def refuse_editor(update: Update) -> None:
         )
 
 
+# * Telegram caps callback_data at 64 bytes. The longest category callback is
+# * "rules_cat_rename:" (17 bytes) plus a numeric collision suffix, so the
+# * slug must leave room for both.
+_SLUG_MAX = 40
+
+
 def _slug(title: str) -> str:
     """Derive a stable category slug from a display title."""
     base = re.sub(r"[^a-z0-9]+", "-", title.strip().lower()).strip("-")
-    return base[:60] or "category"
+    return base[:_SLUG_MAX] or "category"
 
 
 class RulesEditor:
@@ -130,15 +136,13 @@ class RulesEditor:
         set_doc, version = opened
         locale = await self._locale(update)
         text = await rules_msg.editor_panel(set_doc, version, locale)
-        markup = rules_kb.editor_panel_kb(locale)
+        markup = rules_btn.editor_panel_btn(locale)
         if q is not None:
-            await q.edit_message_text(
-                text, parse_mode="MarkdownV2", reply_markup=markup
-            )
+            await q.edit_message_text(text, parse_mode=None, reply_markup=markup)
         else:
             msg = update.effective_message
             if msg is not None:
-                await safe_reply(msg, text, reply_markup=markup)
+                await reply_rich(msg, text, reply_markup=markup)
         return ConversationHandler.END
 
     async def on_text(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -157,7 +161,7 @@ class RulesEditor:
 
         if step == "category_title":
             if not text or len(text) > _TITLE_MAX:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t("rules.editor.bad_title", locale, limit=_TITLE_MAX, plain=True),
                     parse_mode=None,
@@ -171,7 +175,7 @@ class RulesEditor:
 
         if step == "rename_category":
             if not text or len(text) > _TITLE_MAX:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t("rules.editor.bad_title", locale, limit=_TITLE_MAX, plain=True),
                     parse_mode=None,
@@ -187,7 +191,7 @@ class RulesEditor:
 
         if step == "item_title":
             if not text or len(text) > _TITLE_MAX:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t("rules.editor.bad_title", locale, limit=_TITLE_MAX, plain=True),
                     parse_mode=None,
@@ -195,14 +199,14 @@ class RulesEditor:
                 return WAITING_ITEM_TITLE
             scope["rules_item_title"] = text
             scope["rules_step"] = "item_body"
-            await safe_reply(
+            await reply_rich(
                 msg, t("rules.editor.ask_body", locale, plain=True), parse_mode=None
             )
             return WAITING_ITEM_BODY
 
         if step == "item_body":
             if not text or len(text) > _BODY_MAX:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t("rules.editor.bad_body", locale, limit=_BODY_MAX, plain=True),
                     parse_mode=None,
@@ -210,7 +214,7 @@ class RulesEditor:
                 return WAITING_ITEM_BODY
             scope["rules_item_body"] = text
             scope["rules_step"] = "item_url"
-            await safe_reply(
+            await reply_rich(
                 msg, t("rules.editor.ask_url", locale, plain=True), parse_mode=None
             )
             return WAITING_ITEM_URL
@@ -219,7 +223,7 @@ class RulesEditor:
             if text and (
                 len(text) > _URL_MAX or not text.startswith(("https://", "http://"))
             ):
-                await safe_reply(
+                await reply_rich(
                     msg, t("rules.editor.bad_url", locale, plain=True), parse_mode=None
                 )
                 return WAITING_ITEM_URL
@@ -244,7 +248,7 @@ class RulesEditor:
         categories = await db.rules_db.list_categories(set_id)
         locale = await self._locale(update)
         text = rules_msg.category_list(categories, locale)
-        markup = rules_kb.categories_kb(categories, locale)
+        markup = rules_btn.categories_btn(categories, locale)
         await self._edit_or_reply(update, text, markup)
         return ConversationHandler.END
 
@@ -260,7 +264,7 @@ class RulesEditor:
         items = await db.rules_db.list_items(version_id, category_key)
         locale = await self._locale(update)
         text = rules_msg.item_list(items, locale)
-        markup = rules_kb.items_kb(items, locale)
+        markup = rules_btn.items_btn(items, locale)
         await self._edit_or_reply(update, text, markup)
         return ConversationHandler.END
 
@@ -274,7 +278,7 @@ class RulesEditor:
         flow_scope(ctx, update)["rules_step"] = "category_title"
         msg = update.effective_message
         if msg is not None:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t("rules.editor.ask_category", await self._locale(update), plain=True),
                 parse_mode=None,
@@ -292,7 +296,7 @@ class RulesEditor:
         scope["rules_step"] = "item_title"
         msg = update.effective_message
         if msg is not None:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t("rules.editor.ask_title", await self._locale(update), plain=True),
                 parse_mode=None,
@@ -321,7 +325,7 @@ class RulesEditor:
         await self._edit_or_reply(
             update,
             t("rules.editor.confirm_discard", locale),
-            rules_kb.confirm_kb("rules_discard_yes", "rules_discard_no", locale),
+            rules_btn.confirm_btn("rules_discard_yes", "rules_discard_no", locale),
         )
         return WAITING_CONFIRM_DISCARD
 
@@ -355,11 +359,11 @@ class RulesEditor:
         """Edit the invoking message, or reply when no callback is present."""
         q = update.callback_query
         if q is not None:
-            await safe_edit_cb(q, text, parse_mode="MarkdownV2", reply_markup=markup)
+            await safe_edit_cb(q, text, parse_mode=None, reply_markup=markup)
             return
         msg = update.effective_message
         if msg is not None:
-            await safe_reply(msg, text, reply_markup=markup)
+            await reply_rich(msg, text, reply_markup=markup)
 
 
 rules_editor = RulesEditor()

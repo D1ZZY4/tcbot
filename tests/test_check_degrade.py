@@ -13,8 +13,7 @@ import pytest
 from tcbot import database as db
 from tcbot.modules import check
 from tcbot.modules.helper.pipelines import check_flow
-from tcbot.utils.formatter import code, user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, code, t, user_ref
 
 
 def _expected_not_found(ban_id: str) -> str:

@@ -13,8 +13,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.messages import message_link
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import BULLET, SECTION_RULE, code, user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import BULLET, SECTION_RULE, Safe, code, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_dt
 

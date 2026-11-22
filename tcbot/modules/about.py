@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes
 
-from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import about_msg, answer_and_edit
 
@@ -35,7 +35,7 @@ async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await answer_and_edit(
         q,
         about_msg(locale),
-        reply_markup=keyboards.back_to_start_kb(locale),
+        reply_markup=buttons.back_to_start_btn(locale),
     )
 
 

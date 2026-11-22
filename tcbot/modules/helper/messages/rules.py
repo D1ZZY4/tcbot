@@ -10,17 +10,22 @@ import hashlib
 from typing import Any
 
 from tcbot import database as db
-from tcbot.modules.helper.messages import rich
-from tcbot.utils.formatter import (
+from tcbot.modules.helper.messages import rich_msg
+from tcbot.modules.helper.messages.rich_format import heading, paragraph
+from tcbot.modules.helper.messages.rich_style import bold as rich_bold
+from tcbot.modules.helper.messages.rich_style import esc as rich_esc
+from tcbot.modules.helper.messages.rich_table import table
+from tcbot.utils.i18n import (
     BULLET,
     SECTION_RULE,
+    Safe,
     bold,
     bullet_list,
     code,
     esc,
     section,
+    t,
 )
-from tcbot.utils.i18n import Safe, t
 from tcbot.utils.logger import get_logger
 
 # * Telegram accepts 4096 UTF-16 units in a message; stay below it so the
@@ -224,9 +229,9 @@ def rich_category_view(
     """
     heading_text = t("rules.menu.category", locale, category=category)
     if not items:
-        return rich.html_message(
-            rich.heading(heading_text),
-            rich.paragraph(t("rules.menu.no_rules", locale)),
+        return rich_msg.html_message(
+            heading(heading_text),
+            paragraph(t("rules.menu.no_rules", locale)),
         )
     headers = [
         t("rules.rich.number", locale, plain=True),
@@ -235,11 +240,11 @@ def rich_category_view(
     rows: list[list[str]] = []
     for number, item in enumerate(items, start=1):
         rows.append(
-            [str(number), f"{rich.bold(item['title'])}\n{rich.esc(item['body'])}"]
+            [str(number), f"{rich_bold(item['title'])}\n{rich_esc(item['body'])}"]
         )
-    return rich.html_message(
-        rich.heading(heading_text),
-        rich.table(headers, rows, raw_cells=True, striped=True),
+    return rich_msg.html_message(
+        heading(heading_text),
+        table(headers, rows, raw_cells=True, striped=True),
     )
 
 

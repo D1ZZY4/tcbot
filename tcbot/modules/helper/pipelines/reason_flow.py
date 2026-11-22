@@ -22,12 +22,12 @@ from telegram.ext.filters import BaseFilter
 
 from tcbot import database as db
 from tcbot.modules.helper import guards
+from tcbot.modules.helper.buttons import reason_step_btn
+from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.extraction import parse_user_id_token
-from tcbot.modules.helper.keyboards import reason_step_kb
-from tcbot.modules.helper.keyboards import rules as rules_kb
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import replies, reply_rich
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines import rules_step
 from tcbot.modules.helper.pipelines.proof_flow import (
     PROOF_MEDIA_FILTER,
@@ -39,8 +39,7 @@ from tcbot.modules.helper.scope import (
     flow_scope,
 )
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, esc, user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, bold, esc, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
@@ -117,7 +116,7 @@ class BuildReason:
 
     def keyboard(self, locale: str | None = None) -> InlineKeyboardMarkup:
         """Return the reason-step keyboard (Skip only when allowed)."""
-        return reason_step_kb(
+        return reason_step_btn(
             self.action, skip_allowed=self.skip_allowed, locale=locale
         )
 
@@ -204,23 +203,21 @@ class _FlowBase:
         scope = flow_scope(ctx, update)
         chat_id = scope.get(self._prompt_chat_key)
         message_id = scope.get(self._prompt_id_key)
-        styled = apply_style(text)
+        styled = style(text)
         try:
             if chat_id is not None and message_id is not None:
                 await ctx.bot.edit_message_text(
                     styled,
                     chat_id=chat_id,
                     message_id=message_id,
-                    parse_mode="MarkdownV2",
+                    parse_mode=None,
                     reply_markup=markup,
                 )
             else:
                 msg = update.effective_message
                 if msg is None:
                     return False
-                await msg.reply_text(
-                    styled, parse_mode="MarkdownV2", reply_markup=markup
-                )
+                await msg.reply_text(styled, parse_mode=None, reply_markup=markup)
             return True
         except Exception as exc:
             log.debug("%s prompt edit failed: %s", self.action, exc)
@@ -324,7 +321,7 @@ class _FlowBase:
         self._clear_scope(ctx, update)
         if update.effective_message:
             locale = await locale_for_update(update)
-            await safe_reply(
+            await reply_rich(
                 update.effective_message,
                 t(
                     "reason.cancel.via_command",
@@ -453,7 +450,7 @@ class _ProofStepMixin(_FlowBase):
         """Reject unexpected message types during proof collection."""
         if update.effective_message:
             locale = await locale_for_update(update)
-            await safe_reply(
+            await reply_rich(
                 update.effective_message,
                 t(
                     "proof.unexpected.body",
@@ -488,7 +485,7 @@ class _ReasonStepMixin(_FlowBase):
         text = msg.text.strip()
         locale = await locale_for_update(update)
         if is_reason_too_long(text):
-            await safe_reply(
+            await reply_rich(
                 msg,
                 reason_too_long_text(len(text), locale),
                 log_label=f"{self.action} reason-too-long",
@@ -527,8 +524,8 @@ class _ReasonStepMixin(_FlowBase):
         results = await asyncio.gather(
             q.answer(),
             q.edit_message_text(
-                apply_style(prompt_txt),
-                parse_mode="MarkdownV2",
+                style(prompt_txt),
+                parse_mode=None,
                 reply_markup=self.proof.keyboard(locale),
             ),
             return_exceptions=True,
@@ -558,7 +555,7 @@ class _ReasonStepMixin(_FlowBase):
                 may_pick = False
             published = await db.rules_db.published_rules() if may_pick else None
             if published is not None and published.get("items"):
-                markup = rules_kb.picker_kb(published["items"], [], locale)
+                markup = rules_btn.picker_btn(published["items"], [], locale)
                 text = rules_step.picker_text(published["items"], [], locale)
                 if await self._edit_prompt(update, ctx, text, markup):
                     return WAITING_RULES
@@ -571,7 +568,7 @@ class _ReasonStepMixin(_FlowBase):
         """Reject non-text messages during reason collection."""
         if update.effective_message:
             locale = await locale_for_update(update)
-            await safe_reply(
+            await reply_rich(
                 update.effective_message,
                 t(
                     "reason.unexpected.body",
@@ -608,7 +605,7 @@ class _RulesStepMixin(_FlowBase):
             update,
             ctx,
             rules_step.picker_text(items, selected, locale),
-            rules_kb.picker_kb(items, selected, locale),
+            rules_btn.picker_btn(items, selected, locale),
         )
         return WAITING_RULES
 
@@ -681,7 +678,7 @@ class _RulesStepMixin(_FlowBase):
         await q.answer()
         msg = update.effective_message
         if msg is not None:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t("rules.picker.ask_note", await locale_for_update(update), plain=True),
                 log_label=f"{self.action} rules-note",
@@ -698,7 +695,7 @@ class _RulesStepMixin(_FlowBase):
         note = msg.text.strip()
         locale = await locale_for_update(update)
         if not note or len(note) > MAX_RULES_NOTE_LEN:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "rules.picker.bad_note",

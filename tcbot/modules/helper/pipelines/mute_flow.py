@@ -13,15 +13,15 @@ from telegram import Bot, ChatPermissions, Update
 
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
-from tcbot.modules.helper import guards, keyboards, messages
+from tcbot.modules.helper import buttons, guards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     replies,
+    reply_rich,
     safe_edit_message,
-    safe_reply,
     send_log,
 )
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import (
     BuildProof,
@@ -39,8 +39,7 @@ from tcbot.utils.dispatch import (
     summarize_fanout,
     throw_if_cancelled,
 )
-from tcbot.utils.formatter import bold, user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, bold, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_duration, utc_now
 
@@ -269,7 +268,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         failed = outcome.failed
         failed_targets = [grp for grp, _exc in outcome.transient]
     proof_link: str | None = proof_upload.link if proof_upload else None
-    proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
+    proof_btn = buttons.action_proof_btn(target_id, proof_link, locale)
     notes: list[str] = []
     if failed:
         notes.append(
@@ -311,14 +310,14 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         send_log(
             bot,
             log_text,
-            reply_markup=proof_kb,
+            reply_markup=proof_btn,
         ),
         bot.edit_message_text(
-            apply_style(summary),
+            style(summary),
             chat_id=prompt_chat,
             message_id=prompt_id,
-            parse_mode="MarkdownV2",
-            reply_markup=proof_kb,
+            parse_mode=None,
+            reply_markup=proof_btn,
         ),
         return_exceptions=True,
     )
@@ -328,8 +327,8 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     if isinstance(edit_r, BaseException):
         msg = update.effective_message
         if msg:
-            await safe_reply(
-                msg, summary, log_label="Mute summary fallback", reply_markup=proof_kb
+            await reply_rich(
+                msg, summary, log_label="Mute summary fallback", reply_markup=proof_btn
             )
 
 
@@ -358,7 +357,7 @@ async def execute_unmute(
         active_mute = await db.mutes_db.get_active_mute(target_id)
     except Exception:
         log.exception("get_active_mute failed for target=%d", target_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="execute_unmute DB-fail",
@@ -366,7 +365,7 @@ async def execute_unmute(
         )
         return
     if active_mute is None:
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "muting.note.no_mute",
@@ -383,7 +382,7 @@ async def execute_unmute(
         groups = await db.groups_db.active_groups()
     except Exception:
         log.exception("active_groups failed during unmute of %d", target_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="execute_unmute groups-fail",
@@ -408,7 +407,7 @@ async def execute_unmute(
             "unmute to avoid a record without its delivery run",
             target_id,
         )
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="execute_unmute DB-fail",
@@ -419,7 +418,7 @@ async def execute_unmute(
         # * Another process revoked the mute between the read and the
         # * write. Reporting "no mute" is idempotent and claims no new
         # * change that this call did not make.
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "muting.note.no_mute",
@@ -516,7 +515,7 @@ async def execute_unmute(
             ctx.bot,
             log_text,
         ),
-        msg.reply_text(apply_style(note), parse_mode="MarkdownV2"),
+        msg.reply_text(style(note), parse_mode=None),
         return_exceptions=True,
     )
     throw_if_cancelled(results)

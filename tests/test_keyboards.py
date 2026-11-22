@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper import keyboards as kb
+from tcbot.modules.helper import buttons as btn
 
 
 def _cells(markup):  # type: ignore[no-untyped-def]
@@ -19,8 +19,8 @@ def _cells(markup):  # type: ignore[no-untyped-def]
     ]
 
 
-def test_promote_role_kb_pairs_roles_plus_cancel() -> None:
-    rows = _cells(kb.promote_role_kb(7, ["admin", "developer", "moderator"]))
+def test_promote_role_btn_pairs_roles_plus_cancel() -> None:
+    rows = _cells(btn.promote_role_btn(7, ["admin", "developer", "moderator"]))
     assert rows[0] == [
         ("Admin", "promo_role:admin:7", None, KeyboardButtonStyle.PRIMARY),
         ("Developer", "promo_role:developer:7", None, KeyboardButtonStyle.PRIMARY),
@@ -31,14 +31,14 @@ def test_promote_role_kb_pairs_roles_plus_cancel() -> None:
     assert rows[2] == [("Cancel", "promo_role_cancel:7", None, None)]
 
 
-def test_promote_role_kb_skips_unknown_roles() -> None:
-    rows = _cells(kb.promote_role_kb(7, ["admin", "nope"]))
+def test_promote_role_btn_skips_unknown_roles() -> None:
+    rows = _cells(btn.promote_role_btn(7, ["admin", "nope"]))
     assert len(rows) == 2
     assert rows[0][0][1] == "promo_role:admin:7"
 
 
-def test_demote_confirm_kb_marks_confirm_danger() -> None:
-    rows = _cells(kb.demote_confirm_kb(7))
+def test_demote_confirm_btn_marks_confirm_danger() -> None:
+    rows = _cells(btn.demote_confirm_btn(7))
     assert rows == [
         [
             ("Confirm", "demote_confirm:7", None, KeyboardButtonStyle.DANGER),
@@ -47,8 +47,8 @@ def test_demote_confirm_kb_marks_confirm_danger() -> None:
     ]
 
 
-def test_promo_decision_kb_success_and_danger() -> None:
-    rows = _cells(kb.promo_decision_kb("r1"))
+def test_promo_decision_btn_success_and_danger() -> None:
+    rows = _cells(btn.promo_decision_btn("r1"))
     assert rows == [
         [
             ("Approve", "promo_approve:r1", None, KeyboardButtonStyle.SUCCESS),
@@ -57,35 +57,35 @@ def test_promo_decision_kb_success_and_danger() -> None:
     ]
 
 
-def test_checkme_ban_kb_rows_and_links() -> None:
-    rows = _cells(kb.checkme_ban_kb("bot", "a" * 10, "https://t.me/x/1"))
+def test_checkme_ban_btn_rows_and_links() -> None:
+    rows = _cells(btn.checkme_ban_btn("bot", "a" * 10, "https://t.me/x/1"))
     assert rows[0][0][:2] == ("Details", "checkme_detail:" + "a" * 10)
     assert rows[0][1][2] == "https://t.me/x/1"
     assert rows[1][0][2] == "https://t.me/bot?start=appeal_" + "a" * 10
     assert all(cell[3] == KeyboardButtonStyle.PRIMARY for row in rows for cell in row)
 
 
-def test_checkme_ban_kb_without_username_is_none() -> None:
-    assert kb.checkme_ban_kb("", "a" * 10) is None
+def test_checkme_ban_btn_without_username_is_none() -> None:
+    assert btn.checkme_ban_btn("", "a" * 10) is None
 
 
-def test_appeal_button_kb_guards() -> None:
-    assert kb.appeal_button_kb("", "a" * 10) is None
-    rows = _cells(kb.appeal_button_kb("bot", "a" * 10))
+def test_appeal_button_btn_guards() -> None:
+    assert btn.appeal_button_btn("", "a" * 10) is None
+    rows = _cells(btn.appeal_button_btn("bot", "a" * 10))
     assert rows[0][0][2] == "https://t.me/bot?start=appeal_" + "a" * 10
 
 
-def test_action_proof_kb_guards() -> None:
-    assert kb.action_proof_kb(1, None) is None
-    rows = _cells(kb.action_proof_kb(1, "https://t.me/x/1"))
+def test_action_proof_btn_guards() -> None:
+    assert btn.action_proof_btn(1, None) is None
+    rows = _cells(btn.action_proof_btn(1, "https://t.me/x/1"))
     assert rows == [
         [("Proof 1", None, "https://t.me/x/1", KeyboardButtonStyle.PRIMARY)]
     ]
 
 
-def test_ban_update_confirm_kb_rows_callbacks_and_links() -> None:
+def test_ban_update_confirm_btn_rows_callbacks_and_links() -> None:
     rows = _cells(
-        kb.ban_update_confirm_kb("https://t.me/x/log", "https://t.me/x/proof")
+        btn.ban_update_confirm_btn("https://t.me/x/log", "https://t.me/x/proof")
     )
     assert rows[0] == [
         ("View Log", None, "https://t.me/x/log", None),
@@ -97,21 +97,21 @@ def test_ban_update_confirm_kb_rows_callbacks_and_links() -> None:
     ]
 
 
-def test_ban_update_confirm_kb_omits_missing_urls() -> None:
-    rows = _cells(kb.ban_update_confirm_kb(None, None))
+def test_ban_update_confirm_btn_omits_missing_urls() -> None:
+    rows = _cells(btn.ban_update_confirm_btn(None, None))
     assert rows == [
         [
             ("Cancel", "ban_cancel", None, None),
             ("Continue", "ban_continue", None, KeyboardButtonStyle.PRIMARY),
         ]
     ]
-    rows = _cells(kb.ban_update_confirm_kb("https://t.me/x/log", None))
+    rows = _cells(btn.ban_update_confirm_btn("https://t.me/x/log", None))
     assert [c[0] for c in rows[0]] == ["View Log"]
     assert len(rows) == 2
 
 
 def test_groups_menu_pairs_toggle_with_back() -> None:
-    rows = _cells(kb.groups_menu_kb(detailed=True))
+    rows = _cells(btn.groups_menu_btn(detailed=True))
     assert rows == [
         [
             ("Simple", "menu_groups_simple", None, KeyboardButtonStyle.PRIMARY),
@@ -120,15 +120,15 @@ def test_groups_menu_pairs_toggle_with_back() -> None:
     ]
 
 
-def test_module_help_kb_pairs_sections_back_last() -> None:
-    rows = _cells(kb.module_help_kb([("A", "a"), ("B", "b"), ("C", "c")], "back"))
+def test_module_help_btn_pairs_sections_back_last() -> None:
+    rows = _cells(btn.module_help_btn([("A", "a"), ("B", "b"), ("C", "c")], "back"))
     assert [c[0] for c in rows[0]] == ["A", "B"]
     assert [c[0] for c in rows[1]] == ["C"]
     assert rows[2] == [("« Back", "back", None, None)]
 
 
 def test_main_menu_options_are_primary() -> None:
-    rows = _cells(kb.main_menu_kb())
+    rows = _cells(btn.main_menu_btn())
     options = [c for row in rows for c in row]
     assert [c[0] for c in options] == [
         "About",
@@ -143,9 +143,9 @@ def test_main_menu_options_are_primary() -> None:
     ]
 
 
-def test_appeal_review_kb_matches_handler_pattern() -> None:
+def test_appeal_review_btn_matches_handler_pattern() -> None:
     """Both verdict buttons name the review card the handler must match."""
-    rows = _cells(kb.appeal_review_kb("abc123", 77, "en-US"))
+    rows = _cells(btn.appeal_review_btn("abc123", 77, "en-US"))
     callbacks = [rows[0][0][1], rows[0][1][1]]
     assert callbacks == ["appeal_approve_abc123_77", "appeal_reject_abc123_77"]
     for callback in callbacks:
@@ -156,16 +156,18 @@ def test_appeal_review_kb_matches_handler_pattern() -> None:
 
 
 def test_check_back_markup_is_profile_back_row() -> None:
-    assert _cells(kb.check_back_markup(7)) == [[("« Back", "check_main:7", None, None)]]
+    assert _cells(btn.check_back_markup(7)) == [
+        [("« Back", "check_main:7", None, None)]
+    ]
 
 
 def test_check_paged_markup_stacks_nav_above_back() -> None:
-    nav = kb.check_back_row(7)
-    back = kb.check_warns_back_row(7)
-    assert _cells(kb.check_paged_markup(nav, back)) == [
+    nav = btn.check_back_row(7)
+    back = btn.check_warns_back_row(7)
+    assert _cells(btn.check_paged_markup(nav, back)) == [
         [("« Back", "check_main:7", None, None)],
         [("« Back", "check_warns:7", None, None)],
     ]
-    assert _cells(kb.check_paged_markup(None, back)) == [
+    assert _cells(btn.check_paged_markup(None, back)) == [
         [("« Back", "check_warns:7", None, None)]
     ]

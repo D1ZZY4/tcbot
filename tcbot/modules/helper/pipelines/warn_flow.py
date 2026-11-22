@@ -13,10 +13,10 @@ from telegram import Message, Update
 
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
-from tcbot.modules.helper import guards, keyboards, messages
+from tcbot.modules.helper import buttons, guards, messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply, send_log
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import replies, reply_rich, send_log
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.demote_flow import Demote, demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import (
     BuildProof,
@@ -34,8 +34,7 @@ from tcbot.utils.dispatch import (
     summarize_fanout,
     throw_if_cancelled,
 )
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -91,7 +90,7 @@ async def execute_warn(
         locale=locale,
     )
     if refusal is not None:
-        await safe_reply(
+        await reply_rich(
             msg,
             refusal,
             log_label="execute_warn rank-refusal",
@@ -124,7 +123,7 @@ async def execute_warn(
         locale=locale,
     )
     if refusal is not None:
-        await safe_reply(
+        await reply_rich(
             msg,
             refusal,
             log_label="execute_warn rank-refusal after proof",
@@ -151,7 +150,7 @@ async def execute_warn(
         log.exception(
             "add_warn DB write failed for target=%d chat=%d", target_id, chat_id
         )
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="execute_warn DB-fail",
@@ -160,7 +159,7 @@ async def execute_warn(
         return
     proof_link: str | None = proof_upload.link if proof_upload else None
     warn_proof_id: int | None = proof_upload.message_id if proof_upload else None
-    proof_kb = keyboards.action_proof_kb(target_id, proof_link, locale)
+    proof_btn = buttons.action_proof_btn(target_id, proof_link, locale)
     log_text = messages.warn_log(
         target_id,
         target_name,
@@ -183,7 +182,7 @@ async def execute_warn(
                 fed_count = await db.warns_db.federation_warn_count(target_id)
             except Exception:
                 log.exception("federation_warn_count failed for target=%d", target_id)
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t(
                         "warnings.fed_fail.body",
@@ -194,7 +193,7 @@ async def execute_warn(
                         reason=reason_text,
                     ),
                     log_label="execute_warn fed-count-fail",
-                    reply_markup=proof_kb,
+                    reply_markup=proof_btn,
                 )
                 return
             if fed_count >= fed_limit:
@@ -208,7 +207,7 @@ async def execute_warn(
                 "Warn threshold ban role lookup failed for target=%d; aborting threshold ban",
                 target_id,
             )
-            await safe_reply(
+            await reply_rich(
                 msg,
                 replies.err_db_retry(locale, plain=True),
                 log_label="Warn threshold lookup-fail",
@@ -252,11 +251,11 @@ async def execute_warn(
                     role=target_role,
                 )
             )
-            await safe_reply(
+            await reply_rich(
                 msg,
                 exemption_text,
                 log_label="Warn threshold staff exemption",
-                reply_markup=proof_kb,
+                reply_markup=proof_btn,
             )
             return
         # * The exemption above read the role before the ban was recorded.
@@ -276,7 +275,7 @@ async def execute_warn(
             # * The target was promoted to Owner after the staff exemption
             # * read. The role is protected, so the automatic ban must not
             # * proceed.
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "warnings.exempt.failed",
@@ -285,7 +284,7 @@ async def execute_warn(
                     role=db.users_roles.role_label("owner"),
                 ),
                 log_label="Warn threshold Owner protection",
-                reply_markup=proof_kb,
+                reply_markup=proof_btn,
             )
             return
         groups_result, existing_ban = await asyncio.gather(
@@ -336,7 +335,7 @@ async def execute_warn(
                     "Failed to create federation ban record on warn limit for user %d",
                     target_id,
                 )
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t(
                         "warnings.autoban.db_fail",
@@ -344,14 +343,14 @@ async def execute_warn(
                         user=Safe(user_ref(target_id, target_name)),
                     ),
                     log_label="Warn threshold DB-fail",
-                    reply_markup=proof_kb,
+                    reply_markup=proof_btn,
                 )
                 return
         try:
             log_msg = await send_log(
                 ctx.bot,
                 log_text,
-                reply_markup=proof_kb,
+                reply_markup=proof_btn,
             )
         except asyncio.CancelledError:
             raise
@@ -468,9 +467,9 @@ async def execute_warn(
             # * skip the warn cleanup below.
             try:
                 await msg.reply_text(
-                    apply_style(f"{ban_notice}{applied_line}"),
-                    parse_mode="MarkdownV2",
-                    reply_markup=proof_kb,
+                    style(f"{ban_notice}{applied_line}"),
+                    parse_mode=None,
+                    reply_markup=proof_btn,
                 )
             except asyncio.CancelledError:
                 raise
@@ -495,21 +494,21 @@ async def execute_warn(
                     clear_result,
                 )
         else:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 f"{ban_fail_notice}{applied_line}",
                 log_label="Threshold ban failure notice",
-                reply_markup=proof_kb,
+                reply_markup=proof_btn,
             )
         return
     results2 = await asyncio.gather(
         send_log(
             ctx.bot,
             log_text,
-            reply_markup=proof_kb,
+            reply_markup=proof_btn,
         ),
         msg.reply_text(
-            apply_style(
+            style(
                 t(
                     "warnings.issued.body",
                     locale,
@@ -519,8 +518,8 @@ async def execute_warn(
                     reason=reason_text,
                 )
             ),
-            parse_mode="MarkdownV2",
-            reply_markup=proof_kb,
+            parse_mode=None,
+            reply_markup=proof_btn,
         ),
         return_exceptions=True,
     )
@@ -582,7 +581,7 @@ async def execute_unwarn(
         log.exception(
             "warn_count read failed for target=%d chat=%d", target_id, chat_id
         )
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="execute_unwarn DB-fail",
@@ -590,7 +589,7 @@ async def execute_unwarn(
         )
         return
     if count == 0:
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "warnings.none.body",
@@ -613,7 +612,7 @@ async def execute_unwarn(
             target_id,
             chat_id,
         )
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="execute_unwarn db_retry",
@@ -621,7 +620,7 @@ async def execute_unwarn(
         )
         return
     if not removed:
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "warnings.none.body",
@@ -656,7 +655,7 @@ async def execute_unwarn(
             log_text,
         ),
         msg.reply_text(
-            apply_style(
+            style(
                 t(
                     "warnings.removed.body",
                     locale,
@@ -665,7 +664,7 @@ async def execute_unwarn(
                     limit=warn_limit,
                 )
             ),
-            parse_mode="MarkdownV2",
+            parse_mode=None,
         ),
         return_exceptions=True,
     )
@@ -698,7 +697,7 @@ async def execute_warnlist(
         )
     except Exception:
         log.exception("get_warns read failed for target=%d chat=%d", target_id, chat_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="execute_warnlist DB-fail",
@@ -713,7 +712,7 @@ async def execute_warnlist(
         total = len(warns)
     count = max(total, len(warns))
     if count == 0:
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "warnings.none.body",
@@ -741,7 +740,7 @@ async def execute_warnlist(
                 or t("warnings.list.no_reason", locale, plain=True),
             )
         )
-    await safe_reply(msg, "\n".join(lines), log_label="execute_warnlist")
+    await reply_rich(msg, "\n".join(lines), log_label="execute_warnlist")
 
 
 async def execute_resetwarns(
@@ -768,7 +767,7 @@ async def execute_resetwarns(
         removed = await db.warns_db.clear_warns(target_id, chat_id)
     except Exception:
         log.exception("clear_warns failed for target=%d chat=%d", target_id, chat_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="execute_resetwarns DB-fail",
@@ -776,7 +775,7 @@ async def execute_resetwarns(
         )
         return
     if removed == 0:
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "warnings.none_clear.body",
@@ -801,7 +800,7 @@ async def execute_resetwarns(
             log_text,
         ),
         msg.reply_text(
-            apply_style(
+            style(
                 t(
                     "warnings.cleared.body",
                     locale,
@@ -809,7 +808,7 @@ async def execute_resetwarns(
                     user=Safe(user_ref(target_id, target_name)),
                 )
             ),
-            parse_mode="MarkdownV2",
+            parse_mode=None,
         ),
         return_exceptions=True,
     )

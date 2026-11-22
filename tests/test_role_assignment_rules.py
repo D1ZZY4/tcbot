@@ -264,7 +264,7 @@ def _install_transfer(
     async def _safe_reply(*args: Any, **kwargs: Any) -> None:
         _ = (args, kwargs)
 
-    monkeypatch.setattr(transfer_flow, "safe_reply", _safe_reply)
+    monkeypatch.setattr(transfer_flow, "reply_rich", _safe_reply)
     monkeypatch.setattr(db.bans_db, "get_active_ban", _ban)
     monkeypatch.setattr(db.users_cache, "upsert_user", _upsert)
     monkeypatch.setattr(transfer_flow.identity, "classify", _classify)

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from tcbot.modules.helper.keyboards import rules as rules_kb
+from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.messages import rules as rules_msg
 from tcbot.modules.helper.pipelines import reason_flow, rules_step
 
@@ -59,8 +59,8 @@ def test_render_channel_escapes_and_numbers_items() -> None:
     )
     assert len(parts) == 1
     assert parts[0][0] == "Conduct"
-    assert "1\\. " in parts[0][2]
-    assert "2\\. " in parts[0][2]
+    assert "1. " in parts[0][2]
+    assert "2. " in parts[0][2]
     assert "v3" in parts[0][2]
 
 
@@ -75,10 +75,10 @@ def test_render_channel_escapes_each_value_once() -> None:
         published_at="22-11-2026 | 14:30",
     )
     text = parts[0][2]
-    assert "*Rule\\_1*" in text
-    assert "*FAQ\\_v2*" in text
-    assert "Body\\_1" in text
-    assert "v2 \\- 22\\-11\\-2026 \\| 14:30" in text
+    assert "<b>Rule_1</b>" in text
+    assert "<b>FAQ_v2</b>" in text
+    assert "Body_1" in text
+    assert "v2 - 22-11-2026 | 14:30" in text
     assert "\\\\_" not in text
 
 
@@ -108,7 +108,7 @@ def test_rules_scope_round_trips_selection_and_note() -> None:
 
 def test_picker_markup_offers_all_controls() -> None:
     """The picker always offers Other, Done, Clear, and Cancel."""
-    markup = rules_kb.picker_kb([_item(1), _item(2)], [1], "en-US")
+    markup = rules_btn.picker_btn([_item(1), _item(2)], [1], "en-US")
     callbacks = {
         button.callback_data for row in markup.inline_keyboard for button in row
     }

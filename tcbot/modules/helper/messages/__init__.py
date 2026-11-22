@@ -46,7 +46,7 @@ from tcbot.modules.helper.messages.panels import (
     about_msg,
     render_groups,
 )
-from tcbot.modules.helper.messages.safe_edits import (
+from tcbot.modules.helper.messages.rich_edit import (
     ack_and_render,
     answer_ack,
     answer_alert,
@@ -59,9 +59,9 @@ from tcbot.modules.helper.messages.safe_edits import (
     safe_edit,
     safe_edit_cb,
     safe_edit_message,
-    safe_reply,
     send_log,
 )
+from tcbot.modules.helper.messages.rich_msg import reply_rich
 
 __all__ = [
     "LogBuilder",
@@ -102,11 +102,11 @@ __all__ = [
     "proof_caption_update",
     "render_groups",
     "replies",
+    "reply_rich",
     "resetwarns_log",
     "safe_edit",
     "safe_edit_cb",
     "safe_edit_message",
-    "safe_reply",
     "send_log",
     "unban_log",
     "unmute_log",

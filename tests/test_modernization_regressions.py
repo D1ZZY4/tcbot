@@ -199,7 +199,7 @@ def test_classify_failure_replies(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(guards.identity, "classify", _classify)
     monkeypatch.setattr(guards, "resolve_and_check", _resolve)
     monkeypatch.setattr(guards, "effective_locale", _locale)
-    monkeypatch.setattr(guards, "safe_reply", _safe_reply)
+    monkeypatch.setattr(guards, "reply_rich", _safe_reply)
 
     msg = MagicMock()
     msg.chat = MagicMock(type="group", id=1)
@@ -219,7 +219,7 @@ def test_greeting_has_no_hardcoded_submit_appeal() -> None:
     assert '"Submit Appeal"' not in text
     # * The label belongs to the keyboard owner, so greeting delegates the
     # * whole join-ban keyboard instead of naming a button itself.
-    assert "keyboards.join_ban_kb" in text
+    assert "buttons.join_ban_btn" in text
 
 
 def test_staff_roster_resolves_live_on_numeric_fallback(

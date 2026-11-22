@@ -17,7 +17,7 @@ from tcbot.modules.admins import (
     on_promote_role_btn,
     on_promote_role_cancel,
 )
-from tcbot.modules.helper import keyboards as kb
+from tcbot.modules.helper import buttons as btn
 from tcbot.utils.i18n import t
 
 
@@ -54,12 +54,12 @@ def _cells(markup: Any) -> list[list[tuple[Any, Any, Any, Any]]]:
     ]
 
 
-def test_keyboards_carry_executor_for_cancel() -> None:
+def test_buttons_carry_executor_for_cancel() -> None:
     promote_rows = _cells(
-        kb.promote_role_kb(7, ["admin"], "en-US", 1),
+        btn.promote_role_btn(7, ["admin"], "en-US", 1),
     )
     assert promote_rows[-1][0][1] == "promo_role_cancel:7:1"
-    demote_rows = _cells(kb.demote_confirm_kb(7, "en-US", 1))
+    demote_rows = _cells(btn.demote_confirm_btn(7, "en-US", 1))
     assert demote_rows[0][1][1] == "demote_cancel:7:1"
 
 
@@ -101,10 +101,10 @@ def test_legacy_cancel_keeps_working(monkeypatch: pytest.MonkeyPatch) -> None:
     assert query.edits != []
 
 
-def test_keyboards_carry_executor_for_action() -> None:
-    promote_rows = _cells(kb.promote_role_kb(7, ["admin"], "en-US", 1))
+def test_buttons_carry_executor_for_action() -> None:
+    promote_rows = _cells(btn.promote_role_btn(7, ["admin"], "en-US", 1))
     assert promote_rows[0][0][1] == "promo_role:admin:7:1"
-    demote_rows = _cells(kb.demote_confirm_kb(7, "en-US", 1))
+    demote_rows = _cells(btn.demote_confirm_btn(7, "en-US", 1))
     assert demote_rows[0][0][1] == "demote_confirm:7:1"
 
 

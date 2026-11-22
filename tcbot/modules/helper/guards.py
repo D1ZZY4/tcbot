@@ -14,7 +14,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import identity
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
-from tcbot.modules.helper.messages import cb_error_edit, replies, safe_reply
+from tcbot.modules.helper.messages import cb_error_edit, replies, reply_rich
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -247,7 +247,7 @@ async def resolve_and_check(
         )
         target_role = None
     if executor_lookup_failed or target_lookup_failed:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.refuse_role_lookup(locale, plain=True),
             log_label="resolve_and_check role-lookup",
@@ -255,7 +255,7 @@ async def resolve_and_check(
         )
         return None, None
     if required_rank(min_role) > db.users_roles.role_rank(executor_role):
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.refuse_rank_insufficient(locale, plain=True),
             log_label="resolve_and_check rank-insufficient",
@@ -265,7 +265,7 @@ async def resolve_and_check(
 
     if not outranks(executor_role, target_role):
         label = db.users_roles.role_label(target_role)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.refuse_outranked(label, locale, plain=True),
             log_label="resolve_and_check outrank",
@@ -312,7 +312,7 @@ async def classify_and_check(
         locale = await effective_locale(
             getattr(chat, "type", None), admin_id, getattr(chat, "id", 0)
         )
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
             log_label=f"classify_and_check {action} failed",
@@ -353,7 +353,7 @@ async def recheck_executor_rank(
         raise
     except Exception as exc:
         log.warning("recheck executor role lookup failed for %d: %s", executor_id, exc)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.refuse_role_lookup(locale, plain=True),
             log_label="recheck role-lookup",
@@ -361,7 +361,7 @@ async def recheck_executor_rank(
         )
         return False
     if required_rank(min_role) > db.users_roles.role_rank(role):
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.refuse_rank_insufficient(locale, plain=True),
             log_label="recheck rank-insufficient",
@@ -393,7 +393,7 @@ async def require_federation_origin(
     if chat_type == "private":
         if allow_private:
             return True
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_group_only(locale, plain=True),
             log_label=log_label,
@@ -408,7 +408,7 @@ async def require_federation_origin(
         raise
     except Exception as exc:
         log.warning("is_connected check failed for chat=%d: %s", chat_id, exc)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label=log_label,
@@ -416,7 +416,7 @@ async def require_federation_origin(
         )
         return False
     if not connected:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_group_not_found(locale, plain=True),
             log_label=log_label,

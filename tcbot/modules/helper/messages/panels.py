@@ -9,8 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tcbot import cfg
-from tcbot.utils.formatter import BULLET, SECTION_RULE, bold, code
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import BULLET, SECTION_RULE, Safe, bold, code, t
 
 if TYPE_CHECKING:
     from tcbot.database.documents import GroupDoc

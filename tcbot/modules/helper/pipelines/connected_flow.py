@@ -22,7 +22,7 @@ from telegram.constants import ChatMemberStatus
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import identity, messages
-from tcbot.modules.helper.keyboards import connect_join_kb
+from tcbot.modules.helper.buttons import connect_join_btn
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     answer_ack,
@@ -37,8 +37,7 @@ from tcbot.utils.dispatch import (
     is_benign_telegram_error,
     throw_if_cancelled,
 )
-from tcbot.utils.formatter import bold, code
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import bold, code, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.time_and_date import monotonic
@@ -666,7 +665,7 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
 
     def join_keyboard(self, locale: str | None = None) -> InlineKeyboardMarkup:
         """Connect / Cancel keyboard for the join prompt."""
-        return connect_join_kb(self.join_callback, self.cancel_callback, locale=locale)
+        return connect_join_btn(self.join_callback, self.cancel_callback, locale=locale)
 
     def check_perms(self, member: ChatMember) -> bool:
         """Return True when member holds every permission in required_perms."""

@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import cfg
-from tcbot.modules.helper.messages import safe_edits, send_log
+from tcbot.modules.helper.messages import rich_edit, send_log
 
 
 class _FakeBot:
@@ -28,7 +28,7 @@ class _FakeBot:
 def _logs_destination(monkeypatch: pytest.MonkeyPatch) -> tuple[int, int]:
     """Point the federation log destination at a known chat and thread."""
     destination = (-1001234567890, 42)
-    monkeypatch.setattr(safe_edits, "cfg", dataclasses.replace(cfg, logs=destination))
+    monkeypatch.setattr(rich_edit, "cfg", dataclasses.replace(cfg, logs=destination))
     return destination
 
 
@@ -47,7 +47,7 @@ async def test_send_log_posts_to_the_configured_destination(
     assert chat_id == _logs_destination[0]
     assert text == "audit text"
     assert kwargs["message_thread_id"] == _logs_destination[1]
-    assert kwargs["parse_mode"] == "MarkdownV2"
+    assert "parse_mode" not in kwargs
 
 
 async def test_send_log_forwards_extra_keyword_arguments(
@@ -58,20 +58,20 @@ async def test_send_log_forwards_extra_keyword_arguments(
     await send_log(
         bot,  # type: ignore[arg-type]
         "audit text",
-        reply_markup="KB",
+        reply_markup="btn",
     )
 
-    assert bot.calls[0][2]["reply_markup"] == "KB"
+    assert bot.calls[0][2]["reply_markup"] == "btn"
 
 
 async def test_send_log_does_not_duplicate_the_parse_mode(
     _logs_destination: tuple[int, int],
 ) -> None:
-    """The helper owns the parse mode, so a caller cannot override it."""
+    """A caller cannot force a parse mode onto the rich log delivery."""
     bot = _FakeBot()
-    with pytest.raises(TypeError):
-        await send_log(
-            bot,  # type: ignore[arg-type]
-            "audit text",
-            parse_mode="HTML",
-        )
+    await send_log(
+        bot,  # type: ignore[arg-type]
+        "audit text",
+        parse_mode="HTML",
+    )
+    assert "parse_mode" not in bot.calls[0][2]

@@ -87,8 +87,8 @@ def _stub_stats_reads(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 def test_stats_main_uses_role_counts_not_docs(monkeypatch: pytest.MonkeyPatch) -> None:
     called_all_by_role = _stub_stats_reads(monkeypatch)
 
-    text, _kb = asyncio.run(Stats.main(viewer_id=1))
+    text, _btn = asyncio.run(Stats.main(viewer_id=1))
 
     assert called_all_by_role == []
-    assert "Staff: *10*" in text
+    assert "Staff: <b>10</b>" in text
     assert "Devs 2, Moderators 3" in text

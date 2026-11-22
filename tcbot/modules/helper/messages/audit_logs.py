@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.utils.formatter import code, esc, link, safe_username, user_ref
+from tcbot.utils.i18n import code, esc, link, safe_username, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_dt, utc_now
 

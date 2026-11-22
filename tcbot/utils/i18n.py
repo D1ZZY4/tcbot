@@ -10,8 +10,97 @@ import re
 import tomllib
 from pathlib import Path
 
-from tcbot.utils.formatter import esc
 from tcbot.utils.logger import get_logger
+
+# * All formatting is rich HTML from the helper/messages rich modules. The
+# * imports are lazy (inside the helpers) because that package imports i18n
+# * back; importing at module load would create a cycle.
+_USERNAME_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_]{5,32}$")
+
+# * Shared visual constants for long messages (used by legacy layout paths).
+SECTION_RULE: str = "━━━━━━━━━━━━━━━━━━━━"
+BULLET: str = "➛"
+
+
+def esc(text: object) -> str:
+    """Escape untrusted text for a rich HTML field."""
+    from tcbot.modules.helper.messages.rich_style import esc as _esc  # noqa: PLC0415
+
+    return _esc(text)
+
+
+def bold(text: object) -> str:
+    """Render text in rich bold markup."""
+    from tcbot.modules.helper.messages.rich_style import bold as _bold  # noqa: PLC0415
+
+    return _bold(text)
+
+
+def italic(text: object) -> str:
+    """Render text in rich italic markup."""
+    from tcbot.modules.helper.messages.rich_style import italic as _italic  # noqa: PLC0415
+
+    return _italic(text)
+
+
+def underline(text: object) -> str:
+    """Render text in rich underline markup."""
+    from tcbot.modules.helper.messages.rich_style import underline as _underline  # noqa: PLC0415
+
+    return _underline(text)
+
+
+def strike(text: object) -> str:
+    """Render text in rich strikethrough markup."""
+    from tcbot.modules.helper.messages.rich_style import strike as _strike  # noqa: PLC0415
+
+    return _strike(text)
+
+
+def code(text: object) -> str:
+    """Render text as an inline rich code span."""
+    from tcbot.modules.helper.messages.rich_format import code as _code  # noqa: PLC0415
+
+    return _code(text)
+
+
+def pre(text: object) -> str:
+    """Render text as a rich preformatted block."""
+    from tcbot.modules.helper.messages.rich_format import pre as _pre  # noqa: PLC0415
+
+    return _pre(text)
+
+
+def link(text: object, url: str) -> str:
+    """Render a rich hyperlink from text and a URL."""
+    from tcbot.modules.helper.messages.rich_link import link as _link  # noqa: PLC0415
+
+    return _link(text, url)
+
+
+def user_ref(user_id: int, name: str, username: str | None = None) -> str:
+    """Render a rich, ID-based mention of a user."""
+    from tcbot.modules.helper.messages.rich_link import user_ref as _user_ref  # noqa: PLC0415
+
+    return _user_ref(user_id, name)
+
+
+def safe_username(username: str | None) -> str | None:
+    """Return ``username`` only when it matches a Telegram username shape."""
+    if username and _USERNAME_RE.match(username):
+        return username
+    return None
+
+
+def bullet_list(lines: list[str]) -> str:
+    """Render already-formatted lines as a bulleted block."""
+    return "\n".join(f"{BULLET} {line}" for line in lines if line)
+
+
+def section(title: str, body: str) -> str:
+    """Render a titled section with the shared divider rule."""
+    return f"{bold(title)}\n{SECTION_RULE}\n{body}"
+
 
 log = get_logger(__name__)
 
@@ -174,15 +263,12 @@ def _prepare_value(name: str, value: object, *, escape: bool) -> str:
 def _render_template(
     template: str, prepared: dict[str, str], *, key: str, escape: bool
 ) -> str:
-    """Substitute ``{name}`` placeholders and resolve mini-markup.
+    """Substitute placeholders and resolve the strict mini-markup.
 
-    Only two markup forms exist, both strict: `` `code` `` spans and
-    ``*bold*`` spans must be non-empty, balanced, unnested, and free of
-    braces (placeholder ambiguity). Anything else raises
-    :class:`I18nError` so malformed translator markup fails tests,
-    never production sends. Span contents escape exactly what
-    MarkdownV2 requires inside them (code: backtick/backslash only;
-    bold: full text set); plain mode strips the markers.
+    In rich mode (``escape=True``) literal text is HTML-escaped and the
+    `` `code` `` / ``*bold*`` spans become ``<code>`` / ``<b>`` tags. Plain
+    mode (``plain=True``) keeps raw catalog text for callback alerts, which
+    Telegram never parses.
     """
     parts: list[str] = []
     literal: list[str] = []
@@ -209,10 +295,7 @@ def _render_template(
             inner = template[i + 1 : j]
             check_span(inner, "code")
             flush_literal()
-            if escape:
-                parts.append("`" + inner.replace("\\", "\\\\") + "`")
-            else:
-                parts.append(inner)
+            parts.append(f"<code>{esc(inner)}</code>" if escape else inner)
             i = j + 1
         elif ch == "*":
             j = template.find("*", i + 1)
@@ -225,7 +308,7 @@ def _render_template(
                     f"i18n template {key!r} forbids nesting inside bold spans"
                 )
             flush_literal()
-            parts.append(f"*{esc(inner)}*" if escape else inner)
+            parts.append(f"<b>{esc(inner)}</b>" if escape else inner)
             i = j + 1
         elif ch == "{":
             if template.startswith("{{", i):
@@ -266,16 +349,12 @@ def t(
 ) -> str:
     """Render ``key`` for ``locale`` with safe placeholder interpolation.
 
-    Templates are stored raw (no manual backslashes): literal segments
-    are escaped here in MarkdownV2 mode and left verbatim with
-    ``plain=True`` (callback alerts, which Telegram never parses).
-    Templates may also use strict mini-markup (```code` `` and
-    ``*bold*`` spans, balanced and unnested); malformed markup raises
-    :class:`I18nError`.
+    Templates are stored raw with `` `code` `` and ``*bold*`` mini-markup.
+    Rich mode renders HTML-escaped text with real tags; ``plain=True`` keeps
+    raw text for callback alerts, which Telegram never parses.
     Unknown locales fall back to :data:`DEFAULT_LOCALE`; keys missing in
     the locale fall back per key. A key missing everywhere is a
-    programming error: it is logged and returned as ``[key]`` (never an
-    empty string, never an exception into the handler).
+    programming error: it is logged and returned as ``[key]``.
     """
     if vargs:
         raise I18nError(f"i18n key {key!r} takes keyword placeholders only")
@@ -284,9 +363,6 @@ def t(
     template = data.get(canonical, {}).get(key, data[DEFAULT_LOCALE].get(key))
     if template is None:
         log.error("i18n missing key %r (locale %r)", key, locale)
-        # * The diagnostic is rendered as message text, so it must obey the
-        # * send mode: raw brackets and dots break MarkdownV2 parsing and
-        # * would drop the whole message instead of showing the bad key.
         return f"[{key}]" if plain else esc(f"[{key}]")
     escape = not plain
     prepared = {

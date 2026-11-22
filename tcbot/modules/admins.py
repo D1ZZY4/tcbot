@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import database as db
-from tcbot.modules.helper import decorators, extraction, identity, keyboards
+from tcbot.modules.helper import buttons, decorators, extraction, identity
 from tcbot.modules.helper.guards import (
     action_owner_mismatch,
     can_demote_admin,
@@ -25,8 +25,8 @@ from tcbot.modules.helper.messages import (
     callback_args_optional,
     cb_error_edit,
     replies,
+    reply_rich,
     safe_edit_cb,
-    safe_reply,
 )
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.promo_decision_flow import execute_promo_decision
@@ -34,8 +34,7 @@ from tcbot.modules.helper.pipelines.promote_flow import Promote
 from tcbot.modules.helper.pipelines.transfer_flow import execute_transfer
 from tcbot.modules.helper.targets import classify_and_load_role, resolve_executor_target
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, bold, code, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -118,7 +117,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         and extraction.reply_uid(msg) is None
         and args[0].lstrip("@").lower() in db.users_roles.ROLE_ALIASES
     ):
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.promote_needs_target", locale, plain=True),
             log_label="cmd_promote needs-target",
@@ -148,14 +147,14 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ident, _entry_role = classified
     refusal = identity.refuse_message("promote", ident, locale)
     if refusal is not None:
-        await safe_reply(msg, refusal, log_label="cmd_promote refusal")
+        await reply_rich(msg, refusal, log_label="cmd_promote refusal")
         return
 
     # * Bots hold no actionable identity, so promoting one grants privilege
     # * to a non-actor. Verified-only; unknown stays allowed so off-group
     # * promotions keep working.
     if await identity.is_proven_bot(update, target_id, ctx.bot):
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.bot_target", locale, plain=True),
             log_label="cmd_promote bot-target",
@@ -175,19 +174,19 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             role,
             locale,
         )
-        await safe_reply(msg, text, log_label="cmd_promote result")
+        await reply_rich(msg, text, log_label="cmd_promote result")
         return
 
     available = Promote.available_roles_for(executor_role)
     if not available:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.no_assign_perms", locale, plain=True),
             log_label="cmd_promote no-perms",
             parse_mode=None,
         )
         return
-    await safe_reply(
+    await reply_rich(
         msg,
         t(
             "admins.promote_ui.role_picker",
@@ -197,7 +196,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ),
         ),
         log_label="cmd_promote role-picker",
-        reply_markup=keyboards.promote_role_kb(target_id, available, locale, admin.id),
+        reply_markup=buttons.promote_role_btn(target_id, available, locale, admin.id),
     )
 
 
@@ -208,7 +207,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 
     New prompts carry the opener as ``promo_role:{role}:{target}:{executor}``
     so only that staffer can act; a different tapper gets an alert and the
-    prompt stays live. Legacy three-part callbacks from in-flight keyboards
+    prompt stays live. Legacy three-part callbacks from in-flight buttons
     act as the tapper. Verifies the executor still holds staff rank; rejects
     with alert if expired. Fetches the target's name and current role in
     parallel, then delegates to ``Promote.execute`` and edits the prompt to
@@ -354,7 +353,7 @@ async def on_promote_role_cancel(
     New prompts carry the opener as ``promo_role_cancel:{target}:{executor}``
     so only that staffer can collapse the picker; a different tapper gets an
     alert and the prompt stays live. Legacy two-part callbacks from
-    in-flight keyboards name no owner, so the staff-rank check is the only
+    in-flight buttons name no owner, so the staff-rank check is the only
     gate there: a non-staffer can never collapse the prompt.
     """
     q = update.callback_query
@@ -435,11 +434,11 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ident, target_role = classified
     refusal = identity.refuse_message("demote", ident, locale)
     if refusal is not None:
-        await safe_reply(msg, refusal, log_label="cmd_demote refusal")
+        await reply_rich(msg, refusal, log_label="cmd_demote refusal")
         return
 
     if not target_role:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.no_removable_role", locale, plain=True),
             log_label="cmd_demote no-role",
@@ -448,7 +447,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if not can_demote_admin(executor_role, target_role):
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.owner_demote_only", locale, plain=True),
             log_label="cmd_demote owner-only",
@@ -457,7 +456,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     role_label = db.users_roles.role_label(target_role)
-    await safe_reply(
+    await reply_rich(
         msg,
         t(
             "admins.demote.confirm",
@@ -468,7 +467,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             role=Safe(bold(role_label)),
         ),
         log_label="cmd_demote confirm-prompt",
-        reply_markup=keyboards.demote_confirm_kb(target_id, locale, admin.id),
+        reply_markup=buttons.demote_confirm_btn(target_id, locale, admin.id),
     )
 
 
@@ -479,7 +478,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
     New prompts carry the opener as ``demote_confirm:{target}:{executor}``
     so only that staffer can act; a different tapper gets an alert and the
-    prompt stays live. Legacy two-part callbacks from in-flight keyboards
+    prompt stays live. Legacy two-part callbacks from in-flight buttons
     act as the tapper. Re-validates the executor's rank; rejects with alert
     if insufficient. Answers the query, fetches the target's current role
     and mention data in parallel, then executes ``Demote.execute`` and
@@ -626,7 +625,7 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     New prompts carry the opener as ``demote_cancel:{target}:{executor}``
     so only that staffer can collapse the confirmation; a different tapper
     gets an alert and the prompt stays live. Legacy two-part callbacks from
-    in-flight keyboards name no owner, so the staff-rank check is the only
+    in-flight buttons name no owner, so the staff-rank check is the only
     gate there: a non-staffer can never collapse the prompt.
     """
     q = update.callback_query
@@ -707,7 +706,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     # * reach the Owner with no attributable sender. Real humans send from
     # * their own account.
     if identity.is_anon_admin(user):
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.request.anon_admin", locale, plain=True),
             log_label="cmd_promote_request anon-admin",
@@ -715,7 +714,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         )
         return
     if user.is_bot:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.bot_target", locale, plain=True),
             log_label="cmd_promote_request bot-target",
@@ -740,7 +739,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
             existing_role,
             existing,
         )
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.role_lookup_failed", locale, plain=True),
             log_label="cmd_promote_request lookup-fail",
@@ -749,7 +748,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         return
     if existing_role:
         label = db.users_roles.role_label(existing_role)
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.request.already_role", locale, role=label, plain=True),
             log_label="cmd_promote_request already-role",
@@ -758,7 +757,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         return
 
     if existing:
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "admins.request.existing",
@@ -776,7 +775,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         user.username or "",
         locale,
     )
-    await safe_reply(msg, reply, log_label="cmd_promote_request result")
+    await reply_rich(msg, reply, log_label="cmd_promote_request result")
 
 
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
@@ -800,7 +799,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             pending_r,
             total_r,
         )
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.role_lookup_failed", locale, plain=True),
             log_label="cmd_promote_list db-error",
@@ -809,7 +808,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
     pending, total_pending = pending_r, total_r
     if not pending:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.no_pending", locale, plain=True),
             log_label="cmd_promote_list no-pending",
@@ -865,7 +864,7 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                 req=Safe(code(req.get("request_id", "unknown"))),
             )
         )
-    await safe_reply(msg, "\n".join(lines), log_label="cmd_promote_list result")
+    await reply_rich(msg, "\n".join(lines), log_label="cmd_promote_list result")
 
 
 # ────────────────────── Promotion decisions ────────────────────── #

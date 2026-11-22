@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Step keyboards for the moderation, proof, and connect flows."""
+"""Step buttons for the moderation, proof, and connect flows."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from tcbot.utils.i18n import t
 # * delegating methods so call sites stay unchanged while markup lives here.
 
 
-def reason_step_kb(
+def reason_step_btn(
     action: str, *, skip_allowed: bool = True, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Reason step: optional Skip plus Cancel."""
@@ -37,7 +37,7 @@ def reason_step_kb(
     return InlineKeyboardMarkup([buttons])
 
 
-def proof_step_kb(
+def proof_step_btn(
     action: str, *, skip_allowed: bool = True, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Proof step: optional Skip, Done flush, Cancel."""
@@ -65,7 +65,7 @@ def proof_step_kb(
     return InlineKeyboardMarkup([buttons])
 
 
-def connect_join_kb(
+def connect_join_btn(
     join_callback: str, cancel_callback: str, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Connect / Cancel keyboard attached to the join prompt."""

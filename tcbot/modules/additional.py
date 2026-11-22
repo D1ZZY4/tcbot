@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from tcbot import cfg
-from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit
 from tcbot.utils.i18n import t
@@ -45,7 +45,7 @@ async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     await answer_and_edit(
         q,
         additional_msg(locale),
-        reply_markup=await keyboards.additional_menu_kb(ctx.bot, locale),
+        reply_markup=await buttons.additional_menu_btn(ctx.bot, locale),
     )
 
 

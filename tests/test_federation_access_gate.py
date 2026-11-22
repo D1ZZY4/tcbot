@@ -24,11 +24,11 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules import admins, stats
+from tcbot.modules.helper.buttons import stats_main_btn
 from tcbot.modules.helper.guards import (
     EnforcementVerdict,
     enforcement_verdict,
 )
-from tcbot.modules.helper.keyboards import stats_main_kb
 from tcbot.utils.i18n import t
 
 
@@ -127,8 +127,8 @@ def test_a_lookup_outage_closes_the_stats_gate(
 
 def test_the_owner_keeps_the_staff_panes() -> None:
     """The owner id passes the gate even when the owner role is unset."""
-    kb = stats_main_kb(show_users=True, show_staff=True)
-    labels = [button.text for row in kb.inline_keyboard for button in row]
+    btn = stats_main_btn(show_users=True, show_staff=True)
+    labels = [button.text for row in btn.inline_keyboard for button in row]
     assert "Users" in labels
 
 

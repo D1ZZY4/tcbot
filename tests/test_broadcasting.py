@@ -94,8 +94,8 @@ def test_broadcast_total_success_counts_all(
     msg = _run(monkeypatch, {})
     assert msg.status.edits
     text = msg.status.edits[0]
-    assert "`3`" in text
-    assert "`0`" in text
+    assert "<code>3</code>" in text
+    assert "<code>0</code>" in text
 
 
 def test_broadcast_counts_only_transient_failures(
@@ -111,8 +111,8 @@ def test_broadcast_counts_only_transient_failures(
     assert msg.status.edits
     text = msg.status.edits[0]
     # * Benign refusal is not a failure.
-    assert "`2`" in text
-    assert "`1`" in text
+    assert "<code>2</code>" in text
+    assert "<code>1</code>" in text
 
 
 def test_broadcast_refuses_disconnected_origin(monkeypatch: pytest.MonkeyPatch) -> None:

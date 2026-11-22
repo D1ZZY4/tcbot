@@ -198,4 +198,4 @@ def test_a_failed_ban_marks_the_kick_failed(
 
     assert failed == [55]
     assert len(bot.replies) == 1
-    assert "Couldn't kick" in bot.replies[0]["args"][0]
+    assert "Couldn&#x27;t kick" in bot.replies[0]["args"][0]

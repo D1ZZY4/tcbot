@@ -14,26 +14,25 @@ from telegram import Bot, InlineKeyboardMarkup
 
 from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
+from tcbot.modules.helper.buttons import (
+    back_to_module_btn,
+    check_back_markup,
+    check_back_row,
+    check_paged_markup,
+    check_profile_btn,
+    check_warn_groups_btn,
+    check_warns_back_row,
+    detail_btn,
+    nav_row,
+    paged_drill_btn,
+)
 from tcbot.modules.helper.extraction import (
     identity_needs_refresh,
     launch_identity_refresh,
 )
 from tcbot.modules.helper.identity import Identity, classify, profile_note
-from tcbot.modules.helper.keyboards import (
-    back_to_module_kb,
-    check_back_markup,
-    check_back_row,
-    check_paged_markup,
-    check_profile_kb,
-    check_warn_groups_kb,
-    check_warns_back_row,
-    detail_kb,
-    nav_row,
-    paged_drill_kb,
-)
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import bold, code, italic, user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, bold, code, italic, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page
 from tcbot.utils.time_and_date import date_or_unknown, fmt_dt, fmt_duration
@@ -247,7 +246,7 @@ class CheckProfileMixin:
         )
         if counts_failed:
             text += f"\n\n{t('checking.profile.caveat', locale)}"
-        return text, check_profile_kb(
+        return text, check_profile_btn(
             target_id,
             ban_total=ban_total,
             appeal_total=appeal_total,
@@ -298,16 +297,16 @@ class CheckBansMixin:
                 locale,
                 ban=Safe(code(ban_id)),
             )
-            return text, back_to_module_kb(f"check_bans:{target_id}:0", locale)
+            return text, back_to_module_btn(f"check_bans:{target_id}:0", locale)
         if not ban or ban.get("target_user_id") != target_id:
             text = t(
                 "checking.bans.not_found",
                 locale,
                 ban=Safe(code(ban_id)),
             )
-            return text, back_to_module_kb(f"check_bans:{target_id}:0", locale)
+            return text, back_to_module_btn(f"check_bans:{target_id}:0", locale)
         text, proof_link = await build_ban_detail(ban, locale=locale)
-        return text, detail_kb(
+        return text, detail_btn(
             back_callback=f"check_bans:{target_id}:0",
             proof_link=proof_link,
             appeal_link=ban.get("appeal_link"),
@@ -471,7 +470,7 @@ async def _ban_list_render(
         )
     return _maybe_caveat(
         "\n".join(lines), locale, failed=count_failed or paged.fetch_failed
-    ), paged_drill_kb(
+    ), paged_drill_btn(
         items,
         page=page,
         total_pages=total_pages,
@@ -538,7 +537,7 @@ class CheckEventsMixin:
                 )
             )
             warn_groups.append((title, count, cid))
-        return "\n".join(lines), check_warn_groups_kb(
+        return "\n".join(lines), check_warn_groups_btn(
             target_id, warn_groups, locale=locale
         )
 

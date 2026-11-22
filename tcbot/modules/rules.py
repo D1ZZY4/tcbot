@@ -13,10 +13,10 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
-from tcbot.modules.helper.keyboards import rules as rules_kb
+from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_edit_cb, safe_reply
-from tcbot.modules.helper.messages import rich as rich_msg
+from tcbot.modules.helper.messages import replies, reply_rich, safe_edit_cb
+from tcbot.modules.helper.messages import rich_edit as rich_msg
 from tcbot.modules.helper.messages import rules as rules_msg
 from tcbot.modules.helper.pipelines.rules_flow import (
     WAITING_CATEGORY_TITLE,
@@ -66,7 +66,7 @@ async def cmd_tcrules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     locale = await locale_for_update(update)
     if update.effective_chat is not None and update.effective_chat.type != "private":
-        await safe_reply(
+        await reply_rich(
             msg,
             t("rules.editor.open_pm", locale, plain=True),
             parse_mode=None,
@@ -75,7 +75,7 @@ async def cmd_tcrules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     rule_set = await db.rules_db.get_or_create_community_set()
     panel = await db.rules_db.open_draft(int(rule_set["id"]), user.id)
     text = await rules_msg.editor_panel(rule_set, panel, locale)
-    await safe_reply(msg, text, reply_markup=rules_kb.editor_panel_kb(locale))
+    await reply_rich(msg, text, reply_markup=rules_btn.editor_panel_btn(locale))
 
 
 @decorators.ratelimiter(decorators.THROTTLE_READ)
@@ -87,7 +87,7 @@ async def cmd_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     locale = await locale_for_update(update)
     if update.effective_chat is not None and update.effective_chat.type != "private":
-        await safe_reply(
+        await reply_rich(
             msg,
             t("rules.editor.open_pm", locale, plain=True),
             parse_mode=None,
@@ -95,13 +95,13 @@ async def cmd_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     published = await db.rules_db.published_rules()
     if published is None or not published.get("items"):
-        await safe_reply(
+        await reply_rich(
             msg, t("rules.menu.empty", locale, plain=True), parse_mode=None
         )
         return
     text = rules_msg.rules_menu(locale, cfg.community_name)
-    markup = rules_kb.rules_menu_kb(published["categories"], locale)
-    await safe_reply(msg, text, reply_markup=markup)
+    markup = rules_btn.rules_menu_btn(published["categories"], locale)
+    await reply_rich(msg, text, reply_markup=markup)
 
 
 # ─────────────────────────── Callbacks ─────────────────────────── #
@@ -165,7 +165,7 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     locale = await locale_for_update(update)
     text = rules_msg.category_view(str(category), items, locale)
-    markup = rules_kb.category_back_kb()
+    markup = rules_btn.category_back_btn()
     message = query.message
     if message is not None and getattr(message, "chat", None) is not None:
         try:
@@ -175,12 +175,11 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 message.message_id,
                 rules_msg.rich_category_view(str(category), items, locale),
                 reply_markup=markup,
-                fallback_text=text,
             )
             return
         except Exception as exc:
-            log.debug("Rich category view failed, using MarkdownV2: %s", exc)
-    await safe_edit_cb(query, text, parse_mode="MarkdownV2", reply_markup=markup)
+            log.debug("Rich category view edit failed: %s", exc)
+    await safe_edit_cb(query, text, reply_markup=markup)
 
 
 async def on_rules_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -191,10 +190,10 @@ async def on_rules_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await query.answer()
     text = rules_msg.rules_menu(await locale_for_update(update), cfg.community_name)
     published = await db.rules_db.published_rules()
-    markup = rules_kb.rules_menu_kb(
+    markup = rules_btn.rules_menu_btn(
         published["categories"] if published else [], await locale_for_update(update)
     )
-    await safe_edit_cb(query, text, parse_mode="MarkdownV2", reply_markup=markup)
+    await safe_edit_cb(query, text, parse_mode=None, reply_markup=markup)
 
 
 async def on_rules_panel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -214,8 +213,8 @@ async def on_rules_panel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await safe_edit_cb(
         query,
         text,
-        parse_mode="MarkdownV2",
-        reply_markup=rules_kb.editor_panel_kb(await locale_for_update(update)),
+        parse_mode=None,
+        reply_markup=rules_btn.editor_panel_btn(await locale_for_update(update)),
     )
 
 
@@ -237,7 +236,7 @@ async def on_rules_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         await safe_edit_cb(
             query,
             t("rules.publish.error", locale, error=str(exc)),
-            parse_mode="MarkdownV2",
+            parse_mode=None,
         )
         return
     await safe_edit_cb(
@@ -248,7 +247,7 @@ async def on_rules_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             synced=result["synced"],
             failed=len(result["failed"]),
         ),
-        parse_mode="MarkdownV2",
+        parse_mode=None,
     )
 
 
@@ -270,7 +269,7 @@ async def on_rules_cat_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         scope["rules_category_key"] = key
         scope["rules_step"] = "rename_category"
         if query.message is not None:
-            await safe_reply(
+            await reply_rich(
                 cast("Any", query.message),
                 t("rules.editor.ask_rename", locale, plain=True),
                 parse_mode=None,
@@ -289,8 +288,8 @@ async def on_rules_cat_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     await safe_edit_cb(
         query,
         rules_msg.category_list(categories, locale),
-        parse_mode="MarkdownV2",
-        reply_markup=rules_kb.categories_kb(categories, locale),
+        parse_mode=None,
+        reply_markup=rules_btn.categories_btn(categories, locale),
     )
 
 

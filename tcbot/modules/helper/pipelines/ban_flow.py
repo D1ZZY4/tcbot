@@ -20,18 +20,18 @@ from telegram.ext import (
 
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
-from tcbot.modules.helper import guards, keyboards, messages
+from tcbot.modules.helper import buttons, guards, messages
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
     appeal_deep_link,
     clear_markup_cb,
     message_link,
     replies,
+    reply_rich,
     safe_edit_cb,
     safe_edit_message,
-    safe_reply,
 )
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.ban_confirmation import (
     on_ban_update_continue,
     stale_ban_callback,
@@ -54,8 +54,7 @@ from tcbot.utils.dispatch import (
     summarize_fanout,
     throw_if_cancelled,
 )
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 from tcbot.utils.time_and_date import monotonic, to_utc, utc_now
@@ -306,7 +305,7 @@ async def _execute_ban_record(
             now,
         )
     kb = (
-        keyboards.ban_log_kb(
+        buttons.ban_log_btn(
             target_id,
             proof_link,
             appeal_deep_link(bot_username, canonical_ban_id),
@@ -323,9 +322,7 @@ async def _execute_ban_record(
     if kb is not None:
         send_kwargs["reply_markup"] = kb
     try:
-        log_msg = await bot.send_message(
-            logs_chat, apply_style(log_text), **send_kwargs
-        )
+        log_msg = await bot.send_message(logs_chat, style(log_text), **send_kwargs)
     except Exception:
         log.exception("Ban log send failed for ban_id=%s", canonical_ban_id)
         return 0, True, canonical_ban_id, enforcement_run_id
@@ -655,7 +652,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         community=cfg.community_name,
         reason=reason,
     )
-    _pm_kb = keyboards.appeal_button_kb(bot_username, ban_id, target_locale)
+    _pm_btn = buttons.appeal_button_btn(bot_username, ban_id, target_locale)
     summary = t(
         "banning.summary.body",
         locale,
@@ -666,17 +663,17 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     if prompt_msg_id and prompt_chat_id:
         edit_result, upsert_result, pm_result, markup_result = await asyncio.gather(
             bot.edit_message_text(
-                apply_style(summary),
+                style(summary),
                 chat_id=prompt_chat_id,
                 message_id=prompt_msg_id,
-                parse_mode="MarkdownV2",
+                parse_mode=None,
             ),
             db.users_cache.upsert_user(target_id, None, target_fname),
             bot.send_message(
                 target_id,
-                apply_style(_pm_text),
-                parse_mode="MarkdownV2",
-                reply_markup=_pm_kb,
+                style(_pm_text),
+                parse_mode=None,
+                reply_markup=_pm_btn,
             ),
             bot.edit_message_reply_markup(
                 chat_id=prompt_chat_id, message_id=prompt_msg_id
@@ -691,8 +688,8 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             try:
                 await bot.send_message(
                     prompt_chat_id,
-                    apply_style(summary),
-                    parse_mode="MarkdownV2",
+                    style(summary),
+                    parse_mode=None,
                 )
             except Exception as exc:
                 log.debug("Ban summary fallback send failed: %s", exc)
@@ -703,9 +700,9 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             db.users_cache.upsert_user(target_id, None, target_fname),
             bot.send_message(
                 target_id,
-                apply_style(_pm_text),
-                parse_mode="MarkdownV2",
-                reply_markup=_pm_kb,
+                style(_pm_text),
+                parse_mode=None,
+                reply_markup=_pm_btn,
             ),
             return_exceptions=True,
         )
@@ -864,7 +861,7 @@ async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     if ctx.user_data is not None and not flow_scope(ctx, update).get("ban_target_id"):
         return ConversationHandler.END
     if update.effective_message:
-        await safe_reply(
+        await reply_rich(
             update.effective_message,
             t(
                 "banning.state.proof_expected",
@@ -932,7 +929,7 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     if not had_state:
         return ConversationHandler.END
     if update.effective_message:
-        await safe_reply(
+        await reply_rich(
             update.effective_message,
             t(
                 "banning.state.timeout",

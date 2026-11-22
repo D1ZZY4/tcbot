@@ -14,7 +14,7 @@ import sys
 import threading
 import traceback
 from itertools import islice
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import telegram.error as _te
 
@@ -22,7 +22,7 @@ from tcbot import cfg
 from tcbot.database import engine as db_engine
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitOpenError
-from tcbot.utils.formatter import bold, code, esc, pre
+from tcbot.utils.i18n import bold, code, esc, pre
 from tcbot.utils.logger import get_logger
 from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.time_and_date import monotonic, utc_now
@@ -306,6 +306,14 @@ def _owner_suppressed(fp: tuple[object, ...]) -> bool:
                 k for k, (at, _) in _owner_sent.items() if now - at >= _OWNER_WINDOW
             ]:
                 del _owner_sent[key]
+            # * A burst of fresh fingerprints cannot be pruned by time. Drop
+            # * the oldest tenth so the budget map stays bounded.
+            if len(_owner_sent) >= _OWNER_MAX:
+                oldest = sorted(_owner_sent, key=lambda key: _owner_sent[key][0])[
+                    : max(1, _OWNER_MAX // 10)
+                ]
+                for key in oldest:
+                    del _owner_sent[key]
         start, count = _owner_sent.get(fp, (now, 0))
         if now - start >= _OWNER_WINDOW:
             start, count = now, 0
@@ -476,6 +484,69 @@ def scrub_text(text: str) -> str:
     return _scrub_secrets(text)
 
 
+def _scrub_event_value(value: object) -> object:
+    """Recursively redact string leaves in a Sentry event payload."""
+    if isinstance(value, str):
+        return _scrub_secrets(value)
+    if isinstance(value, dict):
+        return {str(key): _scrub_event_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_scrub_event_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_scrub_event_value(item) for item in value)
+    return value
+
+
+def scrub_sentry_event(event: dict[str, Any], hint: Any = None) -> dict[str, Any]:
+    """Redact credential-bearing strings before a Sentry event is delivered.
+
+    Used as the ``before_send`` hook, so non-string values such as retry
+    counters must survive unchanged and the event structure must be kept.
+    """
+    _ = hint
+    return {key: _scrub_event_value(value) for key, value in event.items()}
+
+
+def build_error_report_payload(
+    *,
+    exc: BaseException | None = None,
+    record: logging.LogRecord | None = None,
+    context: str | None = None,
+) -> dict[str, Any]:
+    """Build a rich error report with a collapsible details list.
+
+    The short classification stays visible while the traceback and context
+    live in an expandable block. Every dynamic value is redacted before it
+    is placed in the rich HTML payload.
+    """
+    from tcbot.modules.helper.messages.rich_format import code, heading, pre  # noqa: PLC0415
+    from tcbot.modules.helper.messages.rich_list import bullet_list, details  # noqa: PLC0415
+    from tcbot.modules.helper.messages.rich_style import esc as html_esc  # noqa: PLC0415
+
+    if record and record.exc_info and record.exc_info[1]:
+        exc = exc or record.exc_info[1]
+    label = _classify(exc)
+    action = _action_hint(label)
+    file_part, func_name, line_no = _location(exc, record)
+    raw_msg = record.getMessage() if record else str(exc) if exc else "No detail."
+    lines = [
+        f"Type: {html_esc(label)}",
+        f"Action: {html_esc(action)}",
+        f"Where: {html_esc(f'{file_part}:{line_no} in {func_name}')}",
+        f"Message: {html_esc(_scrub_secrets(raw_msg)[:_MAX_MSG])}",
+    ]
+    body = bullet_list(lines)
+    if exc and exc.__traceback__:
+        body += "\n" + html_esc("Traceback:") + pre(_scrub_secrets(_condensed_tb(exc)))
+    if context:
+        body += (
+            "\n" + html_esc("Context:") + code(_scrub_secrets(str(context))[:_MAX_CTX])
+        )
+    return {
+        "html": "\n".join((heading("Error Report", 2), details("<b>Details</b>", body)))
+    }
+
+
 def build_error_message(
     *,
     exc: BaseException | None = None,
@@ -529,7 +600,7 @@ _sent_in_window: int = 0
 _suppressed_in_window: int = 0
 
 
-async def _ship_throttled(text: str) -> None:
+async def _ship_throttled(text: str, payload: dict[str, Any] | None = None) -> None:
     """Send to LOG_ERRORS within budget, else count for the summary."""
     global _send_window_start, _sent_in_window, _suppressed_in_window
     if not _bot or not _chat_id:
@@ -542,11 +613,18 @@ async def _ship_throttled(text: str) -> None:
             suppressed = _suppressed_in_window
             _suppressed_in_window = 0
             try:
-                await _bot.send_message(
+                from tcbot.modules.helper.messages.rich_msg import (  # noqa: PLC0415
+                    html_message,
+                    send_rich,
+                )
+
+                await send_rich(
+                    _bot,
                     _chat_id,
-                    f"Error reporter: {suppressed} further error\\(s\\) "
-                    f"suppressed in the last {_SEND_WINDOW:.0f}s window\\.",
-                    parse_mode="MarkdownV2",
+                    html_message(
+                        f"Error reporter: {suppressed} further error(s) "
+                        f"suppressed in the last {_SEND_WINDOW:.0f}s window."
+                    ),
                     message_thread_id=_thread_id,
                 )
             except Exception as exc:
@@ -558,18 +636,27 @@ async def _ship_throttled(text: str) -> None:
         return
     _sent_in_window += 1
     try:
-        await _bot.send_message(
-            _chat_id, text, parse_mode="MarkdownV2", message_thread_id=_thread_id
+        from tcbot.modules.helper.messages.rich_msg import html_message, send_rich  # noqa: PLC0415
+
+        await send_rich(
+            _bot,
+            _chat_id,
+            payload if payload is not None else html_message(text),
+            message_thread_id=_thread_id,
         )
     except Exception as exc:
         log.warning("Failed to ship error to LOG_ERRORS: %s", exc)
 
 
-async def send_to_log_errors(text: str) -> None:
-    """Fire-and-forget send to LOG_ERRORS (throttled)."""
+async def send_to_log_errors(text: str, payload: dict[str, Any] | None = None) -> None:
+    """Fire-and-forget send to LOG_ERRORS (throttled).
+
+    ``text`` is the render used when no rich payload is supplied; both paths
+    ship through the rich transport.
+    """
     if not _bot or not _chat_id:
         return
-    await _ship_throttled(text)
+    await _ship_throttled(text, payload)
 
 
 async def send_to_owner(text: str) -> None:
@@ -577,7 +664,7 @@ async def send_to_owner(text: str) -> None:
     if not _bot or not _owner_id:
         return
     try:
-        await _bot.send_message(_owner_id, text, parse_mode="MarkdownV2")
+        await _bot.send_message(_owner_id, text)
     except Exception as exc:
         log.warning("Failed to send owner DM: %s", exc)
 
@@ -585,10 +672,11 @@ async def send_to_owner(text: str) -> None:
 async def _deliver(exc: BaseException | None, record: logging.LogRecord | None) -> None:
     """Render the report and send it to its destination."""
     text = build_error_message(exc=exc, record=record)
+    payload = build_error_report_payload(exc=exc, record=record)
     if _owner_only(exc):
         await send_to_owner(text)
     else:
-        await send_to_log_errors(text)
+        await send_to_log_errors(text, payload)
 
 
 def _approved(record: logging.LogRecord) -> bool:
@@ -616,10 +704,11 @@ async def report_exc(exc: BaseException, context: str | None = None) -> None:
     if _is_benign(exc) or _dedup(exc, None):
         return
     text = build_error_message(exc=exc, context=context)
+    payload = build_error_report_payload(exc=exc, context=context)
     if _owner_only(exc):
         if _owner_suppressed(_fingerprint_exc(exc)):
             log.debug("Owner DM suppressed: budget spent.")
             return
         await send_to_owner(text)
     else:
-        await send_to_log_errors(text)
+        await send_to_log_errors(text, payload)

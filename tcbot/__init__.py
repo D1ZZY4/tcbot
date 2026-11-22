@@ -10,7 +10,7 @@ import ast
 import os
 import re
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from dotenv import find_dotenv, load_dotenv
@@ -389,9 +389,9 @@ class Configs:
     silently degrading at every call site.
     """
 
-    bot_token: str
+    bot_token: str = field(repr=False)
     initial_owner_id: int
-    database_url: str
+    database_url: str = field(repr=False)
     community_name: str
     prefixes: tuple[str, ...]
     port: int
@@ -406,7 +406,7 @@ class Configs:
     log_level: int
     modules_load: tuple[str, ...]
     modules_no_load: tuple[str, ...]
-    redis_url: str | None
+    redis_url: str | None = field(repr=False)
     db_pool_size: int
     db_max_overflow: int
     db_schema: str
@@ -416,11 +416,11 @@ class Configs:
     fed_warn_limit: int
     warn_limit: int
     webhook_url: str
-    webhook_secret: str
+    webhook_secret: str = field(repr=False)
     api_id: int
-    api_hash: str
+    api_hash: str = field(repr=False)
     mtproto_session: str
-    sentry_dsn: str
+    sentry_dsn: str = field(repr=False)
 
     def is_primary_group(self, chat_id: int | None) -> bool:
         """Check whether the chat is the main group.

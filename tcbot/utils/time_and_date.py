@@ -10,8 +10,7 @@ import re
 import time
 from datetime import UTC, datetime, timedelta
 
-from tcbot.utils.formatter import esc
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import esc, t
 
 # ──────────────────────── Datetime Helpers ──────────────────────── #
 

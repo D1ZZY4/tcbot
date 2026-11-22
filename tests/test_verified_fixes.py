@@ -13,14 +13,14 @@ from tcbot.database import users_roles
 from tcbot.database.types import GroupId
 from tcbot.modules import help as helpmod
 from tcbot.modules.help import _help_index_text, _module_text
-from tcbot.modules.helper import guards, keyboards
+from tcbot.modules.helper import buttons, guards
 from tcbot.modules.helper.ban_info import build_ban_detail
-from tcbot.modules.helper.keyboards import nav_row
+from tcbot.modules.helper.buttons import nav_row
 from tcbot.modules.helper.messages import replies
 from tcbot.modules.helper.pipelines.connected_flow import BuildConnection
 from tcbot.modules.helper.pipelines.proof_flow import BuildProof
 from tcbot.modules.helper.pipelines.reason_flow import BuildReason
-from tcbot.utils.formatter import esc
+from tcbot.utils.i18n import esc
 
 
 def test_nav_row_labels_follow_locale() -> None:
@@ -61,36 +61,36 @@ def test_refusal_texts_localize() -> None:
     )
 
 
-def test_flow_keyboards_delegate_to_single_source() -> None:
+def test_flow_buttons_delegate_to_single_source() -> None:
     assert (
         BuildReason("ban").keyboard("en-US").to_dict()
-        == keyboards.reason_step_kb("ban", locale="en-US").to_dict()
+        == buttons.reason_step_btn("ban", locale="en-US").to_dict()
     )
     assert (
         BuildProof("mute", skip_allowed=False).keyboard("en-US").to_dict()
-        == keyboards.proof_step_kb("mute", skip_allowed=False, locale="en-US").to_dict()
+        == buttons.proof_step_btn("mute", skip_allowed=False, locale="en-US").to_dict()
     )
     conn = BuildConnection("TCF")
     assert (
         conn.join_keyboard("en-US").to_dict()
-        == keyboards.connect_join_kb(
+        == buttons.connect_join_btn(
             conn.join_callback, conn.cancel_callback, locale="en-US"
         ).to_dict()
     )
 
 
 def test_reason_step_keyboard_skip_toggle() -> None:
-    full = keyboards.reason_step_kb("ban", locale="en-US")
+    full = buttons.reason_step_btn("ban", locale="en-US")
     assert [b.callback_data for b in full.inline_keyboard[0]] == [
         "ban_skip_reason",
         "ban_cancel",
     ]
-    noskip = keyboards.reason_step_kb("warn", skip_allowed=False, locale="en-US")
+    noskip = buttons.reason_step_btn("warn", skip_allowed=False, locale="en-US")
     assert [b.callback_data for b in noskip.inline_keyboard[0]] == ["warn_cancel"]
 
 
 def test_check_profile_keyboard_callbacks() -> None:
-    kb = keyboards.check_profile_kb(
+    btn = buttons.check_profile_btn(
         42,
         ban_total=1,
         appeal_total=2,
@@ -99,7 +99,7 @@ def test_check_profile_keyboard_callbacks() -> None:
         mute_total=5,
         locale="en-US",
     )
-    callbacks = [b.callback_data for row in kb.inline_keyboard for b in row]
+    callbacks = [b.callback_data for row in btn.inline_keyboard for b in row]
     assert callbacks == [
         "check_bans:42:0",
         "check_appeals:42:0",
@@ -110,13 +110,13 @@ def test_check_profile_keyboard_callbacks() -> None:
 
 
 def test_language_list_back_label_localizes() -> None:
-    kb = keyboards.language_list_kb(
+    btn = buttons.language_list_btn(
         "user",
         [("English (US)", "en-US")],
         back_callback="back_to_start",
         locale="id-ID",
     )
-    assert kb.inline_keyboard[-1][0].text == "« Kembali"
+    assert btn.inline_keyboard[-1][0].text == "« Kembali"
 
 
 def test_ban_detail_escapes_moderator_reason() -> None:
@@ -143,7 +143,7 @@ def test_ban_detail_escapes_moderator_reason() -> None:
     text, proof_link = asyncio.run(run())
     assert proof_link is None
     assert esc("spam_here *now* [x](y)") in text
-    assert "*now*" not in text
+    assert "<b>now</b>" not in text
 
 
 def test_invalid_stored_role_grants_nothing(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -184,18 +184,18 @@ def test_help_topics_rebuild_per_locale() -> None:
 
 def test_stats_search_buttons_resolve_in_catalog() -> None:
     for locale in ("en-US", "id-ID"):
-        row = keyboards.stats_search_row(locale)
+        row = buttons.stats_search_row(locale)
         assert row[0].text and not row[0].text.startswith("[")
-        kb = keyboards.stats_search_results_kb(2, locale)
-        labels = [b.text for r in kb.inline_keyboard for b in r]
+        btn = buttons.stats_search_results_btn(2, locale)
+        labels = [b.text for r in btn.inline_keyboard for b in r]
         assert labels and all(not label.startswith("[") for label in labels)
 
 
 def test_stats_search_results_carry_stable_ids() -> None:
-    kb = keyboards.stats_search_results_kb(2, "en-US", item_ids=["banA", "banB"])
-    assert kb.inline_keyboard[0][0].callback_data == "stats_search_item:0:banA"
-    assert kb.inline_keyboard[0][1].callback_data == "stats_search_item:1:banB"
-    legacy = keyboards.stats_search_results_kb(1, "en-US")
+    btn = buttons.stats_search_results_btn(2, "en-US", item_ids=["banA", "banB"])
+    assert btn.inline_keyboard[0][0].callback_data == "stats_search_item:0:banA"
+    assert btn.inline_keyboard[0][1].callback_data == "stats_search_item:1:banB"
+    legacy = buttons.stats_search_results_btn(1, "en-US")
     assert legacy.inline_keyboard[0][0].callback_data == "stats_search_item:0"
 
 

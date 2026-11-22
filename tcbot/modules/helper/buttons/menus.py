@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Start menu, community links, and group-list keyboards."""
+"""Start menu, community links, and group-list buttons."""
 
 from __future__ import annotations
 
@@ -13,15 +13,15 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
 from tcbot import cfg
-from tcbot.modules.helper.keyboards.common import back_markup
-from tcbot.utils import community_links
+from tcbot.modules.helper.buttons.common import back_markup
+from tcbot.modules.helper.messages import links as community_links
 from tcbot.utils.i18n import t
 
 if TYPE_CHECKING:
     from telegram import Bot
 
 
-def main_menu_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+def main_menu_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Top-level start menu: About, Help, Additional, Privacy, Language."""
     return InlineKeyboardMarkup(
         [
@@ -60,7 +60,7 @@ def main_menu_kb(locale: str | None = None) -> InlineKeyboardMarkup:
     )
 
 
-def group_start_kb(
+def group_start_btn(
     bot_username: str, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Group /start keyboard: Open PM link plus group help button."""
@@ -87,12 +87,12 @@ def group_start_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def back_to_start_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+def back_to_start_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Single Back button returning to the start menu."""
     return back_markup("back_to_start", locale)
 
 
-async def additional_menu_kb(
+async def additional_menu_btn(
     bot: Bot, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Community links menu; chats without a public link are omitted.
@@ -160,7 +160,7 @@ async def additional_menu_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def groups_menu_kb(
+def groups_menu_btn(
     *, detailed: bool, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Start-menu groups list: Detailed/Simple toggle plus Back."""
@@ -177,7 +177,7 @@ def groups_menu_kb(
     return InlineKeyboardMarkup([[toggle, back]])
 
 
-def tcgroups_kb(*, detailed: bool, locale: str | None = None) -> InlineKeyboardMarkup:
+def tcgroups_btn(*, detailed: bool, locale: str | None = None) -> InlineKeyboardMarkup:
     """Toggle keyboard for /tcgroups: Simple/Details switch."""
     label = (
         t("button.simple", locale, plain=True)

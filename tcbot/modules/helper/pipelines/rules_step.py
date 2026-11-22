@@ -15,11 +15,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from tcbot.modules.helper.keyboards import rules as rules_kb
+from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.messages.rules import selected_summary
 from tcbot.utils.i18n import t
 
-_PREFIX = rules_kb.PICKER_PICK_PREFIX
+_PREFIX = rules_btn.PICKER_PICK_PREFIX
 
 
 def callback_for(item_id: int) -> str:

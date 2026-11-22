@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from tcbot.modules.helper.keyboards import nav_row
+from tcbot.modules.helper.buttons import nav_row
 from tcbot.utils.pagination import clamp_page, paginate
 
 

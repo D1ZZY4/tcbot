@@ -11,11 +11,10 @@ from typing import TYPE_CHECKING
 from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from tcbot import cfg
-from tcbot.modules.helper import decorators, keyboards
+from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit
-from tcbot.utils.formatter import bold
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import bold, t
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -78,7 +77,7 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     await answer_and_edit(
         q,
         _privacy_msg(botname, locale),
-        reply_markup=keyboards.privacy_kb(locale),
+        reply_markup=buttons.privacy_btn(locale),
     )
 
 
@@ -97,7 +96,7 @@ async def on_privacy_policy_menu(
     await answer_and_edit(
         q,
         _privacy_policy_index_msg(botname, locale),
-        reply_markup=keyboards.privacy_policy_sections_kb(
+        reply_markup=buttons.privacy_policy_sections_btn(
             _section_labels(locale), locale
         ),
     )
@@ -137,7 +136,7 @@ async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     await answer_and_edit(
         q,
         body,
-        reply_markup=keyboards.back_to_privacy_policy_kb(locale),
+        reply_markup=buttons.back_to_privacy_policy_btn(locale),
     )
 
 

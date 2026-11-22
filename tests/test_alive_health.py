@@ -7,11 +7,11 @@
 from __future__ import annotations
 
 import concurrent.futures
-import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
+import msgspec
 import pytest
 
 import tcbot.alive as alive_mod
@@ -82,7 +82,7 @@ def _health_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _call_health() -> tuple[dict, int]:
     body, code, _ = alive_mod.health()
-    return json.loads(body), code
+    return msgspec.json.decode(body), code
 
 
 def test_health_ok_when_all_closed(_health_no_io: None) -> None:

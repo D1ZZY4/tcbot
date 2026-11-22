@@ -15,12 +15,11 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, guards, identity
 from tcbot.modules.helper.guards import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply
+from tcbot.modules.helper.messages import replies, reply_rich
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
 from tcbot.modules.helper.pipelines.unban_flow import execute_unban
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -101,7 +100,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
     target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_cannot_resolve(locale, plain=True),
             log_label="unban no-target",
@@ -126,7 +125,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     throw_if_cancelled((ident, pre_ban, role_result))
     if isinstance(ident, BaseException):
         log.exception("identity.classify failed in cmd_unban: %s", ident)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
             log_label="unban classify-fail",
@@ -142,7 +141,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         pre_ban = None
     if isinstance(role_result, BaseException):
         log.exception("resolve_and_check failed in cmd_unban: %s", role_result)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
             log_label="unban rank-check-fail",
@@ -159,7 +158,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * Hard identity refusals (self, bot, telegram, anon_admin, owner)
     # * always block, regardless of federation role.
     if refusal is not None and ident.kind not in staff_roles:
-        await safe_reply(msg, refusal, log_label="unban refusal")
+        await reply_rich(msg, refusal, log_label="unban refusal")
         return
 
     # * Federation staff-ness comes from the fail-closed role read
@@ -203,7 +202,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 )
                 ban_record = None
         if ban_record is None:
-            await safe_reply(msg, refusal or "", log_label="unban refusal")
+            await reply_rich(msg, refusal or "", log_label="unban refusal")
             return
         # * The classification and the role read are two separate fresh
         # * reads. When they disagree on a promotion, either one proves a
@@ -224,7 +223,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 admin.first_name,
             )
             if not gate.may_proceed:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t(
                         "demote.abort.body",
@@ -251,7 +250,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * speculative pre-fetch above failed, so an outage would
         # * otherwise end with no operator feedback.
         log.exception("execute_unban failed for target=%s", target_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="unban DB-fail",

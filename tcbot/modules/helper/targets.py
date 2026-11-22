@@ -14,7 +14,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import extraction, guards, identity
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply
+from tcbot.modules.helper.messages import replies, reply_rich
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -107,7 +107,7 @@ async def resolve_executor_target(
         # * A genuinely role-less caller gets None below; the decorator
         # * denies them properly on retry.
         log.warning("cmd_%s executor role lookup failed: %s", action, _exec_r)
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.role_lookup_failed", locale, plain=True),
             log_label=f"cmd_{action} lookup-fail",
@@ -119,7 +119,7 @@ async def resolve_executor_target(
         return None
     if isinstance(_target_r, BaseException):
         log.error("extract_target failed during %s: %s", action, _target_r)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_cannot_resolve(locale, plain=True),
             log_label=f"cmd_{action} no-target",
@@ -128,7 +128,7 @@ async def resolve_executor_target(
         return None
     target_id, target_fname = _target_r
     if not target_id:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_cannot_resolve(locale, plain=True),
             log_label=f"cmd_{action} no-target-id",
@@ -166,7 +166,7 @@ async def classify_and_load_role(
             target_id,
             ident_r,
         )
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.classify_failed", locale, plain=True),
             log_label=f"cmd_{action} classify-failed",
@@ -180,7 +180,7 @@ async def classify_and_load_role(
             target_id,
             role_r,
         )
-        await safe_reply(
+        await reply_rich(
             msg,
             t("admins.error.role_lookup_failed", locale, plain=True),
             log_label=f"cmd_{action} role-lookup-failed",
@@ -226,7 +226,7 @@ async def resolve_staff_target(
     args = parse_cmd_args(msg.text)
     target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
     if not target_id:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_cannot_resolve(locale, plain=True),
             log_label=f"{log_prefix} no-target",
@@ -252,7 +252,7 @@ async def resolve_staff_target(
     ident, _target_role = classified
     refusal = identity.refuse_message(action, ident, locale)
     if refusal is not None:
-        await safe_reply(msg, refusal, log_label=f"{log_prefix} refusal")
+        await reply_rich(msg, refusal, log_label=f"{log_prefix} refusal")
         return None
     return StaffTarget(
         target_id=target_id,
@@ -301,7 +301,7 @@ async def resolve_mod_target(
         update, args, ctx.bot
     )
     if not target_id:
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_cannot_resolve(locale, plain=True),
             log_label=f"{log_prefix} no-target",
@@ -329,7 +329,7 @@ async def resolve_mod_target(
     ident, _target_role = classified
     refusal = identity.refuse_message(action, ident, locale)
     if refusal is not None:
-        await safe_reply(msg, refusal, log_label=f"{log_prefix} refusal")
+        await reply_rich(msg, refusal, log_label=f"{log_prefix} refusal")
         return None
     return ModTarget(
         msg=msg,
@@ -376,5 +376,5 @@ async def run_staff_action(
         action, resolved.ident, cfg.community_name, resolved.locale
     )
     if notice is not None:
-        await safe_reply(msg, notice, log_label=f"{log_prefix} notice")
+        await reply_rich(msg, notice, log_label=f"{log_prefix} notice")
     await execute(update, ctx, resolved.target_id, resolved.target_name)

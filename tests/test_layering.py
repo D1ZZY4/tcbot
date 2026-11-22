@@ -8,7 +8,7 @@ The repository is a modular monolith with three layers under the command
 handlers:
 
     tcbot/modules/*.py        command handlers
-    tcbot/modules/helper/     domain: roles, targets, keyboards, flows
+    tcbot/modules/helper/     domain: roles, targets, buttons, flows
     tcbot/database/           storage
     tcbot/utils/              shared foundation used by both of the above
 
@@ -110,14 +110,25 @@ def _imported_names(path: Path, root: Path = _TCBOT_ROOT) -> set[str]:
     return names
 
 
+# * The i18n engine renders rich HTML with the leaf formatting modules. Those
+# * imports are lazy (inside helper functions) to avoid a cycle, and the rich
+# * modules are the single source of truth for the HTML shapes.
+_I18N_RICH_LEAVES = (
+    "tcbot.modules.helper.messages.rich_style",
+    "tcbot.modules.helper.messages.rich_format",
+    "tcbot.modules.helper.messages.rich_link",
+)
+
+
 def _offenders(root: Path, forbidden: tuple[str, ...]) -> list[str]:
     """Return one report line per import that breaks the layer boundary."""
     found: list[str] = []
     for path in sorted(root.rglob("*.py")):
+        allowed = _I18N_RICH_LEAVES if path.name == "i18n.py" else ()
         found.extend(
             f"{path.relative_to(_TCBOT_ROOT)} imports {name}"
             for name in _imported_names(path)
-            if name.startswith(forbidden)
+            if name.startswith(forbidden) and not name.startswith(allowed)
         )
     return found
 

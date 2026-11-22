@@ -117,7 +117,7 @@ def _set_up(
     monkeypatch.setattr(db.queues_db, "pending_count", _pending_count)
     monkeypatch.setattr(db.users_roles, "get_owner_id", _owner)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(admins, "safe_reply", _safe_reply)
+    monkeypatch.setattr(admins, "reply_rich", _safe_reply)
 
     update = SimpleNamespace(
         effective_message=SimpleNamespace(),
@@ -148,7 +148,7 @@ def test_promote_list_header_shows_true_total_when_truncated(
     captured = _set_up(monkeypatch, total_pending=234)
 
     assert len(captured) == 1
-    assert "Pending Promotion Requests \\(234\\)" in captured[0]
+    assert "<b>Pending Promotion Requests (234)</b>" in captured[0]
 
 
 def test_promote_list_omits_cap_notice_within_limit(

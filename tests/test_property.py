@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Property-based checks for formatter escaping, list parsing, and links."""
+"""Property-based checks for rich HTML escaping, list parsing, and links."""
 
 from __future__ import annotations
 
@@ -11,32 +11,24 @@ from hypothesis import strategies as st
 
 from tcbot import parse_list
 from tcbot.modules.helper.messages import chat_id_to_link_id, message_link
-from tcbot.utils.formatter import _MD_V2_TEXT_SPECIAL, esc
+from tcbot.utils.i18n import esc
 
 # * Keep examples fast: the suite already covers behaviour with unit tests,
 # * these invariants are ordering/shape checks only.
 MAX_EXAMPLES = 50
 
-_SPECIAL_ALPHABET = "abcXYZ019 _*[]()~`>#+-=|{}.!\\"
+_HTML_SPECIAL_ALPHABET = "abcXYZ019 <>\"'&*_[]`\\"
 
 
 def _is_fully_escaped(text: str) -> bool:
-    """Walk output pairwise: every special char must sit behind a backslash."""
-    i = 0
-    while i < len(text):
-        if text[i] == "\\":
-            i += 2
-            continue
-        if text[i] in _MD_V2_TEXT_SPECIAL:
-            return False
-        i += 1
-    return True
+    """No raw HTML metacharacter may survive rich escaping."""
+    return not any(char in text for char in "<>\"'")
 
 
-@given(st.text(alphabet=_SPECIAL_ALPHABET, max_size=40))
+@given(st.text(alphabet=_HTML_SPECIAL_ALPHABET, max_size=40))
 @settings(max_examples=MAX_EXAMPLES)
-def test_esc_escapes_every_special(text: str) -> None:
-    """esc() output must leave no unescaped MarkdownV2 special character."""
+def test_esc_escapes_every_html_special(text: str) -> None:
+    """esc() output must leave no raw HTML metacharacter."""
     assert _is_fully_escaped(esc(text))
 
 

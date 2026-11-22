@@ -21,7 +21,7 @@ from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.identity import is_anon_admin
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply
+from tcbot.modules.helper.messages import replies, reply_rich
 from tcbot.modules.helper.pipelines.connected_flow import connection
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
@@ -95,7 +95,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * supergroup). A channel has no member list to moderate, so it is
     # * refused before any Telegram or database work.
     if chat.type not in ("group", "supergroup"):
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_group_only(locale, plain=True),
             log_label="cmd_tctc group-only",
@@ -108,7 +108,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * the main group already hosts moderation commands as the primary
     # * origin, and the others are record-keeping destinations.
     if cfg.is_infrastructure_chat(chat.id):
-        await safe_reply(
+        await reply_rich(
             msg,
             t("connecting.state.infrastructure_chat", locale, plain=True),
             log_label="cmd_tctc infrastructure",
@@ -124,7 +124,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * no real account, so the request cannot be attributed; tell the
         # * admin how to send it from their own account instead of calling
         # * them a non-admin.
-        await safe_reply(
+        await reply_rich(
             msg,
             t("connecting.state.anon_admin", locale, plain=True),
             log_label="cmd_tctc anon-admin",
@@ -150,7 +150,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     throw_if_cancelled((member, is_connected, pending, bot_member))
     if isinstance(member, BaseException):
         log.debug("get_chat_member failed for %d/%d: %s", chat.id, user.id, member)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
             log_label="cmd_tctc role-verify",
@@ -159,7 +159,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if member.status not in ("administrator", "creator"):
-        await safe_reply(
+        await reply_rich(
             msg,
             t("connecting.state.admin_required", locale, plain=True),
             log_label="cmd_tctc admin-required",
@@ -171,7 +171,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * groups; connecting them would add an ID to the connected-group
     # * registry that the fan-out paths include anyway.
     if cfg.is_primary_group(chat.id):
-        await safe_reply(
+        await reply_rich(
             msg,
             t("connecting.state.primary_group", locale, plain=True),
             log_label="cmd_tctc primary-group",
@@ -184,7 +184,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * must not coerce them to False/None and proceed to complete_join.
     if isinstance(is_connected, BaseException):
         log.warning("is_connected check failed for chat %d: %s", chat.id, is_connected)
-        await safe_reply(
+        await reply_rich(
             msg,
             t("connecting.state.connect_failed", locale, plain=True),
             log_label="cmd_tctc status-failed",
@@ -193,7 +193,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if isinstance(pending, BaseException):
         log.warning("get_pending check failed for chat %d: %s", chat.id, pending)
-        await safe_reply(
+        await reply_rich(
             msg,
             t("connecting.state.connect_failed", locale, plain=True),
             log_label="cmd_tctc pending-failed",
@@ -202,7 +202,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if is_connected:
-        await safe_reply(
+        await reply_rich(
             msg,
             connection.already_connected_message(locale),
             log_label="cmd_tctc already-connected",
@@ -211,7 +211,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if pending:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("connecting.state.pending_request", locale, plain=True),
             log_label="cmd_tctc pending-request",
@@ -221,7 +221,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if isinstance(bot_member, BaseException):
         log.debug("Could not verify bot permissions for %d: %s", chat.id, bot_member)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
             log_label="cmd_tctc perms-verify",
@@ -230,7 +230,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if not connection.check_perms(bot_member):
-        await safe_reply(
+        await reply_rich(
             msg,
             connection.perms_required_message(locale),
             log_label="cmd_tctc perms-required",
@@ -248,7 +248,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
     except Exception:
         log.exception("complete_join failed for chat %d", chat.id)
-        await safe_reply(
+        await reply_rich(
             msg,
             t("connecting.state.connect_failed", locale, plain=True),
             log_label="connect failure",
@@ -257,7 +257,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     # * A blind replay ran without ban/mute data: say so instead of
     # * confirming success, so the owner re-syncs instead of trusting a gap.
-    await safe_reply(
+    await reply_rich(
         msg,
         connection.connected_blind_message(locale)
         if blind

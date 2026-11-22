@@ -14,11 +14,10 @@ from tcbot import database as db
 from tcbot.database import documents as docs
 from tcbot.modules.helper import guards, messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_reply, send_log
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import reply_rich, send_log
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -68,7 +67,7 @@ async def execute_unban(
         except Exception:
             log.exception("get_active_ban failed during unban of %d", target_id)
             if msg is not None:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     t(
                         "unbanning.note.read_fail",
@@ -81,7 +80,7 @@ async def execute_unban(
 
     if not ban:
         if msg is not None:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "unbanning.note.no_record",
@@ -106,7 +105,7 @@ async def execute_unban(
     except Exception:
         log.exception("active_groups failed during unban of %d", target_id)
         if msg is not None:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "unbanning.note.groups_fail",
@@ -140,7 +139,7 @@ async def execute_unban(
         )
         if refusal is not None:
             if msg is not None:
-                await safe_reply(
+                await reply_rich(
                     msg,
                     refusal,
                     log_label="Unban rank-refusal",
@@ -166,7 +165,7 @@ async def execute_unban(
             target_id,
         )
         if msg is not None:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "unbanning.note.db_fail",
@@ -181,7 +180,7 @@ async def execute_unban(
         # * Reporting "no record" is idempotent and does not claim a new
         # * change that this call did not make.
         if msg is not None:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 t(
                     "unbanning.note.no_record",
@@ -266,7 +265,7 @@ async def execute_unban(
                 log_text,
             ),
             msg.reply_text(
-                apply_style(
+                style(
                     t(
                         "unbanning.summary.body",
                         locale,
@@ -274,7 +273,7 @@ async def execute_unban(
                         note=Safe(unban_note),
                     )
                 ),
-                parse_mode="MarkdownV2",
+                parse_mode=None,
             ),
             return_exceptions=True,
         )

@@ -12,7 +12,7 @@ from telegram.constants import KeyboardButtonStyle
 from tcbot.utils.i18n import t
 
 
-def language_list_kb(
+def language_list_btn(
     scope: str,
     items: list[tuple[str, str]],
     *,

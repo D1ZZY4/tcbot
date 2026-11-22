@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, targets
-from tcbot.modules.helper.messages import replies, safe_reply
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import replies, reply_rich
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.kick_flow import kick_conversation, proof, reason
 from tcbot.modules.helper.pipelines.reason_flow import (
     WAITING_PROOF,
@@ -22,8 +22,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
     reason_too_long_text,
 )
 from tcbot.modules.helper.scope import flow_scope
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -110,7 +109,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * Fail fast on overlong inline reasons with the shared cap and text,
     # * before any role I/O or demote work.
     if inline_reason and is_reason_too_long(inline_reason):
-        await safe_reply(
+        await reply_rich(
             msg,
             reason_too_long_text(len(inline_reason), locale),
             log_label="cmd_kick reason-too-long",
@@ -138,12 +137,12 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         scope["kick_reason"] = inline_reason
         try:
             prompt = await msg.reply_text(
-                apply_style(
+                style(
                     proof.noted_prompt(
                         "kick", inline_reason, target_mention, locale=locale
                     )
                 ),
-                parse_mode="MarkdownV2",
+                parse_mode=None,
                 reply_markup=proof.keyboard(locale),
             )
             scope["kick_prompt_id"] = prompt.message_id
@@ -156,8 +155,8 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         prompt = await msg.reply_text(
-            apply_style(reason.prompt(target_mention, "kick", locale=locale)),
-            parse_mode="MarkdownV2",
+            style(reason.prompt(target_mention, "kick", locale=locale)),
+            parse_mode=None,
             reply_markup=reason.keyboard(locale),
         )
         scope["kick_prompt_id"] = prompt.message_id

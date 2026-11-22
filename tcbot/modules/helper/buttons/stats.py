@@ -9,11 +9,11 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.keyboards.common import back_markup
+from tcbot.modules.helper.buttons.common import back_markup
 from tcbot.utils.i18n import t
 
 
-def stats_main_kb(
+def stats_main_btn(
     *,
     show_users: bool = False,
     show_staff: bool = False,
@@ -64,6 +64,6 @@ def stats_main_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def stats_back_kb(locale: str | None = None) -> InlineKeyboardMarkup:
+def stats_back_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Single Back button returning to the stats main menu."""
     return back_markup("stats_main", locale)

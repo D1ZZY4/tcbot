@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Promotion and demotion keyboards."""
+"""Promotion and demotion buttons."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from tcbot import database as db
 from tcbot.utils.i18n import t
 
 
-def promote_role_kb(
+def promote_role_btn(
     target_id: int,
     available_roles: list[str],
     locale: str | None = None,
@@ -61,7 +61,7 @@ def promote_role_kb(
     return InlineKeyboardMarkup(rows)
 
 
-def demote_confirm_kb(
+def demote_confirm_btn(
     target_id: int, locale: str | None = None, executor_id: int | None = None
 ) -> InlineKeyboardMarkup:
     """Demotion confirmation: Confirm plus Cancel.
@@ -98,7 +98,7 @@ def demote_confirm_kb(
     )
 
 
-def promo_decision_kb(
+def promo_decision_btn(
     request_id: str, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Approve/Reject keyboard for promotion review cards."""

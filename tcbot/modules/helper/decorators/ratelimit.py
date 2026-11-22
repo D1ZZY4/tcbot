@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_reply
+from tcbot.modules.helper.messages import replies, reply_rich
 from tcbot.utils.time_and_date import monotonic
 
 if TYPE_CHECKING:
@@ -305,7 +305,7 @@ async def global_rate_limit_handler(
     wait = await limiter.check(uid)
     if wait:
         if msg:
-            await safe_reply(
+            await reply_rich(
                 msg,
                 replies.rate_limit_text(
                     wait, await locale_for_update(update), plain=True
@@ -370,7 +370,7 @@ def ratelimiter[R](
                             log.debug("Callback rate-limit answer failed: %s", exc)
                         return None
                     if update.effective_message:
-                        await safe_reply(
+                        await reply_rich(
                             update.effective_message,
                             replies.rate_limit_text(
                                 wait, await locale_for_update(update), plain=True

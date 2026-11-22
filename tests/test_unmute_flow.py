@@ -16,8 +16,7 @@ from tcbot import database as db
 from tcbot import enforcement_worker
 from tcbot.modules.helper.messages import replies
 from tcbot.modules.helper.pipelines import mute_flow
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 
 
 class _FakeMsg:

@@ -16,8 +16,7 @@ import pytest
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import mute_flow
 from tcbot.modules.helper.pipelines.mute_flow import execute_unmute
-from tcbot.utils.formatter import user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, t, user_ref
 
 
 class _FakeBot:

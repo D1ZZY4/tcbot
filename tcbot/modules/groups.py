@@ -18,9 +18,9 @@ from tcbot.utils.logger import get_logger
 if TYPE_CHECKING:
     from telegram import Update
 from tcbot.modules.helper import decorators
-from tcbot.modules.helper.keyboards import tcgroups_kb
+from tcbot.modules.helper.buttons import tcgroups_btn
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import render_groups, replies, safe_edit, safe_reply
+from tcbot.modules.helper.messages import render_groups, replies, reply_rich, safe_edit
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -66,7 +66,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         groups = await db.groups_db.active_groups()
     except Exception:
         log.exception("active_groups failed during tcgroups")
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_groups_load_failed(locale, plain=True),
             log_label="tcgroups groups-failed",
@@ -74,7 +74,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if not groups:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("groups.menu.empty", locale, community=cfg.community_name, plain=True),
             log_label="tcgroups no-groups",
@@ -82,11 +82,11 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    await safe_reply(
+    await reply_rich(
         msg,
         render_groups(groups, detailed=False, locale=locale),
         log_label="tcgroups list",
-        reply_markup=tcgroups_kb(detailed=False, locale=locale),
+        reply_markup=tcgroups_btn(detailed=False, locale=locale),
     )
 
 
@@ -124,14 +124,14 @@ async def _toggle(
         await safe_edit(
             cbq_msg,  # type: ignore[arg-type]
             replies.err_groups_load_failed(locale, plain=False),
-            reply_markup=tcgroups_kb(detailed=detailed, locale=locale),
+            reply_markup=tcgroups_btn(detailed=detailed, locale=locale),
         )
         return
     groups = groups_r
     await safe_edit(
         cbq_msg,  # type: ignore[arg-type]
         render_groups(groups, detailed=detailed, locale=locale),
-        reply_markup=tcgroups_kb(detailed=detailed, locale=locale),
+        reply_markup=tcgroups_btn(detailed=detailed, locale=locale),
     )
 
 

@@ -15,10 +15,10 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import decorators, targets
-from tcbot.modules.helper.keyboards import ban_update_confirm_kb
+from tcbot.modules.helper.buttons import ban_update_confirm_btn
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import message_link, replies, safe_reply
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import message_link, replies, reply_rich
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.ban_flow import (
     BAN_USER_DATA_KEYS,
     WAITING_UPDATE_CONFIRM,
@@ -34,8 +34,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
     reason_too_long_text,
 )
 from tcbot.modules.helper.scope import flow_scope
-from tcbot.utils.formatter import code, user_ref
-from tcbot.utils.i18n import Safe, t
+from tcbot.utils.i18n import Safe, code, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -117,7 +116,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     )
 
     if not ban_reason:
-        await safe_reply(
+        await reply_rich(
             msg,
             t("banning.error.reason_required", locale, plain=True),
             log_label="cmd_ban_start no-reason",
@@ -128,7 +127,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * Fail fast on overlong inline reasons with the same cap and text as
     # * the typed-reason path, before any role I/O or demote work.
     if is_reason_too_long(ban_reason):
-        await safe_reply(
+        await reply_rich(
             msg,
             reason_too_long_text(len(ban_reason), locale),
             log_label="cmd_ban_start reason-too-long",
@@ -154,7 +153,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         raise
     except Exception:
         log.exception("cmd_ban_start active-ban lookup failed for target=%d", target_id)
-        await safe_reply(
+        await reply_rich(
             msg,
             replies.err_db_retry(locale, plain=True),
             log_label="cmd_ban_start lookup-failed",
@@ -209,7 +208,7 @@ async def _ask_update_confirm(
     proofs_chat, proofs_thread = cfg.proofs
     log_msg_id = int(existing.get("log_message_id", 0) or 0)
     proof_msg_id = int(existing.get("proof_message_id", 0) or 0)
-    kb = ban_update_confirm_kb(
+    kb = ban_update_confirm_btn(
         message_link(logs_chat, log_msg_id, logs_thread) if log_msg_id else None,
         message_link(proofs_chat, proof_msg_id, proofs_thread)
         if proof_msg_id
@@ -226,9 +225,7 @@ async def _ask_update_confirm(
     )
     scope = flow_scope(ctx, update)
     try:
-        prompt = await msg.reply_text(
-            apply_style(text), parse_mode="MarkdownV2", reply_markup=kb
-        )
+        prompt = await msg.reply_text(style(text), parse_mode=None, reply_markup=kb)
         scope["ban_prompt_msg_id"] = prompt.message_id
         scope["ban_prompt_chat_id"] = msg.chat.id
     except Exception as exc:

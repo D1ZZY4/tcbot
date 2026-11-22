@@ -23,10 +23,10 @@ from telegram.ext import (
 )
 
 from tcbot import database as db
-from tcbot.modules.helper.keyboards import rules as rules_kb
+from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import safe_reply
-from tcbot.modules.helper.messages.rich import apply_style
+from tcbot.modules.helper.messages import reply_rich
+from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines import rules_step
 from tcbot.modules.helper.pipelines.ban_confirmation import stale_ban_callback
 from tcbot.modules.helper.pipelines.ban_flow import (
@@ -64,18 +64,18 @@ async def _render(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if q is not None:
         try:
             await q.edit_message_text(
-                apply_style(rules_step.picker_text(items, selected, locale)),
-                parse_mode="MarkdownV2",
-                reply_markup=rules_kb.picker_kb(items, selected, locale),
+                style(rules_step.picker_text(items, selected, locale)),
+                parse_mode=None,
+                reply_markup=rules_btn.picker_btn(items, selected, locale),
             )
         except Exception as exc:
             log.debug("Ban rules picker edit failed: %s", exc)
     elif update.effective_message is not None:
         try:
             await update.effective_message.reply_text(
-                apply_style(rules_step.picker_text(items, selected, locale)),
-                parse_mode="MarkdownV2",
-                reply_markup=rules_kb.picker_kb(items, selected, locale),
+                style(rules_step.picker_text(items, selected, locale)),
+                parse_mode=None,
+                reply_markup=rules_btn.picker_btn(items, selected, locale),
             )
         except Exception as exc:
             log.debug("Ban rules picker reply failed: %s", exc)
@@ -99,22 +99,20 @@ async def show_ban_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def _show_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     scope = flow_scope(ctx, update)
-    text, kb = proof_prompt_content(
+    text, btn = proof_prompt_content(
         int(scope.get("ban_target_id", 0) or 0),
         str(scope.get("ban_target_fname") or ""),
         str(scope.get("ban_reason") or ""),
         scope.get("ban_locale"),
     )
-    markup: InlineKeyboardMarkup = kb
+    markup: InlineKeyboardMarkup = btn
     q = update.callback_query
     try:
         if q is not None:
-            await q.edit_message_text(
-                apply_style(text), parse_mode="MarkdownV2", reply_markup=markup
-            )
+            await q.edit_message_text(style(text), parse_mode=None, reply_markup=markup)
         elif update.effective_message is not None:
             sent = await update.effective_message.reply_text(
-                apply_style(text), parse_mode="MarkdownV2", reply_markup=markup
+                style(text), parse_mode=None, reply_markup=markup
             )
             scope["ban_prompt_msg_id"] = sent.message_id
             scope["ban_prompt_chat_id"] = update.effective_message.chat.id
@@ -192,7 +190,7 @@ async def on_ban_rules_other(
         return None
     await q.answer()
     if update.effective_message is not None:
-        await safe_reply(
+        await reply_rich(
             update.effective_message,
             t("rules.picker.ask_note", await locale_for_update(update), plain=True),
             parse_mode=None,
@@ -207,7 +205,7 @@ async def on_ban_rules_note(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
         return WAITING_BAN_RULES_NOTE
     note = msg.text.strip()
     if not note or len(note) > MAX_RULES_NOTE_LEN:
-        await safe_reply(
+        await reply_rich(
             msg,
             t(
                 "rules.picker.bad_note",
