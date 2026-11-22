@@ -6,7 +6,7 @@
 overview = "Removes a user from the *current group only*. Demotes staff targets."
 
 [help.commands]
-body = "`/tckick` (alias: `/tck`)"
+body = "`/tckick` `/tck`"
 
 [help.what]
 body = """

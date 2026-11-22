@@ -17,7 +17,6 @@ from tcbot.modules.helper import decorators, messages
 from tcbot.modules.helper.identity import can_manage_group, is_anon_admin
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, send_log
-from tcbot.modules.helper.messages.rich_text import style
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, t
 from tcbot.utils.logger import get_logger
@@ -252,16 +251,14 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 ),
             ),
             ctx.bot.leave_chat(chat_id),
-            msg.reply_text(
-                style(
-                    t(
-                        "disconnecting.removed.body",
-                        locale,
-                        id=Safe(code(str(chat_id))),
-                        community=cfg.community_name,
-                    )
+            reply_rich(
+                msg,
+                t(
+                    "disconnecting.removed.body",
+                    locale,
+                    id=Safe(code(str(chat_id))),
+                    community=cfg.community_name,
                 ),
-                parse_mode=None,
             ),
             return_exceptions=True,
         )

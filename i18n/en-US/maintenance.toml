@@ -7,10 +7,11 @@ overview = "Manage connected groups: clean up inaccessible ones, or leave all gr
 
 [help.commands]
 body = """
-`/leaveall` (aliases: `/exitall`, `/tcleave`)
-`/cleanup` (aliases: `/tcclean`, `/tcc`)
-`/tcrepair` (alias: `/tcr`) or `/tcrepair retry` <run_id> [chat_id]
-`/tcforget` (alias: `/tcf`) <user_id> <reason>"""
+`/leaveall` `/exitall` `/tcleave`
+`/cleanup` `/tcclean` `/tcc`
+`/tcrepair` `/tcr`
+`/tcrepair retry` <run_id> [chat_id]
+`/tcforget` `/tcf` <user_id> <reason>"""
 
 [help.leaveall]
 body = "Makes the bot leave every connected group simultaneously, marks them all as disconnected in the database, and posts a log entry for each group. This is irreversible - each group must be manually reconnected with `/tcconnect`. Use only in emergencies."

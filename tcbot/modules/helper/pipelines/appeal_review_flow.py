@@ -18,8 +18,14 @@ from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.modules.helper import guards, messages
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
-from tcbot.modules.helper.messages import answer_ack, cb_error_edit, send_log
-from tcbot.modules.helper.messages.rich_text import style
+from tcbot.modules.helper.messages import (
+    answer_ack,
+    cb_error_edit,
+    safe_edit_cb,
+    safe_edit_message,
+    send_log,
+    send_text,
+)
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, t, user_ref
@@ -61,12 +67,7 @@ async def _update_or_send_log(bot: Bot, lc: int, msg_id: int | None, text: str) 
     """Edit the existing appeal log message, or post a new one as fallback."""
     if msg_id:
         try:
-            await bot.edit_message_text(
-                style(text),
-                chat_id=lc,
-                message_id=msg_id,
-                parse_mode=None,
-            )
+            await safe_edit_message(bot, lc, msg_id, text)
             return
         except Exception as exc:
             log.warning("Could not edit appeal submitted log: %s", exc)
@@ -280,27 +281,23 @@ class ApproveMixin:
         # * only the target's own locale needs a second lookup.
         target_locale = await locale_for_user(target_id)
         dm_r, card_r, log_r, unban_log_r = await asyncio.gather(
-            bot.send_message(
+            send_text(
+                bot,
                 target_id,
-                style(
-                    t(
-                        "appeals.decision.approve_dm",
-                        target_locale,
-                        ban_id=Safe(code(ban_id)),
-                        community=self.community_name,
-                    )
+                t(
+                    "appeals.decision.approve_dm",
+                    target_locale,
+                    ban_id=Safe(code(ban_id)),
+                    community=self.community_name,
                 ),
-                parse_mode=None,
             ),
-            q.edit_message_text(
-                style(
-                    t(
-                        "appeals.decision.approve_card",
-                        locale,
-                        admin=Safe(user_ref(admin.id, admin.first_name)),
-                    )
+            safe_edit_cb(
+                q,
+                t(
+                    "appeals.decision.approve_card",
+                    locale,
+                    admin=Safe(user_ref(admin.id, admin.first_name)),
                 ),
-                parse_mode=None,
                 reply_markup=None,
             ),
             _update_or_send_log(
@@ -441,15 +438,13 @@ class RejectMixin:
             log.debug("reject_appeal name fetch failed: %s", name_r)
         target_locale = await locale_for_user(target_id)
         try:
-            await q.edit_message_text(
-                style(
-                    t(
-                        "appeals.decision.reject_card",
-                        staff_locale,
-                        admin=Safe(user_ref(admin.id, admin.first_name)),
-                    )
+            await safe_edit_cb(
+                q,
+                t(
+                    "appeals.decision.reject_card",
+                    staff_locale,
+                    admin=Safe(user_ref(admin.id, admin.first_name)),
                 ),
-                parse_mode=None,
                 reply_markup=None,
             )
         except asyncio.CancelledError:
@@ -465,16 +460,14 @@ class RejectMixin:
                     action_id, cfg.main_group, review_id
                 )
         try:
-            await bot.send_message(
+            await send_text(
+                bot,
                 target_id,
-                style(
-                    t(
-                        "appeals.decision.reject_dm",
-                        target_locale,
-                        ban_id=Safe(code(ban_id)),
-                    )
+                t(
+                    "appeals.decision.reject_dm",
+                    target_locale,
+                    ban_id=Safe(code(ban_id)),
                 ),
-                parse_mode=None,
             )
         except asyncio.CancelledError:
             raise

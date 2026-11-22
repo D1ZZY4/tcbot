@@ -22,7 +22,6 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     send_log,
 )
-from tcbot.modules.helper.messages.rich_text import style
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
@@ -218,10 +217,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             ctx.bot,
             log_text,
         ),
-        msg.reply_text(
-            style(transfer_note),
-            parse_mode=None,
-        ),
+        reply_rich(msg, transfer_note),
         return_exceptions=True,
     )
     throw_if_cancelled((transfer_log_r, transfer_reply_r))

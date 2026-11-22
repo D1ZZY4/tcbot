@@ -26,8 +26,13 @@ from tcbot.modules.helper.buttons import reason_step_btn
 from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.extraction import parse_user_id_token
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, reply_rich
-from tcbot.modules.helper.messages.rich_text import style
+from tcbot.modules.helper.messages import (
+    replies,
+    reply_rich,
+    reply_rich_result,
+    safe_edit_cb,
+    safe_edit_message,
+)
 from tcbot.modules.helper.pipelines import rules_step
 from tcbot.modules.helper.pipelines.proof_flow import (
     PROOF_MEDIA_FILTER,
@@ -203,21 +208,16 @@ class _FlowBase:
         scope = flow_scope(ctx, update)
         chat_id = scope.get(self._prompt_chat_key)
         message_id = scope.get(self._prompt_id_key)
-        styled = style(text)
         try:
             if chat_id is not None and message_id is not None:
-                await ctx.bot.edit_message_text(
-                    styled,
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    parse_mode=None,
-                    reply_markup=markup,
+                await safe_edit_message(
+                    ctx.bot, chat_id, message_id, text, reply_markup=markup
                 )
             else:
                 msg = update.effective_message
                 if msg is None:
                     return False
-                await msg.reply_text(styled, parse_mode=None, reply_markup=markup)
+                await reply_rich_result(msg, text, reply_markup=markup)
             return True
         except Exception as exc:
             log.debug("%s prompt edit failed: %s", self.action, exc)
@@ -523,9 +523,9 @@ class _ReasonStepMixin(_FlowBase):
         )
         results = await asyncio.gather(
             q.answer(),
-            q.edit_message_text(
-                style(prompt_txt),
-                parse_mode=None,
+            safe_edit_cb(
+                q,
+                prompt_txt,
                 reply_markup=self.proof.keyboard(locale),
             ),
             return_exceptions=True,
@@ -792,6 +792,8 @@ class _ModActionFlow(_ReasonStepMixin, _RulesStepMixin, _ProofStepMixin, _FlowBa
                 MessageHandler(
                     filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, self._on_rules_note_text
                 ),
+                # * The picker's Cancel button stays visible after "Other".
+                CallbackQueryHandler(self._on_cancel, pattern=r"^rules_step:cancel$"),
                 CallbackQueryHandler(
                     self._on_cancel, pattern=rf"^{self.action}_cancel$"
                 ),

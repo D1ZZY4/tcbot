@@ -37,7 +37,7 @@ whose `CallbackQueryHandler` pattern matches it.
 | `ban_continue` | `buttons/ban.py::ban_confirm_btn` | `ban_confirmation.py` with `^ban_continue$`. |
 | `ban_done_proof` | `buttons/flows.py::proof_step_btn` | `ban_flow.py` with `^ban_done_proof$`. |
 | `rules_step:pick:<id>` | `buttons/rules.py::picker_btn` | `ban_rules_step.py` and `reason_flow.py`. |
-| `rules_step:done`, `other`, `clear`, `cancel` | `buttons/rules.py::picker_btn` | `ban_rules_step.py`, `reason_flow.py`, and the rules editor fallback. |
+| `rules_step:done`, `other`, `clear`, `cancel` | `buttons/rules.py::picker_btn` | `ban_rules_step.py` and `reason_flow.py`. The rules editor fallback handles `rules_step:cancel` only. |
 
 `buttons/ban.py` also builds URL-only buttons with no `callback_data`:
 `action_proof_btn`, `appeal_button_btn`, `join_ban_btn`, `detail_btn`.
@@ -48,7 +48,7 @@ whose `CallbackQueryHandler` pattern matches it.
 |---|---|
 | `<action>_cancel` for `kick`, `mute`, `warn` | `reason_flow.py` with `^<action>_cancel$`. |
 | `<action>_skip_reason` | Registered only when `skip_allowed`; all three consumers use `False`, so it is not emitted. |
-| `<action>_skip_proof` | Registered unconditionally; the three consumers use `skip_allowed=False`, so it is not rendered. |
+| `<action>_skip_proof` | Emitted by `proof_step_btn` for kick, mute, and warn (default `skip_allowed=True`) and handled by `reason_flow.py`; suppressed only for ban. |
 | `<action>_done_proof` | `reason_flow.py` with `^<action>_done_proof$`. |
 | `rules_step:*` | `reason_flow.py` in `WAITING_RULES` and its fallback. |
 
@@ -105,7 +105,7 @@ two-part shapes remain valid.
 | `about_menu`, `additional_menu` | `about.py`, `additional.py`. |
 | `help_menu`, `help_menu_group`, `helpc_main`, `help_<module>`, `helpc_<module>`, `helps_<module>:<index>`, `helpcs_<module>:<index>` | `help.py`. |
 | `privacy_menu`, `privacy_policy_menu`, `privacy_section_<n>` | `privacy.py`. |
-| `back_to_start`, `menu_groups`, `menu_groups_simple`, `menu_groups_details` | `start.py`. |
+| `back_to_start`, `close_msg`, `menu_groups`, `menu_groups_simple`, `menu_groups_details` | `start.py`. |
 | `groups_details`, `groups_simple` | `groups.py`. |
 | `language_menu`, `lang:list:(user|group)`, `lang:set:<scope>:<code>` | `language.py`. |
 

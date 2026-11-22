@@ -29,21 +29,24 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-__module_name__ = None
+__module_name__ = "Rules"
 
 
 def get_help(locale: str | None = None) -> replies.HelpEntry:
     """Return the help entry of the rules module."""
     return replies.module_help(
         locale,
-        name=t("button.rules", locale, plain=True),
-        overview=t("rules.menu.body", locale, community=cfg.community_name),
-        commands="/tcrules, /rules",
+        name=__module_name__,
+        overview=t("rules.help.overview", locale),
+        commands=t("rules.help.commands.body", locale),
         who=replies.perm_staff_only(locale, plain=False),
-        where=t("common.context.bot_or_group", locale),
-        what=t("rules.menu.rules", locale),
+        where=replies.context_bot_or_group(locale),
+        what=t("rules.help.what.body", locale),
         target=False,
     )
+
+
+__help__: replies.HelpEntry = get_help()
 
 
 # ─────────────────────────── Commands ─────────────────────────── #
@@ -137,7 +140,7 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     locale = await locale_for_update(update)
     text = rules_msg.category_view(str(category), items, locale)
-    markup = rules_btn.category_back_btn()
+    markup = rules_btn.category_back_btn(locale)
     message = query.message
     if message is not None and getattr(message, "chat", None) is not None:
         try:

@@ -16,8 +16,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.locale import locale_for_user
-from tcbot.modules.helper.messages import send_log
-from tcbot.modules.helper.messages.rich_text import style
+from tcbot.modules.helper.messages import send_log, send_text
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, t
 from tcbot.utils.logger import get_logger
@@ -156,12 +155,8 @@ class Demote:
                 name=executor_fname,
             )
         else:
-            if trigger == "ban":
-                verb = "banned"
-            elif trigger == "mute":
-                verb = "muted"
-            else:
-                verb = "kicked"
+            verb_key = trigger if trigger in {"ban", "kick", "mute"} else "kick"
+            verb = t(f"dm.verb.{verb_key}", target_locale, plain=True)
             user_msg = t(
                 "demote.dm.auto",
                 target_locale,
@@ -175,7 +170,7 @@ class Demote:
                 bot,
                 log_text,
             ),
-            bot.send_message(target_id, style(user_msg), parse_mode=None),
+            send_text(bot, target_id, user_msg),
             return_exceptions=True,
         )
         throw_if_cancelled((log_result, dm_result))

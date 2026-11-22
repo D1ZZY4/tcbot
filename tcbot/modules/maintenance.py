@@ -18,7 +18,13 @@ from tcbot.database.documents import GroupDoc
 from tcbot.database.types import as_int
 from tcbot.modules.helper import decorators, messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, reply_rich, send_log
+from tcbot.modules.helper.messages import (
+    replies,
+    reply_rich,
+    reply_rich_result,
+    safe_edit,
+    send_log,
+)
 from tcbot.utils.dispatch import fan_out, gather_bounded, throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, t
 from tcbot.utils.logger import get_logger
@@ -207,9 +213,9 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         # * this bot-owned message. Editing the user's command message would
         # * always fail (bots cannot edit messages sent by others).
         try:
-            status = await status_msg.reply_text(
-                t("maintenance.status.sending", locale, n=len(groups)),
-                parse_mode=None,
+            status = await reply_rich_result(
+                status_msg,
+                t("maintenance.status.sending", locale, n=len(groups), plain=True),
             )
         except Exception as exc:
             log.debug("leaveall status reply failed: %s", exc)
@@ -242,7 +248,8 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if log_failed:
             detail += t("maintenance.leaveall.log_failed", locale, n=log_failed)
         try:
-            await status.edit_text(
+            await safe_edit(
+                status,
                 t(
                     "maintenance.leaveall.done",
                     locale,
@@ -250,7 +257,6 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     failed=Safe(code(str(failed))),
                     detail=Safe(detail),
                 ),
-                parse_mode=None,
             )
         except Exception:
             log.exception("Leaveall status edit failed")

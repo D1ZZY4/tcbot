@@ -19,6 +19,7 @@ from telegram import Bot
 from telegram.error import BadRequest
 
 from tcbot import cfg
+from tcbot.modules.helper.messages.rich_format import divider
 from tcbot.modules.helper.messages.rich_link import _markup_dict, keyboard_rows
 from tcbot.modules.helper.messages.rich_msg import html_message, send_rich
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -44,7 +45,10 @@ def _message_with_buttons(
     if not rows or not isinstance(html_value, str):
         return message, False
     payload = dict(message)
-    payload["html"] = "\n".join([html_value, *rows])
+    # * A rule separates content from the keyboard so the last line never
+    # * sits flush against the buttons. An existing trailing rule is kept.
+    separator = [] if html_value.rstrip().endswith("<hr/>") else [divider()]
+    payload["html"] = "\n".join([html_value, *separator, *rows])
     return payload, True
 
 
@@ -56,23 +60,26 @@ async def edit_rich(
     *,
     reply_markup: Any | None = None,
 ) -> Message:
-    """Edit a message's rich content."""
-    from telegram import Message as MessageType  # noqa: PLC0415 (heavy import on use)
+    """Edit a message's rich content.
 
-    if not hasattr(bot, "do_api_request"):
-        raise RuntimeError("rich edit needs a Bot with do_api_request support")
+    PTB exposes ``editMessageText`` natively, so the rich payload is passed
+    through ``api_kwargs`` instead of the generic ``do_api_request`` escape
+    hatch. ``text`` is required by PTB's signature but omitted from the
+    request: the Bot API requires *rich_message* when *text* is absent.
+    """
+    if not hasattr(bot, "edit_message_text"):
+        raise RuntimeError("rich edit needs a Bot with edit_message_text support")
 
     payload, embedded = _message_with_buttons(message, reply_markup)
-    api_kwargs: dict[str, Any] = {
-        "chat_id": chat_id,
-        "message_id": message_id,
-        "rich_message": payload,
-    }
+    api_kwargs: dict[str, Any] = {"rich_message": payload, "text": None}
     markup = _markup_dict(reply_markup)
     if markup is not None and not embedded:
         api_kwargs["reply_markup"] = markup
-    return await bot.do_api_request(
-        "editMessageText", api_kwargs=api_kwargs, return_type=MessageType
+    return await bot.edit_message_text(
+        text=None,  # type: ignore[arg-type]
+        chat_id=chat_id,
+        message_id=message_id,
+        api_kwargs=api_kwargs,
     )
 
 

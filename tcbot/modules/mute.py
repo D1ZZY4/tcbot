@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot.modules.helper import decorators, extraction, targets
-from tcbot.modules.helper.messages import replies, reply_rich
-from tcbot.modules.helper.messages.rich_text import style
+from tcbot.modules.helper.messages import replies, reply_rich, reply_rich_result
 from tcbot.modules.helper.pipelines.mute_flow import (
     execute_unmute,
     mute_conversation,
@@ -190,17 +189,15 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if inline_reason:
         scope["mute_reason"] = inline_reason
         try:
-            prompt = await msg.reply_text(
-                style(
-                    proof.noted_prompt(
-                        "mute",
-                        inline_reason,
-                        target_mention,
-                        extra_info=extra_info,
-                        locale=locale,
-                    )
+            prompt = await reply_rich_result(
+                msg,
+                proof.noted_prompt(
+                    "mute",
+                    inline_reason,
+                    target_mention,
+                    extra_info=extra_info,
+                    locale=locale,
                 ),
-                parse_mode=None,
                 reply_markup=proof.keyboard(locale),
             )
             scope["mute_prompt_id"] = prompt.message_id
@@ -212,13 +209,9 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return WAITING_PROOF
 
     try:
-        prompt = await msg.reply_text(
-            style(
-                reason.prompt(
-                    target_mention, "mute", extra_info=extra_info, locale=locale
-                )
-            ),
-            parse_mode=None,
+        prompt = await reply_rich_result(
+            msg,
+            reason.prompt(target_mention, "mute", extra_info=extra_info, locale=locale),
             reply_markup=reason.keyboard(locale),
         )
         scope["mute_prompt_id"] = prompt.message_id

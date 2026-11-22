@@ -112,6 +112,12 @@ class RulesEditor:
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
     ) -> tuple[dict[str, Any], dict[str, Any]] | None:
         """Ensure a community set and open its working draft."""
+        # * A capability can be revoked while the editor conversation stays
+        # * open. Every path that reaches this draft-opening write must
+        # * re-check, not just the panel entry point.
+        if not await editor_allowed(update):
+            await refuse_editor(update)
+            return None
         scope = flow_scope(ctx, update)
         set_doc = scope.get("rules_set")
         if set_doc is None:
@@ -180,16 +186,13 @@ class RulesEditor:
         if action == "rules_cat_rename":
             scope["rules_category_key"] = key
             scope["rules_step"] = "rename_category"
-            if q.message is not None:
-                await reply_rich(
-                    cast("Any", q.message),
-                    t(
-                        "rules.editor.ask_rename",
-                        await self._locale(update),
-                        plain=True,
-                    ),
-                    parse_mode=None,
-                )
+            # * A callback prompt edits the tapped message; a fresh reply
+            # * would strand the category keyboard above a new question.
+            await self._edit_or_reply(
+                update,
+                t("rules.editor.ask_rename", await self._locale(update), plain=True),
+                rules_btn.prompt_btn("rules_categories", await self._locale(update)),
+            )
             return WAITING_EDITOR_MENU
         if action == "rules_cat_up":
             await db.rules_db.move_category(set_id, key, -1)
@@ -430,13 +433,12 @@ class RulesEditor:
         if q is not None:
             await q.answer()
         flow_scope(ctx, update)["rules_step"] = "category_title"
-        msg = update.effective_message
-        if msg is not None:
-            await reply_rich(
-                msg,
-                t("rules.editor.ask_category", await self._locale(update), plain=True),
-                parse_mode=None,
-            )
+        locale = await self._locale(update)
+        await self._edit_or_reply(
+            update,
+            t("rules.editor.ask_category", locale, plain=True),
+            rules_btn.prompt_btn("rules_panel", locale),
+        )
         return WAITING_EDITOR_MENU
 
     async def ask_item_title(
@@ -448,13 +450,12 @@ class RulesEditor:
             await q.answer()
         scope = flow_scope(ctx, update)
         scope["rules_step"] = "item_title"
-        msg = update.effective_message
-        if msg is not None:
-            await reply_rich(
-                msg,
-                t("rules.editor.ask_title", await self._locale(update), plain=True),
-                parse_mode=None,
-            )
+        locale = await self._locale(update)
+        await self._edit_or_reply(
+            update,
+            t("rules.editor.ask_title", locale, plain=True),
+            rules_btn.prompt_btn("rules_categories", locale),
+        )
         return WAITING_EDITOR_MENU
 
     async def preview(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:

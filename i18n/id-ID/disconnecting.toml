@@ -7,7 +7,7 @@ overview = "Menghapus grup dari {community}. Pakai `/tcdisconnect` dari dalam gr
 
 [help.commands]
 body = """
-`/tcdisconnect` (alias: `/tcdiscon`)
+`/tcdisconnect` `/tcdiscon`
 `/rmtc`"""
 
 [help.who]

@@ -49,8 +49,8 @@ def test_list_module_owns_lists_and_details() -> None:
     assert rich_list.bullet_list(["a"]) == "<ul><li>a</li></ul>"
     assert rich_list.ordered_list(["a"], start=3) == '<ol start="3"><li>a</li></ol>'
     assert rich_list.checklist([("done", True), ("todo", False)]) == (
-        '<ul><li><input type="checbtnox" checked>done</li>'
-        '<li><input type="checbtnox">todo</li></ul>'
+        '<ul><li><input type="checkbox" checked>done</li>'
+        '<li><input type="checkbox">todo</li></ul>'
     )
     assert rich_list.details("S", "B") == ("<details><summary>S</summary>B</details>")
 
@@ -163,8 +163,8 @@ def test_focused_modules_stay_distinct() -> None:
 
 def test_text_blocks_renders_alias_commands_as_a_table() -> None:
     html = rich_text.blocks(
-        "<code>/tcpromote</code> (alias: <code>/tcp</code>)\n"
-        "<code>/tcdemote</code> (alias: <code>/tcd</code>)",
+        "<code>/tcpromote</code> <code>/tcp</code>\n"
+        "<code>/tcdemote</code> <code>/tcd</code>",
         command_header="Command",
         alias_header="Alias",
         caption="Commands &amp; Aliases",

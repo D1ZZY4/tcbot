@@ -7,8 +7,8 @@ overview = "Run network diagnostics: ping for Telegram API round-trip latency, s
 
 [help.commands]
 body = """
-`/ping` (alias: `/p`)
-`/speedtest` (alias: `/st`)"""
+`/ping` `/p`
+`/speedtest` `/st`"""
 
 [help.what]
 body = """

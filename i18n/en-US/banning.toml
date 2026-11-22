@@ -6,7 +6,7 @@
 overview = "Issues a *federation-wide ban* on a user, applied across every connected group at once. Demotes staff targets and stores proof with the ban record."
 
 [help.commands]
-body = "`/tcban` (alias: `/tcb`)"
+body = "`/tcban` `/tcb`"
 
 [help.what]
 body = """
@@ -60,7 +60,7 @@ scope_warn = " WARNING: the group list could not be loaded, so some groups may h
 body = "You have been federation-banned from {community}.\nReason: {reason}\n\nYou may submit an appeal using the button below ↴."
 
 [summary]
-body = "{user} has been banned.\nReason: {reason}\n{applied}"
+body = "{user} has been banned.\n*Reason:* {reason}\n{applied}"
 
 [confirm]
 body = "{user} already has an active federation ban (Ban ID {ban_id}).\nExisting reason: {old_reason}\nNew reason: {new_reason}\n\nUpdate the ban with the new reason and proof?"

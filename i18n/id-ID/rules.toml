@@ -4,7 +4,7 @@
 [editor]
 categories = "Kategori"
 items = "Item"
-panel = "Editor aturan\nSet: {name}\nStatus: {status}\nItem: {count}"
+panel = "Editor aturan\n*Set:* {name}\n*Status:* {status}\n*Item:* {count}"
 ask_category = "Kirim judul kategori."
 ask_title = "Kirim judul item."
 ask_body = "Kirim isi item (teks polos)."
@@ -15,12 +15,20 @@ bad_url = "URL referensi harus tautan http(s) dengan panjang maksimal 500 karakt
 confirm_discard = "Buang draf saat ini? Aturan yang sudah terbit tidak berubah."
 discarded = "Draf dibuang."
 cancelled = "Editor aturan ditutup."
-open_pm = "Buka chat pribadi dengan saya lalu kirim /tcrules di sana."
+open_pm = "Buka chat pribadi dengan saya untuk melanjutkan."
 ask_rename = "Kirim judul kategori yang baru."
 status = "Kanal: tersinkron {synced}, gagal {failed}, hilang {missing}, pensiun {retired}. Acknowledgement: {acks}."
 
+[help]
+overview = "Baca aturan komunitas yang diterbitkan atau sunting dan terbitkan kumpulan aturan."
+
+[help.commands]
+body = "`/tcrules` `/rules`"
+
+[help.what]
+body = "Menu aturan hanya-baca untuk semua orang; editor memungkinkan staf mengelola kategori, butir, dan publikasi ke kanal."
+
 [menu]
-rules = "Aturan"
 body = "Ada aturan di {community}."
 empty = "Belum ada aturan yang diterbitkan."
 category = "Aturan: {category}"

@@ -7,7 +7,7 @@
 overview = "Mengirim pesan ke semua grup yang terhubung ke {community}."
 
 [help.commands]
-body = "`/tcbroadcast` (alias: `/bc`)"
+body = "`/tcbroadcast` `/bc`"
 
 [help.what]
 body = """

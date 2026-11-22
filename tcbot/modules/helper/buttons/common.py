@@ -50,6 +50,13 @@ def close_btn(locale: str | None = None) -> InlineKeyboardButton:
     )
 
 
+def back_close_row(
+    back_callback: str, locale: str | None = None
+) -> list[InlineKeyboardButton]:
+    """Back and Close in one row, so every menu offers both exits."""
+    return [back_button(back_callback, locale), close_btn(locale)]
+
+
 def back_markup(callback_data: str, locale: str | None = None) -> InlineKeyboardMarkup:
     """Single Back button returning to ``callback_data``."""
     return InlineKeyboardMarkup([back_row(callback_data, locale)])

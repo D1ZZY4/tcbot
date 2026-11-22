@@ -93,15 +93,15 @@ def test_join_ban_keyboard_puts_evidence_first_and_appeal_below() -> None:
 
     assert keyboard is not None
     rows = keyboard.inline_keyboard
-    assert [button.text for button in rows[0]] == ["↝ View Log", "↝ View Proof"]
-    assert [button.text for button in rows[1]] == ["↩ Submit Appeal"]
+    assert [button.text for button in rows[0]] == ["↝ View Log", "🖈 View Proof"]
+    assert [button.text for button in rows[1]] == ["🗩 Submit Appeal"]
 
 
 def test_join_ban_keyboard_drops_a_missing_link() -> None:
     keyboard = join_ban_btn(None, "https://t.me/c/456/77", None, "en-US")
 
     assert keyboard is not None
-    assert [button.text for button in keyboard.inline_keyboard[0]] == ["↝ View Proof"]
+    assert [button.text for button in keyboard.inline_keyboard[0]] == ["🖈 View Proof"]
 
 
 def test_the_group_notice_and_the_dm_are_different(
@@ -124,9 +124,9 @@ def test_the_group_notice_and_the_dm_are_different(
 
     assert len(message.replies) == 1
     group_text, group_kwargs = message.replies[0]
-    assert "First name: Alice" in group_text
-    assert "Username: @alice" in group_text
-    assert "Ban ID:" in group_text
+    assert "<b>First name:</b> Alice" in group_text
+    assert "<b>Username:</b> @alice" in group_text
+    assert "<b>Ban ID:</b>" in group_text
 
     assert len(bot.sent) == 1
     dm_chat_id, dm_text, dm_kwargs = bot.sent[0]
@@ -138,7 +138,61 @@ def test_the_group_notice_and_the_dm_are_different(
     for kwargs in (group_kwargs, dm_kwargs):
         markup = kwargs["reply_markup"]
         labels = [[button.text for button in row] for row in markup.inline_keyboard]
-        assert labels == [["↝ View Log", "↝ View Proof"], ["↩ Submit Appeal"]]
+        assert labels == [["↝ View Log", "🖈 View Proof"], ["🗩 Submit Appeal"]]
+
+
+def test_the_dm_follows_the_banned_users_locale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A member reading Indonesian must not get an English ban DM."""
+
+    async def _id(_uid: int) -> str:
+        return "id-ID"
+
+    monkeypatch.setattr(greeting, "locale_for_user", _id)
+    monkeypatch.setattr(greeting, "cfg", _cfg())
+    bot = _FakeBot()
+
+    asyncio.run(
+        greeting._send_join_ban_notices(
+            cast("Bot", bot),
+            cast("Chat", _FakeChat()),
+            cast("User", _FakeUser()),
+            _ban_payload(),
+            "en-US",
+            reply_to=None,
+        )
+    )
+
+    assert bot.sent
+    dm_chat_id, dm_text, dm_kwargs = bot.sent[-1]
+    assert dm_chat_id == 42
+    assert "Kamu di-ban federasi" in dm_text
+    assert "Ajukan Banding" in dm_text
+    markup = dm_kwargs["reply_markup"]
+    labels = [[button.text for button in row] for row in markup.inline_keyboard]
+    assert any("Banding" in label for row in labels for label in row)
+
+
+def test_connection_lookup_outage_still_enforces(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An is_connected outage must not skip ban enforcement on join."""
+
+    async def _raise(*_args: object, **_kwargs: object) -> bool:
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db.groups_db, "is_connected", _raise)
+    monkeypatch.setattr(
+        greeting,
+        "cfg",
+        SimpleNamespace(is_primary_group=lambda _cid: False),
+    )
+
+    async def run() -> object | None:
+        return await greeting._in_federation(-1001, action="join_request")
+
+    assert asyncio.run(run()) is None
 
 
 def test_a_secondary_group_still_gets_the_ban_notice(

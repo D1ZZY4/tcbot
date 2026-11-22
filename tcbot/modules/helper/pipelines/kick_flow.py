@@ -13,8 +13,12 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, guards, messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, reply_rich, send_log
-from tcbot.modules.helper.messages.rich_text import style
+from tcbot.modules.helper.messages import (
+    replies,
+    reply_rich,
+    safe_edit_message,
+    send_log,
+)
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import (
     BuildProof,
@@ -286,12 +290,8 @@ async def execute_kick(
         # * prompt. Falls back to a reply when the prompt is gone/unknown.
         if prompt_chat is not None and prompt_id is not None:
             try:
-                await ctx.bot.edit_message_text(
-                    style(summary),
-                    chat_id=prompt_chat,
-                    message_id=prompt_id,
-                    parse_mode=None,
-                    reply_markup=proof_btn,
+                await safe_edit_message(
+                    ctx.bot, prompt_chat, prompt_id, summary, reply_markup=proof_btn
                 )
             except Exception as exc:
                 log.debug("Kick summary prompt edit failed: %s", exc)

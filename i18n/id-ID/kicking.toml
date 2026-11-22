@@ -6,7 +6,7 @@
 overview = "Mengeluarkan pengguna dari *grup ini saja*. Target staf didemosi."
 
 [help.commands]
-body = "`/tckick` (alias: `/tck`)"
+body = "`/tckick` `/tck`"
 
 [help.what]
 body = """

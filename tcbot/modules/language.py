@@ -78,8 +78,7 @@ def _chat_scope(chat_type: str | None) -> str:
 def _options_btn(scope: str, locale: str) -> InlineKeyboardMarkup:
     """Build the locale-option keyboard for ``scope`` in display ``locale``."""
     items = [(display_name(code_), code_) for code_ in available_locales()]
-    back = t("button.back", locale, plain=True)
-    return buttons.language_list_btn(scope, items, back_label=back, selected=locale)
+    return buttons.language_list_btn(scope, items, selected=locale, locale=locale)
 
 
 def _panel_text(scope: str, locale: str) -> str:
@@ -151,9 +150,9 @@ async def on_language_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         reply_markup=buttons.language_list_btn(
             "user",
             [(display_name(code_), code_) for code_ in available_locales()],
-            back_label=t("button.back", locale, plain=True),
             back_callback="back_to_start",
             selected=locale,
+            locale=locale,
         ),
         log_level="debug",
         log_label="language menu",
@@ -202,9 +201,9 @@ async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=buttons.language_list_btn(
             scope,
             [(display_name(code_), code_) for code_ in available_locales()],
-            back_label=t("button.back", locale, plain=True),
             back_callback=back_callback,
             selected=locale,
+            locale=locale,
         ),
         log_level="debug",
         log_label="language list",

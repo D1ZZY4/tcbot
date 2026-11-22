@@ -25,8 +25,11 @@ from telegram.ext import (
 from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import reply_rich
-from tcbot.modules.helper.messages.rich_text import style
+from tcbot.modules.helper.messages import (
+    reply_rich,
+    reply_rich_result,
+    safe_edit_cb,
+)
 from tcbot.modules.helper.pipelines import rules_step
 from tcbot.modules.helper.pipelines.ban_confirmation import stale_ban_callback
 from tcbot.modules.helper.pipelines.ban_flow import (
@@ -63,18 +66,18 @@ async def _render(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     items = await _items()
     if q is not None:
         try:
-            await q.edit_message_text(
-                style(rules_step.picker_text(items, selected, locale)),
-                parse_mode=None,
+            await safe_edit_cb(
+                q,
+                rules_step.picker_text(items, selected, locale),
                 reply_markup=rules_btn.picker_btn(items, selected, locale),
             )
         except Exception as exc:
             log.debug("Ban rules picker edit failed: %s", exc)
     elif update.effective_message is not None:
         try:
-            await update.effective_message.reply_text(
-                style(rules_step.picker_text(items, selected, locale)),
-                parse_mode=None,
+            await reply_rich(
+                update.effective_message,
+                rules_step.picker_text(items, selected, locale),
                 reply_markup=rules_btn.picker_btn(items, selected, locale),
             )
         except Exception as exc:
@@ -109,13 +112,13 @@ async def _show_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     q = update.callback_query
     try:
         if q is not None:
-            await q.edit_message_text(style(text), parse_mode=None, reply_markup=markup)
+            await safe_edit_cb(q, text, reply_markup=markup)
             if q.message is not None:
                 scope["ban_prompt_msg_id"] = q.message.message_id
                 scope["ban_prompt_chat_id"] = q.message.chat.id
         elif update.effective_message is not None:
-            sent = await update.effective_message.reply_text(
-                style(text), parse_mode=None, reply_markup=markup
+            sent = await reply_rich_result(
+                update.effective_message, text, reply_markup=markup
             )
             scope["ban_prompt_msg_id"] = sent.message_id
             scope["ban_prompt_chat_id"] = update.effective_message.chat.id
@@ -232,6 +235,8 @@ BAN_RULES_STATES: dict[int, list[Any]] = {
         CallbackQueryHandler(on_cancel_proof, pattern=r"^rules_step:cancel$"),
     ],
     WAITING_BAN_RULES_NOTE: [
-        MessageHandler(filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, on_ban_rules_note)
+        MessageHandler(filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, on_ban_rules_note),
+        # * The picker's Cancel button stays visible after "Other".
+        CallbackQueryHandler(on_cancel_proof, pattern=r"^rules_step:cancel$"),
     ],
 }

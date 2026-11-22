@@ -22,14 +22,15 @@ Callback-only panels are listed at the end.
 | Module | Commands | Access | Origin |
 |---|---|---|---|
 | `connect.py` | `/tcconnect`, `/tccon`, plus `MY_CHAT_MEMBER` events | Group administrator; event driven | Group only. |
-| `disconnecting.py` | `/tcdisconnect`, `/rmtc` | Group creator or federation staff | In-group or numeric chat id. |
+| `disconnecting.py` | `/tcdisconnect`, `/tcdiscon`, `/rmtc` | Group creator or federation staff | In-group or numeric chat id. |
 | `groups.py` | `/tcgroups`, `/tcg` | Anyone | Bot DM or group. |
 
 ## Roles
 
 | Module | Commands | Access |
 |---|---|---|
-| `admins.py` | `/tcpromote`, `/tcp`, `/tcdemote`, `/tcd`, `/transferowner`, `/tfowner`, `/tcpromoterequests`, `/tcreqs`, `/tcpromotelist`, `/tcplist` | Staff and Owner. |
+| `admins.py` | `/tcpromote`, `/tcp`, `/tcdemote`, `/tcd`, `/tcpromoterequests`, `/tcreqs`, `/tcpromotelist`, `/tcplist` | Staff and Owner. |
+| `admins.py` | `/transferowner`, `/tfowner` | Owner only. |
 | `admins.py` | `promo_approve:*`, `promo_reject:*`, `promo_role:*`, `demote_confirm:*` callbacks | Owner for approvals; staff for prompts. |
 
 ## Information and utilities
@@ -51,7 +52,7 @@ Callback-only panels are listed at the end.
 | Module | Commands | Access |
 |---|---|---|
 | `broadcast.py` | `/tcbroadcast`, `/bc` | Staff. |
-| `maintenance.py` | `/tcleaveall`, `/leaveall`, `/exitall`, `/cleanup`, `/tcclean`, `/tcc`, `/tcforget`, `/tcf`, `/tcrepair`, `/tcr` | Staff and Owner. |
+| `maintenance.py` | `/leaveall`, `/exitall`, `/tcleave`, `/cleanup`, `/tcclean`, `/tcc`, `/tcforget`, `/tcf`, `/tcrepair`, `/tcr` | Staff and Owner. |
 | `netspeed.py` | `/ping`, `/p`, `/speedtest`, `/st` | Owner. |
 
 ## Handler conventions

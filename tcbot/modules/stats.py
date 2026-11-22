@@ -27,6 +27,7 @@ from tcbot.modules.helper.messages import (
     replies,
     reply_rich,
     safe_edit_message,
+    send_text,
 )
 from tcbot.modules.helper.pipelines.stats_flow import (
     CHAT_KEY,
@@ -280,10 +281,10 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
             # * The search message was deleted before the lookup, so a
             # * reply has no source message; send the notice directly.
             try:
-                await ctx.bot.send_message(
+                await send_text(
+                    ctx.bot,
                     msg.chat_id,
-                    t("stats.error.db_fail", locale),
-                    parse_mode=None,
+                    t("stats.error.db_fail", locale, plain=True),
                 )
             except Exception as exc:
                 log.debug("Stats search error notice failed: %s", exc)

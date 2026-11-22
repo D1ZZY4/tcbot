@@ -6,24 +6,42 @@
 
 from __future__ import annotations
 
+from tcbot.modules.helper.messages.rich_style import esc
+
 
 def bullet_list(items: list[str]) -> str:
     """Render a bulleted list. Items may contain inline rich HTML."""
     return "<ul>" + "".join(f"<li>{item}</li>" for item in items if item) + "</ul>"
 
 
-def ordered_list(items: list[str], *, start: int | None = None) -> str:
-    """Render an ordered list, optionally starting at a given number."""
-    attr = f' start="{start}"' if start is not None else ""
+def ordered_list(
+    items: list[str],
+    *,
+    start: int | None = None,
+    marker: str | None = None,
+    reversed_order: bool = False,
+) -> str:
+    """Render an ordered list with optional start, marker and direction.
+
+    ``marker`` is the Bot API ``type`` attribute (``a``, ``A``, ``i``, ``I``
+    or ``1``) that selects the numbering style.
+    """
+    attrs = ""
+    if start is not None:
+        attrs += f' start="{start}"'
+    if marker:
+        attrs += f' type="{esc(marker)}"'
+    if reversed_order:
+        attrs += " reversed"
     return (
-        f"<ol{attr}>" + "".join(f"<li>{item}</li>" for item in items if item) + "</ol>"
+        f"<ol{attrs}>" + "".join(f"<li>{item}</li>" for item in items if item) + "</ol>"
     )
 
 
 def checklist(items: list[tuple[str, bool]]) -> str:
     """Render a task list from ``(label, checked)`` pairs."""
     rows = "".join(
-        f'<li><input type="checbtnox"{" checked" if checked else ""}>{label}</li>'
+        f'<li><input type="checkbox"{" checked" if checked else ""}>{label}</li>'
         for label, checked in items
         if label
     )

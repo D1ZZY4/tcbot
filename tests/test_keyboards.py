@@ -13,6 +13,20 @@ from tcbot.modules.helper.buttons import rules as rule_btn
 from tcbot.modules.helper.buttons.common import close_btn
 
 
+def test_every_open_in_pm_button_shares_the_start_menu_link() -> None:
+    direct = btn.open_pm_btn("tcbot", "menu", "en-US")
+    group = btn.group_start_btn("tcbot", "en-US")
+    assert direct is not None
+    url = direct.inline_keyboard[0][0].url
+    assert url == "https://t.me/tcbot?start=menu"
+    assert btn.open_pm_btn("", "menu", "en-US") is None
+    chosen = btn.open_pm_btn("tcbot", "tcrules", "en-US")
+    assert chosen is not None
+    assert chosen.inline_keyboard[0][0].url == "https://t.me/tcbot?start=tcrules"
+    assert group.inline_keyboard[0][0].url == url
+    assert [b.callback_data for b in group.inline_keyboard[1]] == ["help_menu_group"]
+
+
 def _cells(markup):  # type: ignore[no-untyped-def]
     """Flatten a markup into (text, callback_data, url, style) rows for assertions."""
     return [
@@ -31,7 +45,7 @@ def test_promote_role_btn_pairs_roles_plus_cancel() -> None:
         ("Moderator", "promo_role:moderator:7", None, KeyboardButtonStyle.PRIMARY)
     ]
     assert rows[2] == [
-        ("✕ Cancel", "promo_role_cancel:7", None, KeyboardButtonStyle.DANGER)
+        ("🗶 Cancel", "promo_role_cancel:7", None, KeyboardButtonStyle.DANGER)
     ]
 
 
@@ -45,8 +59,8 @@ def test_demote_confirm_btn_marks_confirm_danger() -> None:
     rows = _cells(btn.demote_confirm_btn(7))
     assert rows == [
         [
-            ("✓ Confirm", "demote_confirm:7", None, KeyboardButtonStyle.DANGER),
-            ("✕ Cancel", "demote_cancel:7", None, KeyboardButtonStyle.DANGER),
+            ("🗸 Confirm", "demote_confirm:7", None, KeyboardButtonStyle.DANGER),
+            ("🗶 Cancel", "demote_cancel:7", None, KeyboardButtonStyle.DANGER),
         ]
     ]
 
@@ -55,8 +69,8 @@ def test_promo_decision_btn_success_and_danger() -> None:
     rows = _cells(btn.promo_decision_btn("r1"))
     assert rows == [
         [
-            ("✓ Approve", "promo_approve:r1", None, KeyboardButtonStyle.SUCCESS),
-            ("✕ Reject", "promo_reject:r1", None, KeyboardButtonStyle.DANGER),
+            ("🗸 Approve", "promo_approve:r1", None, KeyboardButtonStyle.SUCCESS),
+            ("🗶 Reject", "promo_reject:r1", None, KeyboardButtonStyle.DANGER),
         ]
     ]
 
@@ -83,7 +97,7 @@ def test_action_proof_btn_guards() -> None:
     assert btn.action_proof_btn(1, None) is None
     rows = _cells(btn.action_proof_btn(1, "https://t.me/x/1"))
     assert rows == [
-        [("▤ Proof 1", None, "https://t.me/x/1", KeyboardButtonStyle.PRIMARY)]
+        [("🖈 Proof 1", None, "https://t.me/x/1", KeyboardButtonStyle.PRIMARY)]
     ]
 
 
@@ -93,10 +107,10 @@ def test_ban_update_confirm_btn_rows_callbacks_and_links() -> None:
     )
     assert rows[0] == [
         ("↝ View Log", None, "https://t.me/x/log", KeyboardButtonStyle.PRIMARY),
-        ("↝ View Proof", None, "https://t.me/x/proof", KeyboardButtonStyle.PRIMARY),
+        ("🖈 View Proof", None, "https://t.me/x/proof", KeyboardButtonStyle.PRIMARY),
     ]
     assert rows[1] == [
-        ("✕ Cancel", "ban_cancel", None, KeyboardButtonStyle.DANGER),
+        ("🗶 Cancel", "ban_cancel", None, KeyboardButtonStyle.DANGER),
         ("↦ Continue", "ban_continue", None, KeyboardButtonStyle.PRIMARY),
     ]
 
@@ -105,7 +119,7 @@ def test_ban_update_confirm_btn_omits_missing_urls() -> None:
     rows = _cells(btn.ban_update_confirm_btn(None, None))
     assert rows == [
         [
-            ("✕ Cancel", "ban_cancel", None, KeyboardButtonStyle.DANGER),
+            ("🗶 Cancel", "ban_cancel", None, KeyboardButtonStyle.DANGER),
             ("↦ Continue", "ban_continue", None, KeyboardButtonStyle.PRIMARY),
         ]
     ]
@@ -137,7 +151,7 @@ def test_main_menu_options_are_primary() -> None:
     assert [c[0] for c in options] == [
         "◈ About",
         "ⓘ Help",
-        "⋯ Additional",
+        "☶ Additional",
         "◈ Privacy",
         "⌘ Language",
     ]
@@ -181,8 +195,8 @@ def test_proof_done_is_success_and_cancel_stays_neutral() -> None:
     rows = _cells(btn.proof_step_btn("ban", skip_allowed=False))
     assert rows == [
         [
-            ("✓ Done", "ban_done_proof", None, KeyboardButtonStyle.SUCCESS),
-            ("✕ Cancel", "ban_cancel", None, KeyboardButtonStyle.DANGER),
+            ("🗸 Done", "ban_done_proof", None, KeyboardButtonStyle.SUCCESS),
+            ("🗶 Cancel", "ban_cancel", None, KeyboardButtonStyle.DANGER),
         ]
     ]
 
@@ -207,7 +221,7 @@ def test_rules_editor_colors_commit_and_destruction() -> None:
 
 def test_close_button_dismisses_a_panel() -> None:
     button = close_btn("en-US")
-    assert button.text == "✕ Close"
+    assert button.text == "🗶 Close"
     assert button.callback_data == "close_msg"
     assert button.to_dict().get("style") == KeyboardButtonStyle.DANGER
 

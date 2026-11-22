@@ -7,8 +7,8 @@ overview = "Look up your own ban status with `/checkme`, or pull a full federati
 
 [help.commands]
 body = """
-`/checkme` (alias: `/cme`)
-`/check` (alias: `/c`)"""
+`/checkme` `/cme`
+`/check` `/c`"""
 
 [help.checkme]
 body = """
@@ -41,26 +41,26 @@ Or reply to a message and run `/c`."""
 admin_fallback = "Admin"
 title = "*Profile*"
 activity = "*Federation Activity*"
-name = "Name: {user}"
+name = "*Name:* {user}"
 id = "ID: {id}"
 username = "Username: @{name}"
 username_none = "Username: (none)"
 yes = "Yes"
 yes_ban = "Yes ({ban})"
 no = "No"
-role = "Role: {role}"
+role = "*Role:* {role}"
 assigned_by = "   Assigned by: {by}"
 assigned_at = "   Assigned at: {at}"
 active_ban = "Active Ban: {state}"
 active_mute = "Active Mute: {state}"
 unknown = "Unknown - retry in a moment"
-total_bans = "Total Bans: {n}"
+total_bans = "*Total Bans:* {n}"
 warnings = "Warnings: {active} active across {groups} group(s) ({total} total historical)"
 kicks = "Kicks: {n}"
 mutes = "Mutes: {n}"
 appeals = "Appeals: {n}"
 regular = "Regular user"
-caveat = "Note: some counters could not be loaded; totals above may be incomplete."
+caveat = "Some counters could not be loaded; totals above may be incomplete."
 
 [profile.button]
 bans = "Bans ({n})"
@@ -83,7 +83,7 @@ empty = "*Appeals*\n\nNo appeal records for {user}."
 header = "*Appeals*: {n} total, page {page}/{pages}"
 approved = "*Approved* (unbanned)"
 pending = "Pending / Rejected"
-item = "{i}. {status}\n   Ban ID: {ban} | {ts}"
+item = "{i}. {status}\n   *Ban ID:* {ban} | {ts}"
 
 [warns]
 empty = "*Warnings*\n\nNo warning records for {user}."
@@ -98,10 +98,10 @@ db_fail = "Could not load warning groups. The database is unreachable, try again
 [events]
 empty = "{heading}\n\nNo {lower} records for {user}."
 header = "{heading}: {n} total, page {page}/{pages}"
-item = "{i}. {ts}\n   Group: {title}\n   {reason}\n   By {admin}"
+item = "{i}. {ts}\n   *Group:* {title}\n   {reason}\n   By {admin}"
 kick_failed = "This kick did not complete: the rejoin step is still pending."
 mute_item = "{i}. {ts}\n   Group: {title}\n   Requested: {requested} | Stored: {stored}\n   {reason}\n   By {admin}"
-no_reason = "(no reason)"
+no_reason = "~no reason~"
 
 [ban_info]
 heading = "Ban Information"
@@ -109,7 +109,7 @@ user = "User: {user}"
 user_id = "User ID: {id}"
 banned_by = "Banned by: {admin}"
 admin_id = "Admin ID: {id}"
-reason = "Reason: {reason}"
+reason = "*Reason:* {reason}"
 ban_id = "Ban ID: {id}"
 date = "Date: {date}"
 rules = "Rules broken: {rules}"
@@ -140,7 +140,7 @@ bot_sender = "Bots and anonymous senders don't hold federation records, so there
 status_retry = "I couldn't verify your ban status right now. Please try again in a moment."
 
 [checkme]
-banned = "You are currently banned from {community}.\n\nUser: {user}\nUser ID: {id}\nReason: {reason}\n\nBanned by: {admin}\n\nCommit Date: {date}\nTap a button below ↴ for more details."
+banned = "You are currently banned from {community}.\n\n*User:* {user}\n*User ID:* {id}\n*Reason:* {reason}\n\n*Banned by:* {admin}\n\n*Commit Date:* {date}\nTap a button below ↴ for more details."
 staff_admin = "Hey {user}, checking yourself?\n\nYou're on the staff team - you handle bans, not receive them. No active ban on your end. You're good."
 staff_role = "Hey {user}, all good.\n\nYou're a {community} {role} - on the team, not on the ban list. Nothing to worry about."
 clean = "You're clean - no active ban in {community}."

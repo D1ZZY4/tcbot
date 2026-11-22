@@ -11,7 +11,7 @@ from typing import Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.buttons.common import back_row
+from tcbot.modules.helper.buttons.common import back_close_row
 from tcbot.utils.i18n import t
 
 # * Callback payloads of the moderation rules picker, shared by the ban and
@@ -76,6 +76,11 @@ def _button(
     return InlineKeyboardButton(text, callback_data=data, style=style)
 
 
+def prompt_btn(back_callback: str, locale: str | None = None) -> InlineKeyboardMarkup:
+    """Back and Close navigation for a text-entry step of the editor."""
+    return InlineKeyboardMarkup([back_close_row(back_callback, locale)])
+
+
 def editor_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Build the main editor panel with edit, preview, and publish actions."""
     return InlineKeyboardMarkup(
@@ -97,6 +102,7 @@ def editor_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
                 ),
             ],
             [_button(t("button.settings", locale, plain=True), "rules_settings")],
+            back_close_row("back_to_start", locale),
         ]
     )
 
@@ -126,7 +132,7 @@ def categories_btn(
     rows.append(
         [_button(t("button.add_category", locale, plain=True), "rules_cat_add")]
     )
-    rows.append(back_row("rules_panel", locale))
+    rows.append(back_close_row("rules_panel", locale))
     return InlineKeyboardMarkup(rows)
 
 
@@ -138,7 +144,7 @@ def items_btn(
     # * dead rules_item button is emitted here.
     rows: list[list[InlineKeyboardButton]] = []
     rows.append([_button(t("button.add_item", locale, plain=True), "rules_item_add")])
-    rows.append(back_row("rules_categories", locale))
+    rows.append(back_close_row("rules_categories", locale))
     return InlineKeyboardMarkup(rows)
 
 
@@ -159,7 +165,8 @@ def confirm_btn(
                     callback_data=no_callback,
                     style=KeyboardButtonStyle.DANGER,
                 ),
-            ]
+            ],
+            back_close_row("rules_panel", locale),
         ]
     )
 
@@ -181,12 +188,13 @@ def rules_menu_btn(
         rows.append(
             [_button(t("button.more", locale, plain=True), f"rules_page:{page + 1}")]
         )
+    rows.append(back_close_row("back_to_start", locale))
     return InlineKeyboardMarkup(rows)
 
 
 def category_back_btn(locale: str | None = None) -> InlineKeyboardMarkup:
-    """Build the Back button from a category view to the rules menu."""
-    return InlineKeyboardMarkup([back_row("rules_menu", locale)])
+    """Back to the rules menu and Close, for a category view."""
+    return InlineKeyboardMarkup([back_close_row("rules_menu", locale)])
 
 
 def ack_btn(

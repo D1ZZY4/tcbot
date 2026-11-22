@@ -4,7 +4,7 @@
 [editor]
 categories = "Categories"
 items = "Items"
-panel = "Rules editor\nSet: {name}\nStatus: {status}\nItems: {count}"
+panel = "Rules editor\n*Set:* {name}\n*Status:* {status}\n*Items:* {count}"
 ask_category = "Send the category title."
 ask_title = "Send the item title."
 ask_body = "Send the item body (plain text)."
@@ -15,12 +15,20 @@ bad_url = "The reference URL must be an http(s) link of at most 500 characters."
 confirm_discard = "Discard the current draft? Published rules are not affected."
 discarded = "Draft discarded."
 cancelled = "Rules editor closed."
-open_pm = "Open a private chat with me and send /tcrules there."
+open_pm = "Open a private chat with me to continue."
 ask_rename = "Send the new category title."
 status = "Channel: synced {synced}, failed {failed}, missing {missing}, retired {retired}. Acknowledgements: {acks}."
 
+[help]
+overview = "Read the published community rules or edit and publish the rule set."
+
+[help.commands]
+body = "`/tcrules` `/rules`"
+
+[help.what]
+body = "Read-only rules menu for everyone; the editor lets staff manage categories, items and channel publication."
+
 [menu]
-rules = "Rules"
 body = "There are rules on {community}."
 empty = "There are no published rules yet."
 category = "Rules: {category}"

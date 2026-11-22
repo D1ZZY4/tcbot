@@ -7,15 +7,26 @@
 from __future__ import annotations
 
 import asyncio
+import warnings
 from typing import Any, cast
+
+import pytest
+from telegram import Bot
 
 from tcbot.modules.helper.messages import rich_edit
 from tcbot.modules.helper.messages import rich_msg as rc
 from tcbot.modules.helper.messages.rich_format import (
+    anchor,
     code,
     divider,
+    emoji,
+    footer,
     heading,
+    highlight,
+    math,
+    math_block,
     paragraph,
+    pull_quote,
     quote,
 )
 from tcbot.modules.helper.messages.rich_link import button, button_row, link, user_ref
@@ -26,6 +37,8 @@ from tcbot.modules.helper.messages.rich_style import (
     italic,
     spoiler,
     strike,
+    subscript,
+    superscript,
     underline,
 )
 from tcbot.modules.helper.messages.rich_table import table
@@ -45,6 +58,27 @@ class _FakeBot:
     ) -> str:
         self.calls.append((endpoint, api_kwargs or {}, return_type))
         return "sent"
+
+    async def edit_message_text(
+        self,
+        text: Any = None,
+        chat_id: int | str | None = None,
+        message_id: int | None = None,
+        api_kwargs: dict[str, Any] | None = None,
+        **_kwargs: Any,
+    ) -> str:
+        self.calls.append(
+            (
+                "editMessageText",
+                {
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    **(api_kwargs or {}),
+                },
+                None,
+            )
+        )
+        return "edited"
 
 
 def test_escaping_is_html_safe() -> None:
@@ -75,6 +109,30 @@ def test_blocks_render_expected_rich_html() -> None:
     assert ordered_list(["a"], start=3) == '<ol start="3"><li>a</li></ol>'
     assert quote("q", expandable=True) == "<blockquote expandable>q</blockquote>"
     assert details("S", "B") == "<details><summary>S</summary>B</details>"
+
+
+def test_quote_and_highlight_support_an_author() -> None:
+    assert quote("q", author="Dizzy") == (
+        "<blockquote>q<cite>Dizzy</cite></blockquote>"
+    )
+    assert quote("q", expandable=True, author="Dizzy") == (
+        "<blockquote expandable>q<cite>Dizzy</cite></blockquote>"
+    )
+    assert highlight("x", author="Dizzy") == "<mark>x</mark><cite>Dizzy</cite>"
+    assert pull_quote("q", author="Dizzy") == "<aside>q<cite>Dizzy</cite></aside>"
+
+
+def test_extra_inline_and_block_features_render() -> None:
+    assert subscript("2") == "<sub>2</sub>"
+    assert superscript("2") == "<sup>2</sup>"
+    assert footer("End") == "<footer>End</footer>"
+    assert anchor("a") == '<a name="a"></a>'
+    assert math("x^2") == "<tg-math>x^2</tg-math>"
+    assert math_block("x^2") == "<tg-math-block>x^2</tg-math-block>"
+    assert emoji(123, "ok") == '<tg-emoji emoji-id="123">ok</tg-emoji>'
+    assert ordered_list(["a"], marker="a", reversed_order=True) == (
+        '<ol type="a" reversed><li>a</li></ol>'
+    )
 
 
 def test_table_renders_header_and_rows() -> None:
@@ -132,6 +190,27 @@ def test_edit_rich_uses_edit_message_text_with_rich_field() -> None:
     assert endpoint == "editMessageText"
     assert kwargs["message_id"] == 55
     assert kwargs["rich_message"] == message
+
+
+def test_edit_rich_does_not_emit_the_ptb_deprecation_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bot = Bot("123456:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+
+    async def _edit(_self: object, **_kwargs: Any) -> str:
+        return "edited"
+
+    def _forbidden(_self: object, *_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("do_api_request must not be used for rich edits")
+
+    monkeypatch.setattr(Bot, "edit_message_text", _edit)
+    monkeypatch.setattr(Bot, "do_api_request", _forbidden)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        asyncio.run(rich_edit.edit_rich(bot, -100, 5, rc.html_message("x")))
+
+    assert not [w for w in caught if issubclass(w.category, UserWarning)]
 
 
 def test_reply_markup_is_serialised_for_the_api() -> None:

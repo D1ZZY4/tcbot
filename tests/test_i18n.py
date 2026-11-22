@@ -57,10 +57,13 @@ from tcbot.utils.i18n import (
     bold,
     code,
     display_name,
+    divider,
     esc,
+    heading,
     is_known_locale,
     load_catalog,
     pre,
+    quote,
     resolve_locale,
     t,
 )
@@ -114,6 +117,7 @@ _DYNAMIC_KEY_PREFIXES = (
     "checking.warns.",
     "connecting.",
     "disconnecting.",
+    "demote.dm.verb.",
     "identity.note.",
     "identity.refuse.",
     "kicking.",
@@ -673,8 +677,9 @@ def test_language_help_golden() -> None:
 def test_help_index_golden() -> None:
     assert helpmod._help_index_text("TestBot") == t(
         "help.index.body",
-        title=Safe(bold("TestBot Help")),
-        community=cfg.community_name,
+        title=Safe(heading("TestBot Help")),
+        divider=Safe(divider()),
+        quote=Safe(quote(t("help.index.guidance", plain=True))),
     )
 
 
@@ -933,6 +938,7 @@ def test_get_help_matches_default_import() -> None:
         "maintenance",
         "mute",
         "netspeed",
+        "rules",
         "stats",
         "unban",
         "warns",
@@ -940,6 +946,20 @@ def test_get_help_matches_default_import() -> None:
         mod = importlib.import_module(f"tcbot.modules.{mod_name}")
         assert dict(mod.get_help()) == dict(mod.__help__), mod_name
         assert dict(mod.get_help(DEFAULT_LOCALE)) == dict(mod.__help__), mod_name
+
+
+def test_rules_help_name_is_a_stable_identifier() -> None:
+    rules_mod = importlib.import_module("tcbot.modules.rules")
+    assert rules_mod.__module_name__ == "Rules"
+    assert dict(rules_mod.get_help("id-ID"))["name"] == "Rules"
+    assert dict(rules_mod.get_help("en-US"))["name"] == "Rules"
+
+
+def test_demote_auto_verb_is_localized() -> None:
+    assert t("demote.dm.verb.ban", "id-ID", plain=True) == "diblokir"
+    assert t("demote.dm.verb.mute", "id-ID", plain=True) == "dibisukan"
+    assert t("demote.dm.verb.kick", "id-ID", plain=True) == "dikeluarkan"
+    assert t("demote.dm.verb.ban", "en-US", plain=True) == "banned"
 
 
 def test_builder_help_is_deterministic() -> None:
@@ -985,19 +1005,35 @@ def test_markup_bold_span() -> None:
     )
 
 
+def test_markup_italic_span() -> None:
+    catalog = {"en-US": {"m": "Run `/tcban` then ~wait for the proof~."}}
+    assert t("m", "en-US", catalog=catalog) == (
+        "Run <code>/tcban</code> then <i>wait for the proof</i>."
+    )
+
+
 def test_markup_plain_mode_strips_markers() -> None:
-    catalog = {"en-US": {"m": "Tap *Done* or `/skip` now."}}
-    assert t("m", "en-US", catalog=catalog, plain=True) == "Tap Done or /skip now."
+    catalog = {"en-US": {"m": "Tap *Done* or `/skip` now ~then wait~."}}
+    assert t("m", "en-US", catalog=catalog, plain=True) == (
+        "Tap Done or /skip now then wait."
+    )
 
 
 def test_markup_unbalanced_rejected() -> None:
-    for bad in ("Tap `code now.", "Tap *bold now.", "Tap code` now.", "Tap bold* now."):
+    for bad in (
+        "Tap `code now.",
+        "Tap *bold now.",
+        "Tap ~italic now.",
+        "Tap code` now.",
+        "Tap bold* now.",
+        "Tap italic~ now.",
+    ):
         with pytest.raises(I18nError):
             t("m", "en-US", catalog={"en-US": {"m": bad}})
 
 
 def test_markup_empty_span_rejected() -> None:
-    for bad in ("Tap `` now.", "Tap ** now."):
+    for bad in ("Tap `` now.", "Tap ** now.", "Tap ~~ now."):
         with pytest.raises(I18nError):
             t("m", "en-US", catalog={"en-US": {"m": bad}})
 
@@ -1007,6 +1043,8 @@ def test_markup_nesting_rejected() -> None:
         t("m", "en-US", catalog={"en-US": {"m": "*a `b` c*"}}, b="x")
     with pytest.raises(I18nError):
         t("m", "en-US", catalog={"en-US": {"m": "`a {b}`"}}, b="x")
+    with pytest.raises(I18nError):
+        t("m", "en-US", catalog={"en-US": {"m": "~a *b* c~"}})
 
 
 def test_markup_sequential_pairs_parse() -> None:
@@ -1051,9 +1089,7 @@ def test_ban_help_overview_golden() -> None:
 
 
 def test_ban_help_commands_golden() -> None:
-    assert t("banning.help.commands.body") == (
-        "<code>/tcban</code> (alias: <code>/tcb</code>)"
-    )
+    assert t("banning.help.commands.body") == ("<code>/tcban</code> <code>/tcb</code>")
 
 
 def test_ban_help_examples_golden() -> None:

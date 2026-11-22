@@ -7,8 +7,8 @@ overview = "Membatasi pengguna agar tidak bisa mengirim pesan di *semua grup ter
 
 [help.commands]
 body = """
-`/tcmute` (alias: `/tcm`)
-`/tcunmute` (aliases: `/tcunm`, `/tcum`)"""
+`/tcmute` `/tcm`
+`/tcunmute` `/tcunm` `/tcum`"""
 
 [help.what]
 body = """
@@ -68,7 +68,7 @@ progress = "Dipulihkan di {done}/{total} grup sejauh ini ({failed} gagal: {sampl
 progress_clean = "Dipulihkan di {done}/{total} grup sejauh ini; {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
 
 [summary]
-body = "{user} telah di-mute {dur}.\nAlasan: {reason}\nDiterapkan ke {done}/{total} grup.{note}"
+body = "{user} telah di-mute {dur}.\n*Alasan:* {reason}\nDiterapkan ke {done}/{total} grup.{note}"
 partial = "\nPERINGATAN: mute tidak diterapkan di {failed} grup: {sample}{more}. Catatan mute tetap disimpan agar pembatasan bisa dicoba ulang."
 pending = "\n{pending} grup masih menunggu pengiriman dan dicoba ulang otomatis."
 

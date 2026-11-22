@@ -6,7 +6,7 @@
 overview = "Mencabut ban federasi aktif di *semua grup terhubung* sekaligus."
 
 [help.commands]
-body = "`/tcunban` (alias: `/tcunb`)"
+body = "`/tcunban` `/tcunb`"
 
 [help.what]
 body = """

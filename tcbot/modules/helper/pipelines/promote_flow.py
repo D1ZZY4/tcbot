@@ -14,8 +14,7 @@ from tcbot import database as db
 from tcbot.modules.helper import buttons, messages
 from tcbot.modules.helper.guards import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_user
-from tcbot.modules.helper.messages import send_log
-from tcbot.modules.helper.messages.rich_text import style
+from tcbot.modules.helper.messages import send_log, send_text
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
@@ -223,14 +222,16 @@ async def request_admin(
         target_id, target_fname, target_username, request_id
     )
     notified = False
+    # * The decision card is a direct DM, so its buttons follow the Owner's
+    # * locale rather than the requester's or the default catalog.
+    try:
+        owner_locale = await locale_for_user(owner_id) if owner_id else None
+    except Exception:
+        owner_locale = None
+    card_markup = buttons.promo_decision_btn(request_id, owner_locale)
     if owner_id:
         try:
-            await bot.send_message(
-                owner_id,
-                style(req_text),
-                parse_mode=None,
-                reply_markup=buttons.promo_decision_btn(request_id),
-            )
+            await send_text(bot, owner_id, req_text, reply_markup=card_markup)
             notified = True
         except Exception as exc:
             log.warning("Owner DM failed, falling back to log channel: %s", exc)
@@ -239,7 +240,7 @@ async def request_admin(
             await send_log(
                 bot,
                 req_text,
-                reply_markup=buttons.promo_decision_btn(request_id),
+                reply_markup=card_markup,
             )
         except Exception:
             log.exception("Promo request notify failed")

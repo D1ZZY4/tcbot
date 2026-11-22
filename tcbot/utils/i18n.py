@@ -95,6 +95,40 @@ def divider() -> str:
     return _divider()
 
 
+def quote(text: str, *, author: object | None = None) -> str:
+    """Render a block quotation, with an optional attributed author."""
+    from tcbot.modules.helper.messages.rich_format import quote as _quote  # noqa: PLC0415
+
+    return _quote(text, author=author)
+
+
+def heading(text: object, level: int = 2) -> str:
+    """Render a rich section heading."""
+    from tcbot.modules.helper.messages.rich_format import (  # noqa: PLC0415
+        heading as _heading,
+    )
+
+    return _heading(text, level)
+
+
+def subscript(text: object) -> str:
+    """Render text as rich subscript."""
+    from tcbot.modules.helper.messages.rich_style import (  # noqa: PLC0415
+        subscript as _subscript,
+    )
+
+    return _subscript(text)
+
+
+def superscript(text: object) -> str:
+    """Render text as rich superscript."""
+    from tcbot.modules.helper.messages.rich_style import (  # noqa: PLC0415
+        superscript as _superscript,
+    )
+
+    return _superscript(text)
+
+
 def bullet_list(lines: list[str]) -> str:
     """Render already-formatted lines as a rich bulleted block."""
     from tcbot.modules.helper.messages.rich_list import bullet_list as _bullet_list  # noqa: PLC0415
@@ -250,7 +284,7 @@ def display_name(locale: str, catalog: dict[str, dict[str, str]] | None = None) 
 def _prepare_value(name: str, value: object, *, escape: bool) -> str:
     """Render one placeholder value for the requested mode.
 
-    Raw strings are escaped in MarkdownV2 mode and verbatim in plain
+    Raw strings are escaped in rich mode and verbatim in plain
     mode; :class:`Safe` fragments (helper markup) always pass through.
     """
     if isinstance(value, Safe):
@@ -271,9 +305,9 @@ def _render_template(
     """Substitute placeholders and resolve the strict mini-markup.
 
     In rich mode (``escape=True``) literal text is HTML-escaped and the
-    `` `code` `` / ``*bold*`` spans become ``<code>`` / ``<b>`` tags. Plain
-    mode (``plain=True``) keeps raw catalog text for callback alerts, which
-    Telegram never parses.
+    `` `code` `` / ``*bold*`` / ``~italic~`` spans become ``<code>`` / ``<b>``
+    / ``<i>`` tags. Plain mode (``plain=True``) keeps raw catalog text for
+    callback alerts, which Telegram never parses.
     """
     parts: list[str] = []
     literal: list[str] = []
@@ -314,6 +348,19 @@ def _render_template(
                 )
             flush_literal()
             parts.append(f"<b>{esc(inner)}</b>" if escape else inner)
+            i = j + 1
+        elif ch == "~":
+            j = template.find("~", i + 1)
+            if j < 0:
+                raise I18nError(f"i18n template {key!r} has an unbalanced tilde")
+            inner = template[i + 1 : j]
+            check_span(inner, "italic")
+            if "`" in inner or "*" in inner or "~" in inner:
+                raise I18nError(
+                    f"i18n template {key!r} forbids nesting inside italic spans"
+                )
+            flush_literal()
+            parts.append(f"<i>{esc(inner)}</i>" if escape else inner)
             i = j + 1
         elif ch == "{":
             if template.startswith("{{", i):

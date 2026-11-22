@@ -14,8 +14,7 @@ from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, guards, identity, targets
 from tcbot.modules.helper.guards import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, reply_rich
-from tcbot.modules.helper.messages.rich_text import style
+from tcbot.modules.helper.messages import replies, reply_rich, reply_rich_result
 from tcbot.modules.helper.pipelines.reason_flow import (
     WAITING_PROOF,
     WAITING_REASON,
@@ -155,13 +154,11 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if inline_reason:
         scope["warn_reason"] = inline_reason
         try:
-            prompt = await msg.reply_text(
-                style(
-                    proof.noted_prompt(
-                        "warn", inline_reason, target_mention, locale=locale
-                    )
+            prompt = await reply_rich_result(
+                msg,
+                proof.noted_prompt(
+                    "warn", inline_reason, target_mention, locale=locale
                 ),
-                parse_mode=None,
                 reply_markup=proof.keyboard(locale),
             )
             scope["warn_prompt_chat"] = msg.chat.id
@@ -174,9 +171,9 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         return WAITING_PROOF
 
     try:
-        prompt = await msg.reply_text(
-            style(reason.prompt(target_mention, "warn", locale=locale)),
-            parse_mode=None,
+        prompt = await reply_rich_result(
+            msg,
+            reason.prompt(target_mention, "warn", locale=locale),
             reply_markup=reason.keyboard(locale),
         )
         scope["warn_prompt_chat"] = msg.chat.id

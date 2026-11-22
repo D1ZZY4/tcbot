@@ -38,6 +38,18 @@ Every new conversation in this repository must start by reading the canonical ru
 See [`docs-sync.md`](.agents/rules/docs-sync.md#read-before-work-and-update-after-work)
 for the complete read/update rules. Skipping either step is a serious defect.
 
+## Reading and Editing Discipline
+
+- Read every file **fully**, from the first line to the last. Never stop at a
+  preview, a truncated chunk, or the first matching section. For a large file,
+  continue with sequential reads until the whole file has been inspected. Do
+  not make assumptions about lines that were not read.
+- Group independent edits into one batch of parallel tool calls when many files
+  change, so related changes land together. Verify the files after the batch.
+- A shared builder stays shared but does not hardcode a destination. Let the
+  caller pass the target (start menu, rules, or another surface); call sites
+  choose what fits their context.
+
 ## Rule Reading Policy
 
 Rules in `.agents/rules/` apply by scope without waiting for the user to ask. If you are about to write code in `tcbot/`, read [`code-style.md`](.agents/rules/code-style.md), plus [`security-rules.md`](.agents/rules/security-rules.md) for authorization work or [`asyncio-gather-rules.md`](.agents/rules/asyncio-gather-rules.md) for async work. If you are about to edit docs, read [`docs-sync`](.agents/rules/docs-sync.md). When several rules match, read them all and prioritize by task relevance; never read only the first finding.
@@ -70,9 +82,12 @@ text, quotes, highlights, code, footnotes, dividers), `rich_style.py` (HTML
 escaping and bold, italic, underline, strike, spoiler), `rich_list.py` (lists
 and details), `rich_table.py`, `rich_link.py` (links, ID-based mentions, and
 every rich button feature), and `rich_media.py` (photo, video, slideshow for
-proof, collage). `rich_text.py` exposes only `style(text)`, which returns rich
-text unchanged. `rich_msg.py` and `rich_edit.py` own the `do_api_request`
-transport; there is no parse mode and no MarkdownV2 fallback.
+proof, collage). `rich_text.py` exposes `style(text)`, a verbatim passthrough,
+and `blocks()`, which converts a rendered multiline fragment into rich block
+markup. `rich_msg.py` and `rich_edit.py` own the `do_api_request`
+transport; there is no parse mode and no MarkdownV2 fallback. Every send and
+edit must go through these helpers: a direct PTB `send_message`, `reply_text`,
+or `edit_message_text` cannot render rich HTML and exposes raw tags to users.
 
 - Route new sends and edits through `rich_msg.py` (`send_rich`, `reply_rich`)
   and `rich_edit.py` (`edit_rich` and the safe-edit helpers). Every send uses a

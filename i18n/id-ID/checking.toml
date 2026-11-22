@@ -7,8 +7,8 @@ overview = "Cek status ban sendiri dengan `/checkme`, atau tarik profil aktivita
 
 [help.commands]
 body = """
-`/checkme` (alias: `/cme`)
-`/check` (alias: `/c`)"""
+`/checkme` `/cme`
+`/check` `/c`"""
 
 [help.checkme]
 body = """
@@ -41,26 +41,26 @@ Atau balas sebuah pesan lalu jalankan `/c`."""
 admin_fallback = "Admin"
 title = "*Profil*"
 activity = "*Aktivitas Federasi*"
-name = "Nama: {user}"
+name = "*Nama:* {user}"
 id = "ID: {id}"
 username = "Username: @{name}"
 username_none = "Username: (tidak ada)"
 yes = "Ya"
 yes_ban = "Ya ({ban})"
 no = "Tidak"
-role = "Peran: {role}"
+role = "*Peran:* {role}"
 assigned_by = "   Ditentukan oleh: {by}"
 assigned_at = "   Ditentukan pada: {at}"
 active_ban = "Ban Aktif: {state}"
 active_mute = "Mute Aktif: {state}"
 unknown = "Tidak diketahui, coba lagi sebentar"
-total_bans = "Total Ban: {n}"
+total_bans = "*Total Ban:* {n}"
 warnings = "Peringatan: {active} aktif di {groups} grup ({total} total riwayat)"
 kicks = "Kick: {n}"
 mutes = "Mute: {n}"
 appeals = "Banding: {n}"
 regular = "Pengguna biasa"
-caveat = "Catatan: sebagian penghitung gagal dimuat; total di atas mungkin tidak lengkap."
+caveat = "Sebagian penghitung gagal dimuat; total di atas mungkin tidak lengkap."
 
 [profile.button]
 bans = "Ban ({n})"
@@ -83,7 +83,7 @@ empty = "*Banding*\n\nTidak ada catatan banding untuk {user}."
 header = "*Banding*: {n} total, halaman {page}/{pages}"
 approved = "*Disetujui* (unban)"
 pending = "Tertunda / Ditolak"
-item = "{i}. {status}\n   ID Ban: {ban} | {ts}"
+item = "{i}. {status}\n   *ID Ban:* {ban} | {ts}"
 
 [warns]
 empty = "*Peringatan*\n\nTidak ada catatan peringatan untuk {user}."
@@ -98,10 +98,10 @@ db_fail = "Grup peringatan gagal dimuat. Database tidak terjangkau, coba lagi se
 [events]
 empty = "{heading}\n\nTidak ada catatan {lower} untuk {user}."
 header = "{heading}: {n} total, halaman {page}/{pages}"
-item = "{i}. {ts}\n   Grup: {title}\n   {reason}\n   Oleh {admin}"
+item = "{i}. {ts}\n   *Grup:* {title}\n   {reason}\n   Oleh {admin}"
 kick_failed = "Kick ini belum selesai: langkah pengangkatan ban masih tertunda."
 mute_item = "{i}. {ts}\n   Grup: {title}\n   Diminta: {requested} | Tersimpan: {stored}\n   {reason}\n   Oleh {admin}"
-no_reason = "(tanpa alasan)"
+no_reason = "~tanpa alasan~"
 
 [ban_info]
 heading = "Info Ban"
@@ -109,7 +109,7 @@ user = "Pengguna: {user}"
 user_id = "ID Pengguna: {id}"
 banned_by = "Di-ban oleh: {admin}"
 admin_id = "ID Admin: {id}"
-reason = "Alasan: {reason}"
+reason = "*Alasan:* {reason}"
 ban_id = "ID Ban: {id}"
 date = "Tanggal: {date}"
 rules = "Aturan yang dilanggar: {rules}"
@@ -140,7 +140,7 @@ bot_sender = "Bot dan pengirim anonim tidak punya catatan federasi, jadi tidak a
 status_retry = "Tidak bisa memverifikasi status ban kamu sekarang. Coba lagi sebentar."
 
 [checkme]
-banned = "Kamu sedang di-ban dari {community}.\n\nPengguna: {user}\nID Pengguna: {id}\nAlasan: {reason}\n\nDi-ban oleh: {admin}\n\nTanggal Penetapan: {date}\nKetuk tombol di bawah ↴ untuk detail."
+banned = "Kamu sedang di-ban dari {community}.\n\n*Pengguna:* {user}\n*ID Pengguna:* {id}\n*Alasan:* {reason}\n\n*Di-ban oleh:* {admin}\n\n*Tanggal Penetapan:* {date}\nKetuk tombol di bawah ↴ untuk detail."
 staff_admin = "Hey {user}, cek diri sendiri?\n\nKamu tim staf, kamu yang menangani ban, bukan yang menerima. Tidak ada ban aktif. Aman."
 staff_role = "Hey {user}, semua beres.\n\nKamu {role} {community}, bagian tim, bukan daftar ban. Tidak ada yang perlu dikhawatirkan."
 clean = "Kamu bersih, tidak ada ban aktif di {community}."

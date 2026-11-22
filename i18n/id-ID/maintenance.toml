@@ -7,10 +7,11 @@ overview = "Mengelola grup terhubung: bersihkan yang tidak bisa diakses, atau ke
 
 [help.commands]
 body = """
-`/leaveall` (aliases: `/exitall`, `/tcleave`)
-`/cleanup` (aliases: `/tcclean`, `/tcc`)
-`/tcrepair` (alias: `/tcr`) atau `/tcrepair retry` <run_id> [chat_id]
-`/tcforget` (alias: `/tcf`) <user_id> <reason>"""
+`/leaveall` `/exitall` `/tcleave`
+`/cleanup` `/tcclean` `/tcc`
+`/tcrepair` `/tcr`
+`/tcrepair retry` <run_id> [chat_id]
+`/tcforget` `/tcf` <user_id> <reason>"""
 
 [help.leaveall]
 body = "Membuat bot keluar dari semua grup terhubung sekaligus, menandai semuanya terputus di database, dan mengirim entri log per grup. Ini tidak bisa dibatalkan, tiap grup harus dihubungkan ulang manual dengan `/tcconnect`. Pakai hanya dalam darurat."

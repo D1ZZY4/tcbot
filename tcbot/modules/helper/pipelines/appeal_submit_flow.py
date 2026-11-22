@@ -27,11 +27,16 @@ from tcbot import database as db
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.buttons import appeal_cancel_btn, appeal_review_btn
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import message_link, reply_rich, send_log
+from tcbot.modules.helper.messages import (
+    message_link,
+    reply_rich,
+    reply_rich_result,
+    send_log,
+    send_text,
+)
 from tcbot.modules.helper.messages.links import display as display_community_link
 from tcbot.modules.helper.messages.rich_format import heading
 from tcbot.modules.helper.messages.rich_list import checklist
-from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.appeal_review_flow import AppealReviewMixin
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -378,9 +383,7 @@ async def post_appeal(
     # * behind by an earlier appeal then carries a stale token and cannot
     # * decide the appeal that replaced it.
     try:
-        rv = await ctx.bot.send_message(
-            cfg.main_group, style(review_text), parse_mode=None
-        )
+        rv = await send_text(ctx.bot, cfg.main_group, review_text)
     except Exception:
         log.exception("Appeal review post failed")
         rv = None
@@ -388,12 +391,12 @@ async def post_appeal(
     appeals_review_id: int | None = None
     appeal_log_sent_id: int | None = None
     if review_msg_id is not None:
-        review_btn = appeal_review_btn(ban_id, review_msg_id)
+        review_btn = appeal_review_btn(ban_id, review_msg_id, locale)
         rv_appeals, sent_log, markup = await asyncio.gather(
-            ctx.bot.send_message(
+            send_text(
+                ctx.bot,
                 appeal_chat,
-                style(review_text),
-                parse_mode=None,
+                review_text,
                 message_thread_id=appeal_thread,
                 reply_markup=review_btn,
             ),
@@ -681,14 +684,10 @@ class AppealSubmitMixin(SubmitMessageMixin):
         scope["appeal_log_msg_id"] = ban.get("log_message_id", 0)
         try:
             log_display = await display_community_link(ctx.bot, self.log_channel)
-            instr = await msg.reply_text(
-                style(self.instruction_text(locale, log_display)),
-                parse_mode=None,
-                reply_markup=appeal_cancel_btn(
-                    t("button.cancel", locale, plain=True),
-                    self.cancel_callback,
-                    locale,
-                ),
+            instr = await reply_rich_result(
+                msg,
+                self.instruction_text(locale, log_display),
+                reply_markup=appeal_cancel_btn(None, self.cancel_callback, locale),
             )
             scope["appeal_instruction_msg_id"] = instr.message_id
         except Exception as exc:

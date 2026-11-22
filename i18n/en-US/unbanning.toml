@@ -6,7 +6,7 @@
 overview = "Lifts an active federation ban across *all connected groups* at once."
 
 [help.commands]
-body = "`/tcunban` (alias: `/tcunb`)"
+body = "`/tcunban` `/tcunb`"
 
 [help.what]
 body = """

@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from telegram.error import BadRequest
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg
@@ -17,8 +16,7 @@ from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, guards, messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, reply_rich, send_log
-from tcbot.modules.helper.messages.rich_text import style
+from tcbot.modules.helper.messages import replies, reply_rich, safe_edit, send_log
 from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, t
 from tcbot.utils.logger import get_logger
@@ -120,9 +118,8 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.debug("cmd_broadcast status reply failed: %s", exc)
 
     # * Build per-group send coroutines, then fan out with semaphore limiting.
-    # * Staff text goes out as MarkdownV2 (invalid markup raises BadRequest
-    # * per group); fall back to plain text so one typo does not fail the
-    # * whole broadcast.
+    # * Staff text is untrusted plain text and stays unparsed: interpreting it
+    # * as rich HTML would let a broadcast inject markup into every group.
     async def _send_one(grp: GroupDoc) -> None:
         chat_id = grp.get("chat_id")
         if chat_id is None:
@@ -130,22 +127,7 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if has_reply and msg.reply_to_message:
             await msg.reply_to_message.forward(chat_id)
         elif broadcast_text:
-            try:
-                await ctx.bot.send_message(
-                    chat_id, style(broadcast_text), parse_mode=None
-                )
-            except BadRequest as exc:
-                # * Retry as plain text only for MarkdownV2 parse failures. Any
-                # * other BadRequest (chat gone, bot demoted) would fail the
-                # * retry identically, so re-raise to avoid doubling Telegram
-                # * calls on every dead group in the federation.
-                if "can't parse entities" not in str(exc).lower():
-                    raise
-                log.info(
-                    "Broadcast markup rejected in chat=%d; retrying as plain text",
-                    chat_id,
-                )
-                await ctx.bot.send_message(chat_id, broadcast_text)
+            await ctx.bot.send_message(chat_id, broadcast_text)
 
     results = await fan_out([_send_one(grp) for grp in groups])
     # * Benign per-group refusals (bot removed, chat gone) are not operator
@@ -171,16 +153,14 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     if status is not None:
         edit_r, log_r = await asyncio.gather(
-            status.edit_text(
-                style(
-                    t(
-                        "broadcasting.send.done",
-                        locale,
-                        ok=Safe(code(str(success))),
-                        failed=Safe(code(str(failed))),
-                    )
+            safe_edit(
+                status,
+                t(
+                    "broadcasting.send.done",
+                    locale,
+                    ok=Safe(code(str(success))),
+                    failed=Safe(code(str(failed))),
                 ),
-                parse_mode=None,
             ),
             log_coro,
             return_exceptions=True,

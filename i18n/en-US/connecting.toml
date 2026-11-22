@@ -7,7 +7,7 @@
 overview = "Connects your group to the {community} federation so federation bans, mutes, and broadcasts are applied automatically."
 
 [help.commands]
-body = "`/tcconnect` (alias: `/tccon`)"
+body = "`/tcconnect` `/tccon`"
 
 [help.who]
 body = "Group admins and creators only (checked per-group)."
@@ -58,4 +58,4 @@ declined = "Connection declined. I'll leave the group now."
 already_connected = "This group is already connected to {community}."
 connecting = "Connecting... applying existing federation bans and mutes. This can take a moment for large federations."
 perms_required = "Please make the bot an admin with the required permissions (delete messages, ban users, invite users) and try again."
-welcome_perm_missing = "Note: the bot does not have the new Welcome Messages admin right. Grant it in the group's administrator settings if you want Telegram's native welcome message to be available."
+welcome_perm_missing = "The bot does not have the new Welcome Messages admin right. Grant it in the group's administrator settings if you want Telegram's native welcome message to be available."

@@ -7,7 +7,7 @@
 # button label, {skip_hint} prebuilt hint, {skip}/{cancel} button labels.
 
 [prompt]
-step = "Reason noted; {gerund} {target}{suffix}.\nReason: {reason}\n\nGot any proof? Send photos, videos, GIFs, or files, then tap {done}{skip_hint}."
+step = "Reason noted; {gerund} {target}{suffix}.\n*Reason:* {reason}\n\nGot any proof? Send photos, videos, GIFs, or files, then tap {done}{skip_hint}."
 noted = "{Doing} {target}{suffix}.\nReason: {reason}\n\nGot any proof? Send photos, videos, GIFs, or files, then tap {done}{skip_hint}."
 
 [hint]

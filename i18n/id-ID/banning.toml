@@ -6,7 +6,7 @@
 overview = "Menjatuhkan *ban se-federasi* ke pengguna, berlaku di semua grup terhubung sekaligus. Target staf didemosi dan bukti disimpan bersama catatan ban."
 
 [help.commands]
-body = "`/tcban` (alias: `/tcb`)"
+body = "`/tcban` `/tcb`"
 
 [help.what]
 body = """
@@ -60,7 +60,7 @@ scope_warn = " PERINGATAN: daftar grup gagal dimuat, jadi sebagian grup mungkin 
 body = "Kamu di-ban dari {community} se-federasi.\nAlasan: {reason}\n\nKamu bisa mengajukan banding lewat tombol di bawah ↴."
 
 [summary]
-body = "{user} telah di-ban.\nAlasan: {reason}\n{applied}"
+body = "{user} telah di-ban.\n*Alasan:* {reason}\n{applied}"
 
 [confirm]
 body = "{user} sudah punya ban federasi aktif (ID Ban {ban_id}).\nAlasan lama: {old_reason}\nAlasan baru: {new_reason}\n\nPerbarui ban dengan alasan dan bukti baru?"

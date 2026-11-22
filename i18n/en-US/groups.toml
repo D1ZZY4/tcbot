@@ -7,7 +7,7 @@
 overview = "Lists every group currently connected to {community}, with optional details view."
 
 [help.commands]
-body = "`/tcgroups` (alias: `/tcg`)"
+body = "`/tcgroups` `/tcg`"
 
 [help.what]
 body = """
@@ -16,7 +16,7 @@ Lists all groups currently connected to {community}, along with the total count.
 The default view shows group names only. Tap *Details* to expand the list and show each group's chat ID alongside its name. Tap *Simple* to collapse back."""
 
 [help.examples]
-body = "`/tcgroups` (alias: `/tcg`)"
+body = "`/tcgroups` `/tcg`"
 
 # Runtime strings for the group list (groups.py, start.py menu).
 # [menu] sends plain; [list] renders as rich HTML.
@@ -27,7 +27,7 @@ body = "`/tcgroups` (alias: `/tcg`)"
 empty = "No groups are currently connected to {community}."
 
 [list]
-header = "*Connected Groups*\n\nCount: {n}"
+header = "*Connected Groups*\n\n*Count:* {n}"
 item = "{title}"
 item_detailed = "{title} - {id}"
 more = "...and {n} more not shown."

@@ -490,7 +490,8 @@ class ChatViews:
                     "stats.chats.item",
                     locale,
                     i=base_idx + i,
-                    title=grp.get("title", "Unknown"),
+                    title=grp.get("title")
+                    or t("common.action.unknown_title", locale, plain=True),
                     id=Safe(code(str(grp.get("chat_id", 0)))),
                 )
             )
@@ -526,7 +527,7 @@ class ChatViews:
             text = t("stats.error.group_not_found", locale)
             kb = back_to_module_btn(f"stats_chats:{page}", locale)
             return blocks(text), kb
-        title = grp.get("title", "Unknown")
+        title = grp.get("title") or t("common.action.unknown_title", locale, plain=True)
         launch_group_title_refresh(bot, chat_id)
         added_by = grp.get("added_by", 0)
         adder_fname, adder_uname = await db.users_cache.get_user_mention_data(added_by)

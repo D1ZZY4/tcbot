@@ -7,7 +7,7 @@
 overview = "Sends a message to every group currently connected to {community}."
 
 [help.commands]
-body = "`/tcbroadcast` (alias: `/bc`)"
+body = "`/tcbroadcast` `/bc`"
 
 [help.what]
 body = """

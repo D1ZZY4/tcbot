@@ -18,6 +18,9 @@ import re
 _CODE = r"<code>[^<]+</code>"
 _COMMAND_LINE = re.compile(rf"^({_CODE})(.*)$")
 _ALIAS_WRAPPER = re.compile(r"\((?:alias|aliases):\s*(.+?)\)")
+# * A second bare code span on a command line is the alias cell. The rich
+# * table already labels that column, so no "(alias: ...)" prose is needed.
+_BARE_ALIAS = re.compile(rf"^{_CODE}(?:[\s,]+{_CODE})*$")
 _BULLET_LINE = re.compile(r"^[-*]\s+(.*)$")
 _ORDERED_LINE = re.compile(r"^\d+\.\s+(.*)$")
 _BLOCK_TAGS = (
@@ -38,10 +41,13 @@ def style(text: str) -> str:
 
 
 def _alias_cell(remainder: str) -> tuple[str, bool]:
-    """Strip an ``(alias: ...)`` wrapper, keeping only its useful text."""
+    """Return the alias cell and whether this command row has an alias."""
+    stripped = remainder.strip()
+    if _BARE_ALIAS.fullmatch(stripped):
+        return stripped, True
     match = _ALIAS_WRAPPER.search(remainder)
     if match is None:
-        return remainder.strip(), False
+        return stripped, False
     cleaned = remainder[: match.start()] + match.group(1) + remainder[match.end() :]
     return cleaned.strip(), True
 

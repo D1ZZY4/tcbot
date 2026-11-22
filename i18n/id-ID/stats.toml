@@ -6,7 +6,7 @@
 overview = "Lihat ringkasan federasi live: Owner, staf, pengguna, ban aktif, dan grup terhubung, dengan menu drill-down untuk tiap bagian."
 
 [help.commands]
-body = "`/tcstats` (alias: `/tcs`)"
+body = "`/tcstats` `/tcs`"
 
 [help.what]
 body = "Menampilkan ringkasan federasi live: Owner, total staf per peran, jumlah pengguna yang di-cache, ban federasi aktif, dan chat terhubung."
@@ -47,7 +47,7 @@ users = "Pengguna"
 [main]
 title = "{community} *Statistik*"
 owner_unset = "Belum diatur"
-degraded = "Catatan: sebagian angka gagal dimuat; total di atas mungkin tidak lengkap."
+degraded = "Sebagian angka gagal dimuat; total di atas mungkin tidak lengkap."
 
 # Tabel ringkasan dua kolom. Nilainya dibangun di Python dan disisipkan mentah.
 [main.table]
@@ -74,7 +74,7 @@ item = "{i}. {user}"
 
 [user_detail]
 title = "*Detail Pengguna*"
-name = "Nama: {user}"
+name = "*Nama:* {user}"
 id = "ID: {id}"
 username = "Username: @{name}"
 username_none = "Username: -"
@@ -91,7 +91,7 @@ item = "{i}. {title} - {id}"
 [chat_detail]
 title = "*Detail Grup*"
 name = "Nama: {name}"
-chat_id = "ID Chat: {id}"
+chat_id = "*ID Chat:* {id}"
 connected_by = "Dihubungkan oleh: {user}"
 date = "Tanggal: {date}"
 

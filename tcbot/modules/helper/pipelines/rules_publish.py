@@ -10,6 +10,7 @@ from typing import Any
 
 from tcbot import cfg
 from tcbot.database import rules_db
+from tcbot.modules.helper.messages import safe_edit_message, send_text
 from tcbot.modules.helper.messages.rules import content_hash, render_channel
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_dt_raw, utc_now
@@ -62,21 +63,12 @@ async def publish_rules(
             keep_ids.append(int(slot["id"]))
             try:
                 if slot.get("message_id") and slot.get("content_hash") == digest:
-                    await bot.edit_message_text(
-                        text,
-                        chat_id=cfg.main_channel,
-                        message_id=slot["message_id"],
-                        parse_mode=None,
-                        disable_web_page_preview=True,
+                    await safe_edit_message(
+                        bot, cfg.main_channel, slot["message_id"], text
                     )
                     message_id = int(slot["message_id"])
                 else:
-                    sent = await bot.send_message(
-                        cfg.main_channel,
-                        text,
-                        parse_mode=None,
-                        disable_web_page_preview=True,
-                    )
+                    sent = await send_text(bot, cfg.main_channel, text)
                     message_id = int(sent.message_id)
                 await rules_db.publications.mark_synced(int(slot["id"]), message_id)
                 synced += 1

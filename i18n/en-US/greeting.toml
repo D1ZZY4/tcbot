@@ -4,7 +4,7 @@
 # {group} raw, {community} raw community name.
 
 [notice]
-banned_group = "Federation ban enforced on join.\nUser: {user}\nID: {uid}\nFirst name: {first}\nLast name: {last}\nUsername: {username}\nBan ID: {ban}\n\nThe user was banned in this group. Use View Log and View Proof for details, or Submit Appeal to request a review."
+banned_group = "Federation ban enforced on join.\n*User:* {user}\n*ID:* {uid}\n*First name:* {first}\n*Last name:* {last}\n*Username:* {username}\n*Ban ID:* {ban}\n\nThe user was banned in this group. Use View Log and View Proof for details, or Submit Appeal to request a review."
 banned_dm = "You are federation-banned from {community} and were banned in {group}.\n\nBan ID: {ban}\nReason: {reason}\n\nUse View Log and View Proof for details. If you believe this is a mistake, Submit Appeal."
 
 [welcome]

@@ -31,7 +31,6 @@ from tcbot.modules.helper.messages import (
     safe_edit_cb,
     safe_edit_message,
 )
-from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.ban_confirmation import (
     on_ban_update_continue,
     stale_ban_callback,
@@ -190,8 +189,6 @@ async def _execute_ban_record(
     proof_link: str | None,
     prev_proof_link: str | None,
     now: datetime,
-    logs_chat: int,
-    logs_thread: int | None,
     proof_chat: int,
     proof_thread: int | None,
     proof_items: Sequence[EvidenceItemDoc] | None,
@@ -315,14 +312,8 @@ async def _execute_ban_record(
         if proof_link
         else None
     )
-    send_kwargs: dict[str, Any] = {
-        "parse_mode": "MarkdownV2",
-        "message_thread_id": logs_thread,
-    }
-    if kb is not None:
-        send_kwargs["reply_markup"] = kb
     try:
-        log_msg = await bot.send_message(logs_chat, style(log_text), **send_kwargs)
+        log_msg = await messages.send_log(bot, log_text, reply_markup=kb)
     except Exception:
         log.exception("Ban log send failed for ban_id=%s", canonical_ban_id)
         return 0, True, canonical_ban_id, enforcement_run_id
@@ -417,7 +408,6 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         upload = await upload_proof_media(bot, msgs, caption)
         proof_msg_id = upload.message_id
         proof_link = upload.link
-        logs_chat, logs_thread = cfg.logs
         # * Proof is required for new bans: a proof-less record would let
         # * /check and audit logs reference evidence that never landed.
         # * A gallery that lost a file is a partial upload, and the schema
@@ -504,8 +494,6 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             proof_link=proof_link,
             prev_proof_link=prev_proof_link if is_update else None,
             now=now,
-            logs_chat=logs_chat,
-            logs_thread=logs_thread,
             proof_chat=proof_chat,
             proof_thread=proof_thread,
             proof_items=upload.documents(),
@@ -662,19 +650,9 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     )
     if prompt_msg_id and prompt_chat_id:
         edit_result, upsert_result, pm_result, markup_result = await asyncio.gather(
-            bot.edit_message_text(
-                style(summary),
-                chat_id=prompt_chat_id,
-                message_id=prompt_msg_id,
-                parse_mode=None,
-            ),
+            safe_edit_message(bot, prompt_chat_id, prompt_msg_id, summary),
             db.users_cache.upsert_user(target_id, None, target_fname),
-            bot.send_message(
-                target_id,
-                style(_pm_text),
-                parse_mode=None,
-                reply_markup=_pm_btn,
-            ),
+            messages.send_text(bot, target_id, _pm_text, reply_markup=_pm_btn),
             bot.edit_message_reply_markup(
                 chat_id=prompt_chat_id, message_id=prompt_msg_id
             ),
@@ -686,11 +664,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
         if isinstance(edit_result, BaseException):
             log.debug("Ban summary prompt edit failed: %s", edit_result)
             try:
-                await bot.send_message(
-                    prompt_chat_id,
-                    style(summary),
-                    parse_mode=None,
-                )
+                await messages.send_text(bot, prompt_chat_id, summary)
             except Exception as exc:
                 log.debug("Ban summary fallback send failed: %s", exc)
         if isinstance(upsert_result, BaseException):
@@ -698,12 +672,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
     else:
         upsert_result, pm_result = await asyncio.gather(
             db.users_cache.upsert_user(target_id, None, target_fname),
-            bot.send_message(
-                target_id,
-                style(_pm_text),
-                parse_mode=None,
-                reply_markup=_pm_btn,
-            ),
+            messages.send_text(bot, target_id, _pm_text, reply_markup=_pm_btn),
             return_exceptions=True,
         )
         throw_if_cancelled((upsert_result, pm_result))
@@ -974,7 +943,11 @@ def ban_conversation(
     return ConversationHandler(
         entry_points=[MessageHandler(entry_filter, entry_fn)],
         states=states,
-        fallbacks=[MessageHandler(ALL_PREFIXES_CMD_FILTER, on_proof_timeout)],
+        fallbacks=[
+            MessageHandler(ALL_PREFIXES_CMD_FILTER, on_proof_timeout),
+            CallbackQueryHandler(on_cancel_proof, pattern=r"^rules_step:cancel$"),
+            CallbackQueryHandler(on_cancel_proof, pattern=r"^ban_cancel$"),
+        ],
         per_chat=True,
         per_user=True,
         per_message=False,

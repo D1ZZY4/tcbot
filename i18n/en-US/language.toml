@@ -31,7 +31,7 @@ unavailable = "That language is not available yet."
 overview = "View or change language preferences for yourself or the group."
 
 [help.commands]
-body = "`/language` (aliases: `/lang`, `/langs`)"
+body = "`/language` `/lang` `/langs`"
 
 [help.who]
 body = "Anyone for their own preference. Group language needs the group owner or staff rank."

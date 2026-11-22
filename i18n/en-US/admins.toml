@@ -9,11 +9,11 @@ overview = "Promote and demote staff, transfer ownership, and manage promotion r
 
 [help.commands]
 body = """
-`/tcpromote` (alias: `/tcp`)
-`/tcdemote` (alias: `/tcd`)
-`/transferowner` (alias: `/tfowner`)
-`/tcpromoterequests` (alias: `/tcreqs`)
-`/tcpromotelist` (alias: `/tcplist`)"""
+`/tcpromote` `/tcp`
+`/tcdemote` `/tcd`
+`/transferowner` `/tfowner`
+`/tcpromoterequests` `/tcreqs`
+`/tcpromotelist` `/tcplist`"""
 
 [help.who]
 body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Owner and Admin.

@@ -31,7 +31,7 @@ unavailable = "Bahasa itu belum tersedia."
 overview = "Lihat atau ubah preferensi bahasa untuk dirimu atau grup."
 
 [help.commands]
-body = "`/language` (aliases: `/lang`, `/langs`)"
+body = "`/language` `/lang` `/langs`"
 
 [help.who]
 body = "Siapa pun untuk preferensi sendiri. Bahasa grup butuh pemilik grup atau peran staf."

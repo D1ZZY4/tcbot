@@ -6,7 +6,7 @@
 overview = "See a live federation overview: Owner, staff, users, active bans, and connected groups, with drill-down menus for every section."
 
 [help.commands]
-body = "`/tcstats` (alias: `/tcs`)"
+body = "`/tcstats` `/tcs`"
 
 [help.what]
 body = "Shows a live federation summary: Owner, total staff broken down by role, the number of cached users, active federation bans, and connected chats."
@@ -47,7 +47,7 @@ users = "Users"
 [main]
 title = "{community} *Stats*"
 owner_unset = "Not set"
-degraded = "Note: some numbers could not be loaded; totals above may be incomplete."
+degraded = "Some numbers could not be loaded; totals above may be incomplete."
 
 # Two-column overview table. Values are built in Python and inserted raw.
 [main.table]
@@ -74,7 +74,7 @@ item = "{i}. {user}"
 
 [user_detail]
 title = "*User Details*"
-name = "Name: {user}"
+name = "*Name:* {user}"
 id = "ID: {id}"
 username = "Username: @{name}"
 username_none = "Username: -"
@@ -91,7 +91,7 @@ item = "{i}. {title} - {id}"
 [chat_detail]
 title = "*Group Details*"
 name = "Name: {name}"
-chat_id = "Chat ID: {id}"
+chat_id = "*Chat ID:* {id}"
 connected_by = "Connected by: {user}"
 date = "Date: {date}"
 

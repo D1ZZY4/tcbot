@@ -66,16 +66,17 @@ both catalogs so the same action looks the same in every locale.
 | `⤎` | go back | Back |
 | `↤` / `↦` | previous / next, continue | Prev, Continue, Connect, Next |
 | `↧` / `↥` | expand / collapse | Details, Simple |
-| `✓` / `✕` | confirm / refuse | Done, Confirm, Approve, Agree; Cancel, Reject, Delete |
+| `🗸` / `🗶` | confirm / refuse | Done, Confirm, Approve, Agree; Cancel, Reject, Delete, Close |
 | `↷` | defer | Skip |
-| `↩` | respond to a decision | Appeal, Submit Appeal |
-| `↝` | open elsewhere | View Log, View Proof, View Appeal, Open in PM, community links |
-| `⤎` + `✕` | leave a panel | Back (green) and Close (red) on read-only menus |
-| `▤` | archived evidence | Proof, Proof id |
+| `🗩` | respond to a decision | Appeal, Submit Appeal, View Appeal |
+| `↝` / `🖈` | open elsewhere / pinned evidence | View Log, Open in PM, community links; View Proof, Proof id |
+| `⤎` + `🗶` | leave a panel | Back (green) and Close (red) on read-only menus |
 | `⇧` / `⌫` | create / remove | Publish, Discard |
-| `☰` / `✎` | configure / edit | Settings, Manage Rules, Edit Draft, Rename |
+| `⛁` / `☰` / `✎` | govern / configure / edit | Settings, Manage Rules, Edit Draft, Rename |
 | `↑` / `↓` | reorder | Up, Down |
-| `+` / `⋯` | add / more | Add Category, Add Item, More, Additional |
+| `+` / `☳` / `☶` | add / more / extra | Add Category, Add Item, More, Additional |
+| `🗟` | document preview | Preview |
+| `🕬` / `🗪` / `🗫` | announcement / discussion / appeals channel | Main Channel, Discussion Group, Appeals Channel |
 | `⌕` | search | Search, New Search |
 | `ⓘ` / `◈` | information | Help, Privacy Policy, Preview; About, Privacy, Rules |
 | `⌘` | locale | Language |
@@ -92,8 +93,10 @@ stripped from the cell.
 Every localized label lives exactly once in `i18n/<locale>/button.toml`.
 Locale-dependent builders take an explicit `locale` argument. Role names in the
 promotion picker are canonical English identifiers from `ROLE_LABEL`, not
-translated prose. `help_topics_menu_btn` and `help_topics_btn` are
-locale-independent. Builders never hardcode user-facing labels.
+translated prose. `help_topics_menu_btn` and `help_topics_btn` take a `locale`
+for their Back and Close controls; their topic names are stable module
+identifiers. Builders never hardcode user-facing labels. Builders in `common.py`
+and `rules.py` are reached through their submodules rather than the package root.
 
 ## Shared helpers (`common.py`, `nav.py`)
 
@@ -149,11 +152,12 @@ appeal; a legacy payload without the suffix falls back to the tapped message id.
 | Builder | Emits | Style |
 |---|---|---|
 | `picker_btn(items, selected)` | `rules_step:pick:<id>` (blue), `other` (none), `done` (green), `clear` (none), `cancel` (red) | mixed |
-| `editor_panel_btn` | `rules_edit_draft` (blue), `rules_preview` (blue), `rules_publish` (green), `rules_discard` (red), `rules_settings` (blue) | mixed |
-| `categories_btn` | `rules_cat:<key>`, rename/up/down (blue), `rules_cat_del:<key>` (red), `rules_cat_add` (blue), Back (green) | mixed |
-| `items_btn` | `rules_item_add` (blue), Back (green) | mixed |
-| `confirm_btn(yes, no)` | destructive confirmation: Yes (red), No (red) | mixed |
-| `rules_menu_btn(categories, page)` | `rules_show:<key>`, `rules_page:<n>` | blue |
+| `editor_panel_btn` | `rules_edit_draft` (blue), `rules_preview` (blue), `rules_publish` (green), `rules_discard` (red), `rules_settings` (blue), Back + Close | mixed |
+| `categories_btn` | `rules_cat:<key>`, rename/up/down (blue), `rules_cat_del:<key>` (red), `rules_cat_add` (blue), Back + Close | mixed |
+| `items_btn` | `rules_item_add` (blue), Back + Close | mixed |
+| `confirm_btn(yes, no)` | destructive confirmation: Yes (red), No (red), Back + Close | mixed |
+| `prompt_btn(back)` | Back + Close for a text-entry step | mixed |
+| `rules_menu_btn(categories, page)` | `rules_show:<key>`, `rules_page:<n>`, Back + Close | mixed |
 | `ack_btn(version, member)` | `rules_ack:<version>:<member>` | green |
 
 Category slugs are capped at 40 characters so even the longest callback and a
@@ -182,7 +186,7 @@ and tap cannot show a different record. Legacy three-part callbacks still work.
 |---|---|---|
 | `main_menu_btn` | About, Help, Additional, Privacy, Language | blue |
 | `group_start_btn` | Open PM URL, `help_menu_group` | blue |
-| `open_pm_btn(bot_username, start)` | Deep link to the bot private chat | blue |
+| `open_pm_btn(bot_username, start, locale)` | Shared Open in PM button; the caller chooses the deep-link target | blue |
 | `additional_menu_btn` | Main Channel, Discussion Group, Appeals, Logs URLs, Back | blue + none |
 | `groups_menu_btn`, `tcgroups_btn` | Detailed/Simple toggle | blue |
 | `help_topics_menu_btn`, `help_topics_btn`, `module_help_btn` | `helpc_*`, `helps_<module>:<index>` | blue |

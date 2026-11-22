@@ -9,10 +9,10 @@ limit_noun = "peringatan"
 
 [help.commands]
 body = """
-`/tcwarn` (alias: `/tcw`)
-`/tcunwarn` (alias: `/tcunw`)
-`/warns` (alias: `/warnlist`)
-`/resetwarns` (alias: `/clearwarns`)"""
+`/tcwarn` `/tcw`
+`/tcunwarn` `/tcunw`
+`/warns` `/warnlist`
+`/resetwarns` `/clearwarns`"""
 
 [help.who]
 body = """

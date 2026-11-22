@@ -94,6 +94,72 @@ async def send_rich(
     )
 
 
+async def send_text(
+    bot: Bot,
+    chat_id: int | str,
+    text: str,
+    *,
+    reply_markup: Any | None = None,
+    message_thread_id: int | None = None,
+) -> Message:
+    """Send text as a rich message, or plainly for a non-PTB test double.
+
+    This is the chat-id sibling of :func:`reply_rich`: the rich decision is
+    made here so call sites never build a transport-specific payload.
+    """
+    from telegram import Bot  # noqa: PLC0415 (heavy import on use)
+
+    if not isinstance(bot, Bot):
+        return await bot.send_message(
+            chat_id,
+            text,
+            reply_markup=reply_markup,
+            message_thread_id=message_thread_id,
+        )
+    return await send_rich(
+        bot,
+        chat_id,
+        html_message(text),
+        reply_markup=reply_markup,
+        message_thread_id=message_thread_id,
+    )
+
+
+async def reply_rich_result(
+    msg: Message,
+    text: str,
+    *,
+    reply_markup: Any | None = None,
+    message_thread_id: int | None = None,
+    disable_notification: bool | None = None,
+) -> Message:
+    """Rich reply that returns the sent message so flows can record its id.
+
+    Unlike :func:`reply_rich`, transport errors propagate: a conversation
+    prompt must know whether it landed before storing a message id.
+    """
+    from telegram import Bot  # noqa: PLC0415 (heavy import on use)
+
+    getter = getattr(msg, "get_bot", None)
+    rich_bot = getter() if getter is not None else None
+    if not isinstance(rich_bot, Bot):
+        return await msg.reply_text(
+            text,
+            reply_markup=reply_markup,
+            message_thread_id=message_thread_id,
+            disable_notification=disable_notification,
+        )
+    return await send_rich(
+        rich_bot,
+        msg.chat.id,
+        html_message(text),
+        reply_to_message_id=msg.message_id,
+        reply_markup=reply_markup,
+        message_thread_id=message_thread_id,
+        disable_notification=disable_notification,
+    )
+
+
 async def reply_rich(
     msg: Message,
     text: str,
@@ -129,5 +195,7 @@ __all__ = [
     "blocks_message",
     "html_message",
     "reply_rich",
+    "reply_rich_result",
     "send_rich",
+    "send_text",
 ]

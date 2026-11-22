@@ -1,14 +1,14 @@
 # Help index prose for help.py itself: the topic-list header.
 # Structure stays in help.py; only prose lives here.
-# Placeholders: {title} carries pre-formatted bold markup from code,
-# {community} is the raw community name.
+# Placeholders: {title} carries pre-formatted heading markup from code,
+# {divider} is a rich rule and {quote} is a plain block quotation.
 
 [index]
 title = "Bantuan {botname}"
 body = """{title}
-Bot manajemen federasi untuk {community}.
-
-Pilih modul di bawah ↴ untuk membaca ringkasan dan perintahnya, atau pakai `/help <module>` untuk langsung ke topik."""
+{divider}
+{quote}"""
+guidance = "Pilih modul di bawah ↴ untuk membaca ringkasan dan perintahnya, atau pakai /help module untuk langsung ke topik."
 
 # Runtime strings (help.py). [error] sends plain; [note]/[module]/
 # [section]/[not_found] render as rich HTML. Placeholders: {title}/
@@ -21,15 +21,12 @@ topic_not_found = "Topik tidak ditemukan."
 section_not_found = "Bagian tidak ditemukan."
 invalid_section = "Bagian tidak valid."
 
-[note]
-prefixes = "*Catatan:* Semua perintah juga bisa dipakai dengan {prefixes}"
-
 [module]
 title = "Bantuan untuk {name}"
 body = """{title}
 {divider}
 {overview}
-{list}"""
+{divider}"""
 
 [section]
 body = """{title}

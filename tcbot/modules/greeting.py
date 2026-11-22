@@ -23,13 +23,18 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.buttons import rules as rules_btn
-from tcbot.modules.helper.locale import locale_for_chat, locale_for_update
+from tcbot.modules.helper.locale import (
+    locale_for_chat,
+    locale_for_update,
+    locale_for_user,
+)
 from tcbot.modules.helper.messages import (
     appeal_deep_link,
     message_link,
     reply_rich,
+    reply_rich_result,
+    send_text,
 )
-from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, t, user_ref
@@ -63,9 +68,11 @@ async def _in_federation(chat_id: int, *, action: str) -> bool | None:
     Primary groups always qualify; other chats qualify only while their
     connected row is active, read directly so a disconnect in another
     process stops join enforcement at once instead of lingering for the
-    connection cache TTL. Returns ``None`` on a lookup outage so the
-    caller stays silent instead of enforcing blind or greeting an
-    unverified joiner.
+    connection cache TTL.
+
+    ``None`` on a lookup outage means "unknown": callers still run the
+    ban/mute reads, which fail closed. Skipping enforcement on an outage
+    would let a federation-banned user join unchecked.
     """
     if cfg.is_primary_group(chat_id):
         return True
@@ -115,32 +122,27 @@ async def _send_join_ban_notices(
         username=f"@{member.username}" if member.username else "-",
         ban=Safe(code(ban_id)) if ban_id else "-",
     )
-    if reply_to is not None:
-        group_send = reply_to.reply_text(
-            style(group_text),
-            parse_mode=None,
-            reply_markup=keyboard,
-        )
-    else:
-        group_send = bot.send_message(
-            chat.id,
-            style(group_text),
-            parse_mode=None,
-            reply_markup=keyboard,
-        )
+    group_send = (
+        reply_rich_result(reply_to, group_text, reply_markup=keyboard)
+        if reply_to is not None
+        else send_text(bot, chat.id, group_text, reply_markup=keyboard)
+    )
+    # * The DM goes to the banned member, so it follows their locale, not
+    # * the group's. Every other ban DM resolves the recipient this way.
+    dm_locale = await locale_for_user(member.id)
     dm_text = t(
         "greeting.notice.banned_dm",
-        locale,
+        dm_locale,
         community=cfg.community_name,
         group=chat.title or str(chat.id),
         reason=ban.get("reason") or "-",
         ban=Safe(code(ban_id)) if ban_id else "-",
     )
-    dm_send = bot.send_message(
+    dm_send = send_text(
+        bot,
         member.id,
-        style(dm_text),
-        parse_mode=None,
-        reply_markup=keyboard,
+        dm_text,
+        reply_markup=buttons.join_ban_btn(log_url, proof_url, appeal_url, dm_locale),
     )
     group_result, dm_result = await asyncio.gather(
         group_send,
@@ -333,7 +335,7 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     is_primary = cfg.is_primary_group(chat.id)
 
     # * Only act in connected federation groups; skip all other chats.
-    if not await _in_federation(chat.id, action="new_member"):
+    if await _in_federation(chat.id, action="new_member") is False:
         return
 
     # * One chat, one locale: resolve once for the whole batch below.
@@ -398,7 +400,7 @@ async def on_join_request_approved(
         return
 
     chat = cmu.chat
-    if not await _in_federation(chat.id, action="join_request_approved"):
+    if await _in_federation(chat.id, action="join_request_approved") is False:
         return
 
     # * Identity harvest in parallel with mute/ban lookups.
@@ -523,7 +525,7 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     chat = request.chat
-    if not await _in_federation(chat.id, action="join_request"):
+    if await _in_federation(chat.id, action="join_request") is False:
         return
 
     # * Opportunistic identity harvest + ban check in parallel.

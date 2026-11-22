@@ -44,9 +44,11 @@ inside a file and extend the prefix (`[x]` + `y` = `file.x.y`).
    final wording.
 5. Newlines are `\n` inside basic strings, literal line breaks are not
    allowed; keep messages to the same paragraph breaks as `en-US`.
-6. Mini-markup only: `` `code` `` and `*bold*` spans, balanced and
-   unnested, with no braces inside. Anything else (including a lone
-   `*` or backtick) fails tests. Close multi-line `"""` blocks tight
+6. Mini-markup only: `` `code` ``, `*bold*` and `~italic~` spans, balanced
+   and unnested, with no braces inside. Use bold for field labels
+   (`*Reason:*`), code for commands and IDs, and italic for a short
+   secondary qualifier (`~no reason~`). Anything else (including a lone
+   `*`, `~` or backtick) fails tests. Close multi-line `"""` blocks tight
    against the last content line so no trailing newline ships.
 
 ## Help prose
@@ -83,8 +85,8 @@ default locale is only for tests and goldens.
 
 Each key documents its send path. Plain notices and callback alerts must
 render with `plain=True`. Rich message keys use the default mode, which
-escapes literal text and resolves `` `code` `` / `*bold*` spans into real
-`<code>` / `<b>` tags. Dynamics cross as raw data or `Safe` pre-formatted
+escapes literal text and resolves `` `code` `` / `*bold*` / `~italic~`
+spans into real `<code>` / `<b>` / `<i>` tags. Dynamics cross as raw data or `Safe` pre-formatted
 markup, never pre-escaped. There is no parse-mode fallback path.
 
 ## Adding a locale
@@ -95,7 +97,7 @@ markup, never pre-escaped. There is no parse-mode fallback path.
    to `en-US` per key at runtime. Button labels render as plain text;
    message templates are escaped by the engine, so translators never
    write backslashes in either file.
-4. Run `uv run --with pytest pytest tests/test_i18n.py -q`: placeholder
+4. Run `uv run pytest tests/test_i18n.py -q`: placeholder
    mismatches, unbalanced mini-markup or parentheses, and retired drawn
    separators fail the suite.
 

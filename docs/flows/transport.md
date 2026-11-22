@@ -149,7 +149,7 @@ built with `"\n".join(lines)` must be grouped into real blocks before sending.
 
 | Input lines | Rich output |
 |---|---|
-| Consecutive `` `/command` `` lines, with or without `(alias: ...)` | A two-column table with Command and Alias or Details headers. |
+| Consecutive `` `/command` `` lines, optionally followed by a second `` `/alias` `` code span | A two-column table with Command and Alias, or Details for rows with no alias. |
 | `- ...` | A rich bullet list. |
 | `1. ...` | A rich ordered list. |
 | Other lines, separated by blank lines | Paragraphs. |
@@ -194,15 +194,24 @@ application-level default parse-mode setting in `__main__.py`.
 
 User-facing wording comes from `t()` in `utils/i18n.py`, which owns the `Safe`
 marker and the shared markup helpers `esc`, `bold`, `italic`, `underline`,
-`strike`, `code`, `pre`, `link`, `user_ref`, and `safe_username`. Rich HTML
-escaping for button labels and attributes is `esc()` in `rich_style.py`, backed
-by `html.escape`. The richer formatting primitives live in `rich_format.py`
-(`heading`, `paragraph`, `quote`, `code`, `pre`, `highlight`, `code_block`,
-`footnote`, `footnote_ref`, `divider`), `rich_list.py` (`bullet_list`,
-`ordered_list`, `checklist`, `details`), `rich_table.py` (`table`), and
-`rich_media.py` (`photo`, `video`, `slideshow`, `proof_slideshow`, `collage`).
-`rich_text.py` exposes only `style(text)`, which returns text unchanged because
-rich messages carry their own markup.
+`strike`, `code`, `pre`, `link`, `user_ref`, and `safe_username`. Catalogs use
+one style convention: `` `code` `` for commands and IDs, `*bold*` for field
+labels, and `~italic~` for short secondary qualifiers. Titles use `heading()`
+at the panel boundary, and a divider separates content from any keyboard.
+Rich HTML escaping for button labels and attributes is `esc()` in
+`rich_style.py`, backed by `html.escape`. The richer formatting primitives live in `rich_format.py`
+(`heading`, `paragraph`, `quote` with an optional author, `pull_quote`,
+`highlight` with an optional author, `code`, `pre`, `code_block`, `footnote`,
+`footnote_ref`, `divider`, `footer`, `anchor`, `math`, `math_block`, `time_tag`,
+`emoji`), `rich_style.py` (`bold`, `italic`, `underline`, `strike`, `spoiler`,
+`subscript`, `superscript`), `rich_list.py` (`bullet_list`, `ordered_list` with
+`start`/`marker`/`reversed_order`, `checklist`, `details`), `rich_table.py`
+(`table`), and `rich_media.py` (`photo`, `video`, `slideshow`,
+`proof_slideshow`, `collage`).
+`rich_text.py` exposes `style(text)`, a verbatim passthrough, and `blocks()`,
+which converts a rendered multiline fragment into rich block markup. Rich
+messages carry their own markup, so sends and edits must use the rich helpers;
+a direct PTB send leaves the HTML tags visible to users.
 
 ## Audit logs and deep links
 

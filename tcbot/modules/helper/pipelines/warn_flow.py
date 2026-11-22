@@ -16,7 +16,6 @@ from tcbot import database as db
 from tcbot.modules.helper import buttons, guards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, send_log
-from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.demote_flow import Demote, demote_before_enforcement
 from tcbot.modules.helper.pipelines.proof_flow import (
     BuildProof,
@@ -466,9 +465,9 @@ async def execute_warn(
             # * The reply is best-effort: a failed notification must not
             # * skip the warn cleanup below.
             try:
-                await msg.reply_text(
-                    style(f"{ban_notice}{applied_line}"),
-                    parse_mode=None,
+                await reply_rich(
+                    msg,
+                    f"{ban_notice}{applied_line}",
                     reply_markup=proof_btn,
                 )
             except asyncio.CancelledError:
@@ -507,18 +506,16 @@ async def execute_warn(
             log_text,
             reply_markup=proof_btn,
         ),
-        msg.reply_text(
-            style(
-                t(
-                    "warnings.issued.body",
-                    locale,
-                    user=Safe(user_ref(target_id, target_name)),
-                    count=count,
-                    limit=warn_limit,
-                    reason=reason_text,
-                )
+        reply_rich(
+            msg,
+            t(
+                "warnings.issued.body",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+                count=count,
+                limit=warn_limit,
+                reason=reason_text,
             ),
-            parse_mode=None,
             reply_markup=proof_btn,
         ),
         return_exceptions=True,
@@ -654,17 +651,15 @@ async def execute_unwarn(
             ctx.bot,
             log_text,
         ),
-        msg.reply_text(
-            style(
-                t(
-                    "warnings.removed.body",
-                    locale,
-                    user=Safe(user_ref(target_id, target_name)),
-                    new=new_count,
-                    limit=warn_limit,
-                )
+        reply_rich(
+            msg,
+            t(
+                "warnings.removed.body",
+                locale,
+                user=Safe(user_ref(target_id, target_name)),
+                new=new_count,
+                limit=warn_limit,
             ),
-            parse_mode=None,
         ),
         return_exceptions=True,
     )
@@ -799,16 +794,14 @@ async def execute_resetwarns(
             ctx.bot,
             log_text,
         ),
-        msg.reply_text(
-            style(
-                t(
-                    "warnings.cleared.body",
-                    locale,
-                    removed=removed,
-                    user=Safe(user_ref(target_id, target_name)),
-                )
+        reply_rich(
+            msg,
+            t(
+                "warnings.cleared.body",
+                locale,
+                removed=removed,
+                user=Safe(user_ref(target_id, target_name)),
             ),
-            parse_mode=None,
         ),
         return_exceptions=True,
     )

@@ -52,7 +52,7 @@ def render_groups(
     used = len(header) + len(rule) + 2
     items: list[str] = []
     for i, g in enumerate(groups):
-        title = g.get("title", "Unknown")
+        title = g.get("title") or t("common.action.unknown_title", locale, plain=True)
         if detailed:
             line = t(
                 "groups.list.item_detailed",

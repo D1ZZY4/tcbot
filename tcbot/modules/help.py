@@ -15,13 +15,12 @@ from telegram.ext import (
     MessageHandler,
 )
 
-from tcbot import cfg
 from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit, reply_rich
 from tcbot.modules.helper.messages.rich_text import blocks
-from tcbot.utils.i18n import Safe, bold, code, divider, t
+from tcbot.utils.i18n import Safe, bold, code, divider, heading, quote, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -72,8 +71,8 @@ def _builder_help(
 def _topics_for_locale(locale: str | None, *, menu: bool) -> list[tuple[str, str]]:
     """Build the help-index topic list in ``locale`` (names + callbacks).
 
-    The topic list is rebuilt per request so the topic names follow the
-    tapper's locale like every other keyboard.
+    Topic names are stable module identifiers; only the keyboard controls
+    (Back and Close) follow the requested locale.
     """
     content = _builder_help(locale)
     ordered = sorted(
@@ -97,33 +96,19 @@ def _module_map_for_locale(locale: str | None) -> dict[str, str]:
 
 def _help_index_text(botname: str, locale: str | None = None) -> str:
     """Build the help index header for the given plain-text bot display name."""
-    # * Title renders plain then bolds outside: the engine would double
+    # * Title renders plain then heads outside: the engine would double
     # * escape the name if it escaped first, and plain alone would leave
-    # * a markup-bearing bot name unescaped. bold() escapes exactly once.
+    # * a markup-bearing bot name unescaped. heading() escapes exactly once.
     return t(
         "help.index.body",
         locale,
-        title=Safe(bold(t("help.index.title", locale, botname=botname, plain=True))),
-        community=cfg.community_name,
+        title=Safe(heading(t("help.index.title", locale, botname=botname, plain=True))),
+        divider=Safe(divider()),
+        quote=Safe(quote(t("help.index.guidance", locale, plain=True))),
     )
 
 
 # ──────────────────────── Shared Renderers ──────────────────────── #
-
-
-def _prefix_note(locale: str | None = None) -> str:
-    """Render the command-prefix footer note in ``locale``.
-
-    Prefixes come from frozen env config and never change at runtime, but
-    the surrounding prose is translated, so this renders per request
-    instead of once at import. The leading newline separates the note
-    from the overview.
-    """
-    return t(
-        "help.note.prefixes",
-        locale,
-        prefixes=Safe(" ".join(code(p) for p in cfg.prefixes)),
-    )
 
 
 def _section_buttons(
@@ -144,10 +129,9 @@ def _module_text(name: str, overview: str, locale: str | None = None) -> str:
     return t(
         "help.module.body",
         locale,
-        title=Safe(bold(t("help.module.title", locale, name=name, plain=True))),
+        title=Safe(heading(t("help.module.title", locale, name=name, plain=True))),
         divider=Safe(divider()),
         overview=Safe(blocks(overview)),
-        list=Safe(blocks(_prefix_note(locale))),
     )
 
 
@@ -216,7 +200,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ),
             log_label="cmd_help not-found",
             reply_markup=buttons.help_topics_btn(
-                _topics_for_locale(locale, menu=False)
+                _topics_for_locale(locale, menu=False), locale
             ),
         )
         return
@@ -225,7 +209,9 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         msg,
         _help_index_text(botname, locale),
         log_label="cmd_help index",
-        reply_markup=buttons.help_topics_btn(_topics_for_locale(locale, menu=False)),
+        reply_markup=buttons.help_topics_btn(
+            _topics_for_locale(locale, menu=False), locale
+        ),
     )
 
 
@@ -245,7 +231,7 @@ async def _render_help_index(
     kb = (
         buttons.help_topics_menu_btn(_topics_for_locale(locale, menu=True), locale)
         if with_back_to_start
-        else buttons.help_topics_btn(_topics_for_locale(locale, menu=False))
+        else buttons.help_topics_btn(_topics_for_locale(locale, menu=False), locale)
     )
     await answer_and_edit(q, _help_index_text(botname, locale), reply_markup=kb)
 

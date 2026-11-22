@@ -7,8 +7,8 @@ overview = "Jalankan diagnostik jaringan: ping untuk latensi round-trip API Tele
 
 [help.commands]
 body = """
-`/ping` (alias: `/p`)
-`/speedtest` (alias: `/st`)"""
+`/ping` `/p`
+`/speedtest` `/st`"""
 
 [help.what]
 body = """

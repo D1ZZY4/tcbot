@@ -61,9 +61,17 @@ def main_menu_btn(locale: str | None = None) -> InlineKeyboardMarkup:
 
 
 def open_pm_btn(
-    bot_username: str, start: str = "menu", locale: str | None = None
+    bot_username: str,
+    start: str = "menu",
+    locale: str | None = None,
 ) -> InlineKeyboardMarkup | None:
-    """Single deep-link button that opens the bot in a private chat."""
+    """One shared Open in PM button whose destination the caller chooses.
+
+    ``start`` is the deep-link argument. A start-menu surface passes ``menu``;
+    a rules surface may pass ``rules`` or ``tcrules``. Keeping the builder
+    shared while leaving the destination to the caller avoids both duplicated
+    builders and a hardcoded target that cannot fit every entry point.
+    """
     if not bot_username:
         return None
     return InlineKeyboardMarkup(
@@ -82,18 +90,11 @@ def open_pm_btn(
 def group_start_btn(
     bot_username: str, locale: str | None = None
 ) -> InlineKeyboardMarkup:
-    """Group /start keyboard: Open PM link plus group help button."""
-    rows: list[list[InlineKeyboardButton]] = []
-    if bot_username:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    t("button.open_pm", locale, plain=True),
-                    url=f"https://t.me/{bot_username}?start=menu",
-                    style=KeyboardButtonStyle.PRIMARY,
-                )
-            ]
-        )
+    """Group /start keyboard: the shared Open PM button plus group help."""
+    pm = open_pm_btn(bot_username, "menu", locale)
+    rows: list[list[InlineKeyboardButton]] = (
+        [list(row) for row in pm.inline_keyboard] if pm else []
+    )
     rows.append(
         [
             InlineKeyboardButton(

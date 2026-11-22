@@ -2,9 +2,9 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Inline rich text styles: bold, italic, underline, strike, spoiler.
+"""Inline rich text styles: bold, italic, underline, strike, spoiler, sub/sup.
 
-Only these five inline styles live here. Code and preformatted blocks are in
+Inline styling lives here. Code and preformatted blocks are in
 ``rich_format``; links and mentions are in ``rich_link``.
 """
 
@@ -50,4 +50,25 @@ def spoiler(text: object) -> str:
     return f"<tg-spoiler>{content}</tg-spoiler>" if content else ""
 
 
-__all__ = ["bold", "esc", "italic", "spoiler", "strike", "underline"]
+def subscript(text: object) -> str:
+    """Render text as rich subscript."""
+    content = esc(text)
+    return f"<sub>{content}</sub>" if content else ""
+
+
+def superscript(text: object) -> str:
+    """Render text as rich superscript."""
+    content = esc(text)
+    return f"<sup>{content}</sup>" if content else ""
+
+
+__all__ = [
+    "bold",
+    "esc",
+    "italic",
+    "spoiler",
+    "strike",
+    "subscript",
+    "superscript",
+    "underline",
+]

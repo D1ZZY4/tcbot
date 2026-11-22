@@ -16,7 +16,6 @@ def language_list_btn(
     scope: str,
     items: list[tuple[str, str]],
     *,
-    back_label: str | None = None,
     back_callback: str | None = None,
     selected: str | None = None,
     locale: str | None = None,
@@ -25,8 +24,8 @@ def language_list_btn(
 
     Each button sends ``lang:set:<scope>:<locale>``; the current setting
     gets a checkmark text prefix (a plain character, not emoji). The Back row sends the given
-    callback verbatim, so the start-menu path returns to ``back_to_start``
-    while the command path omits it.
+    callback verbatim and uses ``locale`` for its label, so the start-menu
+    path returns to ``back_to_start`` while the command path omits it.
     """
     rows = [
         [
@@ -44,7 +43,6 @@ def language_list_btn(
     ]
     if back_callback is not None:
         # * The label comes from the shared Back button so its style and
-        # * wording cannot drift; back_label stays for older callers.
-        _ = back_label
+        # * wording cannot drift.
         rows.append([back_button(back_callback, locale)])
     return InlineKeyboardMarkup(rows)

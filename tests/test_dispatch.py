@@ -239,3 +239,22 @@ def test_gather_bounded_caps_concurrency() -> None:
 
     assert asyncio.run(_main()) == [1] * 20
     assert peak <= 3
+
+
+def test_fan_out_caps_concurrency_and_keeps_order() -> None:
+    in_flight = 0
+    peak = 0
+
+    async def _work(index: int) -> int:
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.01)
+        in_flight -= 1
+        return index
+
+    async def _main() -> list[int | BaseException]:
+        return await fan_out([_work(i) for i in range(20)], max_concurrent=3)
+
+    assert asyncio.run(_main()) == list(range(20))
+    assert peak <= 3

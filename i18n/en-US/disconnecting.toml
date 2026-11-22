@@ -7,7 +7,7 @@ overview = "Removes a group from {community}. Use `/tcdisconnect` from inside th
 
 [help.commands]
 body = """
-`/tcdisconnect` (alias: `/tcdiscon`)
+`/tcdisconnect` `/tcdiscon`
 `/rmtc`"""
 
 [help.who]

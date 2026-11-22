@@ -49,6 +49,7 @@ text = "Pelan-pelan, coba lagi dalam {wait}s."
 [action]
 no_reason = "Tanpa alasan"
 unknown_date = "Tidak diketahui"
+unknown_title = "Grup tanpa nama"
 
 # Help section labels (raw: buttons show them plain, titles escape them
 # via bold()) and scope bodies (rich prose).

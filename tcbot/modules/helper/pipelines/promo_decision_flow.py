@@ -21,13 +21,14 @@ from tcbot.modules.helper.messages import (
     cb_error_edit,
     promote_approved_log,
     promote_rejected_log,
+    promote_request_log,
     replies,
     safe_edit_cb,
     send_log,
+    send_text,
 )
-from tcbot.modules.helper.messages.rich_text import style
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.i18n import esc, t
+from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -233,28 +234,23 @@ async def execute_promo_decision(
             admin.first_name,
             request_id,
         )
-        existing_text = ""
-        if q.message is not None:
-            # * Plain .text: the edit sends MarkdownV2, so the display text
-            # * is re-escaped here. Empty on MaybeInaccessibleMessage.
-            existing_text = esc(getattr(q.message, "text", "") or "")
+        card_text = getattr(q.message, "text", "") if q.message is not None else ""
+        if not card_text:
+            # * A rich card may have no plain .text; rebuild it from the
+            # * request so the decision suffix never becomes the whole card.
+            card_text = promote_request_log(
+                target_id, target_fname, req.get("username"), request_id
+            )
+        decision_text = card_text + t(
+            "admins.decision.approved_suffix", locale, name=admin.first_name
+        )
         # * The target reads their own locale: a direct message to one
         # * user resolves the recipient's preference, not the card's.
         target_locale = await locale_for_user(target_id)
         notify_results = await asyncio.gather(
-            q.edit_message_text(
-                style(
-                    existing_text
-                    + t(
-                        "admins.decision.approved_suffix",
-                        locale,
-                        name=admin.first_name,
-                    )
-                ),
-                parse_mode=None,
-                reply_markup=None,
-            ),
-            ctx.bot.send_message(
+            safe_edit_cb(q, decision_text, reply_markup=None),
+            send_text(
+                ctx.bot,
                 target_id,
                 t(
                     "admins.decision.approve_dm",
@@ -300,24 +296,19 @@ async def execute_promo_decision(
             admin.first_name,
             request_id,
         )
-        existing_text = ""
-        if q.message is not None:
-            existing_text = esc(getattr(q.message, "text", "") or "")
+        card_text = getattr(q.message, "text", "") if q.message is not None else ""
+        if not card_text:
+            card_text = promote_request_log(
+                target_id, target_fname, req.get("username"), request_id
+            )
+        decision_text = card_text + t(
+            "admins.decision.rejected_suffix", locale, name=admin.first_name
+        )
         target_locale = await locale_for_user(target_id)
         reject_results = await asyncio.gather(
-            q.edit_message_text(
-                style(
-                    existing_text
-                    + t(
-                        "admins.decision.rejected_suffix",
-                        locale,
-                        name=admin.first_name,
-                    )
-                ),
-                parse_mode=None,
-                reply_markup=None,
-            ),
-            ctx.bot.send_message(
+            safe_edit_cb(q, decision_text, reply_markup=None),
+            send_text(
+                ctx.bot,
                 target_id,
                 t("admins.decision.reject_dm", target_locale, plain=True),
             ),

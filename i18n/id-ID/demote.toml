@@ -13,5 +13,10 @@ warn = "Peran {role} kamu di {community} telah dicabut - kamu mencapai batas per
 unban = "Peran {role} kamu di {community} telah dicabut oleh {name}. Ban federasi kamu juga sudah diangkat."
 appeal = "Peran {role} kamu di {community} telah dicabut karena {name} menyetujui banding kamu dan mengangkat ban federasi."
 
+[dm.verb]
+ban = "diblokir"
+mute = "dibisukan"
+kick = "dikeluarkan"
+
 [abort]
 body = "{user} memegang peran federasi ({target_role}) dan tahap demote gagal, sehingga {action} tidak bisa lanjut dengan aman. Demosi manual dengan /tcdemote lalu ulangi {action}."

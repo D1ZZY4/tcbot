@@ -20,10 +20,21 @@ def paragraph(text: str) -> str:
     return f"<p>{text}</p>" if text else ""
 
 
-def quote(text: str, *, expandable: bool = False) -> str:
-    """Render a block quotation, optionally collapsed by default."""
+def quote(text: str, *, expandable: bool = False, author: object | None = None) -> str:
+    """Render a block quotation with an optional attributed author.
+
+    The Bot API has no ``author`` attribute on ``blockquote``; authorship is
+    expressed by a ``<cite>`` element inside the quotation.
+    """
     attr = " expandable" if expandable else ""
-    return f"<blockquote{attr}>{text}</blockquote>"
+    credit = f"<cite>{esc(author)}</cite>" if author else ""
+    return f"<blockquote{attr}>{text}{credit}</blockquote>"
+
+
+def pull_quote(text: str, *, author: object | None = None) -> str:
+    """Render a centred pull quote with an optional attributed author."""
+    credit = f"<cite>{esc(author)}</cite>" if author else ""
+    return f"<aside>{text}{credit}</aside>"
 
 
 def code(text: object) -> str:
@@ -38,10 +49,17 @@ def pre(text: object) -> str:
     return f"<pre><code>{content}</code></pre>" if content else ""
 
 
-def highlight(text: object) -> str:
-    """Render marked text, corresponding to the rich ``<mark>`` tag."""
+def highlight(text: object, *, author: object | None = None) -> str:
+    """Render marked text, optionally credited to an author.
+
+    ``<mark>`` has no author attribute in the Bot API, so a credit is rendered
+    as a following ``<cite>`` element.
+    """
     content = esc(text)
-    return f"<mark>{content}</mark>" if content else ""
+    if not content:
+        return ""
+    credit = f"<cite>{esc(author)}</cite>" if author else ""
+    return f"<mark>{content}</mark>{credit}"
 
 
 def code_block(text: object, *, language: str | None = None) -> str:
@@ -65,15 +83,61 @@ def divider() -> str:
     return "<hr/>"
 
 
+def line_break() -> str:
+    """Render an explicit line break inside a block."""
+    return "<br/>"
+
+
+def footer(text: object) -> str:
+    """Render a footer block."""
+    content = esc(text)
+    return f"<footer>{content}</footer>" if content else ""
+
+
+def anchor(name: str) -> str:
+    """Render an in-document anchor that :func:`footnote_ref` can link to."""
+    return f'<a name="{esc(name)}"></a>'
+
+
+def math(expression: object) -> str:
+    """Render an inline LaTeX expression."""
+    content = esc(expression)
+    return f"<tg-math>{content}</tg-math>" if content else ""
+
+
+def math_block(expression: object) -> str:
+    """Render a LaTeX expression as its own block."""
+    content = esc(expression)
+    return f"<tg-math-block>{content}</tg-math-block>" if content else ""
+
+
+def time_tag(unix: int, fmt: str, label: object) -> str:
+    """Render a formatted date-time entity."""
+    return f'<tg-time unix="{unix}" format="{esc(fmt)}">{esc(label)}</tg-time>'
+
+
+def emoji(emoji_id: int, alt: str) -> str:
+    """Render a custom emoji by its numeric identifier."""
+    return f'<tg-emoji emoji-id="{emoji_id}">{esc(alt)}</tg-emoji>'
+
+
 __all__ = [
+    "anchor",
     "code",
     "code_block",
     "divider",
+    "emoji",
+    "footer",
     "footnote",
     "footnote_ref",
     "heading",
     "highlight",
+    "line_break",
+    "math",
+    "math_block",
     "paragraph",
     "pre",
+    "pull_quote",
     "quote",
+    "time_tag",
 ]

@@ -61,7 +61,11 @@ from tcbot.modules.helper.messages.rich_edit import (
     safe_edit_message,
     send_log,
 )
-from tcbot.modules.helper.messages.rich_msg import reply_rich
+from tcbot.modules.helper.messages.rich_msg import (
+    reply_rich,
+    reply_rich_result,
+    send_text,
+)
 
 __all__ = [
     "LogBuilder",
@@ -103,11 +107,13 @@ __all__ = [
     "render_groups",
     "replies",
     "reply_rich",
+    "reply_rich_result",
     "resetwarns_log",
     "safe_edit",
     "safe_edit_cb",
     "safe_edit_message",
     "send_log",
+    "send_text",
     "unban_log",
     "unmute_log",
     "unwarn_log",
