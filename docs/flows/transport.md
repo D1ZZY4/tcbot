@@ -216,8 +216,10 @@ a direct PTB send leaves the HTML tags visible to users.
 ## Audit logs and deep links
 
 `modules/helper/messages/audit_logs.py` owns `LogBuilder`, a fluent builder with
-`field`, `code_field`, `mention_field`, `link_field`, `raw`, `section`, `date`,
-and `build`. `send_log(bot, text, **kwargs)` in `rich_edit.py` posts to `cfg.logs`
+`detail_field`, `field`, `code_field`, `mention_field`, `link_field`, `raw`,
+`section`, `date`, and `build`. Field entries render as rich bulleted lists;
+`raw` keeps free-form prose and `section` inserts a divider between lists.
+`send_log(bot, text, **kwargs)` in `rich_edit.py` posts to `cfg.logs`
 (chat and thread) through `send_rich`; it falls back to `bot.send_message` for a
 non-rich-ready bot.
 

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.messages.rich_format import divider, heading
+from tcbot.modules.helper.messages.rich_list import bullet_list
 from tcbot.modules.helper.messages.rich_style import bold as rich_bold
 from tcbot.utils.i18n import code, esc, link, safe_username, user_ref
 from tcbot.utils.logger import get_logger
@@ -31,17 +32,27 @@ _MAX_BROADCAST_PREVIEW_LEN: int = 100
 
 
 class LogBuilder:
-    """Fluent builder for rich audit-log messages used by the log builders."""
+    """Fluent builder for rich audit-log messages used by the log builders.
 
-    __slots__ = ("_lines",)
+    Field-like entries render as a rich bulleted list so label/value pairs
+    stay readable in a narrow log channel. Headings, dividers, and free-form
+    notes sit between the lists as their own rich blocks.
+    """
+
+    __slots__ = ("_items",)
 
     def __init__(self, title: str) -> None:
         """Start a new log message with the given title header.
 
         The title is escaped so callers can pass raw config or user-facing
-        strings without risk of breaking the Markdown markup sent to the log channel.
+        strings without risk of breaking the rich markup sent to the log channel.
         """
-        self._lines: list[str] = [heading(str(title))]
+        self._items: list[tuple[str, str]] = [("heading", heading(str(title)))]
+
+    def detail_field(self, rendered: str) -> LogBuilder:
+        """Append an already-rendered rich line to the current field list."""
+        self._items.append(("item", rendered))
+        return self
 
     def field(
         self,
@@ -50,48 +61,60 @@ class LogBuilder:
         *,
         escape: bool = True,
     ) -> LogBuilder:
-        """Append a `Label: value` line. The value is escaped by default."""
+        """Append a `Label: value` field. The value is escaped by default."""
         v = esc(str(value)) if escape else str(value)
-        self._lines.append(f"{rich_bold(label)}: {v}")
-        return self
+        return self.detail_field(f"{rich_bold(label)}: {v}")
 
     def code_field(self, label: str, value: object) -> LogBuilder:
-        """Append a `Label: code(value)` line."""
-        self._lines.append(f"{rich_bold(label)}: {code(str(value))}")
-        return self
+        """Append a `Label: code(value)` field."""
+        return self.detail_field(f"{rich_bold(label)}: {code(str(value))}")
 
     def mention_field(
         self, label: str, user_id: int, name: str, username: str | None = None
     ) -> LogBuilder:
-        """Append a `Label: user_ref(user_id, name, username)` line."""
-        self._lines.append(f"{rich_bold(label)}: {user_ref(user_id, name, username)}")
-        return self
+        """Append a `Label: user_ref(user_id, name, username)` field."""
+        return self.detail_field(
+            f"{rich_bold(label)}: {user_ref(user_id, name, username)}"
+        )
 
     def link_field(self, label: str, text: str, url: str) -> LogBuilder:
-        """Append a `Label: [text](url)` line."""
-        self._lines.append(f"{rich_bold(label)}: {link(text, url)}")
-        return self
+        """Append a `Label: link(text, url)` field."""
+        return self.detail_field(f"{rich_bold(label)}: {link(text, url)}")
 
     def raw(self, text: str) -> LogBuilder:
-        """Append a raw Markdown line. Caller is responsible for escaping user input."""
-        self._lines.append(text)
+        """Append a free-form rich line. Caller is responsible for escaping."""
+        self._items.append(("raw", text))
         return self
 
     def section(self) -> LogBuilder:
         """Insert a rich divider between sections."""
-        self._lines.append(divider())
+        self._items.append(("divider", divider()))
         return self
 
     def date(self, ts: datetime | None = None, *, label: str = "Date") -> LogBuilder:
-        """Append a `Label: dd-mm-yyyy | HH:MM` line. Defaults to utc_now()."""
-        self._lines.append(
+        """Append a `Label: dd-mm-yyyy | HH:MM` field. Defaults to utc_now()."""
+        return self.detail_field(
             f"{rich_bold(label)}: {fmt_dt(ts if ts is not None else utc_now())}"
         )
-        return self
 
     def build(self) -> str:
-        """Return the assembled Markdown message."""
-        return "\n".join(self._lines)
+        """Return the assembled rich message with fields grouped into lists."""
+        parts: list[str] = []
+        pending: list[str] = []
+
+        def flush() -> None:
+            if pending:
+                parts.append(bullet_list(pending))
+                pending.clear()
+
+        for kind, content in self._items:
+            if kind == "item":
+                pending.append(content)
+                continue
+            flush()
+            parts.append(content)
+        flush()
+        return "\n".join(parts)
 
     def __str__(self) -> str:
         """Delegate to build so str(builder) works naturally."""
@@ -246,7 +269,7 @@ def kick_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Reason", reason)
-        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
+        .detail_field(f"{rich_bold('Group')}: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -269,7 +292,7 @@ def resetwarns_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Warnings cleared", str(removed))
-        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
+        .detail_field(f"{rich_bold('Group')}: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -295,7 +318,7 @@ def warn_log(
         .code_field("User ID", target_id)
         .field("Reason", reason)
         .field("Warnings", f"{count}/{warn_limit}")
-        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
+        .detail_field(f"{rich_bold('Group')}: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -319,7 +342,7 @@ def unwarn_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Warnings now", f"{new_count}/{warn_limit}")
-        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
+        .detail_field(f"{rich_bold('Group')}: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -358,8 +381,9 @@ def appeal_received_log(
     rules: Sequence[str] = (),
 ) -> str:
     """Review card posted to MAIN_GROUP and the appeals destination."""
-    b = LogBuilder(f"New {cfg.community_name} Appeal Request").raw(
-        f"User: {user_ref(target_id, target_fname)} (ID: {code(str(target_id))})"
+    b = LogBuilder(f"New {cfg.community_name} Appeal Request").detail_field(
+        f"{rich_bold('User')}: {user_ref(target_id, target_fname)} "
+        f"(ID: {code(str(target_id))})"
     )
     b.code_field("Ban ID", ban_id)
     if rules:
@@ -425,7 +449,7 @@ def _appeal_decision_edit(
         # * submitted_str arrives pre-escaped from fmt_dt: pass it through
         # * instead of escaping twice like the default field() does.
         .field("Submitted", submitted_str, escape=False)
-        .raw(f"{decision_label}: {user_ref(admin_id, admin_fname)}")
+        .detail_field(f"{rich_bold(decision_label)}: {user_ref(admin_id, admin_fname)}")
         .date(label=f"{decision_label} at")
         .build()
     )
@@ -651,7 +675,7 @@ def group_connected_log(
         group_display = esc(chat_title)
     return (
         LogBuilder(f"New {cfg.community_name} Connected Group")
-        .raw(f"Group: {group_display}")
+        .detail_field(f"{rich_bold('Group')}: {group_display}")
         .code_field("ID", chat_id)
         .section()
         .mention_field("Added by Owner", owner_id, owner_fname)
@@ -671,10 +695,11 @@ def group_connection_rejected_log(
     """Connection-rejected audit-log message."""
     return (
         LogBuilder(f"{cfg.community_name} Connection Rejected")
-        .raw(f"Group: {esc(chat_title)} (ID: {chat_id})")
+        .detail_field(f"{rich_bold('Group')}: {esc(chat_title)} (ID: {chat_id})")
         .section()
-        .raw(
-            f"Rejected by Owner: {user_ref(owner_id, owner_fname)} (ID: {code(str(owner_id))})"
+        .detail_field(
+            f"{rich_bold('Rejected by Owner')}: "
+            f"{user_ref(owner_id, owner_fname)} (ID: {code(str(owner_id))})"
         )
         .section()
         .date()
