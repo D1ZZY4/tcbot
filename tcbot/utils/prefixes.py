@@ -168,6 +168,96 @@ ALL_PREFIXES_CMD_FILTER: filters.BaseFilter = (
     else _never_match_filter()
 )
 
+# * Every command a module registers. A conversation fallback that matches one
+# * of these swallows the user's real command: /tcunban sent during ban proof
+# * collection would cancel the ban and never unban anyone. Each flow passes its
+# * own re-entry commands as exclusions so re-entering still ends the old flow.
+_ALL_COMMANDS: tuple[str, ...] = (
+    "bc",
+    "c",
+    "check",
+    "checkme",
+    "cleanup",
+    "clearwarns",
+    "cme",
+    "exitall",
+    "help",
+    "lang",
+    "langs",
+    "language",
+    "leaveall",
+    "p",
+    "ping",
+    "resetwarns",
+    "rmtc",
+    "rules",
+    "speedtest",
+    "st",
+    "start",
+    "tcb",
+    "tcban",
+    "tcbroadcast",
+    "tcc",
+    "tcclean",
+    "tccon",
+    "tcconnect",
+    "tcd",
+    "tcdemote",
+    "tcdiscon",
+    "tcdisconnect",
+    "tcf",
+    "tcforget",
+    "tcplist",
+    "tcg",
+    "tcgroups",
+    "tck",
+    "tckick",
+    "tcleave",
+    "tcm",
+    "tcmute",
+    "tcp",
+    "tcpromote",
+    "tcpromotelist",
+    "tcpromoterequests",
+    "tcr",
+    "tcrepair",
+    "tcreqs",
+    "tcrules",
+    "tcs",
+    "tcstats",
+    "tcsetrole",
+    "tcsr",
+    "tcum",
+    "tcunb",
+    "tcunban",
+    "tcunm",
+    "tcunmute",
+    "tcunw",
+    "tcunwarn",
+    "tcw",
+    "tcwarn",
+    "tfowner",
+    "transferowner",
+    "warnlist",
+    "warns",
+)
+
+
+def build_conversation_escape_filter(*own_commands: str) -> filters.BaseFilter:
+    """Return a filter for commands that must bypass conversation fallbacks.
+
+    *own_commands* are the calling flow's re-entry commands: they stay out of
+    the escape set so the fallback can still end the previous flow.
+    """
+    excluded = set(own_commands)
+    combined: filters.BaseFilter | None = None
+    for command in _ALL_COMMANDS:
+        if command in excluded:
+            continue
+        one = build_prefixed_filters(command)
+        combined = one if combined is None else combined | one
+    return combined if combined is not None else _never_match_filter()
+
 
 # ──────────────────────── Argument Parsing ──────────────────────── #
 

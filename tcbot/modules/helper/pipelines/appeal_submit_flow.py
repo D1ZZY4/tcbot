@@ -42,7 +42,10 @@ from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import pre, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
+from tcbot.utils.prefixes import (
+    ALL_PREFIXES_CMD_FILTER,
+    build_conversation_escape_filter,
+)
 from tcbot.utils.time_and_date import to_utc, utc_now
 
 if TYPE_CHECKING:
@@ -712,7 +715,9 @@ class AppealSubmitMixin(SubmitMessageMixin):
         """Handle #appeal in the main group via the DM submit path."""
         await handle_group_appeal(update, ctx, self._on_message)
 
-    async def _on_cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def _on_cancel(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int | None:
         """Cancel button handler; clears state and ends the conversation."""
         q = update.callback_query
         if q is None:
@@ -725,7 +730,9 @@ class AppealSubmitMixin(SubmitMessageMixin):
                 await q.answer()
             except Exception as exc:
                 log.debug("appeal stale-cancel answer failed: %s", exc)
-            return ConversationHandler.END
+            # * A stale card must not end the live appeal opened by a newer
+            # * deep link; leave its conversation and scope untouched.
+            return None
         _clear_appeal_state(scope)
         try:
             await q.answer()
@@ -820,7 +827,12 @@ def build_handler(
         },
         fallbacks=[
             MessageHandler(entry_filter, on_entry),
-            MessageHandler(ALL_PREFIXES_CMD_FILTER, on_end),
+            # * The deep-link entry stays here; other commands pass through so
+            # * the user is not trapped in an appeal they want to leave.
+            MessageHandler(
+                ALL_PREFIXES_CMD_FILTER & ~build_conversation_escape_filter(),
+                on_end,
+            ),
         ],
         per_chat=True,
         per_user=True,

@@ -55,7 +55,10 @@ from tcbot.utils.dispatch import (
 )
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
+from tcbot.utils.prefixes import (
+    ALL_PREFIXES_CMD_FILTER,
+    build_conversation_escape_filter,
+)
 from tcbot.utils.time_and_date import monotonic, to_utc, utc_now
 
 if TYPE_CHECKING:
@@ -944,7 +947,14 @@ def ban_conversation(
         entry_points=[MessageHandler(entry_filter, entry_fn)],
         states=states,
         fallbacks=[
-            MessageHandler(ALL_PREFIXES_CMD_FILTER, on_proof_timeout),
+            # * Only this flow's own re-entry command may end proof collection.
+            # * Swallowing other commands loses the moderator's intent: /tcunban
+            # * sent here would cancel the ban and never unban anyone.
+            MessageHandler(
+                ALL_PREFIXES_CMD_FILTER
+                & ~build_conversation_escape_filter("tcban", "tcb"),
+                on_proof_timeout,
+            ),
             CallbackQueryHandler(on_cancel_proof, pattern=r"^rules_step:cancel$"),
             CallbackQueryHandler(on_cancel_proof, pattern=r"^ban_cancel$"),
         ],

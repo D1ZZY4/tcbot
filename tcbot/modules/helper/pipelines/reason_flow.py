@@ -46,7 +46,10 @@ from tcbot.modules.helper.scope import (
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, esc, t, user_ref
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
+from tcbot.utils.prefixes import (
+    ALL_PREFIXES_CMD_FILTER,
+    build_conversation_escape_filter,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -73,6 +76,14 @@ WAITING_RULES_NOTE = 3
 
 MAX_REASON_LEN: int = 1000
 MAX_RULES_NOTE_LEN: int = 200
+
+# * Re-entry commands of each moderation flow. They stay in the fallback so
+# * starting the same action again still ends the previous conversation.
+_OWN_COMMANDS: dict[str, tuple[str, ...]] = {
+    "kick": ("tckick", "tck"),
+    "mute": ("tcmute", "tcm"),
+    "warn": ("tcwarn", "tcw"),
+}
 
 
 def parse_inline_reason(
@@ -764,7 +775,12 @@ class _ModActionFlow(_ReasonStepMixin, _RulesStepMixin, _ProofStepMixin, _FlowBa
                 self._on_proof_unexpected,
             ),
         ]
-        fallback_filter = ALL_PREFIXES_CMD_FILTER
+        # * Every command except this flow's own re-entry must reach its own
+        # * handler. A fallback that swallows them loses the moderator's intent
+        # * (for example /tcunban during proof collection).
+        fallback_filter = ALL_PREFIXES_CMD_FILTER & ~build_conversation_escape_filter(
+            *_OWN_COMMANDS.get(self.action, ())
+        )
         if escape_filter is not None:
             fallback_filter = fallback_filter & ~escape_filter
         states: dict[Any, list[Any]] = {
