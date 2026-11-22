@@ -314,8 +314,11 @@ class _FlowBase:
         locale = await locale_for_update(update)
         results = await asyncio.gather(
             q.answer(),
-            q.edit_message_text(
-                t("reason.cancel.body", locale, action=self.action, plain=True)
+            safe_edit_cb(
+                q,
+                t("reason.cancel.body", locale, action=self.action, plain=True),
+                reply_markup=None,
+                parse_mode=None,
             ),
             return_exceptions=True,
         )

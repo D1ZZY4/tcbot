@@ -31,6 +31,8 @@ from tcbot.modules.helper.messages import (
     message_link,
     reply_rich,
     reply_rich_result,
+    safe_edit_cb,
+    safe_edit_message,
     send_log,
     send_text,
 )
@@ -288,13 +290,15 @@ class SubmitMessageMixin:
                         _who.id if _who is not None else 0,
                     )
                     with contextlib.suppress(Exception):
-                        await msg.reply_text(
+                        await reply_rich(
+                            msg,
                             t(
                                 "appeals.submit.pending_review",
                                 locale,
                                 hours=_STALE_REVIEW_HOURS,
                                 plain=True,
-                            )
+                            ),
+                            parse_mode=None,
                         )
                     _clear_appeal_state(scope)
                     return ConversationHandler.END
@@ -501,11 +505,13 @@ async def post_appeal(
             log.exception("Appeal DB write failed for ban_id=%s", ban_id)
     instr_mid = scope.get("appeal_instruction_msg_id")
     edit_coro = (
-        ctx.bot.edit_message_text(
+        safe_edit_message(
+            ctx.bot,
+            update.effective_chat.id,
+            instr_mid,
             t("appeals.submit.submitted", locale, plain=True),
-            chat_id=update.effective_chat.id if update.effective_chat else None,
-            message_id=instr_mid,
             reply_markup=None,
+            parse_mode=None,
         )
         if instr_mid and update.effective_chat
         else None
@@ -544,10 +550,12 @@ async def post_appeal(
                 )
         if instr_mid and update.effective_chat:
             try:
-                await ctx.bot.edit_message_text(
+                await safe_edit_message(
+                    ctx.bot,
+                    update.effective_chat.id,
+                    instr_mid,
                     t("appeals.submit.delivery_failed", locale, plain=True),
-                    chat_id=update.effective_chat.id,
-                    message_id=instr_mid,
+                    parse_mode=None,
                 )
             except Exception as exc:
                 log.debug("submit_appeal delivery-failed reply failed: %s", exc)
@@ -600,8 +608,10 @@ class AppealSubmitMixin(SubmitMessageMixin):
         except Exception:
             log.exception("Appeal _start: DB error fetching ban_id=%s", ban_id)
             with contextlib.suppress(Exception):
-                await msg.reply_text(
-                    t("appeals.submit.invalid_link", locale, plain=True)
+                await reply_rich(
+                    msg,
+                    t("appeals.submit.invalid_link", locale, plain=True),
+                    parse_mode=None,
                 )
             return ConversationHandler.END
         if not ban or not ban.get("is_active"):
@@ -637,13 +647,15 @@ class AppealSubmitMixin(SubmitMessageMixin):
                         uid,
                     )
                     with contextlib.suppress(Exception):
-                        await msg.reply_text(
+                        await reply_rich(
+                            msg,
                             t(
                                 "appeals.submit.pending_review",
                                 locale,
                                 hours=_STALE_REVIEW_HOURS,
                                 plain=True,
-                            )
+                            ),
+                            parse_mode=None,
                         )
                     return ConversationHandler.END
                 log.info(
@@ -740,7 +752,11 @@ class AppealSubmitMixin(SubmitMessageMixin):
             log.debug("appeal cancel answer failed: %s", exc)
         try:
             locale = await locale_for_update(update)
-            await q.edit_message_text(t("appeals.submit.cancelled", locale, plain=True))
+            await safe_edit_cb(
+                q,
+                t("appeals.submit.cancelled", locale, plain=True),
+                parse_mode=None,
+            )
         except Exception:
             log.debug("appeal cancel edit failed (message may already be gone)")
         return ConversationHandler.END

@@ -4,10 +4,11 @@
 
 """Rich message editing: ``edit_rich`` and the safe edit helpers.
 
-Sending and replying live in ``rich_msg.py``. This module owns edits only.
-Every edit is a rich-message edit; there is no plain or alternate parse-mode
-send path. Callback answers and keyboard-only edits have no rich equivalent
-and remain the only direct PTB calls here.
+Sending and replying live in ``rich_msg.py``. The safe helpers edit through
+the rich transport when the bot is a real PTB ``Bot`` and fall back to the
+plain PTB edit for test doubles or non-PTB bots. ``send_log`` lives here
+because its log payload is shared with the edit helpers. Callback answers and
+keyboard-only edits have no rich equivalent and remain direct PTB calls.
 """
 
 from __future__ import annotations

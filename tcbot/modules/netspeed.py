@@ -23,7 +23,7 @@ from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, safe_edit
+from tcbot.modules.helper.messages import replies, reply_rich_result, safe_edit
 from tcbot.modules.helper.messages.rich_format import divider, heading
 from tcbot.modules.helper.messages.rich_table import table
 from tcbot.utils.i18n import Safe, code, t
@@ -620,7 +620,9 @@ async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     locale = await locale_for_update(update)
     t0 = monotonic()
     try:
-        sent = await msg.reply_text(t("netspeed.status.pinging", locale, plain=True))
+        sent = await reply_rich_result(
+            msg, t("netspeed.status.pinging", locale, plain=True)
+        )
     except Exception as exc:
         log.debug("cmd_ping initial reply failed: %s", exc)
         return
@@ -650,7 +652,7 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     full = any(arg.lower() == "full" for arg in parse_cmd_args(msg.text))
     status_key = "netspeed.status.running_full" if full else "netspeed.status.running"
     try:
-        notice = await msg.reply_text(t(status_key, locale, plain=True))
+        notice = await reply_rich_result(msg, t(status_key, locale, plain=True))
     except Exception as exc:
         log.debug("cmd_speedtest initial reply failed: %s", exc)
         return

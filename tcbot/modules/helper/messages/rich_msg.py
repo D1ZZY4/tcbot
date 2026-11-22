@@ -5,8 +5,9 @@
 """Rich message sending: ``send_rich`` and ``reply_rich``.
 
 Owns the InputRichMessage payloads, inline-button conversion, and the PTB
-``do_api_request`` send transport. Messages are rich only; there is no plain
-text or alternate parse-mode send path. Editing lives in ``rich_edit.py``.
+``do_api_request`` send transport. ``send_text`` keeps the rich decision at
+the call site; for a non-PTB bot the helpers fall back to the plain PTB send
+so test doubles still work. Editing lives in ``rich_edit.py``.
 """
 
 from __future__ import annotations

@@ -4,8 +4,9 @@
 
 """Rich media blocks: photo, video, slideshow, and collage.
 
-Proof media uses a slideshow so a group of related images stays together in
-one ordered, expandable block.
+Uploaded proof media is sent as a plain Bot API media message with a plain
+caption; these helpers render URL-based media inside rich HTML when a caller
+needs it. ``proof_slideshow`` is available for that rich path.
 """
 
 from __future__ import annotations

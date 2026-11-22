@@ -16,9 +16,16 @@ from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, guards, messages
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, reply_rich, safe_edit, send_log
+from tcbot.modules.helper.messages import (
+    replies,
+    reply_rich,
+    reply_rich_result,
+    safe_edit,
+    send_log,
+    send_text,
+)
 from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
-from tcbot.utils.i18n import Safe, code, t
+from tcbot.utils.i18n import Safe, code, esc, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -111,8 +118,9 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     status = None
     try:
-        status = await msg.reply_text(
-            t("broadcasting.send.sending", locale, n=len(groups), plain=True)
+        status = await reply_rich_result(
+            msg,
+            t("broadcasting.send.sending", locale, n=len(groups), plain=True),
         )
     except Exception as exc:
         log.debug("cmd_broadcast status reply failed: %s", exc)
@@ -127,7 +135,9 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if has_reply and msg.reply_to_message:
             await msg.reply_to_message.forward(chat_id)
         elif broadcast_text:
-            await ctx.bot.send_message(chat_id, broadcast_text)
+            # * Staff text is untrusted, so escape it before the rich transport;
+            # * the rendered HTML then shows the literal text in every group.
+            await send_text(ctx.bot, chat_id, esc(broadcast_text))
 
     results = await fan_out([_send_one(grp) for grp in groups])
     # * Benign per-group refusals (bot removed, chat gone) are not operator

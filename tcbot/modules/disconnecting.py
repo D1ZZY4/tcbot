@@ -154,13 +154,15 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
                 chat.id, chat.title or "Unknown", user.id, user.first_name
             ),
         ),
-        msg.reply_text(
+        reply_rich(
+            msg,
             t(
                 "disconnecting.state.disconnected",
                 locale,
                 community=cfg.community_name,
                 plain=True,
-            )
+            ),
+            parse_mode=None,
         ),
         ctx.bot.leave_chat(chat.id),
         return_exceptions=True,
