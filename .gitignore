@@ -50,6 +50,9 @@ build/
 .DS_Store
 Thumbs.db
 
+# Local community rules source (seeded into the bot's rules feature)
+rules/
+
 # Logs and scratch notes
 logs*/
 check.log
