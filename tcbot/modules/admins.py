@@ -65,6 +65,7 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
                 t("admins.help.roles.body", locale),
             ),
             ("/tcpromote", t("admins.help.promote.body", locale)),
+            ("/tcsetrole", t("admins.help.setrole.body", locale)),
             ("/tcdemote", t("admins.help.demote.body", locale)),
             ("/transferowner", t("admins.help.transferowner.body", locale)),
         ],

@@ -10,6 +10,7 @@ from tcbot.modules.helper.buttons.admin import (
     demote_confirm_btn,
     promo_decision_btn,
     promote_role_btn,
+    role_change_btn,
 )
 from tcbot.modules.helper.buttons.appeal import appeal_cancel_btn, appeal_review_btn
 from tcbot.modules.helper.buttons.ban import (
@@ -33,8 +34,10 @@ from tcbot.modules.helper.buttons.check import (
 from tcbot.modules.helper.buttons.drills import (
     paged_drill_btn,
     stats_list_btn,
+    stats_list_nav_btn,
     stats_search_panel_btn,
     stats_search_results_btn,
+    stats_search_results_nav_btn,
     stats_search_row,
 )
 from tcbot.modules.helper.buttons.flows import (
@@ -110,11 +113,14 @@ __all__ = [
     "promote_role_btn",
     "proof_step_btn",
     "reason_step_btn",
+    "role_change_btn",
     "stats_back_btn",
     "stats_list_btn",
+    "stats_list_nav_btn",
     "stats_main_btn",
     "stats_search_panel_btn",
     "stats_search_results_btn",
+    "stats_search_results_nav_btn",
     "stats_search_row",
     "tcgroups_btn",
 ]

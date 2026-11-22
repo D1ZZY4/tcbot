@@ -10,15 +10,16 @@ overview = "Promote and demote staff, transfer ownership, and manage promotion r
 [help.commands]
 body = """
 `/tcpromote` `/tcp`
+`/tcsetrole` `/tcsr`
 `/tcdemote` `/tcd`
 `/transferowner` `/tfowner`
 `/tcpromoterequests` `/tcreqs`
 `/tcpromotelist` `/tcplist`"""
 
 [help.who]
-body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Owner and Admin.
+body = """*/tcpromote*, */tcsetrole*, */tcdemote*, */tcpromotelist*: Owner and Admin.
 */transferowner*: {perm}
-*/tcpromoterequests*: anyone (creates a self-request to the Owner)."""""
+*/tcpromoterequests*: anyone (creates a self-request to the Owner)."""
 
 [help.roles]
 title = "Role Hierarchy"
@@ -44,6 +45,15 @@ Removes a user's role. A confirmation button is shown before the action executes
 - Admin can demote Developer or Moderator only.
 - When a user with a role is banned or kicked, their role is removed and they are notified by DM."""
 
+[help.setrole]
+body = """
+Changes an existing staff member's role instead of removing it. A picker shows only the tiers you may grant, excluding the one they already hold - so Admin to Moderator or Moderator to Developer works.
+
+*Usage:* `/tcsetrole <target>`
+- Owner can move staff between Admin, Developer, and Moderator.
+- Admin can move staff between Developer and Moderator.
+- The Owner can never be targeted, and a banned user cannot hold a role."""
+
 [help.transferowner]
 body = """
 Transfers federation ownership to another user. The current Owner steps down to Admin. Owner only.
@@ -53,11 +63,12 @@ Transfers federation ownership to another user. The current Owner steps down to 
 [help.examples]
 body = """
 `/tcpromote @username developer`
-`/tcpromote 123456789`: shows the role selection menu
+`/tcpromote 123456789` shows the role selection menu
+`/tcsetrole @username moderator` changes an existing role
 `/tcdemote @username`
 `/transferowner @newowner`
-`/tcpromoterequests`: request promotion to Admin
-`/tcplist`: list pending promotion requests"""
+`/tcpromoterequests` request promotion to Admin
+`/tcplist` list pending promotion requests"""
 
 # Runtime strings for promotion (promote_flow.py).
 # Reply texts render as rich HTML; DMs send plain (no parse_mode).
@@ -80,6 +91,17 @@ no_assign_perms = "You don't have permission to assign this role."
 [promote.dm]
 admin = "You've been promoted to Admin in {community} - welcome to the staff team."
 role = "You've been assigned the {role} role in {community} - welcome to the team."
+
+# Role changes for an existing staff member. The picker and replies render
+# rich HTML; the DM is plain. {user} is pre-formatted, other values are raw.
+[role_change]
+picker = "Choose the new role for {user} (currently {role}):"
+no_role = "{user} does not hold a federation role. Use /tcpromote instead."
+same_role = "{user} already holds the {role} role."
+not_outranked = "You cannot change the role of someone at or above your own rank."
+fail = "Failed to change the role. No changes were made; please try again."
+done = "Done. {user} is now a {community} {role}."
+dm = "Your role in {community} is now {role}."
 
 [request]
 anon_admin = "This command must be sent from your personal account, not as the group. Anonymous-admin commands are not accepted here."

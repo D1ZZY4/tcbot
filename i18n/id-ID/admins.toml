@@ -10,13 +10,14 @@ overview = "Mempromosikan dan mendemosi staf, mentransfer kepemilikan, dan menge
 [help.commands]
 body = """
 `/tcpromote` `/tcp`
+`/tcsetrole` `/tcsr`
 `/tcdemote` `/tcd`
 `/transferowner` `/tfowner`
 `/tcpromoterequests` `/tcreqs`
 `/tcpromotelist` `/tcplist`"""
 
 [help.who]
-body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Owner dan Admin.
+body = """*/tcpromote*, */tcsetrole*, */tcdemote*, */tcpromotelist*: Owner dan Admin.
 */transferowner*: {perm}
 */tcpromoterequests*: siapa pun (membuat permintaan sendiri ke Owner)."""
 
@@ -44,6 +45,15 @@ Mencabut peran pengguna. Tombol konfirmasi muncul sebelum tindakan dijalankan.
 - Admin hanya bisa mendemosi Developer atau Moderator.
 - Saat pengguna berperan di-ban atau di-kick, perannya dicabut dan mereka diberi tahu lewat DM."""
 
+[help.setrole]
+body = """
+Mengubah peran staf yang sudah ada tanpa mencabutnya. Pemilih hanya menampilkan peran yang boleh kamu berikan, kecuali peran yang sedang dipegang - jadi Admin ke Moderator atau Moderator ke Developer bisa dilakukan.
+
+*Pemakaian:* `/tcsetrole <target>`
+- Owner bisa memindahkan staf antar Admin, Developer, dan Moderator.
+- Admin bisa memindahkan staf antar Developer dan Moderator.
+- Owner tidak pernah bisa menjadi target, dan pengguna yang di-ban tidak bisa memegang peran."""
+
 [help.transferowner]
 body = """
 Mentransfer kepemilikan federasi ke pengguna lain. Owner saat ini turun jadi Admin. Hanya Owner.
@@ -53,11 +63,12 @@ Mentransfer kepemilikan federasi ke pengguna lain. Owner saat ini turun jadi Adm
 [help.examples]
 body = """
 `/tcpromote @username developer`
-`/tcpromote 123456789`: menampilkan menu pilihan peran
+`/tcpromote 123456789` menampilkan menu pilihan peran
+`/tcsetrole @username moderator` mengubah peran yang sudah ada
 `/tcdemote @username`
 `/transferowner @newowner`
-`/tcpromoterequests`: minta promosi ke Admin
-`/tcplist`: daftar permintaan promosi tertunda"""
+`/tcpromoterequests` minta promosi ke Admin
+`/tcplist` daftar permintaan promosi tertunda"""
 
 # Runtime strings for promotion (promote_flow.py).
 # Reply texts render as rich HTML; DMs send plain (no parse_mode).
@@ -80,6 +91,17 @@ no_assign_perms = "Kamu tidak punya izin untuk memberi peran ini."
 [promote.dm]
 admin = "Kamu dipromosikan jadi Admin di {community}, selamat datang di tim staf."
 role = "Kamu diberi peran {role} di {community}, selamat datang di tim."
+
+# Perubahan peran untuk staf yang sudah ada. Pemilih dan balasan memakai rich
+# HTML; DM polos. {user} sudah terformat, nilai lain mentah.
+[role_change]
+picker = "Pilih peran baru untuk {user} (saat ini {role}):"
+no_role = "{user} tidak memegang peran federasi. Pakai /tcpromote sebagai gantinya."
+same_role = "{user} sudah memegang peran {role}."
+not_outranked = "Kamu tidak bisa mengubah peran seseorang yang setara atau lebih tinggi darimu."
+fail = "Gagal mengubah peran. Tidak ada perubahan, coba lagi."
+done = "Beres. {user} sekarang {role} {community}."
+dm = "Peranmu di {community} sekarang {role}."
 
 [request]
 anon_admin = "Perintah ini harus dikirim dari akun pribadimu, bukan sebagai grup. Perintah mode admin anonim tidak diterima di sini."

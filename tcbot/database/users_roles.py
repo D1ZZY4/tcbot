@@ -551,6 +551,21 @@ async def set_role(user_id: int, role: str, assigned_by: int) -> None:
     effective_role_cache.invalidate(user_id)
 
 
+async def change_role(user_id: int, role: str, assigned_by: int) -> None:
+    """Replace a staff member's role with another assignable tier.
+
+    ``set_role`` is deliberately limited to Developer/Moderator. This helper
+    also allows Admin, so an existing staff member can move between any of the
+    three assignable tiers without a remove-then-add gap. The Owner role is
+    never touched: ``_assign_role`` refuses to revoke it and the uniqueness
+    guard rejects the new assignment, so an Owner target always fails closed.
+    """
+    if role not in ("admin", "developer", "moderator"):
+        raise ValueError(f"Refusing to change to role: {role!r}")
+    await _assign_role(user_id, role, assigned_by)
+    effective_role_cache.invalidate(user_id)
+
+
 async def remove_role(user_id: int) -> bool:
     """Revoke a user's community role; the assignment history stays readable.
 

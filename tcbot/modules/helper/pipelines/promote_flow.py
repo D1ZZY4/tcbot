@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, messages
-from tcbot.modules.helper.guards import banned_target_refusal
+from tcbot.modules.helper.guards import banned_target_refusal, outranks
 from tcbot.modules.helper.locale import locale_for_user
 from tcbot.modules.helper.messages import send_log, send_text
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -162,6 +162,95 @@ async def assign_subrole(
 
 
 # ────────────────────────── Admin request ───────────────────────── #
+
+
+async def change_role_for_staff(
+    bot: Bot,
+    admin_id: int,
+    admin_fname: str,
+    target_id: int,
+    target_fname: str,
+    role: str,
+    locale: str | None = None,
+) -> tuple[bool, str]:
+    """Move an existing staff member to another assignable role.
+
+    Unlike a promotion this accepts a lower target tier, so Admin to
+    Moderator and Moderator to Developer are both possible. The Owner is
+    never a valid target, the executor must outrank the current role, and a
+    banned user cannot hold any federation role.
+    """
+    role_results = await asyncio.gather(
+        db.users_roles.get_effective_role(admin_id, fresh=True),
+        db.users_roles.get_effective_role(target_id, fresh=True),
+        return_exceptions=True,
+    )
+    throw_if_cancelled(role_results)
+    executor_result, current_result = role_results
+    if isinstance(executor_result, BaseException) or isinstance(
+        current_result, BaseException
+    ):
+        log.warning(
+            "change_role lookup failed: executor=%d target=%d", admin_id, target_id
+        )
+        return False, t("admins.error.role_lookup_failed", locale)
+    executor_role, current_role = executor_result, current_result
+    target_ref = Safe(user_ref(target_id, target_fname))
+    if current_role == "owner":
+        return False, t("admins.promote.target_is_owner", locale)
+    if not current_role:
+        return False, t("admins.role_change.no_role", locale, user=target_ref)
+    if role == current_role:
+        return False, t(
+            "admins.role_change.same_role",
+            locale,
+            user=target_ref,
+            role=db.users_roles.role_label(role),
+        )
+    if role not in Promote.available_roles_for(executor_role):
+        return False, t("admins.promote.no_assign_perms", locale)
+    if executor_role != "owner" and not outranks(executor_role, current_role):
+        return False, t("admins.role_change.not_outranked", locale)
+    refusal = await banned_target_refusal(
+        target_id, locale, log_label="change_role ban-guard"
+    )
+    if refusal is not None:
+        return False, refusal
+    try:
+        await db.users_roles.change_role(target_id, role, admin_id)
+    except Exception:
+        log.exception("change_role failed for target=%d role=%s", target_id, role)
+        return False, t("admins.role_change.fail", locale)
+    role_label = db.users_roles.role_label(role)
+    target_locale = await locale_for_user(target_id)
+    notice = await asyncio.gather(
+        send_log(
+            bot,
+            messages.promoted(target_id, target_fname, role, admin_id, admin_fname),
+        ),
+        bot.send_message(
+            target_id,
+            t(
+                "admins.role_change.dm",
+                target_locale,
+                role=role_label,
+                community=cfg.community_name,
+                plain=True,
+            ),
+        ),
+        return_exceptions=True,
+    )
+    throw_if_cancelled(notice)
+    for result in notice:
+        if isinstance(result, BaseException):
+            log.warning("change_role notice failed for %d: %s", target_id, result)
+    return True, t(
+        "admins.role_change.done",
+        locale,
+        user=target_ref,
+        role=role_label,
+        community=cfg.community_name,
+    )
 
 
 async def request_admin(

@@ -195,6 +195,6 @@ def test_help_command_section_uses_a_real_table() -> None:
         alias_header=t("common.help.alias", "en-US"),
         caption=t("common.section.commands", "en-US"),
     )
-    assert rendered.count("<tr>") == 6
+    assert rendered.count("<tr>") == 7
     assert "<th>Command</th><th>Alias</th>" in rendered
     assert "<li>" not in rendered

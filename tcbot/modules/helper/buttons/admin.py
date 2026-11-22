@@ -62,6 +62,48 @@ def promote_role_btn(
     return InlineKeyboardMarkup(rows)
 
 
+def role_change_btn(
+    target_id: int,
+    available_roles: list[str],
+    current_role: str | None,
+    locale: str | None = None,
+    executor_id: int | None = None,
+) -> InlineKeyboardMarkup:
+    """Role picker for /tcsetrole, excluding the role already held."""
+    roles = [r for r in available_roles if r != current_role]
+    buttons = [
+        InlineKeyboardButton(
+            db.users_roles.ROLE_LABEL[r],
+            callback_data=(
+                f"role_change:{r}:{target_id}:{executor_id}"
+                if executor_id is not None
+                else f"role_change:{r}:{target_id}"
+            ),
+            style=KeyboardButtonStyle.PRIMARY,
+        )
+        for r in roles
+        if r in db.users_roles.ROLE_LABEL
+    ]
+    rows: list[list[InlineKeyboardButton]] = [
+        buttons[i : i + 2] for i in range(0, len(buttons), 2)
+    ]
+    cancel_data = (
+        f"role_change_cancel:{target_id}:{executor_id}"
+        if executor_id is not None
+        else f"role_change_cancel:{target_id}"
+    )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                t("button.cancel", locale, plain=True),
+                callback_data=cancel_data,
+                style=KeyboardButtonStyle.DANGER,
+            )
+        ]
+    )
+    return InlineKeyboardMarkup(rows)
+
+
 def demote_confirm_btn(
     target_id: int, locale: str | None = None, executor_id: int | None = None
 ) -> InlineKeyboardMarkup:
