@@ -71,6 +71,29 @@ async def editor_allowed(update: Update) -> bool:
         return False
 
 
+_EDITOR_SCOPE_KEYS = (
+    "rules_set",
+    "rules_version",
+    "rules_step",
+    "rules_item_title",
+    "rules_item_body",
+    "rules_category",
+    "rules_category_key",
+)
+
+
+def _clear_item_step(scope: dict[str, Any]) -> None:
+    """Forget a completed text step so a later chat message cannot repeat it."""
+    for key in ("rules_step", "rules_item_title", "rules_item_body"):
+        scope.pop(key, None)
+
+
+def _clear_editor_scope(scope: dict[str, Any]) -> None:
+    """Drop every editor key so a later session starts clean."""
+    for key in _EDITOR_SCOPE_KEYS:
+        scope.pop(key, None)
+
+
 async def refuse_editor(update: Update) -> None:
     """Answer the callback and explain why an editor action was refused."""
     query = update.callback_query
@@ -305,6 +328,21 @@ class RulesEditor:
                 rules_btn.editor_panel_btn(locale, has_content=True),
             )
             return WAITING_EDITOR_MENU
+        # * The cached version is still marked draft after publish. Refresh it
+        # * from the database so the next mutation opens a fresh draft instead
+        # * of appending rows to the now immutable published version.
+        try:
+            published = await db.rules_db.published_version(int(set_doc["id"]))
+        except Exception as exc:
+            log.warning(
+                "Published-version refresh failed for set=%d: %s",
+                int(set_doc["id"]),
+                exc,
+            )
+            published = None
+        if published is not None:
+            scope = flow_scope(ctx, update)
+            scope["rules_version"] = published
         await self._edit_or_reply(
             update,
             t(
@@ -343,6 +381,7 @@ class RulesEditor:
                 int(scope["rules_set"]["id"]), _slug(text), text
             )
             scope["rules_category"] = category
+            _clear_item_step(scope)
             return await self.categories(update, ctx)
 
         if step == "rename_category":
@@ -406,6 +445,7 @@ class RulesEditor:
                 str(scope["rules_item_body"]),
                 text or None,
             )
+            _clear_item_step(scope)
             return await self.items(update, ctx)
 
         # * Typing while simply viewing the panel is unexpected input, not a
@@ -523,7 +563,7 @@ class RulesEditor:
         version_id = scope.get("rules_version", {}).get("id")
         if version_id is not None:
             await db.rules_db.discard_draft(int(version_id))
-        scope.pop("rules_version", None)
+        _clear_editor_scope(scope)
         locale = await self._locale(update)
         await self._edit_or_reply(update, t("rules.editor.discarded", locale), None)
         return ConversationHandler.END
@@ -533,6 +573,7 @@ class RulesEditor:
         q = update.callback_query
         if q is not None:
             await q.answer()
+        _clear_editor_scope(flow_scope(ctx, update))
         locale = await self._locale(update)
         await self._edit_or_reply(update, t("rules.editor.cancelled", locale), None)
         return ConversationHandler.END

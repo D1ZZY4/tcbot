@@ -90,3 +90,8 @@ def test_parse_duration_accepts_every_unit_inside_the_cap() -> None:
 def test_parse_duration_rejects_tokens_past_the_cap() -> None:
     assert parse_duration("36501d") is None
     assert parse_duration("999999999999999ye") is None
+
+
+def test_parse_duration_rejects_an_overlong_digit_run() -> None:
+    """A token past Python's int conversion cap is invalid, not fatal."""
+    assert parse_duration("9" * 5000 + "d") is None

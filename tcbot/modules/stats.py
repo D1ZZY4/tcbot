@@ -438,10 +438,12 @@ __handlers__ = [
     CallbackQueryHandler(on_stats_bans_search, pattern=r"^stats_bans_search$"),
     CallbackQueryHandler(on_stats_search_back, pattern=r"^stats_search_back$"),
     CallbackQueryHandler(on_stats_search_cancel, pattern=r"^stats_search_cancel$"),
-    # * Search input only matters in PM where the bans panel was opened;
-    # * avoids absorbing every non-command text in groups.
+    # * The handler is registered in every chat because the panel can be
+    # * opened from a group. It returns immediately unless SEARCH_KEY is set
+    # * and the message comes from the chat that owns the panel, so ordinary
+    # * group chatter is never absorbed.
     MessageHandler(
-        filters.ChatType.PRIVATE & filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
+        filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
         on_bans_search_input,
     ),
 ]

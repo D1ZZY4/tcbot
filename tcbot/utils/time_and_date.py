@@ -112,7 +112,12 @@ def parse_duration(raw: str) -> timedelta | None:
     m = _DURATION_RE.match(raw.strip())
     if not m:
         return None
-    value = int(m.group(1))
+    try:
+        value = int(m.group(1))
+    except ValueError:
+        # * Python caps int(str) at 4300 digits; a longer token is simply an
+        # * invalid duration, not a reason to abort the whole command.
+        return None
     if value <= 0:
         # * timedelta(0) is falsy; a "0s" token must be invalid, never
         # * permanent (None would disable expiry on mute expiry paths).

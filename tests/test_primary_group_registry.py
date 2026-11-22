@@ -53,6 +53,7 @@ def test_primary_group_is_anchored_inactive(monkeypatch: pytest.MonkeyPatch) -> 
     compiled = str(connected_stmt.compile(compile_kwargs={"literal_binds": True}))
     assert "is_active" in compiled
     assert "false" in compiled.lower(), compiled
-    # * An existing row must not be reactivated: conflict does nothing.
+    # * An existing ACTIVE row from an older deployment must be repaired to
+    # * inactive, so conflict forces the same value instead of preserving it.
     assert "ON CONFLICT" in compiled
-    assert "DO NOTHING" in compiled
+    assert "DO UPDATE SET is_active = false" in compiled

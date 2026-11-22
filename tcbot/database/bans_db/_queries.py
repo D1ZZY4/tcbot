@@ -225,14 +225,25 @@ async def user_ban_count(user_id: int) -> int:
 
 
 async def user_appeal_count(user_id: int) -> int:
-    """Count bans on this user that ever had an appeal submitted."""
+    """Count bans on this user that ever had an appeal submitted.
+
+    This is the count counterpart of :func:`user_appealable_bans`, so it must
+    count the same grain: one row per ban, not one row per appeal. A ban can
+    carry several appeals after a rejection, and counting those rows inflated
+    the pager with pages that had no ban to show.
+    """
     return await db_call(
         lambda: fetch_count(
             select(func.count())
-            .select_from(moderation_appeals)
+            .select_from(moderation_actions)
             .where(
-                moderation_appeals.c.appellant_user_id == user_id,
-                moderation_appeals.c.status.isnot(None),
+                moderation_actions.c.target_user_id == user_id,
+                moderation_actions.c.action_type == "ban",
+                moderation_actions.c.id.in_(
+                    select(moderation_appeals.c.action_id).where(
+                        moderation_appeals.c.status.isnot(None)
+                    )
+                ),
             )
         )
     )

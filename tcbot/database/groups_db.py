@@ -188,13 +188,17 @@ async def ensure_primary_group(chat_id: int, title: str | None = None) -> None:
                 set_={"title": title, "updated_at": utc_now()},
             )
         await sess.execute(chat_stmt)
-        # * Insert a row only when none exists. Never flip an existing row
-        # * back to active: that would re-join the main group to the
-        # * federation after an operator removed it.
+        # * Force the row INACTIVE on every boot. Older deployments created
+        # * the main group as ACTIVE, and "do nothing" left that stale row in
+        # * the federation list while the cache already reported it offline.
+        # * Nothing may ever set it back to ACTIVE: the connect paths refuse
+        # * the primary group, so an active row is always a leftover to heal.
         await sess.execute(
             pg_insert(connected_chats)
             .values(chat_id=chat_id, is_active=False)
-            .on_conflict_do_nothing(index_elements=["chat_id"])
+            .on_conflict_do_update(
+                index_elements=["chat_id"], set_={"is_active": False}
+            )
         )
 
     await run_transaction(_work)

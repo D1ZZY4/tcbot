@@ -56,6 +56,29 @@ def _emitted() -> set[str]:
     return callbacks
 
 
+def test_completed_editor_steps_are_forgotten() -> None:
+    """A successful add must leave no pending step for the next chat message."""
+    scope: dict[str, Any] = {
+        "rules_step": "item_url",
+        "rules_item_title": "Spam",
+        "rules_item_body": "No spam",
+        "rules_category": {"category_key": "spam"},
+    }
+    rules_flow._clear_item_step(scope)
+    assert scope == {"rules_category": {"category_key": "spam"}}
+
+    scope.update(
+        {
+            "rules_step": "category_title",
+            "rules_set": {"id": 1},
+            "rules_version": {"id": 2},
+            "rules_category_key": "spam",
+        }
+    )
+    rules_flow._clear_editor_scope(scope)
+    assert scope == {}
+
+
 def test_editor_and_confirmation_callbacks_are_wired() -> None:
     conv = build_rules_conv()
     menu = _patterns(conv, WAITING_EDITOR_MENU)
