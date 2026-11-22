@@ -62,9 +62,13 @@ async def run_once(bot: Bot) -> None:
             "queued card edits stay pending for the next tick."
         )
         return
-    # * HALF_OPEN admits one probe. Claiming more tasks would call a still
-    # * degraded Telegram concurrently and burn their retry budget.
-    limit = 1 if state is CircuitState.HALF_OPEN else _MAX_TASKS_PER_TICK
+    # * HALF_OPEN admits one probe. When CLOSED, claim no more edits than the
+    # * breaker can still admit: a mid-batch opening would skip the remaining
+    # * tasks after their attempt counters were already consumed at claim time.
+    if state is CircuitState.HALF_OPEN:
+        limit = 1
+    else:
+        limit = min(_MAX_TASKS_PER_TICK, max(1, _cb.telegram.admission_headroom))
     tasks = await db.notifications_db.claim_due_tasks(limit, retry_after=_RETRY_DELAY)
     for task in tasks:
         try:
