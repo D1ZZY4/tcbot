@@ -446,7 +446,9 @@ def _location(
     return "?", "?", 0
 
 
-_TOKEN_RE = re.compile(r"\b\d{6,}:[A-Za-z0-9_-]{20,}\b")
+# * No leading word boundary: a token inside "bot<token>/..." must still be
+# * redacted when the exact configured value is unavailable.
+_TOKEN_RE = re.compile(r"(?<!\d)\d{6,}:[A-Za-z0-9_-]{20,}\b")
 _URL_CREDENTIALS_RE = re.compile(r"://(?:[^:@/\s]+)?:[^@/\s]+@")
 
 

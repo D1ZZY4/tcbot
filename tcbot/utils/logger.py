@@ -178,7 +178,10 @@ class TelegramErrorHandler(logging.Handler):
             # * traceback before the delivery reads it.
             sink(copy.copy(record))
         except Exception as exc:
-            logger.bind(module=__name__).debug("Error log sink failed: %s", exc)
+            # * WARNING stays below this ERROR-level handler, so it cannot
+            # * recurse, while a sink outage remains visible at production
+            # * log levels instead of silently losing every report.
+            logger.bind(module=__name__).warning("Error log sink failed: %s", exc)
 
 
 # ─────────────────────── Logging Setup ──────────────────────────── #

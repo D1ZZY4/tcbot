@@ -134,6 +134,11 @@ def test_scrub_secrets_redacts_exact_configured_values(
         "oops 999888:ABCDEFghij1234567890XY end"
     )
     assert "999888:ABCDEFghij1234567890XY" not in token_shaped
+    url_token = error_reporter._scrub_secrets(
+        "GET https://api.telegram.org/bot999888:ABCDEFghij1234567890XY/getMe"
+    )
+    assert "999888:ABCDEFghij1234567890XY" not in url_token
+    assert "[REDACTED_TOKEN]" in url_token
     database_shaped = error_reporter._scrub_secrets(
         "oops postgresql://user:hunter2@host/db end"
     )
