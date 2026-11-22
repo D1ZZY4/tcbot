@@ -28,7 +28,10 @@ from tcbot.modules.helper.messages import (
     answer_ack,
     answer_alert,
     cb_error_edit,
+    safe_edit_cb,
+    safe_edit_message,
     send_log,
+    send_text,
 )
 from tcbot.utils.dispatch import (
     count_transient_errors,
@@ -261,10 +264,10 @@ class ConnectionAddedMixin:
             return
         if new_status in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR):
             if cfg.is_primary_group(chat.id):
-                # * A primary group is not connected through the join flow,
-                # * but its registry row has to exist before it can hold a
-                # * chat-scoped decision. Re-register it here so a bot that
-                # * was removed and re-added keeps that capability.
+                # * A primary group is never connected into the federation;
+                # * ensure_primary_group anchors its registry row as inactive.
+                # * Re-anchor it here so a removed and re-added bot keeps the
+                # * identity row needed for chat-scoped decisions.
                 try:
                     await db.groups_db.ensure_primary_group(chat.id, chat.title)
                 except Exception:
@@ -310,10 +313,11 @@ class ConnectionAddedMixin:
                         pending.get("owner_id", 0), "Owner"
                     )
                     with contextlib.suppress(Exception):
-                        await ctx.bot.edit_message_text(
+                        await safe_edit_message(
+                            ctx.bot,
+                            chat.id,
+                            pending.get("message_id", 0),
                             self.connecting_message(locale),
-                            chat_id=chat.id,
-                            message_id=pending.get("message_id", 0),
                             reply_markup=None,
                         )
                     try:
@@ -330,10 +334,11 @@ class ConnectionAddedMixin:
                             chat.id,
                         )
                         with contextlib.suppress(Exception):
-                            await ctx.bot.edit_message_text(
+                            await safe_edit_message(
+                                ctx.bot,
+                                chat.id,
+                                pending.get("message_id", 0),
                                 t("connecting.state.complete_join", locale, plain=True),
-                                chat_id=chat.id,
-                                message_id=pending.get("message_id", 0),
                                 reply_markup=None,
                             )
                         return
@@ -341,15 +346,16 @@ class ConnectionAddedMixin:
                         ctx.bot, chat.id, locale
                     )
                     try:
-                        await ctx.bot.edit_message_text(
+                        await safe_edit_message(
+                            ctx.bot,
+                            chat.id,
+                            pending.get("message_id", 0),
                             (
                                 self.connected_blind_message(locale)
                                 if blind
                                 else self.connected_message(locale)
                             )
                             + welcome_note,
-                            chat_id=chat.id,
-                            message_id=pending.get("message_id", 0),
                             reply_markup=None,
                         )
                     except Exception as exc:
@@ -375,7 +381,11 @@ class ConnectionAddedMixin:
                     chat.id,
                 )
             try:
-                prompt = await ctx.bot.send_message(
+                # * The rich transport converts the styled keyboard cells to
+                # * rich buttons; a raw send_message leaves them as a legacy
+                # * inline keyboard.
+                prompt = await send_text(
+                    ctx.bot,
                     chat.id,
                     self.join_prompt(locale),
                     reply_markup=self.join_keyboard(locale),
@@ -455,11 +465,11 @@ class ConnectionDecisionMixin:
             except Exception as exc:
                 log.debug("Join decision answer failed with no chat/user: %s", exc)
             return
-        if cfg.is_primary_group(chat.id):
+        if cfg.is_primary_group(chat.id) or cfg.is_infrastructure_chat(chat.id):
             try:
                 await q.answer()
             except Exception as exc:
-                log.debug("Join decision primary-group answer failed: %s", exc)
+                log.debug("Join decision infrastructure answer failed: %s", exc)
             return
         locale = await locale_for_update(update)
         try:
@@ -531,9 +541,11 @@ class ConnectionDecisionMixin:
             except Exception:
                 log.exception("is_connected failed for chat %d", chat.id)
                 with contextlib.suppress(Exception):
-                    await q.edit_message_text(
+                    await safe_edit_cb(
+                        q,
                         t("connecting.state.complete_join", locale, plain=True),
                         reply_markup=None,
+                        parse_mode=None,
                     )
                 return
             if already_connected:
@@ -545,8 +557,8 @@ class ConnectionDecisionMixin:
                 )
                 return
             with contextlib.suppress(Exception):
-                await q.edit_message_text(
-                    self.connecting_message(locale), reply_markup=None
+                await safe_edit_cb(
+                    q, self.connecting_message(locale), reply_markup=None
                 )
             try:
                 blind = await self.complete_join(
@@ -555,14 +567,17 @@ class ConnectionDecisionMixin:
             except Exception:
                 log.exception("complete_join failed for chat %d", chat.id)
                 with contextlib.suppress(Exception):
-                    await q.edit_message_text(
+                    await safe_edit_cb(
+                        q,
                         t("connecting.state.complete_join", locale, plain=True),
                         reply_markup=None,
+                        parse_mode=None,
                     )
                 return
             welcome_note = await _welcome_permission_note(ctx.bot, chat.id, locale)
             with contextlib.suppress(Exception):
-                await q.edit_message_text(
+                await safe_edit_cb(
+                    q,
                     (
                         self.connected_blind_message(locale)
                         if blind
@@ -577,7 +592,7 @@ class ConnectionDecisionMixin:
             except Exception:
                 log.exception("remove_pending failed for chat %d on cancel", chat.id)
             cancel_results = await asyncio.gather(
-                q.edit_message_text(self.declined_message(locale), reply_markup=None),
+                safe_edit_cb(q, self.declined_message(locale), reply_markup=None),
                 send_log(
                     ctx.bot,
                     messages.group_connection_rejected_log(

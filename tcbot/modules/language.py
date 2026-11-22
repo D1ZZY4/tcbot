@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.identity import can_manage_group
@@ -256,7 +257,11 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 log.debug("language denied answer failed: %s", exc)
             return
         try:
-            connected = await db.groups_db.is_connected(chat.id, fresh=True)
+            # * The main group is a federation origin even though it is not
+            # * a connected federation group, so its locale is configurable.
+            connected = cfg.is_primary_group(
+                chat.id
+            ) or await db.groups_db.is_connected(chat.id, fresh=True)
         except Exception as exc:
             log.debug("language is_connected failed for %d: %s", chat.id, exc)
             connected = False

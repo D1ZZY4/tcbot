@@ -196,11 +196,17 @@ list that would claim zero groups.
 
 Primary groups (the main and exec destinations) are infrastructure, not managed
 groups. They are always enforcement destinations for ban, unban, mute, warn, and
-federation logs. The connect command, the join-decision callback,
-`/tcdisconnect`, and `/rmtc` all refuse them. The bot-added path re-registers
-them with `ensure_primary_group()` so a group that was removed and re-added keeps
-its ability to hold chat-scoped decisions. `MAIN_GROUP` remains the federation
-origin and the primary greeting target.
+federation logs, because every fan-out appends them through
+`with_primary_groups()`. The connect command, the join-decision callback,
+`/tcdisconnect`, and `/rmtc` all refuse them. `ensure_primary_group()` anchors
+the identity row and an INACTIVE connection row so a group that was removed and
+re-added keeps its ability to hold chat-scoped decisions without ever joining
+the federation connected set; a removed row is never reactivated. Configured
+infrastructure chats (`MAIN_GROUP`, `MAIN_CHANNEL`, `APPEALS`, `LOGS`,
+`LOGS_ERRORS`, `PROOFS`) are refused on every connect entry point. Users can
+still discuss, appeal, and run commands in `MAIN_GROUP`: the federation-origin
+gate short-circuits on `is_primary_group`. The join prompt is sent through the
+rich transport so its Connect/Cancel buttons render as rich buttons.
 
 ## Exact names and validation
 

@@ -209,12 +209,14 @@ async def test_a_group_connection_creates_the_missing_owner(postgres: str) -> No
 
 
 async def test_a_primary_group_can_hold_a_chat_scoped_decision(postgres: str) -> None:
-    """The primary group registry row lets a warn be recorded there."""
+    """The primary group is anchored for decisions but never federation-connected."""
     await groups_db.ensure_primary_group(-1003, "Primary Group")
 
     await warns_db.add_warn(42, "spam", 7, -1003)
 
-    assert await groups_db.is_connected(-1003, fresh=True) is True
+    # * The registry row satisfies the moderation_actions FK, but the main
+    # * group is not part of the federation connected set.
+    assert await groups_db.is_connected(-1003, fresh=True) is False
     assert await warns_db.warn_count(42, -1003) == 1
 
 

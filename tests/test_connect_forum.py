@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import inspect
 from types import SimpleNamespace
+from types import SimpleNamespace as _NS
 
 import pytest
 from telegram.constants import ChatMemberStatus
@@ -23,7 +24,11 @@ class _FakeBot:
         self.sent: list[tuple[int, object]] = []
 
     async def send_message(
-        self, chat_id: int, text: str, reply_markup: object | None = None
+        self,
+        chat_id: int,
+        text: str,
+        reply_markup: object | None = None,
+        message_thread_id: int | None = None,
     ) -> SimpleNamespace:
         self.sent.append((chat_id, reply_markup))
         return SimpleNamespace(message_id=77)
@@ -104,6 +109,55 @@ async def test_forum_prompt_is_sent_without_an_attributed_adder(
 
 
 @pytest.mark.asyncio
+async def test_join_prompt_uses_the_rich_transport_with_buttons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The Connect/Cancel prompt goes through send_text so buttons render rich."""
+    sent: list[dict[str, object]] = []
+
+    async def _send_text(bot: object, chat_id: int, text: str, **kwargs: object) -> _NS:
+        sent.append({"bot": bot, "chat_id": chat_id, "text": text, **kwargs})
+        return _NS(message_id=77)
+
+    async def _get_pending(_chat_id: int) -> None:
+        return None
+
+    async def _is_connected(_chat_id: int, *, fresh: bool = False) -> bool:
+        return False
+
+    async def _add_pending(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def _locale(_update: object) -> str:
+        return "en-US"
+
+    monkeypatch.setattr(
+        connected_flow,
+        "cfg",
+        _NS(
+            is_primary_group=lambda _chat_id: False,
+            is_infrastructure_chat=lambda _chat_id: False,
+        ),
+    )
+    monkeypatch.setattr(connected_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(connected_flow, "send_text", _send_text)
+    monkeypatch.setattr(connected_flow.db.groups_db, "get_pending", _get_pending)
+    monkeypatch.setattr(connected_flow.db.groups_db, "is_connected", _is_connected)
+    monkeypatch.setattr(connected_flow.db.groups_db, "add_pending", _add_pending)
+
+    bot = _FakeBot()
+    await connected_flow.connection.on_bot_added(
+        _forum_update(None),  # type: ignore[arg-type]
+        _NS(bot=bot),  # type: ignore[arg-type]
+    )
+
+    assert len(sent) == 1
+    assert sent[0]["chat_id"] == -1001234567890
+    assert sent[0]["reply_markup"] is not None
+    assert bot.sent == []  # no raw send_message path was used
+
+
+@pytest.mark.asyncio
 async def test_forum_prompt_records_the_adder_when_known(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -145,6 +199,52 @@ async def test_forum_prompt_records_the_adder_when_known(
     )
 
     assert recorded == [(-1001234567890, "Community Forum", 4242, 77)]
+
+
+@pytest.mark.asyncio
+async def test_join_decision_refuses_an_infrastructure_chat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stale/tc_join tap inside a config chat must not connect it."""
+
+    class _Query:
+        def __init__(self) -> None:
+            self.answers = 0
+
+        async def answer(self) -> None:
+            self.answers += 1
+
+        @property
+        def data(self) -> str:
+            return "tc_join"
+
+        @property
+        def message(self) -> object:
+            return None
+
+    q = _Query()
+    chat = _NS(id=-1004339701876, type="supergroup", title="Appeals")
+    update = _NS(
+        callback_query=q,
+        effective_chat=chat,
+        effective_user=_NS(id=42, first_name="Owner"),
+    )
+    monkeypatch.setattr(
+        connected_flow,
+        "cfg",
+        _NS(
+            is_primary_group=lambda _chat_id: False,
+            is_infrastructure_chat=lambda _chat_id: True,
+        ),
+    )
+
+    await inspect.unwrap(connected_flow.connection.on_join_decision)(
+        update,  # type: ignore[arg-type]
+        _NS(bot=_FakeBot()),  # type: ignore[arg-type]
+    )
+
+    # * The guard answers the tap and returns before any member lookup or DB work.
+    assert q.answers == 1
 
 
 @pytest.mark.asyncio

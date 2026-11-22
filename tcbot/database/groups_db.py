@@ -161,14 +161,15 @@ async def is_connected(chat_id: int, *, fresh: bool = False) -> bool:
 
 
 async def ensure_primary_group(chat_id: int, title: str | None = None) -> None:
-    """Register a primary group as a managed chat without a connect prompt.
+    """Anchor a primary group in the registry without joining the federation.
 
-    A primary group is a required enforcement destination, but it is not
-    connected through the join flow. The moderation schema nevertheless
-    requires chat-scoped decisions to name an active connected chat, so the
-    primary group needs a registry row of its own. The row is active, like
-    a connected group, and the regular connect path still refuses to
-    create it. The title is only written when the caller has one.
+    The main group is a deployment destination, not a connected federation
+    group: users discuss, appeal, and run commands there, but it must never
+    appear in the connected-chat list or count. The moderation schema needs
+    an identity row (``telegram_chats``) for chat-scoped decisions and an
+    ``origin_chat_id`` FK target, so both rows are created. The connection
+    row is deliberately INACTIVE. Enforcement still reaches the main group
+    because every fan-out appends it through ``with_primary_groups``.
     """
     if not chat_id:
         return
@@ -187,17 +188,17 @@ async def ensure_primary_group(chat_id: int, title: str | None = None) -> None:
                 set_={"title": title, "updated_at": utc_now()},
             )
         await sess.execute(chat_stmt)
+        # * Insert a row only when none exists. Never flip an existing row
+        # * back to active: that would re-join the main group to the
+        # * federation after an operator removed it.
         await sess.execute(
             pg_insert(connected_chats)
-            .values(chat_id=chat_id, is_active=True)
-            .on_conflict_do_update(
-                index_elements=["chat_id"],
-                set_={"is_active": True},
-            )
+            .values(chat_id=chat_id, is_active=False)
+            .on_conflict_do_nothing(index_elements=["chat_id"])
         )
 
     await run_transaction(_work)
-    connected_cache.put(chat_id, True)  # noqa: FBT003
+    connected_cache.put(chat_id, False)  # noqa: FBT003
     active_groups_cache.invalidate(_ALL_GROUPS_KEY)
 
 
