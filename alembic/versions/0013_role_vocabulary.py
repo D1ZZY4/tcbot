@@ -20,6 +20,7 @@ Create Date: 2026-11-21
 from __future__ import annotations
 
 from alembic import op
+from tcbot.database.schema import apply_schema
 
 revision: str = "0013_role_vocabulary"
 down_revision: str | None = "0012_rules_publication"
@@ -56,6 +57,11 @@ _FINAL_ROLES = (
 
 def upgrade() -> None:
     """Normalise every stored role reference and remove the stale names."""
+    # * Reinstall the schema objects first: a deployment already at 0012 still
+    # * carries the old guard whose BEFORE DELETE trigger returned NULL and
+    # * silently suppressed the stale-definition deletes below.
+    apply_schema(op.get_bind())
+
     for key, display, priority, description in _FINAL_ROLES:
         op.execute(
             "INSERT INTO role_definitions (role_key, display_name, priority, "
