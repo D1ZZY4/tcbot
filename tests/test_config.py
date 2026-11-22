@@ -10,7 +10,31 @@ import dataclasses
 
 import pytest
 
-from tcbot import Configs, cfg, parse_chat_id, parse_list, parse_port
+from tcbot import (
+    DB_SCHEMAS,
+    Configs,
+    _db_schema_from_env,
+    cfg,
+    parse_chat_id,
+    parse_list,
+    parse_port,
+)
+
+
+@pytest.mark.parametrize("schema", sorted(DB_SCHEMAS))
+def test_owned_schemas_are_accepted(
+    monkeypatch: pytest.MonkeyPatch, schema: str
+) -> None:
+    monkeypatch.setenv("DB_SCHEMA", schema)
+    assert _db_schema_from_env() == schema
+
+
+@pytest.mark.parametrize("schema", ["publc", "staging", "PUBLIC", "test;drop"])
+def test_a_stray_schema_falls_back_to_public(
+    monkeypatch: pytest.MonkeyPatch, schema: str
+) -> None:
+    monkeypatch.setenv("DB_SCHEMA", schema)
+    assert _db_schema_from_env() == "public"
 
 
 def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:

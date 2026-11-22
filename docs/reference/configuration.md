@@ -52,7 +52,7 @@ from these ids through `messages/links.py`; no static URL variables remain.
 | Variable | Default | Notes |
 |---|---|---|
 | `DATABASE_URL` | required | See above. |
-| `DB_SCHEMA` | `public` | Plain PostgreSQL identifier. Only `public`, `test`, and `development` are used. |
+| `DB_SCHEMA` | `public` | Only `public`, `test`, and `development` are accepted; any other value falls back to `public` instead of creating a fourth schema. |
 | `DB_POOL_SIZE` | `5` | Minimum 1. Must fit the server's connection limit. |
 | `DB_MAX_OVERFLOW` | `5` | Minimum 0. |
 | `REDIS_URL` | empty | Optional Redis L2 cache; empty runs on in-memory L1 only. |

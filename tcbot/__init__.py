@@ -47,14 +47,13 @@ _DEFAULT_DB_MAX_OVERFLOW: int = 5
 # * "development". Those three are the only schemas this project uses,
 # * so a stray schema cannot hide a migration that never ran.
 _DEFAULT_DB_SCHEMA: str = "public"
+# * The complete set of schemas this project owns. A name outside it would
+# * create a fourth schema at startup and hide migrations that never ran.
+DB_SCHEMAS: frozenset[str] = frozenset({"public", "test", "development"})
 # * A pending promotion request that is not decided within this window is
 # * marked expired, so an old card cannot block a fresh request forever.
 # * Zero disables the expiry and keeps requests pending indefinitely.
 _DEFAULT_PROMOTION_REQUEST_TTL_DAYS: int = 7
-# * A schema name reaches the server as part of a connection option, so
-# * it has to be a plain identifier. Anything else is refused instead of
-# * being quoted into the option string.
-_DB_SCHEMA_PATTERN: re.Pattern[str] = re.compile(r"^[a-z_][a-z0-9_]*$")
 # * Telegram accepts a webhook secret of 1-256 characters from this set. A
 # * value outside it makes set_webhook fail after the bot has started, so it
 # * is refused at configuration load with an actionable message instead.
@@ -361,17 +360,17 @@ def _env_or(key: str, default: str) -> str:
 def _db_schema_from_env() -> str:
     """Read the schema the application works in.
 
-    The value reaches the server as a connection option, so only a plain
-    identifier is accepted. An unusable name falls back to the default
-    rather than producing a connection that fails on every call.
+    Only the three schemas the project owns are accepted. A typo would
+    otherwise create a fourth schema at startup and hide migrations that
+    never ran in the schema the deployment actually reads.
     """
     raw = os.getenv("DB_SCHEMA", "").strip() or _DEFAULT_DB_SCHEMA
-    if not _DB_SCHEMA_PATTERN.fullmatch(raw):
+    if raw not in DB_SCHEMAS:
         log.warning(
-            "Invalid DB_SCHEMA '%s'; using %s. The name has to be a plain "
-            "PostgreSQL identifier.",
+            "Invalid DB_SCHEMA '%s'; using %s. Allowed schemas: %s.",
             raw,
             _DEFAULT_DB_SCHEMA,
+            ", ".join(sorted(DB_SCHEMAS)),
         )
         return _DEFAULT_DB_SCHEMA
     return raw

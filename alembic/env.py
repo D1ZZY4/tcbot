@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -23,6 +22,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from tcbot import DB_SCHEMAS  # noqa: E402
 from tcbot.database.base import metadata  # noqa: E402
 from tcbot.database.connection_options import TIMEZONE_OPTION  # noqa: E402
 from tcbot.database.migrations import (  # noqa: E402
@@ -147,7 +147,7 @@ def _db_schema() -> str:
         or os.environ.get("DB_SCHEMA", "").strip()
         or "public"
     )
-    if not re.fullmatch(r"[a-z_][a-z0-9_]*", raw):
+    if raw not in DB_SCHEMAS:
         return "public"
     return raw
 
