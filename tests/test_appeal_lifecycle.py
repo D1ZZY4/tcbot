@@ -228,7 +228,9 @@ async def test_the_acceptance_shows_up_on_the_decision(ban_db: str) -> None:
     ban = await db.bans_db.get_ban(_BAN_REF)
     assert ban is not None
     assert ban.get("rejected_by_id") == _REVIEWER_ID
-    assert ban.get("rejected_at") is not None
+    # * An accepted appeal is not a rejection, so it must not start the
+    # * rejection cooldown.
+    assert ban.get("rejected_at") is None
     assert ban.get("is_active") is False
 
 
@@ -248,6 +250,19 @@ async def test_the_rejection_closes_the_appeal_and_frees_the_slot(
     ban = await db.bans_db.get_ban(_BAN_REF)
     assert ban is not None
     assert ban.get("review_message_id") is None
+    assert ban.get("rejected_at") is not None
+
+
+async def test_a_stale_release_does_not_start_the_cooldown(ban_db: str) -> None:
+    """A stale review is withdrawn, not rejected, so reappeal stays open."""
+    await _seed_ban()
+    await db.bans_db.submit_appeal(_BAN_REF, _TARGET_ID, "please reconsider", 77)
+
+    assert await db.bans_db.release_stale_review(_BAN_REF, 77) is True
+
+    ban = await db.bans_db.get_ban(_BAN_REF)
+    assert ban is not None
+    assert ban.get("rejected_at") is None
 
 
 async def test_a_rejected_decision_takes_a_new_appeal(ban_db: str) -> None:

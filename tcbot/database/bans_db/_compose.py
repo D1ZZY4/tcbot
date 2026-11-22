@@ -221,7 +221,14 @@ def compose_row(
         appeal_submitted_at=(appeal or {}).get("submitted_at"),
         appeal_link=metadata.get(META_APPEAL_LINK),
         rejected_by_id=(appeal or {}).get("reviewed_by_user_id"),
-        rejected_at=(appeal or {}).get("resolved_at"),
+        # * Only a real rejection starts the appeal cooldown. An accepted
+        # * or stale-withdrawn appeal also resolves, but that timestamp must
+        # * not block the member from appealing again.
+        rejected_at=(
+            (appeal or {}).get("resolved_at")
+            if (appeal or {}).get("status") == "rejected"
+            else None
+        ),
         case_id=int(row["case_id"]),
         evidence_upload_id=row.get("evidence_upload_id"),
         action_origin=str(row.get("action_origin") or "manual"),
