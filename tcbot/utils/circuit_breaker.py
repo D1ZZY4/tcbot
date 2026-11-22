@@ -120,6 +120,19 @@ class CircuitBreaker:
         """
         return self._state
 
+    @property
+    def admission_headroom(self) -> int:
+        """Calls a CLOSED circuit can admit before it trips.
+
+        A worker that claims more targets than this number can deliver leaves
+        the surplus slots to be skipped by ``try_acquire`` after the breaker
+        opens mid-batch. Those slots consume their retry budget without ever
+        reaching Telegram, so batch sizes must respect this window.
+        """
+        if self._state is not CircuitState.CLOSED:
+            return 0
+        return max(0, self._failure_threshold - self._failure_count)
+
     async def call[T](
         self,
         coro: Awaitable[T],

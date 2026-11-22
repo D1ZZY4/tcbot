@@ -107,6 +107,24 @@ def test_a_half_open_circuit_claims_one_probe(
     assert claimed == [1]
 
 
+def test_a_reserved_half_open_probe_is_not_bypassed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second worker must not edit a card while another probe is in flight."""
+    _wire(monkeypatch)
+    bot = _Bot()
+
+    _cb.telegram.reset()
+    _cb.telegram._state = _cb.CircuitState.HALF_OPEN
+    try:
+        assert _cb.telegram.try_acquire() is True
+        asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+    finally:
+        _cb.telegram.reset()
+
+    assert bot.edits == []
+
+
 def test_a_worker_error_at_the_attempt_ceiling_is_terminal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

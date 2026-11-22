@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from telegram.error import BadRequest, Forbidden
 
@@ -88,6 +88,7 @@ async def run_once(bot: Bot) -> None:
                         state="failed",
                         error=f"worker error: {exc}",
                         expected_attempts=as_int(task.get("attempts")),
+                        expected_message_id=as_int(task.get("message_id")),
                     )
                 except asyncio.CancelledError:
                     raise
@@ -135,14 +136,22 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
     chat_id = as_int(task.get("chat_id"))
     message_id = as_int(task.get("message_id"))
     attempts = as_int(task.get("attempts"))
+
+    async def _complete(**kwargs: Any) -> None:
+        """Settle only the claim that started this edit."""
+        await db.notifications_db.complete_task(
+            task_id,
+            expected_message_id=message_id,
+            **kwargs,
+        )
+
     if task_id <= 0:
         return
     if action_id <= 0 or chat_id == 0 or message_id <= 0:
         # * A row with a missing identifier can never succeed, and leaving
         # * it pending makes the claim advance its attempt count forever.
         # * Record the terminal state so it stops consuming a worker slot.
-        await db.notifications_db.complete_task(
-            task_id,
+        await _complete(
             state="failed",
             error="the task carries an invalid action, chat, or message id",
             expected_attempts=attempts,
@@ -150,12 +159,21 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
         return
     action = await db.notifications_db.load_task_action(task_id)
     if action is None or _card_is_still_decidable(action, message_id):
-        await db.notifications_db.complete_task(
-            task_id, state="skipped", expected_attempts=attempts
-        )
+        await _complete(state="skipped", expected_attempts=attempts)
         return
     locale = await _group_locale(chat_id)
     text = t("appeals.review.card_closed", locale, plain=True)
+    # * Reserve the breaker slot at the call site. run_once only limits how
+    # * many tasks are claimed; without this guard a second worker can issue a
+    # * concurrent HALF_OPEN call and close the circuit while the other probe
+    # * is still in flight. A rejected call leaves the task for a later tick.
+    if not _cb.telegram.try_acquire():
+        log.warning(
+            "Review-card edit for action=%d skipped: Telegram circuit is not "
+            "admitting calls.",
+            action_id,
+        )
+        return
     try:
         async with asyncio.timeout(TELEGRAM_ACTION_TIMEOUT):
             await bot.edit_message_text(
@@ -166,6 +184,7 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
                 reply_markup=None,
             )
     except asyncio.CancelledError:
+        _cb.telegram.release_probe()
         raise
     except Exception as exc:
         detail = str(exc).lower()
@@ -179,17 +198,14 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
             isinstance(exc, BadRequest)
             and ("not found" in detail or "message_id_invalid" in detail)
         ):
-            await db.notifications_db.complete_task(
-                task_id,
+            await _complete(
                 state="skipped",
                 error=str(exc),
                 expected_attempts=attempts,
             )
             return
         if isinstance(exc, BadRequest) and "not modified" in detail:
-            await db.notifications_db.complete_task(
-                task_id, state="sent", expected_attempts=attempts
-            )
+            await _complete(state="sent", expected_attempts=attempts)
             return
         retry = attempts < _MAX_ATTEMPTS
         log.warning(
@@ -202,8 +218,7 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
             _MAX_ATTEMPTS,
             exc,
         )
-        await db.notifications_db.complete_task(
-            task_id,
+        await _complete(
             state="failed" if not retry else "pending",
             error=str(exc),
             retry_after=_RETRY_DELAY if retry else None,
@@ -211,6 +226,4 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
         )
         return
     _cb.telegram.record_success()
-    await db.notifications_db.complete_task(
-        task_id, state="sent", expected_attempts=attempts
-    )
+    await _complete(state="sent", expected_attempts=attempts)

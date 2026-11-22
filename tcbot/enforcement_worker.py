@@ -42,6 +42,8 @@ log = get_logger(__name__)
 _BOT: Bot | None = None
 _MAX_RUNS_PER_TICK: int = 10
 _MAX_TARGETS_PER_RUN: int = 100
+# * Upper bound on one delivery chunk; the breaker headroom tightens it further.
+_DELIVERY_CHUNK: int = 10
 _MAX_ATTEMPTS: int = db.enforcement_db.MAX_ATTEMPTS
 _RETRY_DELAY = timedelta(minutes=5)
 
@@ -222,37 +224,65 @@ async def _process_run(
         )
         return
 
-    targets = await db.enforcement_db.claim_targets(run_id, max_targets)
-    if not targets:
-        # * A repair with no claimable target is not a successful unban: the
-        # * chat may be disconnected, so the record stays failed and visible.
-        await db.enforcement_db.complete_empty_run(run_id)
-        return
-
-    coros = [
-        _deliver(
-            bot,
-            action_type,
-            as_int(target.get("chat_id")),
-            target_user_id,
-            operation,
-            expiry,
-        )
-        for target in targets
-    ]
-    results = await fan_out(coros)
-    throw_if_cancelled(results)
-
-    updates = [
-        _record_target(target, result)
-        for target, result in zip(targets, results, strict=True)
-    ]
-    settled = await gather_bounded(updates, max_concurrent=10)
+    # * Claim in small chunks capped by the breaker's remaining failure
+    # * headroom. A claim consumes one of the target's three attempts before
+    # * the call starts, so claiming more than the circuit can admit would
+    # * let a mid-batch OPEN leave later slots skipped without a delivery and
+    # * exhaust their budget across a few outages.
+    results: list[object] = []
+    processed = 0
     update_failed = False
-    for result in settled:
-        if isinstance(result, BaseException):
-            update_failed = True
-            log.error("Enforcement target update failed: %s", result)
+    while processed < max_targets:
+        state = _cb.telegram.state
+        if state is CircuitState.OPEN:
+            break
+        if state is CircuitState.HALF_OPEN:
+            chunk_size = 1
+        else:
+            chunk_size = min(
+                _DELIVERY_CHUNK,
+                max_targets - processed,
+                _cb.telegram.admission_headroom,
+            )
+            if chunk_size <= 0:
+                break
+        targets = await db.enforcement_db.claim_targets(run_id, chunk_size)
+        if not targets:
+            if not results:
+                # * A repair with no claimable target is not a successful
+                # * unban: the chat may be disconnected, so the record stays
+                # * failed and visible.
+                await db.enforcement_db.complete_empty_run(run_id)
+            break
+        coros = [
+            _deliver(
+                bot,
+                action_type,
+                as_int(target.get("chat_id")),
+                target_user_id,
+                operation,
+                expiry,
+            )
+            for target in targets
+        ]
+        chunk_results = await fan_out(coros)
+        throw_if_cancelled(chunk_results)
+        updates = [
+            _record_target(target, result)
+            for target, result in zip(targets, chunk_results, strict=True)
+        ]
+        settled = await gather_bounded(updates, max_concurrent=10)
+        for result in settled:
+            if isinstance(result, BaseException):
+                update_failed = True
+                log.error("Enforcement target update failed: %s", result)
+        results.extend(chunk_results)
+        processed += len(targets)
+        # * A short claim means no more targets of this run are available
+        # * right now, so there is nothing left to deliver in later chunks.
+        if len(targets) < chunk_size:
+            break
+
     if operation == "reconcile" and not update_failed:
         remaining = [
             result

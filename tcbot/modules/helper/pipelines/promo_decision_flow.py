@@ -269,6 +269,7 @@ async def execute_promo_decision(
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled(notify_results)
         for i, r in enumerate(notify_results):
             if isinstance(r, BaseException):
                 log.debug("promo_approve notify[%d] failed: %s", i, r)
@@ -326,6 +327,7 @@ async def execute_promo_decision(
             ),
             return_exceptions=True,
         )
+        throw_if_cancelled(reject_results)
         for i, r in enumerate(reject_results):
             if isinstance(r, BaseException):
                 log.debug("promo_reject notify[%d] failed: %s", i, r)
