@@ -56,7 +56,7 @@ telegram = "Telegram doing fine without a role here."
 other_bot = "Other bots can't hold federation roles - humans only."
 anon_admin = "Anonymous admin cannot hold a federation role."
 owner = "{line} already runs the place, promoting them is a circular move."
-admin = "{line} is already an Admin. Use /tcpromote for a different role."
+admin = "{line} is already an Admin. Use /tcsetrole to change their role."
 
 [refuse.demote]
 self = "Demoting yourself? Bold. Ask a higher-up if you really mean it."

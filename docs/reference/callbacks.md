@@ -67,7 +67,7 @@ whose `CallbackQueryHandler` pattern matches it.
 |---|---|---|
 | `promo_approve:<id>`, `promo_reject:<id>` | `buttons/admin.py::promo_decision_btn` | `admins.py`. |
 | `promo_role:<role>:<target_id>[:<executor_id>]` | `buttons/admin.py::promote_role_btn` | `admins.py`. |
-| `role_change:<role>:<target_id>[:<executor_id>]`, `role_change_cancel:<target_id>[:<executor_id>]` | `buttons/admin.py::role_change_btn` | `rolechange.py`; moves an existing staff member between tiers. |
+| `role_change:<role>:<target_id>[:<executor_id>]`, `role_change_cancel:<target_id>[:<executor_id>]` | `buttons/admin.py::role_change_btn` | `roles_flow.py`; moves an existing staff member between tiers. |
 | `promo_role_cancel:<target_id>[:<executor_id>]` | `buttons/admin.py::promote_role_btn` | `admins.py`. |
 | `demote_confirm:<target_id>[:<executor_id>]` | `buttons/admin.py::demote_confirm_btn` | `admins.py`. |
 | `demote_cancel:<target_id>[:<executor_id>]` | `buttons/admin.py::demote_confirm_btn` | `admins.py`. |

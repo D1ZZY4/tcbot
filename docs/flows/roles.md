@@ -69,13 +69,13 @@ so no second cleanup write is needed.
 
 ## Changing an existing role
 
-`/tcsetrole` (alias `/tcsr`) moves a staff member between tiers without a
-remove-then-add gap. It checks the federation origin and resolves the target
-with the shared executor-and-target lookup, refuses the Owner and already
-banned targets, then shows a picker containing only the tiers the executor
-may grant **except** the one already held. Unlike `/tcpromote`, it does not
-run the protected-identity and proven-bot probes at entry; rank checks and the
-ban guard still apply at the mutation point. The same grant table applies:
+`/tcsetrole` (alias `/tcsr`) and `/tcpromote <target> <role>` both move a staff
+member between tiers without a remove-then-add gap. They check the federation
+origin and resolve the target with the shared executor-and-target lookup, then
+show a picker containing only the tiers the executor may grant **except** the
+one already held. When a tier is supplied directly, the change is applied at
+once. Rank checks and the ban guard still apply at the mutation point. The
+same grant table applies:
 
 | Executor | Roles offered for a change |
 |---|---|
@@ -83,7 +83,7 @@ ban guard still apply at the mutation point. The same grant table applies:
 | `admin` | `developer`, `moderator` |
 | anything else | none |
 
-`change_role_for_staff()` in `promote_flow.py` re-reads both roles fresh, refuses
+`change_role_for_staff()` in `roles_flow.py` re-reads both roles fresh, refuses
 an Owner target, a role-less user, the role already held, a tier outside the grant
 table, and a target at or above the executor's rank. It also applies the banned
 target guard. `db.users_roles.change_role()` validates the destination against
@@ -91,6 +91,17 @@ the three assignable tiers and delegates to the same one-transaction
 `_assign_role()` that `add_admin()` and `set_role()` use, so the revoked and new
 assignments land together. The Owner row is never revoked. Log and DM are sent
 in a bounded gather, best effort.
+
+`is_role_change_request()` in `roles_flow.py` classifies a promote-style request
+against a target who already holds a role. A tier the executor may grant
+directly becomes a role change; no tier shows the change picker; a tier the
+executor cannot grant (Admin for an Admin) stays on the queued-request path so
+an Admin can still request Admin for the Owner. This is what lets
+`/tcpromote @user moderator` change an existing Admin, instead of the old
+identity refusal that rejected every Admin target before the change ran.
+Protected identities (self, bots, Telegram, anonymous admin, Owner) are still
+refused before the change. `role_change_prompt()` owns the picker so both entry
+points render the same keyboard.
 
 The picker callbacks are `role_change:<role>:<target>[:<executor>]` and
 `role_change_cancel:<target>[:<executor>]`; the four-part forms bind the tap to
@@ -236,6 +247,7 @@ pre-transfer card cannot be approved later.
 |---|---|---|
 | `Promote.available_roles_for`, `Promote.execute` | `promote_flow.py` | Grant table and mutation point. |
 | `request_admin` | `promote_flow.py` | Queued Admin request. |
+| `is_role_change_request`, `change_role_for_staff`, `role_change_prompt` | `roles_flow.py` | Role-change routing, mutation, and picker. |
 | `execute_promo_decision` | `promo_decision_flow.py` | Owner approval or rejection. |
 | `Demote.execute` | `demote_flow.py` | Role removal and DM wording. |
 | `demote_before_enforcement`, `demote_before_unban` | `demote_flow.py` | The two policies. |

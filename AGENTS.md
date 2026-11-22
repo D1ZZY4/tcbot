@@ -241,8 +241,7 @@ Current stack:
 │   │   ├── mute.py           /tcmute command
 │   │   ├── warns.py          /tcwarn command
 │   │   ├── appeals.py        /appeal flow
-│   │   ├── admins.py         Role commands (/tcpromote, /tcdemote, /transferowner, …)
-│   │   ├── rolechange.py     /tcsetrole: move existing staff between roles
+│   │   ├── admins.py         Role commands (/tcpromote, /tcsetrole, /tcdemote, /transferowner, …)
 │   │   ├── language.py       /language command
 │   │   ├── connect.py        /tcconnect command
 │   │   ├── disconnecting.py  /tcdisconnect and /rmtc commands

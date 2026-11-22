@@ -56,7 +56,7 @@ telegram = "Telegram baik-baik saja tanpa peran di sini."
 other_bot = "Bot lain tidak bisa memegang peran federasi, khusus manusia."
 anon_admin = "Admin anonim tidak bisa memegang peran federasi."
 owner = "{line} sudah menjalankan tempat ini, mempromosikannya itu jalan di tempat."
-admin = "{line} sudah Admin. Pakai /tcpromote untuk peran lain."
+admin = "{line} sudah Admin. Pakai /tcsetrole untuk mengubah perannya."
 
 [refuse.demote]
 self = "Demosi diri sendiri? Berani. Tanya atasan bila serius."

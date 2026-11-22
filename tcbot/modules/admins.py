@@ -28,6 +28,7 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     safe_edit_cb,
 )
+from tcbot.modules.helper.pipelines import roles_flow
 from tcbot.modules.helper.pipelines.demote_flow import Demote
 from tcbot.modules.helper.pipelines.promo_decision_flow import execute_promo_decision
 from tcbot.modules.helper.pipelines.promote_flow import Promote
@@ -133,6 +134,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     executor_role, target_id, target_fname = resolved
     remaining_args = args[1:] if has_explicit_target else args
     role_arg = remaining_args[0].lower() if remaining_args else ""
+    role = db.users_roles.ROLE_ALIASES.get(role_arg)
 
     classified = await classify_and_load_role(
         ctx.bot,
@@ -145,7 +147,39 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     if classified is None:
         return
-    ident, _entry_role = classified
+    ident, entry_role = classified
+
+    # * A user who already holds a role is a role change, not a fresh grant.
+    # * /tcpromote <target> <role> is the natural way staff try to move an
+    # * Admin to Moderator; the old promote identity refusal rejected every
+    # * Admin target before the change could run. Route these through the
+    # * role-change workflow, and show its picker when no role was given.
+    if roles_flow.is_role_change_request(entry_role, role, executor_role):
+        refusal = identity.refuse_message("demote", ident, locale)
+        if refusal is not None:
+            await reply_rich(msg, refusal, log_label="cmd_promote change-refusal")
+            return
+        if role is not None:
+            _, text = await roles_flow.change_role_for_staff(
+                ctx.bot,
+                admin.id,
+                admin.first_name,
+                target_id,
+                target_fname or str(target_id),
+                role,
+                locale,
+            )
+            await reply_rich(msg, text, log_label="cmd_promote role-change result")
+        else:
+            await roles_flow.role_change_prompt(
+                update,
+                executor_role=executor_role,
+                target_id=target_id,
+                target_fname=target_fname,
+                locale=locale,
+            )
+        return
+
     refusal = identity.refuse_message("promote", ident, locale)
     if refusal is not None:
         await reply_rich(msg, refusal, log_label="cmd_promote refusal")
@@ -162,8 +196,6 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode=None,
         )
         return
-
-    role = db.users_roles.ROLE_ALIASES.get(role_arg)
 
     if role:
         _, text = await Promote.execute(
@@ -886,6 +918,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 # ──────────────────────────── Handlers ──────────────────────────── #
 
 _PMT_CMDS = build_prefixed_filters("tcpromote") | build_prefixed_filters("tcp")
+_SETROLE_CMDS = build_prefixed_filters("tcsetrole") | build_prefixed_filters("tcsr")
 _DMT_CMDS = build_prefixed_filters("tcdemote") | build_prefixed_filters("tcd")
 _TF_CMDS = build_prefixed_filters("transferowner") | build_prefixed_filters("tfowner")
 _PMTREQ_CMDS = build_prefixed_filters("tcpromoterequests") | build_prefixed_filters(
@@ -897,6 +930,7 @@ _PMTLIST_CMDS = build_prefixed_filters("tcpromotelist") | build_prefixed_filters
 
 __handlers__ = [
     MessageHandler(_PMT_CMDS, cmd_promote),
+    MessageHandler(_SETROLE_CMDS, roles_flow.cmd_setrole),
     MessageHandler(_DMT_CMDS, cmd_demote),
     MessageHandler(_TF_CMDS, cmd_transfer),
     MessageHandler(_PMTREQ_CMDS, cmd_promote_request),
@@ -907,6 +941,12 @@ __handlers__ = [
     ),
     CallbackQueryHandler(
         on_promote_role_cancel, pattern=r"^promo_role_cancel:\d+(:\d+)?$"
+    ),
+    CallbackQueryHandler(
+        roles_flow.on_role_change_btn, pattern=r"^role_change:[a-z]+:\d+(:\d+)?$"
+    ),
+    CallbackQueryHandler(
+        roles_flow.on_role_change_cancel, pattern=r"^role_change_cancel:\d+(:\d+)?$"
     ),
     CallbackQueryHandler(on_demote_confirm, pattern=r"^demote_confirm:\d+(:\d+)?$"),
     CallbackQueryHandler(on_demote_cancel, pattern=r"^demote_cancel:\d+(:\d+)?$"),
