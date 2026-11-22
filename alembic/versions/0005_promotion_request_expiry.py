@@ -108,6 +108,15 @@ def downgrade() -> None:
         op.drop_index(_EXPIRY_INDEX, table_name=_TABLE)
     status_sql = _check_sql(bind, _STATUS_CHECK)
     if status_sql is not None and "expired" in status_sql:
+        # * The narrow check validates existing rows when it is created, so
+        # * requests the sweep already expired must first be folded into a
+        # * terminal state the old check accepts.
+        op.execute(
+            sa.text(
+                "UPDATE promotion_requests SET status = 'cancelled' "
+                "WHERE status = 'expired'"
+            )
+        )
         op.drop_constraint(_STATUS_CHECK, _TABLE, type_="check")
         op.create_check_constraint(_STATUS_CHECK, _TABLE, _OLD_STATUS)
     if _check_sql(bind, _EXPIRY_CHECK) is not None:
