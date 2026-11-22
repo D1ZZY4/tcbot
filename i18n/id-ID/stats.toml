@@ -14,12 +14,12 @@ body = "Menampilkan ringkasan federasi live: Owner, total staf per peran, jumlah
 [help.drills]
 title = "Rincian"
 body = """
-*Daftar Staf*: Owner, Admin, Developer, Moderator, semua dengan mention.
-*Pengguna*: daftar semua pengguna yang di-cache per halaman (hanya Owner, tombol dan daftarnya disembunyikan dari yang lain). Tombol bernomor membuka kartu detail per pengguna.
-*Chat Terhubung*: daftar semua grup aktif per halaman; drill-in menampilkan pemilik, ID, dan tanggal connect.
-*Ban Pengguna*: daftar semua ban aktif per halaman dengan pintasan *Cari* untuk mencari pengguna via nama atau ID.
+*Daftar Staf*: Owner, Admin, Developer, dan Moderator, masing dengan mention di bawah garis pemisah.
+*Pengguna*: tabel semua pengguna yang di-cache per halaman dengan ID, username, dan kedua tanggal aktivitas di barisnya (hanya Owner, tombol dan tabelnya disembunyikan dari yang lain).
+*Chat Terhubung*: tabel semua grup aktif per halaman dengan ID, penghubung, dan tanggal connect.
+*Ban Pengguna*: tabel semua ban aktif per halaman dengan ID, alasan, dan tanggal, plus pintasan *Cari* untuk mencari pengguna via nama atau ID.
 
-Tiap tampilan diakhiri tombol *Kembali* ke ringkasan utama."""
+Tiap tabel dihalaman dengan *Sebelumnya* dan *Berikutnya* serta diakhiri tombol *Kembali* ke ringkasan utama."""
 
 [help.examples]
 body = """
@@ -59,6 +59,19 @@ users = "Pengguna terlacak"
 bans = "Ban aktif"
 chats = "Chat terhubung"
 staff_value = "{n} (Admin {admins}, Dev {devs}, Moderator {moderators})"
+
+# Header kolom untuk tampilan tabel. Teks polos, tanpa placeholder.
+[table]
+user = "Pengguna"
+id = "ID"
+username = "Username"
+first_seen = "Pertama terlihat"
+last_seen = "Terakhir terlihat"
+group = "Grup"
+connected_by = "Dihubungkan oleh"
+reason = "Alasan"
+ban = "ID Ban"
+date = "Tanggal"
 
 [roster]
 title = "*Daftar Staf* - {community}"

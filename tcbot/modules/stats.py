@@ -22,7 +22,6 @@ from tcbot.modules.helper.messages import (
     ack_and_render,
     answer_alert,
     answer_and_edit,
-    callback_args_optional,
     callback_numbers,
     replies,
     reply_rich,
@@ -191,26 +190,6 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await reply_rich(msg, text, log_label="cmd_stats", reply_markup=btn)
 
 
-def _parse_item_callback(
-    q: CallbackQuery,
-) -> tuple[int, int, str | None] | None:
-    """Parse ``prefix:page:idx[:stable]`` item callbacks.
-
-    Four-part callbacks carry the stable entity ID so detail views can
-    reject a record shifted by a concurrent list mutation. Three-part
-    callbacks from older buttons keep working without the check.
-    """
-    args = callback_args_optional(q, 3)
-    if args is None:
-        return None
-    try:
-        page, idx = int(args[0]), int(args[1])
-    except ValueError:
-        return None
-    stable = args[2] if len(args) > 2 else None
-    return page, idx, stable
-
-
 # ────────────────────────── Search callbacks ───────────────────────── #
 
 
@@ -316,30 +295,6 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_stats_search_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Render the detail view for a search result selected by the user."""
-    q = update.callback_query
-    if q is None:
-        return
-    locale = await _require_staff_pane(q, update)
-    if locale is None:
-        return
-    args = callback_args_optional(q, 2)
-    if args is None:
-        await q.answer()
-        return
-    try:
-        idx = int(args[0])
-    except ValueError:
-        await q.answer()
-        return
-    stable = args[1] if len(args) > 1 else None
-    results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
-    await ack_and_render(q, Stats.search_detail(results, idx, locale, stable))
-
-
-@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
-@decorators.log_execution
 async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to search results (or the open-search prompt) without re-running the query."""
     q = update.callback_query
@@ -434,30 +389,6 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_stats_user_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Render the detail view for a single cached user entry."""
-    q = update.callback_query
-    if q is None:
-        return
-    parsed = _parse_item_callback(q)
-    if parsed is None:
-        await q.answer()
-        return
-    page, idx, stable = parsed
-    tapper = update.effective_user
-    locale = await _require_owner_list(
-        q, tapper.id if tapper is not None else None, update
-    )
-    if locale is None:
-        return
-    await ack_and_render(
-        q,
-        Stats.user_detail(ctx.bot, page, idx, stable, locale),
-    )
-
-
-@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
-@decorators.log_execution
 async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Render a paginated list of connected groups."""
     q = update.callback_query
@@ -472,27 +403,6 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         return
     page = numbers[0]
     await ack_and_render(q, Stats.chats_list(page, locale))
-
-
-@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
-@decorators.log_execution
-async def on_stats_chat_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Render the detail view for a single connected group entry."""
-    q = update.callback_query
-    if q is None:
-        return
-    locale = await _require_staff_pane(q, update)
-    if locale is None:
-        return
-    parsed = _parse_item_callback(q)
-    if parsed is None:
-        await q.answer()
-        return
-    page, idx, stable = parsed
-    await ack_and_render(
-        q,
-        Stats.chat_detail(ctx.bot, page, idx, stable, locale),
-    )
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
@@ -514,24 +424,6 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await ack_and_render(q, Stats.bans_list(page, locale))
 
 
-@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
-@decorators.log_execution
-async def on_stats_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Render the detail view for a single ban entry from the stats list."""
-    q = update.callback_query
-    if q is None:
-        return
-    locale = await _require_staff_pane(q, update)
-    if locale is None:
-        return
-    parsed = _parse_item_callback(q)
-    if parsed is None:
-        await q.answer()
-        return
-    page, idx, stable = parsed
-    await ack_and_render(q, Stats.ban_detail(page, idx, stable, locale))
-
-
 # ──────────────────────────── Handlers ──────────────────────────── #
 
 _STATS_CMDS = build_prefixed_filters("tcstats") | build_prefixed_filters("tcs")
@@ -541,21 +433,9 @@ __handlers__ = [
     CallbackQueryHandler(on_stats_main, pattern=r"^stats_main$"),
     CallbackQueryHandler(on_stats_admins, pattern=r"^stats_admins$"),
     CallbackQueryHandler(on_stats_users, pattern=r"^stats_users:\d+$"),
-    CallbackQueryHandler(
-        on_stats_user_item, pattern=r"^stats_user_item:\d+:\d+(:[^:]+)?$"
-    ),
     CallbackQueryHandler(on_stats_chats, pattern=r"^stats_chats:\d+$"),
-    CallbackQueryHandler(
-        on_stats_chat_item, pattern=r"^stats_chat_item:\d+:\d+(:[^:]+)?$"
-    ),
     CallbackQueryHandler(on_stats_bans, pattern=r"^stats_bans:\d+$"),
-    CallbackQueryHandler(
-        on_stats_ban_item, pattern=r"^stats_ban_item:\d+:\d+(:[^:]+)?$"
-    ),
     CallbackQueryHandler(on_stats_bans_search, pattern=r"^stats_bans_search$"),
-    CallbackQueryHandler(
-        on_stats_search_item, pattern=r"^stats_search_item:\d+(:[^:]+)?$"
-    ),
     CallbackQueryHandler(on_stats_search_back, pattern=r"^stats_search_back$"),
     CallbackQueryHandler(on_stats_search_cancel, pattern=r"^stats_search_cancel$"),
     # * Search input only matters in PM where the bans panel was opened;

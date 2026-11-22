@@ -89,6 +89,45 @@ def stats_list_btn(
     )
 
 
+def stats_list_nav_btn(
+    page: int,
+    total_pages: int,
+    cb_prefix: str,
+    *,
+    extra_row: list[InlineKeyboardButton] | None = None,
+    locale: str | None = None,
+) -> InlineKeyboardMarkup:
+    """Navigation-only keyboard for a table view: Prev/Next, extras, Back.
+
+    Table rows carry their own details, so no numbered drill-in buttons are
+    needed. Only the navigation controls remain.
+    """
+    rows: list[list[InlineKeyboardButton]] = []
+    nav = nav_row(page, total_pages, cb_prefix, locale)
+    if nav:
+        rows.append(nav)
+    if extra_row is not None:
+        rows.append(list(extra_row))
+    rows.append([back_button("stats_main", locale)])
+    return InlineKeyboardMarkup(rows)
+
+
+def stats_search_results_nav_btn(locale: str | None = None) -> InlineKeyboardMarkup:
+    """Search results keyboard: New Search and Back, no numbered rows."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    t("button.new_search", locale, plain=True),
+                    callback_data="stats_bans_search",
+                    style=KeyboardButtonStyle.PRIMARY,
+                ),
+                back_button("stats_search_back", locale),
+            ]
+        ]
+    )
+
+
 def stats_search_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Search panel keyboard: Cancel only."""
     return InlineKeyboardMarkup(

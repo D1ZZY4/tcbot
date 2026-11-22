@@ -339,13 +339,13 @@ def test_sync_user_identity_trusts_a_fresh_complete_profile(
     live.assert_not_awaited()
 
 
-def test_user_detail_renders_the_stored_profile_timestamps(
+def test_user_table_renders_the_stored_profile_timestamps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The card reads ``first_seen_at`` and ``last_seen_at``, not old field names.
+    """The table reads ``first_seen_at`` and ``last_seen_at``, not old field names.
 
-    The user card used to read ``commit_date`` and ``last_updated``, so both
-    dates always rendered as the unknown fallback.
+    A user row carries both dates directly, so no separate detail card is
+    needed and the older field names must not render as unknown fallbacks.
     """
     first_seen = utc_now() - timedelta(days=30)
     last_seen = utc_now()
@@ -365,10 +365,19 @@ def test_user_detail_renders_the_stored_profile_timestamps(
         rendered.append(value)
         return "RENDERED"
 
+    monkeypatch.setattr(db.users_cache, "total_users", AsyncMock(return_value=1))
     monkeypatch.setattr(db.users_cache, "all_users_page", AsyncMock(return_value=page))
-    monkeypatch.setattr(stats_flow, "identity_needs_refresh", lambda _doc: False)
     monkeypatch.setattr(stats_flow, "date_or_unknown", _date)
 
-    asyncio.run(stats_flow.Stats.user_detail(MagicMock(), 0, 0, locale="en-US"))  # type: ignore[arg-type]
+    text, markup = asyncio.run(stats_flow.Stats.users_list(0, "en-US"))
 
     assert rendered == [first_seen, last_seen]
+    assert "<table" in text
+    callbacks = {
+        b.callback_data
+        for row in markup.inline_keyboard
+        for b in row
+        if isinstance(b.callback_data, str)
+    }
+    assert "stats_main" in callbacks
+    assert not any(cb.startswith("stats_user_item") for cb in callbacks)

@@ -18,26 +18,19 @@ from telegram import (
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.buttons import (
-    back_to_module_btn,
-    detail_btn,
     stats_back_btn,
-    stats_list_btn,
+    stats_list_nav_btn,
     stats_main_btn,
     stats_search_panel_btn,
-    stats_search_results_btn,
+    stats_search_results_nav_btn,
     stats_search_row,
 )
-from tcbot.modules.helper.extraction import (
-    identity_needs_refresh,
-    launch_identity_refresh,
-    sync_user_identity,
-)
+from tcbot.modules.helper.extraction import sync_user_identity
 from tcbot.modules.helper.messages.rich_table import table
 from tcbot.modules.helper.messages.rich_text import blocks
 from tcbot.utils.dispatch import gather_bounded, throw_if_cancelled
-from tcbot.utils.i18n import Safe, bold, code, esc, t, user_ref
+from tcbot.utils.i18n import Safe, bold, code, divider, esc, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page, paginate
 from tcbot.utils.tasks import TaskTracker
@@ -54,7 +47,9 @@ log = get_logger(__name__)
 # ────────────────────────── Title refresh ───────────────────────── #
 
 
-_PAGE_SIZE = 6
+# * Five rows keep each table well inside Telegram's rich-message limits
+# * (32768 UTF-8 characters, 500 blocks) while staying easy to scan.
+_PAGE_SIZE = 5
 _SEARCH_LIMIT = 30
 SEARCH_KEY = "stats_search_active"
 RESULTS_KEY = "stats_search_results"
@@ -298,12 +293,9 @@ class OverviewViews:
                     if not db.users_cache.is_placeholder_name(live_fname):
                         mention_data_map[uid] = (live_fname, live_uname)
         lines = [
-            t(
-                "stats.roster.title",
-                locale,
-                community=Safe(esc(cfg.community_name)),
-            )
-            + "\n"
+            t("stats.roster.title", locale, community=Safe(esc(cfg.community_name))),
+            divider(),
+            "",
         ]
         if owner_idx is not None:
             lines.append(t("stats.roster.owner", locale))
@@ -350,13 +342,13 @@ class OverviewViews:
 
 
 class PeopleViews:
-    """Paginated member roster and single-user detail cards."""
+    """Paginated user table; every row carries the full cached profile."""
 
     @classmethod
     async def users_list(
         cls, page: int, locale: str | None = None
     ) -> tuple[str, InlineKeyboardMarkup]:
-        """Paginated list of every cached user."""
+        """Paginated table of every cached user, with details in each row."""
         try:
             total = await db.users_cache.total_users()
             total_pages, page = clamp_page(total, page, _PAGE_SIZE)
@@ -370,99 +362,43 @@ class PeopleViews:
             return t("stats.error.db_fail", locale), stats_back_btn(locale)
         if total == 0:
             return t("stats.users.empty", locale), stats_back_btn(locale)
-        lines = [
-            t(
-                "stats.users.header",
-                locale,
-                n=total,
-                page=page + 1,
-                pages=total_pages,
-            )
-            + "\n"
-        ]
-        base_idx = page * _PAGE_SIZE
-        for i, u in enumerate(chunk, start=1):
+        header = t(
+            "stats.users.header", locale, n=total, page=page + 1, pages=total_pages
+        )
+        rows: list[list[str]] = []
+        for u in chunk:
             uid = u.get("user_id", 0)
             fname = u.get("first_name") or str(uid)
             uname = u.get("username")
-            lines.append(
-                t(
-                    "stats.users.item",
-                    locale,
-                    i=base_idx + i,
-                    user=Safe(user_ref(uid, fname, uname)),
-                )
+            rows.append(
+                [
+                    Safe(user_ref(uid, fname, uname)),
+                    Safe(code(str(uid))),
+                    esc(uname or "-"),
+                    esc(date_or_unknown(u.get("first_seen_at"), locale)),
+                    esc(date_or_unknown(u.get("last_seen_at"), locale)),
+                ]
             )
-        return blocks("\n".join(lines)), stats_list_btn(
-            page,
-            total_pages,
-            len(chunk),
-            cb_prefix="stats_users",
-            item_cb_prefix="stats_user_item",
-            item_ids=[str(u.get("user_id", 0)) for u in chunk],
-            locale=locale,
-        )
-
-    @classmethod
-    async def user_detail(
-        cls,
-        bot: Bot,
-        page: int,
-        idx: int,
-        stable: str | None = None,
-        locale: str | None = None,
-    ) -> tuple[str, InlineKeyboardMarkup]:
-        """Detail card for a single cached user."""
-        chunk = await db.users_cache.all_users_page(
-            skip=page * _PAGE_SIZE, limit=_PAGE_SIZE
-        )
-        if idx < 0 or idx >= len(chunk):
-            text = t("stats.error.user_not_found", locale)
-            kb = back_to_module_btn(f"stats_users:{page}", locale)
-            return blocks(text), kb
-        u = chunk[idx]
-        uid = u.get("user_id", 0)
-        if stable is not None and str(uid) != stable:
-            text = t("stats.error.user_not_found", locale)
-            kb = back_to_module_btn(f"stats_users:{page}", locale)
-            return blocks(text), kb
-        fname = u.get("first_name") or str(uid)
-        uname = u.get("username")
-        last_name = u.get("last_name") or "-"
-        if identity_needs_refresh(u):
-            launch_identity_refresh(bot, uid)
-        commit = date_or_unknown(u.get("first_seen_at"), locale)
-        seen = date_or_unknown(u.get("last_seen_at"), locale)
-        username_line = (
-            t("stats.user_detail.username", locale, name=uname)
-            if uname
-            else t("stats.user_detail.username_none", locale)
-        )
         text = (
-            f"{t('stats.user_detail.title', locale)}\n\n"
-            f"{t('stats.user_detail.name', locale, user=Safe(user_ref(uid, fname, uname)))}\n"
-            f"{t('stats.user_detail.id', locale, id=Safe(code(str(uid))))}\n"
-            f"{username_line}\n"
-            f"{t('stats.user_detail.last_name', locale, name=str(last_name))}\n\n"
-            f"{t('stats.user_detail.first_seen', locale, date=Safe(commit))}\n"
-            f"{t('stats.user_detail.last_seen', locale, date=Safe(seen))}\n\n"
-            f"{t('stats.user_detail.check_hint', locale, command=Safe(code(f'/check {uid}')))}"
+            f"{Safe(bold(header))}\n"
+            f"{table([t('stats.table.user', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.username', locale, plain=True), t('stats.table.first_seen', locale, plain=True), t('stats.table.last_seen', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
         )
-        kb = back_to_module_btn(f"stats_users:{page}", locale)
-        return blocks(text), kb
+        return blocks(text), stats_list_nav_btn(
+            page, total_pages, "stats_users", locale=locale
+        )
 
 
 # ─────────────────────────── Group lists ────────────────────────── #
 
 
 class ChatViews:
-    """Paginated connected-group roster and single-group detail cards."""
+    """Paginated connected-group table; each row carries the group details."""
 
     @classmethod
     async def chats_list(
         cls, page: int, locale: str | None = None
     ) -> tuple[str, InlineKeyboardMarkup]:
-        """Paginated list of every active connected group."""
+        """Paginated table of every active connected group."""
         try:
             groups = await db.groups_db.active_groups()
         except asyncio.CancelledError:
@@ -473,87 +409,52 @@ class ChatViews:
         chunk, total_pages, page = paginate(groups, page, _PAGE_SIZE)
         if not groups:
             return t("stats.chats.empty", locale), stats_back_btn(locale)
-        lines = [
-            t(
-                "stats.chats.header",
-                locale,
-                n=len(groups),
-                page=page + 1,
-                pages=total_pages,
-            )
-            + "\n"
-        ]
-        base_idx = page * _PAGE_SIZE
-        for i, grp in enumerate(chunk, start=1):
-            lines.append(
-                t(
-                    "stats.chats.item",
-                    locale,
-                    i=base_idx + i,
-                    title=grp.get("title")
-                    or t("common.action.unknown_title", locale, plain=True),
-                    id=Safe(code(str(grp.get("chat_id", 0)))),
-                )
-            )
-        return blocks("\n".join(lines)), stats_list_btn(
-            page,
-            total_pages,
-            len(chunk),
-            cb_prefix="stats_chats",
-            item_cb_prefix="stats_chat_item",
-            item_ids=[str(grp.get("chat_id", 0)) for grp in chunk],
-            locale=locale,
+        header = t(
+            "stats.chats.header",
+            locale,
+            n=len(groups),
+            page=page + 1,
+            pages=total_pages,
         )
-
-    @classmethod
-    async def chat_detail(
-        cls,
-        bot: Bot,
-        page: int,
-        idx: int,
-        stable: str | None = None,
-        locale: str | None = None,
-    ) -> tuple[str, InlineKeyboardMarkup]:
-        """Detail card for a connected group."""
-        groups = await db.groups_db.active_groups()
-        chunk, _total, page = paginate(groups, page, _PAGE_SIZE)
-        if idx < 0 or idx >= len(chunk):
-            text = t("stats.error.group_not_found", locale)
-            kb = back_to_module_btn(f"stats_chats:{page}", locale)
-            return blocks(text), kb
-        grp = chunk[idx]
-        chat_id = grp.get("chat_id", 0)
-        if stable is not None and str(chat_id) != stable:
-            text = t("stats.error.group_not_found", locale)
-            kb = back_to_module_btn(f"stats_chats:{page}", locale)
-            return blocks(text), kb
-        title = grp.get("title") or t("common.action.unknown_title", locale, plain=True)
-        launch_group_title_refresh(bot, chat_id)
-        added_by = grp.get("added_by", 0)
-        adder_fname, adder_uname = await db.users_cache.get_user_mention_data(added_by)
-        date_str = date_or_unknown(grp.get("added_date"), locale)
+        mention_map = await db.users_cache.get_mention_data_batch(
+            [grp.get("added_by", 0) for grp in chunk]
+        )
+        rows: list[list[str]] = []
+        for grp in chunk:
+            chat_id = grp.get("chat_id", 0)
+            title = grp.get("title") or t(
+                "common.action.unknown_title", locale, plain=True
+            )
+            added_by = grp.get("added_by", 0)
+            fname, uname = mention_map.get(added_by, (str(added_by), None))
+            rows.append(
+                [
+                    esc(title),
+                    Safe(code(str(chat_id))),
+                    Safe(user_ref(added_by, fname, uname)),
+                    esc(date_or_unknown(grp.get("added_date"), locale)),
+                ]
+            )
         text = (
-            f"{t('stats.chat_detail.title', locale)}\n\n"
-            f"{t('stats.chat_detail.name', locale, name=Safe(bold(title)))}\n"
-            f"{t('stats.chat_detail.chat_id', locale, id=Safe(code(str(chat_id))))}\n\n"
-            f"{t('stats.chat_detail.connected_by', locale, user=Safe(user_ref(added_by, adder_fname, adder_uname)))}\n"
-            f"{t('stats.chat_detail.date', locale, date=Safe(date_str))}"
+            f"{Safe(bold(header))}\n"
+            f"{table([t('stats.table.group', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.connected_by', locale, plain=True), t('stats.table.date', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
         )
-        kb = back_to_module_btn(f"stats_chats:{page}", locale)
-        return blocks(text), kb
+        return blocks(text), stats_list_nav_btn(
+            page, total_pages, "stats_chats", locale=locale
+        )
 
 
 # ──────────────────────────── Ban lists ─────────────────────────── #
 
 
 class BanViews:
-    """Paginated active-ban roster and single-ban detail cards."""
+    """Paginated active-ban table; each row carries the ban details."""
 
     @classmethod
     async def bans_list(
         cls, page: int, locale: str | None = None
     ) -> tuple[str, InlineKeyboardMarkup]:
-        """Paginated list of every active federation ban."""
+        """Paginated table of every active federation ban."""
         try:
             total = await db.bans_db.active_ban_count()
             total_pages, page = clamp_page(total, page, _PAGE_SIZE)
@@ -567,65 +468,36 @@ class BanViews:
             return t("stats.bans_view.empty", locale), stats_back_btn(locale)
         uids = [b.get("target_user_id", 0) for b in chunk]
         fname_map = await db.users_cache.get_first_names_batch(uids) if uids else {}
-        lines = [
-            t(
-                "stats.bans_view.header",
-                locale,
-                n=total,
-                page=page + 1,
-                pages=total_pages,
-            )
-            + "\n"
-        ]
-        base_idx = page * _PAGE_SIZE
-        for i, ban in enumerate(chunk, start=1):
+        header = t(
+            "stats.bans_view.header",
+            locale,
+            n=total,
+            page=page + 1,
+            pages=total_pages,
+        )
+        rows: list[list[str]] = []
+        for ban in chunk:
             uid = ban.get("target_user_id", 0)
             fname = fname_map.get(uid, str(uid))
-            lines.append(
-                t(
-                    "stats.bans_view.item",
-                    locale,
-                    i=base_idx + i,
-                    name=fname,
-                    id=Safe(code(str(uid))),
-                )
+            rows.append(
+                [
+                    Safe(user_ref(uid, fname)),
+                    Safe(code(str(uid))),
+                    esc(str(ban.get("reason") or "-")),
+                    Safe(code(str(ban.get("ban_id") or "-"))),
+                    esc(date_or_unknown(ban.get("timestamp"), locale)),
+                ]
             )
-        search_row = stats_search_row(locale)
-        return blocks("\n".join(lines)), stats_list_btn(
+        text = (
+            f"{Safe(bold(header))}\n"
+            f"{table([t('stats.table.user', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.reason', locale, plain=True), t('stats.table.ban', locale, plain=True), t('stats.table.date', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
+        )
+        return blocks(text), stats_list_nav_btn(
             page,
             total_pages,
-            len(chunk),
-            cb_prefix="stats_bans",
-            item_cb_prefix="stats_ban_item",
-            extra_row=search_row,
-            item_ids=[str(ban.get("ban_id", "")) for ban in chunk],
+            "stats_bans",
+            extra_row=stats_search_row(locale),
             locale=locale,
-        )
-
-    @classmethod
-    async def ban_detail(
-        cls,
-        page: int,
-        idx: int,
-        stable: str | None = None,
-        locale: str | None = None,
-    ) -> tuple[str, InlineKeyboardMarkup]:
-        """Detail card for a banned user, reusing build_ban_detail."""
-        if stable is not None:
-            ban = await db.bans_db.get_ban(stable)
-            if not ban or not ban.get("is_active"):
-                text = t("stats.error.ban_not_found", locale)
-                kb = back_to_module_btn(f"stats_bans:{page}", locale)
-                return blocks(text), kb
-            text, proof_link = await build_ban_detail(ban, locale=locale)
-            return blocks(text), detail_btn(
-                back_callback=f"stats_bans:{page}",
-                proof_link=proof_link,
-                locale=locale,
-            )
-        return (
-            t("stats.error.ban_not_found", locale),
-            back_to_module_btn(f"stats_bans:{page}", locale),
         )
 
 
@@ -639,13 +511,6 @@ class SearchViews:
     def _search_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
         """Search panel keyboard."""
         return stats_search_panel_btn(locale)
-
-    @staticmethod
-    def _search_results_btn(
-        n: int, locale: str | None = None, *, item_ids: list[str] | None = None
-    ) -> InlineKeyboardMarkup:
-        """Numbered search results."""
-        return stats_search_results_btn(n, locale, item_ids=item_ids)
 
     @classmethod
     def open_search(
@@ -692,55 +557,30 @@ class SearchViews:
         results: list[BanDoc],
         locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
-        """Render search results: empty state or numbered hits."""
+        """Render search results as a table: empty state or full hits."""
         if not results:
             text = t("stats.search.empty", locale, query=query)
-            return text, cls._search_results_btn(0, locale)
+            return text, stats_search_results_nav_btn(locale)
         uids = [b.get("target_user_id", 0) for b in results]
         fname_map = await db.users_cache.get_first_names_batch(uids)
-        lines = [t("stats.search.header", locale, query=query, n=len(results)) + "\n"]
-        for i, ban in enumerate(results, start=1):
+        header = t("stats.search.header", locale, query=query, n=len(results))
+        rows: list[list[str]] = []
+        for ban in results:
             uid = ban.get("target_user_id", 0)
             fname = fname_map.get(uid, str(uid))
-            lines.append(
-                t(
-                    "stats.search.item",
-                    locale,
-                    i=i,
-                    name=fname,
-                    id=Safe(code(str(uid))),
-                )
+            rows.append(
+                [
+                    Safe(user_ref(uid, fname)),
+                    Safe(code(str(uid))),
+                    esc(str(ban.get("reason") or "-")),
+                    Safe(code(str(ban.get("ban_id") or "-"))),
+                ]
             )
-        return blocks("\n".join(lines)), cls._search_results_btn(
-            len(results),
-            locale,
-            item_ids=[str(ban.get("ban_id", "")) for ban in results],
+        text = (
+            f"{Safe(bold(header))}\n"
+            f"{table([t('stats.table.user', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.reason', locale, plain=True), t('stats.table.ban', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
         )
-
-    @classmethod
-    async def search_detail(
-        cls,
-        results: list[BanDoc],
-        idx: int,
-        locale: str | None = None,
-        stable: str | None = None,
-    ) -> tuple[str, InlineKeyboardMarkup]:
-        """Detail card for a single search hit."""
-        if idx < 0 or idx >= len(results):
-            text = t("stats.error.result_unavailable", locale)
-            kb = back_to_module_btn("stats_search_back")
-            return blocks(text), kb
-        ban = results[idx]
-        if stable is not None and str(ban.get("ban_id", "")) != stable:
-            text = t("stats.error.result_unavailable", locale)
-            kb = back_to_module_btn("stats_search_back")
-            return blocks(text), kb
-        text, proof_link = await build_ban_detail(ban, locale=locale)
-        return blocks(text), detail_btn(
-            back_callback="stats_search_back",
-            proof_link=proof_link,
-            locale=locale,
-        )
+        return blocks(text), stats_search_results_nav_btn(locale)
 
 
 class Stats(OverviewViews, PeopleViews, ChatViews, BanViews, SearchViews):

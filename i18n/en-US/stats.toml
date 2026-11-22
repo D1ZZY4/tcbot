@@ -14,12 +14,12 @@ body = "Shows a live federation summary: Owner, total staff broken down by role,
 [help.drills]
 title = "Drill-downs"
 body = """
-*Staff Roster*: Owner, Admins, Developers, Moderators, all listed with mentions.
-*Users*: paginated list of every cached user (Owner only - the button and the list are hidden from everyone else). Numbered buttons open a per-user detail card.
-*Connected Chats*: paginated list of every active group; drill-in shows owner, ID, and connect date.
-*User Bans*: paginated list of every active ban with a *Search* shortcut to look up a user by name or ID.
+*Staff Roster*: Owner, Admins, Developers, and Moderators, each listed with a mention under a divider.
+*Users*: paginated table of every cached user with ID, username, and both activity dates in the row (Owner only - the button and the table are hidden from everyone else).
+*Connected Chats*: paginated table of every active group with ID, connector, and connect date.
+*User Bans*: paginated table of every active ban with ID, reason, and date, plus a *Search* shortcut to look up a user by name or ID.
 
-Every view ends with a *Back* button to the main summary."""
+Every table is paged with *Prev* and *Next* and ends with a *Back* button to the main summary."""
 
 [help.examples]
 body = """
@@ -59,6 +59,19 @@ users = "Users tracked"
 bans = "Active bans"
 chats = "Connected chats"
 staff_value = "{n} (Admins {admins}, Devs {devs}, Moderators {moderators})"
+
+# Column headers shared by the table views. Plain text, no placeholders.
+[table]
+user = "User"
+id = "ID"
+username = "Username"
+first_seen = "First seen"
+last_seen = "Last seen"
+group = "Group"
+connected_by = "Connected by"
+reason = "Reason"
+ban = "Ban ID"
+date = "Date"
 
 [roster]
 title = "*Staff Roster* - {community}"
