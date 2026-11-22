@@ -1,4 +1,4 @@
-# Start menu prose (start.py). All render as MarkdownV2.
+# Start menu prose (start.py). All render as rich HTML.
 # Placeholders: {bot} pre-formatted bold bot name, {community} raw name.
 
 [private]
@@ -7,7 +7,7 @@ Bot manajemen federasi untuk {community}.
 
 Aku menangani ban, mute, kick, dan moderasi se-federasi di semua grup terhubung. Staf bisa menjalankan perintah di sini atau dari grup terhubung mana pun.
 
-Pakai tombol di bawah untuk menjelajah kemampuanku."""
+Pakai tombol di bawah ↴ untuk menjelajah kemampuanku."""
 
 [group]
 body = """{bot}

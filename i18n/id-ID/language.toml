@@ -9,7 +9,7 @@ title_group = "Bahasa grup"
 current_user = "Bahasa kamu: {language}."
 current_group = "Bahasa grup: {language}."
 
-prompt = "Ketuk bahasa di bawah."
+prompt = "Ketuk bahasa di bawah ↴."
 
 updated_user = "Bahasa kamu sekarang {language}."
 updated_group = "Bahasa grup sekarang {language}."

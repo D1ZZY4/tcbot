@@ -61,17 +61,19 @@ def picker_btn(
                 callback_data=PICKER_CLEAR,
             ),
             InlineKeyboardButton(
-                t("button.cancel", locale, plain=True), callback_data=PICKER_CANCEL
+                t("button.cancel", locale, plain=True),
+                callback_data=PICKER_CANCEL,
+                style=KeyboardButtonStyle.DANGER,
             ),
         ]
     )
     return InlineKeyboardMarkup(rows)
 
 
-def _button(text: str, data: str) -> InlineKeyboardButton:
-    return InlineKeyboardButton(
-        text, callback_data=data, style=KeyboardButtonStyle.PRIMARY
-    )
+def _button(
+    text: str, data: str, *, style: KeyboardButtonStyle = KeyboardButtonStyle.PRIMARY
+) -> InlineKeyboardButton:
+    return InlineKeyboardButton(text, callback_data=data, style=style)
 
 
 def editor_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
@@ -83,8 +85,16 @@ def editor_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
                 _button(t("button.preview", locale, plain=True), "rules_preview"),
             ],
             [
-                _button(t("button.publish", locale, plain=True), "rules_publish"),
-                _button(t("button.discard", locale, plain=True), "rules_discard"),
+                _button(
+                    t("button.publish", locale, plain=True),
+                    "rules_publish",
+                    style=KeyboardButtonStyle.SUCCESS,
+                ),
+                _button(
+                    t("button.discard", locale, plain=True),
+                    "rules_discard",
+                    style=KeyboardButtonStyle.DANGER,
+                ),
             ],
             [_button(t("button.settings", locale, plain=True), "rules_settings")],
         ]
@@ -106,7 +116,11 @@ def categories_btn(
                 ),
                 _button(t("button.up", locale, plain=True), f"rules_cat_up:{key}"),
                 _button(t("button.down", locale, plain=True), f"rules_cat_down:{key}"),
-                _button(t("button.delete", locale, plain=True), f"rules_cat_del:{key}"),
+                _button(
+                    t("button.delete", locale, plain=True),
+                    f"rules_cat_del:{key}",
+                    style=KeyboardButtonStyle.DANGER,
+                ),
             ]
         )
     rows.append(
@@ -120,9 +134,9 @@ def items_btn(
     items: list[dict[str, Any]], locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Build the item list of one category."""
-    rows: list[list[InlineKeyboardButton]] = [
-        [_button(str(item["title"]), f"rules_item:{int(item['id'])}")] for item in items
-    ]
+    # * The titles are the list; there is no per-item detail surface, so no
+    # * dead rules_item button is emitted here.
+    rows: list[list[InlineKeyboardButton]] = []
     rows.append([_button(t("button.add_item", locale, plain=True), "rules_item_add")])
     rows.append(back_row("rules_categories", locale))
     return InlineKeyboardMarkup(rows)
@@ -135,8 +149,16 @@ def confirm_btn(
     return InlineKeyboardMarkup(
         [
             [
-                _button(t("button.confirm", locale, plain=True), yes_callback),
-                _button(t("button.cancel", locale, plain=True), no_callback),
+                _button(
+                    t("button.confirm", locale, plain=True),
+                    yes_callback,
+                    style=KeyboardButtonStyle.DANGER,
+                ),
+                InlineKeyboardButton(
+                    t("button.cancel", locale, plain=True),
+                    callback_data=no_callback,
+                    style=KeyboardButtonStyle.DANGER,
+                ),
             ]
         ]
     )

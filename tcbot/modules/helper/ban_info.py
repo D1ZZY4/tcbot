@@ -12,8 +12,10 @@ from typing import TYPE_CHECKING
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.messages import message_link
+from tcbot.modules.helper.messages.rich_format import heading
+from tcbot.modules.helper.messages.rich_table import table
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.i18n import BULLET, SECTION_RULE, Safe, code, t, user_ref
+from tcbot.utils.i18n import Safe, code, divider, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_dt
 
@@ -84,25 +86,58 @@ async def build_ban_detail(
     proof_link = ban_proof_link(ban)
     date_str = ban_date_text(ban, locale)
 
-    text = (
-        f"{t('checking.ban_info.title', locale)}\n{SECTION_RULE}\n"
-        f"{BULLET} {t('checking.ban_info.user', locale, user=Safe(user_ref(uid, target_fname, target_uname)))}\n"
-        f"{BULLET} {t('checking.ban_info.user_id', locale, id=Safe(code(str(uid))))}\n\n"
-        f"{BULLET} {t('checking.ban_info.banned_by', locale, admin=Safe(user_ref(aid, admin_fname, admin_uname)))}\n"
-        f"{BULLET} {t('checking.ban_info.admin_id', locale, id=Safe(code(str(aid))))}\n\n"
-        # * Reason is moderator free text: pass raw so the engine escapes
-        # * MarkdownV2 at render time (Safe would inject markup/parse errors).
-        f"{BULLET} {t('checking.ban_info.reason', locale, reason=ban.get('reason', None) or t('checking.events.no_reason', locale, plain=True))}\n"
-        f"{BULLET} {t('checking.ban_info.ban_id', locale, id=Safe(code(ban.get('ban_id', ''))))}\n"
-        f"{BULLET} {t('checking.ban_info.date', locale, date=Safe(date_str))}"
-    )
+    identity_items = [
+        t(
+            "checking.ban_info.user",
+            locale,
+            user=Safe(user_ref(uid, target_fname, target_uname)),
+        ),
+        t("checking.ban_info.user_id", locale, id=Safe(code(str(uid)))),
+    ]
+    actor_items = [
+        t(
+            "checking.ban_info.banned_by",
+            locale,
+            admin=Safe(user_ref(aid, admin_fname, admin_uname)),
+        ),
+        t("checking.ban_info.admin_id", locale, id=Safe(code(str(aid)))),
+    ]
+    # * Reason is moderator free text: pass raw so the engine escapes it at
+    # * render time (Safe would inject markup or break parsing).
+    detail_items = [
+        t(
+            "checking.ban_info.reason",
+            locale,
+            reason=ban.get("reason", None)
+            or t("checking.events.no_reason", locale, plain=True),
+        ),
+        t("checking.ban_info.ban_id", locale, id=Safe(code(ban.get("ban_id", "")))),
+        t("checking.ban_info.date", locale, date=Safe(date_str)),
+    ]
     linked = ban.get("rules") or []
     if linked:
-        text += (
-            "\n"
-            + f"{BULLET} "
-            + t("checking.ban_info.rules", locale, rules=", ".join(linked))
+        detail_items.append(
+            t("checking.ban_info.rules", locale, rules=", ".join(linked))
         )
+
+    field = t("checking.ban_info.table.field", locale)
+    value = t("checking.ban_info.table.value", locale)
+    rows = [
+        [t("checking.ban_info.table.user", locale), identity_items[0]],
+        [t("checking.ban_info.table.user_id", locale), identity_items[1]],
+        [t("checking.ban_info.table.banned_by", locale), actor_items[0]],
+        [t("checking.ban_info.table.admin_id", locale), actor_items[1]],
+        [t("checking.ban_info.table.reason", locale), detail_items[0]],
+        [t("checking.ban_info.table.ban_id", locale), detail_items[1]],
+        [t("checking.ban_info.table.date", locale), detail_items[2]],
+    ]
+    if linked:
+        rows.append([t("checking.ban_info.table.rules", locale), detail_items[3]])
+    text = (
+        f"{heading(t('checking.ban_info.heading', locale), 3)}\n"
+        f"{divider()}\n"
+        f"{table([field, value], rows, raw_cells=True, compact=True, striped=True)}"
+    )
     return text, proof_link
 
 

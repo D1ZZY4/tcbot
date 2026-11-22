@@ -13,7 +13,9 @@ from tcbot.modules.helper.messages import (
     rich_media,
     rich_style,
     rich_table,
+    rich_text,
 )
+from tcbot.utils.i18n import t
 
 
 def test_style_module_owns_inline_styles() -> None:
@@ -157,3 +159,42 @@ def test_focused_modules_stay_distinct() -> None:
     assert rich_format.heading is not rich_style.bold
     assert rich_table.table is not rich_link.button
     assert rich_media.slideshow is not rich_list.details
+
+
+def test_text_blocks_renders_alias_commands_as_a_table() -> None:
+    html = rich_text.blocks(
+        "<code>/tcpromote</code> (alias: <code>/tcp</code>)\n"
+        "<code>/tcdemote</code> (alias: <code>/tcd</code>)",
+        command_header="Command",
+        alias_header="Alias",
+        caption="Commands &amp; Aliases",
+    )
+    assert html.startswith("<table bordered><caption>Commands &amp; Aliases</caption>")
+    assert "<th>Command</th><th>Alias</th>" in html
+    assert html.count("<tr>") == 3
+    assert "<li>" not in html
+
+
+def test_text_blocks_groups_other_line_kinds() -> None:
+    html = rich_text.blocks(
+        "Intro line\n\n- first\n- second\n\n1. step one\n2. step two\n\n"
+        "<code>/tcban</code> with a reason",
+        detail_header="Details",
+    )
+    assert html.startswith("<p>Intro line</p>")
+    assert "<ul><li>first</li><li>second</li></ul>" in html
+    assert "<ol><li>step one</li><li>step two</li></ol>" in html
+    assert "<th>Command</th><th>Details</th>" in html
+
+
+def test_help_command_section_uses_a_real_table() -> None:
+    """The admin Commands & Aliases section is a table, not one long bullet."""
+    rendered = rich_text.blocks(
+        t("admins.help.commands.body", "en-US"),
+        command_header=t("common.help.command", "en-US"),
+        alias_header=t("common.help.alias", "en-US"),
+        caption=t("common.section.commands", "en-US"),
+    )
+    assert rendered.count("<tr>") == 6
+    assert "<th>Command</th><th>Alias</th>" in rendered
+    assert "<li>" not in rendered

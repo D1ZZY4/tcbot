@@ -16,10 +16,10 @@ Lists all groups currently connected to {community}, along with the total count.
 The default view shows group names only. Tap *Details* to expand the list and show each group's chat ID alongside its name. Tap *Simple* to collapse back."""
 
 [help.examples]
-body = "`/tcgroups` or `/tcg`"
+body = "`/tcgroups` (alias: `/tcg`)"
 
 # Runtime strings for the group list (groups.py, start.py menu).
-# [menu] sends plain; [list] renders as MarkdownV2.
+# [menu] sends plain; [list] renders as rich HTML.
 # Placeholders: {community} raw name, {title} raw group title,
 # {id} pre-formatted code ID, {n} ints.
 
@@ -28,6 +28,6 @@ empty = "No groups are currently connected to {community}."
 
 [list]
 header = "*Connected Groups*\n\nCount: {n}"
-item = "- {title}"
-item_detailed = "- {title} - {id}"
+item = "{title}"
+item_detailed = "{title} - {id}"
 more = "...and {n} more not shown."

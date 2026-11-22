@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Error reports use a rich collapsible detail list with MarkdownV2 fallback."""
+"""Error reports use a rich collapsible detail list on both delivery paths."""
 
 from __future__ import annotations
 
@@ -58,8 +58,32 @@ def test_delivery_sends_rich_with_markdown_fallback(monkeypatch: Any) -> None:
     monkeypatch.setattr(error_reporter, "_chat_id", -100)
     monkeypatch.setattr(error_reporter, "_thread_id", None)
 
-    asyncio.run(error_reporter.send_to_log_errors("plain", {"html": "<p>x</p>"}))
+    asyncio.run(error_reporter.send_to_log_errors({"html": "<p>x</p>"}))
 
     assert calls
     assert calls[0]["endpoint"] == "sendRichMessage"
     assert calls[0]["rich_message"] == {"html": "<p>x</p>"}
+
+
+def test_owner_dm_uses_the_rich_payload(monkeypatch: Any) -> None:
+    calls: list[dict[str, Any]] = []
+
+    class _Bot:
+        async def do_api_request(
+            self, endpoint: str, *, api_kwargs: Any, return_type: Any
+        ) -> str:
+            calls.append({"endpoint": endpoint, **api_kwargs})
+            return "sent"
+
+    monkeypatch.setattr(error_reporter, "_bot", _Bot())
+    monkeypatch.setattr(error_reporter, "_owner_id", 123)
+
+    asyncio.run(error_reporter.send_to_owner({"html": "<p>owner</p>"}))
+
+    assert calls == [
+        {
+            "endpoint": "sendRichMessage",
+            "chat_id": 123,
+            "rich_message": {"html": "<p>owner</p>"},
+        }
+    ]

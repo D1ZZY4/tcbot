@@ -8,12 +8,13 @@ title = "Bantuan {botname}"
 body = """{title}
 Bot manajemen federasi untuk {community}.
 
-Pilih modul di bawah untuk membaca ringkasan dan perintahnya, atau pakai `/help <module>` untuk langsung ke topik."""
+Pilih modul di bawah ↴ untuk membaca ringkasan dan perintahnya, atau pakai `/help <module>` untuk langsung ke topik."""
 
 # Runtime strings (help.py). [error] sends plain; [note]/[module]/
-# [section]/[not_found] render as MarkdownV2. Placeholders: {title}/
+# [section]/[not_found] render as rich HTML. Placeholders: {title}/
 # {prefixes}/{query}/{hint} pre-formatted fragments, {overview}/
-# {content} pre-rendered help prose.
+# {content} pre-rendered help prose, {divider} a rich rule and
+# {list} a rich bulleted block.
 
 [error]
 topic_not_found = "Topik tidak ditemukan."
@@ -26,14 +27,14 @@ prefixes = "*Catatan:* Semua perintah juga bisa dipakai dengan {prefixes}"
 [module]
 title = "Bantuan untuk {name}"
 body = """{title}
-━━━━━━━━━━━━━━━━━━━━
+{divider}
 {overview}
-➛ {note}"""
+{list}"""
 
 [section]
 body = """{title}
-━━━━━━━━━━━━━━━━━━━━
-➛ {content}"""
+{divider}
+{list}"""
 
 [not_found]
 body = "Modul {query} tidak ditemukan.{hint}"

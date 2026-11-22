@@ -30,16 +30,16 @@ def test_grid_chunks_three_per_row_with_nav_and_back() -> None:
         nav_prefix="cb",
         back_callback="main",
     )
-    assert _texts(btn) == [["1", "2", "3"], ["4", "5"], ["Next »"], ["« Back"]]
+    assert _texts(btn) == [["1", "2", "3"], ["4", "5"], ["Next ↦"], ["⤎ Back"]]
     assert _styles(btn)[0] == [KeyboardButtonStyle.PRIMARY] * 3
-    assert _styles(btn)[-1] == [None]
+    assert _styles(btn)[-1] == [KeyboardButtonStyle.SUCCESS]
 
 
 def test_single_page_omits_nav_row() -> None:
     btn = paged_drill_btn(
         [("1", "cb:0")], page=0, total_pages=1, nav_prefix="cb", back_callback="main"
     )
-    assert _texts(btn) == [["1"], ["« Back"]]
+    assert _texts(btn) == [["1"], ["⤎ Back"]]
 
 
 def test_extra_rows_land_before_back() -> None:
@@ -52,7 +52,7 @@ def test_extra_rows_land_before_back() -> None:
         back_callback="main",
         extra_rows=extra,
     )
-    assert _texts(btn) == [["Search"], ["« Back"]]
+    assert _texts(btn) == [["Search"], ["⤎ Back"]]
 
 
 def test_stats_list_btn_keeps_shape_and_callbacks() -> None:

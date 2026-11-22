@@ -9,7 +9,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.buttons.common import back_row
+from tcbot.modules.helper.buttons.common import back_button, back_row
 from tcbot.modules.helper.messages import appeal_deep_link
 from tcbot.utils.i18n import t
 
@@ -201,12 +201,5 @@ def checkme_detail_back_btn(
                 )
             ]
         )
-    rows.append(
-        [
-            InlineKeyboardButton(
-                t("button.back", locale, plain=True),
-                callback_data=f"checkme_back:{ban_id}",
-            )
-        ]
-    )
+    rows.append([back_button(f"checkme_back:{ban_id}", locale)])
     return InlineKeyboardMarkup(rows)

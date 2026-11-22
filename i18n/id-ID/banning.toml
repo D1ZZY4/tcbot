@@ -30,7 +30,7 @@ Atau balas sebuah pesan lalu jalankan `/tcb tulis alasan di sini`."""
 
 # Runtime strings for the ban flow (ban_flow.py, banning.py).
 # [state] entries send plain (alerts, parse_mode=None replies, plain edits).
-# [db_fail]/[applied]/[pm]/[summary] render as MarkdownV2.
+# [db_fail]/[applied]/[pm]/[summary] render as rich HTML.
 # Placeholders: {user} pre-formatted user reference, {reason} raw reason
 # text, {applied} prebuilt applied line, {sample} raw group names,
 # {total}/{failed} ints, {community} raw community name.
@@ -50,14 +50,14 @@ body = "{user} tidak bisa di-ban: media bukti gagal diunggah sepenuhnya, jadi ti
 [applied]
 empty = "Belum ada grup terhubung yang dikonfigurasi."
 none = "PERINGATAN: ban tidak ditegakkan di grup mana pun ({total}/{total} gagal). Cek hak admin bot di: {sample}{more}"
-partial = "Diterapkan ke {done}/{total} grup ({failed} gagal: {sample}{more}"
+partial = "Diterapkan ke {done}/{total} grup ({failed} gagal: {sample}{more})"
 full = "Diterapkan ke {total}/{total} grup."
-progress = "Diterapkan ke {done}/{total} grup sejauh ini ({failed} gagal: {sample}{more}; {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
+progress = "Diterapkan ke {done}/{total} grup sejauh ini ({failed} gagal: {sample}{more}); {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
 progress_clean = "Diterapkan ke {done}/{total} grup sejauh ini; {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
 scope_warn = " PERINGATAN: daftar grup gagal dimuat, jadi sebagian grup mungkin terlewat. Cek log lalu ban ulang manual dengan /tcban bila perlu."
 
 [pm]
-body = "Kamu di-ban dari {community} se-federasi.\nAlasan: {reason}\n\nKamu bisa mengajukan banding lewat tombol di bawah."
+body = "Kamu di-ban dari {community} se-federasi.\nAlasan: {reason}\n\nKamu bisa mengajukan banding lewat tombol di bawah ↴."
 
 [summary]
 body = "{user} telah di-ban.\nAlasan: {reason}\n{applied}"

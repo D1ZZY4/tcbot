@@ -1,10 +1,10 @@
 # Shared generic errors and notices. Templates stay raw: the engine
 
-# escapes MarkdownV2 at render time.
+# escapes rich HTML at render time.
 retry = "Something went wrong on our side. Please try again in a moment."
 
 # Shared moderation error and notice strings (replies.py owners).
-# Send path per key: keys rendered through MarkdownV2 sends use the
+# Send path per key: keys rendered through rich HTML sends use the
 # default mode; keys sent as plain text (alerts, parse_mode=None
 # replies) render with plain=True at the call site.
 
@@ -50,7 +50,7 @@ no_reason = "No reason provided"
 unknown_date = "Unknown"
 
 # Help section labels (raw: buttons show them plain, titles escape them
-# via bold()) and scope bodies (V2-escaped prose).
+# via bold()) and scope bodies (rich prose).
 
 [section]
 commands = "Commands & Aliases"
@@ -60,6 +60,12 @@ what = "What it does"
 flow = "Flow"
 examples = "Examples"
 target = "Target syntax"
+
+# Table headers for structured help sections.
+[help]
+command = "Command"
+alias = "Alias"
+details = "Details"
 
 [context]
 bot_or_group = "Bot PM, the main group, or any connected group."

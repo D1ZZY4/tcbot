@@ -9,6 +9,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
+from tcbot.modules.helper.buttons.common import back_button
 from tcbot.modules.helper.messages import appeal_deep_link
 from tcbot.utils.i18n import t
 
@@ -73,12 +74,18 @@ def ban_update_confirm_btn(
     links = []
     if log_url:
         links.append(
-            InlineKeyboardButton(t("button.view_log", locale, plain=True), url=log_url)
+            InlineKeyboardButton(
+                t("button.view_log", locale, plain=True),
+                url=log_url,
+                style=KeyboardButtonStyle.PRIMARY,
+            )
         )
     if proof_url:
         links.append(
             InlineKeyboardButton(
-                t("button.view_proof", locale, plain=True), url=proof_url
+                t("button.view_proof", locale, plain=True),
+                url=proof_url,
+                style=KeyboardButtonStyle.PRIMARY,
             )
         )
     if links:
@@ -86,7 +93,9 @@ def ban_update_confirm_btn(
     rows.append(
         [
             InlineKeyboardButton(
-                t("button.cancel", locale, plain=True), callback_data="ban_cancel"
+                t("button.cancel", locale, plain=True),
+                callback_data="ban_cancel",
+                style=KeyboardButtonStyle.DANGER,
             ),
             InlineKeyboardButton(
                 t("button.continue", locale, plain=True),
@@ -157,12 +166,18 @@ def join_ban_btn(
     evidence: list[InlineKeyboardButton] = []
     if log_url:
         evidence.append(
-            InlineKeyboardButton(t("button.view_log", locale, plain=True), url=log_url)
+            InlineKeyboardButton(
+                t("button.view_log", locale, plain=True),
+                url=log_url,
+                style=KeyboardButtonStyle.PRIMARY,
+            )
         )
     if proof_url:
         evidence.append(
             InlineKeyboardButton(
-                t("button.view_proof", locale, plain=True), url=proof_url
+                t("button.view_proof", locale, plain=True),
+                url=proof_url,
+                style=KeyboardButtonStyle.PRIMARY,
             )
         )
     if evidence:
@@ -209,12 +224,5 @@ def detail_btn(
                 )
             ]
         )
-    rows.append(
-        [
-            InlineKeyboardButton(
-                t("button.back", locale, plain=True),
-                callback_data=back_callback,
-            )
-        ]
-    )
+    rows.append([back_button(back_callback, locale)])
     return InlineKeyboardMarkup(rows)

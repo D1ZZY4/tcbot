@@ -206,6 +206,20 @@ async def on_menu_groups_details(
     await _show_groups(q, update, detailed=True)
 
 
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
+@decorators.log_execution
+async def on_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Dismiss a read-only panel by deleting the message it lives on."""
+    q = update.callback_query
+    if q is None:
+        return
+    await q.answer()
+    try:
+        await q.delete_message()
+    except Exception as exc:
+        log.debug("Close button could not delete the panel: %s", exc)
+
+
 # ──────────────────────────── Handlers ──────────────────────────── #
 
 _START_CMDS = build_prefixed_filters("start")
@@ -213,6 +227,7 @@ _START_CMDS = build_prefixed_filters("start")
 __handlers__ = [
     MessageHandler(_START_CMDS, cmd_start),
     CallbackQueryHandler(on_back_to_start, pattern=r"^back_to_start$"),
+    CallbackQueryHandler(on_close, pattern=r"^close_msg$"),
     CallbackQueryHandler(on_menu_groups, pattern=r"^(menu_groups|menu_groups_simple)$"),
     CallbackQueryHandler(on_menu_groups_details, pattern=r"^menu_groups_details$"),
 ]

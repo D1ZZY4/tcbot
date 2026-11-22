@@ -1,5 +1,5 @@
 # Fitur aturan: dialog editor, menu publik, dan acknowledgement.
-# Template tetap apa adanya; mesin escape MarkdownV2 saat render.
+# Template tetap apa adanya; mesin escape rich HTML saat render.
 
 [editor]
 categories = "Kategori"

@@ -1,4 +1,4 @@
-# Privacy prose (privacy.py). Messages render as MarkdownV2 except
+# Privacy prose (privacy.py). Messages render as rich HTML except
 # alerts (plain). Placeholders: {bot} raw bot name, {community} raw name.
 
 [msg]
@@ -16,13 +16,13 @@ body = """*Privasi dan Data*
 
 Catatan ban, peringatan, mute, dan kick bisa dilihat siapa pun dengan `/check` atau `/checkme`; mengubah apa pun tetap butuh peran staf yang sesuai.
 
-Ketuk *Kebijakan Privasi* di bawah untuk kebijakan lengkap, per bagian."""
+Ketuk *Kebijakan Privasi* di bawah ↴ untuk kebijakan lengkap, per bagian."""
 
 [index]
 body = """*Kebijakan Privasi*
 {bot}
 
-Pilih bagian di bawah untuk membaca selengkapnya. Pakai tombol kembali untuk ke sini kapan pun."""
+Pilih bagian di bawah ↴ untuk membaca selengkapnya. Pakai tombol kembali untuk ke sini kapan pun."""
 
 [error]
 invalid_section = "Bagian tidak valid."

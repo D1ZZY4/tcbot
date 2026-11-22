@@ -244,7 +244,7 @@ def kick_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Reason", reason)
-        .raw(f"Group: {esc(chat_title)} \\({code(str(chat_id))}\\)")
+        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -267,7 +267,7 @@ def resetwarns_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Warnings cleared", str(removed))
-        .raw(f"Group: {esc(chat_title)} \\({code(str(chat_id))}\\)")
+        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -293,7 +293,7 @@ def warn_log(
         .code_field("User ID", target_id)
         .field("Reason", reason)
         .field("Warnings", f"{count}/{warn_limit}")
-        .raw(f"Group: {esc(chat_title)} \\({code(str(chat_id))}\\)")
+        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -317,7 +317,7 @@ def unwarn_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Warnings now", f"{new_count}/{warn_limit}")
-        .raw(f"Group: {esc(chat_title)} \\({code(str(chat_id))}\\)")
+        .raw(f"Group: {esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -357,7 +357,7 @@ def appeal_received_log(
 ) -> str:
     """Review card posted to MAIN_GROUP and the appeals destination."""
     b = LogBuilder(f"New {cfg.community_name} Appeal Request").raw(
-        f"User: {user_ref(target_id, target_fname)} \\(ID: {code(str(target_id))}\\)"
+        f"User: {user_ref(target_id, target_fname)} (ID: {code(str(target_id))})"
     )
     b.code_field("Ban ID", ban_id)
     if rules:
@@ -369,7 +369,7 @@ def appeal_received_log(
     return (
         b.date(label="Submitted")
         .section()
-        .raw("This appeal is pending review\\.")
+        .raw("This appeal is pending review.")
         .build()
     )
 
@@ -669,10 +669,10 @@ def group_connection_rejected_log(
     """Connection-rejected audit-log message."""
     return (
         LogBuilder(f"{cfg.community_name} Connection Rejected")
-        .raw(f"Group: {esc(chat_title)} \\(ID: {chat_id}\\)")
+        .raw(f"Group: {esc(chat_title)} (ID: {chat_id})")
         .section()
         .raw(
-            f"Rejected by Owner: {user_ref(owner_id, owner_fname)} \\(ID: {code(str(owner_id))}\\)"
+            f"Rejected by Owner: {user_ref(owner_id, owner_fname)} (ID: {code(str(owner_id))})"
         )
         .section()
         .date()

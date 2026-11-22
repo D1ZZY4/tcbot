@@ -8,12 +8,13 @@ title = "{botname} Help"
 body = """{title}
 Federation management bot for {community}.
 
-Select a module below to read its overview and commands, or use `/help <module>` to jump straight to a topic."""
+Select a module below ↴ to read its overview and commands, or use `/help <module>` to jump straight to a topic."""
 
 # Runtime strings (help.py). [error] sends plain; [note]/[module]/
-# [section]/[not_found] render as MarkdownV2. Placeholders: {title}/
+# [section]/[not_found] render as rich HTML. Placeholders: {title}/
 # {prefixes}/{query}/{hint} pre-formatted fragments, {overview}/
-# {content} pre-rendered help prose.
+# {content} pre-rendered help prose, {divider} a rich rule and
+# {list} a rich bulleted block.
 
 [error]
 topic_not_found = "Topic not found."
@@ -26,14 +27,14 @@ prefixes = "*Note:* All commands also work with {prefixes}"
 [module]
 title = "Help for {name}"
 body = """{title}
-━━━━━━━━━━━━━━━━━━━━
+{divider}
 {overview}
-➛ {note}"""
+{list}"""
 
 [section]
 body = """{title}
-━━━━━━━━━━━━━━━━━━━━
-➛ {content}"""
+{divider}
+{list}"""
 
 [not_found]
 body = "Module {query} not found.{hint}"

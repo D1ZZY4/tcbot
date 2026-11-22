@@ -43,12 +43,12 @@ def test_clamp_page_handles_a_degenerate_page_size() -> None:
 def test_nav_row_middle_has_both_directions() -> None:
     row = nav_row(1, 3, "cb")
     assert [(b.text, b.callback_data) for b in row] == [
-        ("« Prev", "cb:0"),
-        ("Next »", "cb:2"),
+        ("↤ Prev", "cb:0"),
+        ("Next ↦", "cb:2"),
     ]
 
 
 def test_nav_row_edges_have_single_direction() -> None:
-    assert [b.text for b in nav_row(0, 3, "cb")] == ["Next »"]
-    assert [b.text for b in nav_row(2, 3, "cb")] == ["« Prev"]
+    assert [b.text for b in nav_row(0, 3, "cb")] == ["Next ↦"]
+    assert [b.text for b in nav_row(2, 3, "cb")] == ["↤ Prev"]
     assert nav_row(0, 1, "cb") == []

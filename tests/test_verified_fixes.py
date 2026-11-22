@@ -26,13 +26,13 @@ from tcbot.utils.i18n import esc
 def test_nav_row_labels_follow_locale() -> None:
     row_en = nav_row(1, 3, "cb", "en-US")
     assert [(b.text, b.callback_data) for b in row_en] == [
-        ("« Prev", "cb:0"),
-        ("Next »", "cb:2"),
+        ("↤ Prev", "cb:0"),
+        ("Next ↦", "cb:2"),
     ]
     row_id = nav_row(1, 3, "cb", "id-ID")
     assert [(b.text, b.callback_data) for b in row_id] == [
-        ("« Sblm", "cb:0"),
-        ("Lanjut »", "cb:2"),
+        ("↤ Sblm", "cb:0"),
+        ("Lanjut ↦", "cb:2"),
     ]
 
 
@@ -116,7 +116,7 @@ def test_language_list_back_label_localizes() -> None:
         back_callback="back_to_start",
         locale="id-ID",
     )
-    assert btn.inline_keyboard[-1][0].text == "« Kembali"
+    assert btn.inline_keyboard[-1][0].text == "⤎ Kembali"
 
 
 def test_ban_detail_escapes_moderator_reason() -> None:

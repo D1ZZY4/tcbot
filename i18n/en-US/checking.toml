@@ -31,7 +31,7 @@ body = """
 Or reply to a message and run `/c`."""
 
 # Runtime strings for profile and drill-down views (check_flow.py).
-# All render as MarkdownV2.
+# All render as rich HTML.
 # Placeholders: {user} pre-formatted mention, {name} raw display name,
 # {id} pre-formatted code ID, {role}/{by} pre-formatted fragments,
 # {note} prebuilt caveat, counts as ints, {title} raw group title,
@@ -104,7 +104,7 @@ mute_item = "{i}. {ts}\n   Group: {title}\n   Requested: {requested} | Stored: {
 no_reason = "(no reason)"
 
 [ban_info]
-title = "*Ban Information*"
+heading = "Ban Information"
 user = "User: {user}"
 user_id = "User ID: {id}"
 banned_by = "Banned by: {admin}"
@@ -114,6 +114,20 @@ ban_id = "Ban ID: {id}"
 date = "Date: {date}"
 rules = "Rules broken: {rules}"
 unknown_date = "Unknown"
+
+# Column headers and row labels for the ban detail table. Values carry the
+# rich markup built in Python, so only the labels live here.
+[ban_info.table]
+field = "Field"
+value = "Value"
+user = "User"
+user_id = "User ID"
+banned_by = "Banned by"
+admin_id = "Admin ID"
+reason = "Reason"
+ban_id = "Ban ID"
+date = "Date"
+rules = "Rules broken"
 
 # checkme/check runtime (checking.py). [error] sends plain.
 # Placeholders: {user} pre-formatted mention, {name} raw name,
@@ -126,7 +140,7 @@ bot_sender = "Bots and anonymous senders don't hold federation records, so there
 status_retry = "I couldn't verify your ban status right now. Please try again in a moment."
 
 [checkme]
-banned = "You are currently banned from {community}.\n\nUser: {user}\nUser ID: {id}\nReason: {reason}\n\nBanned by: {admin}\n\nCommit Date: {date}\nTap a button below for more details."
+banned = "You are currently banned from {community}.\n\nUser: {user}\nUser ID: {id}\nReason: {reason}\n\nBanned by: {admin}\n\nCommit Date: {date}\nTap a button below ↴ for more details."
 staff_admin = "Hey {user}, checking yourself?\n\nYou're on the staff team - you handle bans, not receive them. No active ban on your end. You're good."
 staff_role = "Hey {user}, all good.\n\nYou're a {community} {role} - on the team, not on the ban list. Nothing to worry about."
 clean = "You're clean - no active ban in {community}."

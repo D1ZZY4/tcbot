@@ -110,6 +110,9 @@ async def _show_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         if q is not None:
             await q.edit_message_text(style(text), parse_mode=None, reply_markup=markup)
+            if q.message is not None:
+                scope["ban_prompt_msg_id"] = q.message.message_id
+                scope["ban_prompt_chat_id"] = q.message.chat.id
         elif update.effective_message is not None:
             sent = await update.effective_message.reply_text(
                 style(text), parse_mode=None, reply_markup=markup

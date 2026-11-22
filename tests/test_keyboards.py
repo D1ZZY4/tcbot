@@ -9,6 +9,8 @@ from __future__ import annotations
 from telegram.constants import KeyboardButtonStyle
 
 from tcbot.modules.helper import buttons as btn
+from tcbot.modules.helper.buttons import rules as rule_btn
+from tcbot.modules.helper.buttons.common import close_btn
 
 
 def _cells(markup):  # type: ignore[no-untyped-def]
@@ -28,7 +30,9 @@ def test_promote_role_btn_pairs_roles_plus_cancel() -> None:
     assert rows[1] == [
         ("Moderator", "promo_role:moderator:7", None, KeyboardButtonStyle.PRIMARY)
     ]
-    assert rows[2] == [("Cancel", "promo_role_cancel:7", None, None)]
+    assert rows[2] == [
+        ("✕ Cancel", "promo_role_cancel:7", None, KeyboardButtonStyle.DANGER)
+    ]
 
 
 def test_promote_role_btn_skips_unknown_roles() -> None:
@@ -41,8 +45,8 @@ def test_demote_confirm_btn_marks_confirm_danger() -> None:
     rows = _cells(btn.demote_confirm_btn(7))
     assert rows == [
         [
-            ("Confirm", "demote_confirm:7", None, KeyboardButtonStyle.DANGER),
-            ("Cancel", "demote_cancel:7", None, None),
+            ("✓ Confirm", "demote_confirm:7", None, KeyboardButtonStyle.DANGER),
+            ("✕ Cancel", "demote_cancel:7", None, KeyboardButtonStyle.DANGER),
         ]
     ]
 
@@ -51,15 +55,15 @@ def test_promo_decision_btn_success_and_danger() -> None:
     rows = _cells(btn.promo_decision_btn("r1"))
     assert rows == [
         [
-            ("Approve", "promo_approve:r1", None, KeyboardButtonStyle.SUCCESS),
-            ("Reject", "promo_reject:r1", None, KeyboardButtonStyle.DANGER),
+            ("✓ Approve", "promo_approve:r1", None, KeyboardButtonStyle.SUCCESS),
+            ("✕ Reject", "promo_reject:r1", None, KeyboardButtonStyle.DANGER),
         ]
     ]
 
 
 def test_checkme_ban_btn_rows_and_links() -> None:
     rows = _cells(btn.checkme_ban_btn("bot", "a" * 10, "https://t.me/x/1"))
-    assert rows[0][0][:2] == ("Details", "checkme_detail:" + "a" * 10)
+    assert rows[0][0][:2] == ("↧ Details", "checkme_detail:" + "a" * 10)
     assert rows[0][1][2] == "https://t.me/x/1"
     assert rows[1][0][2] == "https://t.me/bot?start=appeal_" + "a" * 10
     assert all(cell[3] == KeyboardButtonStyle.PRIMARY for row in rows for cell in row)
@@ -79,7 +83,7 @@ def test_action_proof_btn_guards() -> None:
     assert btn.action_proof_btn(1, None) is None
     rows = _cells(btn.action_proof_btn(1, "https://t.me/x/1"))
     assert rows == [
-        [("Proof 1", None, "https://t.me/x/1", KeyboardButtonStyle.PRIMARY)]
+        [("▤ Proof 1", None, "https://t.me/x/1", KeyboardButtonStyle.PRIMARY)]
     ]
 
 
@@ -88,12 +92,12 @@ def test_ban_update_confirm_btn_rows_callbacks_and_links() -> None:
         btn.ban_update_confirm_btn("https://t.me/x/log", "https://t.me/x/proof")
     )
     assert rows[0] == [
-        ("View Log", None, "https://t.me/x/log", None),
-        ("View Proof", None, "https://t.me/x/proof", None),
+        ("↝ View Log", None, "https://t.me/x/log", KeyboardButtonStyle.PRIMARY),
+        ("↝ View Proof", None, "https://t.me/x/proof", KeyboardButtonStyle.PRIMARY),
     ]
     assert rows[1] == [
-        ("Cancel", "ban_cancel", None, None),
-        ("Continue", "ban_continue", None, KeyboardButtonStyle.PRIMARY),
+        ("✕ Cancel", "ban_cancel", None, KeyboardButtonStyle.DANGER),
+        ("↦ Continue", "ban_continue", None, KeyboardButtonStyle.PRIMARY),
     ]
 
 
@@ -101,12 +105,12 @@ def test_ban_update_confirm_btn_omits_missing_urls() -> None:
     rows = _cells(btn.ban_update_confirm_btn(None, None))
     assert rows == [
         [
-            ("Cancel", "ban_cancel", None, None),
-            ("Continue", "ban_continue", None, KeyboardButtonStyle.PRIMARY),
+            ("✕ Cancel", "ban_cancel", None, KeyboardButtonStyle.DANGER),
+            ("↦ Continue", "ban_continue", None, KeyboardButtonStyle.PRIMARY),
         ]
     ]
     rows = _cells(btn.ban_update_confirm_btn("https://t.me/x/log", None))
-    assert [c[0] for c in rows[0]] == ["View Log"]
+    assert [c[0] for c in rows[0]] == ["↝ View Log"]
     assert len(rows) == 2
 
 
@@ -114,8 +118,8 @@ def test_groups_menu_pairs_toggle_with_back() -> None:
     rows = _cells(btn.groups_menu_btn(detailed=True))
     assert rows == [
         [
-            ("Simple", "menu_groups_simple", None, KeyboardButtonStyle.PRIMARY),
-            ("« Back", "back_to_start", None, None),
+            ("↥ Simple", "menu_groups_simple", None, KeyboardButtonStyle.PRIMARY),
+            ("⤎ Back", "back_to_start", None, KeyboardButtonStyle.SUCCESS),
         ]
     ]
 
@@ -124,22 +128,22 @@ def test_module_help_btn_pairs_sections_back_last() -> None:
     rows = _cells(btn.module_help_btn([("A", "a"), ("B", "b"), ("C", "c")], "back"))
     assert [c[0] for c in rows[0]] == ["A", "B"]
     assert [c[0] for c in rows[1]] == ["C"]
-    assert rows[2] == [("« Back", "back", None, None)]
+    assert rows[2] == [("⤎ Back", "back", None, KeyboardButtonStyle.SUCCESS)]
 
 
 def test_main_menu_options_are_primary() -> None:
     rows = _cells(btn.main_menu_btn())
     options = [c for row in rows for c in row]
     assert [c[0] for c in options] == [
-        "About",
-        "Help",
-        "Additional",
-        "Privacy",
-        "Language",
+        "◈ About",
+        "ⓘ Help",
+        "⋯ Additional",
+        "◈ Privacy",
+        "⌘ Language",
     ]
     assert all(c[3] == KeyboardButtonStyle.PRIMARY for c in options)
     assert rows[-1] == [
-        ("Language", "language_menu", None, KeyboardButtonStyle.PRIMARY)
+        ("⌘ Language", "language_menu", None, KeyboardButtonStyle.PRIMARY)
     ]
 
 
@@ -157,7 +161,7 @@ def test_appeal_review_btn_matches_handler_pattern() -> None:
 
 def test_check_back_markup_is_profile_back_row() -> None:
     assert _cells(btn.check_back_markup(7)) == [
-        [("« Back", "check_main:7", None, None)]
+        [("⤎ Back", "check_main:7", None, KeyboardButtonStyle.SUCCESS)]
     ]
 
 
@@ -165,9 +169,58 @@ def test_check_paged_markup_stacks_nav_above_back() -> None:
     nav = btn.check_back_row(7)
     back = btn.check_warns_back_row(7)
     assert _cells(btn.check_paged_markup(nav, back)) == [
-        [("« Back", "check_main:7", None, None)],
-        [("« Back", "check_warns:7", None, None)],
+        [("⤎ Back", "check_main:7", None, KeyboardButtonStyle.SUCCESS)],
+        [("⤎ Back", "check_warns:7", None, KeyboardButtonStyle.SUCCESS)],
     ]
     assert _cells(btn.check_paged_markup(None, back)) == [
-        [("« Back", "check_warns:7", None, None)]
+        [("⤎ Back", "check_warns:7", None, KeyboardButtonStyle.SUCCESS)]
     ]
+
+
+def test_proof_done_is_success_and_cancel_stays_neutral() -> None:
+    rows = _cells(btn.proof_step_btn("ban", skip_allowed=False))
+    assert rows == [
+        [
+            ("✓ Done", "ban_done_proof", None, KeyboardButtonStyle.SUCCESS),
+            ("✕ Cancel", "ban_cancel", None, KeyboardButtonStyle.DANGER),
+        ]
+    ]
+
+
+def test_rules_editor_colors_commit_and_destruction() -> None:
+    panel = _cells(rule_btn.editor_panel_btn())
+    flat = {cell[1]: cell[3] for row in panel for cell in row}
+    assert flat["rules_publish"] == KeyboardButtonStyle.SUCCESS
+    assert flat["rules_discard"] == KeyboardButtonStyle.DANGER
+
+    categories = _cells(
+        rule_btn.categories_btn([{"category_key": "spam", "title": "Spam"}])
+    )
+    flat_categories = {cell[1]: cell[3] for row in categories for cell in row}
+    assert flat_categories["rules_cat_del:spam"] == KeyboardButtonStyle.DANGER
+    assert flat_categories["rules_cat_up:spam"] == KeyboardButtonStyle.PRIMARY
+
+    confirm = _cells(rule_btn.confirm_btn("yes", "no"))
+    assert confirm[0][0][3] == KeyboardButtonStyle.DANGER
+    assert confirm[0][1][3] == KeyboardButtonStyle.DANGER
+
+
+def test_close_button_dismisses_a_panel() -> None:
+    button = close_btn("en-US")
+    assert button.text == "✕ Close"
+    assert button.callback_data == "close_msg"
+    assert button.to_dict().get("style") == KeyboardButtonStyle.DANGER
+
+    rows = _cells(btn.stats_main_btn())
+    callbacks = [cell[1] for row in rows for cell in row]
+    assert "close_msg" in callbacks
+
+
+def test_selected_language_is_success() -> None:
+    rows = _cells(
+        btn.language_list_btn(
+            "user", [("English", "en-US"), ("Indonesia", "id-ID")], selected="id-ID"
+        )
+    )
+    assert rows[0][0][3] == KeyboardButtonStyle.PRIMARY
+    assert rows[1][0][3] == KeyboardButtonStyle.SUCCESS

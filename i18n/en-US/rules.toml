@@ -1,5 +1,5 @@
 # Rules feature: editor dialog, public menu, and acknowledgement.
-# Templates stay raw; the engine escapes MarkdownV2 at render time.
+# Templates stay raw; the engine escapes rich HTML at render time.
 
 [editor]
 categories = "Categories"

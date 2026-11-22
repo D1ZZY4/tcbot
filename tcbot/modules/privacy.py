@@ -14,7 +14,9 @@ from tcbot import cfg
 from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit
-from tcbot.utils.i18n import bold, t
+from tcbot.modules.helper.messages.rich_format import heading
+from tcbot.modules.helper.messages.rich_text import blocks
+from tcbot.utils.i18n import t
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -37,12 +39,12 @@ _SECTION_KEYS: tuple[str, ...] = (
 
 def _privacy_msg(botname: str, locale: str | None = None) -> str:
     """Build the data-collection notice for the given plain-text bot display name."""
-    return t("privacy.msg.body", locale, bot=botname)
+    return blocks(t("privacy.msg.body", locale, bot=botname))
 
 
 def _privacy_policy_index_msg(botname: str, locale: str | None = None) -> str:
     """Build the privacy policy section index page for the plain-text bot name."""
-    return t("privacy.index.body", locale, bot=botname)
+    return blocks(t("privacy.index.body", locale, bot=botname))
 
 
 def _section_labels(locale: str | None = None) -> list[str]:
@@ -57,7 +59,7 @@ def _section_body(idx: int, locale: str | None = None) -> tuple[str, str]:
     key = _SECTION_KEYS[idx]
     return (
         t(f"privacy.section.{key}.label", locale, plain=True),
-        t(f"privacy.section.{key}.body", locale, community=cfg.community_name),
+        blocks(t(f"privacy.section.{key}.body", locale, community=cfg.community_name)),
     )
 
 
@@ -132,7 +134,7 @@ async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     label, content = _section_body(idx, locale)
-    body = f"{bold(label)}\n\n{content}"
+    body = f"{heading(label, 3)}\n{content}"
     await answer_and_edit(
         q,
         body,

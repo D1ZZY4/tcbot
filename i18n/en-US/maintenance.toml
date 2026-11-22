@@ -33,7 +33,7 @@ body = """
 `/tcrepair retry 42 -1001234567890`: re-drive one group of run 42.
 `/tcforget 123456789 inactive account`: queue an account erasure."""
 
-# Runtime strings (maintenance.py). All render as MarkdownV2.
+# Runtime strings (maintenance.py). All render as rich HTML.
 # Placeholders: counts as pre-formatted code, {detail} prebuilt suffix,
 # {partial}/{log_failed} ints, {run}/{user} pre-formatted code in [repair].
 

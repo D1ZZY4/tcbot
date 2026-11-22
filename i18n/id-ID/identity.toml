@@ -1,5 +1,5 @@
 # Identity refusal lines, recognition notes, and staff notices.
-# All render as MarkdownV2. Placeholders: {line} pre-formatted user
+# All render as rich HTML. Placeholders: {line} pre-formatted user
 # reference, {community}/{role}/{action} raw values.
 
 [refuse.ban]

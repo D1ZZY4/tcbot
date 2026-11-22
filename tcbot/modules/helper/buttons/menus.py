@@ -13,7 +13,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
 from tcbot import cfg
-from tcbot.modules.helper.buttons.common import back_markup
+from tcbot.modules.helper.buttons.common import back_button, back_markup
 from tcbot.modules.helper.messages import links as community_links
 from tcbot.utils.i18n import t
 
@@ -56,6 +56,25 @@ def main_menu_btn(locale: str | None = None) -> InlineKeyboardMarkup:
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             ],
+        ]
+    )
+
+
+def open_pm_btn(
+    bot_username: str, start: str = "menu", locale: str | None = None
+) -> InlineKeyboardMarkup | None:
+    """Single deep-link button that opens the bot in a private chat."""
+    if not bot_username:
+        return None
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    t("button.open_pm", locale, plain=True),
+                    url=f"https://t.me/{bot_username}?start={start}",
+                    style=KeyboardButtonStyle.PRIMARY,
+                )
+            ]
         ]
     )
 
@@ -150,13 +169,7 @@ async def additional_menu_btn(
     if logs_btn:
         rows.append([logs_btn])
 
-    rows.append(
-        [
-            InlineKeyboardButton(
-                t("button.back", locale, plain=True), callback_data="back_to_start"
-            )
-        ]
-    )
+    rows.append([back_button("back_to_start", locale)])
     return InlineKeyboardMarkup(rows)
 
 
@@ -171,9 +184,7 @@ def groups_menu_btn(
         callback_data="menu_groups_simple" if detailed else "menu_groups_details",
         style=KeyboardButtonStyle.PRIMARY,
     )
-    back = InlineKeyboardButton(
-        t("button.back", locale, plain=True), callback_data="back_to_start"
-    )
+    back = back_button("back_to_start", locale)
     return InlineKeyboardMarkup([[toggle, back]])
 
 

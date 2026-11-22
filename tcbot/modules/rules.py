@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
@@ -14,18 +14,12 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.buttons import rules as rules_btn
+from tcbot.modules.helper.buttons.menus import open_pm_btn
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, safe_edit_cb
 from tcbot.modules.helper.messages import rich_edit as rich_msg
 from tcbot.modules.helper.messages import rules as rules_msg
-from tcbot.modules.helper.pipelines.rules_flow import (
-    WAITING_CATEGORY_TITLE,
-    build_rules_conv,
-    editor_allowed,
-    refuse_editor,
-)
-from tcbot.modules.helper.pipelines.rules_publish import publish_rules
-from tcbot.modules.helper.scope import flow_scope
+from tcbot.modules.helper.pipelines.rules_flow import build_rules_conv
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -55,29 +49,6 @@ def get_help(locale: str | None = None) -> replies.HelpEntry:
 # ─────────────────────────── Commands ─────────────────────────── #
 
 
-@decorators.ratelimiter(decorators.THROTTLE_STAFF)
-@decorators.permission_only("rules.manage")
-@decorators.log_execution
-async def cmd_tcrules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Open the rules editor in the user's private chat."""
-    msg = update.effective_message
-    user = update.effective_user
-    if msg is None or user is None:
-        return
-    locale = await locale_for_update(update)
-    if update.effective_chat is not None and update.effective_chat.type != "private":
-        await reply_rich(
-            msg,
-            t("rules.editor.open_pm", locale, plain=True),
-            parse_mode=None,
-        )
-        return
-    rule_set = await db.rules_db.get_or_create_community_set()
-    panel = await db.rules_db.open_draft(int(rule_set["id"]), user.id)
-    text = await rules_msg.editor_panel(rule_set, panel, locale)
-    await reply_rich(msg, text, reply_markup=rules_btn.editor_panel_btn(locale))
-
-
 @decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
 async def cmd_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -91,6 +62,7 @@ async def cmd_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             msg,
             t("rules.editor.open_pm", locale, plain=True),
             parse_mode=None,
+            reply_markup=open_pm_btn(ctx.bot.username or "", "menu", locale),
         )
         return
     published = await db.rules_db.published_rules()
@@ -196,117 +168,36 @@ async def on_rules_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await safe_edit_cb(query, text, parse_mode=None, reply_markup=markup)
 
 
-async def on_rules_panel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Reopen the editor panel from a sub-menu."""
-    query = update.callback_query
-    if query is None:
-        return
-    if not await editor_allowed(update):
-        await refuse_editor(update)
-        return
-    await query.answer()
-    rule_set = await db.rules_db.get_or_create_community_set()
-    draft = await db.rules_db.open_draft(int(rule_set["id"]), query.from_user.id)
-    text = await rules_msg.editor_panel(
-        rule_set, draft, await locale_for_update(update)
-    )
-    await safe_edit_cb(
-        query,
-        text,
-        parse_mode=None,
-        reply_markup=rules_btn.editor_panel_btn(await locale_for_update(update)),
-    )
-
-
-@decorators.permission_only("rules.manage")
-async def on_rules_publish(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Publish the open draft and immediately sync the channel."""
-    query = update.callback_query
-    if query is None:
-        return
-    await query.answer()
-    locale = await locale_for_update(update)
-    rule_set = await db.rules_db.get_or_create_community_set()
-    draft = await db.rules_db.open_draft(int(rule_set["id"]), query.from_user.id)
-    try:
-        result = await publish_rules(
-            int(rule_set["id"]), int(draft["id"]), query.from_user.id, ctx.bot
-        )
-    except Exception as exc:
-        await safe_edit_cb(
-            query,
-            t("rules.publish.error", locale, error=str(exc)),
-            parse_mode=None,
-        )
-        return
-    await safe_edit_cb(
-        query,
-        t(
-            "rules.publish.result",
-            locale,
-            synced=result["synced"],
-            failed=len(result["failed"]),
-        ),
-        parse_mode=None,
-    )
-
-
-async def on_rules_cat_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle rename, reorder, and delete actions on a category."""
+async def on_rules_page(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the next page of the public rules category menu."""
     query = update.callback_query
     if query is None or query.data is None:
         return
-    if not await editor_allowed(update):
-        await refuse_editor(update)
-        return
     await query.answer()
-    action, key = query.data.split(":", 1)
-    rule_set = await db.rules_db.get_or_create_community_set()
-    set_id = int(rule_set["id"])
-    locale = await locale_for_update(update)
-    if action == "rules_cat_rename":
-        scope = flow_scope(ctx, update)
-        scope["rules_category_key"] = key
-        scope["rules_step"] = "rename_category"
-        if query.message is not None:
-            await reply_rich(
-                cast("Any", query.message),
-                t("rules.editor.ask_rename", locale, plain=True),
-                parse_mode=None,
-            )
-        # * The reply above is the prompt; the next text lands in the editor
-        # * conversation, which stores the pending rename in the scope.
-        scope["rules_rename_state"] = WAITING_CATEGORY_TITLE
+    try:
+        page = int(query.data.split(":", 1)[1])
+    except ValueError, IndexError:
         return
-    if action == "rules_cat_up":
-        await db.rules_db.move_category(set_id, key, -1)
-    elif action == "rules_cat_down":
-        await db.rules_db.move_category(set_id, key, 1)
-    elif action == "rules_cat_del":
-        await db.rules_db.delete_category(set_id, key)
-    categories = await db.rules_db.list_categories(set_id)
+    locale = await locale_for_update(update)
+    published = await db.rules_db.published_rules()
+    markup = rules_btn.rules_menu_btn(
+        published["categories"] if published else [], locale, page=page
+    )
     await safe_edit_cb(
         query,
-        rules_msg.category_list(categories, locale),
+        rules_msg.rules_menu(locale, cfg.community_name),
         parse_mode=None,
-        reply_markup=rules_btn.categories_btn(categories, locale),
+        reply_markup=markup,
     )
 
 
-_TCRULES_CMDS = build_prefixed_filters("tcrules")
 _RULES_CMDS = build_prefixed_filters("rules")
 
 __handlers__ = [
-    MessageHandler(_TCRULES_CMDS, cmd_tcrules),
     MessageHandler(_RULES_CMDS, cmd_rules),
     CallbackQueryHandler(_acknowledge, pattern=r"^rules_ack:\d+:\d+$"),
     CallbackQueryHandler(on_rules_show, pattern=r"^rules_show:"),
     CallbackQueryHandler(on_rules_menu, pattern=r"^rules_menu$"),
-    CallbackQueryHandler(
-        on_rules_cat_action,
-        pattern=r"^rules_cat_(rename|up|down|del):.+",
-    ),
-    CallbackQueryHandler(on_rules_panel, pattern=r"^rules_panel$"),
-    CallbackQueryHandler(on_rules_publish, pattern=r"^rules_publish$"),
+    CallbackQueryHandler(on_rules_page, pattern=r"^rules_page:\d+$"),
     build_rules_conv(),
 ]

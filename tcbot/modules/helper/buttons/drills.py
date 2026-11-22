@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
+from tcbot.modules.helper.buttons.common import back_button
 from tcbot.modules.helper.buttons.nav import nav_row
 from tcbot.utils.i18n import t
 
@@ -48,13 +49,7 @@ def paged_drill_btn(
         rows.append(nav)
     if extra_rows:
         rows.extend([list(row) for row in extra_rows])
-    rows.append(
-        [
-            InlineKeyboardButton(
-                t("button.back", locale, plain=True), callback_data=back_callback
-            )
-        ]
-    )
+    rows.append([back_button(back_callback, locale)])
     return InlineKeyboardMarkup(rows)
 
 
@@ -102,6 +97,7 @@ def stats_search_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     t("button.cancel", locale, plain=True),
                     callback_data="stats_search_cancel",
+                    style=KeyboardButtonStyle.DANGER,
                 )
             ]
         ]
@@ -153,6 +149,7 @@ def stats_search_results_btn(
             InlineKeyboardButton(
                 t("button.cancel", locale, plain=True),
                 callback_data="stats_search_cancel",
+                style=KeyboardButtonStyle.DANGER,
             ),
         ]
     )

@@ -29,6 +29,8 @@ from tcbot.modules.helper.buttons import appeal_cancel_btn, appeal_review_btn
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import message_link, reply_rich, send_log
 from tcbot.modules.helper.messages.links import display as display_community_link
+from tcbot.modules.helper.messages.rich_format import heading
+from tcbot.modules.helper.messages.rich_list import checklist
 from tcbot.modules.helper.messages.rich_text import style
 from tcbot.modules.helper.pipelines.appeal_review_flow import AppealReviewMixin
 from tcbot.modules.helper.scope import flow_scope
@@ -118,12 +120,15 @@ def instruction_text(
             plain=True,
         )
     )
+    required = [
+        t("appeals.instruction.log_item", locale).removeprefix("- "),
+        t("appeals.instruction.clarify_item", locale).removeprefix("- "),
+        t("appeals.instruction.agree_item", locale).removeprefix("- "),
+    ]
     return (
-        f"{t('appeals.instruction.title', locale, community=community_name)}\n\n"
+        f"{heading(t('appeals.instruction.title', locale, community=community_name, plain=True), 2)}\n"
         f"{t('appeals.instruction.intro', locale)}\n"
-        f"{t('appeals.instruction.log_item', locale)}\n"
-        f"{t('appeals.instruction.clarify_item', locale)}\n"
-        f"{t('appeals.instruction.agree_item', locale)}\n\n"
+        f"{checklist([(item, False) for item in required])}\n\n"
         f"{t('appeals.instruction.example_label', locale)}\n"
         f"{example}\n\n"
         f"{t('appeals.instruction.channel', locale, handle=log_channel)}"

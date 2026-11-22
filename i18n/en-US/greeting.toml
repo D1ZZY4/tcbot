@@ -1,4 +1,4 @@
-# Join/leave event strings (greeting.py). All render as MarkdownV2
+# Join/leave event strings (greeting.py). All render as rich HTML
 # in the group or private-chat language. Placeholders: {user} pre-formatted
 # mention, {uid}/{ban} pre-formatted code, {first}/{last}/{username}/{reason}/
 # {group} raw, {community} raw community name.

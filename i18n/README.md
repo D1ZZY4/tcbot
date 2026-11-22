@@ -34,13 +34,14 @@ inside a file and extend the prefix (`[x]` + `y` = `file.x.y`).
 2. Placeholders (`{user}`, `{count}`, ...) are code. Keep the exact set
    the `en-US` entry documents; a mismatch fails tests. Bare names only:
    no format specs (`{n:03d}`) and no conversions (`{x!r}`).
-3. Write raw text, never backslashes: the engine escapes MarkdownV2 at
+3. Write raw text, never backslashes: the engine escapes rich HTML at
    render time, so `Done.` stays `Done.` in TOML (use literal single
    quotes to keep it obvious; basic double quotes work too).
 4. `{placeholder}` values arrive pre-formatted from code: `user_ref()`
-   style fragments pass through, raw text is escaped. Do not add `*`,
-   `_`, `` ` ``, `[`, `]`, `(`, `)` around a placeholder unless the
-   `en-US` entry does.
+   style fragments pass through, raw text is escaped. Do not decorate a
+   placeholder with mini-markup in the catalog; compose markup in Python
+   with `Safe` and `bold()` / `code()`. Keep parentheses balanced in the
+   final wording.
 5. Newlines are `\n` inside basic strings, literal line breaks are not
    allowed; keep messages to the same paragraph breaks as `en-US`.
 6. Mini-markup only: `` `code` `` and `*bold*` spans, balanced and
@@ -60,7 +61,7 @@ leave prose duplicated between TOML and Python.
 Section labels and scope bodies are shared (`common.toml` `[section]`,
 `[context]`, `[target]`): labels render raw (plain buttons show them
 verbatim, section titles escape them via `bold()`), bodies render
-MarkdownV2. `who_section` / `where_section` / `target_section` take the
+rich HTML. `who_section` / `where_section` / `target_section` take the
 locale alongside the body.
 
 Every module exposes `get_help(locale)` returning its `HelpEntry`;
@@ -80,11 +81,11 @@ via `locale_for_user`; event handlers without an update use
 `locale_for_chat`. Every `t()` call passes that locale explicitly; the
 default locale is only for tests and goldens.
 
-Each key documents its send path. Keys sent without `parse_mode` must
-render with `plain=True` (Telegram never parses them, so escaped text
-would show raw backslashes). Keys sent as MarkdownV2 use the default
-mode. Dynamics cross as raw data or `Safe` pre-formatted markup, never
-pre-escaped.
+Each key documents its send path. Plain notices and callback alerts must
+render with `plain=True`. Rich message keys use the default mode, which
+escapes literal text and resolves `` `code` `` / `*bold*` spans into real
+`<code>` / `<b>` tags. Dynamics cross as raw data or `Safe` pre-formatted
+markup, never pre-escaped. There is no parse-mode fallback path.
 
 ## Adding a locale
 
@@ -95,7 +96,8 @@ pre-escaped.
    message templates are escaped by the engine, so translators never
    write backslashes in either file.
 4. Run `uv run --with pytest pytest tests/test_i18n.py -q`: placeholder
-   mismatches and MarkdownV2 violations fail the suite.
+   mismatches, unbalanced mini-markup or parentheses, and retired drawn
+   separators fail the suite.
 
 ## Adding a domain
 

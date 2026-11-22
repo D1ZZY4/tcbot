@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import platform
 import re
-import sys
 import threading
 import traceback
 from itertools import islice
@@ -22,10 +20,9 @@ from tcbot import cfg
 from tcbot.database import engine as db_engine
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitOpenError
-from tcbot.utils.i18n import bold, code, esc, pre
 from tcbot.utils.logger import get_logger
 from tcbot.utils.tasks import TaskTracker
-from tcbot.utils.time_and_date import monotonic, utc_now
+from tcbot.utils.time_and_date import monotonic
 
 if TYPE_CHECKING:
     import concurrent.futures
@@ -407,7 +404,6 @@ _MAX_MSG = 250
 _MAX_CTX = 250
 _TB_FRAMES = 8
 _MAX_LINE_CONTENT: int = 100
-_REPORT_SEP_LEN: int = 30
 
 
 def _shorten_path(path: str) -> str:
@@ -547,51 +543,6 @@ def build_error_report_payload(
     }
 
 
-def build_error_message(
-    *,
-    exc: BaseException | None = None,
-    record: logging.LogRecord | None = None,
-    context: str | None = None,
-) -> str:
-    """Build a MarkdownV2-formatted error message for Telegram."""
-    now = utc_now()
-    time_str = now.strftime("%H:%M:%S UTC")
-    date_str = now.strftime("%d-%m-%Y")
-    if record and record.exc_info and record.exc_info[1]:
-        exc = exc or record.exc_info[1]
-    raw_msg = record.getMessage() if record else str(exc) if exc else "No detail."
-    raw_msg = _scrub_secrets(raw_msg)
-    file_part, func_name, line_no = _location(exc, record)
-    label = _classify(exc)
-    action = _action_hint(label)
-    tb_block = ""
-    if exc and exc.__traceback__:
-        tb_block = (
-            f"\n\n{bold('Traceback:')}\n{pre(_scrub_secrets(_condensed_tb(exc)))}"
-        )
-    ctx_block = ""
-    if context:
-        ctx_block = (
-            f"\n\n{bold('Context:')}\n{code(_scrub_secrets(str(context))[:_MAX_CTX])}"
-        )
-    py_ver = sys.version.split()[0]
-    host = platform.node() or "?"
-    sep = "\\-" * _REPORT_SEP_LEN
-    return (
-        f"{bold('Error Report')}\n"
-        f"{sep}\n"
-        f"{bold('Type:')} {esc(label)}\n"
-        f"{bold('Action:')} {esc(action)}\n"
-        f"{bold('Where:')} {code(f'{file_part}:{line_no}')} in {code(func_name)}\n"
-        f"{bold('When:')} {esc(time_str)} \\- {esc(date_str)}\n"
-        f"{bold('Host:')} Python {esc(py_ver)} @ {esc(host)}\n"
-        f"{sep}\n"
-        f"{bold('Message:')}\n{code(raw_msg[:_MAX_MSG])}"
-        f"{tb_block}"
-        f"{ctx_block}"
-    )
-
-
 # * At most _SEND_BUDGET per window; overflow counts into one summary.
 _SEND_BUDGET: int = 20
 _SEND_WINDOW: float = 60.0
@@ -600,8 +551,8 @@ _sent_in_window: int = 0
 _suppressed_in_window: int = 0
 
 
-async def _ship_throttled(text: str, payload: dict[str, Any] | None = None) -> None:
-    """Send to LOG_ERRORS within budget, else count for the summary."""
+async def _ship_throttled(payload: dict[str, Any]) -> None:
+    """Send a rich report to LOG_ERRORS within budget, else count for summary."""
     global _send_window_start, _sent_in_window, _suppressed_in_window
     if not _bot or not _chat_id:
         return
@@ -636,47 +587,44 @@ async def _ship_throttled(text: str, payload: dict[str, Any] | None = None) -> N
         return
     _sent_in_window += 1
     try:
-        from tcbot.modules.helper.messages.rich_msg import html_message, send_rich  # noqa: PLC0415
+        from tcbot.modules.helper.messages.rich_msg import send_rich  # noqa: PLC0415
 
         await send_rich(
             _bot,
             _chat_id,
-            payload if payload is not None else html_message(text),
+            payload,
             message_thread_id=_thread_id,
         )
     except Exception as exc:
         log.warning("Failed to ship error to LOG_ERRORS: %s", exc)
 
 
-async def send_to_log_errors(text: str, payload: dict[str, Any] | None = None) -> None:
-    """Fire-and-forget send to LOG_ERRORS (throttled).
-
-    ``text`` is the render used when no rich payload is supplied; both paths
-    ship through the rich transport.
-    """
+async def send_to_log_errors(payload: dict[str, Any]) -> None:
+    """Fire-and-forget rich report to LOG_ERRORS (throttled)."""
     if not _bot or not _chat_id:
         return
-    await _ship_throttled(text, payload)
+    await _ship_throttled(payload)
 
 
-async def send_to_owner(text: str) -> None:
-    """Fire-and-forget DM to the owner for infra-only errors."""
+async def send_to_owner(payload: dict[str, Any]) -> None:
+    """Fire-and-forget rich DM to the owner for infra-only errors."""
     if not _bot or not _owner_id:
         return
     try:
-        await _bot.send_message(_owner_id, text)
+        from tcbot.modules.helper.messages.rich_msg import send_rich  # noqa: PLC0415
+
+        await send_rich(_bot, _owner_id, payload)
     except Exception as exc:
         log.warning("Failed to send owner DM: %s", exc)
 
 
 async def _deliver(exc: BaseException | None, record: logging.LogRecord | None) -> None:
     """Render the report and send it to its destination."""
-    text = build_error_message(exc=exc, record=record)
     payload = build_error_report_payload(exc=exc, record=record)
     if _owner_only(exc):
-        await send_to_owner(text)
+        await send_to_owner(payload)
     else:
-        await send_to_log_errors(text, payload)
+        await send_to_log_errors(payload)
 
 
 def _approved(record: logging.LogRecord) -> bool:
@@ -703,12 +651,11 @@ async def report_exc(exc: BaseException, context: str | None = None) -> None:
     """Report an exception; owner-only errors go to owner DM."""
     if _is_benign(exc) or _dedup(exc, None):
         return
-    text = build_error_message(exc=exc, context=context)
     payload = build_error_report_payload(exc=exc, context=context)
     if _owner_only(exc):
         if _owner_suppressed(_fingerprint_exc(exc)):
             log.debug("Owner DM suppressed: budget spent.")
             return
-        await send_to_owner(text)
+        await send_to_owner(payload)
     else:
-        await send_to_log_errors(text, payload)
+        await send_to_log_errors(payload)

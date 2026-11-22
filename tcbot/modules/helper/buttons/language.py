@@ -9,7 +9,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.utils.i18n import t
+from tcbot.modules.helper.buttons.common import back_button
 
 
 def language_list_btn(
@@ -33,16 +33,18 @@ def language_list_btn(
             InlineKeyboardButton(
                 f"✓ {name}" if code == selected else name,
                 callback_data=f"lang:set:{scope}:{code}",
-                style=KeyboardButtonStyle.PRIMARY,
+                style=(
+                    KeyboardButtonStyle.SUCCESS
+                    if code == selected
+                    else KeyboardButtonStyle.PRIMARY
+                ),
             )
         ]
         for name, code in items
     ]
     if back_callback is not None:
-        label = (
-            back_label
-            if back_label is not None
-            else t("button.back", locale, plain=True)
-        )
-        rows.append([InlineKeyboardButton(label, callback_data=back_callback)])
+        # * The label comes from the shared Back button so its style and
+        # * wording cannot drift; back_label stays for older callers.
+        _ = back_label
+        rows.append([back_button(back_callback, locale)])
     return InlineKeyboardMarkup(rows)

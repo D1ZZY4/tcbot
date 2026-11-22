@@ -11,9 +11,22 @@ from telegram.constants import KeyboardButtonStyle
 
 from tcbot.utils.i18n import t
 
-# * Button colors follow docs/reference/button-styles.md: SUCCESS approves,
-# * DANGER rejects or confirms destruction, PRIMARY continues a flow. Older
-# * clients ignore the style field, so color is purely additive.
+# * Button colors are semantic (see docs/reference/buttons.md): PRIMARY (blue)
+# * is the default for actions,
+# * navigation, and links; SUCCESS (green) commits a positive decision such
+# * as approve, agree, Done, or publish; DANGER (red) marks destructive or
+# * rejecting actions such as delete, discard, demote, and reject. Back,
+# * Cancel, and page navigation stay unstyled so the colored buttons lead.
+# * Older clients ignore the style field, so color is purely additive.
+
+
+def back_button(callback_data: str, locale: str | None = None) -> InlineKeyboardButton:
+    """Build the shared Back button, colored green as a positive navigation."""
+    return InlineKeyboardButton(
+        t("button.back", locale, plain=True),
+        callback_data=callback_data,
+        style=KeyboardButtonStyle.SUCCESS,
+    )
 
 
 def back_row(
@@ -22,14 +35,19 @@ def back_row(
     """Single Back button row pointing at ``callback_data``.
 
     Single owner for the Back button: every view that returns somewhere
-    renders the label from the shared button catalog, so the wording and
-    the callback stay consistent across the buttons.
+    renders the label from the shared button catalog, so the wording,
+    callback, and green style stay consistent across the buttons.
     """
-    return [
-        InlineKeyboardButton(
-            t("button.back", locale, plain=True), callback_data=callback_data
-        )
-    ]
+    return [back_button(callback_data, locale)]
+
+
+def close_btn(locale: str | None = None) -> InlineKeyboardButton:
+    """Build the Close button that dismisses a read-only panel."""
+    return InlineKeyboardButton(
+        t("button.close", locale, plain=True),
+        callback_data="close_msg",
+        style=KeyboardButtonStyle.DANGER,
+    )
 
 
 def back_markup(callback_data: str, locale: str | None = None) -> InlineKeyboardMarkup:

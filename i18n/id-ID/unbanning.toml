@@ -24,7 +24,7 @@ body = """
 Atau balas sebuah pesan lalu jalankan `/tcunb`."""
 
 # Runtime strings for the unban executor (unban_flow.py).
-# All render as MarkdownV2.
+# All render as rich HTML.
 # Placeholders: {user} pre-formatted user reference, {note} prebuilt
 # result line, {done}/{total} ints, {sample} raw group names.
 

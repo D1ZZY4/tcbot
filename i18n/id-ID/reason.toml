@@ -1,9 +1,9 @@
 # Reason-step strings shared by ban/kick/mute/warn flows.
 # Structure stays in reason_flow.py; only prose lives here.
 # [limit]/[unexpected] send plain (parse_mode=None): plain=True at call sites.
-# [prompt] renders as MarkdownV2.
-# Placeholders: {verb} bare action verb, {target} V2-ready mention,
-# {suffix} V2-ready extra, {skip_hint} prebuilt hint, {action}/{Action}
+# [prompt] renders as rich HTML.
+# Placeholders: {verb} bare action verb, {target} rich mention,
+# {suffix} rich extra, {skip_hint} prebuilt hint, {action}/{Action}
 # raw action stems, {skip}/{cancel} button labels, {max}/{actual} ints.
 
 [limit]

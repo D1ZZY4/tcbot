@@ -112,11 +112,13 @@ def _imported_names(path: Path, root: Path = _TCBOT_ROOT) -> set[str]:
 
 # * The i18n engine renders rich HTML with the leaf formatting modules. Those
 # * imports are lazy (inside helper functions) to avoid a cycle, and the rich
-# * modules are the single source of truth for the HTML shapes.
+# * modules are the single source of truth for the HTML shapes, including the
+# * divider and the bulleted-list tags.
 _I18N_RICH_LEAVES = (
     "tcbot.modules.helper.messages.rich_style",
     "tcbot.modules.helper.messages.rich_format",
     "tcbot.modules.helper.messages.rich_link",
+    "tcbot.modules.helper.messages.rich_list",
 )
 
 

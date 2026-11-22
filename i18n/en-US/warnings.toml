@@ -46,7 +46,7 @@ Or reply to a message and run `/tcw`."""
 
 # Runtime strings for the warn executors (warning_flow.py).
 # [none]/[removed]/[list]/[cleared]/[fed_fail]/[issued]/[exempt]/
-# [autoban] render as MarkdownV2; db_retry sends plain.
+# [autoban] render as rich HTML; db_retry sends plain.
 # Placeholders: {user} pre-formatted user reference, {reason} raw reason
 # text, {role} raw role name, {count}/{limit}/{new}/{removed}/{done}/
 # {total}/{failed}/{fed}/{fedlimit} ints/strings, {sample} raw group
@@ -83,9 +83,9 @@ failed = "{user} is a {role}, but the demote step failed; staff are not banned v
 db_fail = "{user} reached the warning threshold but the federation ban record could not be written to the database, so no groups were touched. Check the logs and ban them manually with /tcban once the database recovers."
 empty = " No connected groups configured."
 none = " WARNING: ban not enforced in any group ({total}/{total} failed). Check bot admin rights in: {sample}{more}"
-partial = " Applied to {done}/{total} groups ({failed} failed: {sample}{more}"
+partial = " Applied to {done}/{total} groups ({failed} failed: {sample}{more})"
 full = " Applied to {total}/{total} groups."
-progress = " Applied to {done}/{total} groups so far ({failed} failed: {sample}{more}; {pending} still awaiting delivery, retried automatically."
+progress = " Applied to {done}/{total} groups so far ({failed} failed: {sample}{more}); {pending} still awaiting delivery, retried automatically."
 progress_clean = " Applied to {done}/{total} groups so far; {pending} still awaiting delivery, retried automatically."
 scope_warn = " WARNING: the group list could not be loaded, so some groups may have been skipped. Check the logs and re-ban manually with /tcban if needed."
 notice_per_group = "{user} hit {limit} warnings and has been federation-banned."

@@ -46,7 +46,7 @@ Atau balas sebuah pesan lalu jalankan `/tcw`."""
 
 # Runtime strings for the warn executors (warning_flow.py).
 # [none]/[removed]/[list]/[cleared]/[fed_fail]/[issued]/[exempt]/
-# [autoban] render as MarkdownV2; db_retry sends plain.
+# [autoban] render as rich HTML; db_retry sends plain.
 # Placeholders: {user} pre-formatted user reference, {reason} raw reason
 # text, {role} raw role name, {count}/{limit}/{new}/{removed}/{done}/
 # {total}/{failed}/{fed}/{fedlimit} ints/strings, {sample} raw group
@@ -83,9 +83,9 @@ failed = "{user} adalah {role}, tetapi tahap demote gagal; staf tidak ikut ban v
 db_fail = "{user} mencapai ambang peringatan tetapi catatan ban federasi gagal ditulis ke database, jadi tidak ada grup yang disentuh. Cek log lalu ban manual dengan /tcban setelah database pulih."
 empty = " Tidak ada grup terhubung yang dikonfigurasi."
 none = " PERINGATAN: ban tidak ditegakkan di grup mana pun ({total}/{total} gagal). Cek hak admin bot di: {sample}{more}"
-partial = " Diterapkan ke {done}/{total} grup ({failed} gagal: {sample}{more}"
+partial = " Diterapkan ke {done}/{total} grup ({failed} gagal: {sample}{more})"
 full = " Diterapkan ke {total}/{total} grup."
-progress = " Diterapkan ke {done}/{total} grup sejauh ini ({failed} gagal: {sample}{more}; {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
+progress = " Diterapkan ke {done}/{total} grup sejauh ini ({failed} gagal: {sample}{more}); {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
 progress_clean = " Diterapkan ke {done}/{total} grup sejauh ini; {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
 scope_warn = " PERINGATAN: daftar grup gagal dimuat, jadi sebagian grup mungkin terlewat. Cek log lalu ban ulang manual dengan /tcban bila perlu."
 notice_per_group = "{user} mencapai {limit} peringatan dan telah di-ban se-federasi."

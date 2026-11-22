@@ -55,6 +55,7 @@ def promote_role_btn(
             InlineKeyboardButton(
                 t("button.cancel", locale, plain=True),
                 callback_data=cancel_data,
+                style=KeyboardButtonStyle.DANGER,
             )
         ]
     )
@@ -92,6 +93,7 @@ def demote_confirm_btn(
                 InlineKeyboardButton(
                     t("button.cancel", locale, plain=True),
                     callback_data=cancel_data,
+                    style=KeyboardButtonStyle.DANGER,
                 ),
             ]
         ]

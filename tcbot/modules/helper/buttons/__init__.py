@@ -49,6 +49,7 @@ from tcbot.modules.helper.buttons.menus import (
     group_start_btn,
     groups_menu_btn,
     main_menu_btn,
+    open_pm_btn,
     tcgroups_btn,
 )
 from tcbot.modules.helper.buttons.nav import nav_row
@@ -101,6 +102,7 @@ __all__ = [
     "main_menu_btn",
     "module_help_btn",
     "nav_row",
+    "open_pm_btn",
     "paged_drill_btn",
     "privacy_btn",
     "privacy_policy_sections_btn",

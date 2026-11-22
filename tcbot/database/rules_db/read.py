@@ -69,6 +69,39 @@ async def published_rules(set_id: int | None = None) -> dict[str, Any] | None:
     }
 
 
+async def acknowledgement_requirement() -> tuple[int, bool] | None:
+    """Return the published version id and its acknowledgement requirement.
+
+    The join greeting only needs these two fields. Reading them in one
+    statement avoids loading the whole item and category catalog on every
+    join in the primary group.
+    """
+    row = await db_call(
+        lambda: fetch_one(
+            select(
+                rule_set_versions.c.id.label("version_id"),
+                rule_sets.c.requires_acknowledgement,
+            )
+            .select_from(
+                rule_set_versions.join(
+                    rule_sets, rule_set_versions.c.rule_set_id == rule_sets.c.id
+                )
+            )
+            .where(
+                rule_sets.c.scope_type == "community",
+                rule_sets.c.is_active.is_(True),
+                rule_set_versions.c.locale == WORKING_LOCALE,
+                rule_set_versions.c.status == "published",
+            )
+            .order_by(rule_set_versions.c.id.desc())
+            .limit(1)
+        )
+    )
+    if row is None:
+        return None
+    return int(row["version_id"]), bool(row["requires_acknowledgement"])
+
+
 async def acknowledgement_count(version_id: int) -> int:
     """Return how many users accepted one published version."""
     row = await db_call(

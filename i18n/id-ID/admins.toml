@@ -23,7 +23,7 @@ body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Owner dan Admin.
 [help.roles]
 title = "Hierarki Peran"
 body = """
-Owner (peringkat 4) > Admin (peringkat 3) > Developer (peringkat 2) > Moderator (peringkat 1)
+*Owner* (peringkat 4) ➛ *Admin* (peringkat 3) ➛ *Developer* (peringkat 2) ➛ *Moderator* (peringkat 1)
 
 Kamu tidak bisa mempromosikan pengguna ke peringkat yang sama atau lebih tinggi darimu. Admin yang mempromosikan seseorang ke Admin mengantrekan permintaan ke Owner."""
 
@@ -60,7 +60,7 @@ body = """
 `/tcplist`: daftar permintaan promosi tertunda"""
 
 # Runtime strings for promotion (promote_flow.py).
-# Reply texts render as MarkdownV2; DMs send plain (no parse_mode).
+# Reply texts render as rich HTML; DMs send plain (no parse_mode).
 # Placeholders: {user} pre-formatted user reference, {role}/{label}/
 # {community} raw values.
 
@@ -108,7 +108,7 @@ bot_target = "Bot tidak dapat memegang peran atau kepemilikan federasi."
 banned_target = "Pengguna ter-ban tidak dapat memegang peran atau kepemilikan federasi. Cabut ban dulu."
 
 # Promote/demote/transfer/list/decision UI. [role_picker]/[confirm]/
-# [transfer]/[list]/[card] render as MarkdownV2; [decision.dm] sends plain.
+# [transfer]/[list]/[card] render as rich HTML; [decision.dm] sends plain.
 
 [promote_ui]
 role_picker = "Pilih peran untuk {user}:"

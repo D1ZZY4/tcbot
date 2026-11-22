@@ -13,6 +13,7 @@ from tcbot.modules.helper.buttons.common import (
     _build_topic_rows,
     back_markup,
     back_row,
+    close_btn,
     with_back_row,
 )
 from tcbot.utils.i18n import t
@@ -23,14 +24,18 @@ def help_topics_menu_btn(
 ) -> InlineKeyboardMarkup:
     """Help index from the start menu: topics plus Back to start."""
     rows = _build_topic_rows(topics, style=KeyboardButtonStyle.PRIMARY)
-    return InlineKeyboardMarkup(with_back_row(rows, "back_to_start", locale))
+    rows = with_back_row(rows, "back_to_start", locale)
+    rows.append([close_btn(locale)])
+    return InlineKeyboardMarkup(rows)
 
 
-def help_topics_btn(topics: list[tuple[str, str]]) -> InlineKeyboardMarkup:
-    """Help index from /help: topics only, no Back to start."""
-    return InlineKeyboardMarkup(
-        _build_topic_rows(topics, style=KeyboardButtonStyle.PRIMARY)
-    )
+def help_topics_btn(
+    topics: list[tuple[str, str]], locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """Help index from /help: topics plus a Close button."""
+    rows = _build_topic_rows(topics, style=KeyboardButtonStyle.PRIMARY)
+    rows.append([close_btn(locale)])
+    return InlineKeyboardMarkup(rows)
 
 
 def back_to_help_btn(locale: str | None = None) -> InlineKeyboardMarkup:
@@ -71,7 +76,7 @@ def privacy_btn(locale: str | None = None) -> InlineKeyboardMarkup:
                     style=KeyboardButtonStyle.PRIMARY,
                 )
             ],
-            back_row("back_to_start", locale),
+            [*back_row("back_to_start", locale), close_btn(locale)],
         ]
     )
 
@@ -84,7 +89,9 @@ def privacy_policy_sections_btn(
         (label, f"privacy_section_{idx}") for idx, label in enumerate(section_labels)
     ]
     rows = _build_topic_rows(pairs, style=KeyboardButtonStyle.PRIMARY)
-    return InlineKeyboardMarkup(with_back_row(rows, "privacy_menu", locale))
+    rows = with_back_row(rows, "privacy_menu", locale)
+    rows.append([close_btn(locale)])
+    return InlineKeyboardMarkup(rows)
 
 
 def back_to_privacy_policy_btn(locale: str | None = None) -> InlineKeyboardMarkup:

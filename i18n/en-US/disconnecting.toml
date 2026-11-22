@@ -32,7 +32,7 @@ body = """
 `/rmtc -1001234567890`: force-remove a group by chat ID."""
 
 # Runtime strings (disconnecting.py). [state] sends plain (parse_mode=None
-# replies); [removed] renders as MarkdownV2. Placeholders: {community}
+# replies); [removed] renders as rich HTML. Placeholders: {community}
 # raw name, {id} pre-formatted code chat ID.
 
 [state]

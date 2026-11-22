@@ -27,6 +27,7 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     safe_edit_cb,
 )
+from tcbot.modules.helper.messages.rich_text import blocks
 from tcbot.modules.helper.pipelines.check_flow import Check
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
@@ -164,7 +165,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         text, proof_link = await build_ban_summary(ban, user.id, fname, None, locale)
         await reply_rich(
             msg,
-            text,
+            blocks(text),
             log_label="checkme banned-staff",
             reply_markup=buttons.checkme_ban_btn(
                 ctx.bot.username or "", str(ban.get("ban_id", "")), proof_link, locale
@@ -298,7 +299,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     await answer_ack(q)
     await safe_edit_cb(
         q,
-        text,
+        blocks(text),
         reply_markup=buttons.checkme_ban_btn(
             ctx.bot.username or "", ban_id, proof_link, locale
         ),

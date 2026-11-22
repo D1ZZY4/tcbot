@@ -25,6 +25,7 @@ from tcbot.database.rules_db.publications import status_counts
 from tcbot.database.rules_db.publish import promote_version
 from tcbot.database.rules_db.read import (
     acknowledgement_count,
+    acknowledgement_requirement,
     has_acknowledged,
     published_rules,
     record_acknowledgement,
@@ -33,6 +34,7 @@ from tcbot.database.rules_db.sets import get_or_create_community_set
 
 __all__ = [
     "acknowledgement_count",
+    "acknowledgement_requirement",
     "add_category",
     "add_item",
     "all_items",

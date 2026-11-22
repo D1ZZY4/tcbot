@@ -35,7 +35,7 @@ access_retry = "I couldn't verify your access right now. Please try again in a m
 staff_only = "This panel is for TC Staff only."
 db_fail = "Could not load the data. The database is unreachable, try again in a bit."
 
-# Runtime strings for stats views (stats_flow.py). All render MarkdownV2
+# Runtime strings for stats views (stats_flow.py). All render rich HTML
 # except button labels (plain). Placeholders as documented per key.
 
 [button]
@@ -46,13 +46,19 @@ users = "Users"
 
 [main]
 title = "{community} *Stats*"
-owner = "Owner: {owner}"
-staff = "Staff: {n} (Admins {admins}, Devs {devs}, Moderators {moderators})"
-users = "Users tracked: {n}"
-bans = "Active bans: {n}"
-chats = "Connected chats: {n}"
 owner_unset = "Not set"
 degraded = "Note: some numbers could not be loaded; totals above may be incomplete."
+
+# Two-column overview table. Values are built in Python and inserted raw.
+[main.table]
+metric = "Metric"
+value = "Value"
+owner = "Owner"
+staff = "Staff"
+users = "Users tracked"
+bans = "Active bans"
+chats = "Connected chats"
+staff_value = "{n} (Admins {admins}, Devs {devs}, Moderators {moderators})"
 
 [roster]
 title = "*Staff Roster* - {community}"

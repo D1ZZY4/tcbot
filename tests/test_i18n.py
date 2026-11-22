@@ -308,6 +308,29 @@ def _assert_v2_render_clean(rendered: str, where: str) -> None:
     assert rendered.count("<code>") == rendered.count("</code>"), where
 
 
+def test_all_templates_render_in_plain_mode() -> None:
+    """Every catalog entry must also survive the plain alert/reply path."""
+    catalog = _catalog()
+    for locale, keys in catalog.items():
+        for key, template in keys.items():
+            dummy: dict[str, Any] = dict.fromkeys(placeholders(template), "x")
+            t(key, locale, catalog=catalog, plain=True, **dummy)
+
+
+def test_templates_have_balanced_parentheses_and_no_legacy_glyphs() -> None:
+    """Catch broken applied lines and retired drawn separators in wording."""
+    catalog = _catalog()
+    # * U+279B is the requested hierarchy separator, not a retired glyph.
+    legacy = re.compile("[\u2014\u2501]")
+    for locale, keys in catalog.items():
+        for key, template in keys.items():
+            dummy: dict[str, Any] = dict.fromkeys(placeholders(template), "x")
+            rendered = t(key, locale, catalog=catalog, **dummy)
+            where = f"{locale}:{key}"
+            assert rendered.count("(") == rendered.count(")"), where
+            assert not legacy.search(rendered), where
+
+
 def test_non_default_locales_subset_default_keys() -> None:
     catalog = _catalog()
     default_keys = set(catalog[DEFAULT_LOCALE])
@@ -546,7 +569,7 @@ def test_start_menu_has_language_bottom_row() -> None:
     assert rows
     bottom = rows[-1]
     assert len(bottom) == 1
-    assert bottom[0].text == "Language"
+    assert bottom[0].text == "⌘ Language"
     assert bottom[0].callback_data == "language_menu"
 
 

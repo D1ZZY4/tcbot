@@ -9,7 +9,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.buttons.common import back_markup
+from tcbot.modules.helper.buttons.common import back_markup, close_btn
 from tcbot.utils.i18n import t
 
 
@@ -61,6 +61,7 @@ def stats_main_btn(
                 )
             ]
         )
+    rows.append([close_btn(locale)])
     return InlineKeyboardMarkup(rows)
 
 

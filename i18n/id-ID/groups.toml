@@ -16,10 +16,10 @@ Menampilkan semua grup yang terhubung ke {community}, beserta jumlah total.
 Tampilan default hanya nama grup. Ketuk *Detail* untuk memperluas daftar dan menampilkan ID chat tiap grup di samping namanya. Ketuk *Sederhana* untuk menciutkan lagi."""
 
 [help.examples]
-body = "`/tcgroups` atau `/tcg`"
+body = "`/tcgroups` (alias: `/tcg`)"
 
 # Runtime strings for the group list (groups.py, start.py menu).
-# [menu] sends plain; [list] renders as MarkdownV2.
+# [menu] sends plain; [list] renders as rich HTML.
 # Placeholders: {community} raw name, {title} raw group title,
 # {id} pre-formatted code ID, {n} ints.
 
@@ -28,6 +28,6 @@ empty = "Tidak ada grup yang terhubung ke {community}."
 
 [list]
 header = "*Grup Terhubung*\n\nJumlah: {n}"
-item = "- {title}"
-item_detailed = "- {title} - {id}"
+item = "{title}"
+item_detailed = "{title} - {id}"
 more = "...dan {n} lagi tidak ditampilkan."

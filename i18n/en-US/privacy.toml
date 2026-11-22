@@ -1,4 +1,4 @@
-# Privacy prose (privacy.py). Messages render as MarkdownV2 except
+# Privacy prose (privacy.py). Messages render as rich HTML except
 # alerts (plain). Placeholders: {bot} raw bot name, {community} raw name.
 
 [msg]
@@ -16,13 +16,13 @@ body = """*Privacy and Data*
 
 Ban, warn, mute, and kick records can be looked up by anyone with `/check` or `/checkme`; changing anything still requires the proper staff rank.
 
-Tap *Privacy Policy* below for the full policy, organized by section."""
+Tap *Privacy Policy* below ↴ for the full policy, organized by section."""
 
 [index]
 body = """*Privacy Policy*
 {bot}
 
-Select a section below to read it in full. Use the back button to return here at any time."""
+Select a section below ↴ to read it in full. Use the back button to return here at any time."""
 
 [error]
 invalid_section = "Invalid section."

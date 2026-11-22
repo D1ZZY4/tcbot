@@ -17,10 +17,6 @@ from tcbot.utils.logger import get_logger
 # * back; importing at module load would create a cycle.
 _USERNAME_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_]{5,32}$")
 
-# * Shared visual constants for long messages (used by legacy layout paths).
-SECTION_RULE: str = "━━━━━━━━━━━━━━━━━━━━"
-BULLET: str = "➛"
-
 
 def esc(text: object) -> str:
     """Escape untrusted text for a rich HTML field."""
@@ -92,14 +88,23 @@ def safe_username(username: str | None) -> str | None:
     return None
 
 
+def divider() -> str:
+    """Render the shared rich horizontal rule."""
+    from tcbot.modules.helper.messages.rich_format import divider as _divider  # noqa: PLC0415
+
+    return _divider()
+
+
 def bullet_list(lines: list[str]) -> str:
-    """Render already-formatted lines as a bulleted block."""
-    return "\n".join(f"{BULLET} {line}" for line in lines if line)
+    """Render already-formatted lines as a rich bulleted block."""
+    from tcbot.modules.helper.messages.rich_list import bullet_list as _bullet_list  # noqa: PLC0415
+
+    return _bullet_list([line for line in lines if line])
 
 
 def section(title: str, body: str) -> str:
-    """Render a titled section with the shared divider rule."""
-    return f"{bold(title)}\n{SECTION_RULE}\n{body}"
+    """Render a titled section with the rich divider rule."""
+    return f"{bold(title)}\n{divider()}\n{body}"
 
 
 log = get_logger(__name__)

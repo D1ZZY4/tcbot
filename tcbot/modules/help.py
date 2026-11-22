@@ -20,7 +20,8 @@ from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit, reply_rich
-from tcbot.utils.i18n import Safe, bold, code, t
+from tcbot.modules.helper.messages.rich_text import blocks
+from tcbot.utils.i18n import Safe, bold, code, divider, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -118,7 +119,7 @@ def _prefix_note(locale: str | None = None) -> str:
     instead of once at import. The leading newline separates the note
     from the overview.
     """
-    return "\n" + t(
+    return t(
         "help.note.prefixes",
         locale,
         prefixes=Safe(" ".join(code(p) for p in cfg.prefixes)),
@@ -144,8 +145,9 @@ def _module_text(name: str, overview: str, locale: str | None = None) -> str:
         "help.module.body",
         locale,
         title=Safe(bold(t("help.module.title", locale, name=name, plain=True))),
-        overview=Safe(overview),
-        note=Safe(_prefix_note(locale)),
+        divider=Safe(divider()),
+        overview=Safe(blocks(overview)),
+        list=Safe(blocks(_prefix_note(locale))),
     )
 
 
@@ -323,8 +325,16 @@ async def _show_section(
     body = t(
         "help.section.body",
         locale,
-        title=Safe(bold(f"{name} > {label}")),
-        content=Safe(section_content),
+        title=Safe(bold(f"{name} ➛ {label}")),
+        divider=Safe(divider()),
+        list=Safe(
+            blocks(
+                section_content,
+                command_header=t("common.help.command", locale),
+                alias_header=t("common.help.alias", locale),
+                detail_header=t("common.help.details", locale),
+            )
+        ),
     )
     await answer_and_edit(
         q, body, reply_markup=buttons.back_to_module_btn(back_module_cb, locale)

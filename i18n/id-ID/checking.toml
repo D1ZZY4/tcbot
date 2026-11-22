@@ -31,7 +31,7 @@ body = """
 Atau balas sebuah pesan lalu jalankan `/c`."""
 
 # Runtime strings for profile and drill-down views (check_flow.py).
-# All render as MarkdownV2.
+# All render as rich HTML.
 # Placeholders: {user} pre-formatted mention, {name} raw display name,
 # {id} pre-formatted code ID, {role}/{by} pre-formatted fragments,
 # {note} prebuilt caveat, counts as ints, {title} raw group title,
@@ -104,7 +104,7 @@ mute_item = "{i}. {ts}\n   Grup: {title}\n   Diminta: {requested} | Tersimpan: {
 no_reason = "(tanpa alasan)"
 
 [ban_info]
-title = "*Info Ban*"
+heading = "Info Ban"
 user = "Pengguna: {user}"
 user_id = "ID Pengguna: {id}"
 banned_by = "Di-ban oleh: {admin}"
@@ -114,6 +114,20 @@ ban_id = "ID Ban: {id}"
 date = "Tanggal: {date}"
 rules = "Aturan yang dilanggar: {rules}"
 unknown_date = "Tidak diketahui"
+
+# Header kolom dan label baris untuk tabel detail ban. Nilainya memuat
+# markup rich dari Python, jadi hanya label yang disimpan di sini.
+[ban_info.table]
+field = "Kolom"
+value = "Nilai"
+user = "Pengguna"
+user_id = "ID Pengguna"
+banned_by = "Di-ban oleh"
+admin_id = "ID Admin"
+reason = "Alasan"
+ban_id = "ID Ban"
+date = "Tanggal"
+rules = "Aturan dilanggar"
 
 # checkme/check runtime (checking.py). [error] sends plain.
 # Placeholders: {user} pre-formatted mention, {name} raw name,
@@ -126,7 +140,7 @@ bot_sender = "Bot dan pengirim anonim tidak punya catatan federasi, jadi tidak a
 status_retry = "Tidak bisa memverifikasi status ban kamu sekarang. Coba lagi sebentar."
 
 [checkme]
-banned = "Kamu sedang di-ban dari {community}.\n\nPengguna: {user}\nID Pengguna: {id}\nAlasan: {reason}\n\nDi-ban oleh: {admin}\n\nTanggal Penetapan: {date}\nKetuk tombol di bawah untuk detail."
+banned = "Kamu sedang di-ban dari {community}.\n\nPengguna: {user}\nID Pengguna: {id}\nAlasan: {reason}\n\nDi-ban oleh: {admin}\n\nTanggal Penetapan: {date}\nKetuk tombol di bawah ↴ untuk detail."
 staff_admin = "Hey {user}, cek diri sendiri?\n\nKamu tim staf, kamu yang menangani ban, bukan yang menerima. Tidak ada ban aktif. Aman."
 staff_role = "Hey {user}, semua beres.\n\nKamu {role} {community}, bagian tim, bukan daftar ban. Tidak ada yang perlu dikhawatirkan."
 clean = "Kamu bersih, tidak ada ban aktif di {community}."

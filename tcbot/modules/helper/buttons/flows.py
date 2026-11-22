@@ -32,6 +32,7 @@ def reason_step_btn(
         InlineKeyboardButton(
             t("button.cancel", locale, plain=True),
             callback_data=f"{action}_cancel",
+            style=KeyboardButtonStyle.DANGER,
         )
     )
     return InlineKeyboardMarkup([buttons])
@@ -54,12 +55,14 @@ def proof_step_btn(
         InlineKeyboardButton(
             t("button.done", locale, plain=True),
             callback_data=f"{action}_done_proof",
+            style=KeyboardButtonStyle.SUCCESS,
         )
     )
     buttons.append(
         InlineKeyboardButton(
             t("button.cancel", locale, plain=True),
             callback_data=f"{action}_cancel",
+            style=KeyboardButtonStyle.DANGER,
         )
     )
     return InlineKeyboardMarkup([buttons])
@@ -80,6 +83,7 @@ def connect_join_btn(
                 InlineKeyboardButton(
                     t("button.cancel", locale, plain=True),
                     callback_data=cancel_callback,
+                    style=KeyboardButtonStyle.DANGER,
                 ),
             ]
         ]

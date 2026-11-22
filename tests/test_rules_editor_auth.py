@@ -13,7 +13,6 @@ from typing import Any, cast
 import pytest
 
 from tcbot import database as db
-from tcbot.modules import rules
 from tcbot.modules.helper.pipelines import rules_flow
 
 
@@ -50,8 +49,8 @@ def test_category_action_refuses_a_revoked_editor(
     async def _answer() -> None:
         return None
 
-    monkeypatch.setattr(rules, "editor_allowed", _no_permission)
-    monkeypatch.setattr(rules, "refuse_editor", _no_permission)
+    monkeypatch.setattr(rules_flow, "editor_allowed", _no_permission)
+    monkeypatch.setattr(rules_flow, "refuse_editor", _no_permission)
     monkeypatch.setattr(db.rules_db, "move_category", _move)
     update = SimpleNamespace(
         callback_query=SimpleNamespace(
@@ -62,7 +61,9 @@ def test_category_action_refuses_a_revoked_editor(
     )
 
     asyncio.run(
-        rules.on_rules_cat_action(cast("Any", update), cast("Any", SimpleNamespace()))
+        rules_flow.rules_editor.cat_action(
+            cast("Any", update), cast("Any", SimpleNamespace())
+        )
     )
 
     assert moved == []

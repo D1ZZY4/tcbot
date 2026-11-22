@@ -44,7 +44,7 @@ async def test_a_failed_summary_still_ships_the_current_error(
     monkeypatch.setattr(error_reporter, "_suppressed_in_window", 3)
     monkeypatch.setattr(error_reporter, "monotonic", lambda: 10_000.0)
 
-    await error_reporter._ship_throttled("current incident")
+    await error_reporter._ship_throttled({"html": "current incident"})
 
     assert len(bot.calls) == 2
     assert "suppressed" in bot.calls[0]

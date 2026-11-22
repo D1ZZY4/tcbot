@@ -1,7 +1,7 @@
-# Additional-links menu prose (additional.py). Rendered as MarkdownV2.
+# Additional-links menu prose (additional.py). Rendered as rich HTML.
 # Placeholders: {community} raw community name.
 
 [msg]
 body = """{community} *Official Links*
 
-Use the buttons below to access our channels and groups."""
+Use the buttons below ↴ to access our channels and groups."""

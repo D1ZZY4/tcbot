@@ -243,9 +243,9 @@ class ConnectionAddedMixin:
                 warning_text = (
                     f"Bot was demoted in group"
                     f" {bold(chat.title or str(chat.id))}"
-                    f" \\(id: {code(str(chat.id))}\\)\\."
+                    f" (id: {code(str(chat.id))})."
                     " Federation bans cannot be enforced there until"
-                    " admin rights are restored\\."
+                    " admin rights are restored."
                 )
                 try:
                     await send_log(

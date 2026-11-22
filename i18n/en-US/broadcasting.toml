@@ -14,7 +14,7 @@ body = """
 Sends a message to every group currently connected to {community}.
 
 You can compose the message in two ways:
-- Type the message directly after the command (MarkdownV2 formatting is supported; markup that fails to parse is delivered as plain text).
+- Type the message directly after the command. It is sent as a rich message; text is escaped automatically.
 - Reply to an existing message with `/bc` to forward that message to all groups.
 
 When the broadcast is complete, the bot shows a summary of how many groups received the message and how many deliveries failed, and posts a log entry to the federation logs channel."""
@@ -25,7 +25,7 @@ body = """
 `/bc *Event tonight* (join us at 8 PM UTC).`
 Or reply to a message and run `/bc` to forward it to all groups."""
 
-# Runtime strings (broadcasting.py). [no_content]/[done] render MarkdownV2;
+# Runtime strings (broadcasting.py). [no_content]/[done] render rich HTML;
 # [sending] sends plain (no parse_mode). Placeholders: {ok}/{failed}/
 # {n} pre-formatted code counts.
 

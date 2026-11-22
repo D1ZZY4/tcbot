@@ -1,4 +1,4 @@
-# About page prose (about.py). Rendered as MarkdownV2.
+# About page prose (about.py). Rendered as rich HTML.
 # Placeholders: {title}/{disc} pre-formatted lines, {community} raw name.
 
 [page]

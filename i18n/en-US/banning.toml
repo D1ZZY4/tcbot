@@ -30,7 +30,7 @@ Or reply to a message and run `/tcb reason here`."""
 
 # Runtime strings for the ban flow (ban_flow.py, banning.py).
 # [state] entries send plain (alerts, parse_mode=None replies, plain edits).
-# [db_fail]/[applied]/[pm]/[summary] render as MarkdownV2.
+# [db_fail]/[applied]/[pm]/[summary] render as rich HTML.
 # Placeholders: {user} pre-formatted user reference, {reason} raw reason
 # text, {applied} prebuilt applied line, {sample} raw group names,
 # {total}/{failed} ints, {community} raw community name.
@@ -50,14 +50,14 @@ body = "{user} could not be banned: the proof media could not be uploaded comple
 [applied]
 empty = "No connected groups configured."
 none = "WARNING: ban not enforced in any group ({total}/{total} failed). Check bot admin rights in: {sample}{more}"
-partial = "Applied to {done}/{total} groups ({failed} failed: {sample}{more}"
+partial = "Applied to {done}/{total} groups ({failed} failed: {sample}{more})"
 full = "Applied to {total}/{total} groups."
-progress = "Applied to {done}/{total} groups so far ({failed} failed: {sample}{more}; {pending} still awaiting delivery, retried automatically."
+progress = "Applied to {done}/{total} groups so far ({failed} failed: {sample}{more}); {pending} still awaiting delivery, retried automatically."
 progress_clean = "Applied to {done}/{total} groups so far; {pending} still awaiting delivery, retried automatically."
 scope_warn = " WARNING: the group list could not be loaded, so some groups may have been skipped. Check the logs and re-ban manually with /tcban if needed."
 
 [pm]
-body = "You have been federation-banned from {community}.\nReason: {reason}\n\nYou may submit an appeal using the button below."
+body = "You have been federation-banned from {community}.\nReason: {reason}\n\nYou may submit an appeal using the button below ↴."
 
 [summary]
 body = "{user} has been banned.\nReason: {reason}\n{applied}"

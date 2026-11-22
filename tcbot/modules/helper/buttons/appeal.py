@@ -26,6 +26,7 @@ def appeal_cancel_btn(
                     if label is not None
                     else t("button.cancel", locale, plain=True),
                     callback_data=callback,
+                    style=KeyboardButtonStyle.DANGER,
                 )
             ]
         ]

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from telegram import InlineKeyboardButton
+from telegram.constants import KeyboardButtonStyle
 
 from tcbot.utils.i18n import t
 
@@ -28,6 +29,7 @@ def nav_row(
             InlineKeyboardButton(
                 t("button.prev", locale, plain=True),
                 callback_data=f"{cb_prefix}:{page - 1}",
+                style=KeyboardButtonStyle.SUCCESS,
             )
         )
     if page < total_pages - 1:
@@ -35,6 +37,7 @@ def nav_row(
             InlineKeyboardButton(
                 t("button.next", locale, plain=True),
                 callback_data=f"{cb_prefix}:{page + 1}",
+                style=KeyboardButtonStyle.SUCCESS,
             )
         )
     return row

@@ -7,11 +7,10 @@
 from __future__ import annotations
 
 from tcbot.utils.i18n import (
-    BULLET,
-    SECTION_RULE,
     bold,
     bullet_list,
     code,
+    divider,
     esc,
     italic,
     link,
@@ -90,6 +89,6 @@ def test_underline_and_strike_escape_their_content() -> None:
 
 def test_section_and_bullets_use_the_shared_vocabulary() -> None:
     body = bullet_list(["one", "two"])
-    assert body == f"{BULLET} one\n{BULLET} two"
+    assert body == "<ul><li>one</li><li>two</li></ul>"
     rendered = section("Heading", body)
-    assert rendered == f"<b>Heading</b>\n{SECTION_RULE}\n{BULLET} one\n{BULLET} two"
+    assert rendered == f"<b>Heading</b>\n{divider()}\n{body}"

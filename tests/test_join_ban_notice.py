@@ -93,15 +93,15 @@ def test_join_ban_keyboard_puts_evidence_first_and_appeal_below() -> None:
 
     assert keyboard is not None
     rows = keyboard.inline_keyboard
-    assert [button.text for button in rows[0]] == ["View Log", "View Proof"]
-    assert [button.text for button in rows[1]] == ["Submit Appeal"]
+    assert [button.text for button in rows[0]] == ["↝ View Log", "↝ View Proof"]
+    assert [button.text for button in rows[1]] == ["↩ Submit Appeal"]
 
 
 def test_join_ban_keyboard_drops_a_missing_link() -> None:
     keyboard = join_ban_btn(None, "https://t.me/c/456/77", None, "en-US")
 
     assert keyboard is not None
-    assert [button.text for button in keyboard.inline_keyboard[0]] == ["View Proof"]
+    assert [button.text for button in keyboard.inline_keyboard[0]] == ["↝ View Proof"]
 
 
 def test_the_group_notice_and_the_dm_are_different(
@@ -138,7 +138,7 @@ def test_the_group_notice_and_the_dm_are_different(
     for kwargs in (group_kwargs, dm_kwargs):
         markup = kwargs["reply_markup"]
         labels = [[button.text for button in row] for row in markup.inline_keyboard]
-        assert labels == [["View Log", "View Proof"], ["Submit Appeal"]]
+        assert labels == [["↝ View Log", "↝ View Proof"], ["↩ Submit Appeal"]]
 
 
 def test_a_secondary_group_still_gets_the_ban_notice(

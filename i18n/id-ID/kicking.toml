@@ -29,7 +29,7 @@ body = """
 Atau balas sebuah pesan lalu jalankan `/tck`."""
 
 # Runtime strings for the kick executor (kicking_flow.py).
-# [warn]/[summary]/[error] render as MarkdownV2.
+# [warn]/[summary]/[error] render as rich HTML.
 # Placeholders: {user} pre-formatted user reference, {reason} raw reason
 # text, {rejoin}/{warning} prebuilt lines.
 

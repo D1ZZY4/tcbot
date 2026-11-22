@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from tcbot.modules.helper.messages.rich_format import divider
 from tcbot.modules.helper.messages.rich_link import _markup_dict, keyboard_rows
 from tcbot.utils.logger import get_logger
 
@@ -51,7 +52,10 @@ def _message_with_buttons(
     if not rows or not isinstance(html_value, str):
         return message, False
     payload = dict(message)
-    payload["html"] = "\n".join([html_value, *rows])
+    # * A rule separates content from the keyboard so the last line never
+    # * sits flush against the buttons. An existing trailing rule is kept.
+    separator = [] if html_value.rstrip().endswith("<hr/>") else [divider()]
+    payload["html"] = "\n".join([html_value, *separator, *rows])
     return payload, True
 
 

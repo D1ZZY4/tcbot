@@ -14,7 +14,7 @@ body = """
 Mengirim pesan ke semua grup yang terhubung ke {community}.
 
 Kamu bisa menyusun pesan dengan dua cara:
-- Ketik pesan langsung setelah perintah (format MarkdownV2 didukung; markup yang gagal diurai dikirim sebagai teks biasa).
+- Ketik pesan langsung setelah perintah. Pesan dikirim sebagai pesan rich; teks di-escape otomatis.
 - Balas pesan yang ada dengan `/bc` untuk meneruskan pesan itu ke semua grup.
 
 Saat broadcast selesai, bot menampilkan ringkasan berapa grup menerima pesan dan berapa yang gagal, lalu mengirim entri log ke kanal log federasi."""
@@ -25,7 +25,7 @@ body = """
 `/bc *Acara malam ini* (gabung jam 8 malam UTC).`
 Atau balas sebuah pesan lalu jalankan `/bc` untuk meneruskannya ke semua grup."""
 
-# Runtime strings (broadcasting.py). [no_content]/[done] render MarkdownV2;
+# Runtime strings (broadcasting.py). [no_content]/[done] render rich HTML;
 # [sending] sends plain (no parse_mode). Placeholders: {ok}/{failed}/
 # {n} pre-formatted code counts.
 

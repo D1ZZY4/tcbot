@@ -1,4 +1,4 @@
-# Start menu prose (start.py). All render as MarkdownV2.
+# Start menu prose (start.py). All render as rich HTML.
 # Placeholders: {bot} pre-formatted bold bot name, {community} raw name.
 
 [private]
@@ -7,7 +7,7 @@ Federation management bot for {community}.
 
 I handle federation-wide bans, mutes, kicks, and moderation across all connected groups. Staff can run commands here or from within any connected group.
 
-Use the buttons below to explore what I can do."""
+Use the buttons below ↴ to explore what I can do."""
 
 [group]
 body = """{bot}

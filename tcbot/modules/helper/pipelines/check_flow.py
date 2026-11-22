@@ -31,6 +31,7 @@ from tcbot.modules.helper.extraction import (
     launch_identity_refresh,
 )
 from tcbot.modules.helper.identity import Identity, classify, profile_note
+from tcbot.modules.helper.messages.rich_text import blocks
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, italic, t, user_ref
 from tcbot.utils.logger import get_logger
@@ -246,7 +247,7 @@ class CheckProfileMixin:
         )
         if counts_failed:
             text += f"\n\n{t('checking.profile.caveat', locale)}"
-        return text, check_profile_btn(
+        return blocks(text), check_profile_btn(
             target_id,
             ban_total=ban_total,
             appeal_total=appeal_total,
@@ -297,16 +298,16 @@ class CheckBansMixin:
                 locale,
                 ban=Safe(code(ban_id)),
             )
-            return text, back_to_module_btn(f"check_bans:{target_id}:0", locale)
+            return blocks(text), back_to_module_btn(f"check_bans:{target_id}:0", locale)
         if not ban or ban.get("target_user_id") != target_id:
             text = t(
                 "checking.bans.not_found",
                 locale,
                 ban=Safe(code(ban_id)),
             )
-            return text, back_to_module_btn(f"check_bans:{target_id}:0", locale)
+            return blocks(text), back_to_module_btn(f"check_bans:{target_id}:0", locale)
         text, proof_link = await build_ban_detail(ban, locale=locale)
-        return text, detail_btn(
+        return blocks(text), detail_btn(
             back_callback=f"check_bans:{target_id}:0",
             proof_link=proof_link,
             appeal_link=ban.get("appeal_link"),
@@ -423,7 +424,7 @@ async def _ban_list_render(
     if not chunk:
         if count_failed or paged.fetch_failed:
             text = t("checking.warns.db_fail", locale)
-            return text, check_back_markup(target_id, locale)
+            return blocks(text), check_back_markup(target_id, locale)
         text = t(
             f"checking.{key_prefix}.empty",
             locale,
@@ -500,7 +501,7 @@ class CheckEventsMixin:
         throw_if_cancelled((groups, display_name))
         if isinstance(groups, BaseException):
             text = t("checking.warns.db_fail", locale)
-            return text, check_back_markup(target_id, locale)
+            return blocks(text), check_back_markup(target_id, locale)
         if isinstance(display_name, BaseException):
             display_name = str(target_id)
         if not groups:
@@ -509,7 +510,7 @@ class CheckEventsMixin:
                 locale,
                 user=Safe(user_ref(target_id, display_name)),
             )
-            return text, check_back_markup(target_id, locale)
+            return blocks(text), check_back_markup(target_id, locale)
         try:
             titles = await db.groups_db.get_group_titles([cid for cid, _ in groups])
         except Exception as exc:
@@ -537,7 +538,7 @@ class CheckEventsMixin:
                 )
             )
             warn_groups.append((title, count, cid))
-        return "\n".join(lines), check_warn_groups_btn(
+        return blocks("\n".join(lines)), check_warn_groups_btn(
             target_id, warn_groups, locale=locale
         )
 
@@ -690,7 +691,7 @@ async def _per_chat_event_list(
     if not records:
         if count_failed or paged.fetch_failed:
             text = t("checking.warns.db_fail", locale)
-            return text, check_back_markup(target_id, locale)
+            return blocks(text), check_back_markup(target_id, locale)
         text = t(
             "checking.events.empty",
             locale,

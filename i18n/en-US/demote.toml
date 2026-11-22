@@ -2,7 +2,7 @@
 # Runtime strings for demotion (demote_flow.py).
 # [dm] sends to the demoted user (their personal locale, resolved inside
 # execute); [abort] replies in the moderator's chat (resolved at call).
-# Both render as MarkdownV2.
+# Both render as rich HTML.
 # Placeholders: {role} pre-formatted bold rank, {community}/{name} raw
 # values, {verb} banned/muted/kicked, {user} pre-formatted mention,
 # {target_role} raw role, {action} trigger noun.

@@ -44,7 +44,7 @@ body = """
 Atau balas sebuah pesan lalu jalankan `/tcm`."""
 
 # Runtime strings for the mute/unmute executors (muting_flow.py).
-# [note] plain sends use plain=True; [summary]/[unmute] render MarkdownV2.
+# [note] plain sends use plain=True; [summary]/[unmute] render rich HTML.
 # [applied] renders the unmute fan-out line; {applied} carries it whole.
 # Placeholders: {user} pre-formatted user reference, {dur} pre-formatted
 # bold duration, {reason} raw reason text, {done}/{total}/{failed} ints,
@@ -62,9 +62,9 @@ unmute_queued = "{user}: unmute sudah dicatat dan pengirimannya diantrekan untuk
 [applied]
 empty = "Belum ada grup terhubung yang dikonfigurasi."
 none = "PERINGATAN: tidak ada grup yang di-unmute ({total}/{total} gagal). Cek hak admin bot di: {sample}{more}"
-partial = "Dipulihkan di {done}/{total} grup ({failed} gagal: {sample}{more}"
+partial = "Dipulihkan di {done}/{total} grup ({failed} gagal: {sample}{more})"
 full = "Dipulihkan di {total}/{total} grup."
-progress = "Dipulihkan di {done}/{total} grup sejauh ini ({failed} gagal: {sample}{more}; {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
+progress = "Dipulihkan di {done}/{total} grup sejauh ini ({failed} gagal: {sample}{more}); {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
 progress_clean = "Dipulihkan di {done}/{total} grup sejauh ini; {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
 
 [summary]

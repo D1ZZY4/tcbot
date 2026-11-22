@@ -15,13 +15,13 @@ from tcbot.modules.helper.messages.rich_format import heading, paragraph
 from tcbot.modules.helper.messages.rich_style import bold as rich_bold
 from tcbot.modules.helper.messages.rich_style import esc as rich_esc
 from tcbot.modules.helper.messages.rich_table import table
+from tcbot.modules.helper.messages.rich_text import blocks
 from tcbot.utils.i18n import (
-    BULLET,
-    SECTION_RULE,
     Safe,
     bold,
     bullet_list,
     code,
+    divider,
     esc,
     section,
     t,
@@ -163,7 +163,7 @@ async def editor_panel(
         acks = 0
         if version.get("status") == "published":
             acks = await db.rules_db.acknowledgement_count(int(version["id"]))
-        text += f"\n{SECTION_RULE}\n" + t(
+        text += f"\n{divider()}\n" + t(
             "rules.editor.status",
             locale,
             synced=Safe(code(str(counts.get("synced", 0)))),
@@ -179,17 +179,19 @@ async def editor_panel(
 
 def category_list(categories: list[dict[str, Any]], locale: str | None) -> str:
     """Render the category list body."""
-    lines = [f"{BULLET} {esc(str(cat['title']))}" for cat in categories]
-    return section(t("rules.editor.categories", locale, plain=True), "\n".join(lines))
+    lines = [esc(str(cat["title"])) for cat in categories]
+    return section(t("rules.editor.categories", locale, plain=True), bullet_list(lines))
 
 
 def item_list(items: list[dict[str, Any]], locale: str | None) -> str:
     """Render the item list of one category."""
     lines = [
-        f"{esc(str(number))}\\. {esc(str(item['title']))}"
+        f"{number}. {esc(str(item['title']))}"
         for number, item in enumerate(items, start=1)
     ]
-    return section(t("rules.editor.items", locale, plain=True), "\n".join(lines))
+    return section(
+        t("rules.editor.items", locale, plain=True), blocks("\n".join(lines))
+    )
 
 
 async def preview(items: list[dict[str, Any]], locale: str | None) -> str:
@@ -213,7 +215,7 @@ def category_view(
         return f"{header}\n\n{t('rules.menu.no_rules', locale)}"
     lines = []
     for number, item in enumerate(items, start=1):
-        lines.append(f"{esc(str(number))}\\. {esc(str(item['title']))}")
+        lines.append(f"{number}. {esc(str(item['title']))}")
         lines.append(esc(str(item["body"])))
     return f"{header}\n\n" + "\n".join(lines)
 

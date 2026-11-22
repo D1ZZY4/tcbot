@@ -23,7 +23,7 @@ body = """*/tcpromote*, */tcdemote*, */tcpromotelist*: Owner and Admin.
 [help.roles]
 title = "Role Hierarchy"
 body = """
-Owner (rank 4) > Admin (rank 3) > Developer (rank 2) > Moderator (rank 1)
+*Owner* (rank 4) ➛ *Admin* (rank 3) ➛ *Developer* (rank 2) ➛ *Moderator* (rank 1)
 
 You cannot promote a user to a rank equal to or above your own. Admins promoting someone to Admin queues a request for the Owner."""
 
@@ -60,7 +60,7 @@ body = """
 `/tcplist`: list pending promotion requests"""
 
 # Runtime strings for promotion (promote_flow.py).
-# Reply texts render as MarkdownV2; DMs send plain (no parse_mode).
+# Reply texts render as rich HTML; DMs send plain (no parse_mode).
 # Placeholders: {user} pre-formatted user reference, {role}/{label}/
 # {community} raw values.
 
@@ -108,7 +108,7 @@ bot_target = "Bots cannot hold federation roles or ownership."
 banned_target = "Banned users cannot hold federation roles or ownership. Lift the ban first."
 
 # Promote/demote/transfer/list/decision UI. [role_picker]/[confirm]/
-# [transfer]/[list]/[card] render as MarkdownV2; [decision.dm] sends plain.
+# [transfer]/[list]/[card] render as rich HTML; [decision.dm] sends plain.
 
 [promote_ui]
 role_picker = "Choose a role to assign to {user}:"
