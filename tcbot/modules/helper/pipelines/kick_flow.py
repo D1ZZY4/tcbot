@@ -303,6 +303,23 @@ async def execute_kick(
                 )
         else:
             await reply_rich(msg, summary, log_label="Kick", reply_markup=proof_btn)
+    except asyncio.CancelledError:
+        # * Cancellation is a BaseException, so the Exception branch below
+        # * would skip the repair and leave a completed kick record with no
+        # * enforcement and no reconcile run. Repair it, then re-raise so
+        # * shutdown cancellation still propagates.
+        if proof_task is not None and not proof_task.done():
+            proof_task.cancel()
+            await asyncio.gather(proof_task, return_exceptions=True)
+        if kick_action_id is not None and not kick_delivered:
+            try:
+                await db.kicks_db.mark_kick_failed(kick_action_id)
+            except Exception:
+                log.exception(
+                    "Kick status update failed during cancellation for action=%s",
+                    kick_action_id,
+                )
+        raise
     except Exception:
         # * Ban failed while the proof upload may still be in flight: cancel
         # * it so no orphan upload outlives this executor.

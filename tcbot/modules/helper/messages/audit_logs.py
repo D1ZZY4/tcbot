@@ -27,6 +27,9 @@ log = get_logger(__name__)
 
 # * Caps the broadcast log preview to one line of the operator's message.
 _MAX_BROADCAST_PREVIEW_LEN: int = 100
+# * Enough for a reviewer to judge an appeal when the forwarded original
+# * could not be posted to the appeals destination.
+_APPEAL_EXCERPT_MAX: int = 600
 
 # ───────────────────────── Audit-log builder ────────────────────────── #
 
@@ -209,14 +212,15 @@ def proof_caption_update(
 ) -> str:
     """Plain caption used when the proof message is updated."""
     previous = f"\n\nPrevious: {prev_proof_lnk}" if prev_proof_lnk else ""
+    updated_at = utc_now()
     return (
         f"ID: {target_id}\n\n"
         f"Admin: {admin_fname}\n"
         f"Admin ID: {admin_id}{previous}\n\n"
         f"Commit date: {fmt_date(original_ts)}\n"
         f"Commit time: {fmt_time(original_ts)}\n"
-        f"Update date: {fmt_date(utc_now())}\n"
-        f"Update time: {fmt_time(utc_now())}"
+        f"Update date: {fmt_date(updated_at)}\n"
+        f"Update time: {fmt_time(updated_at)}"
     )
 
 
@@ -386,8 +390,15 @@ def appeal_received_log(
     ban_id: str,
     appeal_link: str,
     rules: Sequence[str] = (),
+    *,
+    appeal_excerpt: str = "",
 ) -> str:
-    """Review card posted to MAIN_GROUP and the appeals destination."""
+    """Review card posted to MAIN_GROUP and the appeals destination.
+
+    The forwarded original message is the usual path to the appeal text. If
+    that forward failed, the excerpt keeps the reviewers from deciding a
+    request they never saw.
+    """
     b = LogBuilder(f"New {cfg.community_name} Appeal Request").detail_field(
         f"{rich_bold('User')}: {user_ref(target_id, target_fname)} "
         f"(ID: {code(str(target_id))})"
@@ -397,6 +408,8 @@ def appeal_received_log(
         b.field("Rules broken", ", ".join(rules))
     if appeal_link:
         b.link_field("Appeal", "View", appeal_link)
+    elif appeal_excerpt:
+        b.field("Appeal text", appeal_excerpt[:_APPEAL_EXCERPT_MAX])
     else:
         b.field("Appeal", "N/A")
     return (

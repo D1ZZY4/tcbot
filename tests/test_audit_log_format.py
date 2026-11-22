@@ -115,3 +115,20 @@ def test_free_form_note_stays_outside_the_list() -> None:
 
     assert "<ul>" in text
     assert "This appeal is pending review." in text
+
+
+def test_review_card_shows_the_appeal_text_when_the_forward_failed() -> None:
+    """A failed forward must not leave reviewers with 'Appeal: N/A'."""
+    text = audit_logs.appeal_received_log(
+        1, "Ann", "ban-1", "", appeal_excerpt="please reconsider"
+    )
+
+    assert "Appeal text" in text
+    assert "please reconsider" in text
+    assert "N/A" not in text
+
+    escaped = audit_logs.appeal_received_log(
+        1, "Ann", "ban-1", "", appeal_excerpt="<script>x</script>"
+    )
+    assert "<script>" not in escaped
+    assert "&lt;script&gt;" in escaped

@@ -383,7 +383,12 @@ async def post_appeal(
     except Exception as exc:
         log.debug("Appeal rule lookup failed for %s: %s", ban_id, exc)
     review_text = messages.appeal_received_log(
-        uid, user.first_name, ban_id, appeal_link, linked_rules
+        uid,
+        user.first_name,
+        ban_id,
+        appeal_link,
+        linked_rules,
+        appeal_excerpt=appeal_text if not appeal_link else "",
     )
     # * The review card id is the decision token, so the main card is posted
     # * first and its keyboard is attached once the id is known. A card left
