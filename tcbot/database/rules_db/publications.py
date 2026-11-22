@@ -84,16 +84,24 @@ async def mark_synced(slot_id: int, message_id: int) -> None:
 
 
 async def mark_failed(slot_id: int, error: str, *, missing: bool = False) -> None:
-    """Record a failed or missing channel message for the next publish."""
+    """Record a failed or missing channel message for the next publish.
+
+    A missing message must drop its stale id: the publisher edits only when a
+    message id exists, so keeping a deleted id would retry the dead message
+    forever instead of sending a fresh one.
+    """
+    values: dict[str, Any] = {
+        "status": "missing" if missing else "failed",
+        "last_error": error[:500],
+        "updated_at": utc_now(),
+    }
+    if missing:
+        values["message_id"] = None
     await db_call(
         lambda: run(
             rule_publications.update()
             .where(rule_publications.c.id == slot_id)
-            .values(
-                status="missing" if missing else "failed",
-                last_error=error[:500],
-                updated_at=utc_now(),
-            )
+            .values(**values)
         )
     )
 

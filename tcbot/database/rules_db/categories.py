@@ -37,9 +37,15 @@ async def list_categories(
     return [dict(row) for row in rows]
 
 
+# * The key is embedded in "rules_cat_rename:<key>" callback data, which
+# * Telegram caps at 64 bytes. Leave room for the prefix and a numeric
+# * collision suffix so a long title cannot break the editor keyboard.
+_KEY_MAX = 40
+
+
 def _available_key(title: str, existing: set[str]) -> str:
     """Return a slug that does not collide with an existing category."""
-    base = re.sub(r"[^a-z0-9]+", "-", title.strip().lower()).strip("-")[:60]
+    base = re.sub(r"[^a-z0-9]+", "-", title.strip().lower()).strip("-")[:_KEY_MAX]
     key = base or "category"
     suffix = 2
     while key in existing:
