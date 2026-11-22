@@ -7,8 +7,9 @@
 A database created from the declared metadata carries every table but no
 ``alembic_version`` row, so the first migration would try to create the
 tables again and the bot would crash-loop on boot with a duplicate-table
-error. The migration environment stamps the base revision in that case
-and lets the normal upgrade apply everything after it.
+error. The migration environment stamps the head revision in that case:
+the schema already has the head shape, and replaying the legacy import
+from the base revision would fail against tables that no longer exist.
 
 A database that is empty, or that carries only part of the schema, must
 not be stamped: a partial schema has to fail loudly in the migration.
@@ -41,10 +42,10 @@ class _FakeMigrationContext:
 
 
 class _FakeScripts:
-    """Script-directory double exposing the base revision."""
+    """Script-directory double exposing the single head revision."""
 
-    def get_base(self) -> str:
-        return "0001_initial"
+    def get_heads(self) -> list[str]:
+        return ["0013_role_vocabulary"]
 
 
 def _patch_inspector(monkeypatch: pytest.MonkeyPatch, tables: set[str]) -> None:
@@ -59,16 +60,16 @@ def _declared() -> set[str]:
     return set(metadata.tables)
 
 
-def test_a_bootstrapped_schema_is_stamped_at_the_base_revision(
+def test_a_bootstrapped_schema_is_stamped_at_the_head_revision(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Every declared table present and no version row: stamp and upgrade."""
+    """Every declared table present and no version row: stamp the head."""
     _patch_inspector(monkeypatch, _declared())
     context = _FakeMigrationContext(heads=())
 
     migrations.stamp_bootstrap_schema(context, object(), _FakeScripts())  # type: ignore[arg-type]
 
-    assert context.stamped == ["0001_initial"]
+    assert context.stamped == ["0013_role_vocabulary"]
 
 
 def test_the_legacy_index_migration_skips_a_bootstrapped_schema(

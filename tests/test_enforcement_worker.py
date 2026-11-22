@@ -475,6 +475,49 @@ def test_a_kick_repair_run_lifts_the_second_step(
     assert restored == [6]
 
 
+def test_an_empty_kick_reconcile_does_not_close_the_failed_kick(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No delivered unban means the kick stays failed and visible."""
+    restored: list[int] = []
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [{"id": 5, "action_id": 6, "operation": "reconcile"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "action_id": 6,
+            "target_user_id": 9,
+            "action_type": "kick",
+            "action_status": "failed",
+            "operation": "reconcile",
+        }
+
+    async def _targets(run_id: int, limit: int = 100) -> list[dict[str, object]]:
+        return []
+
+    async def _empty(run_id: int) -> None:
+        return None
+
+    async def _restore(action_id: int) -> bool:
+        restored.append(action_id)
+        return True
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_db, "complete_empty_run", _empty)
+    monkeypatch.setattr(db.kicks_db, "mark_kick_completed", _restore)
+
+    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+
+    assert restored == []
+
+
 def test_a_reconcile_run_for_another_action_is_cancelled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

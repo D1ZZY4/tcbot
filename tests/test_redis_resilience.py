@@ -134,36 +134,26 @@ def test_cache_resolves_the_client_through_the_reconnect_path(
     assert redis_client_mod.client() is fake
 
 
-def test_queue_drops_a_droppable_op_past_the_soft_ceiling(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_queue_drops_a_droppable_op_past_the_soft_ceiling() -> None:
     """A droppable op is dropped with a warning past the soft ceiling."""
-    loop = asyncio.new_event_loop()
+    prefix = "test-queue-soft"
+    tail_key = (prefix, asyncio.get_running_loop())
+    redis_io._redis_pending[tail_key] = _REDIS_MAX_PENDING
     try:
-        tail_key = ("test-queue-soft", loop)
-        redis_io._redis_pending[tail_key] = _REDIS_MAX_PENDING
-        task = redis_io.enqueue_redis_mutation("test-queue-soft", _noop, droppable=True)
-        assert task is None
+        assert redis_io.enqueue_redis_mutation(prefix, _noop, droppable=True) is None
     finally:
-        redis_io._redis_pending.pop(("test-queue-soft", loop), None)
-        loop.close()
+        redis_io._redis_pending.pop(tail_key, None)
 
 
-def test_queue_drops_a_revocation_op_past_the_hard_ceiling(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_queue_drops_a_revocation_op_past_the_hard_ceiling() -> None:
     """Even a revocation op is dropped past the hard ceiling."""
-    loop = asyncio.new_event_loop()
+    prefix = "test-queue-hard"
+    tail_key = (prefix, asyncio.get_running_loop())
+    redis_io._redis_pending[tail_key] = _REDIS_HARD_MAX_PENDING
     try:
-        tail_key = ("test-queue-hard", loop)
-        redis_io._redis_pending[tail_key] = _REDIS_HARD_MAX_PENDING
-        task = redis_io.enqueue_redis_mutation(
-            "test-queue-hard", _noop, droppable=False
-        )
-        assert task is None
+        assert redis_io.enqueue_redis_mutation(prefix, _noop, droppable=False) is None
     finally:
-        redis_io._redis_pending.pop(("test-queue-hard", loop), None)
-        loop.close()
+        redis_io._redis_pending.pop(tail_key, None)
 
 
 async def _noop() -> None:

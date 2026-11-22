@@ -290,7 +290,9 @@ async def _process_run(
             if isinstance(result, BaseException)
             and not is_benign_telegram_error(result)
         ]
-        if not remaining:
+        # * Empty results mean no unban was delivered (the circuit opened or
+        # * no target was claimable). Closing the kick then hides a live ban.
+        if results and not remaining:
             await _close_repaired_kick(as_int(action.get("action_id")))
 
 

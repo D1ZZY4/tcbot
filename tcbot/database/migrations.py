@@ -70,11 +70,13 @@ def stamp_bootstrap_schema(
     first migration would try to create the tables again and the bot would
     crash-loop on boot with a duplicate-table error.
 
-    The base revision is stamped and the normal upgrade follows, so every
-    revision after the one that created the schema still applies. A
-    database with a version row, and a database that is empty or only
-    partially built, are left to the ordinary upgrade path: a partial
-    schema must fail loudly in the migration instead of being stamped.
+    Such a schema was built from the current metadata, so it already has
+    the head shape. Stamping the base would replay the legacy-data import
+    and fail against tables the current schema no longer has, so the head
+    is stamped instead. A database with a version row, and a database that
+    is empty or only partially built, are left to the ordinary upgrade
+    path: a partial schema must fail loudly in the migration instead of
+    being stamped.
     """
     if migration_context.get_current_heads():
         return
@@ -84,10 +86,10 @@ def stamp_bootstrap_schema(
     existing = set(inspect(connection).get_table_names())
     if not declared.issubset(existing):
         return
-    base_revision = scripts.get_base()
-    if base_revision is None:
+    heads = scripts.get_heads()
+    if len(heads) != 1:
         return
-    migration_context.stamp(scripts, base_revision)
+    migration_context.stamp(scripts, heads[0])
 
 
 def ensure_schema(database_url: str, schema: str) -> None:

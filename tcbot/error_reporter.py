@@ -495,11 +495,14 @@ def _scrub_event_value(value: object) -> object:
     return value
 
 
-def scrub_sentry_event(event: dict[str, Any], hint: Any = None) -> dict[str, Any]:
+def scrub_sentry_event(event: Any, hint: Any = None) -> Any:
     """Redact credential-bearing strings before a Sentry event is delivered.
 
     Used as the ``before_send`` hook, so non-string values such as retry
     counters must survive unchanged and the event structure must be kept.
+    The SDK is an optional extra, so its ``Event`` type cannot be imported
+    here without breaking checks in installations that omit it; the hook
+    is duck-typed against the event mapping at runtime.
     """
     _ = hint
     return {key: _scrub_event_value(value) for key, value in event.items()}

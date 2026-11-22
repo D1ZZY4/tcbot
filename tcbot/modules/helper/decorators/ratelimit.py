@@ -379,6 +379,9 @@ def ratelimiter[R](
                             parse_mode=None,
                         )
                         return None
+                    # * No surface exists to tell the user why, so block the
+                    # * call instead of running it past its quota.
+                    return None
             return await func(update, ctx)
 
         return _wrapper

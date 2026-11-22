@@ -10,7 +10,7 @@ import asyncio
 from typing import Any
 
 import pytest
-from telegram.error import BadRequest
+from telegram.error import BadRequest, RetryAfter
 
 from tcbot import database as db
 from tcbot import notification_worker
@@ -83,6 +83,24 @@ def test_a_failed_card_edit_is_retried(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(bot.edits) == 1
     assert completed[0]["state"] == "pending"
     assert completed[0]["retry_after"] is not None
+
+
+def test_a_rate_limit_reply_does_not_trip_the_shared_circuit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Telegram service answer must not count as a transport failure."""
+    completed = _wire(monkeypatch)
+    bot = _Bot(RetryAfter(1))
+
+    _cb.telegram.reset()
+    try:
+        asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+        assert _cb.telegram.state is _cb.CircuitState.CLOSED
+    finally:
+        _cb.telegram.reset()
+
+    assert len(bot.edits) == 1
+    assert completed[0]["state"] == "pending"
 
 
 def test_a_half_open_circuit_claims_one_probe(

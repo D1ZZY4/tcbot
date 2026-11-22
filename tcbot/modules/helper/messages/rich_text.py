@@ -32,6 +32,18 @@ _BLOCK_TAGS = (
     "<hr/>",
     "<blockquote",
     "<details",
+    "<h1",
+    "<h2",
+    "<h3",
+    "<h4",
+    "<h5",
+    "<h6",
+    "<aside",
+    "<footer",
+    "<figure",
+    "<figcaption",
+    "<tg-slideshow",
+    "<tg-collage",
     "<tg-button-row",
 )
 

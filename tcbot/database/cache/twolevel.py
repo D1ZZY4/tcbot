@@ -584,12 +584,16 @@ class TwoLevelCache[T]:
             async with state.lock:
                 generation = state.generation
                 epoch = self._epoch
+
+                def _raced() -> bool:
+                    return (
+                        state.generation != generation
+                        or self._epoch != epoch
+                        or key in self._pending_invalidations
+                    )
+
                 val = await fetch()
-                if (
-                    state.generation != generation
-                    or self._epoch != epoch
-                    or key in self._pending_invalidations
-                ):
+                if _raced():
                     log.debug("Discarding stale refresh for invalidated key %s", key)
                     return val
                 # * A local marker only covers this process. A revocation in
@@ -601,6 +605,12 @@ class TwoLevelCache[T]:
                     if rc is not None and await self._tombstoned(rc, key):
                         log.debug("Discarding refresh for tombstoned key %s", key)
                         return val
+                # ! CRITICAL: invalidate() is synchronous and needs no lock, so
+                # * it can land during the awaits above. Publishing without this
+                # * second check would restore a revoked privilege into L1.
+                if _raced():
+                    log.debug("Discarding refresh invalidated mid-read for %s", key)
+                    return val
                 self._publish(key, val)
                 return val
         finally:

@@ -10,7 +10,7 @@ import asyncio
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from telegram.error import BadRequest, Forbidden
+from telegram.error import BadRequest, Forbidden, NetworkError
 
 from tcbot import database as db
 from tcbot.database.types import as_int
@@ -201,12 +201,15 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
         raise
     except Exception as exc:
         detail = str(exc).lower()
-        # * A Telegram refusal means the service answered. Like fan_out, do
-        # * not count it toward the breaker; only transport failures do.
-        if isinstance(exc, (BadRequest, Forbidden)):
-            _cb.telegram.release_probe(reached_service=True)
-        else:
+        # * Match fan_out: only a transport failure trips the breaker. A
+        # * service answer, including RetryAfter and BadRequest, does not;
+        # * otherwise five rate-limit replies would stall every fan-out.
+        if isinstance(exc, TimeoutError) or (
+            isinstance(exc, NetworkError) and not isinstance(exc, BadRequest)
+        ):
             _cb.telegram.record_failure()
+        else:
+            _cb.telegram.release_probe(reached_service=True)
         if isinstance(exc, Forbidden) or (
             isinstance(exc, BadRequest)
             and ("not found" in detail or "message_id_invalid" in detail)

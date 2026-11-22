@@ -83,7 +83,7 @@ def user_ref(user_id: int, name: str, username: str | None = None) -> str:
 
 def safe_username(username: str | None) -> str | None:
     """Return ``username`` only when it matches a Telegram username shape."""
-    if username and _USERNAME_RE.match(username):
+    if username and _USERNAME_RE.fullmatch(username):
         return username
     return None
 

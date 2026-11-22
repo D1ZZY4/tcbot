@@ -47,7 +47,7 @@ from tcbot.notification_worker import run as run_notification_worker
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import _ensure_loaded
-from tcbot.utils.logger import get_logger
+from tcbot.utils.logger import ERROR_LEVEL, get_logger
 from tcbot.utils.logger import setup as setup_logging
 from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.transport import (
@@ -662,7 +662,7 @@ def _init_sentry() -> None:
     try:
         sentry_sdk.init(
             dsn=cfg.sentry_dsn,
-            integrations=[LoguruIntegration(level_include="ERROR")],
+            integrations=[LoguruIntegration(event_level=ERROR_LEVEL)],
             traces_sample_rate=0.0,
             send_default_pii=False,
             before_send=error_reporter.scrub_sentry_event,

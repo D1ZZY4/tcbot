@@ -294,9 +294,14 @@ async def execute_warn(
         throw_if_cancelled((groups_result, existing_ban))
         groups_fetch_failed = isinstance(groups_result, BaseException)
         if groups_fetch_failed:
-            log.exception(
-                "Warn threshold ban groups fetch failed for target=%d; enforcing reduced scope",
+            # * The failure came back as a gather value, not an active
+            # * exception, so log the object itself instead of using
+            # * log.exception, which would report "NoneType: None".
+            log.error(
+                "Warn threshold ban groups fetch failed for target=%d: %s; "
+                "enforcing reduced scope",
                 target_id,
+                groups_result,
             )
         groups: list = [] if groups_fetch_failed else groups_result
         already_banned = (
@@ -479,18 +484,20 @@ async def execute_warn(
             # * failed groups with no warning and no ban, so their threshold
             # * could never fire again. A complete enforcement clears the
             # * whole slate so a later unban does not re-ban on stale counts.
-            clear_result = await _clear_warns_after_threshold_ban(
-                target_id,
-                groups,
-                landed_chat_ids,
-                scope_complete=not groups_fetch_failed,
-            )
-            if isinstance(clear_result, BaseException):
-                log.error(
-                    "Warn clear after threshold ban failed for target=%d chat=%d: %s",
+            try:
+                await _clear_warns_after_threshold_ban(
+                    target_id,
+                    groups,
+                    landed_chat_ids,
+                    scope_complete=not groups_fetch_failed,
+                )
+            except Exception:
+                # * The clear helper re-raises on failure. Cancellation is a
+                # * BaseException and still propagates to the caller.
+                log.exception(
+                    "Warn clear after threshold ban failed for target=%d chat=%d",
                     target_id,
                     chat_id,
-                    clear_result,
                 )
         else:
             await reply_rich(

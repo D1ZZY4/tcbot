@@ -380,7 +380,7 @@ class PeopleViews:
                 ]
             )
         text = (
-            f"{Safe(bold(header))}\n"
+            f"{header}\n"
             f"{table([t('stats.table.user', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.username', locale, plain=True), t('stats.table.first_seen', locale, plain=True), t('stats.table.last_seen', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
         )
         return blocks(text), stats_list_nav_btn(
@@ -436,7 +436,7 @@ class ChatViews:
                 ]
             )
         text = (
-            f"{Safe(bold(header))}\n"
+            f"{header}\n"
             f"{table([t('stats.table.group', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.connected_by', locale, plain=True), t('stats.table.date', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
         )
         return blocks(text), stats_list_nav_btn(
@@ -489,7 +489,7 @@ class BanViews:
                 ]
             )
         text = (
-            f"{Safe(bold(header))}\n"
+            f"{header}\n"
             f"{table([t('stats.table.user', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.reason', locale, plain=True), t('stats.table.ban', locale, plain=True), t('stats.table.date', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
         )
         return blocks(text), stats_list_nav_btn(
@@ -577,7 +577,7 @@ class SearchViews:
                 ]
             )
         text = (
-            f"{Safe(bold(header))}\n"
+            f"{header}\n"
             f"{table([t('stats.table.user', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.reason', locale, plain=True), t('stats.table.ban', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
         )
         return blocks(text), stats_search_results_nav_btn(locale)

@@ -48,9 +48,10 @@ def _media(
     tag: str, url: str, *, caption: str | None = None, self_closing: bool = False
 ) -> str:
     src = esc(url)
+    caption_markup = _caption(caption)
     if self_closing:
-        return f'<img src="{src}"/>'
-    return f'<{tag} src="{src}"></{tag}>'
+        return f'<img src="{src}"/>{caption_markup}'
+    return f'<{tag} src="{src}"></{tag}>{caption_markup}'
 
 
 __all__ = ["collage", "photo", "proof_slideshow", "slideshow", "video"]

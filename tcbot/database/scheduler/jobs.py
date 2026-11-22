@@ -41,6 +41,9 @@ _RETENTION_OP_TIMEOUT_S: float = 300.0
 # * account deletions, and each one anonymizes rows across the community
 # * tables, so the budget matches the registered contract.
 _ERASURE_OP_TIMEOUT_S: float = 120.0
+# * The daily cleanup runs the erasure sweep as well, so its combined run
+# * has to allow the erasure budget even though the expiry one is shorter.
+_DAILY_CLEANUP_TIMEOUT_S: float = max(_EXPIRE_OP_TIMEOUT_S, _ERASURE_OP_TIMEOUT_S)
 # * How long a cached profile is kept before the daily cleanup drops it.
 # * It replaces the TTL pruning the MongoDB deployment did on its own.
 _MEMBER_CACHE_EXPIRE_DAYS: int = 90
@@ -152,7 +155,7 @@ async def expire_stale_records() -> None:
     """
     profile_cutoff = utc_now() - timedelta(days=_MEMBER_CACHE_EXPIRE_DAYS)
     try:
-        async with asyncio.timeout(_EXPIRE_OP_TIMEOUT_S):
+        async with asyncio.timeout(_DAILY_CLEANUP_TIMEOUT_S):
             # * The two sweeps touch different tables, so they run
             # * concurrently and the run waits for both.
             members_res, erasures_res = await asyncio.gather(
@@ -169,7 +172,7 @@ async def expire_stale_records() -> None:
     except TimeoutError:
         log.exception(
             "Stale record cleanup timed out after %ds; no cleanup completed.",
-            _EXPIRE_OP_TIMEOUT_S,
+            _DAILY_CLEANUP_TIMEOUT_S,
         )
         raise RuntimeError(
             "Stale record cleanup timed out: nothing expired; see errors above."

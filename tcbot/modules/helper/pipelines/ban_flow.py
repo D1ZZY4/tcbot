@@ -264,6 +264,7 @@ async def _execute_ban_record(
                 proof_expected_count=proof_expected_count,
                 destination_thread_id=proof_thread,
                 enforcement_chat_ids=enforcement_chat_ids,
+                origin_chat_id=link_context,
                 rule_item_ids=rule_ids,
                 rule_selection_note=rule_note,
             )

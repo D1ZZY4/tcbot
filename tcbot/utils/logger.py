@@ -17,6 +17,10 @@ from loguru import logger
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+# * Loguru owns the level registry. Integrations that need a numeric level
+# * read it from here instead of importing the standard logging module.
+ERROR_LEVEL: int = logger.level("ERROR").no
+
 # ────────────────────── Request context ─────────────────────────────── #
 
 _ctx: ContextVar[dict[str, object] | None] = ContextVar("tcbot_log_ctx", default=None)

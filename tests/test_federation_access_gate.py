@@ -109,6 +109,52 @@ def test_a_staffer_can_open_the_ban_list(monkeypatch: pytest.MonkeyPatch) -> Non
     assert q.edits == ["bans"]
 
 
+def test_a_moderator_cannot_open_the_owner_only_users_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-owner tapping the owner's Users button is refused."""
+    _roles(monkeypatch, {42: "moderator"})
+    rendered: list[int] = []
+
+    async def _users_list(page: int, locale: str | None = None) -> tuple[str, Any]:
+        _ = locale
+        rendered.append(page)
+        return "users", None
+
+    monkeypatch.setattr(stats.Stats, "users_list", _users_list)
+    q = _FakeCallback("stats_users:0")
+    asyncio.run(stats.on_stats_users(_update(q), SimpleNamespace(user_data={})))
+
+    assert rendered == []
+    assert q.edits == []
+    assert q.answers
+    assert q.answers[0][1] is True
+
+
+def test_the_owner_can_open_the_users_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The Owner's own tap still renders the Users list."""
+    _roles(monkeypatch, {42: "moderator"})
+
+    async def _owner(user_id: int, *, fresh: bool = False) -> bool:
+        _ = fresh
+        return user_id == 42
+
+    monkeypatch.setattr(db.users_roles, "is_owner", _owner)
+    rendered: list[int] = []
+
+    async def _users_list(page: int, locale: str | None = None) -> tuple[str, Any]:
+        _ = locale
+        rendered.append(page)
+        return "users", None
+
+    monkeypatch.setattr(stats.Stats, "users_list", _users_list)
+    q = _FakeCallback("stats_users:0")
+    asyncio.run(stats.on_stats_users(_update(q), SimpleNamespace(user_data={})))
+
+    assert rendered == [0]
+    assert q.edits == ["users"]
+
+
 def test_a_lookup_outage_closes_the_stats_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
