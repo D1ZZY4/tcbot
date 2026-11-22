@@ -146,23 +146,39 @@ def content_hash(text: str) -> str:
 
 
 async def editor_panel(
-    set_doc: dict[str, Any], version: dict[str, Any], locale: str | None
+    set_doc: dict[str, Any],
+    version: dict[str, Any],
+    locale: str | None,
+    *,
+    has_content: bool = False,
+    item_count: int = 0,
 ) -> str:
-    """Render the editor panel text."""
+    """Render the editor panel with a clear next step for the reader."""
     header = t("button.manage_rules", locale, plain=True)
     body = t(
         "rules.editor.panel",
         locale,
         name=Safe(code(str(set_doc.get("name", "Rules")))),
         status=Safe(code(str(version.get("status", "draft")))),
-        count=Safe(code(str(len(version.get("items", []))))),
+        count=Safe(code(str(item_count))),
     )
     text = section(header, bullet_list(body.splitlines()))
+    hint = "rules.editor.ready_hint" if has_content else "rules.editor.empty_hint"
+    text += f"\n{divider()}\n" + t(hint, locale)
     try:
         counts = await db.rules_db.status_counts(int(set_doc["id"]))
-        acks = 0
-        if version.get("status") == "published":
-            acks = await db.rules_db.acknowledgement_count(int(version["id"]))
+        published = await db.rules_db.published_version(int(set_doc["id"]))
+        # * An empty, never-published set has no meaningful channel status;
+        # * showing four zeroes there only obscures the next step.
+        if published is None and not any(
+            counts.get(key, 0) for key in ("synced", "failed", "missing", "retired")
+        ):
+            return text
+        acks = (
+            await db.rules_db.acknowledgement_count(int(published["id"]))
+            if published
+            else 0
+        )
         text += f"\n{divider()}\n" + t(
             "rules.editor.status",
             locale,
@@ -196,6 +212,8 @@ def item_list(items: list[dict[str, Any]], locale: str | None) -> str:
 
 async def preview(items: list[dict[str, Any]], locale: str | None) -> str:
     """Render the draft as it would appear on the channel, with a marker."""
+    if not items:
+        return t("rules.menu.preview_empty", locale)
     parts = render_channel(items, version_number=0, published_at="-")
     body = "\n\n".join(part[2] for part in parts)
     return f"{t('rules.menu.preview', locale)}\n\n{body}"
@@ -229,7 +247,7 @@ def rich_category_view(
     better than a flat MarkdownV2 list: each rule has a number, a title, and
     a body. It is sent as an InputRichMessage through PTB.
     """
-    heading_text = t("rules.menu.category", locale, category=category)
+    heading_text = t("rules.menu.category", locale, category=category, plain=True)
     if not items:
         return rich_msg.html_message(
             heading(heading_text),

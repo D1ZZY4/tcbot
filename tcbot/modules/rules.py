@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
+from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 from tcbot import cfg
 from tcbot import database as db
@@ -65,7 +65,7 @@ async def cmd_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             msg,
             t("rules.editor.open_pm", locale, plain=True),
             parse_mode=None,
-            reply_markup=open_pm_btn(ctx.bot.username or "", "menu", locale),
+            reply_markup=open_pm_btn(ctx.bot.username or "", "rules", locale),
         )
         return
     published = await db.rules_db.published_rules()
@@ -196,7 +196,12 @@ async def on_rules_page(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 _RULES_CMDS = build_prefixed_filters("rules")
 
+# * The Open in PM button on the group surface uses a deep link, so the
+# * reader lands directly on the public rules menu instead of the start menu.
+_RULES_START = filters.ChatType.PRIVATE & filters.Regex(r"^/start\s+rules$")
+
 __handlers__ = [
+    MessageHandler(_RULES_START, cmd_rules),
     MessageHandler(_RULES_CMDS, cmd_rules),
     CallbackQueryHandler(_acknowledge, pattern=r"^rules_ack:\d+:\d+$"),
     CallbackQueryHandler(on_rules_show, pattern=r"^rules_show:"),

@@ -52,7 +52,6 @@ WAITING_CONFIRM_DISCARD = 5
 _TITLE_MAX: int = 200
 _BODY_MAX: int = 3500
 _URL_MAX: int = 500
-_SLUG_PATTERN: re.Pattern[str] = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
 async def editor_allowed(update: Update) -> bool:
@@ -145,8 +144,12 @@ class RulesEditor:
             return ConversationHandler.END
         set_doc, version = opened
         locale = await self._locale(update)
-        text = await rules_msg.editor_panel(set_doc, version, locale)
-        markup = rules_btn.editor_panel_btn(locale)
+        items = await db.rules_db.list_items(int(version["id"]))
+        has_content = bool(items)
+        text = await rules_msg.editor_panel(
+            set_doc, version, locale, has_content=has_content, item_count=len(items)
+        )
+        markup = rules_btn.editor_panel_btn(locale, has_content=has_content)
         await self._edit_or_reply(update, text, markup)
         return WAITING_EDITOR_MENU
 
@@ -162,7 +165,7 @@ class RulesEditor:
                 msg,
                 t("rules.editor.open_pm", locale, plain=True),
                 parse_mode=None,
-                reply_markup=open_pm_btn(ctx.bot.username or "", "menu", locale),
+                reply_markup=open_pm_btn(ctx.bot.username or "", "tcrules", locale),
             )
             return ConversationHandler.END
         return await self.panel(update, ctx)
@@ -235,8 +238,9 @@ class RulesEditor:
         opened = await self._set_and_draft(update, ctx)
         if opened is None:
             return ConversationHandler.END
-        set_doc, _version = opened
+        set_doc, version = opened
         set_id = int(set_doc["id"])
+        items = await db.rules_db.all_items(int(version["id"]))
         counts = await db.rules_db.status_counts(set_id)
         published = await db.rules_db.published_version(set_id)
         acks = (
@@ -254,7 +258,11 @@ class RulesEditor:
             acks=acks,
         )
         await self._edit_or_reply(
-            update, text, rules_btn.editor_panel_btn(locale=await self._locale(update))
+            update,
+            text,
+            rules_btn.editor_panel_btn(
+                await self._locale(update), has_content=bool(items)
+            ),
         )
         return WAITING_EDITOR_MENU
 
@@ -272,6 +280,16 @@ class RulesEditor:
         if opened is None:
             return ConversationHandler.END
         set_doc, version = opened
+        items = await db.rules_db.all_items(int(version["id"]))
+        if not items:
+            # * An empty draft has nothing to publish. Guide the reader into
+            # * the editor instead of surfacing a technical publish error.
+            await self._edit_or_reply(
+                update,
+                t("rules.publish.empty", locale),
+                rules_btn.editor_panel_btn(locale, has_content=False),
+            )
+            return WAITING_EDITOR_MENU
         user_id = update.effective_user.id if update.effective_user else 0
         try:
             result = await publish_rules(
@@ -284,7 +302,7 @@ class RulesEditor:
             await self._edit_or_reply(
                 update,
                 t("rules.publish.error", locale, error=str(exc)),
-                rules_btn.editor_panel_btn(locale),
+                rules_btn.editor_panel_btn(locale, has_content=True),
             )
             return WAITING_EDITOR_MENU
         await self._edit_or_reply(
@@ -295,7 +313,7 @@ class RulesEditor:
                 synced=result["synced"],
                 failed=len(result["failed"]),
             ),
-            rules_btn.editor_panel_btn(locale),
+            rules_btn.editor_panel_btn(locale, has_content=True),
         )
         return WAITING_EDITOR_MENU
 
@@ -390,7 +408,15 @@ class RulesEditor:
             )
             return await self.items(update, ctx)
 
-        return ConversationHandler.END
+        # * Typing while simply viewing the panel is unexpected input, not a
+        # * request to leave. Keep the conversation and its draft alive.
+        await reply_rich(
+            msg,
+            t("rules.editor.unexpected", locale, plain=True),
+            log_label="rules editor unexpected text",
+            parse_mode=None,
+        )
+        return WAITING_EDITOR_MENU
 
     async def categories(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """List the categories of the open draft, creating the draft if needed."""
@@ -468,8 +494,9 @@ class RulesEditor:
         items = await db.rules_db.list_items(version_id)
         locale = await self._locale(update)
         text = await rules_msg.preview(items, locale)
-        await self._edit_or_reply(update, text, None)
-        return ConversationHandler.END
+        # * Keep the editor open: Back returns to the main panel, Close exits.
+        await self._edit_or_reply(update, text, rules_btn.preview_btn(locale))
+        return WAITING_EDITOR_MENU
 
     async def ask_discard(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Ask for confirmation before removing the draft."""
@@ -510,6 +537,22 @@ class RulesEditor:
         await self._edit_or_reply(update, t("rules.editor.cancelled", locale), None)
         return ConversationHandler.END
 
+    async def ignore_foreign_cancel(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        """Answer a moderation picker Cancel without closing the editor.
+
+        That callback belongs to a ban or reason flow. A stale tap must not
+        end an unrelated rules session, so the editor stays open.
+        """
+        q = update.callback_query
+        if q is not None:
+            try:
+                await q.answer()
+            except Exception as exc:
+                log.debug("foreign picker cancel answer failed: %s", exc)
+        return WAITING_EDITOR_MENU
+
     async def _edit_or_reply(self, update: Update, text: str, markup: Any) -> None:
         """Edit the invoking message, or reply when no callback is present."""
         q = update.callback_query
@@ -531,8 +574,15 @@ def build_rules_conv() -> ConversationHandler:
     is owned by the flow scope, so a button always has a reachable handler
     and a typed answer always returns to the same menu.
     """
+    # * The group's Open in PM button uses a deep link. Registering it as an
+    # * entry point starts the editor conversation, so its buttons keep working
+    # * after the reader follows the link.
+    _TCRULES_START = filters.ChatType.PRIVATE & filters.Regex(r"^/start\s+tcrules$")
     return ConversationHandler(
-        entry_points=[MessageHandler(_TCRULES_CMDS, rules_editor.start)],
+        entry_points=[
+            MessageHandler(_TCRULES_CMDS, rules_editor.start),
+            MessageHandler(_TCRULES_START, rules_editor.start),
+        ],
         states={
             WAITING_EDITOR_MENU: [
                 CallbackQueryHandler(rules_editor.panel, pattern=r"^rules_panel$"),
@@ -574,10 +624,15 @@ def build_rules_conv() -> ConversationHandler:
                 CallbackQueryHandler(
                     rules_editor.cancel, pattern=r"^rules_discard_no$"
                 ),
+                # * The confirmation keyboard still shows Back and Close.
+                # * Close is global; Back must return to the panel from here.
+                CallbackQueryHandler(rules_editor.panel, pattern=r"^rules_panel$"),
             ],
         },
         fallbacks=[
-            CallbackQueryHandler(rules_editor.cancel, pattern=r"^rules_step:cancel$")
+            CallbackQueryHandler(
+                rules_editor.ignore_foreign_cancel, pattern=r"^rules_step:cancel$"
+            )
         ],
         per_message=False,
     )

@@ -5,6 +5,8 @@
 categories = "Kategori"
 items = "Item"
 panel = "Editor aturan\n*Set:* {name}\n*Status:* {status}\n*Item:* {count}"
+empty_hint = "Draf ini masih kosong. Mulai dari *Edit Draft*, tambahkan kategori, lalu tambahkan aturan pertama."
+ready_hint = "Sudah bagus. *Preview* menampilkan tampilan untuk anggota, dan *Publish* membagikan versi ini ke kanal."
 ask_category = "Kirim judul kategori."
 ask_title = "Kirim judul item."
 ask_body = "Kirim isi item (teks polos)."
@@ -15,9 +17,10 @@ bad_url = "URL referensi harus tautan http(s) dengan panjang maksimal 500 karakt
 confirm_discard = "Buang draf saat ini? Aturan yang sudah terbit tidak berubah."
 discarded = "Draf dibuang."
 cancelled = "Editor aturan ditutup."
+unexpected = "Gunakan tombol di bawah untuk menyunting, atau tutup editor."
 open_pm = "Buka chat pribadi dengan saya untuk melanjutkan."
 ask_rename = "Kirim judul kategori yang baru."
-status = "Kanal: tersinkron {synced}, gagal {failed}, hilang {missing}, pensiun {retired}. Acknowledgement: {acks}."
+status = "Kanal: {synced} tersinkron, {failed} gagal, {missing} hilang, {retired} pensiun. Acknowledgement: {acks}."
 
 [help]
 overview = "Baca aturan komunitas yang diterbitkan atau sunting dan terbitkan kumpulan aturan."
@@ -33,7 +36,8 @@ body = "Ada aturan di {community}."
 empty = "Belum ada aturan yang diterbitkan."
 category = "Aturan: {category}"
 no_rules = "Tidak ada aturan di kategori ini."
-preview = "Pratinjau - belum diterbitkan."
+preview = "Pratinjau\nBeginilah tampilan aturan di kanal. Belum ada yang diterbitkan sampai Anda menekan Publish."
+preview_empty = "Pratinjau\nBelum ada yang ditampilkan. Tambahkan kategori dan aturan di *Edit Draft* terlebih dahulu."
 
 [rich]
 number = "No"
@@ -48,8 +52,9 @@ ask_note = "Kirim catatan singkat (maksimal 200 karakter)."
 bad_note = "Catatan harus 1-{limit} karakter."
 
 [publish]
-error = "Publish gagal: {error}"
-result = "Diterbitkan. Pesan kanal tersinkron: {synced}; gagal: {failed}."
+error = "Publish tidak selesai: {error}\n\nDraf Anda aman. Perbaiki masalahnya lalu tekan Publish lagi."
+empty = "Belum ada yang diterbitkan.\n\nTambahkan minimal satu aturan di *Edit Draft*, lalu kembali dan tekan *Publish*."
+result = "Diterbitkan. {synced} pesan kanal diperbarui, {failed} gagal."
 
 [selected]
 none = "Tidak ada aturan dipilih."

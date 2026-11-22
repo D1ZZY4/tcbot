@@ -64,6 +64,9 @@ async def _render(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     selected: list[int] = scope.get("ban_rules", [])
     locale = await locale_for_update(update)
     items = await _items()
+    # * Record the prompt identity from this first interactive step. Without
+    # * it a stale Cancel on an older ban prompt still looks current here and
+    # * cancels the newer ban before proof collection starts.
     if q is not None:
         try:
             await safe_edit_cb(
@@ -71,15 +74,20 @@ async def _render(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                 rules_step.picker_text(items, selected, locale),
                 reply_markup=rules_btn.picker_btn(items, selected, locale),
             )
+            if q.message is not None:
+                scope["ban_prompt_msg_id"] = q.message.message_id
+                scope["ban_prompt_chat_id"] = q.message.chat.id
         except Exception as exc:
             log.debug("Ban rules picker edit failed: %s", exc)
     elif update.effective_message is not None:
         try:
-            await reply_rich(
+            sent = await reply_rich_result(
                 update.effective_message,
                 rules_step.picker_text(items, selected, locale),
                 reply_markup=rules_btn.picker_btn(items, selected, locale),
             )
+            scope["ban_prompt_msg_id"] = sent.message_id
+            scope["ban_prompt_chat_id"] = update.effective_message.chat.id
         except Exception as exc:
             log.debug("Ban rules picker reply failed: %s", exc)
     return WAITING_BAN_RULES

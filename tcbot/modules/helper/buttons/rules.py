@@ -11,7 +11,7 @@ from typing import Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from tcbot.modules.helper.buttons.common import back_close_row
+from tcbot.modules.helper.buttons.common import back_close_row, close_btn
 from tcbot.utils.i18n import t
 
 # * Callback payloads of the moderation rules picker, shared by the ban and
@@ -81,14 +81,24 @@ def prompt_btn(back_callback: str, locale: str | None = None) -> InlineKeyboardM
     return InlineKeyboardMarkup([back_close_row(back_callback, locale)])
 
 
-def editor_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
-    """Build the main editor panel with edit, preview, and publish actions."""
-    return InlineKeyboardMarkup(
+def editor_panel_btn(
+    locale: str | None = None, *, has_content: bool = False
+) -> InlineKeyboardMarkup:
+    """Build the main editor panel.
+
+    The main panel is the root of the editor, so it offers Close but no Back.
+    Publishing and Discard only appear once the draft has content: an empty
+    draft should guide the reader into the editor, not offer to destroy or
+    publish nothing.
+    """
+    rows: list[list[InlineKeyboardButton]] = [
         [
-            [
-                _button(t("button.edit_draft", locale, plain=True), "rules_edit_draft"),
-                _button(t("button.preview", locale, plain=True), "rules_preview"),
-            ],
+            _button(t("button.edit_draft", locale, plain=True), "rules_edit_draft"),
+            _button(t("button.preview", locale, plain=True), "rules_preview"),
+        ]
+    ]
+    if has_content:
+        rows.append(
             [
                 _button(
                     t("button.publish", locale, plain=True),
@@ -100,11 +110,16 @@ def editor_panel_btn(locale: str | None = None) -> InlineKeyboardMarkup:
                     "rules_discard",
                     style=KeyboardButtonStyle.DANGER,
                 ),
-            ],
-            [_button(t("button.settings", locale, plain=True), "rules_settings")],
-            back_close_row("back_to_start", locale),
-        ]
-    )
+            ]
+        )
+    rows.append([_button(t("button.settings", locale, plain=True), "rules_settings")])
+    rows.append([close_btn(locale)])
+    return InlineKeyboardMarkup(rows)
+
+
+def preview_btn(locale: str | None = None) -> InlineKeyboardMarkup:
+    """Back to the editor panel and Close, for the draft preview."""
+    return InlineKeyboardMarkup([back_close_row("rules_panel", locale)])
 
 
 def categories_btn(

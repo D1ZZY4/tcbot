@@ -5,6 +5,8 @@
 categories = "Categories"
 items = "Items"
 panel = "Rules editor\n*Set:* {name}\n*Status:* {status}\n*Items:* {count}"
+empty_hint = "This draft is empty. Start with *Edit Draft*, add a category, then add your first rule."
+ready_hint = "Looking good. *Preview* shows what members will see, and *Publish* shares this version in the channel."
 ask_category = "Send the category title."
 ask_title = "Send the item title."
 ask_body = "Send the item body (plain text)."
@@ -15,9 +17,10 @@ bad_url = "The reference URL must be an http(s) link of at most 500 characters."
 confirm_discard = "Discard the current draft? Published rules are not affected."
 discarded = "Draft discarded."
 cancelled = "Rules editor closed."
+unexpected = "Use the buttons below to keep editing, or close the editor."
 open_pm = "Open a private chat with me to continue."
 ask_rename = "Send the new category title."
-status = "Channel: synced {synced}, failed {failed}, missing {missing}, retired {retired}. Acknowledgements: {acks}."
+status = "Channel: {synced} synced, {failed} failed, {missing} missing, {retired} retired. Acknowledgements: {acks}."
 
 [help]
 overview = "Read the published community rules or edit and publish the rule set."
@@ -33,7 +36,8 @@ body = "There are rules on {community}."
 empty = "There are no published rules yet."
 category = "Rules: {category}"
 no_rules = "No rules in this category."
-preview = "Preview - not published yet."
+preview = "Preview\nThis is how the rules will look in the channel. Nothing is published until you tap Publish."
+preview_empty = "Preview\nThere is nothing to show yet. Add a category and a rule in *Edit Draft* first."
 
 [rich]
 number = "No"
@@ -48,8 +52,9 @@ ask_note = "Send a short note (at most 200 characters)."
 bad_note = "The note must be 1-{limit} characters."
 
 [publish]
-error = "Publish failed: {error}"
-result = "Published. Channel messages synced: {synced}; failed: {failed}."
+error = "Publish could not finish: {error}\n\nYour draft is safe. Fix the issue and tap Publish again."
+empty = "Nothing to publish yet.\n\nAdd at least one rule in *Edit Draft* first, then come back and tap *Publish*."
+result = "Published. {synced} channel message(s) updated, {failed} failed."
 
 [selected]
 none = "No rule selected."

@@ -202,7 +202,7 @@ def test_proof_done_is_success_and_cancel_stays_neutral() -> None:
 
 
 def test_rules_editor_colors_commit_and_destruction() -> None:
-    panel = _cells(rule_btn.editor_panel_btn())
+    panel = _cells(rule_btn.editor_panel_btn(has_content=True))
     flat = {cell[1]: cell[3] for row in panel for cell in row}
     assert flat["rules_publish"] == KeyboardButtonStyle.SUCCESS
     assert flat["rules_discard"] == KeyboardButtonStyle.DANGER
