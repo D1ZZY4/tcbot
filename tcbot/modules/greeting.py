@@ -51,7 +51,7 @@ log = get_logger(__name__)
 # * Upper bound for concurrent per-member join handling (batch invite-link
 # * joins). Each member costs one harvest write plus ban/mute reads and a
 # * Telegram enforcement call; unbounded gather() on a large batch would
-# * spike database pool pressure (pool max 20) and Telegram burst traffic.
+# * spike database pool pressure (default pool max 10) and Telegram burst traffic.
 # * Matches the fan_out Telegram cap; members beyond the bound wait.
 _MAX_CONCURRENT_JOINS: int = 10
 
@@ -208,7 +208,7 @@ async def _handle_member(
     if member.is_bot:
         return
 
-    _, ban, mute = await asyncio.gather(
+    harvest_r, ban, mute = await asyncio.gather(
         db.users_cache.harvest_user_identity(
             member.id,
             member.username,
@@ -221,7 +221,7 @@ async def _handle_member(
     )
     # ! CRITICAL: a cancelled read must propagate, never degrade into a
     # ! clean greet: shutdown would otherwise welcome a banned joiner.
-    throw_if_cancelled((ban, mute))
+    throw_if_cancelled((harvest_r, ban, mute))
     # * When an enforcement read fails we cannot prove the joiner is
     # * clean, so the welcome below is skipped: greeting an unverified
     # * user as safe is worse than staying silent until the next event.
@@ -405,7 +405,7 @@ async def on_join_request_approved(
 
     # * Identity harvest in parallel with mute/ban lookups.
     # * harvest_user_identity skips the DB write when identity is unchanged (L1 hit).
-    _, mute, ban = await asyncio.gather(
+    harvest_r, mute, ban = await asyncio.gather(
         db.users_cache.harvest_user_identity(
             user.id, user.username, user.first_name, user.last_name or None
         ),
@@ -415,7 +415,7 @@ async def on_join_request_approved(
     )
     # ! CRITICAL: cancellation must propagate before any enforcement
     # ! decision; coercing it into ban=None skips the ban below.
-    throw_if_cancelled((mute, ban))
+    throw_if_cancelled((harvest_r, mute, ban))
     if isinstance(ban, BaseException):
         log.error(
             "get_active_ban failed for uid=%d on join_request_approved in chat=%d: %s",
@@ -530,14 +530,14 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
     # * Opportunistic identity harvest + ban check in parallel.
     # * harvest_user_identity skips the DB write when identity is unchanged (L1 hit).
-    _, ban = await asyncio.gather(
+    harvest_r, ban = await asyncio.gather(
         db.users_cache.harvest_user_identity(
             user.id, user.username, user.first_name, user.last_name or None
         ),
         db.bans_db.get_active_ban(user.id),
         return_exceptions=True,
     )
-    throw_if_cancelled((ban,))
+    throw_if_cancelled((harvest_r, ban))
     if isinstance(ban, BaseException):
         log.error(
             "get_active_ban failed for uid=%d on join_request in chat=%d: %s",
