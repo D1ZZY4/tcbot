@@ -144,7 +144,7 @@ The Additional Links menu derives its buttons from `MAIN_CHANNEL`, `MAIN_GROUP`,
 `LOGS`, and `APPEALS` through Telegram `get_chat`: a chat username becomes a
 `t.me` link, otherwise its invite link is used, and a chat with neither drops
 its button. No static community URL variables remain. See
-[Community rules](docs/features/moderation/rules.md) for the rules editor and channel
+[Community rules](docs/features/rules.md) for the rules editor and channel
 publication.
 
 </details>
@@ -179,7 +179,7 @@ Run exactly one live instance per token on exactly one target below. Every targe
 <details>
 <summary>GitHub Actions automation (lint, auto-fix, dependencies, CodeQL)</summary>
 
-Seven CI workflows run automatically; no secrets needed (validation steps use dummy values, so fork PRs work too). All use Python 3.14 with `uv sync --frozen` and cached `uv` setup.
+Seven CI workflows run automatically. The lint, type-check, test, auto-fix, dependency-update, and CodeQL workflows need no repository secrets (validation steps use dummy values, so fork PRs work too). The 24/7 Run Bot workflow is the exception: it needs the deployment secrets listed in the next section. All workflows use Python 3.14 with `uv sync --frozen` and cached `uv` setup.
 
 - **Lint (Ruff)** (`lint-ruff.yml`), **Lint (Pyright)** (`lint-pyright.yml`), **Test (Pytest)** (`test-pytest.yml`): on push to `main`/`feat/**`/`fix/**` and PRs to `main`. Run `ruff format --check` + `ruff check` + the `import tcbot` check, `pyright`, and two Pytest passes respectively: a serial `pytest tests/ -q -m postgres` pass, then `pytest tests/ -q -m "not postgres" -n auto --cov=tcbot --cov-branch --cov-append`. Fail the PR subject to branch protection.
 - **Auto-Fix** (`auto-fix.yml`): same push/PR triggers plus weekly Monday 04:00 UTC and manual dispatch. Runs `ruff format` + `ruff check --fix`; outside a PR it force-pushes the fixed `auto-fix/ruff` branch and opens a PR, on a PR it comments the local fix commands instead. Needs `contents: write` + `pull-requests: write`.
@@ -297,12 +297,12 @@ git diff --check
 
 ## Documentation
 
-- [Setup guide](docs/getting-started/setup.md): local, Docker, and hosted setup with the full environment reference.
-- [Architecture map](docs/architecture/repository-map.md): startup flow, package ownership, and service boundaries.
-- [Module breakdown](docs/architecture/modules.md): command ownership and handler registration.
-- [Database layer](docs/architecture/database.md): tables, helpers, and indexes.
-- [Flow overview](docs/features/flow-overview.md): user-visible moderation, appeal, and role flows.
-- [Pipelines](docs/pipelines/banning.md): every flow diagram, starting with the full system and ban flow.
+- [Setup guide](docs/getting-started/setup.md) and [Configuration reference](docs/reference/configuration.md).
+- [Architecture overview](docs/architecture/overview.md): startup flow, package ownership, and service boundaries.
+- [Database layer](docs/architecture/database.md) and [Security model](docs/architecture/security.md).
+- [Flow index](docs/flows/README.md): 18 full domain flows, starting with the [system spine](docs/flows/system.md).
+- [Commands](docs/reference/commands.md) and [Callbacks](docs/reference/callbacks.md): stable references.
+- [Documentation index](docs/README.md): the complete map.
 - [Project guide](AGENTS.md): contributor and maintainer rules.
 
 ## Repo Activity

@@ -5,7 +5,7 @@ cover linting, type checking, tests, security scanning, automated fixes,
 dependency updates, and the 24/7 bot runner.
 
 Related pages: [setup](../getting-started/setup.md) and
-[utilities](../architecture/utilities.md).
+[runtime mechanics](../architecture/runtime.md).
 
 ## Workflow inventory
 

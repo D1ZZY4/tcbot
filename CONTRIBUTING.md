@@ -31,17 +31,17 @@ Suggested reading path:
 
 1. [`README.md`](README.md) for the project overview and setup.
 2. [`docs/README.md`](docs/README.md) as the index, then the
-   [repository map](docs/architecture/repository-map.md) for structure,
+   [architecture overview](docs/architecture/overview.md) for structure,
    ownership, and startup flow.
-3. The [flow overview](docs/features/flow-overview.md) and the
-   [pipelines folder](docs/pipelines/banning.md) for every flow diagram, plus
-   the feature guide for the area you plan to change (moderation, roles,
-   appeals, or statistics).
+3. The [flow index](docs/flows/README.md) and the page for your domain, such as
+   [banning](docs/flows/banning.md), [appeals](docs/flows/appeals.md),
+   [connection](docs/flows/connection.md), or
+   [statistics](docs/flows/statistics.md), for every diagram.
 4. [`CHANGELOG.md`](CHANGELOG.md) for what changed recently and why.
 
 The index also covers operations (backup, CI/CD, performance) and
-stable references (keyboard styles). Reading it first is faster than
-reverse-engineering the codebase.
+stable references (commands, callbacks, configuration). Reading it first is
+faster than reverse-engineering the codebase.
 
 ## Ways to Contribute
 
@@ -69,8 +69,9 @@ reverse-engineering the codebase.
 - **Never commit secrets.** No `config.env`, tokens, passwords, database
   URIs, webhook secrets, or private chat IDs. Not in code, not in logs,
   not in screenshots.
-- **Keep bot messages localizable** and in MarkdownV2 parse mode (never
-  HTML), with user-provided text escaped. User-facing wording belongs in
+- **Keep bot messages localizable** and rich, with user-provided text escaped.
+  There is no parse mode and no MarkdownV2 fallback path; formatting belongs
+  in the `messages/` helpers. User-facing wording belongs in
   `i18n/<locale>/*.toml`, never hardcoded in Python (audit logs, staff
   operational messages, and infra error reports are the only sanctioned
   exceptions); see the internationalization rules in

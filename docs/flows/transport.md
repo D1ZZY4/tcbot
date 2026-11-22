@@ -1,0 +1,256 @@
+# Rich message transport
+
+This page documents the rich-only message path: how every user-facing payload
+is assembled, sent, edited, answered, and logged, and exactly when an inline
+keyboard is kept instead of being converted to rich buttons. Callback names and
+state constants are in [reference/callbacks.md](../reference/callbacks.md).
+
+## Payload shape
+
+`modules/helper/messages/rich_msg.py` owns payload assembly and sends.
+`html_message(*blocks, rtl=False, skip_entity_detection=False)` returns a
+dictionary with `html` as the newline-joined non-empty blocks. It adds `is_rtl`
+and `skip_entity_detection` only when requested. `blocks_message(blocks)` returns
+`{"blocks": blocks}` for callers that supply explicit block objects.
+
+`_message_with_buttons(message, reply_markup)` converts the markup with
+`keyboard_rows()` and, when rows exist and `message["html"]` is a string,
+appends the rows to the HTML with a newline. It returns `(payload, embedded)`.
+The send and edit helpers add `reply_markup` to the API call only when
+`embedded` is false.
+
+| Field | Set by | Meaning |
+|---|---|---|
+| `html` | `html_message`, `_message_with_buttons` | Newline-joined rich HTML, including any converted `<tg-button-row>` blocks. |
+| `is_rtl` | `html_message(rtl=True)` | Right-to-left layout hint. |
+| `skip_entity_detection` | `html_message(skip_entity_detection=True)` | Disable automatic entity detection. |
+| `blocks` | `blocks_message(blocks)` | Explicit block payload; buttons are not embedded into it. |
+| `rich_message` | `send_rich`, `edit_rich` | API key carrying the payload above. |
+| `reply_markup` | `send_rich`, `edit_rich` | Inline keyboard kept as fallback when conversion did not embed it. |
+
+## Send and reply
+
+```mermaid
+flowchart TD
+    CALL[reply_rich or send_rich] --> BUILT[html_message payload]
+    BUILT --> CONVERT{keyboard_rows returns rows and html is a string?}
+    CONVERT -->|yes| EMBED[Append tg-button-row markup to html]
+    CONVERT -->|no| INLINE[Keep reply_markup as inline keyboard]
+    EMBED --> API[Bot.do_api_request sendRichMessage]
+    INLINE --> API
+    API --> MSG[Message returned by send_rich]
+    REPLY[reply_rich] --> NORICH{get_bot is a real PTB Bot with do_api_request?}
+    NORICH -->|no| PLAIN[msg.reply_text fallback for test doubles]
+    NORICH -->|yes| SEND[send_rich with chat id and reply_to_message_id]
+    SEND -->|exception| LOG[log.debug log_label]
+```
+
+| Helper | Signature summary | Returns |
+|---|---|---|
+| `send_rich` | `send_rich(bot, chat_id, message, *, reply_markup=None, message_thread_id=None, disable_notification=None, reply_to_message_id=None)` | `Message` |
+| `reply_rich` | `reply_rich(msg, text, *, log_label="reply", parse_mode=None, **kwargs)` | `None` |
+| `html_message` | `html_message(*blocks, rtl=False, skip_entity_detection=False)` | payload dictionary |
+| `blocks_message` | `blocks_message(blocks)` | payload dictionary |
+
+`reply_rich` is the single fire-and-forget reply owner for commands and flows.
+It reads the bot through `msg.get_bot()`; if that is not a PTB `Bot`, it falls
+back to `msg.reply_text(text, **kwargs)` for lightweight test doubles.
+`parse_mode` is accepted for call-site compatibility and discarded with
+`_ = parse_mode`. `send_rich` raises `RuntimeError` when the bot has no
+`do_api_request` support.
+
+## Edits
+
+```mermaid
+flowchart TD
+    CALL[safe_edit, safe_edit_cb or safe_edit_message] --> READY{Real PTB Bot with chat and message id?}
+    READY -->|no| PTB[PTB edit_text or edit_message_text fallback]
+    READY -->|yes| RICH[edit_rich with html_message payload]
+    PTB --> BAD{BadRequest in _IGNORED?}
+    RICH --> BAD
+    BAD -->|yes| IGNORE[Return silently]
+    BAD -->|no| LEVEL[Log at log_level with log_label]
+    PTB --> CATCH{catch_all enabled?}
+    RICH --> CATCH
+    CATCH -->|no| RAISE[Re-raise]
+    CATCH -->|yes| LEVEL
+```
+
+| Helper | Signature summary | Notes |
+|---|---|---|
+| `edit_rich` | `edit_rich(bot, chat_id, message_id, message, *, reply_markup=None)` | Calls `do_api_request("editMessageText", ...)` and returns `Message`. Raises `RuntimeError` without `do_api_request`. |
+| `safe_edit` | `safe_edit(msg, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits a `Message`; falls back to `msg.edit_text`. |
+| `safe_edit_cb` | `safe_edit_cb(q, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits `q.message`; falls back to `q.edit_message_text`. |
+| `safe_edit_message` | `safe_edit_message(bot, chat_id, message_id, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits by id; falls back to `bot.edit_message_text`. |
+| `cb_error_edit` | `cb_error_edit(q, text, *, log_label, parse_mode=None, log_level="debug")` | `safe_edit_cb` with `reply_markup=None` and `catch_all=True`. |
+| `clear_markup_cb` | `clear_markup_cb(q)` | Removes the inline keyboard only; keeps `_IGNORED` BadRequests silent. |
+
+`_IGNORED` contains `"message is not modified"`, `"message to edit not found"`,
+and `"chat not found"`. `_edit_via()` swallows those `BadRequest`s, re-raises
+other failures unless `catch_all=True`, and logs otherwise. `parse_mode` is
+accepted and ignored by the safe helpers.
+
+## Inline keyboard to rich buttons
+
+`modules/helper/messages/rich_link.py` owns `keyboard_rows(reply_markup)` and
+`keyboard_button(cell)`. `keyboard_rows` is all-or-nothing: one unmappable cell
+makes the whole keyboard stay inline. `_markup_dict()` accepts a dict directly
+or calls `to_dict()` on a PTB markup object.
+
+```mermaid
+flowchart TD
+    MARKUP[reply_markup] --> DICT[_markup_dict]
+    DICT --> CELLS{inline_keyboard list present and non-empty?}
+    CELLS -->|no| INLINE[Keep inline keyboard]
+    CELLS -->|yes| EACH[For each cell: keyboard_button]
+    EACH --> TEXT{text is a string?}
+    TEXT -->|no| INLINE
+    TEXT -->|yes| DATA{callback_data present?}
+    DATA -->|yes| SIZE{len data UTF-8 is at most 64 bytes?}
+    SIZE -->|no| INLINE
+    SIZE -->|yes| RICH[tg-button type callback_data]
+    DATA -->|no| URL{url present?}
+    URL -->|yes| RICHURL[tg-button type url]
+    URL -->|no| INLINE
+    RICH --> ROW[button_row with align left center or right]
+    RICHURL --> ROW
+    ROW --> HTML[Embed rows in html]
+```
+
+Before the button rows, `_message_with_buttons()` inserts a divider unless the
+HTML already ends with one, so the last content line never sits flush against
+the keyboard. That separator is added only when buttons are embedded.
+
+The rich button tags are `<tg-button ...>label</tg-button>` inside
+`<tg-button-row align="...">`. `button()` in `rich_link.py` can emit callback,
+url, copy-text, Web App, login URL, three switch-inline-query variants, and
+disabled buttons for direct rich callers.
+
+| Condition | Result |
+|---|---|
+| `callback_data` longer than 64 bytes (`_CALLBACK_MAX_BYTES = 64`) | Whole keyboard stays inline. |
+| Cell with `web_app`, `login_url`, `switch_inline_query*`, `copy_text`, or `disabled` | `keyboard_button()` returns `None`; whole keyboard stays inline. |
+| Cell without string `text`, or with neither `callback_data` nor `url` | `keyboard_button()` returns `None`; whole keyboard stays inline. |
+| Unsupported PTB style value | Style is dropped to `None`; the button still converts. |
+| Payload has `blocks` rather than `html` | `_message_with_buttons()` does not embed; `reply_markup` stays inline. |
+| No markup at all | No buttons in either representation. |
+
+Accepted PTB styles are `primary`, `success`, `danger`, and `link`. Friendly
+names map as `default` to empty, `blue` to `primary`, `green` to `success`, and
+`red` to `danger`. Rows hold up to eight buttons; an unknown alignment is
+ignored. Which style each button uses is a semantic decision documented in
+[Buttons](../reference/buttons.md).
+
+## Multiline text to rich blocks
+
+Rich HTML collapses plain newline characters, so a catalog string or a view
+built with `"\n".join(lines)` must be grouped into real blocks before sending.
+`messages/rich_text.py::blocks()` owns that conversion:
+
+| Input lines | Rich output |
+|---|---|
+| Consecutive `` `/command` `` lines, with or without `(alias: ...)` | A two-column table with Command and Alias or Details headers. |
+| `- ...` | A rich bullet list. |
+| `1. ...` | A rich ordered list. |
+| Other lines, separated by blank lines | Paragraphs. |
+| Already-structured markup | Returned verbatim, so owning renderers keep their tables and lists. |
+| A single plain line | Returned verbatim, preserving short notices exactly. |
+
+Help sections use this conversion, so the Admin Commands & Aliases section is
+a table headed by the module name rather than one long bullet. Stats and check
+detail views apply the same helper to their assembled text.
+
+Key-value cards use richer structure directly. The ban detail card is an `h3`
+heading, a divider, and a compact striped table whose cells are marked raw so
+mentions and code spans stay live. That keeps identity, reason, ban id, and
+date scannable without a run of bullets. The appeal instruction prompt uses an
+`h2` heading, a rich checklist for its three required sections, and a
+preformatted example block.
+
+## Callback answers
+
+| Helper | Behavior |
+|---|---|
+| `answer_ack(q)` | `q.answer()` with no text; never raises. |
+| `answer_alert(q, text)` | `q.answer(text, show_alert=True)`; never raises. |
+| `answer_and_edit(q, text, **kwargs)` | `q.answer()` and `safe_edit_cb()` in one `asyncio.gather(..., return_exceptions=True)`. |
+| `ack_and_render(q, data_coro)` | `q.answer()` parallel to a data coroutine returning `(text, markup)`, then `safe_edit_cb()`. |
+| `cb_error_edit(q, text, *, log_label, ...)` | Ack-style replacement of the message with a notice and no keyboard. |
+| `clear_markup_cb(q)` | `q.edit_message_reply_markup(reply_markup=None)` only. |
+
+Callback answers are plain text and have no rich equivalent. Handlers call
+`await q.answer()` before visible work; the shared answer helpers are used where
+the call site needs either a silent ack or an alert. `callback_args`,
+`callback_args_optional`, and `callback_numbers` in `rich_edit.py` split `q.data`
+on `:` and return `None` on malformed payloads.
+
+## Parse mode
+
+No parse mode is selected anywhere in the application. `reply_rich`,
+`safe_edit`, `safe_edit_cb`, `safe_edit_message`, and `cb_error_edit` accept a
+`parse_mode` argument and discard it. Direct PTB fallback calls pass no parse
+mode; some appeal call sites pass `parse_mode=None` explicitly. There is no
+application-level default parse-mode setting in `__main__.py`.
+
+User-facing wording comes from `t()` in `utils/i18n.py`, which owns the `Safe`
+marker and the shared markup helpers `esc`, `bold`, `italic`, `underline`,
+`strike`, `code`, `pre`, `link`, `user_ref`, and `safe_username`. Rich HTML
+escaping for button labels and attributes is `esc()` in `rich_style.py`, backed
+by `html.escape`. The richer formatting primitives live in `rich_format.py`
+(`heading`, `paragraph`, `quote`, `code`, `pre`, `highlight`, `code_block`,
+`footnote`, `footnote_ref`, `divider`), `rich_list.py` (`bullet_list`,
+`ordered_list`, `checklist`, `details`), `rich_table.py` (`table`), and
+`rich_media.py` (`photo`, `video`, `slideshow`, `proof_slideshow`, `collage`).
+`rich_text.py` exposes only `style(text)`, which returns text unchanged because
+rich messages carry their own markup.
+
+## Audit logs and deep links
+
+`modules/helper/messages/audit_logs.py` owns `LogBuilder`, a fluent builder with
+`field`, `code_field`, `mention_field`, `link_field`, `raw`, `section`, `date`,
+and `build`. `send_log(bot, text, **kwargs)` in `rich_edit.py` posts to `cfg.logs`
+(chat and thread) through `send_rich`; it falls back to `bot.send_message` for a
+non-rich-ready bot.
+
+| Builder group | Names |
+|---|---|
+| Ban and proof | `ban_log`, `ban_update_log`, `proof_caption_new`, `proof_caption_update`, `unban_log` |
+| Kick, mute, warn | `kick_log`, `mute_log`, `unmute_log`, `warn_log`, `unwarn_log`, `resetwarns_log` |
+| Appeals | `appeal_received_log`, `appeal_submitted_log`, `appeal_approved_edit`, `appeal_rejected_edit`, `appeal_unban_log` |
+| Roles | `promoted`, `demoted`, `ownership_transferred`, `promote_request_log`, `promote_approved_log`, `promote_rejected_log` |
+| Groups and broadcast | `group_connected_log`, `group_connection_rejected_log`, `group_disconnected_log`, `group_bot_removed_log`, `broadcast_log` |
+
+`modules/helper/messages/links.py` owns every link builder:
+
+| Function | Output |
+|---|---|
+| `chat_id_to_link_id(chat_id)` | Strip the `-100` supergroup prefix for a `t.me/c/` URL. |
+| `message_link(chat_id, message_id, thread_id=None)` | `https://t.me/c/<id>/<message_id>` plus `?thread=<id>` when provided. |
+| `appeal_deep_link(bot_username, ban_id)` | `https://t.me/<username>?start=appeal_<ban_id>`, or empty when the username is unknown. |
+| `resolve(bot, chat_id)` | Public username or invite link, cached for 300 s with a 5 s lookup timeout. |
+| `display(bot, chat_id)` | `resolve()` result, falling back to the numeric chat id. |
+| `forget(chat_id)`, `clear()` | Drop one cached link or every cached link. |
+
+A URL button is dropped when its link is empty: `additional_menu_btn()`,
+`group_start_btn()`, `checkme_ban_btn()`, `appeal_button_btn()`, and
+`join_ban_btn()` all omit that button rather than send a dead link.
+
+## Error reports
+
+`error_reporter.py` builds a rich payload with `build_error_report_payload()`
+using `rich_format.heading`, `rich_list.details`, `rich_list.bullet_list`,
+`rich_format.code`, and `rich_format.pre`. Every dynamic value passes through
+`_scrub_secrets()` before placement in the HTML. `_ship_throttled()` sends to
+the configured error destination with `send_rich`, capped at 20 reports per 60
+seconds and rolling the suppressed count into one summary.
+`send_to_owner()` sends the same rich payload to the owner DM through
+`send_rich`. Sentry is opt-in through `SENTRY_DSN` and uses the same redaction
+hook.
+
+## Transport tuning
+
+`utils/transport.py` owns the shared budgets: `HTTP_READ_TIMEOUT = 60`,
+`HTTP_WRITE_TIMEOUT = 30`, `HTTP_CONNECT_TIMEOUT = 30`,
+`HTTP_POOL_TIMEOUT = 15`, `TELEGRAM_LOOKUP_TIMEOUT = 3.0`,
+`TELEGRAM_ACTION_TIMEOUT = 20.0`, and `API_POOL_SIZE = 16`. The notification
+worker wraps its card edit in `asyncio.timeout(TELEGRAM_ACTION_TIMEOUT)`.

@@ -22,7 +22,7 @@ same turn:
   [`changelog-style.md`](changelog-style.md).
 - [`docs/README.md`](../../docs/README.md): if a new doc was added or the
   documentation structure changed, update the category index.
-- [`docs/architecture/repository-map.md`](../../docs/architecture/repository-map.md):
+- [`docs/architecture/overview.md`](../../docs/architecture/overview.md):
   if the repository tree changed.
 - Any related docs whose content is now stale or whose cross-references would
   break.

@@ -66,19 +66,20 @@ checkout, but vendor behavior and current APIs come from the documentation.
 
 All user-facing formatted messages are rich messages owned by the focused
 modules under `tcbot/modules/helper/messages/`: `rich_format.py` (headings,
-text, quotes, highlights, code, footnotes, dividers), `rich_style.py` (bold,
-italic, underline, strike, spoiler), `rich_list.py` (lists and details),
-`rich_table.py`, `rich_link.py` (links, mentions, and every rich button
-feature), and `rich_media.py` (photo, video, slideshow for proof, collage).
-`rich_text.py` owns the MarkdownV2 escape tables, the shared visual grammar,
-and the MarkdownV2-to-rich conversion; `rich_msg.py` and `rich_edit.py` own the
-PTB `do_api_request` transport with its MarkdownV2 fallback.
+text, quotes, highlights, code, footnotes, dividers), `rich_style.py` (HTML
+escaping and bold, italic, underline, strike, spoiler), `rich_list.py` (lists
+and details), `rich_table.py`, `rich_link.py` (links, ID-based mentions, and
+every rich button feature), and `rich_media.py` (photo, video, slideshow for
+proof, collage). `rich_text.py` exposes only `style(text)`, which returns rich
+text unchanged. `rich_msg.py` and `rich_edit.py` own the `do_api_request`
+transport; there is no parse mode and no MarkdownV2 fallback.
 
-- Route new sends and edits through `rich_edit.py` and `rich_text.py`,
-  which own the fallback for clients or Bot API servers without rich-message
-  support. All keyboards and inline buttons are rendered as rich buttons
-  through `rich_text.py`, with the inline keyboard kept for the
-  MarkdownV2 fallback.
+- Route new sends and edits through `rich_msg.py` (`send_rich`, `reply_rich`)
+  and `rich_edit.py` (`edit_rich` and the safe-edit helpers). Every send uses a
+  `rich_message` payload. Keyboard cells that cannot be expressed as rich
+  buttons keep their inline keyboard representation.
+- Shared markup helpers (`esc`, `bold`, `code`, `user_ref`, and the rest) and
+  localized wording come from `tcbot/utils/i18n.py`.
 - Plain notices and callback alerts stay unparsed; they are not rich messages.
 - Kurigram is MTProto-only and has no rich-message API. PTB remains the
   Telegram transport.
@@ -214,7 +215,7 @@ Current stack:
 │   │   │   │   ├── audit_logs.py    Audit-log builders
 │   │   │   │   ├── links.py         Telegram link builders (`t.me/c/...`, appeal deep links)
 │   │   │   │   ├── panels.py        Shared information and profile panels
-│   │   │   │   ├── rich_text.py  MarkdownV2 conversion and PTB transport
+│   │   │   │   ├── rich_text.py    Rich text passthrough (style)
 │   │   │   │   ├── rules.py         Rules rendering, hashing, and selected summaries
 │   │   │   │   └── replies.py       Localized reply functions and HelpEntry shape
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
@@ -278,11 +279,11 @@ Current stack:
 
 Core ownership rules:
 
-- Command handlers live in `tcbot/modules/`. See [`docs/architecture/modules.md`](docs/architecture/modules.md) for module boundaries.
-- Shared handler helpers live in `tcbot/modules/helper/`. See [`docs/architecture/helpers.md`](docs/architecture/helpers.md) for helper docs.
-- Conversation flows live in `tcbot/modules/helper/pipelines/` as one `*_flow.py` module each, split into a `*_flow/` package only when a flow outgrows the file budget. See [`docs/pipelines/banning.md`](docs/pipelines/banning.md) for the full system and ban flow and the other documents in that folder for each domain.
+- Command handlers live in `tcbot/modules/`. See [`docs/architecture/overview.md`](docs/architecture/overview.md) for module boundaries.
+- Shared handler helpers live in `tcbot/modules/helper/`. See [`docs/architecture/overview.md`](docs/architecture/overview.md#helper-package) for helper docs.
+- Conversation flows live in `tcbot/modules/helper/pipelines/` as one `*_flow.py` module each, split into a `*_flow/` package only when a flow outgrows the file budget. See [`docs/flows/README.md`](docs/flows/README.md) for the flow index, [`docs/flows/system.md`](docs/flows/system.md) for the system spine, and the per-domain pages such as [`docs/flows/banning.md`](docs/flows/banning.md) for each full flow.
 - Database access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files, or `*_db/` packages once split under the file budget. See [`docs/architecture/database.md`](docs/architecture/database.md) for database layer notes.
-- Runtime utilities live in `tcbot/utils/`. See [`docs/architecture/utilities.md`](docs/architecture/utilities.md) for utility docs.
+- Runtime utilities live in `tcbot/utils/`. See [`docs/architecture/runtime.md`](docs/architecture/runtime.md) for utility docs.
 
 ## Development Commands
 
@@ -373,9 +374,9 @@ this section is only a pointer.
 
 - Module, helper, flow, database, and utility boundaries:
   [`.agents/rules/code-style.md`](.agents/rules/code-style.md) and
-  [`docs/architecture/modules.md`](docs/architecture/modules.md).
+  [`docs/architecture/overview.md`](docs/architecture/overview.md).
 - Startup, transport, scheduler, and cache behavior:
-  [`docs/architecture/repository-map.md`](docs/architecture/repository-map.md)
+  [`docs/architecture/runtime.md`](docs/architecture/runtime.md)
   and [`docs/architecture/database.md`](docs/architecture/database.md).
 - Moderation authorization and role safety:
   [`.agents/rules/security-rules.md`](.agents/rules/security-rules.md).

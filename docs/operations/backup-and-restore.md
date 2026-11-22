@@ -7,7 +7,7 @@ tools.
 
 Related pages: [database layer](../architecture/database.md),
 [setup](../getting-started/setup.md), and
-[persistence](../pipelines/persistance.md).
+[runtime mechanics](../architecture/runtime.md).
 
 ## What must be backed up
 

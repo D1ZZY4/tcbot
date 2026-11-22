@@ -16,8 +16,10 @@ IDs, or raw private user data in any report or public discussion.
 
 ## Scope notes
 
-- `apscheduler==3.11.3` is pinned with an accepted CVE-2026-31072 exception
-  (see `CHANGELOG.md`). The scheduler stores its jobs in the `apscheduler_jobs`
+- APScheduler is declared as `apscheduler[sqlalchemy]>=3.11.3,<4` and the
+  lockfile resolves it to 3.11.3, which carries an accepted CVE-2026-31072
+  exception (see [`docs/releases/v6.2.0.md`](docs/releases/v6.2.0.md)). The
+  scheduler stores its jobs in the `apscheduler_jobs`
   table through `SQLAlchemyJobStore`, which serializes the job state with
   `pickle`. The table lives in the bot's own database, so the exposure is
   bounded by that database's write access: treat the database role as

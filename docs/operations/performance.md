@@ -2,12 +2,11 @@
 
 This page describes the patterns TCF Bot uses to stay responsive while serving
 many groups. It focuses on measured, bounded behavior rather than guarantees.
-The concurrency and cache mechanics are drawn in
-[rate limiting](../pipelines/ratelimit.md) and [cache](../pipelines/cache.md).
+The concurrency and cache mechanics are described in
+[runtime mechanics](../architecture/runtime.md).
 
-Related pages: [database layer](../architecture/database.md),
-[utilities](../architecture/utilities.md), and
-[statistics](../features/statistics.md).
+Related pages: [database layer](../architecture/database.md) and
+[statistics](../flows/statistics.md).
 
 ## Update processing
 
@@ -19,7 +18,7 @@ does not block the rest of the federation.
 The global rate-limit handler runs at handler group `-1`: one bucket for
 commands and one for callback presses, with the Owner exempt. Per-handler
 `ratelimiter()` tiers add a second, independent budget. See
-[rate limiting](../pipelines/ratelimit.md).
+[bounded dispatch and breakers](../architecture/runtime.md#bounded-dispatch-and-breakers).
 
 ## Bounded fan-out
 

@@ -1,8 +1,10 @@
 # Database layer
 
 This page documents the PostgreSQL persistence layer in `tcbot/database/`:
-schemas, tables, helpers, transactions, and caches. The decision and worker
-lifecycle is drawn in [persistence](../pipelines/persistance.md).
+schemas, the engine boundary, tables, schema objects, domain helpers, migrations,
+and cache. The decision and worker lifecycle is in
+[Persistence](../architecture/runtime.md) and the flow diagrams in
+[the system spine](../flows/system.md).
 
 ## Schemas
 
@@ -30,13 +32,12 @@ schema is created at startup for non-public values.
   circuit breaker and an `asyncio.timeout`. Every read and write goes through
   it, so a dead database fails fast for every caller.
 - `run_transaction(op)` runs a callback on one session; all statements commit
-  or roll back together. It already uses `db_call`, so callers must not nest
-  another one.
+  or roll back together. It already uses `db_call`, so callers must not nest another.
 - `read_connection()` is an autocommit read path.
-- A transient failure opens the breaker after five consecutive occurrences,
-  with one half-open probe after 60 seconds. Serialization failures,
-  deadlocks, lock refusals, and statement cancellations prove the server is
-  healthy and do not count toward the breaker.
+- The circuit opens after five consecutive transient failures and admits one
+  half-open probe after 60 seconds. Serialization failures, deadlocks, lock
+  refusals, and statement cancellations prove the server is healthy and do not
+  count toward the breaker. A saturated pool is a load condition, not a defect.
 
 Feature modules must not build SQLAlchemy statements. All table access stays
 in `*_db.py` helpers.
@@ -45,7 +46,7 @@ in `*_db.py` helpers.
 
 `tcbot/database/base/` declares the tables in domain modules and re-exports
 them through `__init__.py`. `SCHEMA_TABLES` is the authoritative ordered list
-that migrations apply. The groups are:
+that migrations apply.
 
 | Group | Representative tables |
 |---|---|
@@ -58,16 +59,23 @@ that migrations apply. The groups are:
 | Automation and broadcast | `automation_*`, `broadcast_campaigns`, `broadcast_targets`, `broadcast_attempts` |
 | Jobs and runtime | `scheduled_jobs`, `scheduled_job_runs`, `retention_policies`, `telegram_user_erasures`, `apscheduler_jobs`, `mtproto_state` |
 
-## Schema objects
+`documents.py` holds `TypedDict` row shapes and status `Literal` aliases.
+`types.py` holds `NewType` domain primitives such as `UserId` and `BanId`.
 
-`tcbot/database/schema/` holds the SQL that is deployed from files. The
-loader applies, in order, `views.sql`, `functions.sql`, `triggers.sql`,
-`policies.sql`, and `seed.sql`. Each file carries a `%SCHEMA%` placeholder, so
-the same SQL targets the deployment schema and the test schema. The statement
-splitter understands dollar-quoted function bodies and comments.
+## Schema objects and migrations
 
-The seed defines role priorities (owner 100, admin 80, developer 60,
-moderator 40), role permissions, and other reference data.
+`tcbot/database/schema/` holds the SQL deployed from files. The loader applies,
+in order, `views.sql`, `functions.sql`, `triggers.sql`, `policies.sql`, and
+`seed.sql`. Each file carries a `%SCHEMA%` placeholder. The statement splitter
+understands dollar-quoted function bodies, escape strings, and nested comments.
+The seed defines role priorities (owner 100, admin 80, developer 60, moderator
+40), permissions, and other reference data.
+
+`alembic/versions/` holds numbered revisions; the current head is `0013`.
+`database/migrations.py` applies them at startup under an advisory lock so two
+instances cannot migrate concurrently. A schema bootstrapped from metadata but
+missing `alembic_version` is stamped at the base revision before the normal
+upgrade. See [Backup and restore](../operations/backup-and-restore.md).
 
 ## Domain helpers
 
@@ -89,36 +97,25 @@ moderator 40), role permissions, and other reference data.
 | `scheduler/` | APScheduler wiring and scheduled maintenance jobs. |
 | `mtproto.py`, `mtproto_store.py` | Bot-token MTProto client and its PostgreSQL session store. |
 
-`documents.py` holds `TypedDict` row shapes and status `Literal` aliases.
-`types.py` holds `NewType` domain primitives such as `UserId` and `BanId`.
-
 ## Documents and status vocabulary
 
 `BanDoc` is the composed ban view: the decision in `moderation_actions` joined
-with its messages and appeal. Status values are `active`, `completed`,
-`revoked`, `expired`, `superseded`, and `failed`. Request statuses are
-`pending`, `approved`, `rejected`, `cancelled`, and `expired`.
+with its messages and appeal. Status values are `active`, `completed`, `revoked`,
+`expired`, `superseded`, and `failed`. Request statuses are `pending`, `approved`,
+`rejected`, `cancelled`, and `expired`.
 
-Enforcement use three tables: one row per run, one per target chat, and one
-per delivery attempt. The target trigger accepts only transitions from
-`in_progress` to `succeeded`, `skipped`, or `failed`; a retry is a failed row
-with a due deadline and never a return to `pending`.
-
-## Migrations
-
-`alembic/versions/` holds numbered revisions; the current head is `0013`.
-`database/migrations.py` applies them at startup under an advisory lock so two
-instances cannot migrate concurrently. A schema bootstrapped from metadata but
-missing `alembic_version` is stamped at the base revision before the normal
-upgrade. See [backup and restore](../operations/backup-and-restore.md).
+Enforcement uses three tables: one row per run, one per target chat, and one per
+delivery attempt. The target trigger accepts only `in_progress` to `succeeded`,
+`skipped`, or `failed`; a retry is a failed row with a due deadline and never a
+return to `pending`.
 
 ## Cache
 
-`database/cache/` implements the two-level cache. L1 is an in-process TTL
-cache; L2 is optional Redis under the `v2` namespace. A generation counter and
-a cache-wide epoch discard results fetched across an invalidation, and a
-FIFO mutation queue keeps writes, deletes, and clears ordered. Redis is never
-on the critical path: a failed L2 read is a miss and a failed write is logged.
+`database/cache/` implements the two-level cache. L1 is an in-process TTL cache;
+L2 is optional Redis under the `v2` namespace. A generation counter and a
+cache-wide epoch discard results fetched across an invalidation, and a FIFO
+mutation queue keeps writes, deletes, and clears ordered. Redis is never on the
+critical path: a failed L2 read is a miss and a failed write is logged.
 
 | Cache | Prefix | L1 TTL | L2 TTL |
 |---|---|---|---|
@@ -131,13 +128,12 @@ on the critical path: a failed L2 read is a miss and a failed write is logged.
 | Group locale | `glocale` | 300 s | 600 s |
 | Community locale | `clocale` | 300 s | 600 s |
 
-Role and owner reads fail closed. Enforcement reads pass `fresh=True` to
-bypass caches. See [cache](../pipelines/cache.md).
+Role and owner reads fail closed. Enforcement reads pass `fresh=True` to bypass
+caches. See [Runtime](runtime.md#cache-mechanics) for the invalidation guards.
 
 ## Validation hints
 
 - `tests/test_engine_client.py`, `tests/test_db_call_transport.py`, and
   `tests/test_postgres_circuit.py` cover the engine boundary.
 - `tests/test_schema_*.py` and `tests/test_migrations.py` cover schema objects.
-- Database-backed tests use the `test` schema and skip when no server is
-  configured.
+- Database-backed tests use the `test` schema and skip when no server is configured.
