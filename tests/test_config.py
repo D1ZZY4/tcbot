@@ -154,6 +154,15 @@ def test_non_positive_thread_id_is_dropped(
     assert loaded.logs == (-1001111111111, None)
 
 
+@pytest.mark.parametrize("raw", ["-1001111111111/abc", "-1001111111111/42/99"])
+def test_malformed_thread_keeps_the_chat(
+    monkeypatch: pytest.MonkeyPatch, raw: str
+) -> None:
+    """A bad thread segment must not disable an otherwise valid chat ID."""
+    loaded = _load(monkeypatch, LOGS=raw)
+    assert loaded.logs == (-1001111111111, None)
+
+
 def test_port_falls_back_to_default_for_invalid_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -321,6 +330,7 @@ def _clear_transport_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "REPLIT_OWNER",
         "REPLIT_APP_NAME",
         "REPLIT_IDENTITY",
+        "REPLIT_DEPLOYMENT",
     ):
         monkeypatch.delenv(key, raising=False)
 

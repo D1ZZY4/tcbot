@@ -135,7 +135,12 @@ def parse_chat_id(raw: str) -> tuple[int, int | None]:
         if "/" in raw:
             chat_str, thread_str = raw.split("/", 1)
             chat_id = int(chat_str)
-            thread_id = int(thread_str)
+            try:
+                thread_id = int(thread_str)
+            except ValueError:
+                # * A bad thread segment must not discard an otherwise valid
+                # * chat: the destination still works without a forum topic.
+                thread_id = 0
             if thread_id <= 0:
                 # * The value may name a private chat, so it stays out of
                 # * the log; the operator already knows which variable it is.
