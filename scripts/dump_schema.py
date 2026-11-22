@@ -32,8 +32,10 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 import psycopg
+from dotenv import find_dotenv, load_dotenv
 from psycopg import sql
 
 # * The directory the schema files live in.
@@ -80,8 +82,37 @@ def _store_version(path: Path) -> tuple[int, ...]:
     return tuple(int(part) for part in match.group(1).split("."))
 
 
+def _database_url(argument: str) -> str:
+    """Return the database URL, loading the local config when absent."""
+    if argument:
+        return argument.strip()
+    load_dotenv(find_dotenv("config.env") or find_dotenv(".env"))
+    url = os.environ.get("DATABASE_URL", "").strip()
+    if not url:
+        raise SystemExit(
+            "DATABASE_URL is required; pass it as an argument or set it in "
+            "the environment."
+        )
+    return url
+
+
 def _dump(url: str, schema: str) -> str:
-    """Return the schema-only dump of *schema* in *url*."""
+    """Return the schema-only dump of *schema* in *url*.
+
+    The password is passed through ``PGPASSWORD`` rather than the argument
+    vector, so it never appears in the process listing. It is also scrubbed
+    from any error text the dump produces.
+    """
+    parsed = urlsplit(url)
+    password = unquote(parsed.password) if parsed.password else None
+    user = f"{parsed.username}@" if parsed.username else ""
+    safe_netloc = user + parsed.netloc.rsplit("@", 1)[-1]
+    safe_url = urlunsplit(
+        (parsed.scheme, safe_netloc, parsed.path, parsed.query, parsed.fragment)
+    )
+    env = os.environ.copy()
+    if password:
+        env["PGPASSWORD"] = password
     command = [
         _pg_dump_binary(),
         "--schema-only",
@@ -89,11 +120,16 @@ def _dump(url: str, schema: str) -> str:
         "--no-owner",
         "--no-privileges",
         "--dbname",
-        url,
+        safe_url,
     ]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        command, capture_output=True, text=True, check=False, env=env
+    )
     if result.returncode != 0:
-        raise SystemExit(f"pg_dump failed: {result.stderr.strip()}")
+        detail = result.stderr.strip()
+        if password:
+            detail = detail.replace(password, "***")
+        raise SystemExit(f"pg_dump failed: {detail}")
     return result.stdout
 
 
@@ -288,15 +324,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--database-url",
-        default=os.environ.get("DATABASE_URL", ""),
+        default=None,
         help="the database to read the catalog from",
     )
     parser.add_argument("--schema", default="public", help="the schema to export")
     args = parser.parse_args()
-    if not args.database_url:
-        raise SystemExit("DATABASE_URL is required")
 
-    dump = _dump(args.database_url, args.schema)
+    dump = _dump(_database_url(args.database_url or ""), args.schema)
     grouped = _split(dump)
 
     _write(
