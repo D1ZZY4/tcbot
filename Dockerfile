@@ -11,6 +11,11 @@ COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
+# * `uv run` re-syncs the environment before executing. Without this, every
+# * verification step and the runtime command re-add the dev group that the
+# * syncs above deliberately exclude, shipping developer tooling to production.
+ENV UV_NO_DEV=1
+
 # Install dependencies first (layer-cached separately from source)
 # * The observability extra ships the Prometheus endpoint and the Sentry
 # * client. Both are optional in the code, but the image is the primary
@@ -44,4 +49,4 @@ RUN useradd --system --create-home --uid 10001 tcbot \
     && chown -R tcbot:tcbot /app
 USER tcbot
 
-CMD ["uv", "run", "--frozen", "python", "-m", "tcbot"]
+CMD ["uv", "run", "--frozen", "--extra", "observability", "python", "-m", "tcbot"]
