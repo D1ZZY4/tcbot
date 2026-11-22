@@ -125,7 +125,7 @@ def _section_buttons(
 
 
 def _module_text(name: str, overview: str, locale: str | None = None) -> str:
-    """Compose the module-overview MarkdownV2 body."""
+    """Compose the module-overview rich body."""
     return t(
         "help.module.body",
         locale,

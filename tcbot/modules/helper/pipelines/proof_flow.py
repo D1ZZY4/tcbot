@@ -90,7 +90,7 @@ class BuildProof:
         locale: str | None = None,
     ) -> str:
         """Proof-step prompt after reason was collected in-conversation."""
-        # * target_mention/extra_info must already be MarkdownV2-ready
+        # * target_mention/extra_info must already be rich-markup-safe
         # * (mention/code output from the single mute.py producer).
         suffix = Safe(f" {extra_info}") if extra_info else Safe("")
         return t(
@@ -113,7 +113,7 @@ class BuildProof:
         locale: str | None = None,
     ) -> str:
         """Proof-step prompt when an inline reason was already provided."""
-        # * Same MarkdownV2-ready contract as step_prompt above.
+        # * Same rich-markup-safe contract as step_prompt above.
         suffix = Safe(f" {extra_info}") if extra_info else Safe("")
         return t(
             "proof.prompt.noted",

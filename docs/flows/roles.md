@@ -70,9 +70,12 @@ so no second cleanup write is needed.
 ## Changing an existing role
 
 `/tcsetrole` (alias `/tcsr`) moves a staff member between tiers without a
-remove-then-add gap. It resolves the target with the same identity and origin
-guards as `/tcpromote`, then shows a picker containing only the tiers the executor
-may grant **except** the one already held. The same grant table applies:
+remove-then-add gap. It checks the federation origin and resolves the target
+with the shared executor-and-target lookup, refuses the Owner and already
+banned targets, then shows a picker containing only the tiers the executor
+may grant **except** the one already held. Unlike `/tcpromote`, it does not
+run the protected-identity and proven-bot probes at entry; rank checks and the
+ban guard still apply at the mutation point. The same grant table applies:
 
 | Executor | Roles offered for a change |
 |---|---|

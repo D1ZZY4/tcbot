@@ -360,7 +360,7 @@ async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def _repair_lines(runs: list[dict[str, object]], locale: str) -> str:
-    """Render the unsettled runs as one MarkdownV2 message."""
+    """Render the unsettled runs as one rich message."""
     lines = [t("maintenance.repair.header", locale, n=len(runs))]
     for run in runs:
         run_id = as_int(run.get("id"))

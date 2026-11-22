@@ -118,7 +118,7 @@ def _cooldown_remaining_h(rejected_at: datetime | None) -> int | None:
 def instruction_text(
     *, community_name: str, log_channel: str, locale: str | None
 ) -> str:
-    """Render the multi-line MarkdownV2 instruction prompt."""
+    """Render the multi-line rich instruction prompt."""
     log_handle = log_channel.lstrip("@")
     example = pre(
         t(
@@ -570,7 +570,7 @@ class AppealSubmitMixin(SubmitMessageMixin):
     def instruction_text(
         self, locale: str | None = None, log_display: str | None = None
     ) -> str:
-        """Multi-line MarkdownV2 instruction prompt."""
+        """Multi-line rich instruction prompt."""
         return instruction_text(
             community_name=self.community_name,
             log_channel=log_display or str(self.log_channel),

@@ -4,7 +4,7 @@ A rule set owns categories and immutable published versions. Staff edit a draft
 in the bot DM, publish it to the main channel, and members can acknowledge a
 version in the welcome message. Moderation flows can cite published rules
 through a shared picker. The full flow diagrams are in
-[the rules section of the flow reference](../reference/callbacks.md).
+[the rules flow](../flows/rules.md).
 
 ## Ownership
 

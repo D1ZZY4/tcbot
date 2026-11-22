@@ -248,7 +248,7 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
     text, proof_link = await build_ban_detail(ban, locale=locale)
     # * The detail card is a normal navigation, not a refusal: it keeps the
-    # * back keyboard and renders as MarkdownV2 like every other card.
+    # * back keyboard and renders as rich HTML like every other card.
     await answer_ack(q)
     await safe_edit_cb(
         q,

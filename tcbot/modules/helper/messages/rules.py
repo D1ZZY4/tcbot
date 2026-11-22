@@ -95,7 +95,7 @@ def render_channel(
     """Render channel parts as ``(category, part_index, text)``.
 
     Every value is escaped here and never by the editor, so staff cannot
-    inject MarkdownV2. ``published_at`` is a raw timestamp; ``fmt_dt_raw``
+    inject markup. ``published_at`` is a raw timestamp; ``fmt_dt_raw``
     produces it and this renderer owns the escaping. Each part carries the
     final text whose hash the publication slot records.
     """
@@ -244,7 +244,7 @@ def rich_category_view(
     """Build a rich-message category view with a real table.
 
     The read-only category menu is the one surface where a table is clearly
-    better than a flat MarkdownV2 list: each rule has a number, a title, and
+    better than a flat list: each rule has a number, a title, and
     a body. It is sent as an InputRichMessage through PTB.
     """
     heading_text = t("rules.menu.category", locale, category=category, plain=True)

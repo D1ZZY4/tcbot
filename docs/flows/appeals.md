@@ -208,7 +208,7 @@ flowchart TD
     TICK --> CB{Telegram circuit state}
     CB -->|OPEN| PAUSE[Skip the tick and keep the retry budget]
     CB -->|HALF_OPEN| ONE[Claim one task only]
-    CB -->|CLOSED| TEN[Claim up to 10 tasks]
+    CB -->|CLOSED| TEN[Claim tasks up to the circuit admission headroom]
     ONE --> CLAIM[claim_due_tasks with retry_after five minutes]
     TEN --> CLAIM
     CLAIM --> LOAD[load_task_action]

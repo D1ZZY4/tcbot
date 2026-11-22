@@ -192,6 +192,9 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Documentation
 
+- **The rules feature guide links to the rules flow diagrams** (`docs/features/rules.md`): the "full flow diagrams" link pointed at the callback registry, which has no diagrams. It now targets the rules flow page.
+- **Flow guides match the shipped role and notification behavior** (`docs/flows/roles.md`, `docs/flows/appeals.md`): `/tcsetrole` is no longer described as running entry identity probes it does not perform, and the review-card claim limit is described as the circuit admission headroom instead of a fixed ten tasks.
+- **Source comments describe the rich message transport** (`tcbot/utils/__init__.py`, `tcbot/modules/`): docstrings and comments that still named MarkdownV2 for prompts, cards, captions, and formatters now describe the rich HTML path actually in use.
 - **Architecture and agent guidance matches the shipped system** (`AGENTS.md`, `.agents/rules/code-style.md`, `docs/architecture/*.md`, `docs/flows/connection.md`): the rich send and edit transports, rich-HTML rendering, locale resolver ownership, circuit behavior, capability checks, and the owner of `on_bot_added` are described as implemented.
 - **The Unreleased history is deduplicated** (`CHANGELOG.md`): superseded, duplicated, and already-published entries were removed so the section reflects only pending changes.
 - **Rules documentation matches the editor** (`docs/flows/rules.md`, `docs/reference/buttons.md`): the deep-link entry, content-aware panel buttons, preview navigation, and slug derivation are described as implemented.
