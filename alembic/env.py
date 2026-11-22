@@ -88,14 +88,21 @@ target_metadata = metadata
 
 def run_migrations_offline() -> None:
     """Emit the migration SQL without connecting to a database."""
+    schema = _db_schema()
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        version_table_schema=schema,
     )
     with context.begin_transaction():
+        # * Online mode pins the search path through the connection options.
+        # * Offline mode has no connection, so emit the same pin as SQL or the
+        # * generated script would create objects in the server default
+        # * schema while the version table lives in the configured one.
+        context.execute(f"SET search_path TO {schema}")
         context.run_migrations()
 
 
