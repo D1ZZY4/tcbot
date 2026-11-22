@@ -177,6 +177,15 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
             "admitting calls.",
             action_id,
         )
+        # * A rejected slot consumes the claim's attempt without any Telegram
+        # * call. Under a flapping breaker the row would otherwise stay pending
+        # * forever while each claim advanced its counter past the ceiling.
+        if attempts >= _MAX_ATTEMPTS:
+            await _complete(
+                state="failed",
+                error="Telegram circuit never admitted the card edit",
+                expected_attempts=attempts,
+            )
         return
     try:
         async with asyncio.timeout(TELEGRAM_ACTION_TIMEOUT):
