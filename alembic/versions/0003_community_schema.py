@@ -1063,6 +1063,24 @@ def _import_moderation_history(
         )
 
 
+def _schema_of(bind) -> str:
+    """Return the first schema of the connection's search path.
+
+    ``current_schema()`` is deliberately avoided: it returns the first path
+    entry that exists, so a misconfigured path would silently target the next
+    schema instead of failing.
+    """
+    raw = bind.exec_driver_sql("SHOW search_path").scalar()
+    first = str(raw or "").split(",")[0].strip().strip('"')
+    if not first or first.startswith("$"):
+        first = str(
+            bind.exec_driver_sql("SELECT current_schema()").scalar() or "public"
+        )
+    # * The value is inlined into a DO body, where bind parameters are not
+    # * accepted, so escape it as a SQL string literal.
+    return first.replace("'", "''")
+
+
 def _drop_shifted_runtime_tables(bind) -> None:
     """Replace the runtime tables whose shape the migration cannot keep.
 
@@ -1073,15 +1091,16 @@ def _drop_shifted_runtime_tables(bind) -> None:
     the rows the lease functions read, and it holds nothing but a
     session the bot can obtain again, so it is replaced instead.
     """
+    schema = _schema_of(bind)
     bind.execute(
         text(
-            """
+            f"""
             DO $do$
             BEGIN
                 IF to_regclass('mtproto_state') IS NOT NULL
                    AND NOT EXISTS (
                        SELECT 1 FROM information_schema.columns
-                       WHERE table_schema = current_schema()
+                       WHERE table_schema = '{schema}'
                          AND table_name = 'mtproto_state'
                          AND column_name = 'value'
                    )
@@ -1102,6 +1121,7 @@ def _rename_legacy_table(bind, legacy: str, renamed: str) -> None:
     renamed table still holds the names the new table needs.
     """
     bind.execute(text(f"ALTER TABLE IF EXISTS {legacy} RENAME TO {renamed}"))
+    schema = _schema_of(bind)
     bind.execute(
         text(
             f"""
@@ -1114,7 +1134,7 @@ def _rename_legacy_table(bind, legacy: str, renamed: str) -> None:
                     FROM pg_constraint c
                     JOIN pg_class t ON t.oid = c.conrelid
                     JOIN pg_namespace n ON n.oid = t.relnamespace
-                    WHERE n.nspname = current_schema()
+                    WHERE n.nspname = '{schema}'
                       AND t.relname = '{renamed}'
                 LOOP
                     EXECUTE 'ALTER TABLE {renamed} RENAME CONSTRAINT '

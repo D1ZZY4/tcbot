@@ -16,6 +16,8 @@ not be stamped: a partial schema has to fail loudly in the migration.
 
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -67,6 +69,43 @@ def test_a_bootstrapped_schema_is_stamped_at_the_base_revision(
     migrations.stamp_bootstrap_schema(context, object(), _FakeScripts())  # type: ignore[arg-type]
 
     assert context.stamped == ["0001_initial"]
+
+
+def test_the_legacy_index_migration_skips_a_bootstrapped_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A metadata-built schema has no member_cache, so 0002 must be a no-op."""
+    path = (
+        Path(__file__).resolve().parent.parent
+        / "alembic/versions/0002_member_cache_sort_indexes.py"
+    )
+    spec = importlib.util.spec_from_file_location("legacy_0002", path)
+    assert spec is not None and spec.loader is not None
+    legacy = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(legacy)
+
+    created: list[tuple[Any, ...]] = []
+
+    class _Op:
+        def get_bind(self) -> object:
+            return object()
+
+        def create_index(self, *args: Any, **_kwargs: Any) -> None:
+            created.append(args)
+
+    class _Inspector:
+        def __init__(self, _bind: object) -> None:
+            pass
+
+        def has_table(self, name: str) -> bool:
+            return name == "member_cache" and False
+
+    monkeypatch.setattr(legacy.sa, "inspect", lambda bind: _Inspector(bind))
+    monkeypatch.setattr(legacy, "op", _Op())
+
+    legacy.upgrade()
+
+    assert created == []
 
 
 def test_a_stamped_database_is_left_alone(monkeypatch: pytest.MonkeyPatch) -> None:

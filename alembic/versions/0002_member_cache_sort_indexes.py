@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import sqlalchemy as sa
+
 from alembic import op
 
 if TYPE_CHECKING:
@@ -32,11 +34,14 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Create the two default-opclass sort indexes.
 
-    The creation is conditional: a database bootstrapped from the declared
-    metadata already carries the indexes, and a schema stamped at the base
-    revision by the migration bootstrap would otherwise fail on the
-    duplicate name.
+    A database bootstrapped from the declared metadata has no ``member_cache``
+    table at all: it is a legacy table dropped in 0003. ``IF NOT EXISTS`` only
+    suppresses a duplicate index name, not a missing table, so a schema
+    stamped at the base revision by the bootstrap would fail here. Skip the
+    legacy indexes when their table is absent.
     """
+    if not sa.inspect(op.get_bind()).has_table("member_cache"):
+        return
     op.create_index(
         "ix_member_cache_first_name_lower_sort",
         "member_cache",
@@ -54,6 +59,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Drop the two default-opclass sort indexes."""
+    """Drop the two default-opclass sort indexes when the legacy table exists."""
+    if not sa.inspect(op.get_bind()).has_table("member_cache"):
+        return
     op.drop_index("ix_member_cache_username_lower_sort", table_name="member_cache")
     op.drop_index("ix_member_cache_first_name_lower_sort", table_name="member_cache")

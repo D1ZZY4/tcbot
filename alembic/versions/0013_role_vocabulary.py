@@ -10,7 +10,9 @@ assignments, promotion requests, and permission grants. This revision maps
 every stored row to the final vocabulary, resolving an active duplicate in
 favour of the final role before renaming, and removes the two stale
 definitions. The change is one way: downgrade does not reintroduce the old
-names.
+names. Take a database backup before upgrading a deployment that still stores
+founder or tester values, since those values cannot be reconstructed from the
+final vocabulary.
 
 Revision ID: 0013_role_vocabulary
 Revises: 0012_rules_publication
