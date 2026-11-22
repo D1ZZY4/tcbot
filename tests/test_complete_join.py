@@ -224,6 +224,32 @@ def test_an_exhausted_replay_queue_failure_is_surfaced(
     assert attempts == connected_flow._REPLAY_QUEUE_ATTEMPTS
 
 
+def test_a_failed_replay_undoes_the_activation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed queue write must not leave an active, unenforced group."""
+    monkeypatch.setattr(connected_flow, "_REPLAY_QUEUE_BACKOFF", 0.0)
+
+    async def _broken_queue(chat_id: int, user_ids: list[int], by: int | None) -> int:
+        raise RuntimeError("db down")
+
+    deactivated: list[int] = []
+
+    async def _deactivate(chat_id: int) -> bool:
+        deactivated.append(chat_id)
+        return True
+
+    _install_world(monkeypatch, ban_uids=[11, 22, 33])
+    monkeypatch.setattr(connected_flow, "_REPLAY_BUDGET_S", 0.0)
+    monkeypatch.setattr(db.enforcement_db, "queue_connect_replay", _broken_queue)
+    monkeypatch.setattr(db.groups_db, "deactivate_group", _deactivate)
+
+    with pytest.raises(RuntimeError, match="connect replay queue failed"):
+        asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", _FakeBot()))  # type: ignore[arg-type]
+
+    assert deactivated == [-100]
+
+
 def test_a_missing_welcome_permission_is_reported() -> None:
     """The new Bot API right is surfaced to the owner, not silently ignored."""
     bot = _FakeBot()

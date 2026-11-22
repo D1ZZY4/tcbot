@@ -862,6 +862,19 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
                             len(pending_user_ids),
                             pending_user_ids,
                         )
+                        # ! CRITICAL: undo the activation so a retry re-enters
+                        # ! complete_join() and replays. Leaving the group
+                        # ! active makes every retry report "already connected"
+                        # ! while federation decisions stay unenforced.
+                        try:
+                            await db.groups_db.deactivate_group(chat_id)
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception:
+                            log.exception(
+                                "Rollback of failed connection for chat %d failed",
+                                chat_id,
+                            )
                         raise RuntimeError(
                             f"connect replay queue failed for chat {chat_id} "
                             f"with {len(pending_user_ids)} pending user(s)"
