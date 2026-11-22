@@ -219,13 +219,17 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
         error_reporter.scrub_text(" | ".join(context_parts)) if context_parts else None
     )
     update_id = update.update_id if isinstance(update, Update) else "?"
+    # * Report with the context first: the log sink also fingerprints this
+    # * exception, so logging first would claim the dedupe slot and ship a
+    # * report without the context assembled above. The log record then
+    # * deduplicates to nothing while still reaching the console.
+    await error_reporter.report_exc(exc, context=context_str)
     log.error(
         "Unhandled exception for update %s%s",
         update_id,
         f" | {context_str}" if context_str else "",
         exc_info=exc,
     )
-    await error_reporter.report_exc(exc, context=context_str)
 
 
 def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], None]:
