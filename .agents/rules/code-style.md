@@ -216,12 +216,12 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 
 ### Templates and Placeholders
 
-- Write raw TOML template text without manually adding MarkdownV2 escape backslashes. The rendering engine escapes text at render time.
+- Write raw TOML template text without manually adding rich HTML escape sequences. The rendering engine escapes text at render time.
 - Keep one translation file per domain, such as `banning.toml` and `kicking.toml`.
 - Button labels live exactly once in `button.toml`.
 - Match the rendering mode to the actual send path.
 - Use `plain=True` for alerts and replies sent with `parse_mode=None`.
-- Use the default rendering mode for MarkdownV2 sends.
+- Use the default rendering mode for rich HTML sends.
 - A rendering-mode mismatch can expose raw escape characters or break message parsing.
 - Pass dynamic values as raw data so the rendering engine can escape them.
 - Use `Safe` only for explicitly preformatted markup produced by trusted formatting helpers such as `user_ref()`, `code()`, and `bold()`.
@@ -238,7 +238,7 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 - Keep `__help__` as the default-locale entry for tests and fallbacks.
 - The `help.py` module rebuilds content per request so topics, overviews, sections, and keyboards follow the requesting user's locale.
 - Section labels and scope bodies are shared through `common.toml` sections such as `[section]`, `[context]`, and `[target]`.
-- Section labels render as raw text, while section bodies render as MarkdownV2.
+- Section labels render as raw text, while section bodies render as rich HTML.
 - Use `who_section`, `where_section`, and `target_section` with the resolved locale.
 - Every locale-dependent keyboard builder in `buttons/` takes `locale` and reads button labels from `button.toml`.
 - `help_topics_kb` is locale-independent.

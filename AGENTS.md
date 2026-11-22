@@ -84,10 +84,11 @@ and details), `rich_table.py`, `rich_link.py` (links, ID-based mentions, and
 every rich button feature), and `rich_media.py` (photo, video, slideshow for
 proof, collage). `rich_text.py` exposes `style(text)`, a verbatim passthrough,
 and `blocks()`, which converts a rendered multiline fragment into rich block
-markup. `rich_msg.py` and `rich_edit.py` own the `do_api_request`
-transport; there is no parse mode and no MarkdownV2 fallback. Every send and
-edit must go through these helpers: a direct PTB `send_message`, `reply_text`,
-or `edit_message_text` cannot render rich HTML and exposes raw tags to users.
+markup. `rich_msg.py` owns the `do_api_request` send transport, while
+`rich_edit.py` uses PTB's native rich `edit_message_text` with `api_kwargs`;
+there is no parse mode and no MarkdownV2 fallback. Every send and edit must go
+through these helpers: a direct PTB `send_message`, `reply_text`, or
+`edit_message_text` cannot render rich HTML and exposes raw tags to users.
 
 - Route new sends and edits through `rich_msg.py` (`send_rich`, `reply_rich`)
   and `rich_edit.py` (`edit_rich` and the safe-edit helpers). Every send uses a
@@ -114,7 +115,7 @@ autonomously:
 4. **Design** the smallest modular change and centralize shared behavior in its
    owning helper or domain module. Do not create parallel utilities for logic
    that already has a project owner.
-5. **Implement** focused typed Python 3.14 code with MarkdownV2-safe output,
+5. **Implement** focused typed Python 3.14 code with rich-HTML-safe output,
    intentional comments, and explicit error handling.
 6. **Validate** targeted behavior, the full relevant checks, startup logs for
    runtime changes, and stale/dead/duplicate paths.
@@ -241,6 +242,7 @@ Current stack:
 │   │   ├── warns.py          /tcwarn command
 │   │   ├── appeals.py        /appeal flow
 │   │   ├── admins.py         Role commands (/tcpromote, /tcdemote, /transferowner, …)
+│   │   ├── rolechange.py     /tcsetrole: move existing staff between roles
 │   │   ├── language.py       /language command
 │   │   ├── connect.py        /tcconnect command
 │   │   ├── disconnecting.py  /tcdisconnect and /rmtc commands

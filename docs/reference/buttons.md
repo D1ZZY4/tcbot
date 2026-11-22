@@ -131,6 +131,7 @@ Skip button. Kick, mute, and warn allow Skip. Done and Skip claim the
 | Builder | Emits | Style |
 |---|---|---|
 | `promote_role_btn(target_id, roles, executor_id)` | `promo_role:<role>:<target>[:<executor>]` and `promo_role_cancel:...` | role buttons blue, Cancel red |
+| `role_change_btn(target, roles, current, executor_id)` | `role_change:<role>:<target>[:<executor>]` and `role_change_cancel:...` | role buttons blue, Cancel red |
 | `demote_confirm_btn(target_id, executor_id)` | `demote_confirm:<target>[:<executor>]` (red), `demote_cancel:...` (red) | mixed |
 | `promo_decision_btn(request_id)` | `promo_approve:<id>` (green), `promo_reject:<id>` (red) | mixed |
 
@@ -152,7 +153,8 @@ appeal; a legacy payload without the suffix falls back to the tapped message id.
 | Builder | Emits | Style |
 |---|---|---|
 | `picker_btn(items, selected)` | `rules_step:pick:<id>` (blue), `other` (none), `done` (green), `clear` (none), `cancel` (red) | mixed |
-| `editor_panel_btn` | `rules_edit_draft` (blue), `rules_preview` (blue), `rules_publish` (green), `rules_discard` (red), `rules_settings` (blue), Back + Close | mixed |
+| `editor_panel_btn(has_content)` | `rules_edit_draft` (blue), `rules_preview` (blue), `rules_settings` (blue), Close; adds `rules_publish` (green) and `rules_discard` (red) only when the draft has items | mixed |
+| `preview_btn` | Back to the editor panel + Close for the draft preview | mixed |
 | `categories_btn` | `rules_cat:<key>`, rename/up/down (blue), `rules_cat_del:<key>` (red), `rules_cat_add` (blue), Back + Close | mixed |
 | `items_btn` | `rules_item_add` (blue), Back + Close | mixed |
 | `confirm_btn(yes, no)` | destructive confirmation: Yes (red), No (red), Back + Close | mixed |
@@ -176,6 +178,8 @@ collision suffix stay within 64 bytes.
 | `stats_search_panel_btn` | `stats_search_cancel` | red |
 | `stats_search_results_btn` | Numbered hits, New Search (blue), Cancel (red) | mixed |
 | `paged_drill_btn`, `stats_list_btn` | Numbered grid (blue), `nav_row` (none), Back (green) | mixed |
+| `stats_list_nav_btn` | `nav_row` (Prev/Next), optional Search row, Back (green); no numbered buttons | mixed |
+| `stats_search_results_nav_btn` | New Search (blue), Back (green) | mixed |
 
 Item callbacks may carry a stable entity id so a list mutation between render
 and tap cannot show a different record. Legacy three-part callbacks still work.

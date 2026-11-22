@@ -259,6 +259,8 @@ new ban and `proof_caption_update` for a re-ban.
 - The proof conversation is per chat and per user, so simultaneous flows stay
   isolated.
 - A late command sent while a flush is already executing does not cancel the ban.
+- Other registered commands sent during proof collection pass through to their
+  own handlers; re-entering the ban command still ends the pending flow.
 
 ## Exact names
 

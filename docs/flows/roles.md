@@ -67,6 +67,32 @@ display-name upsert, then send the audit log and a DM in one bounded gather. The
 assignment revokes the role the target previously held in the same transaction,
 so no second cleanup write is needed.
 
+## Changing an existing role
+
+`/tcsetrole` (alias `/tcsr`) moves a staff member between tiers without a
+remove-then-add gap. It resolves the target with the same identity and origin
+guards as `/tcpromote`, then shows a picker containing only the tiers the executor
+may grant **except** the one already held. The same grant table applies:
+
+| Executor | Roles offered for a change |
+|---|---|
+| `owner` | `admin`, `developer`, `moderator` |
+| `admin` | `developer`, `moderator` |
+| anything else | none |
+
+`change_role_for_staff()` in `promote_flow.py` re-reads both roles fresh, refuses
+an Owner target, a role-less user, the role already held, a tier outside the grant
+table, and a target at or above the executor's rank. It also applies the banned
+target guard. `db.users_roles.change_role()` validates the destination against
+the three assignable tiers and delegates to the same one-transaction
+`_assign_role()` that `add_admin()` and `set_role()` use, so the revoked and new
+assignments land together. The Owner row is never revoked. Log and DM are sent
+in a bounded gather, best effort.
+
+The picker callbacks are `role_change:<role>:<target>[:<executor>]` and
+`role_change_cancel:<target>[:<executor>]`; the four-part forms bind the tap to
+the staff member who opened the prompt, and the executor is re-checked fresh.
+
 ## The Owner approval card
 
 `request_admin()` in `promote_flow.py` guards against a banned target, checks for

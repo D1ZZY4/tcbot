@@ -15,8 +15,9 @@ surface and fails closed when the lookup fails.
 
 ## Editor conversation
 
-`build_rules_conv()` in `rules_flow.py` drives the editor. The entry point is the
-`/tcrules` message in the moderator's private chat. One interactive state handles
+`build_rules_conv()` in `rules_flow.py` drives the editor. Entry points are the
+`/tcrules` message and the `/start tcrules` deep link used by the group's Open in
+PM button, both in the moderator's private chat. One interactive state handles
 every panel callback and text step; the pending step is stored in the
 conversation scope. A second state holds the discard confirmation.
 
@@ -25,11 +26,15 @@ conversation scope. A second state holds the discard confirmation.
 | `WAITING_EDITOR_MENU` | 0 | Callback or typed step | Add, rename, reorder, or delete categories; add items; preview; publish; show status. |
 | `WAITING_CONFIRM_DISCARD` | 5 | Yes or no callback | Delete the draft or leave it untouched. |
 
-The fallback callback `rules_step:cancel` ends the conversation without changing
-the draft. Input limits are title 200, body 3500, and URL 500 characters; a URL
-must start with `https://` or `http://`. Category slugs match
-`^[a-z0-9][a-z0-9._-]*$` and are capped at 40 characters so the longest callback
-stays inside Telegram's 64-byte limit.
+A stale moderation picker `rules_step:cancel` is answered and ignored so it
+cannot close an unrelated editor session; the editor exits through Close or the
+discard confirmation. Input limits are title 200, body 3500, and URL 500
+characters; a URL must start with `https://` or `http://`. Category slugs are derived by
+lowercasing the title and replacing runs of non-alphanumeric characters with a
+hyphen, then capped at 40 characters so the longest callback stays inside
+Telegram's 64-byte limit. The main panel is the editor root: it
+offers Close but no Back, and shows Publish and Discard only once the draft has
+items. Every sub-menu, including the preview, offers both Back and Close.
 
 ```mermaid
 flowchart TD
@@ -37,7 +42,7 @@ flowchart TD
     SET --> DRAFT[open_draft cloning published items]
     DRAFT --> PANEL[Editor panel with edit preview publish discard settings]
     PANEL -->|rules_edit_draft| CATS[Category list with CRUD callbacks]
-    PANEL -->|rules_preview| PREV[Render draft as channel would show it]
+    PANEL -->|rules_preview| PREV[Preview with Back and Close, editor stays open]
     PANEL -->|rules_publish| PUBLISH[publish_rules pipeline]
     PANEL -->|rules_settings| STATUS[Publication and acknowledgement status]
     PANEL -->|rules_discard| CONF{WAITING_CONFIRM_DISCARD}

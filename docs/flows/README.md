@@ -63,7 +63,7 @@ right page without opening all eighteen.
 | [Proof](proof.md) | shared by all four actions | proof sub-states | `<action>_done_proof`, `<action>_skip_proof` | `_evidence_uploads`, `_evidence_items` | session flush + archive |
 | [Appeals](appeals.md) | deep link, `#appeal`, review card | `WAITING_APPEAL` | `cancel_appeal`, `appeal_approve_*`, `appeal_reject_*` | `moderation_appeals`, notification outbox | notification worker, 5 attempts |
 | [Connection](connection.md) | `/tcconnect`, `MY_CHAT_MEMBER` | none | `tc_join`, `tc_cancel` | `connected_chats`, `join_requests`, replay runs | connect replay queue |
-| [Roles](roles.md) | `/tcpromote`, `/tcdemote`, `/transferowner` | none | `promo_role:*`, `demote_confirm:*`, `promo_approve:*` | `role_assignments`, `promotion_requests` | expiry job |
+| [Roles](roles.md) | `/tcpromote`, `/tcsetrole`, `/tcdemote`, `/transferowner` | none | `promo_role:*`, `role_change:*`, `demote_confirm:*`, `promo_approve:*` | `role_assignments`, `promotion_requests` | expiry job |
 | [Rules](rules.md) | `/tcrules`, `/rules` | `WAITING_EDITOR_MENU`, `WAITING_CONFIRM_DISCARD` | `rules_edit_draft`, `rules_publish`, `rules_ack:*` | `rule_*` tables | publication lease + reconciliation |
 | [Check and statistics](statistics.md) | `/checkme`, `/check`, `/tcstats` | none | `check_*`, `stats_*` | read-only across all domains | background identity/title refresh |
 

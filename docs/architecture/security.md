@@ -62,8 +62,10 @@ grants:
 | `rules.manage` | yes | no | no | yes |
 | `rules.view` | yes | yes | yes | yes |
 
-The direct `permission_only` uses are `rules.manage` on the rules editors and
-`rules.view` checked by the reason and rule flows.
+`rules.manage` and `rules.view` are enforced by direct
+`users_roles.has_permission()` calls in `rules_flow.py`, `reason_flow.py`, and
+`ban_rules_step.py`. The `permission_only` decorator is defined for callers that
+want a decorator form, but no current handler uses it.
 
 ## Executor and target checks
 

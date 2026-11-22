@@ -34,8 +34,8 @@ schema is created at startup for non-public values.
 - `run_transaction(op)` runs a callback on one session; all statements commit
   or roll back together. It already uses `db_call`, so callers must not nest another.
 - `read_connection()` is an autocommit read path.
-- The circuit opens after five consecutive transient failures and admits one
-  half-open probe after 60 seconds. Serialization failures, deadlocks, lock
+- The circuit opens after five transient failures within a window (successes in
+  CLOSED do not reset the count) and admits one half-open probe after 60 seconds. Serialization failures, deadlocks, lock
   refusals, and statement cancellations prove the server is healthy and do not
   count toward the breaker. A saturated pool is a load condition, not a defect.
 
@@ -92,7 +92,7 @@ upgrade. See [Backup and restore](../operations/backup-and-restore.md).
 | `notifications_db.py` | Durable review-card edit outbox. |
 | `rules_db/` | Drafts, categories, items, versions, publications, and runs. |
 | `erasure_db.py` | Queued account erasures. |
-| `settings_db.py` | Per-user and per-group locale preferences. |
+| `settings_db.py` | Per-user and community default locale preferences; group locale lives in `groups_db.py`. |
 | `pg_cron.py` | Optional pg_cron ownership of database-only jobs. |
 | `scheduler/` | APScheduler wiring and scheduled maintenance jobs. |
 | `mtproto.py`, `mtproto_store.py` | Bot-token MTProto client and its PostgreSQL session store. |

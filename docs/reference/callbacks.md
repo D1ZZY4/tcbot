@@ -67,6 +67,7 @@ whose `CallbackQueryHandler` pattern matches it.
 |---|---|---|
 | `promo_approve:<id>`, `promo_reject:<id>` | `buttons/admin.py::promo_decision_btn` | `admins.py`. |
 | `promo_role:<role>:<target_id>[:<executor_id>]` | `buttons/admin.py::promote_role_btn` | `admins.py`. |
+| `role_change:<role>:<target_id>[:<executor_id>]`, `role_change_cancel:<target_id>[:<executor_id>]` | `buttons/admin.py::role_change_btn` | `rolechange.py`; moves an existing staff member between tiers. |
 | `promo_role_cancel:<target_id>[:<executor_id>]` | `buttons/admin.py::promote_role_btn` | `admins.py`. |
 | `demote_confirm:<target_id>[:<executor_id>]` | `buttons/admin.py::demote_confirm_btn` | `admins.py`. |
 | `demote_cancel:<target_id>[:<executor_id>]` | `buttons/admin.py::demote_confirm_btn` | `admins.py`. |
@@ -95,8 +96,8 @@ two-part shapes remain valid.
 | `check_warns:<target>`, `check_warn_chat:<target>:<chat>:<page>` | Warning drill-downs. |
 | `check_kicks:<target>:<page>`, `check_mutes:<target>:<page>`, `check_appeals:<target>:<page>` | Event histories. |
 | `stats_main`, `stats_admins`, `stats_users:<page>`, `stats_chats:<page>`, `stats_bans:<page>` | Overview and lists. |
-| `stats_user_item`, `stats_chat_item`, `stats_ban_item` | Paged detail cards with a stable id segment. |
-| `stats_bans_search`, `stats_search_item`, `stats_search_back`, `stats_search_cancel` | Ban search. |
+| `stats_users:<page>`, `stats_chats:<page>`, `stats_bans:<page>` | Rich table pages; rows carry the details, so no per-item callbacks exist. |
+| `stats_bans_search`, `stats_search_back`, `stats_search_cancel` | Ban search; results are a table with New Search and Back. |
 
 ### Menus, help, and language
 

@@ -39,7 +39,7 @@ Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `PROOFS`, `API_ID`, an
 | `/tcwarn` (alias `/tcw`), `/tcunwarn`, `/warns`, `/resetwarns` | Per-group warnings; hitting the limit triggers an automatic federation ban. |
 | `/check`, `/checkme` | Ban-history lookup for a target or for yourself, with appeal links. |
 | `/tcconnect`, `/tcdisconnect`, `/rmtc`, `/tcgroups` | Connect or remove groups and list the federation roster. |
-| `/tcpromote`, `/tcdemote`, `/transferowner` | Manage Owner, Admin, Developer, and Moderator roles. |
+| `/tcpromote`, `/tcsetrole`, `/tcdemote`, `/transferowner` | Manage Owner, Admin, Developer, and Moderator roles, including changing an existing role. |
 | `/tcstats` | Federation statistics with drill-down views. |
 | `/tcrules`, `/rules` | Staff rule editor and the read-only community rules menu. |
 | `/tcpromoterequests`, `/tcpromotelist` | Submit an Admin promotion request and list the pending ones. |

@@ -77,18 +77,22 @@ flowchart TD
     MAIN --> USERS[stats_users 0 owner only]
     MAIN --> CHATS[stats_chats 0 staff only]
     MAIN --> BANS[stats_bans 0 staff only]
-    USERS --> USERITEM[stats_user_item page idx user_id]
-    CHATS --> CHATITEM[stats_chat_item page idx chat_id]
-    BANS --> BANITEM[stats_ban_item page idx ban_id]
+    USERS --> USERTABLE[table rows with profile dates]
+    CHATS --> CHATTABLE[table rows with id connector date]
+    BANS --> BANTABLE[table rows with id reason date]
     BANS --> SEARCH[stats_bans_search]
-    SEARCH --> SEARCHITEM[stats_search_item idx ban_id]
-    SEARCHITEM --> BACK[stats_search_back]
+    SEARCH --> SEARCHTABLE[table rows with full ban details]
+    SEARCHTABLE --> BACK[stats_search_back]
     SEARCH --> CANCEL[stats_search_cancel]
     STAFF --> MAINBACK[stats_main]
-    USERITEM --> MAINBACK
-    CHATITEM --> MAINBACK
-    BANITEM --> MAINBACK
+    USERTABLE --> MAINBACK
+    CHATTABLE --> MAINBACK
+    BANTABLE --> MAINBACK
 ```
+
+Each list is one rich table. A row carries the whole record, so there is no
+per-item detail card and no numbered drill-in buttons. The keyboard keeps only
+Prev/Next, the Search shortcut on bans, and Back.
 
 The overview gathers the owner id, role counts, active ban count, active group
 count, total users, and the viewer's owner status and effective role in one
@@ -101,14 +105,11 @@ live with a bounded lookup and a bounded fan-out.
 |---|---|---|
 | Overview | `stats_main` | `stats_flow.py::OverviewViews.main` |
 | Staff roster | `stats_admins` | `OverviewViews.staff_roster` |
-| Cached users | `stats_users:<page>` | `PeopleViews.users_list` |
-| User detail | `stats_user_item:<page>:<idx>[:<user_id>]` | `PeopleViews.user_detail` |
-| Connected groups | `stats_chats:<page>` | `ChatViews.chats_list` |
-| Group detail | `stats_chat_item:<page>:<idx>[:<chat_id>]` | `ChatViews.chat_detail` |
-| Active bans | `stats_bans:<page>` | `BanViews.bans_list` |
-| Ban detail | `stats_ban_item:<page>:<idx>[:<ban_id>]` | `BanViews.ban_detail` |
-| Ban search | `stats_bans_search` | `SearchViews.open_search`, `search_run`, `search_results` |
-| Search hit | `stats_search_item:<idx>[:<ban_id>]` | `SearchViews.search_detail` |
+| Cached users | `stats_users:<page>` | `PeopleViews.users_list` (User, ID, Username, First seen, Last seen) |
+| Connected groups | `stats_chats:<page>` | `ChatViews.chats_list` (Group, ID, Connected by, Date) |
+| Active bans | `stats_bans:<page>` | `BanViews.bans_list` (User, ID, Reason, Ban ID, Date) |
+| Ban search | `stats_bans_search` | `SearchViews.open_search`, `search_run`, `search_results` (User, ID, Reason, Ban ID) |
+| Search back | `stats_search_back` | `SearchViews.search_results` |
 
 `stats_main_btn(show_staff=..., show_users=...)` hides drill-down buttons when
 the viewer lacks the rank; the callbacks re-check rank fresh, so a crafted or
@@ -119,8 +120,8 @@ The ban search accepts a plain message only in private chat
 query calls `get_active_ban(int(query))`; a name query calls
 `users_cache.search_by_name(q, limit=_SEARCH_LIMIT)` and then
 `bans_db.active_bans_for_users(uids)`. `_SEARCH_LIMIT` is `30`. Results render as
-a numbered list with an explicit empty state. Search context is stored in
-`ctx.user_data` and cleared on exit.
+a rich table with an explicit empty state, and the keyboard offers New Search
+and Back. Search context is stored in `ctx.user_data` and cleared on exit.
 
 ## Pagination and navigation
 
@@ -147,15 +148,17 @@ sequenceDiagram
 | View family | Page size | Page callbacks |
 |---|---|---|
 | `/check` ban, appeal, warn, kick, mute lists | `_PAGE_SIZE = 5` in `check_flow.py` | `<prefix>:<page - 1>`, `<prefix>:<page + 1>` |
-| `/tcstats` users, groups, bans | `_PAGE_SIZE = 6` in `stats_flow.py` | Same `nav_row` shape |
-| `/tcstats` search results | `_SEARCH_LIMIT = 30` hits, no paging row | `stats_search_item:<idx>[:<ban_id>]` |
+| `/tcstats` users, groups, bans | `_PAGE_SIZE = 5` in `stats_flow.py` | Same `nav_row` shape |
+| `/tcstats` search results | `_SEARCH_LIMIT = 30` hits, no paging row | No item callbacks |
 
 `utils/pagination.py` owns `clamp_page(total, page, page_size)` and
 `paginate(items, page, page_size)`. `buttons/nav.py::nav_row(page, total_pages,
 cb_prefix, locale)` emits a previous button when `page > 0` and a next button
-when `page < total_pages - 1`. Item callbacks carry a stable identifier so a
-list mutation between render and tap cannot show a different record; legacy
-three-part callbacks keep working without that check.
+when `page < total_pages - 1`. `buttons/drills.py::stats_list_nav_btn` combines
+that row with the optional Search shortcut and Back; no numbered item callbacks
+are emitted. Telegram allows up to 32768 UTF-8 characters, 500 blocks, and 20
+table columns per rich message, so five rows of four or five short cells stay
+well inside the limit.
 
 Every drill-down ends with a back row: `check_main:<target_id>` for `/check`,
 `check_warns:<target_id>` for the warns-in-group list, and `stats_main` or
@@ -191,7 +194,7 @@ All panels are assembled as localized rich text and delivered through
 
 | Helper | Responsibility |
 |---|---|
-| `ban_info.build_ban_detail` | Full ban detail card plus proof link, reused by check ban detail, stats ban detail, and search detail. |
+| `ban_info.build_ban_detail` | Full ban detail card plus proof link, used by `/check` and `/checkme`. Stats ban rows show the key fields inline instead. |
 | `ban_info.build_ban_summary` | `/checkme` ban summary card and back navigation. |
 | `messages/panels.py::about_msg` | About page rendered from `about.page.*` catalog keys. |
 | `messages/panels.py::render_groups` | Group list, truncated at `_MAX_RENDER_CHARS = 3800` to stay under the Telegram text limit. |
@@ -202,11 +205,9 @@ Dynamic values are wrapped with `Safe()` only after passing through `code()`,
 ordinary placeholders. `Check` and `Stats` view builders return a
 `(text, InlineKeyboardMarkup)` pair; handlers never build text themselves.
 
-Group titles in stats detail views are verified in the background by
-`launch_group_title_refresh()`, owned by a `TaskTracker` and bounded by
-`TELEGRAM_LOOKUP_TIMEOUT`. Member detail fires an identity refresh through the
-`identity refresh` tracker so the view stays instant. `buttons/check.py` caps a
-group title in a warn button at `_WARN_GROUP_TITLE_MAX = 24` characters.
+Staff rows whose cached name is only a numeric fallback are resolved live with
+a bounded lookup so the roster stays readable. `buttons/check.py` caps a group
+title in a warn button at `_WARN_GROUP_TITLE_MAX = 24` characters.
 
 ## Access tiers
 
@@ -214,9 +215,9 @@ group title in a warn button at `_WARN_GROUP_TITLE_MAX = 24` characters.
 |---|---|---|
 | `/check`, `/checkme`, overview counts | Any user | No authorization decorator; only `THROTTLE_READ` and `log_execution`. |
 | `/checkme` detail and back callbacks | The ban must belong to the tapping user | `on_checkme_detail` and `on_checkme_back` compare `ban["target_user_id"]` with `q.from_user.id`. |
-| Stats staff panes (`stats_admins`, `stats_chats`, `stats_bans`, item and search callbacks) | Moderator or higher | `_require_staff_pane` calls `guards.staff_access(user_id, min_role="moderator")`. |
+| Stats staff panes (`stats_admins`, `stats_chats`, `stats_bans`, search callbacks) | Moderator or higher | `_require_staff_pane` calls `guards.staff_access(user_id, min_role="moderator")`. |
 | Stats free-text ban search | Moderator or higher | `_require_staff_input` calls the same gate and replies with a plain notice. |
-| Stats users pane (`stats_users`, `stats_user_item`) | Owner only | `_require_owner_list` calls `guards.staff_access(user_id, min_role="owner")`. |
+| Stats users pane (`stats_users:<page>`) | Owner only | `_require_owner_list` calls `guards.staff_access(user_id, min_role="owner")`. |
 
 `_pane_access()` treats `guards.StaffAccess.LOOKUP_FAILED` as a retry alert and
 fails closed; `guards.StaffAccess.DENIED` gets a staff-only or owner-only alert.
@@ -227,7 +228,7 @@ re-checks rank before it renders. See [Permissions](permissions.md).
 ## Edge cases
 
 - A degraded overview shows unavailable fields rather than zeros.
-- A stale page or search result is refused and shows an unavailable notice.
+- A page beyond the available range is clamped to the last page by `clamp_page`.
 - A failed background refresh leaves the cached value visible; it does not
   block the view.
 - Search is read-only and never exposes proof media directly, only a link.

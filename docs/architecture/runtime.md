@@ -12,8 +12,8 @@ dotted keys. `en-US` is the source of truth; missing keys fall back per key. The
 `id` alias resolves to `id-ID` for stored preferences and in-flight callbacks.
 
 `t(key, locale, **values)` substitutes keyword placeholders only. In rich mode
-literal text is HTML-escaped and the backtick code and asterisk bold mini-markup
-spans become `<code>` and `<b>`. `plain=True` keeps raw text for callback alerts
+literal text is HTML-escaped and the backtick code, asterisk bold, and tilde
+italic mini-markup spans become `<code>`, `<b>`, and `<i>`. `plain=True` keeps raw text for callback alerts
 that Telegram never parses. `Safe` marks preformatted fragments from helpers
 such as `user_ref()`, `code()`, and `bold()` so they pass through verbatim.
 Placeholders must be bare names with no format specifications or conversions,
@@ -21,9 +21,11 @@ and mini-markup spans must be balanced, unnested, and free of braces.
 
 `locale_for_update(update)` resolves once per handler: private chats use the
 sender, groups use the group locale, direct messages use `locale_for_user`, and
-updateless paths use `locale_for_chat`. `resolve_locale()` applies explicit
-precedence, then the context locale, then the community default, then `en-US`.
-Resolution never raises. See [Language](../features/language.md).
+updateless paths use `locale_for_chat`. These resolvers live in
+`modules/helper/locale.py`; `resolve_locale()` applies explicit precedence, then
+the chat-appropriate locale (the sender's in private chats, the group's in
+groups), then the community default, then `en-US`. Resolution never raises. See
+[Language](../features/language.md).
 
 ## Bounded dispatch and breakers
 

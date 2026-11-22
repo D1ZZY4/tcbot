@@ -82,6 +82,15 @@ Decorator order is fixed: `ratelimiter()` outermost, the required authorization
 guard second, and `log_execution` innermost. Message-event handlers are exempt
 from per-handler rate limits. Callback queries always call `q.answer()` first.
 
+A `ConversationHandler` owns an update only when one of its state handlers or
+fallbacks matches its `(chat, user)` key. Its command fallback is narrowed with
+`build_conversation_escape_filter()` from `utils/prefixes.py`: every registered
+command except the flow's own re-entry commands passes through to its own handler.
+A moderator who sends `/tcunban` during ban proof collection therefore unbans the
+target instead of silently cancelling the ban, while re-entering the same command
+still ends the previous flow. Commands a module adds must be listed in
+`_ALL_COMMANDS` so they escape as well.
+
 ## Authorization and target resolution
 
 Every moderation entry passes through the same chain. `guards.resolve_and_check()`
