@@ -23,9 +23,12 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     safe_edit_cb,
 )
+from tcbot.modules.helper.messages.rich_format import heading, quote
 from tcbot.utils.i18n import (
+    Safe,
     available_locales,
     display_name,
+    divider,
     is_known_locale,
     t,
 )
@@ -83,15 +86,30 @@ def _options_btn(scope: str, locale: str) -> InlineKeyboardMarkup:
 
 
 def _panel_text(scope: str, locale: str) -> str:
-    """Render the selection panel body for ``scope`` in ``locale``."""
+    """Render the selection panel body for ``scope`` in ``locale``.
+
+    The heading, rules, and quotation are real rich blocks. Newline-separated
+    plain text reaches the rich transport as one collapsed line, so the
+    structure lives in the catalog with pre-formatted fragments from here.
+    """
     if scope == "user":
-        body = t("language.current_user", locale, language=display_name(locale))
-        title = t("language.title_user", locale)
+        body = t(
+            "language.current_user", locale, language=display_name(locale), plain=True
+        )
+        title = t("language.title_user", locale, plain=True)
     else:
-        body = t("language.current_group", locale, language=display_name(locale))
-        title = t("language.title_group", locale)
-    hint = t("language.prompt", locale)
-    return f"{title}\n\n{body}\n\n{hint}"
+        body = t(
+            "language.current_group", locale, language=display_name(locale), plain=True
+        )
+        title = t("language.title_group", locale, plain=True)
+    hint = t("language.prompt", locale, plain=True)
+    return t(
+        "language.panel",
+        locale,
+        title=Safe(heading(title)),
+        divider=Safe(divider()),
+        quote=Safe(quote(f"{body}\n{hint}")),
+    )
 
 
 def _confirmation_text(scope: str, chosen: str) -> str:

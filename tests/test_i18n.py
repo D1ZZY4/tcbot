@@ -44,6 +44,9 @@ from tcbot.modules import (
     warns,
 )
 from tcbot.modules import help as helpmod
+from tcbot.modules import (
+    start as start_mod,
+)
 from tcbot.modules.helper import buttons
 from tcbot.modules.helper.identity import can_manage_group
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
@@ -978,6 +981,34 @@ def test_panel_renders_v2_clean() -> None:
         assert "en-US" not in text
     confirm = language._confirmation_text("user", "en-US")
     _assert_v2_render_clean(confirm, "language confirmation")
+
+
+@pytest.mark.parametrize("locale", ["en-US", "id-ID"])
+def test_start_cards_are_built_from_rich_blocks(locale: str) -> None:
+    """The welcome cards must not collapse into one plain text blob."""
+    private = start_mod._private_start_text("Test Bot", locale)
+    assert private.startswith("<h2>")
+    assert private.count("<hr/>") == 2
+    assert "<blockquote>" in private
+    assert "<ul><li>" in private
+    assert "<mark>" in private
+    assert "<i>" in private
+
+    group = start_mod._group_start_text("Test Bot", locale)
+    assert group.startswith("<h2>")
+    assert group.count("<hr/>") == 1
+    assert "<blockquote>" in group
+    assert "<ul>" not in group
+
+
+@pytest.mark.parametrize("scope", ["user", "group"])
+def test_language_panel_is_built_from_rich_blocks(scope: str) -> None:
+    """The panel must not collapse into one plain newline-separated line."""
+    for locale in ("en-US", "id-ID"):
+        text = language._panel_text(scope, locale)
+        assert text.startswith("<h2>")
+        assert text.count("<hr/>") == 2
+        assert "<blockquote>" in text and "</blockquote>" in text
 
 
 def test_esc_import_used_by_engine() -> None:

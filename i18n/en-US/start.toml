@@ -1,16 +1,31 @@
-# Start menu prose (start.py). All render as rich HTML.
-# Placeholders: {bot} pre-formatted bold bot name, {community} raw name.
+# Start menu prose (start.py). Structure and order live here; the title,
+# divider, intro, capabilities, usage, and hint placeholders arrive as
+# pre-formatted rich HTML from start.py. {botname} and {community} are raw.
 
 [private]
-body = """{bot}
-Federation management bot for {community}.
+body = """{title}
+{divider}
+{intro}
 
-I handle federation-wide bans, mutes, kicks, and moderation across all connected groups. Staff can run commands here or from within any connected group.
-
-Use the buttons below ↴ to explore what I can do."""
+{capabilities}
+{usage}
+{divider}
+{hint}"""
+title = "{botname} Federation"
+intro = "Federation management bot for {community}."
+cap_bans = "Federation-wide bans"
+cap_mutes = "Mutes and temporary restrictions"
+cap_kicks = "Kicks"
+cap_moderation = "Moderation across all connected groups"
+usage = "Staff can run commands here or from any connected group."
+hint = "Use the buttons below ↴ to explore what I can do."
 
 [group]
-body = """{bot}
-Federation management bot for {community}.
+body = """{title}
+{divider}
+{intro}
 
-Run /help for the full command list, or open me in PM for all options including privacy info and the about page."""
+{hint}"""
+title = "{botname} Federation"
+intro = "Federation management bot for {community}."
+hint = "Run /help for the full command list, or open me in PM for all options including privacy info and the about page."

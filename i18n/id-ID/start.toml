@@ -1,16 +1,31 @@
-# Start menu prose (start.py). All render as rich HTML.
-# Placeholders: {bot} pre-formatted bold bot name, {community} raw name.
+# Prosa menu start (start.py). Struktur dan urutan ada di sini; placeholder
+# title, divider, intro, capabilities, usage, dan hint sudah berupa HTML rich
+# dari start.py. {botname} dan {community} adalah teks mentah.
 
 [private]
-body = """{bot}
-Bot manajemen federasi untuk {community}.
+body = """{title}
+{divider}
+{intro}
 
-Aku menangani ban, mute, kick, dan moderasi se-federasi di semua grup terhubung. Staf bisa menjalankan perintah di sini atau dari grup terhubung mana pun.
-
-Pakai tombol di bawah ↴ untuk menjelajah kemampuanku."""
+{capabilities}
+{usage}
+{divider}
+{hint}"""
+title = "{botname} Federasi"
+intro = "Bot manajemen federasi untuk {community}."
+cap_bans = "Ban se-federasi"
+cap_mutes = "Mute dan pembatasan sementara"
+cap_kicks = "Kick"
+cap_moderation = "Moderasi di semua grup terhubung"
+usage = "Staf bisa menjalankan perintah di sini atau dari grup terhubung mana pun."
+hint = "Pakai tombol di bawah ↴ untuk menjelajah kemampuanku."
 
 [group]
-body = """{bot}
-Bot manajemen federasi untuk {community}.
+body = """{title}
+{divider}
+{intro}
 
-Jalankan /help untuk daftar perintah lengkap, atau buka aku di PM untuk semua opsi termasuk info privasi dan halaman tentang."""
+{hint}"""
+title = "{botname} Federasi"
+intro = "Bot manajemen federasi untuk {community}."
+hint = "Jalankan /help untuk daftar perintah lengkap, atau buka aku di PM untuk semua opsi termasuk info privasi dan halaman tentang."

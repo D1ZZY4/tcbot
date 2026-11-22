@@ -441,9 +441,9 @@ async def _ban_list_render(
             locale,
             user=Safe(user_ref(target_id, display_name)),
         )
-        return _maybe_caveat(text, locale, failed=count_failed), check_back_markup(
-            target_id, locale
-        )
+        return blocks(
+            _maybe_caveat(text, locale, failed=count_failed)
+        ), check_back_markup(target_id, locale)
     lines = [
         t(
             f"checking.{key_prefix}.header",
@@ -482,8 +482,10 @@ async def _ban_list_render(
                 f"check_ban_item:{target_id}:{ban.get('ban_id', '')}",
             )
         )
-    return _maybe_caveat(
-        "\n".join(lines), locale, failed=count_failed or paged.fetch_failed
+    return blocks(
+        _maybe_caveat(
+            "\n".join(lines), locale, failed=count_failed or paged.fetch_failed
+        )
     ), paged_drill_btn(
         items,
         page=page,
@@ -599,8 +601,8 @@ class CheckEventsMixin:
         title = titles.get(chat_id) or str(chat_id)
         if not warns:
             text = t("checking.warns.in_empty", locale, title=title)
-            return _maybe_caveat(
-                text, locale, failed=count_failed or warns_failed
+            return blocks(
+                _maybe_caveat(text, locale, failed=count_failed or warns_failed)
             ), check_paged_markup(None, check_warns_back_row(target_id, locale))
         admin_ids = [w.get("actor_user_id", 0) for w in warns if w.get("actor_user_id")]
         admin_name_map = (
@@ -649,8 +651,8 @@ class CheckEventsMixin:
         nav = nav_row(
             page, total_pages, f"check_warn_chat:{target_id}:{chat_id}", locale
         )
-        return _maybe_caveat(
-            "\n".join(lines), locale, failed=count_failed
+        return blocks(
+            _maybe_caveat("\n".join(lines), locale, failed=count_failed)
         ), check_paged_markup(nav, check_warns_back_row(target_id, locale))
 
     @classmethod
@@ -723,9 +725,9 @@ async def _per_chat_event_list(
             lower=t(f"checking.events.{lower_key}", locale, plain=True),
             user=Safe(user_ref(target_id, display_name)),
         )
-        return _maybe_caveat(text, locale, failed=count_failed), check_back_markup(
-            target_id, locale
-        )
+        return blocks(
+            _maybe_caveat(text, locale, failed=count_failed)
+        ), check_back_markup(target_id, locale)
     chat_ids = list({r["chat_id"] for r in records if "chat_id" in r})
     admin_ids = [r.get("actor_user_id", 0) for r in records if r.get("actor_user_id")]
     titles, admin_name_map = await asyncio.gather(
@@ -765,7 +767,10 @@ async def _per_chat_event_list(
         chat_id = rec.get("chat_id", 0)
         title = titles.get(chat_id) or str(chat_id)
         admin_id = rec.get("actor_user_id", 0)
-        admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
+        admin_fallback = t("checking.profile.admin_fallback", locale, plain=True)
+        admin_name = (
+            admin_name_map.get(admin_id, admin_fallback) if admin_id else admin_fallback
+        )
         if show_duration:
             requested_secs = rec.get("requested_duration_secs")
             stored_secs = rec.get("duration_secs")
@@ -810,8 +815,8 @@ async def _per_chat_event_list(
                 line += "\n   " + t("checking.events.kick_failed", locale)
             lines.append(line)
     nav = nav_row(page, total_pages, cb_prefix, locale)
-    return _maybe_caveat(
-        "\n".join(lines), locale, failed=count_failed
+    return blocks(
+        _maybe_caveat("\n".join(lines), locale, failed=count_failed)
     ), check_paged_markup(nav, check_back_row(target_id, locale))
 
 

@@ -256,6 +256,47 @@ def test_staff_roster_resolves_live_on_numeric_fallback(
     assert "stats.roster.founder" not in text.replace("\\", "")
 
 
+def test_staff_roster_renders_separate_rich_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The roster must not collapse into one raw newline-separated run.
+
+    A divider is a rich block tag, so a generic block converter returns the
+    whole fragment verbatim. Telegram then folds the newlines and the '- '
+    prefixes into a single line, which is what the staff panel used to show.
+    """
+
+    async def _owner() -> int:
+        return 1
+
+    async def _admins() -> list[dict[str, int]]:
+        return [{"user_id": 2}, {"user_id": 3}]
+
+    async def _by_role(role: str) -> list[dict[str, int]]:
+        return [{"user_id": 4}] if role == "developer" else []
+
+    async def _mention(ids: list[int]) -> dict[int, tuple[str, str | None]]:
+        return {
+            1: ("Owner", None),
+            2: ("Alpha", None),
+            3: ("Beta", None),
+            4: ("Gamma", None),
+        }
+
+    monkeypatch.setattr(db.users_roles, "get_owner_id", _owner)
+    monkeypatch.setattr(db.users_roles, "all_admins", _admins)
+    monkeypatch.setattr(db.users_roles, "all_by_role", _by_role)
+    monkeypatch.setattr(db.users_cache, "get_mention_data_batch", _mention)
+
+    text, _ = asyncio.run(stats_flow.Stats.staff_roster("en-US"))
+
+    assert "<hr/>" in text
+    assert "<p><b>Admins (2)</b></p>" in text
+    assert "<ul><li>" in text
+    assert text.count("<ul>") >= 3
+    assert "\n- " not in text
+
+
 def test_circuit_decay_resets_lifetime_count() -> None:
     cb = CircuitBreaker("test", failure_threshold=5, recovery_timeout=60.0)
     cb._record_failure()

@@ -27,6 +27,7 @@ from tcbot.modules.helper.buttons import (
     stats_search_row,
 )
 from tcbot.modules.helper.extraction import sync_user_identity
+from tcbot.modules.helper.messages.rich_list import bullet_list
 from tcbot.modules.helper.messages.rich_table import table
 from tcbot.modules.helper.messages.rich_text import blocks
 from tcbot.utils.dispatch import gather_bounded, throw_if_cancelled
@@ -292,50 +293,53 @@ class OverviewViews:
                     live_fname, live_uname, _ = result
                     if not db.users_cache.is_placeholder_name(live_fname):
                         mention_data_map[uid] = (live_fname, live_uname)
-        lines = [
-            t("stats.roster.title", locale, community=Safe(esc(cfg.community_name))),
+        # * Build real rich blocks here instead of passing a newline fragment
+        # * to blocks(): the divider is itself a block tag, which makes blocks()
+        # * return the whole string verbatim and Telegram then collapses the
+        # * bullet lines and newlines into one unreadable run.
+        blocks_out = [
+            f"<p>{t('stats.roster.title', locale, community=Safe(esc(cfg.community_name)))}</p>",
             divider(),
-            "",
         ]
         if owner_idx is not None:
-            lines.append(t("stats.roster.owner", locale))
+            blocks_out.append(f"<p>{t('stats.roster.owner', locale)}</p>")
             owner_fname, owner_uname = mention_data_map[owner_id_int]
-            lines.append(
-                t(
-                    "stats.roster.member",
-                    locale,
-                    user=Safe(user_ref(owner_id_int, owner_fname, owner_uname)),
+            blocks_out.append(
+                bullet_list(
+                    [
+                        t(
+                            "stats.roster.member",
+                            locale,
+                            user=Safe(user_ref(owner_id_int, owner_fname, owner_uname)),
+                        )
+                    ]
                 )
-                + "\n"
             )
 
         def _section(label: str, docs: list) -> None:
-            lines.append(
-                t(
-                    "stats.roster.section",
-                    locale,
-                    label=Safe(bold(f"{label} ({len(docs)})")),
-                )
+            blocks_out.append(
+                f"<p>{t('stats.roster.section', locale, label=Safe(bold(f'{label} ({len(docs)})')))}</p>"
             )
             if docs:
+                members: list[str] = []
                 for doc in docs:
                     uid = doc.get("user_id", 0)
                     fname, uname = mention_data_map[uid]
-                    lines.append(
+                    members.append(
                         t(
                             "stats.roster.member",
                             locale,
                             user=Safe(user_ref(uid, fname, uname)),
                         )
                     )
+                blocks_out.append(bullet_list(members))
             else:
-                lines.append(t("stats.roster.empty", locale))
-            lines.append("")
+                blocks_out.append(bullet_list([t("stats.roster.empty", locale)]))
 
         _section(t("stats.roster.admins", locale, plain=True), admins)
         _section(t("stats.roster.developers", locale, plain=True), developers)
         _section(t("stats.roster.moderators", locale, plain=True), moderators)
-        return blocks("\n".join(lines).rstrip()), stats_back_btn(locale)
+        return "".join(blocks_out), stats_back_btn(locale)
 
 
 # ────────────────────────── Member lists ────────────────────────── #
@@ -564,7 +568,7 @@ class SearchViews:
         """Render search results as a table: empty state or full hits."""
         if not results:
             text = t("stats.search.empty", locale, query=query)
-            return text, stats_search_results_nav_btn(locale)
+            return blocks(text), stats_search_results_nav_btn(locale)
         uids = [b.get("target_user_id", 0) for b in results]
         fname_map = await db.users_cache.get_first_names_batch(uids)
         header = t("stats.search.header", locale, query=query, n=len(results))

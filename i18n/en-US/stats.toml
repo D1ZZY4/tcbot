@@ -81,8 +81,8 @@ admins = "Admins"
 developers = "Developers"
 moderators = "Moderators"
 section = "{label}"
-member = "- {user}"
-empty = "- No staff assigned"
+member = "{user}"
+empty = "No staff assigned"
 
 [users]
 empty = "*Users*\n\nNo cached users yet. The bot caches users as it sees them across connected groups."

@@ -54,6 +54,8 @@ def test_repair_lines_name_the_run_and_the_failed_groups() -> None:
     assert "ban" in text
     assert "1/2 applied" in text
     assert "1 exhausted" in text
+    assert "<p>" in text
+    assert "\n" not in text
 
 
 def test_tcrepair_lists_the_unsettled_runs(

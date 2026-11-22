@@ -81,8 +81,8 @@ admins = "Admin"
 developers = "Developer"
 moderators = "Moderator"
 section = "{label}"
-member = "- {user}"
-empty = "- Belum ada staf"
+member = "{user}"
+empty = "Belum ada staf"
 
 [users]
 empty = "*Pengguna*\n\nBelum ada pengguna yang di-cache. Bot meng-cache pengguna saat melihat mereka di grup terhubung."

@@ -70,6 +70,24 @@ def test_ban_list_render_passes_skip_limit(
     assert "page 3/5" in text
 
 
+def test_ban_list_render_uses_rich_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A multiline list must not be sent as raw newlines to the rich transport."""
+    fake_db = _SliceDB([_ban_doc("b1")])
+
+    async def _count(user_id: int) -> int:
+        return 1
+
+    monkeypatch.setattr(check_flow, "_name", _fake_name)
+    monkeypatch.setattr(db.bans_db, "user_bans", fake_db.fetch)
+    monkeypatch.setattr(db.bans_db, "user_ban_count", _count)
+
+    text, _markup = asyncio.run(check_flow.Check.bans_list(42, 0, None))
+
+    assert "<p>" in text
+    assert "<li>" in text
+    assert "\n" not in text
+
+
 def test_ban_list_render_clamps_out_of_range_page(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

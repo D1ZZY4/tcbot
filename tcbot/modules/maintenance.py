@@ -25,6 +25,7 @@ from tcbot.modules.helper.messages import (
     safe_edit,
     send_log,
 )
+from tcbot.modules.helper.messages.rich_text import blocks
 from tcbot.utils.dispatch import fan_out, gather_bounded, throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, t
 from tcbot.utils.logger import get_logger
@@ -381,7 +382,7 @@ def _repair_lines(runs: list[dict[str, object]], locale: str) -> str:
             )
         )
     lines.append(t("maintenance.repair.footer", locale))
-    return "\n".join(lines)
+    return blocks("\n".join(lines))
 
 
 async def _reply_repair_list(msg: Message, locale: str) -> None:

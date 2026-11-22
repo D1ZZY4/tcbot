@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
@@ -23,8 +23,10 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     safe_edit_cb,
 )
+from tcbot.modules.helper.messages.rich_format import heading, highlight, quote
+from tcbot.modules.helper.messages.rich_list import bullet_list
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.i18n import Safe, bold, t
+from tcbot.utils.i18n import Safe, divider, esc, italic, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
 
@@ -39,24 +41,55 @@ __module_name__ = None
 # ────────────────────────── Start Message ───────────────────────── #
 
 
+def _start_blocks(botname: str, locale: str | None, *, private: bool) -> str:
+    """Build the welcome card from real rich blocks in the requested locale.
+
+    All prose lives in the catalog. The fragments built here are pre-formatted
+    rich HTML so the template can keep the order without double escaping.
+    """
+    if private:
+        title_key = "start.private.title"
+        intro_key = "start.private.intro"
+        hint_key = "start.private.hint"
+        body_key = "start.private.body"
+    else:
+        title_key = "start.group.title"
+        intro_key = "start.group.intro"
+        hint_key = "start.group.hint"
+        body_key = "start.group.body"
+    title = heading(t(title_key, locale, botname=botname, plain=True))
+    intro = quote(esc(t(intro_key, locale, community=cfg.community_name, plain=True)))
+    fragments: dict[str, Any] = {
+        "title": Safe(title),
+        "divider": Safe(divider()),
+        "intro": Safe(intro),
+    }
+    if private:
+        fragments["capabilities"] = Safe(
+            bullet_list(
+                [
+                    t("start.private.cap_bans", locale, plain=True),
+                    t("start.private.cap_mutes", locale, plain=True),
+                    t("start.private.cap_kicks", locale, plain=True),
+                    t("start.private.cap_moderation", locale, plain=True),
+                ]
+            )
+        )
+        fragments["usage"] = Safe(
+            highlight(t("start.private.usage", locale, plain=True))
+        )
+    fragments["hint"] = Safe(italic(t(hint_key, locale, plain=True)))
+    return t(body_key, locale, **fragments)
+
+
 def _private_start_text(botname: str, locale: str | None = None) -> str:
     """Build the PM start message for the given plain-text bot display name."""
-    return t(
-        "start.private.body",
-        locale,
-        bot=Safe(bold(botname)),
-        community=cfg.community_name,
-    )
+    return _start_blocks(botname, locale, private=True)
 
 
 def _group_start_text(botname: str, locale: str | None = None) -> str:
     """Build the group start message for the given plain-text bot display name."""
-    return t(
-        "start.group.body",
-        locale,
-        bot=Safe(bold(botname)),
-        community=cfg.community_name,
-    )
+    return _start_blocks(botname, locale, private=False)
 
 
 # ──────────────────────── Command Handlers ──────────────────────── #
