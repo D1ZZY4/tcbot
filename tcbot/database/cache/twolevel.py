@@ -585,9 +585,22 @@ class TwoLevelCache[T]:
                 generation = state.generation
                 epoch = self._epoch
                 val = await fetch()
-                if state.generation != generation or self._epoch != epoch:
+                if (
+                    state.generation != generation
+                    or self._epoch != epoch
+                    or key in self._pending_invalidations
+                ):
                     log.debug("Discarding stale refresh for invalidated key %s", key)
                     return val
+                # * A local marker only covers this process. A revocation in
+                # * another process writes a Redis tombstone before its delete;
+                # * publishing after that point would resurrect the old value
+                # * in L2 for the whole TTL. get_or_fetch already checks this.
+                if self._critical_delete:
+                    rc = await self._client()
+                    if rc is not None and await self._tombstoned(rc, key):
+                        log.debug("Discarding refresh for tombstoned key %s", key)
+                        return val
                 self._publish(key, val)
                 return val
         finally:

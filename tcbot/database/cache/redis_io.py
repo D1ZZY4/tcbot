@@ -87,7 +87,7 @@ async def acquire_redis_client() -> Any:
     rate-limited by the client module; this helper only awaits it.
     """
     client = _redis_mod.client()
-    if client is not None:
+    if client is not None and _redis_mod.client_is_usable():
         return client
     return await _redis_mod.ensure_connected()
 
