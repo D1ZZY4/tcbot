@@ -234,7 +234,7 @@ def applied_summary(
                 failed=failed,
                 pending=pending,
                 sample=sample,
-                more=")" if len(transient) <= 3 else " ...)",
+                more="" if len(transient) <= 3 else " ...",
             )
         return t(
             f"{key_prefix}.progress_clean",
@@ -265,7 +265,7 @@ def applied_summary(
             total=total,
             failed=failed,
             sample=sample,
-            more=" ...)" if len(transient) > 3 else ")",
+            more=" ..." if len(transient) > 3 else "",
         )
     return t(f"{key_prefix}.full", locale, total=total)
 

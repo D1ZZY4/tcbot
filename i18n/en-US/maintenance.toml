@@ -10,8 +10,7 @@ body = """
 `/leaveall` `/exitall` `/tcleave`
 `/cleanup` `/tcclean` `/tcc`
 `/tcrepair` `/tcr`
-`/tcrepair retry` <run_id> [chat_id]
-`/tcforget` `/tcf` <user_id> <reason>"""
+`/tcforget` `/tcf`"""
 
 [help.leaveall]
 body = "Makes the bot leave every connected group simultaneously, marks them all as disconnected in the database, and posts a log entry for each group. This is irreversible - each group must be manually reconnected with `/tcconnect`. Use only in emergencies."
@@ -20,19 +19,25 @@ body = "Makes the bot leave every connected group simultaneously, marks them all
 body = "Scans all groups in the database and attempts to verify the bot still has access. Any group where the bot was kicked, removed, or can no longer reach is marked as disconnected and removed from the active list. Run this periodically to keep the group list accurate."
 
 [help.repair]
-body = "Lists the moderation decisions whose Telegram delivery is still queued, running, partial, or failed. Use `retry` with a run id to make its failed groups due again; add a chat id to retry only one group. The existing decision is re-driven, so no new ban, mute, or unban is filed."
+body = """
+Lists the moderation decisions whose Telegram delivery is still queued, running, partial, or failed. Use `retry` with a run id to make its failed groups due again; add a chat id to retry only one group. The existing decision is re-driven, so no new ban, mute, or unban is filed.
+
+*Usage:* `/tcrepair retry <run_id> [chat_id]`"""
 
 [help.forget]
-body = "Queues an erasure request for one Telegram account. The next cleanup sweep anonymises the profile, revokes live roles and moderation actions, and removes the personal rows. The reason is required and recorded in the audit trail."
+body = """
+Queues an erasure request for one Telegram account. The next cleanup sweep anonymises the profile, revokes live roles and moderation actions, and removes the personal rows. The reason is required and recorded in the audit trail.
+
+*Usage:* `/tcforget <user_id> <reason>`"""
 
 [help.examples]
 body = """
-`/cleanup`: remove stale or inaccessible groups.
-`/leaveall`: emergency withdrawal from all connected groups.
-`/tcrepair`: list the enforcement runs that still need attention.
-`/tcrepair retry 42`: re-drive every failed group of run 42.
-`/tcrepair retry 42 -1001234567890`: re-drive one group of run 42.
-`/tcforget 123456789 inactive account`: queue an account erasure."""
+`/cleanup` remove stale or inaccessible groups.
+`/leaveall` emergency withdrawal from all connected groups.
+`/tcrepair` list the enforcement runs that still need attention.
+`/tcrepair retry 42` re-drive every failed group of run 42.
+`/tcrepair retry 42 -1001234567890` re-drive one group of run 42.
+`/tcforget 123456789 inactive account` queue an account erasure."""
 
 # Runtime strings (maintenance.py). All render as rich HTML.
 # Placeholders: counts as pre-formatted code, {detail} prebuilt suffix,

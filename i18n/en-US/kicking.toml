@@ -24,8 +24,8 @@ body = """
 
 [help.examples]
 body = """
-`/tckick @username being disruptive`: reason inline
-`/tck 123456789`: bot will ask for reason
+`/tckick @username being disruptive` reason inline
+`/tck 123456789` bot will ask for reason
 Or reply to a message and run `/tck`."""
 
 # Runtime strings for the kick executor (kicking_flow.py).

@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.modules.helper.messages.rich_format import divider, heading
+from tcbot.modules.helper.messages.rich_style import bold as rich_bold
 from tcbot.utils.i18n import code, esc, link, safe_username, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_dt, utc_now
@@ -29,7 +31,7 @@ _MAX_BROADCAST_PREVIEW_LEN: int = 100
 
 
 class LogBuilder:
-    """Fluent builder for Markdown audit-log messages used by the messages log builders."""
+    """Fluent builder for rich audit-log messages used by the log builders."""
 
     __slots__ = ("_lines",)
 
@@ -39,7 +41,7 @@ class LogBuilder:
         The title is escaped so callers can pass raw config or user-facing
         strings without risk of breaking the Markdown markup sent to the log channel.
         """
-        self._lines: list[str] = [esc(str(title)), ""]
+        self._lines: list[str] = [heading(str(title))]
 
     def field(
         self,
@@ -50,24 +52,24 @@ class LogBuilder:
     ) -> LogBuilder:
         """Append a `Label: value` line. The value is escaped by default."""
         v = esc(str(value)) if escape else str(value)
-        self._lines.append(f"{label}: {v}")
+        self._lines.append(f"{rich_bold(label)}: {v}")
         return self
 
     def code_field(self, label: str, value: object) -> LogBuilder:
         """Append a `Label: code(value)` line."""
-        self._lines.append(f"{label}: {code(str(value))}")
+        self._lines.append(f"{rich_bold(label)}: {code(str(value))}")
         return self
 
     def mention_field(
         self, label: str, user_id: int, name: str, username: str | None = None
     ) -> LogBuilder:
         """Append a `Label: user_ref(user_id, name, username)` line."""
-        self._lines.append(f"{label}: {user_ref(user_id, name, username)}")
+        self._lines.append(f"{rich_bold(label)}: {user_ref(user_id, name, username)}")
         return self
 
     def link_field(self, label: str, text: str, url: str) -> LogBuilder:
         """Append a `Label: [text](url)` line."""
-        self._lines.append(f"{label}: {link(text, url)}")
+        self._lines.append(f"{rich_bold(label)}: {link(text, url)}")
         return self
 
     def raw(self, text: str) -> LogBuilder:
@@ -76,13 +78,15 @@ class LogBuilder:
         return self
 
     def section(self) -> LogBuilder:
-        """Insert a blank separator line between sections."""
-        self._lines.append("")
+        """Insert a rich divider between sections."""
+        self._lines.append(divider())
         return self
 
     def date(self, ts: datetime | None = None, *, label: str = "Date") -> LogBuilder:
         """Append a `Label: dd-mm-yyyy | HH:MM` line. Defaults to utc_now()."""
-        self._lines.append(f"{label}: {fmt_dt(ts if ts is not None else utc_now())}")
+        self._lines.append(
+            f"{rich_bold(label)}: {fmt_dt(ts if ts is not None else utc_now())}"
+        )
         return self
 
     def build(self) -> str:
@@ -155,15 +159,16 @@ def proof_caption_new(
     admin_fname: str,
     timestamp: datetime,
 ) -> str:
-    """Caption used on the initial proof message."""
+    """Caption used on the initial proof message.
+
+    Proof media is sent with ``parse_mode=None``, so this caption must stay
+    plain text: rich tags from the log builder would be shown literally.
+    """
     return (
-        LogBuilder(f"ID: {target_id}")
-        .section()
-        .mention_field("Admin", admin_id, admin_fname)
-        .code_field("Admin ID", admin_id)
-        .section()
-        .date(timestamp, label="Commit at")
-        .build()
+        f"ID: {target_id}\n\n"
+        f"Admin: {admin_fname}\n"
+        f"Admin ID: {admin_id}\n\n"
+        f"Commit at: {fmt_dt(timestamp)}"
     )
 
 
@@ -174,17 +179,14 @@ def proof_caption_update(
     original_ts: datetime,
     prev_proof_lnk: str | None = None,
 ) -> str:
-    """Caption used when the proof message is updated."""
-    b = (
-        LogBuilder(f"ID: {target_id}")
-        .section()
-        .mention_field("Admin", admin_id, admin_fname)
-        .code_field("Admin ID", admin_id)
-    )
-    if prev_proof_lnk:
-        b.section().field("Previous", link("Click Here", prev_proof_lnk), escape=False)
+    """Plain caption used when the proof message is updated."""
+    previous = f"\n\nPrevious: {prev_proof_lnk}" if prev_proof_lnk else ""
     return (
-        b.section().date(original_ts, label="Commit at").date(label="Update at").build()
+        f"ID: {target_id}\n\n"
+        f"Admin: {admin_fname}\n"
+        f"Admin ID: {admin_id}{previous}\n\n"
+        f"Commit at: {fmt_dt(original_ts)}\n"
+        f"Update at: {fmt_dt(utc_now())}"
     )
 
 

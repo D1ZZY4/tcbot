@@ -19,9 +19,12 @@ from telegram import Bot
 from telegram.error import BadRequest
 
 from tcbot import cfg
-from tcbot.modules.helper.messages.rich_format import divider
-from tcbot.modules.helper.messages.rich_link import _markup_dict, keyboard_rows
-from tcbot.modules.helper.messages.rich_msg import html_message, send_rich
+from tcbot.modules.helper.messages.rich_link import _markup_dict
+from tcbot.modules.helper.messages.rich_msg import (
+    _message_with_buttons,
+    html_message,
+    send_rich,
+)
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.logger import get_logger
 
@@ -34,22 +37,6 @@ log = get_logger(__name__)
 
 
 # ───────────────────────────── edit_rich ──────────────────────────────── #
-
-
-def _message_with_buttons(
-    message: dict[str, Any], reply_markup: Any | None
-) -> tuple[dict[str, Any], bool]:
-    """Append rich button rows to an HTML payload."""
-    rows = keyboard_rows(reply_markup)
-    html_value = message.get("html")
-    if not rows or not isinstance(html_value, str):
-        return message, False
-    payload = dict(message)
-    # * A rule separates content from the keyboard so the last line never
-    # * sits flush against the buttons. An existing trailing rule is kept.
-    separator = [] if html_value.rstrip().endswith("<hr/>") else [divider()]
-    payload["html"] = "\n".join([html_value, *separator, *rows])
-    return payload, True
 
 
 async def edit_rich(
@@ -345,7 +332,7 @@ async def cb_error_edit(
     *,
     log_label: str,
     parse_mode: Any = None,
-    log_level: str = "debug",
+    log_level: str = "warning",
 ) -> None:
     """Replace a callback message with a notice and drop its keyboard."""
     await safe_edit_cb(

@@ -122,6 +122,7 @@ _DYNAMIC_KEY_PREFIXES = (
     "identity.refuse.",
     "kicking.",
     "muting.",
+    "netspeed.result.field.",
     "privacy.section.",
     "proof.action.",
     "reason.",

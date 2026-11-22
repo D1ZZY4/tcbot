@@ -196,7 +196,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not args:
         await reply_rich(
             msg,
-            t("disconnecting.state.usage", locale, plain=True),
+            t("disconnecting.state.usage", locale),
             log_label="cmd_rmtc usage",
             parse_mode=None,
         )
@@ -206,7 +206,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     except ValueError:
         await reply_rich(
             msg,
-            t("disconnecting.state.usage", locale, plain=True),
+            t("disconnecting.state.usage", locale),
             log_label="cmd_rmtc usage",
             parse_mode=None,
         )

@@ -24,6 +24,8 @@ from telegram.ext import ContextTypes, MessageHandler
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, safe_edit
+from tcbot.modules.helper.messages.rich_format import divider, heading
+from tcbot.modules.helper.messages.rich_table import table
 from tcbot.utils.i18n import Safe, code, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -519,6 +521,91 @@ def _run_speedtest(
     }
 
 
+# ──────────────────────── Result rendering ──────────────────────── #
+
+
+def _render_result(
+    result: dict,
+    *,
+    download: str,
+    upload: str,
+    sent: str,
+    received: str,
+    locale: str | None,
+) -> str:
+    """Render the measurement as three compact rich tables.
+
+    A flat "Label: value" wall of text hid the structure of the result.
+    Each group now owns a two-column table with preformatted values.
+    """
+    unknown = t("netspeed.result.unknown", locale, plain=True)
+
+    def cell(value: object) -> Safe:
+        """Render a value, keeping a missing or placeholder field readable."""
+        if value is None or value == "" or value == "N/A":
+            return Safe(code(unknown))
+        return Safe(code(str(value)))
+
+    def rows(pairs: list[tuple[str, object]]) -> list[list[str]]:
+        return [
+            [t(f"netspeed.result.field.{key}", locale, plain=True), cell(value)]
+            for key, value in pairs
+        ]
+
+    headers = [
+        t("netspeed.result.table.metric", locale, plain=True),
+        t("netspeed.result.table.value", locale, plain=True),
+    ]
+    client = result.get("client") or {}
+    server = result.get("server") or {}
+    measurements = rows(
+        [
+            ("ping", f"{result.get('ping', 'N/A')} ms"),
+            ("timestamp", result.get("timestamp", "N/A")),
+            ("download", f"{download}/s"),
+            ("upload", f"{upload}/s"),
+            ("sent", sent),
+            ("received", received),
+        ]
+    )
+    client_rows = rows(
+        [
+            ("ip", client.get("ip", "N/A")),
+            ("isp", client.get("isp", "N/A")),
+            ("isp_rating", client.get("isprating", "N/A")),
+            ("country", client.get("country", "N/A")),
+            ("latitude", client.get("lat", "N/A")),
+            ("longitude", client.get("lon", "N/A")),
+        ]
+    )
+    country = server.get("country", "N/A")
+    cc = server.get("cc", "N/A")
+    server_country = (
+        f"{country}, {cc}" if country != "N/A" and cc != "N/A" else country or cc
+    )
+    server_rows = rows(
+        [
+            ("name", server.get("name", "N/A")),
+            ("sponsor", server.get("sponsor", "N/A")),
+            ("latency", f"{server.get('latency', 'N/A')} ms"),
+            ("country", server_country),
+            ("latitude", server.get("lat", "N/A")),
+            ("longitude", server.get("lon", "N/A")),
+        ]
+    )
+    return (
+        f"{heading(t('netspeed.result.title', locale, plain=True), 2)}\n"
+        f"{divider()}\n"
+        f"{table(headers, measurements, raw_cells=True, compact=True, striped=True)}\n"
+        f"{divider()}\n"
+        f"{heading(t('netspeed.result.client', locale, plain=True), 3)}\n"
+        f"{table(headers, client_rows, raw_cells=True, compact=True, striped=True)}\n"
+        f"{divider()}\n"
+        f"{heading(t('netspeed.result.server', locale, plain=True), 3)}\n"
+        f"{table(headers, server_rows, raw_cells=True, compact=True, striped=True)}"
+    )
+
+
 # ──────────────────────── Command handlers ──────────────────────── #
 
 
@@ -646,31 +733,13 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ul = _readable_size(result["upload"] / 8)
         sent_bytes = _readable_size(int(result["bytes_sent"]))
         recv_bytes = _readable_size(int(result["bytes_received"]))
-        client = result["client"]
-        server = result["server"]
-
-        text = (
-            f"{t('netspeed.result.title', locale)}\n\n"
-            f"{t('netspeed.result.field.ping', locale, value=Safe(code(str(result['ping']) + ' ms')))}\n"
-            f"{t('netspeed.result.field.timestamp', locale, value=Safe(code(str(result['timestamp']))))}\n"
-            f"{t('netspeed.result.field.download', locale, value=Safe(code(dl + '/s')))}\n"
-            f"{t('netspeed.result.field.upload', locale, value=Safe(code(ul + '/s')))}\n"
-            f"{t('netspeed.result.field.sent', locale, value=Safe(code(sent_bytes)))}\n"
-            f"{t('netspeed.result.field.received', locale, value=Safe(code(recv_bytes)))}\n\n"
-            f"{t('netspeed.result.client', locale)}\n"
-            f"{t('netspeed.result.field.ip', locale, value=Safe(code(str(client['ip']))))}\n"
-            f"{t('netspeed.result.field.isp', locale, value=Safe(code(str(client['isp']))))}\n"
-            f"{t('netspeed.result.field.isp_rating', locale, value=Safe(code(str(client.get('isprating', 'N/A')))))}\n"
-            f"{t('netspeed.result.field.country', locale, value=Safe(code(str(client['country']))))}\n"
-            f"{t('netspeed.result.field.latitude', locale, value=Safe(code(str(client['lat']))))}\n"
-            f"{t('netspeed.result.field.longitude', locale, value=Safe(code(str(client['lon']))))}\n\n"
-            f"{t('netspeed.result.server', locale)}\n"
-            f"{t('netspeed.result.field.name', locale, value=Safe(code(str(server['name']))))}\n"
-            f"{t('netspeed.result.field.sponsor', locale, value=Safe(code(str(server.get('sponsor', 'N/A')))))}\n"
-            f"{t('netspeed.result.field.latency', locale, value=Safe(code(str(server['latency']))))}\n"
-            f"{t('netspeed.result.field.country', locale, value=Safe(code(str(server['country']) + ', ' + str(server['cc']))))}\n"
-            f"{t('netspeed.result.field.latitude', locale, value=Safe(code(str(server['lat']))))}\n"
-            f"{t('netspeed.result.field.longitude', locale, value=Safe(code(str(server['lon']))))}"
+        text = _render_result(
+            result,
+            download=dl,
+            upload=ul,
+            sent=sent_bytes,
+            received=recv_bytes,
+            locale=locale,
         )
     except KeyError:
         await _parse_failed()

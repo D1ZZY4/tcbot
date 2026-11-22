@@ -435,7 +435,7 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if args[0].lower() != "retry" or len(args) > 3:
         await reply_rich(
             msg,
-            t("maintenance.repair.usage", locale, plain=True),
+            t("maintenance.repair.usage", locale),
             log_label="tcrepair usage",
             parse_mode=None,
         )
@@ -443,7 +443,7 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if len(args) < 2:
         await reply_rich(
             msg,
-            t("maintenance.repair.usage", locale, plain=True),
+            t("maintenance.repair.usage", locale),
             log_label="tcrepair usage",
             parse_mode=None,
         )
@@ -453,7 +453,7 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if run_id <= 0 or (len(args) == 3 and chat_id in (None, 0)):
         await reply_rich(
             msg,
-            t("maintenance.repair.usage", locale, plain=True),
+            t("maintenance.repair.usage", locale),
             log_label="tcrepair invalid",
             parse_mode=None,
         )
@@ -520,7 +520,7 @@ async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if len(args) < 2:
         await reply_rich(
             msg,
-            t("maintenance.forget.usage", locale, plain=True),
+            t("maintenance.forget.usage", locale),
             log_label="tcforget usage",
             parse_mode=None,
         )
@@ -533,7 +533,7 @@ async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if user_id <= 0 or not reason:
         await reply_rich(
             msg,
-            t("maintenance.forget.usage", locale, plain=True),
+            t("maintenance.forget.usage", locale),
             log_label="tcforget invalid",
             parse_mode=None,
         )

@@ -7,7 +7,7 @@ overview = "Menghapus grup dari {community}. Pakai `/tcdisconnect` dari dalam gr
 
 [help.commands]
 body = """
-`/tcdisconnect` `/tcdiscon`
+`/tcdisconnect`
 `/rmtc`"""
 
 [help.who]
@@ -28,8 +28,8 @@ body = """
 
 [help.examples]
 body = """
-`/tcdisconnect`: putus grup ini.
-`/rmtc -1001234567890`: hapus paksa grup via ID chat."""
+`/tcdisconnect` putus grup ini (alias `/tcdiscon`).
+`/rmtc -1001234567890` hapus paksa grup via ID chat."""
 
 # Runtime strings (disconnecting.py). [state] sends plain (parse_mode=None
 # replies); [removed] renders as rich HTML. Placeholders: {community}

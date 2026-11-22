@@ -134,7 +134,7 @@ async def build_ban_detail(
     if linked:
         rows.append([t("checking.ban_info.table.rules", locale), detail_items[3]])
     text = (
-        f"{heading(t('checking.ban_info.heading', locale), 3)}\n"
+        f"{heading(t('checking.ban_info.heading', locale, plain=True), 3)}\n"
         f"{divider()}\n"
         f"{table([field, value], rows, raw_cells=True, compact=True, striped=True)}"
     )

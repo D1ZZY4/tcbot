@@ -188,7 +188,17 @@ async def reply_rich(
             disable_notification=kwargs.get("disable_notification"),
         )
     except Exception as exc:
-        log.debug("%s reply failed: %s", log_label, exc)
+        # * A failed reply is user-visible: a DEBUG-only line disappears at
+        # * the default INFO level, so keep a warning unless the chat itself
+        # * is gone or the message is too old to edit.
+        detail = str(exc).lower()
+        if any(
+            marker in detail
+            for marker in ("chat not found", "message to edit not found", "too old")
+        ):
+            log.debug("%s reply skipped: %s", log_label, exc)
+        else:
+            log.warning("%s reply failed: %s", log_label, exc)
 
 
 __all__ = [

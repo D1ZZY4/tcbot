@@ -7,7 +7,7 @@ overview = "Removes a group from {community}. Use `/tcdisconnect` from inside th
 
 [help.commands]
 body = """
-`/tcdisconnect` `/tcdiscon`
+`/tcdisconnect`
 `/rmtc`"""
 
 [help.who]
@@ -28,8 +28,8 @@ body = """
 
 [help.examples]
 body = """
-`/tcdisconnect`: disconnect the current group.
-`/rmtc -1001234567890`: force-remove a group by chat ID."""
+`/tcdisconnect` disconnect the current group (`/tcdiscon` alias).
+`/rmtc -1001234567890` force-remove a group by chat ID."""
 
 # Runtime strings (disconnecting.py). [state] sends plain (parse_mode=None
 # replies); [removed] renders as rich HTML. Placeholders: {community}

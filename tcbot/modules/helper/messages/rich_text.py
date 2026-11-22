@@ -25,6 +25,7 @@ _BULLET_LINE = re.compile(r"^[-*]\s+(.*)$")
 _ORDERED_LINE = re.compile(r"^\d+\.\s+(.*)$")
 _BLOCK_TAGS = (
     "<p>",
+    "<pre",
     "<ul>",
     "<ol>",
     "<table",

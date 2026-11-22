@@ -37,10 +37,10 @@ Tulis durasi sebelum alasan. Tanpa durasi berarti mute permanen.
 
 [help.examples]
 body = """
-`/tcmute @username 3d spam`: mute 3 hari, alasan inline
-`/tcm @username 1w`: mute 1 minggu, bot akan menanyakan alasan
-`/tcm @username`: mute permanen, bot memandu langkahnya
-`/tcunmute @username`: cabut mute segera di semua grup
+`/tcmute @username 3d spam` mute 3 hari, alasan inline
+`/tcm @username 1w` mute 1 minggu, bot akan menanyakan alasan
+`/tcm @username` mute permanen, bot memandu langkahnya
+`/tcunmute @username` cabut mute segera di semua grup
 Atau balas sebuah pesan lalu jalankan `/tcm`."""
 
 # Runtime strings for the mute/unmute executors (muting_flow.py).

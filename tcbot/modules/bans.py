@@ -122,7 +122,7 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if not ban_reason:
         await reply_rich(
             msg,
-            t("banning.error.reason_required", locale, plain=True),
+            t("banning.error.reason_required", locale),
             log_label="cmd_ban_start no-reason",
             parse_mode=None,
         )

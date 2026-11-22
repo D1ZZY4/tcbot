@@ -37,10 +37,10 @@ Place the duration before the reason. Omit a duration to apply a permanent mute.
 
 [help.examples]
 body = """
-`/tcmute @username 3d spamming`: 3-day mute, reason inline
-`/tcm @username 1w`: 1-week mute, bot will ask for reason
-`/tcm @username`: permanent mute, bot walks you through it
-`/tcunmute @username`: lift mute immediately across all groups
+`/tcmute @username 3d spamming` 3-day mute, reason inline
+`/tcm @username 1w` 1-week mute, bot will ask for reason
+`/tcm @username` permanent mute, bot walks you through it
+`/tcunmute @username` lift mute immediately across all groups
 Or reply to a message and run `/tcm`."""
 
 # Runtime strings for the mute/unmute executors (muting_flow.py).

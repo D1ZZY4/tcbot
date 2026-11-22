@@ -10,8 +10,7 @@ body = """
 `/leaveall` `/exitall` `/tcleave`
 `/cleanup` `/tcclean` `/tcc`
 `/tcrepair` `/tcr`
-`/tcrepair retry` <run_id> [chat_id]
-`/tcforget` `/tcf` <user_id> <reason>"""
+`/tcforget` `/tcf`"""
 
 [help.leaveall]
 body = "Membuat bot keluar dari semua grup terhubung sekaligus, menandai semuanya terputus di database, dan mengirim entri log per grup. Ini tidak bisa dibatalkan, tiap grup harus dihubungkan ulang manual dengan `/tcconnect`. Pakai hanya dalam darurat."
@@ -20,19 +19,25 @@ body = "Membuat bot keluar dari semua grup terhubung sekaligus, menandai semuany
 body = "Memindai semua grup di database dan mencoba memastikan bot masih punya akses. Grup mana pun yang botnya di-kick, dihapus, atau sudah tidak terjangkau ditandai terputus dan dikeluarkan dari daftar aktif. Jalankan berkala agar daftar grup tetap akurat."
 
 [help.repair]
-body = "Menampilkan keputusan moderasi yang pengirimannya ke Telegram masih queued, running, parsial, atau gagal. Pakai `retry` dengan id run agar grup yang gagal dicoba lagi; tambahkan id chat untuk mencoba satu grup saja. Keputusan yang sudah ada yang dijalankan ulang, jadi tidak ada ban, mute, atau unban baru yang dibuat."
+body = """
+Menampilkan keputusan moderasi yang pengirimannya ke Telegram masih queued, running, parsial, atau gagal. Pakai `retry` dengan id run agar grup yang gagal dicoba lagi; tambahkan id chat untuk mencoba satu grup saja. Keputusan yang sudah ada yang dijalankan ulang, jadi tidak ada ban, mute, atau unban baru yang dibuat.
+
+*Pemakaian:* `/tcrepair retry <run_id> [chat_id]`"""
 
 [help.forget]
-body = "Mengantrekan permintaan penghapusan untuk satu akun Telegram. Sapuan pembersihan berikutnya menganonimkan profil, mencabut role dan tindakan moderasi yang aktif, lalu menghapus baris pribadi. Alasan wajib diisi dan dicatat di audit trail."
+body = """
+Mengantrekan permintaan penghapusan untuk satu akun Telegram. Sapuan pembersihan berikutnya menganonimkan profil, mencabut role dan tindakan moderasi yang aktif, lalu menghapus baris pribadi. Alasan wajib diisi dan dicatat di audit trail.
+
+*Pemakaian:* `/tcforget <user_id> <reason>`"""
 
 [help.examples]
 body = """
-`/cleanup`: hapus grup basi atau yang tidak bisa diakses.
-`/leaveall`: keluar darurat dari semua grup terhubung.
-`/tcrepair`: tampilkan run enforcement yang masih butuh perhatian.
-`/tcrepair retry 42`: coba ulang semua grup yang gagal pada run 42.
-`/tcrepair retry 42 -1001234567890`: coba ulang satu grup pada run 42.
-`/tcforget 123456789 akun tidak aktif`: antrekan penghapusan akun."""
+`/cleanup` hapus grup basi atau yang tidak bisa diakses.
+`/leaveall` keluar darurat dari semua grup terhubung.
+`/tcrepair` tampilkan run enforcement yang masih butuh perhatian.
+`/tcrepair retry 42` coba ulang semua grup yang gagal pada run 42.
+`/tcrepair retry 42 -1001234567890` coba ulang satu grup pada run 42.
+`/tcforget 123456789 akun tidak aktif` antrekan penghapusan akun."""
 
 # Runtime strings (maintenance.py). All render as rich HTML.
 # Placeholders: counts as pre-formatted code, {detail} prebuilt suffix,

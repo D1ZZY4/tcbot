@@ -37,8 +37,8 @@ body = """
 
 [help.examples]
 body = """
-`/tcwarn @username spam`: alasan inline
-`/tcw 123456789`: bot akan menanyakan alasan
+`/tcwarn @username spam` alasan inline
+`/tcw 123456789` bot akan menanyakan alasan
 `/tcunwarn @username`
 `/warns @username`
 `/resetwarns @username`
