@@ -156,7 +156,7 @@ class Demote:
             )
         else:
             verb_key = trigger if trigger in {"ban", "kick", "mute"} else "kick"
-            verb = t(f"dm.verb.{verb_key}", target_locale, plain=True)
+            verb = t(f"demote.dm.verb.{verb_key}", target_locale, plain=True)
             user_msg = t(
                 "demote.dm.auto",
                 target_locale,
