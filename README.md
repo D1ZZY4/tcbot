@@ -85,7 +85,7 @@ Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (e
 | `PREFIXES` | No | `["/", "!", "."]` | Python-style list of command prefixes. |
 | `PORT` | No | `5000` | Flask health-server port (`1`-`65535`); `auto` or invalid values fall back to `5000`. |
 | `BIND_HOST` | No | `0.0.0.0` | Listener interface; set `127.0.0.1` behind a local reverse proxy. |
-| `LOG_LEVEL` | No | `INFO` | One of `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
+| `LOG_LEVEL` | No | `INFO` | One of `NOTSET`, `DEBUG`, `INFO`, `WARNING`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`. |
 
 ### Federation chats
 
