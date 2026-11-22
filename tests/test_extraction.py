@@ -249,6 +249,27 @@ def test_reply_plus_verified_username_overrides(monkeypatch) -> None:  # type: i
     ) == (99, "Dude")
 
 
+def test_reply_plus_stale_cached_username_keeps_reply(
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    """A cached username is not a live verification, so it cannot override a quote."""
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+
+    async def _no_hit(username: str):
+        return None
+
+    async def _stale(username: str):
+        return (42, "Ghost")
+
+    monkeypatch.setattr(db.mtproto, "resolve_username", _no_hit)
+    monkeypatch.setattr(db.mtproto, "is_available", lambda: False)
+    monkeypatch.setattr(db.users_cache, "get_by_username", _stale)
+    assert _run(
+        ex.extract_target(_update(_reply_from(11)), ["@ghost"], cast("Any", bot))
+    ) == (11, "Reply")
+
+
 def test_reply_plus_group_chat_never_overrides(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """A numeric ID resolving to a group (title, no first_name) keeps reply."""
     _stub_cache(monkeypatch)

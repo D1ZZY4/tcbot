@@ -328,9 +328,13 @@ async def _args_target(
             uid, fname, _ = hit
             if uid > 0:
                 return uid, await _best_name(uid, fname, arg)
-        cached = await _cached_username_target(arg)
-        if cached is not None:
-            return cached
+        # ! CRITICAL: a verified override must rest on a live resolution. A
+        # ! cached username can be reassigned, so during an MTProto outage it
+        # ! must not displace the reply target and moderate the wrong user.
+        if not verified:
+            cached = await _cached_username_target(arg)
+            if cached is not None:
+                return cached
         log.warning(
             "Could not resolve @%s (MTProto available=%s).",
             arg,
