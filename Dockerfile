@@ -36,7 +36,12 @@ RUN uv run --frozen -- python -c "import hiredis; print('hiredis C extension ver
 RUN uv run --frozen -- python -c "import greenlet; print('greenlet C extension verified')"
 
 ARG PORT=5000
-EXPOSE 5000
-ENV PORT=5000
+EXPOSE ${PORT}
+ENV PORT=${PORT}
+
+# * The bot only needs its virtualenv and read-only catalog files at runtime.
+RUN useradd --system --create-home --uid 10001 tcbot \
+    && chown -R tcbot:tcbot /app
+USER tcbot
 
 CMD ["uv", "run", "--frozen", "python", "-m", "tcbot"]
