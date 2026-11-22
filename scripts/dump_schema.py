@@ -330,7 +330,8 @@ def main() -> int:
     parser.add_argument("--schema", default="public", help="the schema to export")
     args = parser.parse_args()
 
-    dump = _dump(_database_url(args.database_url or ""), args.schema)
+    url = _database_url(args.database_url or "")
+    dump = _dump(url, args.schema)
     grouped = _split(dump)
 
     _write(
@@ -353,7 +354,7 @@ def main() -> int:
     )
     _write(
         "seed.sql",
-        _seed_statements(args.database_url, args.schema),
+        _seed_statements(url, args.schema),
         args.schema,
         "-- The reference data of the community: the role catalog, the "
         "permission catalog,\n-- the retention contract, and the job registry.",
