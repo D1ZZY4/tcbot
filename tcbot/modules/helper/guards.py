@@ -384,9 +384,11 @@ async def require_federation_origin(
 
     Private is allowed only when ``allow_private`` is set (federation-wide
     ban/unban/sync entries). Every group-like origin must be a connected
-    group or a primary group: a disconnected group must not drive
-    federation-wide enforcement or, for warns, record audit rows under a
-    non-federation chat id that later aggregate into a federation threshold ban.
+    group, a primary group, or a deployment-owned destination: a disconnected
+    ordinary group must not drive federation-wide enforcement or, for warns,
+    record audit rows under a non-federation chat id that later aggregate into
+    a federation threshold ban. Log, proof, appeal, and main-channel groups are
+    special origins and stay usable even though they are never connected.
     Fail closed: a connection-state outage replies with the database retry
     notice and blocks the action. Cancellation always propagates.
     """
@@ -401,6 +403,11 @@ async def require_federation_origin(
         )
         return False
     if cfg.is_primary_group(chat_id):
+        return True
+    # * A configured destination may itself be a group. It belongs to the
+    # * deployment, not to the federation, but staff there still need every
+    # * command to work without a connection row.
+    if chat_type in ("group", "supergroup") and cfg.is_infrastructure_chat(chat_id):
         return True
     try:
         connected = await db.groups_db.is_connected(chat_id, fresh=True)

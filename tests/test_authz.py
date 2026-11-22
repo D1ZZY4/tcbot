@@ -76,6 +76,35 @@ def test_primary_group_is_a_federation_origin_without_being_connected(
     assert allowed is True
 
 
+def test_infrastructure_group_is_a_federation_origin_without_being_connected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deployment-owned group accepts commands even without a connection row."""
+    log = _ReplyLog()
+    _install(monkeypatch, log)
+
+    async def _must_not_be_called(*args: Any, **kwargs: Any) -> bool:
+        raise AssertionError("is_connected must not be read for infrastructure")
+
+    monkeypatch.setattr(db.groups_db, "is_connected", _must_not_be_called)
+    monkeypatch.setattr(
+        guards, "cfg", dataclasses.replace(cfg, logs=(-1009999999999, None))
+    )
+
+    allowed = asyncio.run(
+        require_federation_origin(
+            cast("Any", SimpleNamespace(reply_text=None)),
+            chat_id=-1009999999999,
+            chat_type="group",
+            locale="en-US",
+            allow_private=False,
+        )
+    )
+
+    assert allowed is True
+    assert log.texts == []
+
+
 def test_resolve_and_check_success(monkeypatch: pytest.MonkeyPatch) -> None:
     roles = {11: "developer", 22: None}
     log = _ReplyLog()
@@ -685,6 +714,25 @@ def test_role_tiers_invoke_handler_when_rank_is_sufficient(
     asyncio.run(tier(_handler)(_auth_update(), SimpleNamespace()))
 
     assert calls == [True]
+
+
+def test_unknown_tier_refuses_even_the_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A misspelled tier must never grant access, whatever the caller's role."""
+    calls: list[bool] = []
+
+    async def _owner_role(user_id: int, *, fresh: bool = False) -> str:
+        return "owner"
+
+    async def _handler(update: Any, ctx: Any) -> None:
+        calls.append(True)
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _owner_role)
+    gate = auth._auth_only(
+        label="typo", refusal="mod_only", min_role=cast("Any", "admn")
+    )
+    asyncio.run(gate(_handler)(_auth_update(), SimpleNamespace()))
+
+    assert calls == []
 
 
 @pytest.mark.parametrize(

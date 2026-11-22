@@ -18,12 +18,15 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 from tcbot import database as db
+from tcbot.modules.helper.guards import required_rank
 from tcbot.modules.helper.identity import is_anon_admin
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich
 
 if TYPE_CHECKING:
     from telegram import Update
+
+    from tcbot.database.users_roles import RoleName
 
 log = get_logger(__name__)
 
@@ -39,13 +42,17 @@ _REFUSAL_BY_LABEL: dict[str, Any] = {
 }
 
 
-def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
+def _auth_only(*, label: str, refusal: str, min_role: RoleName | None) -> Callable:
     """Build one of the four federated-tier authorization decorators.
 
     ``min_role`` names the lowest ``users_roles`` rank that passes; when it is
     ``None`` means only the Owner id is authorized. ``refusal`` names the
     tier key in ``_REFUSAL_BY_LABEL`` rendered in the viewer's locale.
     """
+    # * Resolve the threshold once, fail closed: an unknown tier maps to the
+    # * highest rank, so a typo can only refuse a call, never authorize one.
+    # * The value is unused for the Owner tier, which compares the id instead.
+    threshold: int = 99 if min_role is None else required_rank(min_role)
 
     def _decorator(func: Callable) -> Callable:
         @functools.wraps(func)
@@ -84,9 +91,12 @@ def _auth_only(*, label: str, refusal: str, min_role: str | None) -> Callable:
                     else:
                         # * Fresh read: a demotion in another process must
                         # * not stay hidden for the 60 s role TTL.
-                        authorized = db.users_roles.role_rank(
-                            await db.users_roles.get_effective_role(uid, fresh=True)
-                        ) >= db.users_roles.role_rank(min_role)
+                        authorized = (
+                            db.users_roles.role_rank(
+                                await db.users_roles.get_effective_role(uid, fresh=True)
+                            )
+                            >= threshold
+                        )
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
