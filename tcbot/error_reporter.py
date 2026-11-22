@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextlib
 import re
 import threading
@@ -41,8 +42,18 @@ _BENIGN_PATTERNS: tuple[str, ...] = (
     "message is too old",
     "message can't be edited",
 )
-_LOG_NOISE_PATTERNS: tuple[str, ...] = (" raised after ",)
+# * The tracer logs "… raised after Nms" only for an exception it is about to
+# * re-raise. Match its whole shape so an unrelated error that merely mentions
+# * elapsed time is still reported.
+_LOG_NOISE_RE = re.compile(r"\[[^]]+\] uid=\S+ raised after [\d.]+ms")
 _OWNER_ONLY_TYPES: tuple[type[BaseException], ...] = (_te.Conflict, _te.InvalidToken)
+# * Kurigram raises these when the MTProto session must be re-established by
+# * an operator; they are auth failures, not application code bugs.
+_MTPROTO_AUTH_TYPES: tuple[str, ...] = (
+    "AuthKeyDuplicated",
+    "AuthKeyNotFound",
+    "SessionRevoked",
+)
 
 
 def _benign(exc: BaseException | None) -> bool:
@@ -80,8 +91,8 @@ def _is_benign(exc: BaseException | None) -> bool:
 
 
 def _log_noise(record: logging.LogRecord | None) -> bool:
-    """Check record duplication an already-reported error."""
-    return bool(record) and any(p in record.getMessage() for p in _LOG_NOISE_PATTERNS)
+    """Check whether this is the tracer's duplicate of an already-reported error."""
+    return bool(record) and bool(_LOG_NOISE_RE.search(record.getMessage()))
 
 
 def _owner_only(exc: BaseException | None) -> bool:
@@ -162,7 +173,7 @@ def _classify(exc: BaseException | None) -> str:
         x in mod for x in ("httpx", "aiohttp", "urllib3", "ssl")
     ):
         return "[~] Network / Server Error"
-    if type(exc).__name__ in ("AuthKeyDuplicated", "AuthKeyNotFound"):
+    if type(exc).__name__ in _MTPROTO_AUTH_TYPES:
         return "[~] MTProto Auth Key Invalidated"
     return "[!] Code Bug"
 
@@ -251,9 +262,26 @@ def _schedule_record(record: logging.LogRecord) -> None:
             except RuntimeError:
                 return
             _cross_thread.add(future)
-            future.add_done_callback(_cross_thread.discard)
+            future.add_done_callback(_cross_thread_done)
             return
     _report_tasks.spawn(_ship_record(record))
+
+
+def _cross_thread_done(future: concurrent.futures.Future[None]) -> None:
+    """Drop a finished cross-thread delivery and surface its failure.
+
+    A ``concurrent.futures.Future`` never warns about an unretrieved
+    exception, so without this callback a delivery that raises outside the
+    send guards disappears with no trace. Log at WARNING: ERROR records are
+    routed back through this reporter and would recurse.
+    """
+    _cross_thread.discard(future)
+    try:
+        exc = future.exception()
+    except concurrent.futures.CancelledError:
+        return
+    if exc is not None:
+        log.warning("Cross-thread error delivery failed: %s", exc)
 
 
 async def drain_pending() -> None:

@@ -167,6 +167,51 @@ def test_db_call_rejects_when_the_circuit_is_open() -> None:
     assert calls == 5
 
 
+def test_startup_ping_is_bounded(
+    monkeypatch: pytest.MonkeyPatch, _restore_engine_state: None
+) -> None:
+    """A stalled SELECT 1 must not hang boot forever."""
+    monkeypatch.setattr(
+        engine_module, "create_async_engine", lambda *_a, **_k: _FakeAsyncEngine()
+    )
+    monkeypatch.setattr(
+        engine_module.migrations, "upgrade_head", lambda *_a, **_k: None
+    )
+    monkeypatch.setattr(
+        engine_module.migrations, "ensure_schema", lambda *_a, **_k: None
+    )
+    monkeypatch.setattr(engine_module, "_database_url", lambda: _TEST_URL)
+    monkeypatch.setattr(engine_module, "_DB_CALL_TIMEOUT_S", 0.2)
+
+    async def _stalled_ping() -> None:
+        await asyncio.sleep(2.0)
+
+    monkeypatch.setattr(engine_module, "_ping", _stalled_ping)
+
+    with pytest.raises(TimeoutError):
+        asyncio.run(engine_module.connect())
+
+
+def test_dispose_failure_keeps_the_engine_reachable(
+    monkeypatch: pytest.MonkeyPatch, _restore_engine_state: None
+) -> None:
+    """A failed dispose must not orphan the pool with no way to retry it."""
+
+    class _FailingEngine(_FakeAsyncEngine):
+        async def dispose(self) -> None:
+            raise RuntimeError("dispose failed")
+
+    failing = _FailingEngine()
+    monkeypatch.setattr(engine_module, "_engine", failing)
+    monkeypatch.setattr(engine_module, "_session_factory", object())
+
+    with pytest.raises(RuntimeError, match="dispose failed"):
+        asyncio.run(engine_module._dispose())
+
+    assert engine_module._engine is failing
+    assert engine_module.is_connected() is True
+
+
 def test_the_engine_is_recreated_after_close(
     monkeypatch: pytest.MonkeyPatch, _restore_engine_state: None
 ) -> None:

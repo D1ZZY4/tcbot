@@ -71,6 +71,13 @@ _NON_CONNECTION_SQLSTATES: frozenset[str] = frozenset(
         "40P01",  # deadlock_detected
         "55P03",  # lock_not_available
         "57014",  # query_canceled (statement timeout)
+        # * The server answered but rejected the deployment configuration.
+        # * These are permanent operator errors, never a transient outage:
+        # * retrying cannot fix them, and counting them would both hide the
+        # * report and open the circuit for the whole federation.
+        "3D000",  # invalid_catalog_name
+        "28000",  # invalid_authorization_specification
+        "28P01",  # invalid_password
     }
 )
 
@@ -369,15 +376,26 @@ async def connect() -> None:
     )
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
     try:
+        # * This startup check calls the breaker directly instead of going
+        # * through db_call, so it needs its own bound: a server that accepts
+        # * the socket but stalls SELECT 1 must not hang boot forever.
+        async def _bounded_ping() -> None:
+            async with asyncio.timeout(_DB_CALL_TIMEOUT_S):
+                await _ping()
+
         await _cb.postgres.call(
-            _ping(),
+            _bounded_ping(),
             count_failure=_counts_toward_circuit,
         )
     except BaseException:
         # * The engine is not published yet, so close() can never reclaim
         # * it. Leaking it would keep a pool and its sockets alive for
-        # * every failed connect attempt.
-        await _dispose()
+        # * every failed connect attempt. A disposal failure must not
+        # * replace the original startup error.
+        try:
+            await _dispose()
+        except Exception as dispose_exc:
+            log.warning("Engine disposal failed after connect error: %s", dispose_exc)
         raise
     log.info("PostgreSQL connected")
 
@@ -389,12 +407,21 @@ async def _ping() -> None:
 
 
 async def _dispose() -> None:
-    """Dispose the engine and drop the session factory."""
+    """Dispose the engine and drop the session factory.
+
+    The globals stay published until disposal succeeds. A failed dispose
+    would otherwise orphan the pool with no way for a later close() to
+    retry it.
+    """
     global _engine, _session_factory
-    engine_obj, _engine = _engine, None
-    _session_factory = None
-    if engine_obj is not None:
-        await engine_obj.dispose()
+    engine_obj = _engine
+    if engine_obj is None:
+        _session_factory = None
+        return
+    await engine_obj.dispose()
+    if _engine is engine_obj:
+        _engine = None
+        _session_factory = None
 
 
 async def close() -> None:

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import telegram.error as te
 from pyrogram.errors import AuthKeyDuplicated
 from pyrogram.session.session import AuthKeyNotFound
@@ -73,3 +75,35 @@ def test_mtproto_auth_key_labels_operator_action() -> None:
         assert classify._classify(exc) == "[~] MTProto Auth Key Invalidated"
         assert "mtproto_state" in classify._action_hint(classify._classify(exc))
         assert classify._benign(exc) is False
+
+
+class SessionRevoked(Exception):
+    """Stand-in for the Kurigram exception, matched by type name."""
+
+
+def test_revoked_session_is_an_auth_failure_not_a_code_bug() -> None:
+    exc = SessionRevoked("session revoked")
+    assert classify._classify(exc) == "[~] MTProto Auth Key Invalidated"
+    assert "mtproto_state" in classify._action_hint(classify._classify(exc))
+
+
+class _CatalogError(Exception):
+    sqlstate = "3D000"
+
+
+def test_invalid_catalog_is_reported_not_suppressed_as_an_outage() -> None:
+    exc = OperationalError("SELECT 1", {}, _CatalogError("database does not exist"))
+    assert classify._benign(exc) is False
+    assert classify._classify(exc) == "[DB] Database Error"
+
+
+def _record(message: str) -> logging.LogRecord:
+    return logging.LogRecord(
+        "tcbot.test", logging.ERROR, "test.py", 1, message, (), None
+    )
+
+
+def test_log_noise_only_matches_the_execution_tracer() -> None:
+    assert classify._log_noise(_record("[cmd_x] uid=1 raised after 12.3ms")) is True
+    assert classify._log_noise(_record("Worker raised after 12.3ms")) is False
+    assert classify._log_noise(_record("[cmd_x] uid=1 ok (12.3ms)")) is False
