@@ -36,7 +36,13 @@ from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, italic, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page
-from tcbot.utils.time_and_date import date_or_unknown, fmt_dt, fmt_duration
+from tcbot.utils.time_and_date import (
+    date_or_unknown,
+    fmt_date,
+    fmt_duration,
+    fmt_time,
+    time_or_unknown,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -89,14 +95,14 @@ async def _async_const(value: Any) -> Any:
     return value
 
 
-def _ban_ts(ban: dict[str, Any], locale: str | None = None) -> str:
-    return date_or_unknown(ban.get("timestamp"), locale)
+def _ban_ts(ban: dict[str, Any], locale: str | None = None) -> tuple[str, str]:
+    ts = ban.get("timestamp")
+    return date_or_unknown(ts, locale), time_or_unknown(ts, locale)
 
 
-def _appeal_ts(ban: dict[str, Any], locale: str | None = None) -> str:
-    return date_or_unknown(
-        ban.get("appeal_submitted_at") or ban.get("timestamp"), locale
-    )
+def _appeal_ts(ban: dict[str, Any], locale: str | None = None) -> tuple[str, str]:
+    ts = ban.get("appeal_submitted_at") or ban.get("timestamp")
+    return date_or_unknown(ts, locale), time_or_unknown(ts, locale)
 
 
 # ────────────────────────── Profile view ────────────────────────── #
@@ -219,7 +225,12 @@ class CheckProfileMixin:
             )
         if role and role != "owner" and role_at:
             role_lines.append(
-                t("checking.profile.assigned_at", locale, at=Safe(fmt_dt(role_at)))
+                t(
+                    "checking.profile.assigned_at",
+                    locale,
+                    date=Safe(fmt_date(role_at)),
+                    time=Safe(fmt_time(role_at)),
+                )
             )
         role_block = Safe("\n".join(role_lines))
         uname_line = Safe(uname_part)
@@ -407,7 +418,7 @@ async def _ban_list_render(
     nav_prefix: str,
     active_key: str,
     inactive_key: str,
-    ts: Callable[..., str],
+    ts: Callable[..., tuple[str, str]],
     show_reason: bool = False,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Shared paginated ban/appeal list renderer."""
@@ -452,8 +463,10 @@ async def _ban_list_render(
             "i": base_idx + i,
             "status": Safe(status),
             "ban": Safe(code(ban.get("ban_id", ""))),
-            "ts": Safe(ts(ban, locale)),
         }
+        item_date, item_time = ts(ban, locale)
+        item_kwargs["date"] = Safe(item_date)
+        item_kwargs["time"] = Safe(item_time)
         if show_reason:
             stored_reason = ban.get("reason", None)
             reason_short = str(
@@ -606,7 +619,9 @@ class CheckEventsMixin:
         ]
         base_idx = page * _PAGE_SIZE
         for i, w in enumerate(warns, start=1):
-            ts = date_or_unknown(w.get("timestamp"), locale)
+            raw_ts = w.get("timestamp")
+            date_s = date_or_unknown(raw_ts, locale)
+            time_s = time_or_unknown(raw_ts, locale)
             stored_reason = w.get("reason", None)
             reason_short = str(
                 stored_reason
@@ -614,13 +629,19 @@ class CheckEventsMixin:
                 else t("checking.events.no_reason", locale, plain=True)
             )[:_REASON_PREVIEW_LEN]
             admin_id = w.get("actor_user_id", 0)
-            admin_name = admin_name_map.get(admin_id, "Admin") if admin_id else "Admin"
+            admin_fallback = t("checking.profile.admin_fallback", locale, plain=True)
+            admin_name = (
+                admin_name_map.get(admin_id, admin_fallback)
+                if admin_id
+                else admin_fallback
+            )
             lines.append(
                 t(
                     "checking.warns.in_item",
                     locale,
                     i=base_idx + i,
-                    ts=Safe(ts),
+                    date=Safe(date_s),
+                    time=Safe(time_s),
                     reason=Safe(italic(reason_short)),
                     admin=Safe(user_ref(admin_id, admin_name)),
                 )
@@ -640,7 +661,8 @@ class CheckEventsMixin:
         return await _per_chat_event_list(
             target_id,
             page,
-            heading_name="Kicks",
+            heading_key="kicks_heading",
+            lower_key="kicks_lower",
             db_call=db.kicks_db.user_kicks,
             count_call=db.kicks_db.user_kick_count,
             cb_prefix=f"check_kicks:{target_id}",
@@ -656,7 +678,8 @@ class CheckEventsMixin:
         return await _per_chat_event_list(
             target_id,
             page,
-            heading_name="Mutes",
+            heading_key="mutes_heading",
+            lower_key="mutes_lower",
             db_call=db.mutes_db.user_mutes,
             count_call=db.mutes_db.user_mute_count,
             cb_prefix=f"check_mutes:{target_id}",
@@ -669,7 +692,8 @@ async def _per_chat_event_list(
     target_id: int,
     page: int,
     *,
-    heading_name: str,
+    heading_key: str,
+    lower_key: str,
     db_call: Callable[..., Awaitable[list[Any]]],
     count_call: Callable[[int], Awaitable[int]],
     cb_prefix: str,
@@ -695,8 +719,8 @@ async def _per_chat_event_list(
         text = t(
             "checking.events.empty",
             locale,
-            heading=Safe(bold(heading_name)),
-            lower=heading_name.lower(),
+            heading=Safe(bold(t(f"checking.events.{heading_key}", locale, plain=True))),
+            lower=t(f"checking.events.{lower_key}", locale, plain=True),
             user=Safe(user_ref(target_id, display_name)),
         )
         return _maybe_caveat(text, locale, failed=count_failed), check_back_markup(
@@ -720,7 +744,7 @@ async def _per_chat_event_list(
         t(
             "checking.events.header",
             locale,
-            heading=Safe(bold(heading_name)),
+            heading=Safe(bold(t(f"checking.events.{heading_key}", locale, plain=True))),
             n=total,
             page=page + 1,
             pages=total_pages,
@@ -729,7 +753,9 @@ async def _per_chat_event_list(
     ]
     base_idx = page * _PAGE_SIZE
     for i, rec in enumerate(records, start=1):
-        ts = date_or_unknown(rec.get("timestamp"), locale)
+        raw_ts = rec.get("timestamp")
+        date_s = date_or_unknown(raw_ts, locale)
+        time_s = time_or_unknown(raw_ts, locale)
         stored_reason = rec.get("reason", None)
         reason_short = str(
             stored_reason
@@ -760,7 +786,8 @@ async def _per_chat_event_list(
                     "checking.events.mute_item",
                     locale,
                     i=base_idx + i,
-                    ts=Safe(ts),
+                    date=Safe(date_s),
+                    time=Safe(time_s),
                     title=title,
                     requested=requested,
                     stored=stored,
@@ -773,7 +800,8 @@ async def _per_chat_event_list(
                 "checking.events.item",
                 locale,
                 i=base_idx + i,
-                ts=Safe(ts),
+                date=Safe(date_s),
+                time=Safe(time_s),
                 title=title,
                 reason=Safe(italic(reason_short)),
                 admin=Safe(user_ref(admin_id, admin_name)),

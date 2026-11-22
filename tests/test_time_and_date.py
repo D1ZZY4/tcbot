@@ -10,8 +10,10 @@ from datetime import UTC, datetime, timedelta, timezone
 
 from tcbot.utils.time_and_date import (
     elapsed_ms,
+    fmt_date,
     fmt_dt,
     fmt_duration,
+    fmt_time,
     monotonic,
     parse_duration,
     to_utc,
@@ -36,6 +38,21 @@ def test_fmt_dt_converts_another_offset_to_utc() -> None:
     """An aware value in another zone renders its UTC wall clock."""
     shifted = datetime(2026, 1, 2, 5, 4, tzinfo=timezone(timedelta(hours=2)))
     assert fmt_dt(shifted) == "02-01-2026 | 03:04"
+
+
+def test_fmt_date_and_fmt_time_are_separate() -> None:
+    """Date and time are independent: neither leaks the other's separator."""
+    value = datetime(2026, 1, 2, 3, 4, tzinfo=UTC)
+    assert fmt_date(value) == "02-01-2026"
+    assert fmt_time(value) == "03:04"
+    assert "|" not in fmt_date(value)
+    assert "-" not in fmt_time(value)
+
+
+def test_fmt_date_and_time_convert_another_offset_to_utc() -> None:
+    shifted = datetime(2026, 1, 2, 5, 4, tzinfo=timezone(timedelta(hours=2)))
+    assert fmt_date(shifted) == "02-01-2026"
+    assert fmt_time(shifted) == "03:04"
 
 
 def test_monotonic_elapsed_non_negative() -> None:

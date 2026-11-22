@@ -34,7 +34,7 @@ from tcbot.utils.i18n import Safe, bold, code, divider, esc, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page, paginate
 from tcbot.utils.tasks import TaskTracker
-from tcbot.utils.time_and_date import date_or_unknown
+from tcbot.utils.time_and_date import date_or_unknown, time_or_unknown
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
@@ -332,9 +332,9 @@ class OverviewViews:
                 lines.append(t("stats.roster.empty", locale))
             lines.append("")
 
-        _section("Admins", admins)
-        _section("Developers", developers)
-        _section("Moderators", moderators)
+        _section(t("stats.roster.admins", locale, plain=True), admins)
+        _section(t("stats.roster.developers", locale, plain=True), developers)
+        _section(t("stats.roster.moderators", locale, plain=True), moderators)
         return blocks("\n".join(lines).rstrip()), stats_back_btn(locale)
 
 
@@ -376,12 +376,14 @@ class PeopleViews:
                     Safe(code(str(uid))),
                     esc(uname or "-"),
                     esc(date_or_unknown(u.get("first_seen_at"), locale)),
+                    esc(time_or_unknown(u.get("first_seen_at"), locale)),
                     esc(date_or_unknown(u.get("last_seen_at"), locale)),
+                    esc(time_or_unknown(u.get("last_seen_at"), locale)),
                 ]
             )
         text = (
             f"{header}\n"
-            f"{table([t('stats.table.user', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.username', locale, plain=True), t('stats.table.first_seen', locale, plain=True), t('stats.table.last_seen', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
+            f"{table([t('stats.table.user', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.username', locale, plain=True), t('stats.table.first_seen', locale, plain=True), t('stats.table.time', locale, plain=True), t('stats.table.last_seen', locale, plain=True), t('stats.table.time', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
         )
         return blocks(text), stats_list_nav_btn(
             page, total_pages, "stats_users", locale=locale
@@ -433,11 +435,12 @@ class ChatViews:
                     Safe(code(str(chat_id))),
                     Safe(user_ref(added_by, fname, uname)),
                     esc(date_or_unknown(grp.get("added_date"), locale)),
+                    esc(time_or_unknown(grp.get("added_date"), locale)),
                 ]
             )
         text = (
             f"{header}\n"
-            f"{table([t('stats.table.group', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.connected_by', locale, plain=True), t('stats.table.date', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
+            f"{table([t('stats.table.group', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.connected_by', locale, plain=True), t('stats.table.date', locale, plain=True), t('stats.table.time', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
         )
         return blocks(text), stats_list_nav_btn(
             page, total_pages, "stats_chats", locale=locale
@@ -486,11 +489,12 @@ class BanViews:
                     esc(str(ban.get("reason") or "-")),
                     Safe(code(str(ban.get("ban_id") or "-"))),
                     esc(date_or_unknown(ban.get("timestamp"), locale)),
+                    esc(time_or_unknown(ban.get("timestamp"), locale)),
                 ]
             )
         text = (
             f"{header}\n"
-            f"{table([t('stats.table.user', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.reason', locale, plain=True), t('stats.table.ban', locale, plain=True), t('stats.table.date', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
+            f"{table([t('stats.table.user', locale, plain=True), t('stats.table.id', locale, plain=True), t('stats.table.reason', locale, plain=True), t('stats.table.ban', locale, plain=True), t('stats.table.date', locale, plain=True), t('stats.table.time', locale, plain=True)], rows, raw_cells=True, compact=True, striped=True)}"
         )
         return blocks(text), stats_list_nav_btn(
             page,

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from tcbot.modules.helper.messages import audit_logs
 from tcbot.utils.time_and_date import utc_now
 
@@ -80,6 +82,23 @@ def test_promoted_log_keeps_inline_markup_inside_the_list() -> None:
     assert "<li><b>ID</b>: <code>7</code>" in text
     assert "<li><b>Date</b>: " in text
     assert "<hr/>" in text
+
+
+def test_date_and_time_are_separate_fields() -> None:
+    """A log never joins the calendar date and clock time into one value."""
+    text = audit_logs.ban_log(1, "Ann", 2, "Bob", "spam", "ban-1")
+    assert "<li><b>Commit at</b>: " in text
+    assert "<li><b>Time</b>: " in text
+    assert " | " not in text
+
+
+def test_proof_captions_split_date_and_time() -> None:
+    """Proof media captions carry a separate date line and time line."""
+    ts = datetime(2026, 11, 22, 15, 27, tzinfo=UTC)
+    caption = audit_logs.proof_caption_new(1, 2, "Bob", ts)
+    assert "Commit date: 22-11-2026" in caption
+    assert "Commit time: 15:27" in caption
+    assert " | " not in caption
 
 
 def test_untrusted_reason_stays_escaped_in_the_list() -> None:

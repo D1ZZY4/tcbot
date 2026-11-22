@@ -27,23 +27,46 @@ def to_utc(dt: datetime) -> datetime:
     return dt.astimezone(UTC)
 
 
-def fmt_dt_raw(dt: datetime) -> str:
-    """Format dt as DD-MM-YYYY | HH:MM in UTC, without MarkdownV2 escaping.
+def fmt_date(dt: datetime) -> str:
+    """Format the calendar date of dt as DD-MM-YYYY in UTC."""
+    return to_utc(dt).strftime("%d-%m-%Y")
 
-    Renderers that escape the whole message themselves use this variant, so
-    the separators are not escaped twice. An aware value in another offset is
-    converted to UTC first.
+
+def fmt_time(dt: datetime) -> str:
+    """Format the clock time of dt as HH:MM in UTC."""
+    return to_utc(dt).strftime("%H:%M")
+
+
+def fmt_date_or_unknown(value: datetime | None, locale: str | None = None) -> str:
+    """Return the escaped calendar date, or a localized Unknown fallback."""
+    return (
+        esc(fmt_date(value))
+        if value
+        else t("common.action.unknown_date", locale, plain=True)
+    )
+
+
+def fmt_time_or_unknown(value: datetime | None, locale: str | None = None) -> str:
+    """Return the escaped clock time, or a localized Unknown fallback."""
+    return (
+        esc(fmt_time(value))
+        if value
+        else t("common.action.unknown_date", locale, plain=True)
+    )
+
+
+def fmt_dt_raw(dt: datetime) -> str:
+    """Format dt as DD-MM-YYYY | HH:MM in UTC (legacy combined form).
+
+    Kept for the rules publication content hash, where the two values appear
+    as one string in a version footer. Display surfaces use fmt_date and
+    fmt_time separately.
     """
-    return to_utc(dt).strftime("%d-%m-%Y | %H:%M")
+    return f"{fmt_date(dt)} | {fmt_time(dt)}"
 
 
 def fmt_dt(dt: datetime) -> str:
-    """Format dt as DD-MM-YYYY | HH:MM in UTC, escaped for MarkdownV2 text.
-
-    Every caller embeds the result in a MarkdownV2 message, so the
-    ``-`` and ``|`` separators come back pre-escaped from this single
-    source instead of at each call site.
-    """
+    """Format dt as an escaped combined date and time for upgrade compat."""
     return esc(fmt_dt_raw(dt))
 
 
@@ -128,7 +151,18 @@ def fmt_duration(td: timedelta | None, locale: str | None = None) -> str:
 
 
 def date_or_unknown(value: datetime | None, locale: str | None = None) -> str:
-    """Format a datetime field or a localized Unknown fallback if missing."""
+    """Format the calendar date or a localized Unknown fallback if missing."""
     return (
-        fmt_dt(value) if value else t("common.action.unknown_date", locale, plain=True)
+        fmt_date(value)
+        if value
+        else t("common.action.unknown_date", locale, plain=True)
+    )
+
+
+def time_or_unknown(value: datetime | None, locale: str | None = None) -> str:
+    """Format the clock time or a localized Unknown fallback if missing."""
+    return (
+        fmt_time(value)
+        if value
+        else t("common.action.unknown_date", locale, plain=True)
     )

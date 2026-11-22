@@ -17,7 +17,7 @@ from tcbot.modules.helper.messages.rich_table import table
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, divider, t, user_ref
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import fmt_dt
+from tcbot.utils.time_and_date import fmt_date, fmt_time
 
 log = get_logger(__name__)
 
@@ -42,9 +42,19 @@ def ban_proof_link(ban: BanDoc) -> str | None:
 
 
 def ban_date_text(ban: BanDoc, locale: str | None = None) -> str:
-    """Return the ban timestamp for display, or the unknown-date notice."""
+    """Return the ban calendar date for display, or the unknown-date notice."""
     ts = ban.get("timestamp")
-    return fmt_dt(ts) if ts else t("checking.ban_info.unknown_date", locale, plain=True)
+    return (
+        fmt_date(ts) if ts else t("checking.ban_info.unknown_date", locale, plain=True)
+    )
+
+
+def ban_time_text(ban: BanDoc, locale: str | None = None) -> str:
+    """Return the ban clock time for display, or the unknown-date notice."""
+    ts = ban.get("timestamp")
+    return (
+        fmt_time(ts) if ts else t("checking.ban_info.unknown_date", locale, plain=True)
+    )
 
 
 async def build_ban_detail(
@@ -85,6 +95,7 @@ async def build_ban_detail(
 
     proof_link = ban_proof_link(ban)
     date_str = ban_date_text(ban, locale)
+    time_str = ban_time_text(ban, locale)
 
     identity_items = [
         t(
@@ -112,7 +123,7 @@ async def build_ban_detail(
             or t("checking.events.no_reason", locale, plain=True),
         ),
         t("checking.ban_info.ban_id", locale, id=Safe(code(ban.get("ban_id", "")))),
-        t("checking.ban_info.date", locale, date=Safe(date_str)),
+        t("checking.ban_info.date", locale, date=Safe(date_str), time=Safe(time_str)),
     ]
     linked = ban.get("rules") or []
     if linked:
@@ -178,6 +189,7 @@ async def build_ban_summary(
 
     proof_link = ban_proof_link(ban)
     date_str = ban_date_text(ban, locale)
+    time_str = ban_time_text(ban, locale)
 
     text = t(
         "checking.checkme.banned",
@@ -189,5 +201,6 @@ async def build_ban_summary(
         or t("checking.events.no_reason", locale, plain=True),
         admin=Safe(user_ref(aid, admin_fname, admin_uname)),
         date=Safe(date_str),
+        time=Safe(time_str),
     )
     return text, proof_link

@@ -18,7 +18,7 @@ from tcbot.modules.helper.messages.rich_list import bullet_list
 from tcbot.modules.helper.messages.rich_style import bold as rich_bold
 from tcbot.utils.i18n import code, esc, link, safe_username, user_ref
 from tcbot.utils.logger import get_logger
-from tcbot.utils.time_and_date import fmt_dt, utc_now
+from tcbot.utils.time_and_date import fmt_date, fmt_time, utc_now
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -92,10 +92,14 @@ class LogBuilder:
         return self
 
     def date(self, ts: datetime | None = None, *, label: str = "Date") -> LogBuilder:
-        """Append a `Label: dd-mm-yyyy | HH:MM` field. Defaults to utc_now()."""
-        return self.detail_field(
-            f"{rich_bold(label)}: {fmt_dt(ts if ts is not None else utc_now())}"
-        )
+        """Append separate `Label`/`Time` fields. Defaults to utc_now().
+
+        Date and time are never joined into one value: each gets its own
+        field so log readers can scan either independently.
+        """
+        value = ts if ts is not None else utc_now()
+        self.detail_field(f"{rich_bold(label)}: {fmt_date(value)}")
+        return self.detail_field(f"{rich_bold('Time')}: {fmt_time(value)}")
 
     def build(self) -> str:
         """Return the assembled rich message with fields grouped into lists."""
@@ -191,7 +195,8 @@ def proof_caption_new(
         f"ID: {target_id}\n\n"
         f"Admin: {admin_fname}\n"
         f"Admin ID: {admin_id}\n\n"
-        f"Commit at: {fmt_dt(timestamp)}"
+        f"Commit date: {fmt_date(timestamp)}\n"
+        f"Commit time: {fmt_time(timestamp)}"
     )
 
 
@@ -208,8 +213,10 @@ def proof_caption_update(
         f"ID: {target_id}\n\n"
         f"Admin: {admin_fname}\n"
         f"Admin ID: {admin_id}{previous}\n\n"
-        f"Commit at: {fmt_dt(original_ts)}\n"
-        f"Update at: {fmt_dt(utc_now())}"
+        f"Commit date: {fmt_date(original_ts)}\n"
+        f"Commit time: {fmt_time(original_ts)}\n"
+        f"Update date: {fmt_date(utc_now())}\n"
+        f"Update time: {fmt_time(utc_now())}"
     )
 
 
@@ -432,7 +439,8 @@ def _appeal_decision_edit(
     appeal_link: str = "",
     submitted_at: datetime | None = None,
 ) -> str:
-    submitted_str = fmt_dt(submitted_at) if submitted_at else "N/A"
+    submitted_date = fmt_date(submitted_at) if submitted_at else "N/A"
+    submitted_time = fmt_time(submitted_at) if submitted_at else "N/A"
     b = (
         LogBuilder(title)
         .mention_field("User", target_id, target_fname)
@@ -446,9 +454,10 @@ def _appeal_decision_edit(
         b.field("Appeal", "N/A")
     return (
         b.section()
-        # * submitted_str arrives pre-escaped from fmt_dt: pass it through
-        # * instead of escaping twice like the default field() does.
-        .field("Submitted", submitted_str, escape=False)
+        # * The values are pre-formatted digits: pass them through instead
+        # * of escaping twice like the default field() does.
+        .field("Submitted date", submitted_date, escape=False)
+        .field("Submitted time", submitted_time, escape=False)
         .detail_field(f"{rich_bold(decision_label)}: {user_ref(admin_id, admin_fname)}")
         .date(label=f"{decision_label} at")
         .build()
