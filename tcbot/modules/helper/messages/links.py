@@ -16,6 +16,7 @@ import time
 from typing import TYPE_CHECKING
 
 from tcbot.utils.logger import get_logger
+from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -23,7 +24,8 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 _CACHE_TTL_S: float = 300.0
-_LOOKUP_TIMEOUT_S: float = 5.0
+# * One lookup budget for every Telegram get_chat/get_chat_member call.
+_LOOKUP_TIMEOUT_S: float = TELEGRAM_LOOKUP_TIMEOUT
 
 _cache: dict[int, tuple[str, float]] = {}
 _locks: dict[int, asyncio.Lock] = {}
