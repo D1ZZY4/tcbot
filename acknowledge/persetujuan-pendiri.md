@@ -15,4 +15,5 @@ Daftar grup pendiri dan admin yang menyepakati:
 ## Catatan
 
 - Persetujuan ini jadi dasar berlakunya aturan bagi grup pendiri sejak diumumkan di kanal resmi dan tersedia di grup.
+- Grup yang menyetujui menerima penegakan ban dan mute federasi di semua grup terhubung. Kick dan warn tetap berlaku di grup asal, dan warn yang mencapai batas memicu ban federasi.
 - Grup keluar dari TCF tidak menghapus perkara yang sedang berjalan.

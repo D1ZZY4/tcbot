@@ -75,17 +75,19 @@ flowchart TD
     DUP -->|no| PROMPT[Send requirement 1 and add_pending]
     PROMPT --> V2["tc_verify_1: requirement 2"]
     V2 --> V3["tc_verify_2: requirement 3"]
-    V3 --> FINAL["tc_verify_3: final confirmation page"]
+    V3 --> SCOPE["tc_verify_3: moderation scope page"]
+    SCOPE --> FINAL["tc_verify_4: final confirmation page"]
     FINAL --> CONNECT["tc_join: owner-only Connect button"]
 ```
 
 An anonymous add stores owner `0` and leaves the verification pages for the group
 creator, because auto-completing it would write owner `0`. A pending row with no
-attributable owner follows the same path. The four pages are the three membership
+attributable owner follows the same path. The five pages are the three membership
 requirements from `about/keanggotaan.md` (admin approval is recorded, the group is
-listed in the official channel, and approval stands) followed by a final
-confirmation. Each step is owner-only; `Connect` appears only on the confirmation
-page, so a group cannot skip the requirements. On removal, the group is deactivated
+listed in the official channel, and approval stands), the moderation scope from
+`about/federasi.md`, and a final confirmation. Each step is owner-only; `Connect`
+appears only on the confirmation page, so a group cannot skip the requirements.
+On removal, the group is deactivated
 first and a log is posted only when it was connected. A demotion from administrator
 to member sends a warning to the moderator log, except in primary groups.
 

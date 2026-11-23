@@ -25,9 +25,9 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# * Three membership requirements plus a final confirmation. The last page
-# * reveals the Connect button.
-VERIFY_STEPS: int = 4
+# * Three membership requirements, one moderation-scope notice, then a final
+# * confirmation. The last page reveals the Connect button.
+VERIFY_STEPS: int = 5
 
 
 async def handle_verify_step(

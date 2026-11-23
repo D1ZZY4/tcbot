@@ -51,7 +51,6 @@ pending_request = "Permintaan connect untuk grup ini sudah tertunda."
 primary_group = "Ini grup utama federasi. Grup utama tidak dihubungkan via /tcconnect."
 infrastructure_chat = "Ini chat infrastruktur deployment (grup utama, kanal utama, arsip bukti, log, atau banding) dan tidak dihubungkan ke federasi."
 connect_failed = "Gagal menghubungkan grup. Coba lagi."
-join_prompt = "Mau menghubungkan grup ini ke {community}?"
 connected = "Grup ini sekarang terhubung ke {community}. Staf berwenang bisa memakai perintah federasi di sini."
 connected_blind = "Grup ini sekarang terhubung ke {community}. PERINGATAN: daftar ban/mute tidak diputar sepenuhnya. Bot akan mencoba ulang pembatasan yang tersisa secara otomatis."
 declined = "Koneksi ditolak. Aku akan keluar dari grup sekarang."
@@ -60,12 +59,14 @@ connecting = "Menghubungkan... menerapkan ban dan mute federasi yang ada. Bisa p
 perms_required = "Jadikan bot admin dengan izin yang dibutuhkan (hapus pesan, ban pengguna, undang via tautan) lalu coba lagi."
 welcome_perm_missing = "Bot belum punya izin admin Welcome Messages yang baru. Berikan izin itu di pengaturan administrator grup jika ingin pesan sambutan native Telegram tersedia."
 
-# Empat halaman verifikasi saat bot ditambahkan ke grup (connect_verify.py).
-# Tiga syarat keanggotaan dari about/keanggotaan.md plus konfirmasi terakhir.
-# Semua dikirim plain.
+# Lima halaman verifikasi saat bot ditambahkan ke grup (connect_verify.py).
+# Tiga syarat keanggotaan dari about/keanggotaan.md, cakupan moderasi dari
+# about/federasi.md, lalu konfirmasi terakhir. Judul dan isi memakai blok rich;
+# label tombol dan alert tetap plain.
 [verify]
-heading = "Syarat keanggotaan"
+heading = "Sebelum menghubungkan"
 step_1 = "1. Admin grup menyetujui dan persetujuan dicatat di grup koordinasi admin atau kanal resmi TCF."
 step_2 = "2. Grup tercantum dalam daftar anggota di kanal resmi TCF."
 step_3 = "3. Persetujuan belum ditarik kembali."
-final = "Ketiga syarat sudah Anda setujui. Apakah Anda benar-benar ingin grup ini bergabung dengan federasi?"
+step_4 = "Cakupan moderasi: ban dan mute federasi berlaku di semua grup terhubung. Kick hanya mengeluarkan target dari grup ini. Warn disimpan per grup dan memicu ban federasi otomatis saat mencapai batas."
+final = "Anda telah menyetujui ketiga syarat dan cakupan moderasi. Apakah Anda benar-benar ingin grup ini bergabung dengan federasi?"

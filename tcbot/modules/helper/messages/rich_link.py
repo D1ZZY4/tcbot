@@ -241,9 +241,10 @@ def _markup_dict(reply_markup: Any | None) -> dict[str, Any] | None:
 def keyboard_button(cell: dict[str, object]) -> str | None:
     """Render one inline-keyboard cell as a rich button via :func:`button`.
 
-    Returns ``None`` when the cell cannot map: an unsupported style, a
-    callback longer than 64 bytes, or an action type the rich API has no
-    equivalent for. One unmappable cell keeps the whole keyboard inline.
+    An unsupported style is dropped, leaving the button in its default
+    color. Returns ``None`` only when the cell has no label, its callback
+    exceeds 64 bytes, or it has no callback or URL. One unmappable cell
+    keeps the whole keyboard inline.
     """
     label = cell.get("text")
     if not isinstance(label, str):

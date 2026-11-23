@@ -51,7 +51,6 @@ pending_request = "A connect request for this group is already pending."
 primary_group = "This is the main group of the federation. The main group is not connected via /tcconnect."
 infrastructure_chat = "This is a deployment chat (main group, main channel, proof archive, logs, or appeals) and is not connected to the federation."
 connect_failed = "Failed to connect the group. Please try again."
-join_prompt = "Want to connect this group to {community}?"
 connected = "This group is now connected to {community}. Authorized staff can use federation commands here."
 connected_blind = "This group is now connected to {community}. WARNING: the ban/mute list was not replayed in full. The bot will retry the remaining restrictions automatically."
 declined = "Connection declined. I'll leave the group now."
@@ -60,12 +59,14 @@ connecting = "Connecting... applying existing federation bans and mutes. This ca
 perms_required = "Please make the bot an admin with the required permissions (delete messages, ban users, invite users) and try again."
 welcome_perm_missing = "The bot does not have the new Welcome Messages admin right. Grant it in the group's administrator settings if you want Telegram's native welcome message to be available."
 
-# Four-page verification shown when the bot is added to a group (connect_verify.py).
-# These are the three membership requirements from about/keanggotaan.md plus a
-# final confirmation. All values are sent plain.
+# Five-page verification shown when the bot is added to a group (connect_verify.py).
+# Three membership requirements from about/keanggotaan.md, the moderation scope
+# from about/federasi.md, then a final confirmation. Heading and body render as
+# rich blocks; button labels and alerts stay plain.
 [verify]
-heading = "Membership requirements"
+heading = "Before connecting"
 step_1 = "1. The group admin approves and the approval is recorded in the admin coordination group or the official TCF channel."
 step_2 = "2. The group is listed in the member list on the official TCF channel."
 step_3 = "3. The approval has not been withdrawn."
-final = "You have confirmed all three requirements. Do you really want this group to join the federation?"
+step_4 = "Moderation scope: federation bans and mutes apply in every connected group. A kick removes the target from this group only. Warnings are kept per group and trigger an automatic federation ban at the limit."
+final = "You have confirmed the three requirements and the moderation scope. Do you really want this group to join the federation?"

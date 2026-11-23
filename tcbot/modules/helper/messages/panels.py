@@ -22,7 +22,7 @@ _MAX_RENDER_CHARS: int = 3800
 
 _ABOUT_SECTIONS: tuple[str, ...] = ("federasi", "keanggotaan", "klarifikasi")
 _ABOUT_ITEM_COUNTS: dict[str, int] = {
-    "federasi": 4,
+    "federasi": 5,
     "keanggotaan": 4,
     "klarifikasi": 3,
 }

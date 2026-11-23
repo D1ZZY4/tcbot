@@ -51,7 +51,7 @@ def test_index_escapes_the_community_name_once(
 
 def test_each_section_renders_its_items() -> None:
     expected = (
-        ("The Federation", 4),
+        ("The Federation", 5),
         ("Membership", 4),
         ("Clarification", 3),
     )

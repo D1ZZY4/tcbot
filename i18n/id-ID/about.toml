@@ -15,8 +15,9 @@ label = "Federasi"
 lead = "Apa itu {community}, dan apa bukan {community}."
 item_1 = "Federasi sukarela dari grup Telegram mandiri di sekitar perangkat Transsion. Bukan perusahaan dan bukan badan hukum."
 item_2 = "Tiap grup memegang aturannya sendiri. Aturan ini hanya standar minimum, jadi aturan grup boleh lebih ketat tetapi tidak boleh bertentangan."
-item_3 = "Blokir federasi berlaku di semua grup terhubung. Warn, mute, kick, dan ban grup tetap berlaku lokal."
+item_3 = "Ban dan mute federasi berlaku di semua grup terhubung. Kick hanya mengeluarkan target dari grup tempat perintah dijalankan."
 item_4 = "Aturan diubah lewat voting grup, bukan keputusan satu admin."
+item_5 = "Warn dicatat per grup. Mencapai batas memicu ban federasi otomatis, dan pengiriman yang gagal dicoba ulang tanpa membatalkan tindakan di grup lain."
 tail = "Bergabung berarti menerima standar minimum tanpa melepaskan kemandirian grup."
 
 [section.keanggotaan]

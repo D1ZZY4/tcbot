@@ -76,7 +76,7 @@ def connect_verify_btn(
     locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Verification step: Continue until the final confirmation, then Connect."""
-    if step >= 3:
+    if step >= 4:
         label, callback = t("button.connect", locale, plain=True), join_callback
     else:
         label = t("button.next", locale, plain=True)

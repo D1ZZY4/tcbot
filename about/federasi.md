@@ -21,7 +21,7 @@ Aturan ini menggantikan tata tertib lama yang tidak punya definisi, pembagian tu
 
   Grup yang hanya memakai nama atau logo TCF tanpa memenuhi syarat bukan Grup Anggota.
 
-- **Admin Federasi**: admin grup anggota yang mengurus koordinasi antargrup, daftar anggota, dan daftar blokir bersama. Tidak mengurus internal grup lain.
+- **Admin Federasi**: admin grup anggota yang mengurus koordinasi antargrup, daftar anggota, dan daftar blokir federasi. Tidak mengurus internal grup lain.
 - **Administrator**: anggota yang ditunjuk admin grup untuk mengelola keanggotaan dan teknis grup.
 - **Moderator**: anggota yang ditunjuk admin grup untuk mengawasi percakapan dan menghapus konten. Tidak bisa menjatuhkan sanksi, kecuali ditentukan lain secara tertulis.
 - **Pengelola**: Administrator dan Moderator.
@@ -30,8 +30,8 @@ Aturan ini menggantikan tata tertib lama yang tidak punya definisi, pembagian tu
 - **Pengembang**: anggota yang membuat, mengembangkan, merawat, atau merilis Karya.
 - **Karya**: perangkat lunak, ROM, kernel, modul, aplikasi, tema, dokumentasi, panduan, tulisan, karya visual, atau hasil pengembangan lain.
 - **Pelanggaran**: perbuatan yang memenuhi unsur larangan dan dibuktikan sesuai cara penegakan. Kritik atau beda pendapat bukan pelanggaran, kecuali caranya melanggar.
-- **Tindakan Moderasi Segera**: pengamanan sementara berupa hapus konten, bisu maksimal 24 jam, atau batasi tautan. Bukan sanksi.
-- **Sanksi**: tindakan setelah pemeriksaan, berupa teguran, pembisuan, pembatasan hak, pengeluaran, blokir bersama, atau pencabutan kewenangan.
+- **Tindakan Moderasi Segera**: pengamanan sementara berupa hapus konten, pembisuan dengan batas waktu tertentu, atau pembatasan tautan. Bukan sanksi.
+- **Sanksi**: tindakan setelah pemeriksaan, berupa teguran, peringatan, pembisuan, pengeluaran, blokir federasi, atau pencabutan kewenangan.
 - **Keputusan Moderasi**: keputusan tertulis berisi identitas, aturan yang dilanggar, bukti, tingkat pelanggaran, sanksi, dan cara keberatan.
 - **Keberatan**: permintaan pemeriksaan ulang oleh pihak yang kena sanksi kepada organ yang berbeda.
 - **Konflik Kepentingan**: Pengelola yang memeriksa perkara adalah pelapor, pihak dirugikan, pihak diperiksa, atau punya hubungan pribadi yang meragukan.
@@ -64,7 +64,7 @@ Aturan ini menggantikan tata tertib lama yang tidak punya definisi, pembagian tu
 4. Aturan tambahan grup hanya berlaku jika tertulis, diumumkan, tidak bertentangan, tidak membuat sanksi baru, dan bisa diakses anggota.
 5. Jika bertentangan, yang berlaku aturan ini.
 6. Admin grup bisa menarik grupnya kapan saja lewat pernyataan di grup koordinasi. Berlaku sejak dicatat, tidak surut, dan tidak menghentikan perkara yang berjalan.
-7. Sanksi berlaku di grup tempat pelanggaran. Yang berlaku lintas grup hanya blokir bersama untuk pelanggaran sangat berat. Warn, mute, kick, dan ban grup tidak otomatis menjadi blokir bersama.
+7. Ban dan mute yang dijatuhkan staf federasi berlaku lintas grup: keduanya dicatat satu kali dan diterapkan ke semua grup terhubung. Kick dan warn berlaku di grup tempat perintah dijalankan. Warn yang mencapai batas memicu ban federasi otomatis; warn lintas grup juga bisa memicu ban federasi bila batas federasi diaktifkan. Tidak ada "ban grup" terpisah dari ban federasi.
 
 ## Aturan penting
 
@@ -72,9 +72,20 @@ Aturan ini menggantikan tata tertib lama yang tidak punya definisi, pembagian tu
 2. Jika ragu, pilih penafsiran yang menguntungkan pihak yang diperiksa.
 3. Satu perbuatan hanya kena satu aturan, yaitu yang paling khusus. Tidak boleh dihukum dua kali.
 
+## Penegakan lewat bot
+
+Bot federasi menjalankan empat tindakan dengan jangkauan yang berbeda:
+
+- **Ban federasi** (`/tcban`, `/tcunban`): satu keputusan berlaku di semua grup terhubung dan grup utama, dengan bukti wajib dan dapat diajukan banding.
+- **Mute federasi** (`/tcmute`, `/tcunmute`): pembatasan pesan berlaku di semua grup terhubung dan grup utama, bisa tetap atau berjangka.
+- **Kick** (`/tckick`): mengeluarkan target hanya dari grup tempat perintah dijalankan. Tidak mencabut ban atau mute federasi.
+- **Warn** (`/tcwarn`): peringatan dicatat per grup. Bila jumlahnya mencapai batas grup, bot menjatuhkan ban federasi otomatis dan warn di grup itu dihapus.
+
+Tindakan yang gagal dikirim ke sebuah grup tetap dicatat sebagai pekerjaan berulang sampai berhasil atau batas percobaan habis. Satu grup yang gagal tidak membatalkan tindakan di grup lain.
+
 ## Daftar yang dipelihara Admin Federasi
 
-- Daftar grup anggota, daftar pengelola, dan daftar blokir bersama, disimpan di kanal resmi TCF dan grup koordinasi admin.
+- Daftar grup anggota, daftar pengelola, dan daftar blokir federasi, disimpan di kanal resmi TCF dan grup koordinasi admin.
 - Daftar grup anggota juga memuat keterangan ruang transaksi resmi.
 - Setiap perubahan dicatat dengan tanggal dan nama grup.
 - Hasil polling di grup koordinasi hanya bahan evaluasi, belum mengubah aturan.

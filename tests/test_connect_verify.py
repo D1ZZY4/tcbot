@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Bot-added verification walks the three membership requirements, then confirms."""
+"""Bot-added verification walks three requirements, the moderation scope, then confirms."""
 
 from __future__ import annotations
 
@@ -17,28 +17,31 @@ from tcbot.modules.helper.pipelines import connect_verify, connected_flow
 
 def test_verify_keyboard_advances_then_connects() -> None:
     flow = connected_flow.BuildConnection("TCF")
-    for step in (0, 1, 2):
+    for step in (0, 1, 2, 3):
         markup = flow.verify_keyboard(step, "en-US")
         callbacks = [
             button.callback_data for row in markup.inline_keyboard for button in row
         ]
         assert callbacks[0] == f"tc_verify_{step + 1}"
         assert callbacks[1] == "tc_cancel"
-    final = flow.verify_keyboard(3, "en-US")
+    final = flow.verify_keyboard(4, "en-US")
     callbacks = [
         button.callback_data for row in final.inline_keyboard for button in row
     ]
     assert callbacks == ["tc_join", "tc_cancel"]
 
 
-def test_verify_prompt_shows_requirements_then_confirmation() -> None:
+def test_verify_prompt_shows_requirements_scope_then_confirmation() -> None:
     flow = connected_flow.BuildConnection("TCF")
     for step, marker in enumerate(("1.", "2.", "3.")):
         text = flow.verify_prompt(step, "en-US")
-        assert "Membership requirements" in text
+        assert "Before connecting" in text
         assert marker in text
-    final = flow.verify_prompt(3, "en-US")
-    assert "confirmed all three requirements" in final
+    scope = flow.verify_prompt(3, "en-US")
+    assert "Moderation scope" in scope
+    assert "mutes apply in every connected group" in scope
+    final = flow.verify_prompt(4, "en-US")
+    assert "three requirements and the moderation scope" in final
 
 
 def test_non_owner_cannot_advance_the_verification(

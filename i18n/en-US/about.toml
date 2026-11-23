@@ -15,8 +15,9 @@ label = "The Federation"
 lead = "What {community} is, and what it is not."
 item_1 = "A voluntary federation of independent Telegram groups around Transsion devices. It is not a company or a legal entity."
 item_2 = "Every group keeps its own rules. These rules are only a shared minimum, so a group rule may be stricter but not contradictory."
-item_3 = "A federation ban applies across connected groups. Local warns, mutes, kicks, and group bans stay local."
+item_3 = "A federation ban and a federation mute apply across every connected group. A kick only removes the target from the group where it was issued."
 item_4 = "Rules change by group vote, not by one admin acting alone."
+item_5 = "Warnings are recorded per group. Reaching the limit triggers an automatic federation ban, and a failed delivery is retried without cancelling the action in other groups."
 tail = "Joining accepts this minimum standard without giving up group independence."
 
 [section.keanggotaan]

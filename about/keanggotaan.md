@@ -15,7 +15,7 @@ Siapa yang menjadi anggota, kapan keanggotaan mulai dan berakhir, serta hak dan 
 
 - **Platform Komunitas**: grup anggota, kanal resmi TCF, dan grup koordinasi admin.
 - **Pengelola**: Administrator dan Moderator grup anggota.
-- **Sanksi**: tindakan setelah pemeriksaan, berupa teguran, pembisuan, pembatasan hak, pengeluaran, blokir bersama, atau pencabutan kewenangan.
+- **Sanksi**: tindakan setelah pemeriksaan, berupa teguran, peringatan, pembisuan, pengeluaran, blokir federasi, atau pencabutan kewenangan.
 - **Keputusan Moderasi**: keputusan tertulis berisi identitas, aturan yang dilanggar, bukti, tingkat pelanggaran, sanksi, dan cara keberatan.
 - **Informasi Pribadi**: data orang yang belum ia umumkan sendiri, seperti alamat, nomor telepon, email pribadi, lokasi, dokumen identitas, foto pribadi, dan isi chat pribadi. Nama pengguna publik dan tautan repositori publik bukan Informasi Pribadi.
 - **Materi Pengujian**: Karya yang belum dirilis, berkas build, tautan unduhan terbatas, data login uji, catatan perubahan yang belum diumumkan, dan info teknis yang dinyatakan rahasia.
@@ -29,7 +29,7 @@ Siapa yang menjadi anggota, kapan keanggotaan mulai dan berakhir, serta hak dan 
 ## Mulai dan berakhirnya keanggotaan
 
 1. Mulai saat orang bergabung dan teks aturan tersedia di grup atau kanal resmi.
-2. Berakhir jika keluar atau dikeluarkan, kena blokir bersama yang sudah tetap, atau grup dibubarkan atau berhenti jadi anggota.
+2. Berakhir jika keluar atau dikeluarkan, kena blokir federasi yang sudah tetap, atau grup dibubarkan atau berhenti jadi anggota.
 3. Berakhir di satu grup tidak otomatis berakhir di grup lain.
 4. Kewajiban rahasia atas Informasi Pribadi dan Materi Pengujian tetap berlaku.
 5. Pengelola masih bisa menyelesaikan pemeriksaan pelanggaran lama maksimal 30 hari sejak keanggotaan berakhir.
@@ -54,3 +54,4 @@ Siapa yang menjadi anggota, kapan keanggotaan mulai dan berakhir, serta hak dan 
 
 - Bergabung di satu grup tidak menimbulkan keanggotaan langsung di TCF.
 - Kewajiban rahasia melekat pada informasinya, bukan pada status keanggotaan.
+- Ban dan mute federasi berlaku di semua grup terhubung; kick dan warn tetap di grup tempat tindakan dijalankan, dan warn yang mencapai batas memicu ban federasi.

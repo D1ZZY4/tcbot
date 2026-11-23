@@ -33,6 +33,7 @@ from tcbot.modules.helper.messages import (
     send_log,
     send_text,
 )
+from tcbot.modules.helper.messages.rich_format import divider, heading, paragraph
 from tcbot.modules.helper.pipelines.connect_verify import handle_verify_step
 from tcbot.utils.dispatch import (
     count_transient_errors,
@@ -191,10 +192,6 @@ class ConnectionAddedMixin:
 
         def join_keyboard(self, locale: str | None = None) -> InlineKeyboardMarkup:
             """Connect / Cancel keyboard."""
-            ...
-
-        def join_prompt(self, locale: str | None = None) -> str:
-            """Build the initial prompt."""
             ...
 
     async def on_bot_added(
@@ -660,11 +657,11 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
     verify_callback: str = field(default="tc_verify", kw_only=True)
 
     def verify_prompt(self, step: int, locale: str | None = None) -> str:
-        """Build one membership verification page shown before connecting."""
+        """Build one rich verification page shown before connecting."""
         title = t("connecting.verify.heading", locale, plain=True)
-        key = "final" if step >= 3 else f"step_{step + 1}"
-        body = t(f"connecting.verify.{key}", locale, plain=True)
-        return f"{title}\n\n{body}"
+        key = "final" if step >= 4 else f"step_{step + 1}"
+        body = t(f"connecting.verify.{key}", locale)
+        return "\n".join((heading(title), divider(), paragraph(body)))
 
     def verify_keyboard(
         self, step: int, locale: str | None = None
@@ -676,15 +673,6 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
             self.join_callback,
             self.cancel_callback,
             locale,
-        )
-
-    def join_prompt(self, locale: str | None = None) -> str:
-        """Return the initial prompt sent when the bot is first added."""
-        return t(
-            "connecting.state.join_prompt",
-            locale,
-            community=self.community_name,
-            plain=True,
         )
 
     def connected_message(self, locale: str | None = None) -> str:
