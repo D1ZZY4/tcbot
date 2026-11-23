@@ -38,6 +38,7 @@ jobs:
       - name: Update dependencies
         id: update
         run: |
+          set -o pipefail
           echo "Updating dependencies..."
           uv lock --upgrade 2>&1 | tee update.log
 

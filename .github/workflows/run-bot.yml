@@ -83,6 +83,7 @@ jobs:
       ALBUM_DEBOUNCE_SECONDS:  ${{ secrets.ALBUM_DEBOUNCE_SECONDS }}
       MODULES_LOAD:            ${{ secrets.MODULES_LOAD }}
       MODULES_NO_LOAD:         ${{ secrets.MODULES_NO_LOAD }}
+      INFRA_CHAT_IDS:          ${{ secrets.INFRA_CHAT_IDS }}
       SENTRY_DSN:              ${{ secrets.SENTRY_DSN }}
 
     steps:
