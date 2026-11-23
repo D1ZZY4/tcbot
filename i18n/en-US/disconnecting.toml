@@ -38,6 +38,7 @@ body = """
 [state]
 usage = "Usage: /rmtc <chat_id>"
 primary_refused = "This is the main group of the federation. It cannot be disconnected: the main group hosts enforcement and the federation log, so the bot must stay."
+infrastructure_refused = "This chat is a deployment destination such as a log, proof, or appeal channel. It must stay connected so federation delivery keeps working."
 status_failed = "Could not verify the group status. Please try again."
 not_connected = "This group is not connected to {community}."
 anon_admin = "Anonymous admin mode is active. Please send this command from your personal account, or ask TC Staff to run /rmtc."

@@ -226,6 +226,16 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode=None,
         )
         return
+    # * A legacy connection row must not let /rmtc make the bot leave a
+    # * configured log, proof, or appeal destination.
+    if cfg.is_infrastructure_chat(chat_id):
+        await reply_rich(
+            msg,
+            t("disconnecting.state.infrastructure_refused", locale, plain=True),
+            log_label="cmd_rmtc infrastructure-chat",
+            parse_mode=None,
+        )
+        return
 
     # * Mirror cmd_tcdisconnect: never leave on an unconfirmed DB write,
     # * and never crash out without a reply on a DB outage.

@@ -38,6 +38,7 @@ body = """
 [state]
 usage = "Pakai: /rmtc <chat_id>"
 primary_refused = "Ini grup utama federasi. Ia tidak bisa diputus: grup utama menampung penegakan dan log federasi, jadi bot harus tetap di sini."
+infrastructure_refused = "Chat ini adalah tujuan deployment seperti kanal log, bukti, atau banding. Chat ini harus tetap terhubung agar pengiriman federasi terus berjalan."
 status_failed = "Tidak bisa memverifikasi status grup. Coba lagi."
 not_connected = "Grup ini tidak terhubung ke {community}."
 anon_admin = "Mode admin anonim aktif. Kirim perintah ini dari akun pribadimu, atau minta Staf TC menjalankan /rmtc."

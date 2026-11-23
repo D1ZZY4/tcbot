@@ -528,6 +528,17 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     if await _in_federation(chat.id, action="join_request") is False:
         return
 
+    # * The protected Owner is never a valid enforcement target, whichever
+    # * join path they use. A lookup failure keeps the existing fail-closed
+    # * decline rather than admitting an unverified user.
+    try:
+        if await db.users_roles.get_effective_role(user.id, fresh=True) == "owner":
+            return
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.debug("Owner check failed for uid=%d on join_request", user.id)
+
     # * Opportunistic identity harvest + ban check in parallel.
     # * harvest_user_identity skips the DB write when identity is unchanged (L1 hit).
     harvest_r, ban = await asyncio.gather(
