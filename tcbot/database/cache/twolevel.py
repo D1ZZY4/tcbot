@@ -532,6 +532,17 @@ class TwoLevelCache[T]:
                                 )
                             else:
                                 metrics.record_hit("l2")
+                                # * The tombstone was checked before the GET.
+                                # * Another process can revoke between that
+                                # * check and this promotion, so confirm the
+                                # * value is still live before writing L1.
+                                if self._critical_delete and await self._tombstoned(
+                                    rc, key
+                                ):
+                                    log.debug(
+                                        "Discarding tombstoned Redis hit for %s", key
+                                    )
+                                    return loaded
                                 if (
                                     state.generation != generation
                                     or self._epoch != epoch
@@ -549,9 +560,11 @@ class TwoLevelCache[T]:
                                     )
                                     return loaded
                                 # * An L2 hit is a cache write in L1; advance
-                                # * the generation so a concurrent peek that
-                                # * captured the old one cannot undo it.
+                                # * both counters so a concurrent peek or a
+                                # * batch reader that captured the old values
+                                # * cannot undo it.
                                 self._advance(key)
+                                self._revision += 1
                                 self._mem.put(key, loaded)
                                 return loaded
 
@@ -646,9 +659,11 @@ class TwoLevelCache[T]:
 
     def _publish(self, key: Any, val: T) -> None:
         """Store *val* in the memory layer and enqueue the ordered Redis write."""
-        # * Publishing is a write like put(): advance the generation so a
-        # * peek() that captured the old one cannot republish stale L2 data.
+        # * Publishing is a write like put(): advance both counters so a
+        # * peek() or a batch reader that captured the old values cannot
+        # * republish stale data over the fetched result.
         self._advance(key)
+        self._revision += 1
         self._mem.put(key, val)
         self._pending_invalidations.discard(key)
         self._enqueue_write(key, val)
