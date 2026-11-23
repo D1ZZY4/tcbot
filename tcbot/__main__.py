@@ -37,7 +37,7 @@ from tcbot.database.engine import close as close_database
 from tcbot.database.engine import connect
 from tcbot.enforcement_worker import configure as configure_enforcement_worker
 from tcbot.enforcement_worker import run as run_enforcement_worker
-from tcbot.modules import get_handlers
+from tcbot.modules import get_handlers, handler_group
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.modules.helper.extraction import refresh as identity_refresh
 from tcbot.modules.helper.pipelines import connected_flow, stats_flow
@@ -494,7 +494,7 @@ def register_handlers(app: Application) -> None:
         group=_HANDLER_GROUP_RATE_LIMITER,
     )
     for handler in get_handlers():
-        app.add_handler(handler)
+        app.add_handler(handler, group=handler_group(handler))
     app.add_handler(
         TypeHandler(Update, _update_member_cache), group=_HANDLER_GROUP_CACHE
     )

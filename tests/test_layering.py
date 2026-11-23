@@ -28,6 +28,7 @@ import pytest
 
 from tcbot import error_reporter
 from tcbot import modules as modules_mod
+from tcbot.modules import stats as stats_mod
 from tcbot.utils import logger as logger_mod
 
 _TCBOT_ROOT = Path(__file__).resolve().parent.parent / "tcbot"
@@ -395,3 +396,23 @@ def test_no_load_typo_is_refused_with_an_allowlist(
     )
     with pytest.raises(SystemExit):
         modules_mod._filter_modules(["bans", "netspeed"])
+
+
+def test_stats_search_handler_runs_after_group_zero_conversations() -> None:
+    """The free-text search handler must not swallow a /tcwarn reason."""
+    assert modules_mod.handler_group(stats_mod._search_input_handler) == 5
+    assert all(
+        modules_mod.handler_group(h) == 0
+        for h in modules_mod.get_handlers()
+        if h is not stats_mod._search_input_handler
+    )
+
+
+def test_allowlist_duplicates_are_dropped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A repeated allowlist name must not register the same handlers twice."""
+    monkeypatch.setattr(
+        modules_mod,
+        "cfg",
+        SimpleNamespace(modules_load=("bans", "bans", "netspeed"), modules_no_load=()),
+    )
+    assert modules_mod._filter_modules(["bans", "netspeed"]) == ["bans", "netspeed"]

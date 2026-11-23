@@ -74,8 +74,12 @@ describes itself, `get_help(locale)`.
 
 `register_handlers()` attaches, in order, the global rate-limit handler, the
 collected module handlers, the member-cache harvester, and the error handler.
-Commands are matched by `build_prefixed_filters()` against all configured
-prefixes. See [Commands](../reference/commands.md) for the ownership table.
+Most module handlers sit in PTB group `0`. A handler that consumes free text and
+must not shadow an active conversation declares a `handler_group`, which the
+caller honours when registering it; the stats ban-search input uses this to run
+in a later group. Commands are matched by `build_prefixed_filters()` against all
+configured prefixes. See [Commands](../reference/commands.md) for the ownership
+table.
 
 ## Handler anatomy
 

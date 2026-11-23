@@ -61,7 +61,9 @@ def _filter_modules(modules: list[str]) -> list[str]:
             raise SystemExit(1)
 
     if to_load:
-        modules = [m for m in to_load if m in modules]
+        # * A repeated name would import once but register the same handlers
+        # * twice, so keep the first occurrence of each name.
+        modules = [m for m in dict.fromkeys(to_load) if m in modules]
     if no_load:
         log.info("Not loading modules: %s", no_load)
         modules = [m for m in modules if m not in no_load]
@@ -109,3 +111,14 @@ def get_handlers() -> list[BaseHandler[Any, Any, Any]]:
             log.debug("Loaded %d handler(s) from %s", len(mod_handlers), mod_name)
 
     return handlers
+
+
+def handler_group(handler: BaseHandler[Any, Any, Any]) -> int:
+    """Return the PTB group a module handler asked to be registered in.
+
+    Most handlers stay in group 0. A free-text handler that must not shadow an
+    active conversation marks itself with ``handler_group`` so the caller can
+    place it in a later group, where PTB only sees it if no group-0 handler
+    consumed the update.
+    """
+    return int(getattr(handler, "handler_group", 0))

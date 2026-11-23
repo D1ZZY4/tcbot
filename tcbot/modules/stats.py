@@ -428,6 +428,26 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 _STATS_CMDS = build_prefixed_filters("tcstats") | build_prefixed_filters("tcs")
 
+
+class _DeferredMessageHandler(MessageHandler):
+    """A message handler registered after group-0 conversations.
+
+    PTB processes groups in order and stops at the first match in each group.
+    Carrying the target group on the class keeps a free-text handler from
+    swallowing input that belongs to an active conversation.
+    """
+
+    handler_group: int = 5
+
+
+# * The search prompt consumes free text in its own PTB group. In group 0 it
+# * would be registered before the later-sorted warn conversation and swallow
+# * the reason the moderator types after /tcwarn.
+_search_input_handler = _DeferredMessageHandler(
+    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
+    on_bans_search_input,
+)
+
 __handlers__ = [
     MessageHandler(_STATS_CMDS, cmd_stats),
     CallbackQueryHandler(on_stats_main, pattern=r"^stats_main$"),
@@ -438,12 +458,9 @@ __handlers__ = [
     CallbackQueryHandler(on_stats_bans_search, pattern=r"^stats_bans_search$"),
     CallbackQueryHandler(on_stats_search_back, pattern=r"^stats_search_back$"),
     CallbackQueryHandler(on_stats_search_cancel, pattern=r"^stats_search_cancel$"),
-    # * The handler is registered in every chat because the panel can be
-    # * opened from a group. It returns immediately unless SEARCH_KEY is set
-    # * and the message comes from the chat that owns the panel, so ordinary
-    # * group chatter is never absorbed.
-    MessageHandler(
-        filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
-        on_bans_search_input,
-    ),
+    # * Registered in every chat because the panel can be opened from a
+    # * group. Its own PTB group keeps it behind group-0 conversations; it
+    # * also returns immediately unless SEARCH_KEY is set and the message
+    # * comes from the chat that owns the panel.
+    _search_input_handler,
 ]
