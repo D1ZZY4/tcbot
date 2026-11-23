@@ -33,10 +33,12 @@ def about_msg(locale: str | None = None) -> str:
     community = cfg.community_name
     return "\n".join(
         (
-            heading(t("about.index.title", locale, community=community)),
+            # * heading() escapes its argument, so the community name must
+            # * reach it as raw text; rich-mode t() would escape it twice.
+            heading(t("about.index.title", locale, community=community, plain=True)),
             paragraph(t("about.index.lead", locale, community=community)),
             divider(),
-            paragraph(t("about.index.hint", locale, plain=True)),
+            paragraph(t("about.index.hint", locale)),
         )
     )
 

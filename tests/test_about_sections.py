@@ -6,11 +6,16 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import pytest
+
 from tcbot.modules.helper.buttons import about_sections_btn, back_to_about_btn
 from tcbot.modules.helper.messages import (
     about_msg,
     about_section_labels,
     about_section_msg,
+    panels,
 )
 
 
@@ -30,6 +35,18 @@ def test_index_uses_rich_blocks() -> None:
     assert "<h2>" in text
     assert "<p>" in text
     assert "<hr/>" in text
+
+
+def test_index_escapes_the_community_name_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The community name must not be escaped twice in the heading."""
+    monkeypatch.setattr(panels, "cfg", SimpleNamespace(community_name="A & B <group>"))
+    text = about_msg("en-US")
+    heading_region = text.split("</h2>")[0]
+    assert "A &amp; B &lt;group&gt;" in heading_region
+    assert "&amp;amp;" not in heading_region
+    assert "&amp;lt;" not in heading_region
 
 
 def test_each_section_renders_its_items() -> None:

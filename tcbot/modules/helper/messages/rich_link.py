@@ -41,7 +41,7 @@ def link(text: object, url: str) -> str:
 
 def user_ref(user_id: int, name: str) -> str:
     """Mention a user by ID. Non-positive IDs render as bold text."""
-    label = str(name) or str(user_id)
+    label = str(name) if name else str(user_id)
     if user_id <= 0:
         return bold(label)
     return link(label, f"tg://user?id={user_id}")
