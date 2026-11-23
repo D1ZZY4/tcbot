@@ -356,6 +356,7 @@ class TwoLevelCache[T]:
             except Exception as exc:
                 _redis_mod.mark_op(ok=False)
                 log.debug("Redis peek failed for %s: %s", rkey, exc)
+                metrics.record_miss()
                 return CACHE_MISS
             _redis_mod.mark_op(ok=True)
             if raw is None:
@@ -439,7 +440,6 @@ class TwoLevelCache[T]:
                     if raw is None:
                         metrics.record_miss()
                         continue
-                    metrics.record_hit("l2")
                     try:
                         loaded: T = _decode_redis_value(raw)
                     except Exception as exc:
@@ -448,7 +448,9 @@ class TwoLevelCache[T]:
                             self._rkey(key),
                             exc,
                         )
+                        metrics.record_miss()
                         continue
+                    metrics.record_hit("l2")
                     if (
                         states[key].generation == generations[key]
                         and self._epoch == epoch
@@ -546,6 +548,10 @@ class TwoLevelCache[T]:
                                         key,
                                     )
                                     return loaded
+                                # * An L2 hit is a cache write in L1; advance
+                                # * the generation so a concurrent peek that
+                                # * captured the old one cannot undo it.
+                                self._advance(key)
                                 self._mem.put(key, loaded)
                                 return loaded
 
@@ -640,6 +646,9 @@ class TwoLevelCache[T]:
 
     def _publish(self, key: Any, val: T) -> None:
         """Store *val* in the memory layer and enqueue the ordered Redis write."""
+        # * Publishing is a write like put(): advance the generation so a
+        # * peek() that captured the old one cannot republish stale L2 data.
+        self._advance(key)
         self._mem.put(key, val)
         self._pending_invalidations.discard(key)
         self._enqueue_write(key, val)
