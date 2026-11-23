@@ -53,7 +53,7 @@ needed. See [Extraction and user data](extraction-user-data.md).
 
 | Pane | Callback | Renderer |
 |---|---|---|
-| Profile | `check_main:<target_id>` | `check_flow.py::CheckProfileMixin.profile` |
+| Profile | `check_main:<target_id>` | `check_panels.py::CheckProfileMixin.profile` |
 | Ban list | `check_bans:<target_id>:<page>` | `CheckBansMixin.bans_list` via `_ban_list_render` |
 | Ban detail | `check_ban_item:<target_id>:<ban_id>` | `CheckBansMixin.ban_detail` using `build_ban_detail()` |
 | Appeal list | `check_appeals:<target_id>:<page>` | `CheckBansMixin.appeals_list` via `_ban_list_render` |
@@ -103,7 +103,7 @@ live with a bounded lookup and a bounded fan-out.
 
 | Pane | Callback | Renderer |
 |---|---|---|
-| Overview | `stats_main` | `stats_flow.py::OverviewViews.main` |
+| Overview | `stats_main` | `stats_panels.py::OverviewViews.main` |
 | Staff roster | `stats_admins` | `OverviewViews.staff_roster` |
 | Cached users | `stats_users:<page>` | `PeopleViews.users_list` (User, ID, Username, First seen, Last seen) |
 | Connected groups | `stats_chats:<page>` | `ChatViews.chats_list` (Group, ID, Connected by, Date) |
@@ -129,7 +129,7 @@ and Back. Search context is stored in `ctx.user_data` and cleared on exit.
 sequenceDiagram
     participant Tap as Callback tap
     participant Handler as check.py or stats.py handler
-    participant Flow as *_flow.py view
+    participant Flow as *_panels.py view
     participant DB as database helpers
     participant Buttons as buttons/nav.py and buttons/common.py
     Tap->>Handler: prefix:page or prefix:page:idx stable
@@ -147,8 +147,8 @@ sequenceDiagram
 
 | View family | Page size | Page callbacks |
 |---|---|---|
-| `/check` ban, appeal, warn, kick, mute lists | `_PAGE_SIZE = 5` in `check_flow.py` | `<prefix>:<page - 1>`, `<prefix>:<page + 1>` |
-| `/tcstats` users, groups, bans | `_PAGE_SIZE = 5` in `stats_flow.py` | Same `nav_row` shape |
+| `/check` ban, appeal, warn, kick, mute lists | `_PAGE_SIZE = 5` in `check_panels.py` | `<prefix>:<page - 1>`, `<prefix>:<page + 1>` |
+| `/tcstats` users, groups, bans | `_PAGE_SIZE = 5` in `stats_panels.py` | Same `nav_row` shape |
 | `/tcstats` search results | `_SEARCH_LIMIT = 30` hits, no paging row | No item callbacks |
 
 `utils/pagination.py` owns `clamp_page(total, page, page_size)` and

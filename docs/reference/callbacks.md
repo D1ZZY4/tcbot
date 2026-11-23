@@ -9,19 +9,19 @@ were formerly in a separate button-styles reference.
 
 | Domain | Constant | Value | Owner |
 |---|---|---|---|
-| Ban | `WAITING_PROOF` | 0 | `pipelines/ban_flow.py` |
-| Ban | `WAITING_UPDATE_CONFIRM` | 1 | `pipelines/ban_flow.py` |
+| Ban | `WAITING_PROOF` | 0 | `pipelines/ban_actions.py` |
+| Ban | `WAITING_UPDATE_CONFIRM` | 1 | `pipelines/ban_actions.py` |
 | Ban rules | `WAITING_BAN_RULES` | 2 | `pipelines/ban_rules_step.py` |
 | Ban rules | `WAITING_BAN_RULES_NOTE` | 3 | `pipelines/ban_rules_step.py` |
-| Kick, mute, warn | `WAITING_REASON` | 0 | `pipelines/reason_flow.py` |
-| Kick, mute, warn | `WAITING_PROOF` | 1 | `pipelines/reason_flow.py` |
-| Kick, mute, warn | `WAITING_RULES` | 2 | `pipelines/reason_flow.py` |
-| Kick, mute, warn | `WAITING_RULES_NOTE` | 3 | `pipelines/reason_flow.py` |
-| Rules editor | `WAITING_EDITOR_MENU` | 0 | `pipelines/rules_flow.py` |
-| Rules editor | `WAITING_CONFIRM_DISCARD` | 5 | `pipelines/rules_flow.py` |
-| Appeal | `WAITING_APPEAL` | 0 | `pipelines/appeal_submit_flow.py` |
+| Kick, mute, warn | `WAITING_REASON` | 0 | `pipelines/mod_action_steps.py` |
+| Kick, mute, warn | `WAITING_PROOF` | 1 | `pipelines/mod_action_steps.py` |
+| Kick, mute, warn | `WAITING_RULES` | 2 | `pipelines/mod_action_steps.py` |
+| Kick, mute, warn | `WAITING_RULES_NOTE` | 3 | `pipelines/mod_action_steps.py` |
+| Rules editor | `WAITING_EDITOR_MENU` | 0 | `pipelines/rules_editor.py` |
+| Rules editor | `WAITING_CONFIRM_DISCARD` | 5 | `pipelines/rules_editor.py` |
+| Appeal | `WAITING_APPEAL` | 0 | `pipelines/appeal_submit.py` |
 
-`check_flow.py`, `stats_flow.py`, and other flows define no `WAITING_*` state.
+`check_panels.py`, `stats_panels.py`, and other flows define no `WAITING_*` state.
 Stats search uses `ctx.user_data` keys instead.
 
 ## Callback namespace by domain
@@ -33,11 +33,11 @@ whose `CallbackQueryHandler` pattern matches it.
 
 | Callback pattern | Built by | Handled by |
 |---|---|---|
-| `ban_cancel` | `buttons/ban.py`, `buttons/flows.py` | `ban_flow.py` with `^ban_cancel$`; `rules_step:cancel` also stops the rules step. |
+| `ban_cancel` | `buttons/ban.py`, `buttons/flows.py` | `ban_actions.py` with `^ban_cancel$`; `rules_step:cancel` also stops the rules step. |
 | `ban_continue` | `buttons/ban.py::ban_confirm_btn` | `ban_confirmation.py` with `^ban_continue$`. |
-| `ban_done_proof` | `buttons/flows.py::proof_step_btn` | `ban_flow.py` with `^ban_done_proof$`. |
-| `rules_step:pick:<id>` | `buttons/rules.py::picker_btn` | `ban_rules_step.py` and `reason_flow.py`. |
-| `rules_step:done`, `other`, `clear`, `cancel` | `buttons/rules.py::picker_btn` | `ban_rules_step.py` and `reason_flow.py`. The rules editor fallback handles `rules_step:cancel` only. |
+| `ban_done_proof` | `buttons/flows.py::proof_step_btn` | `ban_actions.py` with `^ban_done_proof$`. |
+| `rules_step:pick:<id>` | `buttons/rules.py::picker_btn` | `ban_rules_step.py` and `mod_action_steps.py`. |
+| `rules_step:done`, `other`, `clear`, `cancel` | `buttons/rules.py::picker_btn` | `ban_rules_step.py` and `mod_action_steps.py`. The rules editor fallback handles `rules_step:cancel` only. |
 
 `buttons/ban.py` also builds URL-only buttons with no `callback_data`:
 `action_proof_btn`, `appeal_button_btn`, `join_ban_btn`, `detail_btn`.
@@ -46,11 +46,11 @@ whose `CallbackQueryHandler` pattern matches it.
 
 | Callback pattern | Handled by |
 |---|---|
-| `<action>_cancel` for `kick`, `mute`, `warn` | `reason_flow.py` with `^<action>_cancel$`. |
+| `<action>_cancel` for `kick`, `mute`, `warn` | `mod_action_steps.py` with `^<action>_cancel$`. |
 | `<action>_skip_reason` | Registered only when `skip_allowed`; all three consumers use `False`, so it is not emitted. |
-| `<action>_skip_proof` | Emitted by `proof_step_btn` for kick, mute, and warn (default `skip_allowed=True`) and handled by `reason_flow.py`; suppressed only for ban. |
-| `<action>_done_proof` | `reason_flow.py` with `^<action>_done_proof$`. |
-| `rules_step:*` | `reason_flow.py` in `WAITING_RULES` and its fallback. |
+| `<action>_skip_proof` | Emitted by `proof_step_btn` for kick, mute, and warn (default `skip_allowed=True`) and handled by `mod_action_steps.py`; suppressed only for ban. |
+| `<action>_done_proof` | `mod_action_steps.py` with `^<action>_done_proof$`. |
+| `rules_step:*` | `mod_action_steps.py` in `WAITING_RULES` and its fallback. |
 
 ### Appeals
 
@@ -59,7 +59,7 @@ whose `CallbackQueryHandler` pattern matches it.
 | `appeal_approve_<ban_id>_<review_message_id>` | `buttons/appeal.py` | `appeals.py` then `AppealReviewMixin.on_decision`. |
 | `appeal_reject_<ban_id>_<review_message_id>` | `buttons/appeal.py` | Same handler. |
 | `appeal_approve_<ban_id>`, `appeal_reject_<ban_id>` | Legacy cards without suffix | Same handler; falls back to the tapped message id. |
-| `cancel_appeal` | `buttons/appeal.py::appeal_cancel_btn` | `appeal_submit_flow.py`. |
+| `cancel_appeal` | `buttons/appeal.py::appeal_cancel_btn` | `appeal_submit.py`. |
 
 ### Roles
 
@@ -67,7 +67,7 @@ whose `CallbackQueryHandler` pattern matches it.
 |---|---|---|
 | `promo_approve:<id>`, `promo_reject:<id>` | `buttons/admin.py::promo_decision_btn` | `admins.py`. |
 | `promo_role:<role>:<target_id>[:<executor_id>]` | `buttons/admin.py::promote_role_btn` | `admins.py`. |
-| `role_change:<role>:<target_id>[:<executor_id>]`, `role_change_cancel:<target_id>[:<executor_id>]` | `buttons/admin.py::role_change_btn` | `roles_flow.py`; moves an existing staff member between tiers. |
+| `role_change:<role>:<target_id>[:<executor_id>]`, `role_change_cancel:<target_id>[:<executor_id>]` | `buttons/admin.py::role_change_btn` | `promote_steps.py`; moves an existing staff member between tiers. |
 | `promo_role_cancel:<target_id>[:<executor_id>]` | `buttons/admin.py::promote_role_btn` | `admins.py`. |
 | `demote_confirm:<target_id>[:<executor_id>]` | `buttons/admin.py::demote_confirm_btn` | `admins.py`. |
 | `demote_cancel:<target_id>[:<executor_id>]` | `buttons/admin.py::demote_confirm_btn` | `admins.py`. |
@@ -82,10 +82,10 @@ two-part shapes remain valid.
 | `rules_ack:<version>:<member>` | `buttons/rules.py::ack_btn` | `rules.py`. |
 | `rules_show:<key>` | `buttons/rules.py::rules_menu_btn` | `rules.py`. |
 | `rules_menu`, `rules_page:<n>` | `buttons/rules.py` | `rules.py`. |
-| `rules_edit_draft`, `rules_panel`, `rules_preview`, `rules_publish`, `rules_settings`, `rules_discard` | `editor_panel_btn`, `categories_btn` | `rules_flow.py` menu state. |
-| `rules_discard_yes`, `rules_discard_no` | `buttons/rules.py::confirm_btn` | `rules_flow.py` discard state. |
-| `rules_cat:<key>`, `rules_cat_add`, `rules_cat_rename:<key>`, `rules_cat_up:<key>`, `rules_cat_down:<key>`, `rules_cat_del:<key>` | `buttons/rules.py::categories_btn` | `rules_flow.py` menu state. |
-| `rules_item_add`, `rules_categories` | `buttons/rules.py::items_btn` | `rules_flow.py` menu state. |
+| `rules_edit_draft`, `rules_panel`, `rules_preview`, `rules_publish`, `rules_settings`, `rules_discard` | `editor_panel_btn`, `categories_btn` | `rules_editor.py` menu state. |
+| `rules_discard_yes`, `rules_discard_no` | `buttons/rules.py::confirm_btn` | `rules_editor.py` discard state. |
+| `rules_cat:<key>`, `rules_cat_add`, `rules_cat_rename:<key>`, `rules_cat_up:<key>`, `rules_cat_down:<key>`, `rules_cat_del:<key>` | `buttons/rules.py::categories_btn` | `rules_editor.py` menu state. |
+| `rules_item_add`, `rules_categories` | `buttons/rules.py::items_btn` | `rules_editor.py` menu state. |
 
 ### Check and statistics
 
@@ -113,7 +113,7 @@ two-part shapes remain valid.
 ### Connection
 
 `tc_join` and `tc_cancel` are emitted by `buttons/flows.py::connect_join_btn`
-and handled by `connect.py` through `connected_flow.on_join_decision`.
+and handled by `connect.py` through `connect_added.on_join_decision`.
 
 ## Button conventions
 
@@ -133,7 +133,7 @@ Stale taps are answered and discarded.
 
 | Call site | Freshness keys |
 |---|---|
-| `reason_flow.py::_callback_is_live` | `<action>_prompt_chat`, `<action>_prompt_id`. |
+| `mod_action_steps.py::_callback_is_live` | `<action>_prompt_chat`, `<action>_prompt_id`. |
 | `ban_confirmation.py::stale_ban_callback` | `ban_prompt_chat_id`, `ban_prompt_msg_id`. |
 | `ban_rules_step.py` | Calls `stale_ban_callback()` before each action. |
-| `appeal_submit_flow.py::_on_cancel` | Inline check of `appeal_instruction_msg_id`. |
+| `appeal_submit.py::_on_cancel` | Inline check of `appeal_instruction_msg_id`. |

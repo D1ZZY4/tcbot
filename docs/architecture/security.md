@@ -63,7 +63,7 @@ grants:
 | `rules.view` | yes | yes | yes | yes |
 
 `rules.manage` and `rules.view` are enforced by direct
-`users_roles.has_permission()` calls in `rules_flow.py`, `reason_flow.py`, and
+`users_roles.has_permission()` calls in `rules_editor_steps.py`, `mod_action_steps.py`, and
 `ban_rules_step.py`. The `permission_only` decorator is defined for callers that
 want a decorator form, but no current handler uses it.
 

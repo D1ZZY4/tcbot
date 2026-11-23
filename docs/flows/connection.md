@@ -223,8 +223,8 @@ rich transport so its Connect/Cancel buttons render as rich buttons.
 | Name | Owner | Role |
 |---|---|---|
 | `cmd_tcconnect` | `connect.py` | Manual group entry. |
-| `on_bot_added` | `connected_flow.py` | `MY_CHAT_MEMBER` event owner; registered in `connect.py`. |
-| `complete_join` | `connected_flow.py` | Shared connector and replay. |
+| `on_bot_added` | `connect_added.py` | `MY_CHAT_MEMBER` event owner; registered in `connect.py`. |
+| `complete_join` | `connect_added.py` | Shared connector and replay. |
 | `queue_connect_replay` | `enforcement_db.py` | Durable remainder queue. |
 | `on_new_member`, `on_join_request`, `on_join_request_approved` | `greeting.py` | Join-time enforcement. |
 

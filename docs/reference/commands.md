@@ -29,7 +29,7 @@ Callback-only panels are listed at the end.
 
 | Module | Commands | Access |
 |---|---|---|
-| `admins.py` | `/tcpromote`, `/tcp`, `/tcsetrole`, `/tcsr`, `/tcdemote`, `/tcd`, `/tcpromoterequests`, `/tcreqs`, `/tcpromotelist`, `/tcplist` | Staff and Owner. |
+| `admins.py` | `/tcpromote`, `/tcp`, `/tcsetrole`, `/tcdemote`, `/tcd`, `/tcpromoterequests`, `/tcreqs`, `/tcpromotelist`, `/tcplist` | Staff and Owner. |
 | `admins.py` | `/transferowner`, `/tfowner` | Owner only. |
 | `admins.py` | `promo_approve:*`, `promo_reject:*`, `promo_role:*`, `demote_confirm:*` callbacks | Owner for approvals; staff for prompts. |
 
@@ -38,7 +38,7 @@ Callback-only panels are listed at the end.
 | Module | Commands | Access |
 |---|---|---|
 | `language.py` | `/language`, `/lang`, `/langs`, language callbacks | Anyone; group scope requires manage rights. |
-| `rules.py` | `/tcrules`, `/rules`, rule callbacks | Staff editor and public reader. |
+| `rules.py` | `/tcrules` (`/tcrls`), `/rules`, rule callbacks | Staff editor and public reader. |
 | `stats.py` | `/tcstats`, `/tcs`, stats callbacks | Anyone; drill-downs check rank. |
 | `start.py` | `/start`, main-menu callbacks | Anyone. |
 | `help.py` | `/help`, help callbacks | Anyone. |

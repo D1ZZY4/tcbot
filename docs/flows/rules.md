@@ -15,7 +15,7 @@ surface and fails closed when the lookup fails.
 
 ## Editor conversation
 
-`build_rules_conv()` in `rules_flow.py` drives the editor. Entry points are the
+`build_rules_conv()` in `rules_editor.py` drives the editor. Entry points are the
 `/tcrules` message and the `/start tcrules` deep link used by the group's Open in
 PM button, both in the moderator's private chat. One interactive state handles
 every panel callback and text step; the pending step is stored in the
@@ -153,7 +153,7 @@ Acknowledgment never appears on channel posts or in the `/rules` menu.
 
 ## Shared rules picker
 
-`rules_step.py` provides action-agnostic picker helpers: `callback_for`,
+`rules_picker.py` provides action-agnostic picker helpers: `callback_for`,
 `item_id_from_callback`, `toggle`, and `picker_text`. The flow stores selected
 item ids and an optional note in its conversation scope, then passes them to the
 decision writer, which links them to the case through
@@ -170,7 +170,7 @@ decision writer, which links them to the case through
 Ban owns a dedicated step in `ban_rules_step.py` with `WAITING_BAN_RULES` (2) for
 the picker and `WAITING_BAN_RULES_NOTE` (3) for the note, storing `ban_rules` and
 `ban_rules_note` in scope. Kick, mute, and warn share the generic picker step in
-`reason_flow.py`, which uses the same callbacks with its own scope key. The
+`mod_action_steps.py`, which uses the same callbacks with its own scope key. The
 picker therefore has a single implementation and a single callback vocabulary
 across all four moderation actions. With no published rules or no `rules.view`
 permission the step is skipped.
@@ -185,7 +185,10 @@ See [Persistence](persistence.md) for the shared write boundary.
 
 ## Logging and edge cases
 
-Category views render as rich tables through the rich transport.
+The public menu paginates one topic at a time. Each page is a rich payload with
+a position marker; its keyboard carries Prev, Next, and Close only, and the
+target index is clamped before the page is rendered. Legacy category, menu, and
+More callbacks remain registered for keyboards sent before pagination.
 `rules.publish.result` reports synced and failed slot counts. Editor
 authorization failures and publication errors are logged with the set id and
 operator id.
@@ -200,11 +203,11 @@ operator id.
 
 | Name | Owner | Role |
 |---|---|---|
-| `build_rules_conv` | `rules_flow.py` | ConversationHandler factory. |
-| `editor_allowed` | `rules_flow.py` | Re-check of `rules.manage`. |
+| `build_rules_conv` | `rules_editor.py` | ConversationHandler factory. |
+| `editor_allowed` | `rules_editor.py` | Re-check of `rules.manage`. |
 | `publish_rules` | `rules_publish.py` | Leased channel publication. |
 | `_ack_markup`, `_acknowledge` | `greeting.py`, `rules.py` | Welcome-time acknowledgment. |
-| `callback_for`, `toggle`, `picker_text` | `rules_step.py` | Shared picker helpers. |
+| `callback_for`, `toggle`, `picker_text` | `rules_picker.py` | Shared picker helpers. |
 
 ```bash
 uv run pytest tests/ -q -k rules

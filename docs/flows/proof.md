@@ -9,7 +9,7 @@ the archive written with the decision. It is used by
 
 ## Accepted media
 
-`PROOF_MEDIA_FILTER` in `proof_flow.py` is the single owner of which message
+`PROOF_MEDIA_FILTER` in `proof_steps.py` is the single owner of which message
 shapes count as evidence:
 
 ```python
@@ -40,8 +40,8 @@ there. Kick, mute, and warn use the default `skip_allowed=True`.
 ```mermaid
 flowchart TD
     START[Proof prompt shown] --> KIND{which flow family}
-    KIND -->|ban| SESS[ban_flow ProofSession registry]
-    KIND -->|kick mute warn| SCOPE[reason_flow scope buffer]
+    KIND -->|ban| SESS[ban_actions ProofSession registry]
+    KIND -->|kick mute warn| SCOPE[mod_action_steps scope buffer]
     SESS --> KEY[key is chat_id and user_id]
     SCOPE --> BUF[key is action_proof_msgs in flow scope]
     SESS --> DEB[debounce then hard 60 second cap]
@@ -53,7 +53,7 @@ flowchart TD
 The ban flow needs a timed auto-flush because it forbids Skip and must not hang
 on an abandoned proof. `ProofSession` in `proof_session.py` holds the messages,
 a meta snapshot of the conversation scope, the deadline, the last arrival, and
-the flush task. The other flows use the `_ProofStepMixin` in `reason_flow.py`,
+the flush task. The other flows use the `_ProofStepMixin` in `mod_action_steps.py`,
 which buffers media into scope and waits for an explicit Done or Skip.
 
 ## Debounce and flush claim
@@ -61,7 +61,7 @@ which buffers media into scope and waits for an explicit Done or Skip.
 ```mermaid
 sequenceDiagram
     participant Mod as Moderator
-    participant Flow as ban_flow
+    participant Flow as ban_actions
     participant Reg as ProofSessionRegistry
     participant Timer as flush task
     Mod->>Flow: media message arrives
@@ -153,14 +153,14 @@ Either the decision and its proof both commit, or neither does.
 
 | Helper | Owner | Role |
 |---|---|---|
-| `PROOF_MEDIA_FILTER` | `proof_flow.py` | Accepted media shapes. |
-| `BuildProof` | `proof_flow.py` | Keyboard and prompts. |
+| `PROOF_MEDIA_FILTER` | `proof_steps.py` | Accepted media shapes. |
+| `BuildProof` | `proof_steps.py` | Keyboard and prompts. |
 | `proof_step_btn` | `buttons/flows.py` | Skip, Done, Cancel callbacks. |
-| `upload_proof_media` | `proof_flow.py` | Upload owner and `ProofUpload`. |
-| `upload_proof_items` | `proof_flow.py` | Gallery chunking and singles. |
+| `upload_proof_media` | `proof_steps.py` | Upload owner and `ProofUpload`. |
+| `upload_proof_items` | `proof_steps.py` | Gallery chunking and singles. |
 | `ProofSession`, `proof_sessions` | `proof_session.py` | Ban session storage and drain. |
-| `_flush_session` | `ban_flow.py` | Debounce timer and claim. |
-| `demote_before_enforcement` | `demote_flow.py` | Runs after proof before enforcement. |
+| `_flush_session` | `ban_actions.py` | Debounce timer and claim. |
+| `demote_before_enforcement` | `demote_actions.py` | Runs after proof before enforcement. |
 | `archive_proof` | `moderation_db.py` | Durable evidence rows. |
 
 The proof caption is built by `messages.proof_caption_new()` for new decisions

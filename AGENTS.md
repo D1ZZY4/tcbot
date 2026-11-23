@@ -225,7 +225,7 @@ Current stack:
 │   │   └── mtproto_store.py  PostgreSQL-backed Kurigram storage
 │   ├── modules/              Telegram command modules and handlers
 │   │   ├── helper/           Shared helper code and conversation flows
-│   │   │   ├── pipelines/    ConversationHandler flows (one `*_flow.py` module each)
+│   │   │   ├── pipelines/    Conversation steps and executors (domain-named modules)
 │   │   │   ├── buttons/      Inline button builders (rendered as rich buttons)
 │   │   │   │   └── nav.py     Previous/next row for paged views
 │   │   │   ├── decorators/    Rate limiter, tier guards, execution logging
@@ -310,7 +310,7 @@ Core ownership rules:
 
 - Command handlers live in `tcbot/modules/`. See [`docs/architecture/overview.md`](docs/architecture/overview.md) for module boundaries.
 - Shared handler helpers live in `tcbot/modules/helper/`. See [`docs/architecture/overview.md`](docs/architecture/overview.md#helper-package) for helper docs.
-- Conversation flows live in `tcbot/modules/helper/pipelines/` as one `*_flow.py` module each, split into a `*_flow/` package only when a flow outgrows the file budget. See [`docs/flows/README.md`](docs/flows/README.md) for the flow index, [`docs/flows/system.md`](docs/flows/system.md) for the system spine, and the per-domain pages such as [`docs/flows/banning.md`](docs/flows/banning.md) for each full flow.
+- Conversation logic lives in `tcbot/modules/helper/pipelines/` as domain-named modules (`*_steps.py`, `*_actions.py`, `*_panels.py`), split into a same-named package only when a module outgrows the file budget. See [`docs/flows/README.md`](docs/flows/README.md) for the flow index, [`docs/flows/system.md`](docs/flows/system.md) for the system spine, and the per-domain pages such as [`docs/flows/banning.md`](docs/flows/banning.md) for each full flow.
 - Database access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files, or `*_db/` packages once split under the file budget. See [`docs/architecture/database.md`](docs/architecture/database.md) for database layer notes.
 - Runtime utilities live in `tcbot/utils/`. See [`docs/architecture/runtime.md`](docs/architecture/runtime.md) for utility docs.
 
@@ -368,6 +368,7 @@ Important non-secret/runtime variables include:
 - `MAIN_GROUP`: main community group chat id.
 - `MAIN_CHANNEL`: main community channel chat id; the rules publication target. A positive value is treated as unset.
 - `LOGS`, `LOGS_ERRORS`, `APPEALS`: log and appeal destinations; values may be `chat_id` or `chat_id/thread_id` (channel, group, or forum thread). `PROOFS` is required and belongs in the list above.
+- `INFRA_CHAT_IDS`: extra deployment-owned chat ids that the connect paths must refuse; accepts a list or CSV, and only negative chat ids are used.
 - `ALBUM_DEBOUNCE_SECONDS`: proof silence window before the ban executor runs.
 - `LOG_LEVEL`: bot log level.
 - `SENTRY_DSN`: optional Sentry DSN for production error monitoring (observability extra); empty disables monitoring.

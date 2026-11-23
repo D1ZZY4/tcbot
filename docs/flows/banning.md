@@ -16,8 +16,8 @@ and log message ids, the appeal link, and the review slot are part of the
 decision document.
 
 Ownership: the command entry lives in `bans.py`; the conversation and executor
-live in `ban_flow.py`, `ban_confirmation.py`, and `ban_rules_step.py`; proof
-collection lives in `proof_flow.py` and `proof_session.py`; durable delivery
+live in `ban_actions.py`, `ban_confirmation.py`, and `ban_rules_step.py`; proof
+collection lives in `proof_steps.py` and `proof_session.py`; durable delivery
 lives in `enforcement_worker.py`; persistence lives in `bans_db/` and
 `moderation_db.py`.
 
@@ -119,7 +119,7 @@ then delegates to `show_ban_rules()`. The picker stores selections in
 ```mermaid
 sequenceDiagram
     participant Mod as Moderator
-    participant Flow as ban_flow
+    participant Flow as ban_actions
     participant Reg as proof_session registry
     participant Bot as Telegram
     Mod->>Flow: photo video animation or document
@@ -268,16 +268,16 @@ new ban and `proof_caption_update` for a re-ban.
 |---|---|---|
 | `cmd_ban_start` | `bans.py` | Validated entry point. |
 | `_ask_update_confirm` | `bans.py` | Re-ban prompt and prompt identity. |
-| `ban_conversation` | `ban_flow.py` | ConversationHandler factory. |
-| `on_proof_received` | `ban_flow.py` | Buffer proof into a session. |
-| `on_done_proof` | `ban_flow.py` | Claim and run the flush from Done. |
-| `_flush_session` | `ban_flow.py` | Debounce timer flush owner. |
-| `_execute_ban` | `ban_flow.py` | Full enforcement orchestration. |
-| `_execute_ban_record` | `ban_flow.py` | Decision write and federation log. |
+| `ban_conversation` | `ban_actions.py` | ConversationHandler factory. |
+| `on_proof_received` | `ban_actions.py` | Buffer proof into a session. |
+| `on_done_proof` | `ban_actions.py` | Claim and run the flush from Done. |
+| `_flush_session` | `ban_actions.py` | Debounce timer flush owner. |
+| `_execute_ban` | `ban_actions.py` | Full enforcement orchestration. |
+| `_execute_ban_record` | `ban_actions.py` | Decision write and federation log. |
 | `on_ban_update_continue` | `ban_confirmation.py` | Re-ban confirmation handler. |
 | `stale_ban_callback` | `ban_confirmation.py` | Prompt freshness guard. |
 | `show_ban_rules` | `ban_rules_step.py` | Rules picker entry. |
-| `demote_before_enforcement` | `demote_flow.py` | Best-effort pre-fanout demote. |
+| `demote_before_enforcement` | `demote_actions.py` | Best-effort pre-fanout demote. |
 | `run_once`, `deliver_queued_run` | `enforcement_worker.py` | Durable delivery. |
 
 ## Persistence touchpoints

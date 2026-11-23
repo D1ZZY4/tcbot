@@ -10,7 +10,7 @@ overview = "Promote and demote staff, transfer ownership, and manage promotion r
 [help.commands]
 body = """
 `/tcpromote` `/tcp`
-`/tcsetrole` `/tcsr`
+`/tcsetrole`
 `/tcdemote` `/tcd`
 `/transferowner` `/tfowner`
 `/tcpromoterequests` `/tcreqs`

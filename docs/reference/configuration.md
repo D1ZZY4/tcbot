@@ -42,6 +42,7 @@ fail at load time with an actionable message. The template is
 | `LOGS` | unset | Federation log destination. |
 | `LOGS_ERRORS` | unset | Separate error destination; falls back to the Owner DM when empty. |
 | `APPEALS` | unset | Appeal destination. |
+| `INFRA_CHAT_IDS` | `[]` | Extra deployment-owned chat ids refused by the connect paths; list or CSV, negative ids only. |
 
 All four destinations accept `chat_id` or `chat_id/thread_id`. A thread id must
 be positive; a non-positive segment is dropped. Community menu links derive

@@ -28,7 +28,7 @@ flowchart TD
 ```
 
 The conversation is built by `kick_conversation()` through
-`reason_flow.build_modaction_conv()` with `BuildReason("kick",
+`mod_action_steps.build_modaction_conv()` with `BuildReason("kick",
 skip_allowed=False)`, `BuildProof("kick")`, `min_role="moderator"`, and
 `rules_enabled=True`. The executor adapter `_exec_kick()` pops the kick keys
 from the flow scope and calls `execute_kick()`.
@@ -37,10 +37,10 @@ from the flow scope and calls `execute_kick()`.
 
 | Owner | State | Value |
 |---|---|---|
-| `reason_flow.py` | `WAITING_REASON` | 0 |
-| `reason_flow.py` | `WAITING_PROOF` | 1 |
-| `reason_flow.py` | `WAITING_RULES` | 2 |
-| `reason_flow.py` | `WAITING_RULES_NOTE` | 3 |
+| `mod_action_steps.py` | `WAITING_REASON` | 0 |
+| `mod_action_steps.py` | `WAITING_PROOF` | 1 |
+| `mod_action_steps.py` | `WAITING_RULES` | 2 |
+| `mod_action_steps.py` | `WAITING_RULES_NOTE` | 3 |
 
 | Callback data | Meaning |
 |---|---|
@@ -59,7 +59,7 @@ execution. See [Proof](proof.md) for the shared collection model.
 
 ## Kick executor
 
-`execute_kick()` in `kick_flow.py` runs the same two-position enforcement gate as
+`execute_kick()` in `kick_actions.py` runs the same two-position enforcement gate as
 ban and mute, but at the moderator tier. The gate runs once before proof upload
 and audit, and again immediately before the audit record, so a target promoted
 across the proof window cannot be kicked by a moderator who no longer outranks
@@ -157,9 +157,9 @@ the target and action identifiers.
 | Name | Owner | Role |
 |---|---|---|
 | `cmd_kick` | `kick.py` | Validated entry point. |
-| `kick_conversation` | `kick_flow.py` | ConversationHandler factory. |
-| `execute_kick` | `kick_flow.py` | Full enforcement orchestration. |
-| `_exec_kick` | `kick_flow.py` | Adapter from flow scope to executor. |
+| `kick_conversation` | `kick_actions.py` | ConversationHandler factory. |
+| `execute_kick` | `kick_actions.py` | Full enforcement orchestration. |
+| `_exec_kick` | `kick_actions.py` | Adapter from flow scope to executor. |
 
 ```bash
 uv run pytest tests/ -q -k kick

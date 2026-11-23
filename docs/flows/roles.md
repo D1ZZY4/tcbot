@@ -69,7 +69,7 @@ so no second cleanup write is needed.
 
 ## Changing an existing role
 
-`/tcsetrole` (alias `/tcsr`) and `/tcpromote <target> <role>` both move a staff
+`/tcsetrole` and `/tcpromote <target> <role>` both move a staff
 member between tiers without a remove-then-add gap. They check the federation
 origin and resolve the target with the shared executor-and-target lookup, then
 show a picker containing only the tiers the executor may grant **except** the
@@ -83,7 +83,7 @@ same grant table applies:
 | `admin` | `developer`, `moderator` |
 | anything else | none |
 
-`change_role_for_staff()` in `roles_flow.py` re-reads both roles fresh, refuses
+`change_role_for_staff()` in `promote_steps.py` re-reads both roles fresh, refuses
 an Owner target, a role-less user, the role already held, a tier outside the grant
 table, and a target at or above the executor's rank. It also applies the banned
 target guard. `db.users_roles.change_role()` validates the destination against
@@ -92,7 +92,7 @@ the three assignable tiers and delegates to the same one-transaction
 assignments land together. The Owner row is never revoked. Log and DM are sent
 in a bounded gather, best effort.
 
-`is_role_change_request()` in `roles_flow.py` classifies a promote-style request
+`is_role_change_request()` in `promote_steps.py` classifies a promote-style request
 against a target who already holds a role. A tier the executor may grant
 directly becomes a role change; no tier shows the change picker; a tier the
 executor cannot grant (Admin for an Admin) stays on the queued-request path so
@@ -109,7 +109,7 @@ the staff member who opened the prompt, and the executor is re-checked fresh.
 
 ## The Owner approval card
 
-`request_admin()` in `promote_flow.py` guards against a banned target, checks for
+`request_admin()` in `promote_request.py` guards against a banned target, checks for
 an existing request, then enqueues the request and looks up the Owner in parallel.
 The card is sent to the Owner by DM with the `promo_decision_btn(request_id)`
 keyboard, falling back to the log channel when the DM fails. Concurrent
@@ -117,7 +117,7 @@ submissions resolve through the unique pending index rather than duplicating the
 queue.
 
 `on_promo_decision` in `admins.py` delegates to `execute_promo_decision()` in
-`promo_decision_flow.py`. Its contract:
+`promote_decision.py`. Its contract:
 
 | Step | Behavior |
 |---|---|
@@ -163,7 +163,7 @@ Owner, and the Owner is never a demotion target.
 ## Ownership transfer
 
 `cmd_transfer` is Owner-only and delegates to `execute_transfer()` in
-`transfer_flow.py`. The target must resolve, classify as non-protected, verify as
+`transfer_owner.py`. The target must resolve, classify as non-protected, verify as
 a human, and hold no active ban. `verify_not_bot()` returns `True` / `False` /
 `None`, and transfer fails closed on `None` because a bot owner would brick
 federation leadership. The executor's ownership is re-read with `fresh=True` at
@@ -245,13 +245,13 @@ pre-transfer card cannot be approved later.
 
 | Name | Owner | Role |
 |---|---|---|
-| `Promote.available_roles_for`, `Promote.execute` | `promote_flow.py` | Grant table and mutation point. |
-| `request_admin` | `promote_flow.py` | Queued Admin request. |
-| `is_role_change_request`, `change_role_for_staff`, `role_change_prompt` | `roles_flow.py` | Role-change routing, mutation, and picker. |
-| `execute_promo_decision` | `promo_decision_flow.py` | Owner approval or rejection. |
-| `Demote.execute` | `demote_flow.py` | Role removal and DM wording. |
-| `demote_before_enforcement`, `demote_before_unban` | `demote_flow.py` | The two policies. |
-| `execute_transfer` | `transfer_flow.py` | Owner-only transfer orchestration. |
+| `Promote.available_roles_for`, `Promote.execute` | `promote_steps.py` | Grant table and mutation point. |
+| `request_admin` | `promote_request.py` | Queued Admin request. |
+| `is_role_change_request`, `change_role_for_staff`, `role_change_prompt` | `promote_steps.py` | Role-change routing, mutation, and picker. |
+| `execute_promo_decision` | `promote_decision.py` | Owner approval or rejection. |
+| `Demote.execute` | `demote_actions.py` | Role removal and DM wording. |
+| `demote_before_enforcement`, `demote_before_unban` | `demote_actions.py` | The two policies. |
+| `execute_transfer` | `transfer_owner.py` | Owner-only transfer orchestration. |
 | `transfer_ownership` | `users_roles.py` | Atomic swap under advisory lock. |
 
 ```bash

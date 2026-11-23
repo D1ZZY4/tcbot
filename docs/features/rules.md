@@ -9,7 +9,7 @@ through a shared picker. The full flow diagrams are in
 ## Ownership
 
 - `modules/rules.py` owns the `/tcrules` entry, the `/rules` menu, and their read callbacks.
-- `modules/helper/pipelines/rules_flow.py` owns the editor conversation.
+- `modules/helper/pipelines/rules_editor.py` owns the editor conversation.
 - `modules/helper/pipelines/rules_publish.py` owns channel publication.
 - `database/rules_db/` owns drafts, items, versions, publications, and runs.
 - `modules/greeting.py` owns the welcome-time acknowledgement button.
@@ -18,12 +18,23 @@ through a shared picker. The full flow diagrams are in
 
 | Command | Access | Scope |
 |---|---|---|
-| `/tcrules` | Staff with `rules.manage` | Private chat only. |
-| `/rules` | Anyone | Private chat only. |
+| `/tcrules` (alias `/tcrls`) | Staff with `rules.manage` | Private chat only. |
+| `/rules` | Anyone | Group or private chat. |
 
-Both refuse group contexts and ask the user to open the bot DM. `editor_allowed()`
-rechecks `rules.manage` on every editor surface and fails closed when the lookup
-fails.
+The editor refuses group contexts and asks the user to open the bot DM.
+`editor_allowed()` rechecks `rules.manage` on every editor surface and fails
+closed when the lookup fails. The read-only menu has no chat-type restriction.
+
+## Public menu
+
+`/rules` opens a topic index with two categories per row across pages of eight.
+`rules_index:<page>`, `rules_prev:<page>`, `rules_next:<page>`, and `close_msg`
+navigate the index, and a stale page index is clamped to the published set.
+Tapping a category with `rules_show:<key>` renders its localized one-line
+description and one button per section, where sections are derived from the
+stored item titles. Tapping `rules_section:<index>` renders that section's rules.
+The older `rules_menu` and `rules_page` callbacks stay registered so keyboards
+emitted before the index redesign still open the current menu.
 
 ## Editor conversation
 
@@ -109,7 +120,7 @@ in the `/rules` menu.
 
 ## Shared picker
 
-`rules_step.py` provides action-agnostic helpers: `callback_for`,
+`rules_picker.py` provides action-agnostic helpers: `callback_for`,
 `item_id_from_callback`, `toggle`, and `picker_text`. Flows store selected item
 ids and an optional note in their scope, then link them to the case through
 `moderation_db.link_case_rules()`. Ban has a dedicated picker step with

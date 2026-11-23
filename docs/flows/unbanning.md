@@ -44,7 +44,7 @@ the rank would survive the unban. `_cleanup_role()` in `unban.py` reconciles the
 two independent fresh reads, because the identity classification and the rank
 check can disagree when a promotion lands between them.
 
-`demote_before_unban()` in `demote_flow.py` is the single owner of this gate. It
+`demote_before_unban()` in `demote_actions.py` is the single owner of this gate. It
 calls `Demote.execute(trigger="unban")` and returns a `UnbanGate`:
 
 | `UnbanGate` value | Meaning | Caller behavior |
@@ -59,7 +59,7 @@ closed. The `may_proceed` property is the single check the caller uses. See
 
 ## Revoke and queue transaction
 
-`execute_unban()` in `unban_flow.py` accepts an optional `pre_ban` to skip the
+`execute_unban()` in `unban_actions.py` accepts an optional `pre_ban` to skip the
 speculative read. It fetches the active groups before revoking, because
 deactivating first and then discovering the list cannot be loaded would leave
 chats banning a user with no record to retry from. It then re-runs
@@ -179,9 +179,9 @@ unban being lost. See [Connection](connection.md).
 |---|---|---|
 | `cmd_unban` | `unban.py` | Command entry point. |
 | `_cleanup_role` | `unban.py` | Reconcile two fresh role reads. |
-| `demote_before_unban` | `demote_flow.py` | Fail-closed role cleanup gate. |
-| `UnbanGate` | `demote_flow.py` | `PROCEED`, `DEMOTE_FAILED`, `ROLE_SURVIVED`. |
-| `execute_unban` | `unban_flow.py` | Durable unban executor. |
+| `demote_before_unban` | `demote_actions.py` | Fail-closed role cleanup gate. |
+| `UnbanGate` | `demote_actions.py` | `PROCEED`, `DEMOTE_FAILED`, `ROLE_SURVIVED`. |
+| `execute_unban` | `unban_actions.py` | Durable unban executor. |
 | `revoke_ban_and_queue_unban` | `bans_db._lifecycle` | Atomic revoke, appeal cleanup, queue. |
 | `approve_appeal_and_queue_unban` | `bans_db._lifecycle` | Appeal approval transaction. |
 | `deliver_queued_run` | `enforcement_worker.py` | Immediate run delivery. |
@@ -194,5 +194,5 @@ unban being lost. See [Connection](connection.md).
 uv run pytest tests/ -q -k unban
 ```
 
-Relevant tests include `tests/test_unban_flow.py`, `tests/test_demote_*.py`, and
+Relevant tests include `tests/test_unban_actions.py`, `tests/test_demote_*.py`, and
 `tests/test_enforcement_worker.py`.

@@ -120,8 +120,8 @@ subtracts both keys.
 
 | Window | Constant or source | Value | Effect |
 |---|---|---|---|
-| Reviewer lock | `LOCK_HOURS` in `appeal_review_flow.py` | `12` hours | `reviewer_locked_out()` blocks a non-actor reviewer while `utc_now() - review_timestamp < 12h`. The original ban actor is not blocked. |
-| Stale review | `_STALE_REVIEW_HOURS` in `appeal_submit_flow.py` | `72` hours | `_is_stale_review()` allows `release_stale_review()` once the stored review is older than 72 hours. |
+| Reviewer lock | `LOCK_HOURS` in `appeal_review.py` | `12` hours | `reviewer_locked_out()` blocks a non-actor reviewer while `utc_now() - review_timestamp < 12h`. The original ban actor is not blocked. |
+| Stale review | `_STALE_REVIEW_HOURS` in `appeal_submit.py` | `72` hours | `_is_stale_review()` allows `release_stale_review()` once the stored review is older than 72 hours. |
 | Rejection cooldown | `_REJECTION_COOLDOWN_HOURS` and `_REJECTION_COOLDOWN` | `24` hours | `_cooldown_remaining_h()` returns whole hours left from `rejected_at`, rounded up; a value other than `None` blocks a new submission. |
 | Appeal deadline | `_in_force()` in `bans_db/_shared.py` | `expires_at is NULL OR expires_at > utc_now()` | The atomic claim and the approve path both require an in-force ban, so a timed ban whose deadline passed cannot be decided. |
 | Maximum appeal text | `_MAX_APPEAL_LEN` | `2000` characters | Longer text gets `appeals.submit.too_long` and stays in `WAITING_APPEAL`. |

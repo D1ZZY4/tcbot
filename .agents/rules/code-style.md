@@ -267,14 +267,14 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 ### Conversation Flows
 
 - Conversation handlers live in `tcbot/modules/helper/pipelines/`.
-- Flow files use the `*_flow.py` suffix.
+- Conversation files use domain names without `flow` in the filename (`*_steps.py`, `*_actions.py`, `*_panels.py`, or a plain domain name).
 - Keep flow files within the file budget.
-- Split an oversized flow into a same-named `*_flow/` package with focused submodules.
+- Split an oversized conversation module into a same-named package with focused submodules.
 - Preserve existing public import paths through the package's `__init__.py`.
 - Never create `*_conv.py` files.
-- Kick, mute, and warn use `reason_flow.build_modaction_conv()`.
-- Ban uses `ban_flow.ban_conversation()`.
-- Appeals use the `appeal` singleton from `appeal_submit_flow.py` and its `BuildAppeal` builder.
+- Kick, mute, and warn use `mod_action_steps.build_modaction_conv()`.
+- Ban uses `ban_actions.ban_conversation()`.
+- Appeals use the `appeal` singleton from `appeal_submit.py` and its `BuildAppeal` builder.
 - Every flow must have a cancellation fallback.
 - Use `WAITING_*` state constants.
 - Use `cfg.album_debounce` and other `cfg` values for workflow deadlines. Never hardcode workflow timing literals when a project configuration value exists.
