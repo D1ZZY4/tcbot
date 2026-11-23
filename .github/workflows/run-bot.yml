@@ -98,7 +98,10 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --frozen
+        # * The runner is a production path: the observability extra carries
+        # * Sentry and the /metrics endpoint. uv run re-syncs before starting
+        # * the bot, so the extra must be requested there too.
+        run: uv sync --frozen --no-dev --extra observability
 
       - name: Detect self-chain capability
         id: pat
@@ -127,7 +130,7 @@ jobs:
             # * process and the shutdown block below can wait for its exit.
             # * (Capturing via BOT_PID="$(start_bot)" would run this in a
             # * subshell, leaving wait with a non-child PID that always fails.)
-            uv run python -m tcbot > bot.log 2>&1 &
+            uv run --frozen --no-dev --extra observability python -m tcbot > bot.log 2>&1 &
             BOT_PID=$!
           }
 

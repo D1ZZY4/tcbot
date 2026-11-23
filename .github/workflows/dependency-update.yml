@@ -125,6 +125,7 @@ jobs:
           echo "AI title: $AI_TITLE"
 
       - name: Create PR
+        id: create_pr
         if: steps.update.outputs.has_updates == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -192,7 +193,7 @@ jobs:
           exit 1
 
       - name: Telegram notification
-        if: always() && steps.update.outputs.has_updates == 'true'
+        if: always() && steps.update.outputs.has_updates == 'true' && steps.create_pr.outcome == 'success'
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           OWNER_ID: ${{ secrets.OWNER_ID }}

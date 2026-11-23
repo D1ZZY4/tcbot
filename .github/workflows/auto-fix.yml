@@ -58,7 +58,8 @@ jobs:
       - name: Run Ruff check --fix
         id: check
         run: |
-          uv run ruff check --fix . 2>&1 | tee check.log
+          uv run ruff check --fix . 2>&1 | tee check.log || true
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           echo "fixed=$(git diff --name-only | wc -l)" >> "$GITHUB_OUTPUT"
 
       - name: Run Pyright (capture)
