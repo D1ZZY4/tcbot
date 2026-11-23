@@ -58,8 +58,14 @@ jobs:
       - name: Run Ruff check --fix
         id: check
         run: |
-          uv run ruff check --fix . 2>&1 | tee check.log || true
-          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          # * Capture the tool status before the pipeline ends. Appending
+          # * "|| true" makes PIPESTATUS[0] the status of true, so every run
+          # * would report exit 0 even when Ruff still found violations.
+          set +e
+          uv run ruff check --fix . 2>&1 | tee check.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
           echo "fixed=$(git diff --name-only | wc -l)" >> "$GITHUB_OUTPUT"
 
       - name: Run Pyright (capture)
@@ -69,8 +75,11 @@ jobs:
           DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
           OWNER_ID: "1"
         run: |
-          uv run pyright 2>&1 | tee pyright.log || true
-          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          set +e
+          uv run pyright 2>&1 | tee pyright.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
           # * Count errors for PR body
           ERR_COUNT="$(grep -c "error" pyright.log || true)"
           echo "errors=$ERR_COUNT" >> "$GITHUB_OUTPUT"
@@ -82,12 +91,15 @@ jobs:
           DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
           OWNER_ID: "1"
         run: |
-          uv run pytest tests/ -q -n auto 2>&1 | tee pytest.log || true
-          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          set +e
+          uv run pytest tests/ -q -n auto 2>&1 | tee pytest.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$rc" >> "$GITHUB_OUTPUT"
 
       - name: AI Fix remaining issues (free via GitHub Models)
         id: ai-fix
-        if: steps.pyright.outputs.exit_code != '0' || steps.pytest.outputs.exit_code != '0'
+        if: steps.check.outputs.exit_code != '0' || steps.pyright.outputs.exit_code != '0' || steps.pytest.outputs.exit_code != '0'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -227,7 +239,7 @@ jobs:
           \`\`\`
           </details>
 
-          **Safe to merge** - Ruff fixes are deterministic; Pyright/Pytest hints via free GitHub Models (openai/gpt-4o-mini) with no billing." \
+          **Review before merging** - Ruff fixes are deterministic; the logs above show any remaining Ruff, Pyright, or Pytest failures and the free GitHub Models (openai/gpt-4o-mini) summary is advisory only." \
                --base ${{ github.ref_name }} \
                --head "$BRANCH"; then
               echo "::error::gh pr create failed. If the log says 'GitHub Actions is not permitted to create or approve pull requests', enable Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests', then re-run (branch $BRANCH is already pushed) or open the PR manually."

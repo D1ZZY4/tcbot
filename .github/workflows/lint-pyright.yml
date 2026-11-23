@@ -21,6 +21,7 @@ jobs:
       BOT_TOKEN: "000000:dummy-token-for-lint000000000000000"
       DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
       OWNER_ID: "1"
+      PROOFS: "-1000000000001"
 
     steps:
       - uses: actions/checkout@v7
