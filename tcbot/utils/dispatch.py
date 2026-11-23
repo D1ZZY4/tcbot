@@ -79,6 +79,7 @@ async def fan_out[T](
     coros: Sequence[Awaitable[T]],
     *,
     max_concurrent: int = _MAX_CONCURRENT,
+    probe_reserved: bool = False,
 ) -> list[T | BaseException]:
     """Run coros concurrently up to max_concurrent at once.
 
@@ -95,8 +96,17 @@ async def fan_out[T](
     Tasks are admitted lazily through the semaphore so the number of in-flight
     Telegram calls stays bounded. Callers may pass already-created coroutine
     objects; a coroutine skipped by the open circuit is explicitly closed.
+
+    A caller that already reserved the single HALF_OPEN probe passes
+    ``probe_reserved=True`` with exactly one coroutine. The slot then skips its
+    own reservation because the caller holds it; the usual outcome handling
+    still settles the breaker. Every other caller remains blocked while that
+    probe is in flight.
     """
     if not coros:
+        if probe_reserved:
+            # * No slot will settle a probe reserved for an empty fan-out.
+            _cb.telegram.release_probe()
         return []
 
     if max_concurrent < 1:
@@ -113,7 +123,7 @@ async def fan_out[T](
         thunk: Callable[[], Awaitable[T]], coro: Awaitable[T]
     ) -> T | BaseException:
         async with sem:
-            if not _cb.telegram.try_acquire():
+            if not probe_reserved and not _cb.telegram.try_acquire():
                 skipped = thunk()
                 if inspect.iscoroutine(skipped):
                     skipped.close()

@@ -11,7 +11,7 @@ import inspect
 import logging
 
 import pytest
-from telegram.error import BadRequest, Forbidden, TimedOut
+from telegram.error import BadRequest, Forbidden, NetworkError, TimedOut
 
 from tcbot.modules.helper.messages.replies import applied_summary
 from tcbot.utils import circuit_breaker as _cb
@@ -160,6 +160,49 @@ def test_fan_out_counts_a_wrapper_timeout_against_the_circuit() -> None:
         results = asyncio.run(fan_out([_timeout()]))
         assert isinstance(results[0], TimeoutError)
         assert _cb.telegram._failure_count == before + 1
+    finally:
+        _cb.telegram.reset()
+
+
+def test_fan_out_counts_a_network_error_but_not_a_service_refusal() -> None:
+    """Only a transport failure counts against the breaker; a 403 does not."""
+
+    async def _network() -> str:
+        raise NetworkError("connection reset")
+
+    async def _forbidden() -> str:
+        raise Forbidden("denied")
+
+    _cb.telegram.reset()
+    before = _cb.telegram._failure_count
+    try:
+        results = asyncio.run(fan_out([_network(), _forbidden()]))
+        assert isinstance(results[0], NetworkError)
+        assert isinstance(results[1], Forbidden)
+        assert _cb.telegram._failure_count == before + 1
+        assert _cb.telegram.state is _cb.CircuitState.CLOSED
+    finally:
+        _cb.telegram.reset()
+
+
+def test_a_reserved_probe_lets_its_call_through_and_blocks_others() -> None:
+    """A reserved HALF_OPEN probe must not be rejected by its own fan-out."""
+
+    async def _work() -> str:
+        return "ok"
+
+    async def _other() -> str:
+        raise AssertionError("a second probe must not run")
+
+    _cb.telegram.reset()
+    _cb.telegram._state = _cb.CircuitState.HALF_OPEN
+    try:
+        assert _cb.telegram.try_acquire() is True
+        blocked = asyncio.run(fan_out([_other()]))
+        assert isinstance(blocked[0], _cb.CircuitOpenError)
+        results = asyncio.run(fan_out([_work()], probe_reserved=True))
+        assert results == ["ok"]
+        assert _cb.telegram.state is _cb.CircuitState.CLOSED
     finally:
         _cb.telegram.reset()
 

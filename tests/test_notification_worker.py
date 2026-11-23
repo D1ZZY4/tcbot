@@ -144,6 +144,54 @@ def test_a_reserved_half_open_probe_is_not_bypassed(
     assert bot.edits == []
 
 
+def test_a_never_admitted_task_becomes_terminal_at_the_ceiling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A flapping breaker must not leave a maxed-out row pending forever."""
+    completed: list[dict[str, Any]] = []
+    task = {**_task(), "attempts": notification_worker._MAX_ATTEMPTS}
+    _wire(monkeypatch)
+
+    async def _claim(limit: int = 10, *, retry_after: Any) -> list[dict[str, object]]:
+        return [task]
+
+    async def _complete(task_id: int, **kwargs: Any) -> None:
+        completed.append({"task_id": task_id, **kwargs})
+
+    monkeypatch.setattr(db.notifications_db, "claim_due_tasks", _claim)
+    monkeypatch.setattr(db.notifications_db, "complete_task", _complete)
+    bot = _Bot()
+
+    _cb.telegram.reset()
+    _cb.telegram._state = _cb.CircuitState.HALF_OPEN
+    try:
+        assert _cb.telegram.try_acquire() is True
+        asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+    finally:
+        _cb.telegram.reset()
+
+    assert bot.edits == []
+    assert completed[0]["state"] == "failed"
+    assert "circuit" in completed[0]["error"].lower()
+
+
+def test_cancelling_a_card_edit_releases_the_half_open_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Shutdown during the recovery probe must not strand the breaker."""
+    _wire(monkeypatch)
+    bot = _Bot(asyncio.CancelledError())
+
+    _cb.telegram.reset()
+    _cb.telegram._state = _cb.CircuitState.HALF_OPEN
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+        assert _cb.telegram._half_open_probe_in_flight is False
+    finally:
+        _cb.telegram.reset()
+
+
 def test_a_worker_error_at_the_attempt_ceiling_is_terminal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

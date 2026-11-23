@@ -730,7 +730,8 @@ def test_a_half_open_circuit_claims_only_its_single_probe(
     async def _complete(target_id: int, **kwargs: Any) -> None:
         return None
 
-    async def _fan_out(coros: Any) -> list[object]:
+    async def _fan_out(coros: Any, *, probe_reserved: bool = False) -> list[object]:
+        assert probe_reserved is True
         for coro in coros:
             await coro
         return [None] * len(coros)

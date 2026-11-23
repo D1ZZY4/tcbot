@@ -94,21 +94,37 @@ async def run_once(bot: Bot) -> None:
     # * federation during recovery. Deliver the probe; the other targets stay
     # * queued for the next tick once the probe closes the circuit.
     probe_only = state is CircuitState.HALF_OPEN
-    runs = await db.enforcement_db.claim_runs(1 if probe_only else _MAX_RUNS_PER_TICK)
-    for run in runs:
-        try:
-            await _process_run(
-                bot,
-                run,
-                max_targets=1 if probe_only else _MAX_TARGETS_PER_RUN,
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            log.exception(
-                "Enforcement run %s failed; continuing with the next run.",
-                run.get("id"),
-            )
+    # * Reserve before claiming: an immediate delivery and the scheduled tick
+    # * can interleave at the database awaits. Without this reservation both
+    # * would claim a target, and the loser would record a skipped slot as a
+    # * failed attempt even though no Telegram call was made.
+    if probe_only and not _cb.telegram.try_acquire():
+        log.debug("Enforcement worker deferred: the recovery probe is in use.")
+        return
+    try:
+        runs = await db.enforcement_db.claim_runs(
+            1 if probe_only else _MAX_RUNS_PER_TICK
+        )
+        for run in runs:
+            try:
+                await _process_run(
+                    bot,
+                    run,
+                    max_targets=1 if probe_only else _MAX_TARGETS_PER_RUN,
+                    probe_reserved=probe_only,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception(
+                    "Enforcement run %s failed; continuing with the next run.",
+                    run.get("id"),
+                )
+    finally:
+        if probe_only:
+            # * Idempotent when a delivery already settled the probe; releases
+            # * it when the run was cancelled or never reached Telegram.
+            _cb.telegram.release_probe()
 
 
 async def deliver_queued_run(bot: Bot, run_id: int) -> bool:
@@ -131,15 +147,30 @@ async def deliver_queued_run(bot: Bot, run_id: int) -> bool:
             run_id,
         )
         return False
-    run = await db.enforcement_db.claim_run(run_id)
-    if run is None:
+    probe_reserved = state is CircuitState.HALF_OPEN
+    # * The scheduled tick can hold the recovery probe at the same moment.
+    # * Leaving the run queued is safe; claiming its target and recording a
+    # * skipped slot as a failed attempt is not.
+    if probe_reserved and not _cb.telegram.try_acquire():
+        log.debug(
+            "Enforcement run %s delivered later: the recovery probe is in use.",
+            run_id,
+        )
         return False
-    await _process_run(
-        bot,
-        run,
-        max_targets=1 if state is CircuitState.HALF_OPEN else _MAX_TARGETS_PER_RUN,
-    )
-    return True
+    try:
+        run = await db.enforcement_db.claim_run(run_id)
+        if run is None:
+            return False
+        await _process_run(
+            bot,
+            run,
+            max_targets=1 if probe_reserved else _MAX_TARGETS_PER_RUN,
+            probe_reserved=probe_reserved,
+        )
+        return True
+    finally:
+        if probe_reserved:
+            _cb.telegram.release_probe()
 
 
 async def _process_run(
@@ -147,6 +178,7 @@ async def _process_run(
     run: dict[str, object],
     *,
     max_targets: int = _MAX_TARGETS_PER_RUN,
+    probe_reserved: bool = False,
 ) -> None:
     """Process one claimed run, up to *max_targets* targets at a time."""
     run_id = as_int(run.get("id"))
@@ -265,7 +297,12 @@ async def _process_run(
             )
             for target in targets
         ]
-        chunk_results = await fan_out(coros)
+        # * The caller reserved the recovery probe before claiming the run.
+        # * Pass that fact down so the slot does not reject its own probe.
+        if probe_reserved:
+            chunk_results = await fan_out(coros, probe_reserved=True)
+        else:
+            chunk_results = await fan_out(coros)
         throw_if_cancelled(chunk_results)
         updates = [
             _record_target(target, result)
