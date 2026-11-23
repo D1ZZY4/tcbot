@@ -70,7 +70,6 @@ class KeyedUpdateProcessor(BaseUpdateProcessor):
         # * The global cap bounds the handlers that actually run. PTB's own
         # * semaphore is left unused: see ``process_update`` below.
         self._global = asyncio.Semaphore(max_concurrent_updates)
-        self._running = 0
 
     async def initialize(self) -> None:
         """Prepare the processor; nothing to allocate up front."""
@@ -136,11 +135,7 @@ class KeyedUpdateProcessor(BaseUpdateProcessor):
         try:
             async with self._global:
                 entered = True
-                self._running += 1
-                try:
-                    await coroutine
-                finally:
-                    self._running -= 1
+                await coroutine
         except asyncio.CancelledError:
             # * Cancellation while waiting for a global slot means the
             # * coroutine was never started.
