@@ -41,9 +41,17 @@ for the complete read/update rules. Skipping either step is a serious defect.
 ## Reading and Editing Discipline
 
 - Read every file **fully**, from the first line to the last. Never stop at a
-  preview, a truncated chunk, or the first matching section. For a large file,
-  continue with sequential reads until the whole file has been inspected. Do
-  not make assumptions about lines that were not read.
+  preview, a truncated chunk, or the first matching section. Do not make
+  assumptions about lines that were not read.
+- Do **not** pass `offset`, `limit`, or any other range parameter to sample a
+  file. A read is either the complete file or an explicitly mandatory
+  continuation toward the end of the file. If the tool truncates its response,
+  read the next sequential chunk from the exact truncation point and keep going
+  until the final line has been inspected; every chunk counts, and no chunk may
+  be skipped or assumed. This rule is absolute for any file being modified or
+  reviewed and applies to source, tests, configuration, rules, and documentation.
+- Search results and diffs locate targets; they are never a substitute for a
+  full read of a file before editing or judging it.
 - Group independent edits into one batch of parallel tool calls when many files
   change, so related changes land together. Verify the files after the batch.
 - A shared builder stays shared but does not hardcode a destination. Let the

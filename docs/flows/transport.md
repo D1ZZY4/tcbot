@@ -82,16 +82,16 @@ flowchart TD
 | `safe_edit` | `safe_edit(msg, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits a `Message`; falls back to `msg.edit_text`. |
 | `safe_edit_cb` | `safe_edit_cb(q, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits `q.message`; falls back to `q.edit_message_text`. |
 | `safe_edit_message` | `safe_edit_message(bot, chat_id, message_id, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits by id; falls back to `bot.edit_message_text`. |
-| `cb_error_edit` | `cb_error_edit(q, text, *, log_label, parse_mode=None, log_level="debug")` | `safe_edit_cb` with `reply_markup=None` and `catch_all=True`. |
+| `cb_error_edit` | `cb_error_edit(q, text, *, log_label, parse_mode=None, log_level="warning")` | `safe_edit_cb` with an explicitly empty inline keyboard and `catch_all=True`. |
 | `clear_markup_cb` | `clear_markup_cb(q)` | Removes the inline keyboard only; keeps `_IGNORED` BadRequests silent. |
 
 `_IGNORED` contains `"message is not modified"`, `"message to edit not found"`,
 and `"chat not found"`. `_edit_via()` and `safe_edit_message()` return `True`
 on success or an unchanged message, and `False` when the target message is
 gone so a caller that owns a durable slot can send a fresh post instead of
-re-editing a dead id. Other `BadRequest`s are re-raised unless
-`catch_all=True`, and logged otherwise. `parse_mode` is accepted and ignored
-by the safe helpers.
+re-editing a dead id. Other `BadRequest`s are logged and return `False`;
+`catch_all` applies only to non-`BadRequest` exceptions. `parse_mode` is
+accepted and ignored by the safe helpers.
 
 ## Inline keyboard to rich buttons
 
@@ -241,7 +241,7 @@ non-rich-ready bot.
 | `chat_id_to_link_id(chat_id)` | Strip the `-100` supergroup prefix for a `t.me/c/` URL. |
 | `message_link(chat_id, message_id, thread_id=None)` | `https://t.me/c/<id>/<message_id>` plus `?thread=<id>` when provided. |
 | `appeal_deep_link(bot_username, ban_id)` | `https://t.me/<username>?start=appeal_<ban_id>`, or empty when the username is unknown. |
-| `resolve(bot, chat_id)` | Public username or invite link, cached for 300 s with a 5 s lookup timeout. |
+| `resolve(bot, chat_id)` | Public username or invite link, cached for 300 s with the shared 3 s lookup timeout (`TELEGRAM_LOOKUP_TIMEOUT`). |
 | `display(bot, chat_id)` | `resolve()` result, falling back to the numeric chat id. |
 | `forget(chat_id)`, `clear()` | Drop one cached link or every cached link. |
 

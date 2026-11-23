@@ -65,6 +65,7 @@ Commonly configured values:
 | `WEBHOOK_URL`, `WEBHOOK_SECRET` | empty, random | Webhook transport. |
 | `SENTRY_DSN` | empty | Opt-in error monitoring with the observability extra. |
 | `MODULES_LOAD`, `MODULES_NO_LOAD` | empty | Module allowlist and denylist. |
+| `MTPROTO_SESSION` | `tcbot_mtproto` | Namespace for the shared MTProto session in PostgreSQL. |
 
 Community menu links derive from `MAIN_CHANNEL`, `MAIN_GROUP`, `LOGS`, and
 `APPEALS` through `messages/links.py`; no static URL variables remain.
@@ -90,11 +91,14 @@ starts the scheduler, and discovers handlers. Health endpoints:
 ## Run with Docker Compose
 
 ```bash
+cp config.env.example .env
+# Fill in .env before starting: compose reads it through env_file.
 docker compose up --build
 ```
 
-The compose file starts the bot, PostgreSQL, and Redis. Keep secrets in the
-environment or the platform secret manager, not in committed files.
+The compose file starts the bot, PostgreSQL, and Redis, and reads runtime
+settings from `.env`. Keep secrets in the environment or the platform secret
+manager, not in committed files.
 
 ## Hosted webhook deployment
 

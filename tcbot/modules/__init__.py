@@ -106,6 +106,8 @@ def get_handlers() -> list[BaseHandler[Any, Any, Any]]:
         mod_handlers: list[BaseHandler[Any, Any, Any]] = getattr(
             mods_found[mod_name], "__handlers__", []
         )
+        if not mod_handlers:
+            log.warning("Module %s registered no handlers", mod_name)
         if mod_handlers:
             handlers.extend(mod_handlers)
             log.debug("Loaded %d handler(s) from %s", len(mod_handlers), mod_name)

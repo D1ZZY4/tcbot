@@ -105,10 +105,6 @@ no_rules = "Tidak ada aturan di kategori ini."
 preview = "Pratinjau\nBeginilah tampilan aturan di kanal. Belum ada yang diterbitkan sampai Anda menekan Publish."
 preview_empty = "Pratinjau\nBelum ada yang ditampilkan. Tambahkan kategori dan aturan di *Edit Draft* terlebih dahulu."
 
-[rich]
-number = "No"
-rule = "Aturan"
-
 [picker]
 prompt = "Pilih aturan yang dilanggar. Nama kategori menandai aturan wajib federasi atau panduan grup. Hanya aturan wajib federasi yang menjadi dasar ban federasi."
 other = "Lainnya / Tidak tercakup"
