@@ -1,28 +1,25 @@
-# Privacy prose (privacy.py). Messages render as rich HTML except
-# alerts (plain). Placeholders: {bot} raw bot name, {community} raw name.
+# Privacy prose (privacy.py). Wording lives here; rich block structure is
+# composed in privacy.py. Every key exists in both locales with the same
+# placeholders. Placeholders: {bot} raw bot name, {community} raw name.
 
 [msg]
 bot_fallback = "This bot"
-body = """*Privacy and Data*
-
-{bot} stores a small amount of data to run the federation. Here is what that includes:
-
-- *User ID and name*: recorded when you interact with the bot or any connected group.
-- *Ban records*: if you receive a federation ban, the reason, proof, and issuing admin are stored.
-- *Warn and mute records*: logged per group for moderation tracking.
-- *Kick logs*: kept for staff reference.
-- *Appeal submissions*: your messages and any attachments you send through the appeal system.
-- *Promotion requests*: your request and its review outcome when you apply for a staff role.
-
-Ban, warn, mute, and kick records can be looked up by anyone with `/check` or `/checkme`; changing anything still requires the proper staff rank.
-
-Tap *Privacy Policy* below ↴ for the full policy, organized by section."""
+title = "Privacy and Data"
+lead = "{bot} keeps a small set of records so the federation can moderate consistently."
+list_title = "What is stored"
+item_1 = "*Identity*: your Telegram user ID, first name, and username when you interact with the bot or a connected group."
+item_2 = "*Ban records*: the reason, landed proof, issuing staff member, and timestamps."
+item_3 = "*Warnings and mutes*: counts, reasons, and expiry times per group."
+item_4 = "*Kick logs*: a short staff record of the action and its reason."
+item_5 = "*Appeals*: what you write and any files you attach when you appeal a ban."
+item_6 = "*Promotion requests*: your application and its review outcome."
+visibility = "Ban, warn, mute, and kick records can be looked up by anyone with `/check` or `/checkme`; changing anything still requires the proper staff rank."
+policy_hint = "Tap *Privacy Policy* below ↴ for the full policy, organized by section."
 
 [index]
-body = """*Privacy Policy*
-{bot}
-
-Select a section below ↴ to read it in full. Use the back button to return here at any time."""
+title = "Privacy Policy"
+lead = "A plain-language guide to what {bot} stores, why it is kept, who can see it, and how long it stays."
+hint = "Pick a section below ↴. Back returns here at any time."
 
 [error]
 invalid_section = "Invalid section."
@@ -30,49 +27,51 @@ not_found = "Section not found."
 
 [section.collect]
 label = "What We Collect"
-body = """When you interact with a connected group or this bot, the following is stored:
-
-- *User ID*: your numeric Telegram user ID.
-- *Name and username*: your first name and @username at the time of interaction.
-- *Ban records*: reason, proof link, issuing admin, and timestamps.
-- *Appeal submissions*: your appeal message and any supporting files you send.
-- *Warn and mute records*: logged per group for moderation purposes.
-- *Kick logs*: recorded for staff reference and audit.
-- *Promotion requests*: your application and its review outcome when you request a staff role."""
+lead = "When you interact with a connected group or {bot}, these records may be created:"
+item_1 = "*User ID*: your numeric Telegram user ID."
+item_2 = "*Name and username*: your first name and @username at the time of interaction."
+item_3 = "*Ban records*: reason, proof link, issuing admin, and timestamps."
+item_4 = "*Warnings and mutes*: reasons and expiry times, tracked per group."
+item_5 = "*Kick logs*: the action and its reason, kept for staff reference."
+item_6 = "*Appeals*: your appeal message and any supporting files you send."
+item_7 = "*Promotion requests*: your application and its review outcome."
+tail = "Only the records listed here are created by ordinary use of the bot."
 
 [section.why]
 label = "Why We Collect It"
-body = """Everything stored is used solely for {community} federation moderation: keeping connected groups safe, enforcing bans consistently across all groups, and maintaining an auditable record of moderation actions.
-
-We do not collect or use data for advertising, profiling, or any purpose outside of moderation."""
+lead = "Every record has one job: keeping the federation safe and its decisions reviewable."
+item_1 = "*Consistent enforcement*: a ban in one group applies across every connected group."
+item_2 = "*Audit trail*: staff can see who acted, when, and why."
+item_3 = "*Appeals*: the proof and context needed to review a ban."
+tail = "We do not use data for advertising, profiling, or anything outside federation moderation."
 
 [section.access]
 label = "Who Can Access It"
-body = """Moderation records (bans, warns, mutes, kicks) can be looked up by anyone through `/check` and `/checkme`, so enforcement stays transparent. Taking action on that data (banning, muting, promoting, connecting groups) requires the proper {community} staff rank, checked on every command.
-
-No data is sold, rented, or shared with third parties under any circumstances."""
+lead = "Reading enforcement history is open. Changing it is not."
+item_1 = "`/check` and `/checkme` let anyone look up bans, warnings, mutes, and kicks, so enforcement stays transparent."
+item_2 = "Banning, muting, promoting, and connecting groups require the proper {community} staff rank, re-checked on every command."
+item_3 = "Log and appeal destinations are deployment-owned chats; only staff can act on what they contain."
+tail = "No data is sold, rented, or shared with third parties."
 
 [section.retention]
 label = "How Long We Keep It"
-body = """Ban records are kept indefinitely as part of the federation log, to support cross-group enforcement and appeal review.
-
-Cached identity data (name, username) refreshes on each interaction and is pruned automatically after 90 days without activity.
-
-Expired timed mutes are deleted automatically; permanent mutes stay until lifted. Warnings may expire automatically when the operator enables warn expiry, otherwise they stay until cleared.
-
-Appeal and promotion-request records are retained after resolution for reference and audit."""
+lead = "Different records have different lifetimes:"
+item_1 = "*Bans*: kept indefinitely as part of the federation log, so cross-group enforcement and appeal review keep working."
+item_2 = "*Identity cache*: refreshed on each interaction and pruned automatically after 90 days without activity."
+item_3 = "*Mutes and warnings*: timed mutes expire automatically. Warnings expire when the operator enables warn expiry; otherwise they stay until cleared."
+item_4 = "*Appeals and promotion requests*: retained after a decision for reference and audit."
+tail = "Removing cached identity data does not erase ban records needed for active enforcement."
 
 [section.rights]
 label = "Your Rights"
-body = """You can review your own ban status at any time with `/checkme`, and you can request a review or deletion of your personal data by reaching out to a {community} Admin or the Owner directly.
-
-Requests are handled on a best-effort basis. Active ban records may be retained even after a deletion request if they are required for ongoing enforcement or federation integrity."""
+lead = "You can check your own status and ask for personal data to be reviewed or removed."
+item_1 = "`/checkme` shows your own ban status at any time."
+item_2 = "Message a {community} Admin or the Owner to ask for a review or deletion of personal data."
+tail = "Requests are handled on a best-effort basis. Active ban records may be retained when they are needed for ongoing enforcement or federation integrity."
 
 [section.contact]
 label = "Contact"
-body = """Reach {community} staff through:
-
-- The main {community} discussion group.
-- This bot's appeal system (for ban-related matters).
-
-For general data inquiries, contact a staff member directly in the main group."""
+lead = "Reach {community} staff through either of these channels:"
+item_1 = "The main {community} discussion group."
+item_2 = "This bot's appeal system, for ban-related matters."
+tail = "For general data inquiries, write to a staff member in the main group."

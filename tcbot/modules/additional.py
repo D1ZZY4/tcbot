@@ -14,6 +14,7 @@ from tcbot import cfg
 from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit
+from tcbot.modules.helper.messages.rich_text import blocks
 from tcbot.utils.i18n import t
 
 if TYPE_CHECKING:
@@ -26,8 +27,13 @@ __module_name__ = None
 
 
 def additional_msg(locale: str | None = None) -> str:
-    """Render the additional-links menu text."""
-    return t("additional.msg.body", locale, community=cfg.community_name)
+    """Render the additional-links menu as real rich paragraphs.
+
+    The catalog text is newline-separated. Without the block converter the
+    rich transport sends those newlines inside one HTML string, so Telegram
+    folds the heading and the hint into a single line above the buttons.
+    """
+    return blocks(t("additional.msg.body", locale, community=cfg.community_name))
 
 
 # ──────────────────────── Callback Handler ──────────────────────── #

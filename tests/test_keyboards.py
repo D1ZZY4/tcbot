@@ -6,11 +6,16 @@
 
 from __future__ import annotations
 
+import asyncio
+from typing import Any, cast
+
 from telegram.constants import KeyboardButtonStyle
 
 from tcbot.modules.helper import buttons as btn
+from tcbot.modules.helper.buttons import menus as menu_btn
 from tcbot.modules.helper.buttons import rules as rule_btn
 from tcbot.modules.helper.buttons.common import close_btn
+from tcbot.modules.helper.messages import links as community_links
 
 
 def test_every_open_in_pm_button_shares_the_start_menu_link() -> None:
@@ -143,6 +148,24 @@ def test_module_help_btn_pairs_sections_back_last() -> None:
     assert [c[0] for c in rows[0]] == ["A", "B"]
     assert [c[0] for c in rows[1]] == ["C"]
     assert rows[2] == [("⤎ Back", "back", None, KeyboardButtonStyle.SUCCESS)]
+
+
+def test_additional_menu_uses_one_destination_per_row(
+    monkeypatch: Any,
+) -> None:
+    """Channel, group plus appeals, logs, and Back each get their own row."""
+
+    async def _resolve(_bot: Any, chat_id: int) -> str:
+        return f"https://t.me/c/{chat_id}"
+
+    monkeypatch.setattr(community_links, "resolve", _resolve)
+    markup = asyncio.run(menu_btn.additional_menu_btn(cast("Any", None), "en-US"))
+    rows = [[cell[0] for cell in row] for row in _cells(markup)]
+
+    assert rows[0] == ["🕬 Main Channel"]
+    assert rows[1] == ["🗪 Discussion Group", "🗫 Appeals Channel"]
+    assert rows[2] == ["↝ Logs Channel"]
+    assert rows[3] == ["⤎ Back"]
 
 
 def test_main_menu_options_are_primary() -> None:

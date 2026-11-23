@@ -191,7 +191,7 @@ and tap cannot show a different record. Legacy three-part callbacks still work.
 | `main_menu_btn` | About, Help, Additional, Privacy, Language | blue |
 | `group_start_btn` | Open PM URL, `help_menu_group` | blue |
 | `open_pm_btn(bot_username, start, locale)` | Shared Open in PM button; the caller chooses the deep-link target | blue |
-| `additional_menu_btn` | Main Channel, Discussion Group, Appeals, Logs URLs, Back | blue + none |
+| `additional_menu_btn` | Main Channel URL alone, then Discussion Group and Appeals URLs, then Logs URL, then Back | blue + none |
 | `groups_menu_btn`, `tcgroups_btn` | Detailed/Simple toggle | blue |
 | `help_topics_menu_btn`, `help_topics_btn`, `module_help_btn` | `helpc_*`, `helps_<module>:<index>` | blue |
 | `privacy_btn`, `privacy_policy_sections_btn` | `privacy_policy_menu`, `privacy_section_<n>`, Back | blue + none |

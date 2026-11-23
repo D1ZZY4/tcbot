@@ -14,8 +14,13 @@ from tcbot import cfg
 from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit
-from tcbot.modules.helper.messages.rich_format import heading
-from tcbot.modules.helper.messages.rich_text import blocks
+from tcbot.modules.helper.messages.rich_format import (
+    divider,
+    footer,
+    heading,
+    paragraph,
+)
+from tcbot.modules.helper.messages.rich_list import bullet_list
 from tcbot.utils.i18n import t
 
 if TYPE_CHECKING:
@@ -36,15 +41,63 @@ _SECTION_KEYS: tuple[str, ...] = (
     "contact",
 )
 
+# * The catalog owns wording; this table owns how many items each page has.
+_SECTION_ITEM_COUNTS: dict[str, int] = {
+    "collect": 7,
+    "why": 3,
+    "access": 3,
+    "retention": 4,
+    "rights": 2,
+    "contact": 2,
+}
+
+
+def _items(
+    prefix: str, count: int, locale: str | None, *, community: str | None = None
+) -> list[str]:
+    """Read a numbered item group as rich HTML, in catalog order.
+
+    ``None`` is never passed as a placeholder value: the renderer rejects it
+    so a missing value fails loudly instead of rendering an empty word.
+    """
+    if community is None:
+        return [t(f"{prefix}_{n}", locale) for n in range(1, count + 1)]
+    return [
+        t(f"{prefix}_{n}", locale, community=community) for n in range(1, count + 1)
+    ]
+
 
 def _privacy_msg(botname: str, locale: str | None = None) -> str:
-    """Build the data-collection notice for the given plain-text bot display name."""
-    return blocks(t("privacy.msg.body", locale, bot=botname))
+    """Build the data-collection notice from real rich blocks.
+
+    The record list ends with a paragraph about who may read enforcement
+    history. A divider separates that paragraph from the policy hint so the
+    two messages never fold together on Telegram.
+    """
+    return "\n".join(
+        (
+            heading(t("privacy.msg.title", locale)),
+            divider(),
+            paragraph(t("privacy.msg.lead", locale, bot=botname)),
+            paragraph(t("privacy.msg.list_title", locale)),
+            bullet_list(_items("privacy.msg.item", 6, locale)),
+            paragraph(t("privacy.msg.visibility", locale)),
+            divider(),
+            paragraph(t("privacy.msg.policy_hint", locale)),
+        )
+    )
 
 
 def _privacy_policy_index_msg(botname: str, locale: str | None = None) -> str:
-    """Build the privacy policy section index page for the plain-text bot name."""
-    return blocks(t("privacy.index.body", locale, bot=botname))
+    """Build the privacy policy section index page."""
+    return "\n".join(
+        (
+            heading(t("privacy.index.title", locale)),
+            paragraph(t("privacy.index.lead", locale, bot=botname)),
+            divider(),
+            paragraph(t("privacy.index.hint", locale)),
+        )
+    )
 
 
 def _section_labels(locale: str | None = None) -> list[str]:
@@ -54,13 +107,28 @@ def _section_labels(locale: str | None = None) -> list[str]:
     ]
 
 
-def _section_body(idx: int, locale: str | None = None) -> tuple[str, str]:
-    """Return (label, body) for a section index."""
+def _section_body(idx: int, botname: str, locale: str | None = None) -> tuple[str, str]:
+    """Return (label, body) for one policy section, laid out in rich blocks."""
     key = _SECTION_KEYS[idx]
-    return (
-        t(f"privacy.section.{key}.label", locale, plain=True),
-        blocks(t(f"privacy.section.{key}.body", locale, community=cfg.community_name)),
+    prefix = f"privacy.section.{key}"
+    label = t(f"{prefix}.label", locale, plain=True)
+    community = cfg.community_name
+    body = "\n".join(
+        (
+            paragraph(t(f"{prefix}.lead", locale, bot=botname, community=community)),
+            bullet_list(
+                _items(
+                    f"{prefix}.item",
+                    _SECTION_ITEM_COUNTS[key],
+                    locale,
+                    community=community,
+                )
+            ),
+            divider(),
+            footer(t(f"{prefix}.tail", locale, plain=True)),
+        )
     )
+    return label, body
 
 
 # ──────────────────────── Callback Handlers ─────────────────────── #
@@ -133,8 +201,9 @@ async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         )
         return
 
-    label, content = _section_body(idx, locale)
-    body = f"{heading(label, 3)}\n{content}"
+    botname = ctx.bot.first_name or t("privacy.msg.bot_fallback", locale, plain=True)
+    label, content = _section_body(idx, botname, locale)
+    body = f"{heading(label, 3)}\n{divider()}\n{content}"
     await answer_and_edit(
         q,
         body,

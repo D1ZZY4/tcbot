@@ -1,28 +1,25 @@
-# Privacy prose (privacy.py). Messages render as rich HTML except
-# alerts (plain). Placeholders: {bot} raw bot name, {community} raw name.
+# Privacy prose (privacy.py). Wording lives here; rich block structure is
+# composed in privacy.py. Every key exists in both locales with the same
+# placeholders. Placeholders: {bot} raw bot name, {community} raw name.
 
 [msg]
 bot_fallback = "Bot ini"
-body = """*Privasi dan Data*
-
-{bot} menyimpan sedikit data untuk menjalankan federasi. Isinya:
-
-- *ID dan nama pengguna*: dicatat saat kamu berinteraksi dengan bot atau grup terhubung.
-- *Catatan ban*: jika kamu menerima ban federasi, alasan, bukti, dan admin pemberi disimpan.
-- *Catatan peringatan dan mute*: dicatat per grup untuk pelacakan moderasi.
-- *Log kick*: disimpan untuk referensi staf.
-- *Pengajuan banding*: pesanmu dan lampiran apa pun yang kamu kirim lewat sistem banding.
-- *Permintaan promosi*: permintaanmu dan hasil tinjauannya saat kamu melamar peran staf.
-
-Catatan ban, peringatan, mute, dan kick bisa dilihat siapa pun dengan `/check` atau `/checkme`; mengubah apa pun tetap butuh peran staf yang sesuai.
-
-Ketuk *Kebijakan Privasi* di bawah ↴ untuk kebijakan lengkap, per bagian."""
+title = "Privasi dan Data"
+lead = "{bot} menyimpan sedikit catatan agar federasi bisa memoderasi secara konsisten."
+list_title = "Yang disimpan"
+item_1 = "*Identitas*: ID pengguna Telegram, nama depan, dan username saat kamu berinteraksi dengan bot atau grup terhubung."
+item_2 = "*Catatan ban*: alasan, bukti yang sudah masuk, admin pemberi, dan stempel waktu."
+item_3 = "*Peringatan dan mute*: jumlah, alasan, dan waktu kedaluwarsa per grup."
+item_4 = "*Log kick*: catatan singkat untuk staf tentang tindakan dan alasannya."
+item_5 = "*Banding*: tulisanmu dan lampiran apa pun saat kamu mengajukan banding atas ban."
+item_6 = "*Permintaan promosi*: lamaranmu dan hasil tinjauannya."
+visibility = "Catatan ban, peringatan, mute, dan kick bisa dilihat siapa pun dengan `/check` atau `/checkme`; mengubah apa pun tetap butuh peran staf yang sesuai."
+policy_hint = "Ketuk *Kebijakan Privasi* di bawah ↴ untuk kebijakan lengkap, per bagian."
 
 [index]
-body = """*Kebijakan Privasi*
-{bot}
-
-Pilih bagian di bawah ↴ untuk membaca selengkapnya. Pakai tombol kembali untuk ke sini kapan pun."""
+title = "Kebijakan Privasi"
+lead = "Panduan singkat tentang apa yang disimpan {bot}, kenapa disimpan, siapa yang bisa melihat, dan berapa lama datanya bertahan."
+hint = "Pilih bagian di bawah ↴. Tombol kembali membawa ke sini kapan pun."
 
 [error]
 invalid_section = "Bagian tidak valid."
@@ -30,49 +27,51 @@ not_found = "Bagian tidak ditemukan."
 
 [section.collect]
 label = "Yang Kami Kumpulkan"
-body = """Saat kamu berinteraksi dengan grup terhubung atau bot ini, yang disimpan:
-
-- *ID Pengguna*: ID pengguna Telegram numerikmu.
-- *Nama dan username*: nama depan dan @username saat interaksi.
-- *Catatan ban*: alasan, tautan bukti, admin pemberi, dan stempel waktu.
-- *Pengajuan banding*: pesan bandingmu dan file pendukung yang kamu kirim.
-- *Catatan peringatan dan mute*: dicatat per grup untuk keperluan moderasi.
-- *Log kick*: dicatat untuk referensi dan audit staf.
-- *Permintaan promosi*: lamaranmu dan hasil tinjauannya saat kamu meminta peran staf."""
+lead = "Saat kamu berinteraksi dengan grup terhubung atau {bot}, catatan ini bisa dibuat:"
+item_1 = "*ID Pengguna*: ID pengguna Telegram numerikmu."
+item_2 = "*Nama dan username*: nama depan dan @username saat interaksi."
+item_3 = "*Catatan ban*: alasan, tautan bukti, admin pemberi, dan stempel waktu."
+item_4 = "*Peringatan dan mute*: alasan dan waktu kedaluwarsa, dicatat per grup."
+item_5 = "*Log kick*: tindakan dan alasannya, disimpan untuk referensi staf."
+item_6 = "*Banding*: pesan bandingmu dan file pendukung yang kamu kirim."
+item_7 = "*Permintaan promosi*: lamaranmu dan hasil tinjauannya."
+tail = "Hanya catatan yang tercantum di atas yang dibuat oleh pemakaian biasa bot ini."
 
 [section.why]
 label = "Kenapa Kami Mengumpulkan"
-body = """Semua yang disimpan dipakai murni untuk moderasi federasi {community}: menjaga grup terhubung tetap aman, menegakkan ban konsisten di semua grup, dan menyimpan catatan tindakan moderasi yang bisa diaudit.
-
-Kami tidak mengumpulkan atau memakai data untuk iklan, profiling, atau tujuan apa pun di luar moderasi."""
+lead = "Setiap catatan punya satu tujuan: menjaga federasi tetap aman dan keputusannya bisa ditinjau."
+item_1 = "*Penegakan konsisten*: ban di satu grup berlaku di semua grup terhubung."
+item_2 = "*Jejak audit*: staf bisa melihat siapa bertindak, kapan, dan kenapa."
+item_3 = "*Banding*: bukti dan konteks yang dibutuhkan untuk meninjau ban."
+tail = "Kami tidak memakai data untuk iklan, profiling, atau keperluan apa pun di luar moderasi federasi."
 
 [section.access]
 label = "Yang Bisa Mengakses"
-body = """Catatan moderasi (ban, peringatan, mute, kick) bisa dilihat siapa pun lewat `/check` dan `/checkme`, agar penegakan tetap transparan. Bertindak atas data itu (menge-ban, mem-mute, mempromosi, menghubungkan grup) butuh peran staf {community} yang sesuai, dicek di tiap perintah.
-
-Tidak ada data yang dijual, disewakan, atau dibagikan ke pihak ketiga dalam keadaan apa pun."""
+lead = "Membaca riwayat penegakan terbuka. Mengubahnya tidak."
+item_1 = "`/check` dan `/checkme` membiarkan siapa pun melihat ban, peringatan, mute, dan kick, agar penegakan tetap transparan."
+item_2 = "Menge-ban, mem-mute, mempromosi, dan menghubungkan grup butuh peran staf {community} yang sesuai, dicek ulang di tiap perintah."
+item_3 = "Tujuan log dan banding adalah chat milik deployment; hanya staf yang bisa bertindak atas isinya."
+tail = "Tidak ada data yang dijual, disewakan, atau dibagikan ke pihak ketiga."
 
 [section.retention]
 label = "Berapa Lama Kami Menyimpan"
-body = """Catatan ban disimpan tanpa batas sebagai bagian log federasi, untuk mendukung penegakan lintas grup dan tinjauan banding.
-
-Data identitas yang di-cache (nama, username) disegarkan tiap interaksi dan dipangkas otomatis setelah 90 hari tanpa aktivitas.
-
-Mute berjangka yang kedaluwarsa dihapus otomatis; mute permanen bertahan sampai dicabut. Peringatan bisa kedaluwarsa otomatis saat operator mengaktifkan kedaluwarsa peringatan, jika tidak bertahan sampai dihapus.
-
-Catatan banding dan permintaan promosi disimpan setelah diputuskan untuk referensi dan audit."""
+lead = "Setiap jenis catatan punya masa berlaku berbeda:"
+item_1 = "*Ban*: disimpan tanpa batas sebagai bagian log federasi, agar penegakan lintas grup dan tinjauan banding tetap berjalan."
+item_2 = "*Cache identitas*: disegarkan tiap interaksi dan dipangkas otomatis setelah 90 hari tanpa aktivitas."
+item_3 = "*Mute dan peringatan*: mute berjangka kedaluwarsa otomatis. Peringatan kedaluwarsa bila operator mengaktifkannya; jika tidak, bertahan sampai dihapus."
+item_4 = "*Banding dan permintaan promosi*: disimpan setelah diputuskan untuk referensi dan audit."
+tail = "Menghapus data identitas yang di-cache tidak menghapus catatan ban yang masih dibutuhkan penegakan."
 
 [section.rights]
 label = "Hak Kamu"
-body = """Kamu bisa meninjau status ban sendiri kapan pun dengan `/checkme`, dan bisa meminta tinjauan atau penghapusan data pribadimu dengan menghubungi Admin {community} atau Owner langsung.
-
-Permintaan ditangani sebaik mungkin. Catatan ban aktif bisa tetap disimpan walau ada permintaan hapus bila dibutuhkan untuk penegakan berjalan atau integritas federasi."""
+lead = "Kamu bisa mengecek status sendiri dan meminta data pribadimu ditinjau atau dihapus."
+item_1 = "`/checkme` menampilkan status banmu kapan pun."
+item_2 = "Hubungi Admin {community} atau Owner untuk meminta tinjauan atau penghapusan data pribadi."
+tail = "Permintaan ditangani sebaik mungkin. Catatan ban aktif bisa tetap disimpan bila dibutuhkan untuk penegakan berjalan atau integritas federasi."
 
 [section.contact]
 label = "Kontak"
-body = """Hubungi staf {community} lewat:
-
-- Grup diskusi utama {community}.
-- Sistem banding bot ini (untuk hal terkait ban).
-
-Untuk pertanyaan data umum, hubungi staf langsung di grup utama."""
+lead = "Hubungi staf {community} lewat salah satu kanal ini:"
+item_1 = "Grup diskusi utama {community}."
+item_2 = "Sistem banding bot ini, untuk hal yang berkaitan dengan ban."
+tail = "Untuk pertanyaan data umum, tulis ke staf di grup utama."

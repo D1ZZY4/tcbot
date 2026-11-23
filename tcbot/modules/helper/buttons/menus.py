@@ -154,9 +154,14 @@ async def additional_menu_btn(
         if appeals_id
         else None
     )
-    first_row = [b for b in (channel_btn, group_btn, appeal_btn) if b is not None]
-    if first_row:
-        rows.append(first_row)
+    # * One row per kind of destination: the main channel stands alone, the
+    # * group and appeals channel share the next row, then logs, then Back.
+    if channel_btn is not None:
+        rows.append([channel_btn])
+
+    group_row = [b for b in (group_btn, appeal_btn) if b is not None]
+    if group_row:
+        rows.append(group_row)
 
     logs_btn = (
         InlineKeyboardButton(
