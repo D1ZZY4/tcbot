@@ -140,15 +140,14 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return_exceptions=True,
     )
     throw_if_cancelled((user_role, ban))
-    if isinstance(user_role, BaseException):
-        user_role = None
     # * Never render a clean bill of health from a failed read: during an
-    # * outage a coerced None would tell a banned user "You're clean" (same
-    # * defect class as the /check Unknown rendering). Fail closed with a
-    # * retry notice instead; the staff branches below stay unreachable on
-    # * this path because nothing about the caller could be verified.
-    if isinstance(ban, BaseException):
-        log.warning("checkme ban lookup failed for user=%d: %s", user.id, ban)
+    # * outage a coerced role would hide the caller's staff panel and a
+    # * coerced ban would tell a banned user "You're clean". Fail closed with
+    # * a retry notice for either lookup instead.
+    if isinstance(user_role, BaseException) or isinstance(ban, BaseException):
+        log.warning(
+            "checkme lookup failed for user=%d: role=%s ban=%s", user.id, user_role, ban
+        )
         await reply_rich(
             msg,
             t("checking.error.status_retry", locale, plain=True),
@@ -205,9 +204,8 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * non-banned callers.
     await reply_rich(
         msg,
-        t("checking.checkme.clean", locale, community=cfg.community_name, plain=True),
+        t("checking.checkme.clean", locale, community=cfg.community_name),
         log_label=f"checkme clean for user {user.id}",
-        parse_mode=None,
     )
     return
 
