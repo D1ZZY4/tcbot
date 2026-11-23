@@ -31,5 +31,6 @@ Atau balas sebuah pesan lalu jalankan `/bc` untuk meneruskannya ke semua grup.""
 
 [send]
 no_content = "Tulis pesan untuk broadcast, atau balas sebuah pesan."
+circuit_busy = "Telegram sedang melambat, jadi broadcast tidak dikirim. Coba lagi sebentar; tidak ada grup yang menerima pesan sebagian."
 sending = "Mengirim broadcast ke {n} grup..."
 done = "Broadcast terkirim ke {ok} grup. Gagal: {failed}."

@@ -31,5 +31,6 @@ Or reply to a message and run `/bc` to forward it to all groups."""
 
 [send]
 no_content = "Please provide a message to broadcast, or reply to a message."
+circuit_busy = "Telegram is slowing down right now, so the broadcast was not sent. Please try again in a moment; no group received a partial message."
 sending = "Broadcasting to {n} group(s)..."
 done = "Broadcast sent to {ok} groups. Failed: {failed}."

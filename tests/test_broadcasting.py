@@ -15,6 +15,7 @@ from telegram.error import BadRequest, TimedOut
 
 from tcbot import database as db
 from tcbot.modules import broadcast
+from tcbot.utils.circuit_breaker import CircuitState
 
 
 class _StatusMsg:
@@ -113,6 +114,44 @@ def test_broadcast_counts_only_transient_failures(
     # * Benign refusal is not a failure.
     assert "<code>2</code>" in text
     assert "<code>1</code>" in text
+
+
+@pytest.mark.parametrize("state", [CircuitState.OPEN, CircuitState.HALF_OPEN])
+def test_broadcast_refuses_a_degraded_circuit(
+    monkeypatch: pytest.MonkeyPatch, state: CircuitState
+) -> None:
+    """A partial fan-out has no retry, so a degraded circuit refuses up front."""
+
+    async def _connected(chat_id: int, *, fresh: bool = False) -> bool:
+        return True
+
+    async def _role(uid: int, *, fresh: bool = False) -> str | None:
+        return "admin"
+
+    async def _owner() -> int:
+        return 999
+
+    monkeypatch.setattr(db.groups_db, "is_connected", _connected)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.users_roles, "get_owner_id", _owner)
+    monkeypatch.setattr(
+        broadcast,
+        "_cb",
+        SimpleNamespace(telegram=SimpleNamespace(state=state)),
+    )
+
+    msg = _FakeMsg("/tcbroadcast hello federation")
+    bot = _FakeBot({})
+    ctx = SimpleNamespace(bot=bot, user_data={})
+    # * A distinct sender keeps this case off the shared per-user rate bucket.
+    update = _update(msg)
+    sender_id = 7000 if state is CircuitState.OPEN else 7001
+    update.effective_user = SimpleNamespace(id=sender_id, first_name="Admin")
+    asyncio.run(broadcast.cmd_broadcast(update, ctx))  # type: ignore[arg-type]
+
+    assert bot.sent == []
+    assert msg.status.edits == []
+    assert any("Telegram is slowing down" in r for r in msg.replies)
 
 
 def test_broadcast_refuses_disconnected_origin(monkeypatch: pytest.MonkeyPatch) -> None:

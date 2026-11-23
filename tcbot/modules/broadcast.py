@@ -24,6 +24,8 @@ from tcbot.modules.helper.messages import (
     send_log,
     send_text,
 )
+from tcbot.utils import circuit_breaker as _cb
+from tcbot.utils.circuit_breaker import CircuitState
 from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, esc, t
 from tcbot.utils.logger import get_logger
@@ -84,6 +86,21 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         allow_private=True,
         log_label="cmd_broadcast origin",
     ):
+        return
+
+    # * fan_out runs its slots concurrently. A circuit that is OPEN or already
+    # * holding a HALF_OPEN probe would deliver to only part of the federation
+    # * and report the rest as failed, with no durable retry for a broadcast.
+    # * Refuse up front so staff get a clear retry instead of a silent split.
+    state = _cb.telegram.state
+    if state is not CircuitState.CLOSED:
+        log.warning("Broadcast skipped: Telegram circuit is %s.", state.value)
+        await reply_rich(
+            msg,
+            t("broadcasting.send.circuit_busy", locale, plain=True),
+            log_label="cmd_broadcast circuit",
+            parse_mode=None,
+        )
         return
 
     args = parse_cmd_args(msg.text)
