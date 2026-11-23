@@ -159,6 +159,35 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             catch_all=True,
         )
         return
+    # * The demote gate must precede the decision write: record_mute queues a
+    # * durable run, so a later "owner" verdict could not stop the worker.
+    enforced_role = await demote_before_enforcement(
+        bot,
+        target_id,
+        target_fname,
+        trigger="mute",
+        executor_id=admin_id,
+        executor_fname=admin_fname,
+    )
+    if enforced_role == "owner":
+        log.warning(
+            "Mute refused: target=%d became Owner before the decision write", target_id
+        )
+        await safe_edit_message(
+            bot,
+            prompt_chat,
+            prompt_id,
+            t(
+                "identity.refuse.mute.owner",
+                locale,
+                line=Safe(user_ref(target_id, target_fname)),
+            ),
+            reply_markup=None,
+            log_level="debug",
+            log_label="Mute Owner protection",
+            catch_all=True,
+        )
+        return
 
     # * The decision lands before the fan-out: no group is touched on a
     # * database failure. The decision and the live state are one record,
@@ -210,7 +239,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             catch_all=True,
         )
         return
-    await demote_before_enforcement(
+    enforced_role = await demote_before_enforcement(
         bot,
         target_id,
         target_fname,
@@ -218,6 +247,28 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         executor_id=admin_id,
         executor_fname=admin_fname,
     )
+    if enforced_role == "owner":
+        # * The target became Owner after the entry gates. The protected role
+        # * cannot be demoted, and the helper returns it so the mute must stop
+        # * before any group is restricted.
+        log.warning(
+            "Mute fan-out refused: target=%d became Owner before enforcement", target_id
+        )
+        await safe_edit_message(
+            bot,
+            prompt_chat,
+            prompt_id,
+            t(
+                "identity.refuse.mute.owner",
+                locale,
+                line=Safe(user_ref(target_id, target_fname)),
+            ),
+            reply_markup=None,
+            log_level="debug",
+            log_label="Mute Owner protection",
+            catch_all=True,
+        )
+        return
     applied = 0
     total = len(groups)
     failed = 0

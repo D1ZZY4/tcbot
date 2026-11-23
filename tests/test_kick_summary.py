@@ -254,6 +254,12 @@ def test_a_failed_ban_marks_the_kick_failed(
         failed.append(action_id)
         return True
 
+    queued: list[int] = []
+
+    async def _repair(action_id: int, chat_id: int, requested_by: int | None) -> int:
+        queued.append(action_id)
+        return 99
+
     class _FailBanBot(_FakeBot):
         async def ban_chat_member(self, *args: Any, **kwargs: Any) -> bool:
             raise RuntimeError("not enough rights")
@@ -261,9 +267,13 @@ def test_a_failed_ban_marks_the_kick_failed(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
     monkeypatch.setattr(db.kicks_db, "mark_kick_failed", _mark_failed)
+    monkeypatch.setattr(db.enforcement_db, "queue_kick_unban_repair", _repair)
 
     bot = _run(_FailBanBot())
 
     assert failed == [55]
+    # * A ban that never landed cannot strand the user, so no no-op unban
+    # * repair may be queued (the worker would rewrite history as completed).
+    assert queued == []
     assert len(bot.replies) == 1
     assert "Couldn&#x27;t kick" in bot.replies[0]["args"][0]

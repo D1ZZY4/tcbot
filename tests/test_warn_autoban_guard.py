@@ -255,4 +255,6 @@ def test_threshold_ban_demotes_at_enforcement_time(
         )
     )
 
-    assert demoted == [(42, "warn")]
+    # * The enforcement re-check precedes a real threshold ban, so its DM
+    # * wording must never claim the target was spared a ban.
+    assert demoted == [(42, "ban")]

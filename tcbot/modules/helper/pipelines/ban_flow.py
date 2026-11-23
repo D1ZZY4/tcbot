@@ -489,6 +489,40 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                     catch_all=True,
                 )
             return
+        # * The demote gate must run before the decision write: create_ban
+        # * queues a durable run, so an "owner" verdict discovered afterwards
+        # * would leave that run to be delivered by the worker anyway.
+        enforced_role = await demote_before_enforcement(
+            bot,
+            target_id,
+            target_fname,
+            trigger="ban",
+            executor_id=admin_id,
+            executor_fname=admin_fname,
+        )
+        if enforced_role == "owner":
+            # * The target became Owner after the entry gates. The protected
+            # * role cannot be demoted, so no record and no run may be queued.
+            log.warning(
+                "Ban refused: target=%d became Owner before the decision write",
+                target_id,
+            )
+            if prompt_msg_id and prompt_chat_id:
+                await safe_edit_message(
+                    bot,
+                    prompt_chat_id,
+                    prompt_msg_id,
+                    t(
+                        "identity.refuse.ban.owner",
+                        locale,
+                        line=Safe(user_ref(target_id, target_fname)),
+                    ),
+                    reply_markup=None,
+                    log_level="debug",
+                    log_label="Ban Owner protection",
+                    catch_all=True,
+                )
+            return
         log_msg_id, db_ok, ban_id, enforcement_run_id = await _execute_ban_record(
             bot,
             meta,
@@ -550,14 +584,6 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             raise
         except Exception:
             log.exception("set_log_message_id failed for ban_id=%s", ban_id)
-    await demote_before_enforcement(
-        bot,
-        target_id,
-        target_fname,
-        trigger="ban",
-        executor_id=admin_id,
-        executor_fname=admin_fname,
-    )
     applied = 0
     total = len(groups)
     failed = 0

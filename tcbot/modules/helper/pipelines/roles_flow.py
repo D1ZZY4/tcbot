@@ -195,6 +195,21 @@ async def role_change_prompt(
             parse_mode=None,
         )
         return
+    # * The mutation gate requires the executor to strictly outrank the
+    # * target's current role (only the Owner is exempt). Refuse here too, so
+    # * staff are not shown a picker whose every button would be rejected.
+    if (
+        executor_role != "owner"
+        and current_role
+        and not outranks(executor_role, current_role)
+    ):
+        await reply_rich(
+            msg,
+            t("admins.role_change.not_outranked", locale, plain=True),
+            log_label="role_change_prompt not-outranked",
+            parse_mode=None,
+        )
+        return
     available = Promote.available_roles_for(executor_role)
     if not available:
         await reply_rich(

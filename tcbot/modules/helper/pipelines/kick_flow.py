@@ -140,12 +140,13 @@ async def execute_kick(
     # * enforced but unaudited kick that /check can never see.
     kick_action_id: int | None = None
     kick_delivered = False
+    ban_landed = False
     repair_queued = False
 
     async def _queue_unban_repair() -> None:
         """Queue durable repair once when a landed ban was never lifted."""
         nonlocal repair_queued
-        if kick_action_id is None or kick_delivered or repair_queued:
+        if kick_action_id is None or not ban_landed or kick_delivered or repair_queued:
             return
         repair_queued = True
         try:
@@ -193,7 +194,7 @@ async def execute_kick(
         # * exists, so cancellation here must still mark it failed instead of
         # * leaving a completed kick with no enforcement and no repair.
         # * Best-effort by design: a lookup failure must not skip enforcement.
-        await demote_before_enforcement(
+        enforced_role = await demote_before_enforcement(
             ctx.bot,
             target_id,
             target_name,
@@ -201,10 +202,40 @@ async def execute_kick(
             executor_id=admin_id,
             executor_fname=admin_fname,
         )
+        if enforced_role == "owner":
+            # * A target promoted to Owner after the entry gates is protected:
+            # * the helper refuses the demote and returns "owner" so the ban
+            # * must not land. Mark the audit row failed and report the refusal.
+            log.warning(
+                "Kick refused: target=%d became Owner before enforcement", target_id
+            )
+            try:
+                await db.kicks_db.mark_kick_failed(kick_action_id)
+            except Exception:
+                log.exception(
+                    "Kick status update failed on Owner refusal for action=%s",
+                    kick_action_id,
+                )
+            await reply_rich(
+                msg,
+                t(
+                    "identity.refuse.kick.owner",
+                    locale,
+                    line=Safe(user_ref(target_id, target_name)),
+                ),
+                log_label="Kick Owner protection",
+                parse_mode=None,
+            )
+            return
         await asyncio.wait_for(
             ctx.bot.ban_chat_member(chat_id, target_id),
             timeout=TELEGRAM_LOOKUP_TIMEOUT,
         )
+        # * Only a ban that actually landed can leave the target stranded.
+        # * Without this flag a failed ban queued a no-op repair that the
+        # * worker settled as success, flipping the audit row back to
+        # * "completed" for a kick that never happened.
+        ban_landed = True
         proof_link: str | None = proof_upload.link if proof_upload else None
         proof_btn = buttons.action_proof_btn(target_id, proof_link, locale)
         chat_title = effective_chat.title or str(chat_id)

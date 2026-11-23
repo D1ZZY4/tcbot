@@ -30,6 +30,7 @@ from tcbot.modules.helper.pipelines.reason_flow import (
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
     fan_out,
+    is_benign_telegram_error,
     summarize_fanout,
     throw_if_cancelled,
 )
@@ -266,7 +267,10 @@ async def execute_warn(
             ctx.bot,
             target_id,
             target_name,
-            trigger="warn",
+            # * This re-check precedes a real threshold ban, not the staff
+            # * exemption above. Using the "warn" wording here would tell the
+            # * target they were spared a ban while being banned moments later.
+            trigger="ban",
             executor_id=admin_id,
             executor_fname=admin_fname,
         )
@@ -411,10 +415,16 @@ async def execute_warn(
             applied = outcome.applied
             failed_count = outcome.failed
             transient = list(outcome.transient)
+            # * A benign refusal (bot removed, chat gone) means there is nobody
+            # * to warn any more, so the group counts as landed here, matching
+            # * summarize_fanout() and landed_report_chat_ids() on the queued
+            # * path. Excluding it would leave an at-limit warning behind that
+            # * re-fires a federation ban after the next unban.
             landed_chat_ids = [
                 int(grp["chat_id"])
                 for grp, result in zip(groups, ban_results, strict=True)
                 if not isinstance(result, BaseException)
+                or is_benign_telegram_error(result)
             ]
         # * The decision is recorded once the ban row exists. A delivery
         # * that is still pending is not a creation failure and must not
@@ -814,7 +824,9 @@ async def execute_resetwarns(
     )
     throw_if_cancelled(results)
     if isinstance(results[0], BaseException):
-        log.exception(
+        # * This is a captured gather value, not an active exception; using
+        # * log.exception here would attach a spurious "NoneType: None".
+        log.error(
             "Reset-warns log send failed for target=%d: %s", target_id, results[0]
         )
 
