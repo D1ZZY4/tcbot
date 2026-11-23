@@ -291,7 +291,7 @@ async def _scheduler_background(
 
 
 def _schedule_matches(
-    job: Job, trigger: IntervalTrigger, args: tuple[Any, ...]
+    job: Job, func: Callable[..., Any], trigger: IntervalTrigger, args: tuple[Any, ...]
 ) -> bool:
     """Return True when the stored job already runs the desired schedule.
 
@@ -300,12 +300,17 @@ def _schedule_matches(
     two triggers built a second apart are never equal even when they describe
     the same cadence. The timezone is part of the comparison so a job
     persisted against the host-local zone is replaced once the schedules run
-    on UTC.
+    on UTC. The callable is compared as well: a stored job that points at an
+    older implementation at the same cadence must be replaced, or a code fix
+    would never run.
     """
     stored_trigger = job.trigger
     if not isinstance(stored_trigger, IntervalTrigger):
         return False
     if stored_trigger.timezone != trigger.timezone:
+        return False
+    stored_func = getattr(job, "func", None)
+    if stored_func is not func and stored_func != func:
         return False
     return stored_trigger.interval == trigger.interval and tuple(job.args) == args
 
@@ -353,7 +358,7 @@ def _ensure_job(
     existing = stored.get(job_id) if stored is not None else None
     if existing is not None:
         try:
-            matches = _schedule_matches(existing, trigger, args)
+            matches = _schedule_matches(existing, func, trigger, args)
         except Exception as exc:
             # * A stored job from an older schema version can carry a
             # * shape this code cannot compare. Replacing it is safe, so
@@ -530,6 +535,15 @@ def _reconcile_schedules(
             stored=stored,
         )
         log.info("Scheduled enforcement worker: every 5 minutes.")
+    else:
+        # * No callable supplied: a job persisted by an earlier boot must not
+        # * keep firing by its stored reference after the owner opted out.
+        _remove_job(
+            scheduler,
+            _ENFORCEMENT_WORKER_SCHEDULE_ID,
+            "Enforcement worker",
+            stored=stored,
+        )
 
     # * A review-card edit that failed in the handler is retried here, so
     # * a settled appeal cannot leave a live-looking card behind.
@@ -544,6 +558,14 @@ def _reconcile_schedules(
             stored=stored,
         )
         log.info("Scheduled notification worker: every 5 minutes.")
+    else:
+        _remove_job(
+            scheduler,
+            _NOTIFICATION_WORKER_SCHEDULE_ID,
+            "Notification worker",
+            stored=stored,
+        )
+
     # * The retired weekly cleanup job must not fire: it pointed at a
     # * membership sweep the daily job replaced.
     _remove_job(

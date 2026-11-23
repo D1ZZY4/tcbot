@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from apscheduler.jobstores.base import BaseJobStore, JobLookupError
+from apscheduler.triggers.interval import IntervalTrigger
 
 from tcbot.database import scheduler as sched_mod
 
@@ -90,6 +92,21 @@ def _run_scheduler() -> None:
     asyncio.run(_run())
 
 
+def test_schedule_match_checks_the_callable() -> None:
+    """A stored job pointing at an older function must be replaced."""
+
+    async def _old() -> None:
+        return None
+
+    async def _new() -> None:
+        return None
+
+    trigger = IntervalTrigger(minutes=5, timezone=sched_mod._SCHEDULER_TIMEZONE)
+    job = SimpleNamespace(trigger=trigger, args=(), func=_old)
+    assert sched_mod._schedule_matches(cast("Any", job), _old, trigger, ()) is True
+    assert sched_mod._schedule_matches(cast("Any", job), _new, trigger, ()) is False
+
+
 def test_schedules_land_in_the_persistent_job_store(store: _FakeJobStore) -> None:
     """Jobs must not fall back to APScheduler's in-memory default store."""
     _run_scheduler()
@@ -125,6 +142,31 @@ def test_worker_entry_points_are_registered_from_the_caller(
 
     assert store.jobs[sched_mod._ENFORCEMENT_WORKER_SCHEDULE_ID].func is _worker
     assert store.jobs[sched_mod._NOTIFICATION_WORKER_SCHEDULE_ID].func is _worker
+
+
+def test_worker_jobs_are_removed_when_no_callable_is_supplied(
+    store: _FakeJobStore,
+) -> None:
+    """Opting out of a worker must not leave its persisted job firing."""
+
+    async def _worker() -> None:
+        return None
+
+    async def _with_workers() -> None:
+        await sched_mod.start(
+            _TEST_URL, enforcement_job=_worker, notification_job=_worker
+        )
+        await sched_mod.stop()
+
+    async def _without_workers() -> None:
+        await sched_mod.start(_TEST_URL)
+        await sched_mod.stop()
+
+    asyncio.run(_with_workers())
+    assert sched_mod._ENFORCEMENT_WORKER_SCHEDULE_ID in store.jobs
+    asyncio.run(_without_workers())
+    assert sched_mod._ENFORCEMENT_WORKER_SCHEDULE_ID not in store.jobs
+    assert sched_mod._NOTIFICATION_WORKER_SCHEDULE_ID not in store.jobs
 
 
 def test_unchanged_schedule_keeps_its_persisted_fire_time(
