@@ -57,8 +57,9 @@ manually after flipping the toggle.
 
 ## Dependency update workflow
 
-`dependency-update.yml` copies `uv.lock`, runs `uv lock --upgrade`, and opens a
-PR on branch `deps/auto-update-<date>` when the lock changed. It validates with
+`dependency-update.yml` copies `uv.lock`, runs `uv lock --upgrade` with
+`pipefail` so a failed lock resolution cannot be mistaken for "no updates", and
+opens a PR on branch `deps/auto-update-<date>` when the lock changed. It validates with
 `ruff format --check`, `ruff check`, `pyright`, `import tcbot`, and the
 service-free Pytest group; a failing check stops before the PR is opened. It
 then generates a Conventional Commit title and body through GitHub Models with
@@ -93,7 +94,7 @@ only when the PR was created.
 |---|---|---|
 | `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID` | Runner, notifications | Runtime credentials. |
 | `API_ID`, `API_HASH`, `MTPROTO_SESSION` | Runner | MTProto identity lookups. |
-| `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `MAIN_GROUP`, `MAIN_CHANNEL` | Runner | Infrastructure destinations. |
+| `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `MAIN_GROUP`, `MAIN_CHANNEL`, `INFRA_CHAT_IDS` | Runner | Infrastructure destinations. |
 | `DB_SCHEMA`, `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `REDIS_URL`, `PG_CRON_ENABLED` | Runner | Database and cache configuration. |
 | `WEBHOOK_URL`, `WEBHOOK_SECRET`, `PORT`, `BIND_HOST` | Runner | Webhook transport. |
 | `WARN_LIMIT`, `WARN_EXPIRY_DAYS`, `FED_WARN_LIMIT`, `PROMOTION_REQUEST_TTL_DAYS` | Runner | Moderation policy. |

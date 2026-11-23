@@ -90,7 +90,7 @@ Handlers are small orchestration functions. A typical handler guards
 `effective_message`, `effective_user`, and `effective_chat`; resolves the locale
 once with `locale_for_update`; delegates authorization to decorators and guards;
 delegates persistence to `*_db.py` helpers; delegates multi-step work to a
-`*_flow.py` pipeline; and sends replies through the `messages` helpers
+domain-named pipeline module; and sends replies through the `messages` helpers
 (`reply_rich`, defined in `messages/rich_msg.py`).
 
 Decorator order is fixed: `ratelimiter()` outermost, the required authorization
@@ -108,7 +108,7 @@ visible work. See [Security](security.md) for the tier and guard contracts.
 | `guards.py`, `identity.py`, `targets.py`, `extraction/` | Who may act, on whom, and how a target is resolved. |
 | `locale.py`, `scope.py` | Per-update locale and per-conversation payload scope. |
 | `ban_info.py`, `replies` via `messages/replies.py` | Shared ban details and localized replies. |
-| `pipelines/` | `*_flow.py` ConversationHandler factories and their steps. |
+| `pipelines/` | Domain-named `*_actions.py`, `*_steps.py`, `*_panels.py`, or plain ConversationHandler factories and their steps. |
 | `buttons/` | Every inline keyboard builder. |
 | `messages/` | Rich transport, formatters, panels, links, and audit-log builders. |
 

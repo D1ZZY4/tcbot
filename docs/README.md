@@ -88,7 +88,7 @@ order is in [system.md](flows/system.md).
 
 Telegram updates pass through the global rate limiter, a command or callback
 filter, tier decorators, a handler that delegates persistence to `tcbot/database/`
-helpers and multi-step work to a `*_flow.py` pipeline, and a rich-message reply.
+helpers and multi-step work to a domain-named pipeline module, and a rich-message reply.
 Decisions commit to PostgreSQL before any Telegram call. Federation-wide Telegram
 work goes through the bounded `fan_out()` dispatcher and the Telegram circuit
 breaker; unfinished per-group deliveries are retried by the enforcement worker.
@@ -96,7 +96,8 @@ breaker; unfinished per-group deliveries are retried by the enforcement worker.
 ## Ownership rules
 
 - Commands and callbacks live in `tcbot/modules/`; shared helpers in `tcbot/modules/helper/`.
-- Conversation factories live in `tcbot/modules/helper/pipelines/*_flow.py`.
+- Conversation factories live in `tcbot/modules/helper/pipelines/` as domain-named
+  `*_actions.py`, `*_steps.py`, `*_panels.py`, or plain modules.
 - Database reads and writes live in `tcbot/database/*_db.py` helpers.
 - Runtime utilities live in `tcbot/utils/`; configuration in `tcbot/__init__.py`.
 - User-facing wording lives in `i18n/<locale>/*.toml`, never hardcoded in Python

@@ -72,21 +72,28 @@ flowchart TD
     PENDING -->|yes| AUTO[complete_join auto-complete]
     PENDING -->|no| DUP{Already connected or pending}
     DUP -->|yes| IGNORE
-    DUP -->|no| PROMPT[Send requirement 1 and add_pending]
-    PROMPT --> V2["tc_verify_1: requirement 2"]
-    V2 --> V3["tc_verify_2: requirement 3"]
-    V3 --> SCOPE["tc_verify_3: moderation scope page"]
-    SCOPE --> FINAL["tc_verify_4: final confirmation page"]
+    DUP -->|no| PROMPT[Send welcome page and add_pending]
+    PROMPT --> V1["tc_verify_1: approval on record"]
+    V1 --> V2["tc_verify_2: listed with the federation"]
+    V2 --> V3["tc_verify_3: approval still stands"]
+    V3 --> SCOPE["tc_verify_4: moderation scope page"]
+    SCOPE --> FINAL["tc_verify_5: final confirmation page"]
     FINAL --> CONNECT["tc_join: owner-only Connect button"]
+    V2 -->|Prev| V1
+    V3 -->|Prev| V2
+    SCOPE -->|Prev| V3
+    FINAL -->|Prev| SCOPE
 ```
 
 An anonymous add stores owner `0` and leaves the verification pages for the group
 creator, because auto-completing it would write owner `0`. A pending row with no
-attributable owner follows the same path. The five pages are the three membership
-requirements from `about/keanggotaan.md` (admin approval is recorded, the group is
-listed in the official channel, and approval stands), the moderation scope from
-`about/federasi.md`, and a final confirmation. Each step is owner-only; `Connect`
-appears only on the confirmation page, so a group cannot skip the requirements.
+attributable owner follows the same path. The six pages open with a rich welcome
+that explains why the bot was added, what connecting changes, and the three
+membership points in brief. Three detailed pages then explain each requirement
+from `about/keanggotaan.md`, followed by the moderation scope from
+`about/federasi.md` and a final confirmation. Every page renders as rich blocks
+with Prev and Next; `Connect` appears only on the confirmation page, so a group
+cannot skip the requirements. Each step is owner-only.
 On removal, the group is deactivated
 first and a log is posted only when it was connected. A demotion from administrator
 to member sends a warning to the moderator log, except in primary groups.

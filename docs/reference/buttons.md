@@ -159,7 +159,9 @@ appeal; a legacy payload without the suffix falls back to the tapped message id.
 | `items_btn` | `rules_item_add` (blue), Back + Close | mixed |
 | `confirm_btn(yes, no)` | destructive confirmation: Yes (red), No (red), Back + Close | mixed |
 | `prompt_btn(back)` | Back + Close for a text-entry step | mixed |
-| `rules_menu_btn(categories, page)` | `rules_show:<key>`, `rules_page:<n>`, Back + Close | mixed |
+| `rules_index_btn(categories, locale, page)` | `rules_show:<key>`, `rules_index:<n>` | mixed |
+| `category_sections_btn(sections, locale)` | `rules_section:<n>`, Back + Close | mixed |
+| `rules_page_btn(...)` | `rules_prev:<n>`, `rules_next:<n>` | green |
 | `ack_btn(version, member)` | `rules_ack:<version>:<member>` | green |
 
 Category slugs are capped at 40 characters so even the longest callback and a

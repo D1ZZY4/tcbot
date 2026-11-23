@@ -125,7 +125,7 @@ uv run python -m tcbot
    | Concern | Location |
    |---|---|
    | Command handlers | `tcbot/modules/` |
-   | Conversation flows (`*_flow.py`) | `tcbot/modules/helper/pipelines/` |
+   | Conversation pipelines (`*_actions.py`, `*_steps.py`, `*_panels.py`, or domain names) | `tcbot/modules/helper/pipelines/` |
    | Shared handler helpers | `tcbot/modules/helper/` |
    | Database access (always via helpers, never raw SQL) | `tcbot/database/` |
    | Runtime utilities | `tcbot/utils/` |

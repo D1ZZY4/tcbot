@@ -16,7 +16,7 @@ live in [`code-style.md`](code-style.md), and validation commands live in
 | One Telegram API call | Direct `await` |
 | A few independent DB/API reads | `asyncio.gather()` |
 | Federation-wide Telegram actions | `tcbot.utils.dispatch.fan_out()` |
-| User-driven multi-step input | `ConversationHandler` flow in `*_flow.py` |
+| User-driven multi-step input | `ConversationHandler` flow in a domain-named pipeline module |
 | Scheduled expiration or cleanup | APScheduler via `tcbot/database/scheduler/` |
 | Blocking file or CPU-heavy work | Avoid; if necessary, `asyncio.to_thread()` |
 
@@ -24,7 +24,7 @@ live in [`code-style.md`](code-style.md), and validation commands live in
 
 Handlers are small orchestration functions. Put persistence in
 `tcbot/database/*_db.py`, shared formatting in helpers, and reusable workflow
-logic in `tcbot/modules/helper/pipelines/*_flow.py`.
+logic in a domain-named module under `tcbot/modules/helper/pipelines/`.
 
 ```python
 async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

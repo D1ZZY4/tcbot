@@ -34,7 +34,7 @@ whose `CallbackQueryHandler` pattern matches it.
 | Callback pattern | Built by | Handled by |
 |---|---|---|
 | `ban_cancel` | `buttons/ban.py`, `buttons/flows.py` | `ban_actions.py` with `^ban_cancel$`; `rules_step:cancel` also stops the rules step. |
-| `ban_continue` | `buttons/ban.py::ban_confirm_btn` | `ban_confirmation.py` with `^ban_continue$`. |
+| `ban_continue` | `buttons/ban.py::ban_update_confirm_btn` | `ban_confirmation.py` with `^ban_continue$`. |
 | `ban_done_proof` | `buttons/flows.py::proof_step_btn` | `ban_actions.py` with `^ban_done_proof$`. |
 | `rules_step:pick:<id>` | `buttons/rules.py::picker_btn` | `ban_rules_step.py` and `mod_action_steps.py`. |
 | `rules_step:done`, `other`, `clear`, `cancel` | `buttons/rules.py::picker_btn` | `ban_rules_step.py` and `mod_action_steps.py`. The rules editor fallback handles `rules_step:cancel` only. |
@@ -80,8 +80,9 @@ two-part shapes remain valid.
 | Callback pattern | Built by | Handled by |
 |---|---|---|
 | `rules_ack:<version>:<member>` | `buttons/rules.py::ack_btn` | `rules.py`. |
-| `rules_show:<key>` | `buttons/rules.py::rules_menu_btn` | `rules.py`. |
-| `rules_menu`, `rules_page:<n>` | `buttons/rules.py` | `rules.py`. |
+| `rules_show:<key>` | `buttons/rules.py::rules_index_btn` | `rules.py`. |
+| `rules_index:<n>`, `rules_section:<n>`, `rules_prev:<n>`, `rules_next:<n>` | `buttons/rules.py::rules_index_btn`, `category_sections_btn`, `rules_page_btn` | `rules.py` paginated topic index. |
+| `rules_menu`, `rules_page:<n>` | Legacy keyboard builders | `rules.py` stale-tap handlers. |
 | `rules_edit_draft`, `rules_panel`, `rules_preview`, `rules_publish`, `rules_settings`, `rules_discard` | `editor_panel_btn`, `categories_btn` | `rules_editor.py` menu state. |
 | `rules_discard_yes`, `rules_discard_no` | `buttons/rules.py::confirm_btn` | `rules_editor.py` discard state. |
 | `rules_cat:<key>`, `rules_cat_add`, `rules_cat_rename:<key>`, `rules_cat_up:<key>`, `rules_cat_down:<key>`, `rules_cat_del:<key>` | `buttons/rules.py::categories_btn` | `rules_editor.py` menu state. |
@@ -112,8 +113,11 @@ two-part shapes remain valid.
 
 ### Connection
 
-`tc_join` and `tc_cancel` are emitted by `buttons/flows.py::connect_join_btn`
-and handled by `connect.py` through `connect_added.on_join_decision`.
+`tc_verify_0` through `tc_verify_5` are the Prev/Next steps of the six-page
+verification wizard, built by `buttons/flows.py::connect_verify_btn` and handled
+by `connect_verify.handle_verify_step`. `tc_join` and `tc_cancel` come from the
+same builder: Connect appears only on the last page, while Cancel sits on its own
+danger-styled row on every page.
 
 ## Button conventions
 

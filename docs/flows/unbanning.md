@@ -194,5 +194,5 @@ unban being lost. See [Connection](connection.md).
 uv run pytest tests/ -q -k unban
 ```
 
-Relevant tests include `tests/test_unban_actions.py`, `tests/test_demote_*.py`, and
+Relevant tests include `tests/test_unban_flow.py`, `tests/test_demote_*.py`, and
 `tests/test_enforcement_worker.py`.
