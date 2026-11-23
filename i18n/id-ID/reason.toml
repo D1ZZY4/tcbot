@@ -9,6 +9,9 @@
 [limit]
 text = "Alasan terlalu panjang (maks {max} karakter, kamu mengirim {actual}). Tolong persingkat."
 
+[empty]
+text = "Alasan tidak boleh kosong. Ketik alasan singkat, atau ketuk tombol di bawah."
+
 [prompt]
 body = "Akan {verb} {target}{suffix}.\nApa alasannya? Ketik di bawah{skip_hint}."
 

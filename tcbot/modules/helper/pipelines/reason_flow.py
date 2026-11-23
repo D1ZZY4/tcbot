@@ -498,6 +498,17 @@ class _ReasonStepMixin(_FlowBase):
         scope = flow_scope(ctx, update)
         text = msg.text.strip()
         locale = await locale_for_update(update)
+        if not text:
+            # * filters.TEXT accepts whitespace-only messages, and the
+            # * database rejects a blank reason. Keep the flow open instead
+            # * of storing "".
+            await reply_rich(
+                msg,
+                t("reason.empty.text", locale, plain=True),
+                log_label=f"{self.action} reason-empty",
+                parse_mode=None,
+            )
+            return WAITING_REASON
         if is_reason_too_long(text):
             await reply_rich(
                 msg,

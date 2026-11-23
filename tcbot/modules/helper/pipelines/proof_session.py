@@ -97,36 +97,49 @@ class ProofSessionRegistry:
         return len(self._sessions)
 
     async def drain(self) -> None:
-        """Let pending flushes finish, then cancel sessions still waiting.
+        """Let pending flushes finish, then cancel only unclaimed sessions.
 
-        A running flush already owns its ban record and fan-out, so the drain
-        waits for it and cancels only the sessions still in their silence
-        window.
+        A session already inside ``_execute_ban`` owns a committed decision
+        and a queued fan-out. Cancelling that task produces a partial ban and
+        no summary, so the timeout cancels only sessions still waiting in
+        their silence window.
         """
-        pending = [
-            session.flush_task
-            for session in self._sessions.values()
-            if session.flush_task is not None
-        ]
-        live = [task for task in pending if not task.done()]
-        if not live:
+        waiting: list[asyncio.Task[None]] = []
+        for session in self._sessions.values():
+            task = session.flush_task
+            if task is None or task.done() or session.flushing:
+                continue
+            waiting.append(task)
+        if not waiting:
+            # * Give an in-flight execution the same bounded grace period
+            # * before returning; it is never cancelled here.
+            executing = [
+                session.flush_task
+                for session in self._sessions.values()
+                if session.flush_task is not None and session.flushing
+            ]
+            live = [task for task in executing if not task.done()]
+            if live:
+                # * asyncio.wait leaves the tasks running on timeout instead
+                # * of cancelling a ban already in flight.
+                await asyncio.wait(live, timeout=_PROOF_DRAIN_TIMEOUT_S)
             return
         try:
             await asyncio.wait_for(
-                asyncio.gather(*live, return_exceptions=True),
+                asyncio.gather(*waiting, return_exceptions=True),
                 timeout=_PROOF_DRAIN_TIMEOUT_S,
             )
             return
         except TimeoutError:
             log.warning(
-                "Proof flush still running after %.0fs; cancelling.",
+                "Proof collection still waiting after %.0fs; cancelling.",
                 _PROOF_DRAIN_TIMEOUT_S,
             )
-        for task in live:
+        for task in waiting:
             if not task.done():
                 task.cancel()
         await asyncio.gather(
-            *[task for task in live if not task.done()], return_exceptions=True
+            *[task for task in waiting if not task.done()], return_exceptions=True
         )
 
 

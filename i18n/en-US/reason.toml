@@ -9,6 +9,9 @@
 [limit]
 text = "Reason is too long (max {max} characters, you sent {actual}). Please shorten it."
 
+[empty]
+text = "The reason cannot be empty. Type a short reason, or tap the button below."
+
 [prompt]
 body = "About to {verb} {target}{suffix}.\nWhat's the reason? Type it below{skip_hint}."
 

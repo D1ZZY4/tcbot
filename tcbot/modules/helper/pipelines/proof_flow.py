@@ -364,17 +364,17 @@ async def upload_proof_items(
                     media: list[InputMediaPhoto | InputMediaVideo] = [
                         InputMediaPhoto(
                             source.file_id,
-                            caption=caption
-                            if chunk_start == 0 and index == 0
-                            else None,
+                            # * Caption the first item that actually lands.
+                            # * Keying it to chunk 0 would lose the caption
+                            # * entirely when that chunk fails and a later
+                            # * one is the first to reach the destination.
+                            caption=caption if not landed and index == 0 else None,
                             parse_mode=None,
                         )
                         if source.send_kind == "photo"
                         else InputMediaVideo(
                             source.file_id,
-                            caption=caption
-                            if chunk_start == 0 and index == 0
-                            else None,
+                            caption=caption if not landed and index == 0 else None,
                             parse_mode=None,
                         )
                         for index, source in enumerate(chunk)

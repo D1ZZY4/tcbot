@@ -202,6 +202,40 @@ def test_a_failed_chunk_marks_the_upload_partial() -> None:
     assert [item.item_order for item in items] == list(range(10))
 
 
+def test_caption_lands_on_the_first_chunk_that_succeeds() -> None:
+    """A failed first chunk must not leave the archive without a caption."""
+    messages = [_photo_message(f"p{i}", i) for i in range(11)]
+    captured: list[list[Any]] = []
+    calls = 0
+
+    class _Bot:
+        async def send_media_group(self, *args: Any, **kwargs: Any) -> list[Any]:
+            nonlocal calls
+            calls += 1
+            captured.append(args[1])
+            if calls == 1:
+                raise RuntimeError("flood wait on first chunk")
+            return [SimpleNamespace(message_id=300 + i) for i in range(len(args[1]))]
+
+        async def send_photo(self, *args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("a gallery must not fall back to single sends")
+
+    items, expected = asyncio.run(
+        proof_flow.upload_proof_items(
+            cast("Bot", _Bot()),
+            messages,
+            "cap",
+            -100,
+            None,  # type: ignore[arg-type]
+        )
+    )
+
+    assert expected == 11
+    assert len(items) == 1
+    assert captured[1][0].caption == "cap"
+    assert all(item.caption is None for item in captured[1][1:])
+
+
 def test_an_animation_is_sent_as_an_animation() -> None:
     """A GIF keeps its animation kind instead of becoming a document."""
     sent: list[tuple[str, str]] = []
