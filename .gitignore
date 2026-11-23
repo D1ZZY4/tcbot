@@ -50,13 +50,13 @@ build/
 .DS_Store
 Thumbs.db
 
-# Local community rules source (seeded into the bot's rules feature)
-rules/
-
 # Logs and scratch notes
 logs*/
 check.log
 format.log
+pyright.log
+pytest.log
+ai-fix-summary.log
 nothing.md
 nothing-*.md
 account*

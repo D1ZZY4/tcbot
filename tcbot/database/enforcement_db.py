@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import text
 
+from tcbot import cfg
 from tcbot.database.engine import run_transaction
 from tcbot.database.types import as_int
 from tcbot.utils.time_and_date import utc_now
@@ -58,6 +59,10 @@ _CLAIM_ONE_RUN = text(
     """
 )
 
+# * The primary group is registered inactive so it stays out of the connected
+# * list. Its failed targets still need the normal retry path, so the active
+# * check admits it explicitly instead of reopening retries for every
+# * disconnected group.
 _REQUEUE_RUNS = text(
     """
     UPDATE moderation_enforcement_runs AS r
@@ -78,7 +83,7 @@ _REQUEUE_RUNS = text(
                       AND t.status = 'failed'
                       AND t.next_retry_at IS NOT NULL
                       AND t.next_retry_at <= now()
-                      AND cc.is_active
+                      AND (cc.is_active OR cc.chat_id = :primary_chat_id)
                )
            )
     RETURNING r.id
@@ -160,7 +165,7 @@ _TARGET_CLAIM = text(
                        SELECT 1
                          FROM connected_chats AS cc
                         WHERE cc.chat_id = moderation_enforcement_targets.chat_id
-                          AND cc.is_active
+                          AND (cc.is_active OR cc.chat_id = :primary_chat_id)
                    ))
            )
          ORDER BY id
@@ -257,13 +262,17 @@ _RUN_BY_KEY = text(
     """
 )
 
+# * ``chat_ids`` is the trusted enforcement scope computed by the caller:
+# * connected groups plus the primary group via with_primary_groups(). The
+# * primary group is deliberately registered as inactive so it stays out of
+# * the connected list, so filtering on is_active here would silently drop
+# * every ban, mute and revoke in the deployment's main group.
 _QUEUE_TARGETS = text(
     """
     INSERT INTO moderation_enforcement_targets (run_id, chat_id)
     SELECT :run_id, cc.chat_id
       FROM connected_chats AS cc
      WHERE cc.chat_id = ANY(:chat_ids)
-       AND cc.is_active
     ON CONFLICT (run_id, chat_id) DO NOTHING
     """
 )
@@ -712,9 +721,14 @@ async def requeue_stale_runs(stale_after: timedelta = timedelta(minutes=30)) -> 
     """
 
     async def _work(sess: AsyncSession) -> None:
+        # * The main group is registered inactive to stay out of the
+        # * connected list, but it is a permanent enforcement destination.
+        # * Its failed targets must keep the same retry path as active
+        # * groups; genuinely disconnected groups stay excluded.
         params = {
             "stale_seconds": int(stale_after.total_seconds()),
             "max_attempts": MAX_ATTEMPTS,
+            "primary_chat_id": cfg.main_group,
         }
         await sess.execute(_REQUEUE_TARGETS, params)
         await sess.execute(_REQUEUE_RUNS, params)
@@ -744,7 +758,14 @@ async def claim_targets(run_id: int, limit: int = 100) -> list[dict[str, object]
     """Claim the pending targets of one run."""
 
     async def _work(sess: AsyncSession) -> list[dict[str, object]]:
-        result = await sess.execute(_TARGET_CLAIM, {"run_id": run_id, "limit": limit})
+        result = await sess.execute(
+            _TARGET_CLAIM,
+            {
+                "run_id": run_id,
+                "limit": limit,
+                "primary_chat_id": cfg.main_group,
+            },
+        )
         return [dict(row) for row in result.mappings()]
 
     return await run_transaction(_work)

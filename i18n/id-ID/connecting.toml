@@ -59,3 +59,13 @@ already_connected = "Grup ini sudah terhubung ke {community}."
 connecting = "Menghubungkan... menerapkan ban dan mute federasi yang ada. Bisa perlu waktu sejenak untuk federasi besar."
 perms_required = "Jadikan bot admin dengan izin yang dibutuhkan (hapus pesan, ban pengguna, undang via tautan) lalu coba lagi."
 welcome_perm_missing = "Bot belum punya izin admin Welcome Messages yang baru. Berikan izin itu di pengaturan administrator grup jika ingin pesan sambutan native Telegram tersedia."
+
+# Empat halaman verifikasi saat bot ditambahkan ke grup (connect_verify.py).
+# Tiga syarat keanggotaan dari about/keanggotaan.md plus konfirmasi terakhir.
+# Semua dikirim plain.
+[verify]
+heading = "Syarat keanggotaan"
+step_1 = "1. Admin grup menyetujui dan persetujuan dicatat di grup koordinasi admin atau kanal resmi TCF."
+step_2 = "2. Grup tercantum dalam daftar anggota di kanal resmi TCF."
+step_3 = "3. Persetujuan belum ditarik kembali."
+final = "Ketiga syarat sudah Anda setujui. Apakah Anda benar-benar ingin grup ini bergabung dengan federasi?"

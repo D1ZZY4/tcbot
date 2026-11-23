@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from sqlalchemy import func, select
@@ -48,18 +49,25 @@ async def published_rules(set_id: int | None = None) -> dict[str, Any] | None:
     )
     if version is None:
         return None
-    items = await db_call(
-        lambda: fetch_all(
-            select(rule_items).where(rule_items.c.rule_set_version_id == version["id"])
-        )
-    )
-    categories = await db_call(
-        lambda: fetch_all(
-            select(rule_categories).where(rule_categories.c.rule_set_id == set_id)
-        )
-    )
-    set_doc = await db_call(
-        lambda: fetch_one(select(rule_sets).where(rule_sets.c.id == set_id))
+    # * These reads depend only on set_id and the now-known version id. They
+    # * are independent pure reads, so one gather avoids three serial pool
+    # * checkouts on every rules-menu tap.
+    items, categories, set_doc = await asyncio.gather(
+        db_call(
+            lambda: fetch_all(
+                select(rule_items)
+                .where(rule_items.c.rule_set_version_id == version["id"])
+                .order_by(rule_items.c.sort_order, rule_items.c.id)
+            )
+        ),
+        db_call(
+            lambda: fetch_all(
+                select(rule_categories)
+                .where(rule_categories.c.rule_set_id == set_id)
+                .order_by(rule_categories.c.sort_order, rule_categories.c.id)
+            )
+        ),
+        db_call(lambda: fetch_one(select(rule_sets).where(rule_sets.c.id == set_id))),
     )
     return {
         "set": dict(set_doc) if set_doc else {},

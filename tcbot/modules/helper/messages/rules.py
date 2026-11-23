@@ -11,10 +11,9 @@ from typing import Any
 
 from tcbot import database as db
 from tcbot.modules.helper.messages import rich_msg
-from tcbot.modules.helper.messages.rich_format import heading, paragraph
+from tcbot.modules.helper.messages.rich_format import footer, heading, paragraph
 from tcbot.modules.helper.messages.rich_style import bold as rich_bold
 from tcbot.modules.helper.messages.rich_style import esc as rich_esc
-from tcbot.modules.helper.messages.rich_table import table
 from tcbot.modules.helper.messages.rich_text import blocks
 from tcbot.utils.i18n import (
     Safe,
@@ -32,7 +31,43 @@ from tcbot.utils.logger import get_logger
 # * category title, part marker, and footer always fit.
 CHANNEL_LIMIT: int = 4000
 
+# * Category keys come from the operator-local document stems. The catalog owns
+# * the wording; these keys only gate the lookup so a staff-created category
+# * falls back to its stored title instead of logging a missing key.
+_CATEGORY_KEYS: frozenset[str] = frozenset(
+    {
+        "cheat",
+        "doxing-dan-privasi",
+        "identitas",
+        "karya-dan-atribusi",
+        "konten-pornografi-nsfw",
+        "materi-pengujian",
+        "mod-apk-dan-bajakan",
+        "module-root",
+        "out-off-topic",
+        "pengelola",
+        "penipuan",
+        "perundungan-dan-kebencian",
+        "politik",
+        "promosi",
+        "sanksi",
+        "spam",
+        "transaksi",
+        "federasi",
+        "keanggotaan",
+        "klarifikasi",
+        "persetujuan-pendiri",
+    }
+)
+
 log = get_logger(__name__)
+
+
+def category_label(key: str, locale: str | None, fallback: str = "") -> str:
+    """Return the localized label of a published rule category."""
+    if key not in _CATEGORY_KEYS:
+        return fallback or key
+    return t(f"rules.category.{key}.label", locale, plain=True)
 
 
 def utf16_len(text: str) -> int:
@@ -228,7 +263,8 @@ def category_view(
     category: str, items: list[dict[str, Any]], locale: str | None
 ) -> str:
     """Render one category of the public read-only menu."""
-    header = t("rules.menu.category", locale, category=category)
+    label = category_label(str(category), locale, str(category))
+    header = t("rules.menu.category", locale, category=label)
     if not items:
         return f"{header}\n\n{t('rules.menu.no_rules', locale)}"
     lines = []
@@ -241,30 +277,29 @@ def category_view(
 def rich_category_view(
     category: str, items: list[dict[str, Any]], locale: str | None
 ) -> dict[str, Any]:
-    """Build a rich-message category view with a real table.
+    """Build a rich category page in the Privacy Policy layout.
 
-    The read-only category menu is the one surface where a table is clearly
-    better than a flat list: each rule has a number, a title, and
-    a body. It is sent as an InputRichMessage through PTB.
+    A category is one short topic page: heading, divider, a plain list of its
+    rules, then a footer. The index owns navigation, so the page never dumps
+    every topic into one message.
     """
-    heading_text = t("rules.menu.category", locale, category=category, plain=True)
+    label = category_label(str(category), locale, str(category))
+    heading_text = t("rules.menu.category", locale, category=label, plain=True)
     if not items:
         return rich_msg.html_message(
             heading(heading_text),
             paragraph(t("rules.menu.no_rules", locale)),
         )
-    headers = [
-        t("rules.rich.number", locale, plain=True),
-        t("rules.rich.rule", locale, plain=True),
+    lines = [
+        f"{rich_bold(str(item['title']))}\n{rich_esc(str(item['body']))}"
+        for item in items
     ]
-    rows: list[list[str]] = []
-    for number, item in enumerate(items, start=1):
-        rows.append(
-            [str(number), f"{rich_bold(item['title'])}\n{rich_esc(item['body'])}"]
-        )
     return rich_msg.html_message(
         heading(heading_text),
-        table(headers, rows, raw_cells=True, striped=True),
+        divider(),
+        bullet_list(lines),
+        divider(),
+        footer(t("rules.menu.category_footer", locale, plain=True)),
     )
 
 

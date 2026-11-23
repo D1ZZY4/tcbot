@@ -26,7 +26,6 @@ from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.time_and_date import monotonic
 
 if TYPE_CHECKING:
-    import concurrent.futures
     import logging
 
     from telegram import Bot
@@ -257,9 +256,13 @@ def _schedule_record(record: logging.LogRecord) -> None:
         # * loop the reporter was attached on instead of dropping it.
         loop = _loop
         if loop is not None and loop.is_running():
+            # * The loop can close between is_running() and scheduling. Close
+            # * the coroutine on that failure so it is never left unawaited.
+            coro = _ship_record(record)
             try:
-                future = asyncio.run_coroutine_threadsafe(_ship_record(record), loop)
+                future = asyncio.run_coroutine_threadsafe(coro, loop)
             except RuntimeError:
+                coro.close()
                 return
             _cross_thread.add(future)
             future.add_done_callback(_cross_thread_done)

@@ -63,12 +63,17 @@ async def publish_rules(
             )
             keep_ids.append(int(slot["id"]))
             try:
+                edited = False
                 if slot.get("message_id") and slot.get("content_hash") == digest:
-                    await safe_edit_message(
+                    edited = await safe_edit_message(
                         bot, cfg.main_channel, slot["message_id"], text
                     )
+                if edited:
                     message_id = int(slot["message_id"])
                 else:
+                    # * No message yet, or the stored post was deleted. The
+                    # * edit helper hides "not found" as a benign outcome, so
+                    # * use its result instead of trusting the stale id.
                     sent = await send_text(bot, cfg.main_channel, text)
                     message_id = int(sent.message_id)
                 await rules_db.publications.mark_synced(int(slot["id"]), message_id)
@@ -78,7 +83,7 @@ async def publish_rules(
                 await rules_db.publications.mark_failed(
                     int(slot["id"]), str(exc), missing="not found" in str(exc).lower()
                 )
-        await rules_db.publications.retire_unused(set_id, version_id, keep_ids)
+        await rules_db.publications.retire_unused(set_id, keep_ids)
         status = "completed" if not failed else "partial"
         await rules_db.runs.finish(run_id, status)
         return {"synced": synced, "failed": failed, "status": status}

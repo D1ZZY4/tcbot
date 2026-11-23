@@ -124,7 +124,9 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
     throw_if_cancelled((ident, pre_ban, role_result))
     if isinstance(ident, BaseException):
-        log.exception("identity.classify failed in cmd_unban: %s", ident)
+        # * gather(return_exceptions=True) captured this as a value, so there
+        # * is no active exception for log.exception to report.
+        log.error("identity.classify failed in cmd_unban: %s", ident, exc_info=ident)
         await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
@@ -140,7 +142,11 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         pre_ban = None
     if isinstance(role_result, BaseException):
-        log.exception("resolve_and_check failed in cmd_unban: %s", role_result)
+        log.error(
+            "resolve_and_check failed in cmd_unban: %s",
+            role_result,
+            exc_info=role_result,
+        )
         await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),

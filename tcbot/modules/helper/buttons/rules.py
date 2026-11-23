@@ -12,6 +12,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
 from tcbot.modules.helper.buttons.common import back_close_row, close_btn
+from tcbot.modules.helper.messages.rules import category_label
 from tcbot.utils.i18n import t
 
 # * Callback payloads of the moderation rules picker, shared by the ban and
@@ -129,7 +130,8 @@ def categories_btn(
     rows: list[list[InlineKeyboardButton]] = []
     for cat in categories:
         key = str(cat["category_key"])
-        rows.append([_button(str(cat["title"]), f"rules_cat:{key}")])
+        label = category_label(key, locale, str(cat["title"]))
+        rows.append([_button(label, f"rules_cat:{key}")])
         rows.append(
             [
                 _button(
@@ -194,7 +196,10 @@ def rules_menu_btn(
     chunk = categories[page * per_page : (page + 1) * per_page]
     rows: list[list[InlineKeyboardButton]] = [
         [
-            _button(str(cat["title"]), f"rules_show:{cat['category_key']}")
+            _button(
+                category_label(str(cat["category_key"]), locale, str(cat["title"])),
+                f"rules_show:{cat['category_key']}",
+            )
             for cat in chunk[index : index + 2]
         ]
         for index in range(0, len(chunk), 2)

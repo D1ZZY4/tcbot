@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from tcbot.modules.helper.buttons import rules as rules_btn
-from tcbot.modules.helper.messages.rules import selected_summary
+from tcbot.modules.helper.messages.rules import category_label, selected_summary
 from tcbot.utils.i18n import t
 
 _PREFIX = rules_btn.PICKER_PICK_PREFIX
@@ -50,8 +50,13 @@ def toggle(selected: list[int], item_id: int) -> list[int]:
 def picker_text(
     items: list[dict[str, Any]], selected: list[int], locale: str | None = None
 ) -> str:
-    """Build the prompt, highlighting the current selection."""
+    """Build the prompt, highlighting the current selection and its tier."""
     selected_ids = set(selected)
-    titles = [str(item["title"]) for item in items if int(item["id"]) in selected_ids]
+    titles = [
+        f"{category_label(str(item.get('category_key') or ''), locale, str(item.get('category_title') or 'Rules'))}: "
+        f"{item['title']}"
+        for item in items
+        if int(item["id"]) in selected_ids
+    ]
     chosen = selected_summary(titles, None, locale)
     return f"{t('rules.picker.prompt', locale)}\n\n{chosen}"

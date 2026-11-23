@@ -287,10 +287,12 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
             catch_all=True,
         )
     else:
-        # * No result card to edit: reply with results instead of dropping them.
-        await reply_rich(
-            msg, text, log_label="Stats search result fallback", reply_markup=btn
-        )
+        # * The search message was deleted above, so replying to it would
+        # * fail silently. Send the results directly to its chat instead.
+        try:
+            await send_text(ctx.bot, msg.chat_id, text, reply_markup=btn)
+        except Exception as exc:
+            log.debug("Stats search result fallback failed: %s", exc)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)

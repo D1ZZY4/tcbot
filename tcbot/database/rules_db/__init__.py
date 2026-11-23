@@ -16,6 +16,7 @@ from tcbot.database.rules_db.categories import (
 )
 from tcbot.database.rules_db.drafts import (
     all_items,
+    clear_draft_items,
     discard_draft,
     open_draft,
     published_version,
@@ -38,6 +39,7 @@ __all__ = [
     "add_category",
     "add_item",
     "all_items",
+    "clear_draft_items",
     "delete_category",
     "discard_draft",
     "get_or_create_community_set",

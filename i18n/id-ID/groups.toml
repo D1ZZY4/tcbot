@@ -20,14 +20,14 @@ body = "`/tcgroups` `/tcg`"
 
 # Runtime strings for the group list (groups.py, start.py menu).
 # [menu] sends plain; [list] renders as rich HTML.
-# Placeholders: {community} raw name, {title} raw group title,
-# {id} pre-formatted code ID, {n} ints.
+# Placeholders: {community} raw name, {n} ints. Daftar dirender sebagai tabel
+# rich: satu kolom Grup untuk tampilan biasa, Grup dan ID untuk Details.
 
 [menu]
 empty = "Tidak ada grup yang terhubung ke {community}."
 
 [list]
 header = "*Grup Terhubung*\n\n*Jumlah:* {n}"
-item = "{title}"
-item_detailed = "{title} - {id}"
+table_group = "Grup"
+table_id = "ID"
 more = "...dan {n} lagi tidak ditampilkan."

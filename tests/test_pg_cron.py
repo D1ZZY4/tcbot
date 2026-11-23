@@ -37,13 +37,26 @@ def test_missing_extension_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         pg_cron, "cfg", SimpleNamespace(pg_cron_enabled=True, db_schema="public")
     )
+    removed: list[str] = []
 
     async def _missing() -> bool:
         return False
 
+    async def _remove(name: str) -> None:
+        removed.append(name)
+
     monkeypatch.setattr(pg_cron, "_extension_available", _missing)
+    monkeypatch.setattr(pg_cron, "_remove_job", _remove)
 
     assert asyncio.run(pg_cron.sync_schedules()) is False
+    # * A previous boot may have registered jobs before the extension check
+    # * started failing. APScheduler must be the only owner after the fallback.
+    assert removed == [
+        "moderation.expire",
+        "role.expire",
+        "enforcement.reconcile",
+        "scheduler.drift",
+    ]
 
 
 def test_every_registry_job_is_registered(monkeypatch: pytest.MonkeyPatch) -> None:

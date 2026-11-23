@@ -44,31 +44,25 @@ from tcbot.utils.logger import get_logger  # noqa: E402
 
 log = get_logger("tcbot.seed_rules")
 
-# * The catalogue keys created by get_or_create_community_set(); documents
-# * map to one of these so the channel renderer groups them correctly.
-_CATEGORIES = {
-    "sanksi": "conduct",
-    "pengelola": "conduct",
-    "spam": "spam",
-    "promosi": "spam",
-    "penipuan": "safety",
-    "doxing-dan-privasi": "safety",
-    "identitas": "safety",
-    "cheat": "conduct",
-    "mod-apk-dan-bajakan": "content",
-    "module-root": "content",
-    "konten-pornografi-nsfw": "content",
-    "materi-pengujian": "content",
-    "karya-dan-atribusi": "content",
-    "perundungan-dan-kebencian": "safety",
-    "politik": "other",
-    "transaksi": "other",
-    "out-off-topic": "other",
-}
+# * One category per rule document, so "Cheat" holds the cheat rules and so on.
+# * The key is the document stem; localized labels come from i18n, never from
+# * prose stored in the database.
+_RETIRED_KEYS: frozenset[str] = frozenset(
+    {
+        "conduct",
+        "spam",
+        "content",
+        "safety",
+        "other",
+        "mandatory",
+        "optional",
+    }
+)
 
 
 def _category(filename: str) -> str:
-    return _CATEGORIES.get(Path(filename).stem, "other")
+    """Return the document stem as the stable category key."""
+    return Path(filename).stem
 
 
 async def _seed(folder: Path, user_id: int, *, dry_run: bool) -> int:
@@ -78,6 +72,7 @@ async def _seed(folder: Path, user_id: int, *, dry_run: bool) -> int:
         for filename, pairs in parsed.items()
         for title, body in pairs
     ]
+    category_keys = list(dict.fromkeys(key for key, _title, _body in items))
     if not items:
         print(f"No rule documents found in {folder}")
         return 0
@@ -93,14 +88,27 @@ async def _seed(folder: Path, user_id: int, *, dry_run: bool) -> int:
     try:
         rule_set = await db.rules_db.get_or_create_community_set()
         set_id = int(rule_set["id"])
+        existing = {
+            str(row["category_key"])
+            for row in await db.rules_db.list_categories(set_id)
+        }
+        for key in category_keys:
+            if key not in existing:
+                await db.rules_db.add_category(set_id, key, key)
         draft = await db.rules_db.open_draft(set_id, user_id)
         version_id = int(draft["id"])
+        # * open_draft clones the published version. A reseed must replace it,
+        # * not stack another copy of every document on top of the old one.
+        await db.rules_db.clear_draft_items(version_id)
         for category, title, body in items:
             await db.rules_db.add_item(version_id, category, title, body)
         await db.rules_db.promote_version(version_id, user_id)
         published = await db.rules_db.published_version(set_id)
         if published is None:
             raise RuntimeError("seed produced no published version")
+        # * Retire superseded buckets, never a category this seed just wrote.
+        for key in _RETIRED_KEYS - set(category_keys):
+            await db.rules_db.delete_category(set_id, key)
         print(
             f"Published version {published['version_number']} with {len(items)} items"
         )

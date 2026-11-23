@@ -31,10 +31,76 @@ body = "`/tcrules` `/rules`"
 [help.what]
 body = "Menu aturan hanya-baca untuk semua orang; editor memungkinkan staf mengelola kategori, butir, dan publikasi ke kanal."
 
+# Label kategori mengikuti dokumen aturan lokal. Kunci kategori adalah nama
+# berkas; semua teks ada di sini agar tetap bisa diterjemahkan.
+[category.cheat]
+label = "Kecurangan"
+
+[category.doxing-dan-privasi]
+label = "Doxing dan Privasi"
+
+[category.identitas]
+label = "Identitas"
+
+[category.karya-dan-atribusi]
+label = "Karya dan Atribusi"
+
+[category.konten-pornografi-nsfw]
+label = "Konten Pornografi dan NSFW"
+
+[category.materi-pengujian]
+label = "Materi Pengujian"
+
+[category.mod-apk-dan-bajakan]
+label = "MOD APK dan Bajakan"
+
+[category.module-root]
+label = "Root Module"
+
+[category.out-off-topic]
+label = "Out Off Topic"
+
+[category.pengelola]
+label = "Pengelola"
+
+[category.penipuan]
+label = "Penipuan"
+
+[category.perundungan-dan-kebencian]
+label = "Perundungan dan Kebencian"
+
+[category.politik]
+label = "Politik"
+
+[category.promosi]
+label = "Promosi"
+
+[category.sanksi]
+label = "Sanksi"
+
+[category.spam]
+label = "Spam"
+
+[category.transaksi]
+label = "Transaksi"
+
+[category.federasi]
+label = "Federasi"
+
+[category.keanggotaan]
+label = "Keanggotaan"
+
+[category.klarifikasi]
+label = "Klarifikasi"
+
+[category.persetujuan-pendiri]
+label = "Persetujuan Pendiri"
+
 [menu]
-body = "Ada aturan di {community}."
+body = "Ada aturan di {community}.\n\nPilih topik di bawah. Aturan federasi hanya untuk pelanggaran berat; sisanya panduan tiap grup dan tidak pernah menjadi ban federasi."
 empty = "Belum ada aturan yang diterbitkan."
 category = "Aturan: {category}"
+category_footer = "Kembali menuju daftar topik. Pelanggaran berat ditegakkan di semua grup terhubung; topik lainnya panduan tiap grup."
 no_rules = "Tidak ada aturan di kategori ini."
 preview = "Pratinjau\nBeginilah tampilan aturan di kanal. Belum ada yang diterbitkan sampai Anda menekan Publish."
 preview_empty = "Pratinjau\nBelum ada yang ditampilkan. Tambahkan kategori dan aturan di *Edit Draft* terlebih dahulu."
@@ -44,7 +110,7 @@ number = "No"
 rule = "Aturan"
 
 [picker]
-prompt = "Pilih aturan yang dilanggar. Bisa lebih dari satu."
+prompt = "Pilih aturan yang dilanggar. Nama kategori menandai aturan wajib federasi atau panduan grup. Hanya aturan wajib federasi yang menjadi dasar ban federasi."
 other = "Lainnya / Tidak tercakup"
 clear = "Kosongkan"
 require_selection = "Pilih minimal satu aturan atau pilih Lainnya / Tidak tercakup."

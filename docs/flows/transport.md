@@ -78,7 +78,7 @@ flowchart TD
 
 | Helper | Signature summary | Notes |
 |---|---|---|
-| `edit_rich` | `edit_rich(bot, chat_id, message_id, message, *, reply_markup=None)` | Calls `do_api_request("editMessageText", ...)` and returns `Message`. Raises `RuntimeError` without `do_api_request`. |
+| `edit_rich` | `edit_rich(bot, chat_id, message_id, message, *, reply_markup=None)` | Calls PTB's native `bot.edit_message_text` with the rich payload in `api_kwargs` and returns `Message`. Raises `RuntimeError` when the bot lacks `edit_message_text`. |
 | `safe_edit` | `safe_edit(msg, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits a `Message`; falls back to `msg.edit_text`. |
 | `safe_edit_cb` | `safe_edit_cb(q, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits `q.message`; falls back to `q.edit_message_text`. |
 | `safe_edit_message` | `safe_edit_message(bot, chat_id, message_id, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits by id; falls back to `bot.edit_message_text`. |
@@ -86,9 +86,12 @@ flowchart TD
 | `clear_markup_cb` | `clear_markup_cb(q)` | Removes the inline keyboard only; keeps `_IGNORED` BadRequests silent. |
 
 `_IGNORED` contains `"message is not modified"`, `"message to edit not found"`,
-and `"chat not found"`. `_edit_via()` swallows those `BadRequest`s, re-raises
-other failures unless `catch_all=True`, and logs otherwise. `parse_mode` is
-accepted and ignored by the safe helpers.
+and `"chat not found"`. `_edit_via()` and `safe_edit_message()` return `True`
+on success or an unchanged message, and `False` when the target message is
+gone so a caller that owns a durable slot can send a fresh post instead of
+re-editing a dead id. Other `BadRequest`s are re-raised unless
+`catch_all=True`, and logged otherwise. `parse_mode` is accepted and ignored
+by the safe helpers.
 
 ## Inline keyboard to rich buttons
 

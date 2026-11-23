@@ -9,7 +9,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tcbot import cfg
-from tcbot.utils.i18n import Safe, bold, bullet_list, code, divider, t
+from tcbot.modules.helper.messages.rich_format import footer, heading, paragraph
+from tcbot.modules.helper.messages.rich_table import table
+from tcbot.utils.i18n import bullet_list, code, divider, esc, t
 
 if TYPE_CHECKING:
     from tcbot.database.documents import GroupDoc
@@ -18,20 +20,57 @@ if TYPE_CHECKING:
 # * this budget so large federations get a partial list instead of an error.
 _MAX_RENDER_CHARS: int = 3800
 
+_ABOUT_SECTIONS: tuple[str, ...] = ("federasi", "keanggotaan", "klarifikasi")
+_ABOUT_ITEM_COUNTS: dict[str, int] = {
+    "federasi": 4,
+    "keanggotaan": 4,
+    "klarifikasi": 3,
+}
+
 
 def about_msg(locale: str | None = None) -> str:
-    """Render the About page in the given locale."""
-    cname = cfg.community_name
-    disc = Safe(t("about.page.disclaimer_text", locale, community=cname))
+    """Render the About section index in the given locale."""
+    community = cfg.community_name
+    return "\n".join(
+        (
+            heading(t("about.index.title", locale, community=community)),
+            paragraph(t("about.index.lead", locale, community=community)),
+            divider(),
+            paragraph(t("about.index.hint", locale, plain=True)),
+        )
+    )
+
+
+def about_section_labels(locale: str | None = None) -> list[str]:
+    """Localized About section labels in index order."""
+    return [
+        t(f"about.section.{key}.label", locale, plain=True) for key in _ABOUT_SECTIONS
+    ]
+
+
+def about_section_msg(idx: int, locale: str | None = None) -> str:
+    """Render one About section with real rich blocks.
+
+    Callers validate the index; an out-of-range value is a programming error.
+    """
+    key = _ABOUT_SECTIONS[idx]
+    prefix = f"about.section.{key}"
+    community = cfg.community_name
+    body = "\n".join(
+        (
+            paragraph(t(f"{prefix}.lead", locale, community=community)),
+            bullet_list(
+                [
+                    t(f"{prefix}.item_{n}", locale, community=community)
+                    for n in range(1, _ABOUT_ITEM_COUNTS[key] + 1)
+                ]
+            ),
+            divider(),
+            footer(t(f"{prefix}.tail", locale, plain=True)),
+        )
+    )
     return (
-        f"{t('about.page.title', locale, title=Safe(bold(cname)))}\n"
-        f"{divider()}\n"
-        f"{t('about.page.intro', locale)}\n\n"
-        f"{t('about.page.how_title', locale)}\n{divider()}\n"
-        f"{bullet_list([t('about.page.how_body', locale)])}\n\n"
-        f"{t('about.page.history_title', locale)}\n{divider()}\n"
-        f"{bullet_list([t('about.page.history_body', locale, community=cname)])}\n\n"
-        f"{t('about.page.disclaimer', locale, disc=disc)}"
+        f"{heading(t(f'{prefix}.label', locale, plain=True), 3)}\n{divider()}\n{body}"
     )
 
 
@@ -49,22 +88,25 @@ def render_groups(
     """
     header = t("groups.list.header", locale, n=len(groups))
     rule = divider()
+    headers = [esc(t("groups.list.table_group", locale, plain=True))]
+    if detailed:
+        headers.append(esc(t("groups.list.table_id", locale, plain=True)))
     used = len(header) + len(rule) + 2
-    items: list[str] = []
+    rows: list[list[str]] = []
+    more = ""
     for i, g in enumerate(groups):
         title = g.get("title") or t("common.action.unknown_title", locale, plain=True)
+        row: list[str] = [esc(title)]
         if detailed:
-            line = t(
-                "groups.list.item_detailed",
-                locale,
-                title=title,
-                id=Safe(code(str(g.get("chat_id", 0)))),
-            )
-        else:
-            line = t("groups.list.item", locale, title=title)
-        if used + len(line) + 1 > _MAX_RENDER_CHARS:
-            items.append(t("groups.list.more", locale, n=len(groups) - i))
+            row.append(code(str(g.get("chat_id", 0))))
+        candidate = [*rows, row]
+        rendered = table(headers, candidate, raw_cells=True, compact=True)
+        if used + len(rendered) > _MAX_RENDER_CHARS:
+            more = t("groups.list.more", locale, n=len(groups) - i)
             break
-        items.append(line)
-        used += len(line) + 1
-    return f"{header}\n{rule}\n{bullet_list(items)}"
+        rows = candidate
+    body = table(headers, rows, raw_cells=True, compact=True)
+    text = f"{header}\n{rule}\n{body}"
+    if more:
+        text += f"\n{more}"
+    return text

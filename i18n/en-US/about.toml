@@ -1,12 +1,37 @@
-# About page prose (about.py). Rendered as rich HTML.
-# Placeholders: {title}/{disc} pre-formatted lines, {community} raw name.
+# About prose (about.py, start.py, connect verification). Rendered as rich HTML.
+# Placeholders: {community} raw name. Labels and tails are plain text.
 
-[page]
-title = "{title}"
-intro = "A community-driven federation for Infinix, Tecno, and Itel device groups. The focus is straightforward: keep connected groups safe, well-moderated, and free of spam, scams, and bad actors."
-how_title = "*How it works*"
-how_body = "Groups that join the federation share a single moderation layer. A ban issued in one connected group is applied across all of them automatically. The same goes for mutes and broadcasts from TC Staff."
-history_title = "*History*"
-history_body = "Founded in 2024 under the name TFI, which was later disbanded following internal issues. {community} was formed shortly after to continue the work with a cleaner structure and better long-term stability."
-disclaimer = "{disc}"
-disclaimer_text = "{community} is not affiliated with or endorsed by Transsion Holdings. This is an independent community."
+[index]
+title = "About {community}"
+lead = "{community} is an independent federation of Telegram groups for Transsion device communities. Groups stay independent and share one minimum standard for moderation."
+hint = "Pick a section below ↴. Back returns here at any time."
+
+[error]
+invalid_section = "Invalid section."
+not_found = "Section not found."
+
+[section.federasi]
+label = "The Federation"
+lead = "What {community} is, and what it is not."
+item_1 = "A voluntary federation of independent Telegram groups around Transsion devices. It is not a company or a legal entity."
+item_2 = "Every group keeps its own rules. These rules are only a shared minimum, so a group rule may be stricter but not contradictory."
+item_3 = "A federation ban applies across connected groups. Local warns, mutes, kicks, and group bans stay local."
+item_4 = "Rules change by group vote, not by one admin acting alone."
+tail = "Joining accepts this minimum standard without giving up group independence."
+
+[section.keanggotaan]
+label = "Membership"
+lead = "How a group and a person become part of the federation."
+item_1 = "A group joins when its admin approves, it is listed in the official channel, and the approval still stands."
+item_2 = "A person joins by entering at least one member group. Membership belongs to the group, not to {community}."
+item_3 = "Members can read the rules, ask questions, share their own work, and appeal a decision."
+item_4 = "Leaving does not end a confidentiality duty or an open case."
+tail = "Anyone may leave at any time without asking a moderator."
+
+[section.klarifikasi]
+label = "Clarification"
+lead = "The federation's relationship with device brands."
+item_1 = "{community} is an independent community of users and fans. It is not affiliated with Transsion, TECNO, itel, Infinix, Carlcare, or any related party."
+item_2 = "Brand names are used only to name the devices the community is about. They give no rights, endorsement, or support."
+item_3 = "Claiming that a group or a member is officially backed needs written permission from the brand owner."
+tail = "A false claim of official backing is a rule violation."

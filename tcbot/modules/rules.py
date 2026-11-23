@@ -118,7 +118,7 @@ async def _acknowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         version_id,
         user.id,
         getattr(query.message, "chat_id", None),
-        None,
+        getattr(query.message, "message_id", None),
     )
     await query.answer(t("rules.ack.recorded", locale, plain=True), show_alert=True)
 
@@ -163,10 +163,11 @@ async def on_rules_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if query is None:
         return
     await query.answer()
-    text = rules_msg.rules_menu(await locale_for_update(update), cfg.community_name)
+    locale = await locale_for_update(update)
+    text = rules_msg.rules_menu(locale, cfg.community_name)
     published = await db.rules_db.published_rules()
     markup = rules_btn.rules_menu_btn(
-        published["categories"] if published else [], await locale_for_update(update)
+        published["categories"] if published else [], locale
     )
     await safe_edit_cb(query, text, parse_mode=None, reply_markup=markup)
 

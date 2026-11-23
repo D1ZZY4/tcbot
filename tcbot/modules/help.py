@@ -20,7 +20,7 @@ from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit, reply_rich
 from tcbot.modules.helper.messages.rich_text import blocks
-from tcbot.utils.i18n import Safe, bold, code, divider, heading, quote, t
+from tcbot.utils.i18n import Safe, bold, code, divider, esc, heading, quote, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
@@ -104,7 +104,7 @@ def _help_index_text(botname: str, locale: str | None = None) -> str:
         locale,
         title=Safe(heading(t("help.index.title", locale, botname=botname, plain=True))),
         divider=Safe(divider()),
-        quote=Safe(quote(t("help.index.guidance", locale, plain=True))),
+        quote=Safe(quote(esc(t("help.index.guidance", locale, plain=True)))),
     )
 
 

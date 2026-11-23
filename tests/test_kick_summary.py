@@ -10,6 +10,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from telegram.error import BadRequest
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import kick_flow
@@ -192,6 +193,49 @@ def test_a_stranded_kick_queues_its_unban_repair(
     assert failed == [55]
     assert bot.edits
     assert "WARNING" in bot.edits[0]["args"][0]
+
+
+def test_a_benign_retry_after_a_real_refusal_still_queues_repair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real first refusal is not erased by a benign error on the retry."""
+    queued: list[tuple[int, int, int | None]] = []
+    failed: list[int] = []
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        return "moderator" if user_id == 11 else None
+
+    async def _logged(*args: Any, **kwargs: Any) -> int:
+        return 55
+
+    async def _repair(action_id: int, chat_id: int, requested_by: int | None) -> int:
+        queued.append((action_id, chat_id, requested_by))
+        return 99
+
+    async def _mark_failed(action_id: int) -> bool:
+        failed.append(action_id)
+        return True
+
+    class _FlakyUnbanBot(_FakeBot):
+        def __init__(self) -> None:
+            super().__init__()
+            self.unban_calls = 0
+
+        async def unban_chat_member(self, *args: Any, **kwargs: Any) -> bool:
+            self.unban_calls += 1
+            if self.unban_calls == 1:
+                raise BadRequest("CHAT_ADMIN_REQUIRED")
+            raise BadRequest("USER_NOT_PARTICIPANT")
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
+    monkeypatch.setattr(db.kicks_db, "mark_kick_failed", _mark_failed)
+    monkeypatch.setattr(db.enforcement_db, "queue_kick_unban_repair", _repair)
+
+    _run(_FlakyUnbanBot(), prompt_chat=22, prompt_id=44)
+
+    assert queued == [(55, 22, 11)]
+    assert failed == [55]
 
 
 def test_a_failed_ban_marks_the_kick_failed(

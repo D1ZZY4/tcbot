@@ -108,6 +108,7 @@ def _keys_used_in_code() -> set[str]:
 # * cannot be matched statically. Every key below them is exempt from the
 # * orphan check.
 _DYNAMIC_KEY_PREFIXES = (
+    "about.section.",
     "admins.promote.",
     "admins.decision.",
     "admins.list.",
@@ -130,6 +131,7 @@ _DYNAMIC_KEY_PREFIXES = (
     "privacy.section.",
     "proof.action.",
     "reason.",
+    "rules.category.",
     "stats.",
     "unbanning.",
     "warnings.",

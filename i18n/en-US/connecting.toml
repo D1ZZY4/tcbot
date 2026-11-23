@@ -59,3 +59,13 @@ already_connected = "This group is already connected to {community}."
 connecting = "Connecting... applying existing federation bans and mutes. This can take a moment for large federations."
 perms_required = "Please make the bot an admin with the required permissions (delete messages, ban users, invite users) and try again."
 welcome_perm_missing = "The bot does not have the new Welcome Messages admin right. Grant it in the group's administrator settings if you want Telegram's native welcome message to be available."
+
+# Four-page verification shown when the bot is added to a group (connect_verify.py).
+# These are the three membership requirements from about/keanggotaan.md plus a
+# final confirmation. All values are sent plain.
+[verify]
+heading = "Membership requirements"
+step_1 = "1. The group admin approves and the approval is recorded in the admin coordination group or the official TCF channel."
+step_2 = "2. The group is listed in the member list on the official TCF channel."
+step_3 = "3. The approval has not been withdrawn."
+final = "You have confirmed all three requirements. Do you really want this group to join the federation?"

@@ -112,18 +112,28 @@ async def _edit_via(
     log_label: str | None,
     catch_all: bool,
     default_msg: str,
-) -> None:
-    """Run one edit coroutine with the shared benign-error policy."""
+) -> bool:
+    """Run one edit coroutine with the shared benign-error policy.
+
+    Returns False when the target message is gone, so a caller that owns a
+    durable slot can send a fresh message instead of retrying the dead id.
+    """
     try:
         await do_edit
+        return True
     except BadRequest as e:
-        if any(i in str(e).lower() for i in _IGNORED):
-            return
+        text = str(e).lower()
+        if "message is not modified" in text:
+            return True
+        if any(i in text for i in _IGNORED):
+            return False
         _log_edit_failure(log_level, log_label, default_msg, e)
+        return False
     except Exception as exc:
         if not catch_all:
             raise
         _log_edit_failure(log_level, log_label, default_msg, exc)
+        return False
 
 
 async def safe_edit(
@@ -212,11 +222,15 @@ async def safe_edit_message(
     catch_all: bool = False,
     parse_mode: Any = None,
     **kwargs: Any,
-) -> None:
-    """Edit a message by chat/message ID as a rich message."""
+) -> bool:
+    """Edit a message by chat/message ID as a rich message.
+
+    Returns False when the target message is gone so the caller can send a
+    fresh one instead of recording a dead id as synced.
+    """
     _ = parse_mode
     if chat_id is None or message_id is None or not _rich_ready(bot):
-        await _edit_via(
+        return await _edit_via(
             bot.edit_message_text(
                 text, chat_id=chat_id, message_id=message_id, **kwargs
             ),
@@ -225,8 +239,7 @@ async def safe_edit_message(
             catch_all=catch_all,
             default_msg="message edit failed: %s",
         )
-        return
-    await _edit_via(
+    return await _edit_via(
         edit_rich(
             bot,
             chat_id,

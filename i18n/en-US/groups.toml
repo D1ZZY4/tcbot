@@ -20,14 +20,14 @@ body = "`/tcgroups` `/tcg`"
 
 # Runtime strings for the group list (groups.py, start.py menu).
 # [menu] sends plain; [list] renders as rich HTML.
-# Placeholders: {community} raw name, {title} raw group title,
-# {id} pre-formatted code ID, {n} ints.
+# Placeholders: {community} raw name, {n} ints. The list itself renders as a
+# rich table: one Group column in the simple view, Group and ID in Details.
 
 [menu]
 empty = "No groups are currently connected to {community}."
 
 [list]
 header = "*Connected Groups*\n\n*Count:* {n}"
-item = "{title}"
-item_detailed = "{title} - {id}"
+table_group = "Group"
+table_id = "ID"
 more = "...and {n} more not shown."

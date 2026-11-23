@@ -44,6 +44,8 @@ from tcbot.modules.helper.messages.links import (
 )
 from tcbot.modules.helper.messages.panels import (
     about_msg,
+    about_section_labels,
+    about_section_msg,
     render_groups,
 )
 from tcbot.modules.helper.messages.rich_edit import (
@@ -70,6 +72,8 @@ from tcbot.modules.helper.messages.rich_msg import (
 __all__ = [
     "LogBuilder",
     "about_msg",
+    "about_section_labels",
+    "about_section_msg",
     "ack_and_render",
     "answer_ack",
     "answer_alert",

@@ -1,12 +1,37 @@
-# About page prose (about.py). Rendered as rich HTML.
-# Placeholders: {title}/{disc} pre-formatted lines, {community} raw name.
+# About prose (about.py, start.py, connect verification). Rendered as rich HTML.
+# Placeholders: {community} raw name. Labels and tails are plain text.
 
-[page]
-title = "{title}"
-intro = "Federasi komunitas untuk grup perangkat Infinix, Tecno, dan Itel. Fokusnya jelas: menjaga grup terhubung tetap aman, termoderasi baik, dan bebas spam, penipuan, dan pelaku nakal."
-how_title = "*Cara kerja*"
-how_body = "Grup yang bergabung ke federasi berbagi satu lapisan moderasi. Ban yang dijatuhkan di satu grup terhubung berlaku otomatis di semuanya. Begitu juga mute dan broadcast dari Staf TC."
-history_title = "*Sejarah*"
-history_body = "Didirikan tahun 2024 dengan nama TFI, yang kemudian dibubarkan karena masalah internal. {community} dibentuk tak lama setelahnya untuk melanjutkan kerja dengan struktur lebih bersih dan stabilitas jangka panjang lebih baik."
-disclaimer = "{disc}"
-disclaimer_text = "{community} tidak berafiliasi dengan atau didukung oleh Transsion Holdings. Ini komunitas independen."
+[index]
+title = "Tentang {community}"
+lead = "{community} adalah federasi independen grup Telegram untuk komunitas perangkat Transsion. Tiap grup tetap mandiri dan memakai satu standar minimum moderasi bersama."
+hint = "Pilih bagian di bawah ↴. Kembali selalu ke halaman ini."
+
+[error]
+invalid_section = "Bagian tidak valid."
+not_found = "Bagian tidak ditemukan."
+
+[section.federasi]
+label = "Federasi"
+lead = "Apa itu {community}, dan apa bukan {community}."
+item_1 = "Federasi sukarela dari grup Telegram mandiri di sekitar perangkat Transsion. Bukan perusahaan dan bukan badan hukum."
+item_2 = "Tiap grup memegang aturannya sendiri. Aturan ini hanya standar minimum, jadi aturan grup boleh lebih ketat tetapi tidak boleh bertentangan."
+item_3 = "Blokir federasi berlaku di semua grup terhubung. Warn, mute, kick, dan ban grup tetap berlaku lokal."
+item_4 = "Aturan diubah lewat voting grup, bukan keputusan satu admin."
+tail = "Bergabung berarti menerima standar minimum tanpa melepaskan kemandirian grup."
+
+[section.keanggotaan]
+label = "Keanggotaan"
+lead = "Bagaimana grup dan orang menjadi bagian dari federasi."
+item_1 = "Grup bergabung saat admin menyetujui, grup tercantum di kanal resmi, dan persetujuan masih berlaku."
+item_2 = "Orang menjadi anggota dengan bergabung di minimal satu grup anggota. Keanggotaan melekat pada grup, bukan pada {community}."
+item_3 = "Anggota boleh membaca aturan, bertanya, membagikan karya sendiri, dan mengajukan banding."
+item_4 = "Keluar tidak menghapus kewajiban rahasia atau perkara yang masih berjalan."
+tail = "Siapa pun boleh keluar kapan saja tanpa izin moderator."
+
+[section.klarifikasi]
+label = "Klarifikasi"
+lead = "Hubungan federasi dengan merek perangkat."
+item_1 = "{community} adalah komunitas independen buatan pengguna dan penggemar. Tidak berafiliasi dengan Transsion, TECNO, itel, Infinix, Carlcare, atau pihak terkait."
+item_2 = "Nama merek dipakai hanya untuk menyebut perangkat yang jadi minat komunitas. Tidak memberi hak, dukungan, atau pengesahan."
+item_3 = "Klaim bahwa grup atau anggota didukung resmi memerlukan izin tertulis dari pemegang merek."
+tail = "Klaim dukungan resmi yang palsu adalah pelanggaran aturan."

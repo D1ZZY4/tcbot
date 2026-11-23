@@ -141,6 +141,15 @@ async def open_draft(set_id: int, user_id: int) -> dict[str, Any]:
     }
 
 
+async def clear_draft_items(version_id: int) -> int:
+    """Remove every item from a draft before it is filled by a reseed."""
+    return await db_call(
+        lambda: run(
+            rule_items.delete().where(rule_items.c.rule_set_version_id == version_id)
+        )
+    )
+
+
 async def discard_draft(version_id: int) -> bool:
     """Delete a draft version; published versions cannot be removed."""
     affected = await db_call(

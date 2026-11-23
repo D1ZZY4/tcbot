@@ -174,18 +174,18 @@ One pitfall to avoid: committing `config.env` with real values because local tes
 
 ## Deployment
 
-Run exactly one live instance per token on exactly one target below. Every target runs the same command (`uv run python -m tcbot`).
+Run exactly one live instance per token on exactly one target below. Every target launches the bot module with `uv run`; hosted examples pin the lockfile with `--frozen`, and the container image also enables the `observability` extra.
 
 <details>
 <summary>GitHub Actions automation (lint, auto-fix, dependencies, CodeQL)</summary>
 
-Seven CI workflows run automatically. The lint, type-check, test, auto-fix, dependency-update, and CodeQL workflows need no repository secrets (validation steps use dummy values, so fork PRs work too). The 24/7 Run Bot workflow is the exception: it needs the deployment secrets listed in the next section. All workflows use Python 3.14 with `uv sync --frozen` and cached `uv` setup.
+Seven CI workflows run automatically. The lint, type-check, test, auto-fix, dependency-update, and CodeQL workflows need no repository secrets (validation steps use dummy values, so fork PRs work too). The 24/7 Run Bot workflow is the exception: it needs the deployment secrets listed in the next section. The Python workflows set up Python 3.14 with cached `uv`; CodeQL uses `build-mode: none` and needs no Python or `uv` setup.
 
 - **Lint (Ruff)** (`lint-ruff.yml`), **Lint (Pyright)** (`lint-pyright.yml`), **Test (Pytest)** (`test-pytest.yml`): on push to `main`/`feat/**`/`fix/**` and PRs to `main`. Run `ruff format --check` + `ruff check` + the `import tcbot` check, `pyright`, and two Pytest passes respectively: a serial `pytest tests/ -q -m postgres` pass, then `pytest tests/ -q -m "not postgres" -n auto --cov=tcbot --cov-branch --cov-append`. Fail the PR subject to branch protection.
 - **Auto-Fix** (`auto-fix.yml`): same push/PR triggers plus weekly Monday 04:00 UTC and manual dispatch. Runs `ruff format` + `ruff check --fix`; outside a PR it force-pushes the fixed `auto-fix/ruff` branch and opens a PR, on a PR it comments the local fix commands instead. Needs `contents: write` + `pull-requests: write`.
 - **Dependency Updates** (`dependency-update.yml`): weekly Monday 04:00 UTC and manual dispatch. Runs `uv lock --upgrade`, validates with Ruff plus the import check, then opens a `deps/auto-update-YYYYMMDD` PR labeled `dependencies` against `main` (no-op when the lockfile is unchanged). Sends the owner a Telegram status DM when `BOT_TOKEN`/`OWNER_ID` secrets exist, silently skips otherwise.
 - **CodeQL** (`codeql.yml`): on push/PR to `main` plus weekly Tuesday 15:38 UTC. Scans the `actions` and `python` languages with `build-mode: none`; findings land under the repository Security tab.
-- **Run Bot** (`run-bot.yml`): self-chaining 24/7 runner with webhook-first transport, plus daily restart checks.
+- **Run Bot** (`run-bot.yml`): self-chaining 24/7 runner with webhook-first transport, a watchdog, and a 15-minute cron resurrection fallback.
 
 Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run ruff check .`, the 1000-line file-size budget over `tcbot/`, and `uv run python -c "import tcbot"`. Full reference: [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md).
 </details>
@@ -210,7 +210,7 @@ Fail-fast guard: 5 deaths within 10 minutes aborts the run (usually bad config);
 2. `docker compose up --build` (bot plus `postgres:16-alpine` plus `redis:7-alpine`, each with health checks; the bot waits for both databases).
 3. Verify: `curl localhost:${PORT:-5000}/health` returns subsystem JSON with HTTP 200.
 
-Single image without compose: `docker build -t tcf-bot .` then `docker run --env-file .env -p ${PORT:-5000}:${PORT:-5000} tcf-bot` (image command is `uv run --frozen python -m tcbot`). Point PostgreSQL/Redis at reachable hosts.
+Single image without compose: `docker build -t tcf-bot .` then `docker run --env-file .env -p ${PORT:-5000}:${PORT:-5000} tcf-bot` (image command is `uv run --frozen --extra observability python -m tcbot`). Point PostgreSQL/Redis at reachable hosts.
 </details>
 
 <details>

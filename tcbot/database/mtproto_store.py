@@ -16,6 +16,7 @@ from pyrogram.storage.sqlite_storage import SQLiteStorage, get_input_peer
 from sqlalchemy import ARRAY, Text, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError
+from sqlalchemy.exc import TimeoutError as SAPoolTimeout
 from sqlalchemy.sql import Executable
 
 from tcbot.database.base import mtproto_state
@@ -131,6 +132,20 @@ async def _retry_write(
             raise
         except CircuitOpenError:
             log.warning("MTProto write failed (circuit open).")
+            return None
+        except TimeoutError:
+            # * db_call's own budget raises builtin TimeoutError, which is an
+            # * OSError and not a SQLAlchemy error. Without this branch it
+            # * escapes into Pyrogram's fire-and-forget handle_updates task
+            # * and stops update handling for the whole session.
+            log.warning("MTProto write failed (database call timed out).")
+            return None
+        except SAPoolTimeout:
+            # * The pool checkout timeout fires before the db_call budget
+            # * under saturation. It is a SQLAlchemy error, not the builtin
+            # * TimeoutError above, so it would escape into Pyrogram's
+            # * fire-and-forget update task and stop update handling.
+            log.warning("MTProto write failed (connection pool timeout).")
             return None
         except (OperationalError, InterfaceError) as exc:
             if _is_connectivity_failure(exc):

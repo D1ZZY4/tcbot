@@ -24,15 +24,17 @@ def _item(item_id: int, category: str = "Conduct", *, order: int = 1) -> dict:
     }
 
 
-def test_rich_category_view_uses_a_real_table() -> None:
-    """The public category menu can render as a rich message with a table."""
+def test_rich_category_view_uses_privacy_style_blocks() -> None:
+    """A category page uses heading, divider, list, and footer like Privacy."""
     payload = rules_msg.rich_category_view("Conduct", [_item(1)], "en-US")
     assert set(payload) == {"html"}
-    assert "<h2>Rules: Conduct</h2>" in payload["html"]
-    assert "<table bordered striped>" in payload["html"]
-    assert "<th>No</th>" in payload["html"]
-    assert "<td>1</td>" in payload["html"]
-    assert "<b>Rule 1</b>" in payload["html"]
+    html = payload["html"]
+    assert "<h2>Rules: Conduct</h2>" in html
+    assert "<hr/>" in html
+    assert "<ul>" in html
+    assert "<b>Rule 1</b>" in html
+    assert "Back returns to the topic index" in html
+    assert "<table" not in html
 
 
 def test_utf16_units_count_astral_characters_twice() -> None:

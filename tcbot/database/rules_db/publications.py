@@ -106,11 +106,16 @@ async def mark_failed(slot_id: int, error: str, *, missing: bool = False) -> Non
     )
 
 
-async def retire_unused(set_id: int, version_id: int, keep_ids: list[int]) -> int:
-    """Retire slots no longer part of the rendered channel representation."""
+async def retire_unused(set_id: int, keep_ids: list[int]) -> int:
+    """Retire slots no longer part of the rendered channel representation.
+
+    Slots are keyed by category and part, not by version: upserting a new
+    version rewrites ``rule_set_version_id`` on reused slots, so filtering by
+    the new version would match only the kept slots and retire nothing.
+    Scope by set instead so dropped categories and shortened parts retire.
+    """
     stmt = rule_publications.update().where(
         rule_publications.c.rule_set_id == set_id,
-        rule_publications.c.rule_set_version_id == version_id,
         rule_publications.c.status != "retired",
     )
     if keep_ids:

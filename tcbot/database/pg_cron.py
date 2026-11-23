@@ -101,9 +101,13 @@ async def _remove_job(name: str) -> None:
 
 
 async def _remove_known_jobs() -> None:
-    """Remove the jobs this module owns, when the extension is present."""
-    if not await _extension_available():
-        return
+    """Remove the jobs this module owns.
+
+    This is the single-owner sweep, so it must run even when the extension
+    check fails: that is precisely the case where a previous boot may have
+    left registrations behind. ``_remove_job`` already treats an absent
+    extension or a missing job as a benign debug-level outcome.
+    """
     for name, _schedule, _command in _jobs():
         await _remove_job(name)
 
@@ -142,6 +146,10 @@ async def sync_schedules() -> bool:
             "PG_CRON_ENABLED is set but the database has no pg_cron "
             "extension; keeping the APScheduler schedules."
         )
+        # * An extension check can fail after a boot that did register the
+        # * jobs. Without this sweep that earlier registration keeps firing
+        # * alongside APScheduler, breaking the single-owner guarantee.
+        await _remove_known_jobs()
         return False
 
     scheduled: list[str] = []

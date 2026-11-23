@@ -72,18 +72,26 @@ flowchart TD
     PENDING -->|yes| AUTO[complete_join auto-complete]
     PENDING -->|no| DUP{Already connected or pending}
     DUP -->|yes| IGNORE
-    DUP -->|no| PROMPT[Send join prompt and add_pending]
+    DUP -->|no| PROMPT[Send requirement 1 and add_pending]
+    PROMPT --> V2["tc_verify_1: requirement 2"]
+    V2 --> V3["tc_verify_2: requirement 3"]
+    V3 --> FINAL["tc_verify_3: final confirmation page"]
+    FINAL --> CONNECT["tc_join: owner-only Connect button"]
 ```
 
-An anonymous add stores owner `0` and leaves the prompt for the group creator's
-Connect tap, because auto-completing it would write owner `0`. A pending row with
-no attributable owner follows the same path. On removal, the group is deactivated
-first and a log is posted only when it was connected. A demotion from
-administrator to member sends a warning to the moderator log, except in primary
-groups.
+An anonymous add stores owner `0` and leaves the verification pages for the group
+creator, because auto-completing it would write owner `0`. A pending row with no
+attributable owner follows the same path. The four pages are the three membership
+requirements from `about/keanggotaan.md` (admin approval is recorded, the group is
+listed in the official channel, and approval stands) followed by a final
+confirmation. Each step is owner-only; `Connect` appears only on the confirmation
+page, so a group cannot skip the requirements. On removal, the group is deactivated
+first and a log is posted only when it was connected. A demotion from administrator
+to member sends a warning to the moderator log, except in primary groups.
 
 | Callback | Effect |
 |---|---|
+| `tc_verify_1`, `tc_verify_2`, `tc_verify_3` | Owner-only; advance to the next requirement or the final confirmation. Other users get an alert and keep the shared keyboard live. |
 | `tc_join` | Owner-only; verifies bot rights and connection state, then calls `complete_join`. Other users get an alert and keep the shared keyboard live. |
 | `tc_cancel` | Removes the pending row, logs the rejection, edits the prompt, and leaves the chat. |
 

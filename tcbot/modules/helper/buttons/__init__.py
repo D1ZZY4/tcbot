@@ -42,6 +42,7 @@ from tcbot.modules.helper.buttons.drills import (
 )
 from tcbot.modules.helper.buttons.flows import (
     connect_join_btn,
+    connect_verify_btn,
     proof_step_btn,
     reason_step_btn,
 )
@@ -61,6 +62,8 @@ from tcbot.modules.helper.buttons.stats import (
     stats_main_btn,
 )
 from tcbot.modules.helper.buttons.topics import (
+    about_sections_btn,
+    back_to_about_btn,
     back_to_help_btn,
     back_to_help_cmd_btn,
     back_to_module_btn,
@@ -73,11 +76,13 @@ from tcbot.modules.helper.buttons.topics import (
 )
 
 __all__ = [
+    "about_sections_btn",
     "action_proof_btn",
     "additional_menu_btn",
     "appeal_button_btn",
     "appeal_cancel_btn",
     "appeal_review_btn",
+    "back_to_about_btn",
     "back_to_help_btn",
     "back_to_help_cmd_btn",
     "back_to_module_btn",
@@ -94,6 +99,7 @@ __all__ = [
     "checkme_ban_btn",
     "checkme_detail_back_btn",
     "connect_join_btn",
+    "connect_verify_btn",
     "demote_confirm_btn",
     "detail_btn",
     "group_start_btn",

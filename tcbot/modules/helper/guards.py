@@ -305,9 +305,18 @@ async def classify_and_check(
         # * Fail closed with a retry reply (was silent): a classify
         # * failure must not leave the moderator staring at a dead command.
         if isinstance(ident, BaseException):
-            log.exception("identity.classify failed in %s: %s", action, ident)
+            # * gather captured these as values, so re-attach the stored
+            # * traceback instead of calling log.exception with no active one.
+            log.error(
+                "identity.classify failed in %s: %s", action, ident, exc_info=ident
+            )
         if isinstance(role_result, BaseException):
-            log.exception("resolve_and_check failed in %s: %s", action, role_result)
+            log.error(
+                "resolve_and_check failed in %s: %s",
+                action,
+                role_result,
+                exc_info=role_result,
+            )
         chat = msg.chat
         locale = await effective_locale(
             getattr(chat, "type", None), admin_id, getattr(chat, "id", 0)

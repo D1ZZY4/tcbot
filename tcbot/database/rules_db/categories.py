@@ -46,10 +46,14 @@ _KEY_MAX = 40
 def _available_key(title: str, existing: set[str]) -> str:
     """Return a slug that does not collide with an existing category."""
     base = re.sub(r"[^a-z0-9]+", "-", title.strip().lower()).strip("-")[:_KEY_MAX]
-    key = base or "category"
+    # * A title with no ASCII alphanumerics collapses to an empty base. Build
+    # * collision suffixes from the fallback stem so the key still satisfies
+    # * the DB check constraint instead of producing an invalid "-2".
+    stem = base or "category"
+    key = stem
     suffix = 2
     while key in existing:
-        key = f"{base}-{suffix}"
+        key = f"{stem}-{suffix}"
         suffix += 1
     return key
 

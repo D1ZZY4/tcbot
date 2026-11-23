@@ -17,6 +17,7 @@ from pyrogram.storage import UpdateState
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError
+from sqlalchemy.exc import TimeoutError as SAPoolTimeout
 
 from tcbot.database import engine as engine_module
 from tcbot.database import mtproto_store
@@ -530,6 +531,48 @@ def test_retry_write_circuit_open_degrades_immediately(
             nonlocal calls
             calls += 1
             raise CircuitOpenError("Circuit [postgres] is OPEN; call rejected.")
+
+        return await mtproto_store._retry_write(_failing_coro)
+
+    assert asyncio.run(_run_test()) is None
+    assert calls == 1
+
+
+def test_retry_write_db_timeout_degrades_immediately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A db_call budget timeout must not escape into Pyrogram's update task."""
+    monkeypatch.setattr(mtproto_store, "db_call", identity_db_call)
+    calls = 0
+
+    async def _run_test() -> Any:
+        nonlocal calls
+
+        async def _failing_coro() -> None:
+            nonlocal calls
+            calls += 1
+            raise TimeoutError("database call timed out")
+
+        return await mtproto_store._retry_write(_failing_coro)
+
+    assert asyncio.run(_run_test()) is None
+    assert calls == 1
+
+
+def test_retry_write_pool_timeout_degrades_immediately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pool checkout timeout is a SQLAlchemy error that must not escape."""
+    monkeypatch.setattr(mtproto_store, "db_call", identity_db_call)
+    calls = 0
+
+    async def _run_test() -> Any:
+        nonlocal calls
+
+        async def _failing_coro() -> None:
+            nonlocal calls
+            calls += 1
+            raise SAPoolTimeout("stmt", {}, Exception("pool checkout timed out"))
 
         return await mtproto_store._retry_write(_failing_coro)
 

@@ -82,15 +82,15 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    # * Primary groups (main, exec) are required destinations for ban /
-    # * unban / mute / warn fan-out and the federation log channel. They
-    # * must never be disconnected by the group owner; the bot would
-    # * lose primary-group enforcement and log delivery.
-    if cfg.is_primary_group(chat.id):
+    # * Deployment destinations (main group, proofs, logs, appeals, main
+    # * channel) are required for fan-out and delivery. A legacy active row
+    # * must not let this command make the bot leave one of them; the
+    # * force-remove path applies the same guard (see cmd_rmtc).
+    if cfg.is_infrastructure_chat(chat.id):
         await reply_rich(
             msg,
-            t("disconnecting.state.primary_refused", locale, plain=True),
-            log_label="cmd_tcdisconnect primary-group",
+            t("disconnecting.state.infrastructure_refused", locale, plain=True),
+            log_label="cmd_tcdisconnect infrastructure-group",
             parse_mode=None,
         )
         return
@@ -214,9 +214,9 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # * Primary groups (main, exec) are required destinations for ban /
-    # * unban / mute / warn fan-out and the federation log channel. They
-    # * must never be force-disconnected by /rmtc; the bot would lose
+    # * The main group is a required destination for ban / unban / mute /
+    # * warn fan-out and the federation log channel. It must never be
+    # * force-disconnected by /rmtc; the bot would lose
     # * primary-group enforcement and log delivery.
     if cfg.is_primary_group(chat_id):
         await reply_rich(

@@ -10,6 +10,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from telegram import InlineKeyboardMarkup
 from telegram.error import BadRequest, RetryAfter
 
 from tcbot import database as db
@@ -204,6 +205,9 @@ def test_a_rejected_appeal_closes_its_still_active_ban_card(
     asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
 
     assert len(bot.edits) == 1
+    markup = bot.edits[0]["kwargs"]["reply_markup"]
+    assert isinstance(markup, InlineKeyboardMarkup)
+    assert not markup.inline_keyboard
     assert completed[0]["state"] == "sent"
 
 

@@ -29,6 +29,7 @@ from tcbot.utils.i18n import (
     available_locales,
     display_name,
     divider,
+    esc,
     is_known_locale,
     t,
 )
@@ -108,7 +109,9 @@ def _panel_text(scope: str, locale: str) -> str:
         locale,
         title=Safe(heading(title)),
         divider=Safe(divider()),
-        quote=Safe(quote(f"{body}\n{hint}")),
+        # * quote() does not escape; a translated body with & or < would
+        # * otherwise be injected into the rich HTML payload.
+        quote=Safe(quote(esc(f"{body}\n{hint}"))),
     )
 
 

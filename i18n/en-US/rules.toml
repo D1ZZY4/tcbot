@@ -31,20 +31,82 @@ body = "`/tcrules` `/rules`"
 [help.what]
 body = "Read-only rules menu for everyone; the editor lets staff manage categories, items and channel publication."
 
+# Category labels mirror the operator-local rule documents. The category key is
+# the document stem; wording lives here so it stays translatable.
+[category.cheat]
+label = "Cheating"
+
+[category.doxing-dan-privasi]
+label = "Doxing and Privacy"
+
+[category.identitas]
+label = "Identity"
+
+[category.karya-dan-atribusi]
+label = "Work and Attribution"
+
+[category.konten-pornografi-nsfw]
+label = "Adult and NSFW Content"
+
+[category.materi-pengujian]
+label = "Test Material"
+
+[category.mod-apk-dan-bajakan]
+label = "Modified and Pirated Apps"
+
+[category.module-root]
+label = "Root Modules"
+
+[category.out-off-topic]
+label = "Off Topic"
+
+[category.pengelola]
+label = "Moderators"
+
+[category.penipuan]
+label = "Scams"
+
+[category.perundungan-dan-kebencian]
+label = "Bullying and Hate"
+
+[category.politik]
+label = "Politics"
+
+[category.promosi]
+label = "Promotion"
+
+[category.sanksi]
+label = "Sanctions"
+
+[category.spam]
+label = "Spam"
+
+[category.transaksi]
+label = "Transactions"
+
+[category.federasi]
+label = "The Federation"
+
+[category.keanggotaan]
+label = "Membership"
+
+[category.klarifikasi]
+label = "Brand Clarification"
+
+[category.persetujuan-pendiri]
+label = "Founders' Consent"
+
 [menu]
-body = "There are rules on {community}."
+body = "There are rules on {community}.\n\nPick a topic below. Federation-wide rules are the serious violations; the rest is group-level guidance and never becomes a federation ban on its own."
 empty = "There are no published rules yet."
 category = "Rules: {category}"
+category_footer = "Back returns to the topic index. Serious violations are enforced across every connected group; the other topics are group-level guidance."
 no_rules = "No rules in this category."
 preview = "Preview\nThis is how the rules will look in the channel. Nothing is published until you tap Publish."
 preview_empty = "Preview\nThere is nothing to show yet. Add a category and a rule in *Edit Draft* first."
 
-[rich]
-number = "No"
-rule = "Rule"
-
 [picker]
-prompt = "Select the rules that were broken. You can choose more than one."
+prompt = "Select the rules that were broken. Category names mark federation-wide rules versus group guidance. Only a federation-required rule can justify a federation ban."
 other = "Other / Not covered"
 clear = "Clear"
 require_selection = "Select at least one rule or choose Other / Not covered."

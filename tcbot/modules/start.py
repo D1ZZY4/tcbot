@@ -17,6 +17,7 @@ from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     about_msg,
+    about_section_labels,
     answer_and_edit,
     render_groups,
     replies,
@@ -131,7 +132,9 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             msg,
             about_msg(locale),
             log_label="cmd_start about",
-            reply_markup=buttons.back_to_start_btn(locale),
+            reply_markup=buttons.about_sections_btn(
+                about_section_labels(locale), locale
+            ),
         )
         return
 

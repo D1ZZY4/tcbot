@@ -57,7 +57,7 @@ __all__ = [
 
 
 def _schema_of(connection: Connection) -> str:
-    """Return the quoted schema the connection writes to.
+    """Return the bare schema name the connection writes to.
 
     The first entry of the search path is the schema the objects belong
     to. ``current_schema()`` is deliberately not used: it returns the
@@ -65,13 +65,19 @@ def _schema_of(connection: Connection) -> str:
     schema nobody created would silently place the views, the
     functions, and the triggers in the next schema of the path instead
     of failing.
+
+    The name is returned unquoted because ``%SCHEMA%`` is substituted
+    into both identifier positions and single-quoted SQL literals such as
+    ``SET search_path TO 'pg_catalog', '%SCHEMA%'``. Quoting it here
+    would produce the literal ``'"public"'``, which names no schema.
+    All supported schema names are plain lowercase identifiers.
     """
     raw = connection.exec_driver_sql("SHOW search_path").scalar()
     first = str(raw or "").split(",")[0].strip().strip('"')
     if not first or first.startswith("$"):
         fallback = connection.exec_driver_sql("SELECT current_schema()").scalar()
         first = str(fallback or "public")
-    return connection.dialect.identifier_preparer.quote_identifier(first)
+    return first
 
 
 def apply_schema(connection: Connection) -> None:

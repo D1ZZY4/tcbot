@@ -140,6 +140,29 @@ async def execute_kick(
     # * enforced but unaudited kick that /check can never see.
     kick_action_id: int | None = None
     kick_delivered = False
+    repair_queued = False
+
+    async def _queue_unban_repair() -> None:
+        """Queue durable repair once when a landed ban was never lifted."""
+        nonlocal repair_queued
+        if kick_action_id is None or kick_delivered or repair_queued:
+            return
+        repair_queued = True
+        try:
+            repair_run = await db.enforcement_db.queue_kick_unban_repair(
+                kick_action_id, chat_id, admin_id
+            )
+        except Exception:
+            log.exception("Kick repair queue failed for action=%s", kick_action_id)
+        else:
+            if repair_run is not None:
+                log.warning(
+                    "Kick left target=%d banned in %d; repair run %s queued",
+                    target_id,
+                    chat_id,
+                    repair_run,
+                )
+
     rule_ids, rule_note = rules_from_scope(flow_scope(ctx, update), "kick")
     try:
         kick_action_id = await db.kicks_db.log_kick(
@@ -229,13 +252,19 @@ async def execute_kick(
                 unban_result = True
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
+                # * Either refusal can strand the target: the first error may
+                # * be benign while the retry is not, or the reverse. Repair
+                # * unless BOTH are known-benign "nothing to do" responses.
                 log.warning(
                     "unban_chat_member failed after kick for target=%d: %s",
                     target_id,
-                    unban_result,
+                    exc,
                 )
-                if kick_action_id and not is_benign_telegram_error(unban_result):
+                stranded = not is_benign_telegram_error(
+                    unban_result
+                ) or not is_benign_telegram_error(exc)
+                if kick_action_id and stranded:
                     # * The record started completed when the ban landed, but
                     # * the rejoin step did not. Mark it failed before the
                     # * repair queue so history never claims a finished kick
@@ -247,27 +276,7 @@ async def execute_kick(
                             "Kick status update failed for action=%s",
                             kick_action_id,
                         )
-                    # * A kick is a ban followed by an unban. If the second
-                    # * step still fails, the user is banned with no active
-                    # * ban record to repair from. The reconcile run keeps
-                    # * the one chat as durable work and retries it.
-                    try:
-                        repair_run = await db.enforcement_db.queue_kick_unban_repair(
-                            kick_action_id, chat_id, admin_id
-                        )
-                    except Exception:
-                        log.exception(
-                            "Kick repair queue failed for action=%s",
-                            kick_action_id,
-                        )
-                    else:
-                        if repair_run is not None:
-                            log.warning(
-                                "Kick left target=%d banned in %d; repair run %s queued",
-                                target_id,
-                                chat_id,
-                                repair_run,
-                            )
+                    await _queue_unban_repair()
         kick_delivered = not isinstance(unban_result, BaseException)
         if isinstance(log_send_result, BaseException):
             log.error("Kick log send failed: %s", log_send_result)
@@ -318,6 +327,10 @@ async def execute_kick(
                     "Kick status update failed during cancellation for action=%s",
                     kick_action_id,
                 )
+            # * A cancellation after the ban landed but before the unban is
+            # * the one case with no in-flow repair: mark failed, then queue
+            # * the durable reconcile run before the cancellation propagates.
+            await _queue_unban_repair()
         raise
     except Exception:
         # * Ban failed while the proof upload may still be in flight: cancel
@@ -331,6 +344,9 @@ async def execute_kick(
                 await db.kicks_db.mark_kick_failed(kick_action_id)
             except Exception:
                 log.exception("Kick status update failed for action=%s", kick_action_id)
+            # * An exception after the ban landed can also strand the user;
+            # * queue the same durable reconcile run as the cancellation path.
+            await _queue_unban_repair()
         await reply_rich(
             msg,
             t(

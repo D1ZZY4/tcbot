@@ -550,9 +550,16 @@ async def refresh_display_name(user_id: int, first_name: str) -> bool:
     stay as they are: the caller resolved a name, not a full profile.
     """
     cached = await user_mention_cache.peek(user_id)
-    if isinstance(cached, list) and _cached_triple(cached)[0] == first_name:
+    triple = _cached_triple(cached) if isinstance(cached, list) else (None, None, None)
+    if isinstance(cached, list) and triple[0] == first_name:
         return False
     await upsert_user(user_id, None, first_name)
+    # * A display-name-only write cannot reconstruct the full triple, so
+    # * upsert_user invalidates the mention cache. Without re-warming the
+    # * preserved fields, the next view peeks a miss and writes again, making
+    # * this guard ineffective on the hot path it was added to protect.
+    if isinstance(cached, list) and len(cached) == 3 and cached[0] is not None:
+        user_mention_cache.put(user_id, [first_name, triple[1], triple[2]])
     return True
 
 

@@ -278,4 +278,8 @@ __handlers__ = [
         connection.on_join_decision,
         pattern=rf"^({connection.join_callback}|{connection.cancel_callback})$",
     ),
+    CallbackQueryHandler(
+        connection.on_verify_step,
+        pattern=rf"^{connection.verify_callback}_\d+$",
+    ),
 ]

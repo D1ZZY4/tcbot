@@ -22,7 +22,7 @@ from telegram.constants import ChatMemberStatus
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import identity, messages
-from tcbot.modules.helper.buttons import connect_join_btn
+from tcbot.modules.helper.buttons import connect_join_btn, connect_verify_btn
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     answer_ack,
@@ -33,6 +33,7 @@ from tcbot.modules.helper.messages import (
     send_log,
     send_text,
 )
+from tcbot.modules.helper.pipelines.connect_verify import handle_verify_step
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
@@ -172,6 +173,16 @@ class ConnectionAddedMixin:
 
         def connected_message(self, locale: str | None = None) -> str:
             """Success message."""
+            ...
+
+        def verify_prompt(self, step: int, locale: str | None = None) -> str:
+            """Build one verification page."""
+            ...
+
+        def verify_keyboard(
+            self, step: int, locale: str | None = None
+        ) -> InlineKeyboardMarkup:
+            """Build the keyboard of one verification page."""
             ...
 
         def connecting_message(self, locale: str | None = None) -> str:
@@ -387,8 +398,8 @@ class ConnectionAddedMixin:
                 prompt = await send_text(
                     ctx.bot,
                     chat.id,
-                    self.join_prompt(locale),
-                    reply_markup=self.join_keyboard(locale),
+                    self.verify_prompt(0, locale),
+                    reply_markup=self.verify_keyboard(0, locale),
                 )
                 await db.groups_db.add_pending(
                     chat.id,
@@ -408,6 +419,7 @@ class ConnectionDecisionMixin:
 
     join_callback: str
     cancel_callback: str
+    verify_callback: str
 
     if TYPE_CHECKING:
 
@@ -424,6 +436,16 @@ class ConnectionDecisionMixin:
 
         def check_perms(self, member: ChatMember) -> bool:
             """Check whether member holds every required permission."""
+            ...
+
+        def verify_prompt(self, step: int, locale: str | None = None) -> str:
+            """Build one verification page."""
+            ...
+
+        def verify_keyboard(
+            self, step: int, locale: str | None = None
+        ) -> InlineKeyboardMarkup:
+            """Build the keyboard of one verification page."""
             ...
 
         def already_connected_message(self, locale: str | None = None) -> str:
@@ -449,6 +471,12 @@ class ConnectionDecisionMixin:
         def perms_required_message(self, locale: str | None = None) -> str:
             """Notice when the bot lacks admin permissions."""
             ...
+
+    async def on_verify_step(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Advance the About verification pages shown before connecting."""
+        await handle_verify_step(self, update, ctx)
 
     async def on_join_decision(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -629,6 +657,26 @@ class BuildConnection(ConnectionAddedMixin, ConnectionDecisionMixin):
     required_perms: tuple[str, ...] = field(default=_REQUIRED_PERMS, kw_only=True)
     join_callback: str = field(default="tc_join", kw_only=True)
     cancel_callback: str = field(default="tc_cancel", kw_only=True)
+    verify_callback: str = field(default="tc_verify", kw_only=True)
+
+    def verify_prompt(self, step: int, locale: str | None = None) -> str:
+        """Build one membership verification page shown before connecting."""
+        title = t("connecting.verify.heading", locale, plain=True)
+        key = "final" if step >= 3 else f"step_{step + 1}"
+        body = t(f"connecting.verify.{key}", locale, plain=True)
+        return f"{title}\n\n{body}"
+
+    def verify_keyboard(
+        self, step: int, locale: str | None = None
+    ) -> InlineKeyboardMarkup:
+        """Continue through the pages, then reveal Connect on the last one."""
+        return connect_verify_btn(
+            step,
+            self.verify_callback,
+            self.join_callback,
+            self.cancel_callback,
+            locale,
+        )
 
     def join_prompt(self, locale: str | None = None) -> str:
         """Return the initial prompt sent when the bot is first added."""

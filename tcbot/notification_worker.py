@@ -10,6 +10,7 @@ import asyncio
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from telegram import InlineKeyboardMarkup
 from telegram.error import BadRequest, Forbidden, NetworkError
 
 from tcbot import database as db
@@ -194,7 +195,10 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
                 chat_id=chat_id,
                 message_id=message_id,
                 parse_mode=None,
-                reply_markup=None,
+                # * PTB drops None values, so an explicit empty keyboard is
+                # * required to strip the Approve/Reject buttons from a
+                # * decided card on this retry path too.
+                reply_markup=InlineKeyboardMarkup([]),
             )
     except asyncio.CancelledError:
         _cb.telegram.release_probe()

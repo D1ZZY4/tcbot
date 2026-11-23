@@ -68,6 +68,37 @@ def proof_step_btn(
     return InlineKeyboardMarkup([buttons])
 
 
+def connect_verify_btn(
+    step: int,
+    verify_callback: str,
+    join_callback: str,
+    cancel_callback: str,
+    locale: str | None = None,
+) -> InlineKeyboardMarkup:
+    """Verification step: Continue until the final confirmation, then Connect."""
+    if step >= 3:
+        label, callback = t("button.connect", locale, plain=True), join_callback
+    else:
+        label = t("button.next", locale, plain=True)
+        callback = f"{verify_callback}_{step + 1}"
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    label,
+                    callback_data=callback,
+                    style=KeyboardButtonStyle.PRIMARY,
+                ),
+                InlineKeyboardButton(
+                    t("button.cancel", locale, plain=True),
+                    callback_data=cancel_callback,
+                    style=KeyboardButtonStyle.DANGER,
+                ),
+            ]
+        ]
+    )
+
+
 def connect_join_btn(
     join_callback: str, cancel_callback: str, locale: str | None = None
 ) -> InlineKeyboardMarkup:

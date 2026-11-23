@@ -697,6 +697,12 @@ async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             catch_all=True,
         )
         return
+    except asyncio.CancelledError:
+        # * Cancellation is a BaseException and bypasses the handlers below.
+        # * Without this the executor thread keeps measuring and _run_lock
+        # * stays held, so later speed tests report "busy" forever.
+        cancel.set()
+        raise
     except Exception:
         cancel.set()
         log.exception("Speedtest failed")

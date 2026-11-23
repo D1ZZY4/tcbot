@@ -65,6 +65,24 @@ def back_to_module_btn(
     return back_markup(module_callback, locale)
 
 
+def about_sections_btn(
+    section_labels: list[str], locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """About index: one button per section plus Back to start."""
+    pairs: list[tuple[str, str]] = [
+        (label, f"about_section_{idx}") for idx, label in enumerate(section_labels)
+    ]
+    rows = _build_topic_rows(pairs, style=KeyboardButtonStyle.PRIMARY)
+    rows = with_back_row(rows, "back_to_start", locale)
+    rows.append([close_btn(locale)])
+    return InlineKeyboardMarkup(rows)
+
+
+def back_to_about_btn(locale: str | None = None) -> InlineKeyboardMarkup:
+    """Back to the About section index."""
+    return back_markup("about_menu", locale)
+
+
 def privacy_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Privacy section: policy link plus Back to start."""
     return InlineKeyboardMarkup(

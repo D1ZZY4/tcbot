@@ -60,6 +60,17 @@ operation is recorded on its slot and reconciled by the next publish.
 Run states are `running`, `completed`, `partial`, and `failed`. Slot states are
 `pending`, `synced`, `missing`, `failed`, and `retired`.
 
+## Enforcement tiers
+
+The published set uses two categories. `mandatory` holds federation-wide rules
+(cheating, scams, doxing, content involving minors, harassment, malware, and the
+enforcement procedure) and is the only tier that can justify a federation ban.
+`optional` holds group-level guidance; a group owner may keep a stricter local
+rule or ignore it, and it never becomes a federation ban by itself. The public
+menu explains the split and the moderation picker prefixes a selection with its
+category title. The seed script retires the older topic categories when it
+re-tiers documents.
+
 ## Acknowledgement
 
 Acknowledgement is a greeting-only surface. In the primary group the bot
