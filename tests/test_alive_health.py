@@ -348,6 +348,43 @@ def test_webhook_503_while_shutting_down(monkeypatch: pytest.MonkeyPatch) -> Non
     assert body == "Service unavailable"
 
 
+def test_webhook_403_when_server_secret_is_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unconfigured receiver must refuse every update, even an empty token."""
+    queue = _FakeWhQueue()
+    _wire_webhook(monkeypatch, queue=queue, loop=object(), bot=object(), secret="")
+    body, code = _call_webhook(json_data={"update_id": 1}, token=None)
+    assert code == 403
+    assert body == "Forbidden"
+    assert queue.put_item is None
+
+
+def test_shutdown_then_reregister_reopens_the_webhook(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-registration clears the shutdown latch so updates flow again."""
+    queue = _FakeWhQueue()
+    _wire_webhook(monkeypatch, queue=queue, loop=object(), bot=object())
+    monkeypatch.setattr(alive_mod, "_wh_shutting_down", False)
+    _stub_de_json(monkeypatch, ret=object())
+    monkeypatch.setattr(
+        alive_mod.asyncio,
+        "run_coroutine_threadsafe",
+        lambda coro, loop: _FakeFuture(),
+    )
+
+    assert _call_webhook(json_data={"update_id": 1})[1] == 200
+
+    alive_mod.begin_shutdown()
+    assert alive_mod._wh_shutting_down is True
+    assert _call_webhook(json_data={"update_id": 1})[1] == 503
+
+    alive_mod.register_webhook(queue, object(), _WH_SECRET, object())  # type: ignore[arg-type]
+    assert alive_mod._wh_shutting_down is False
+    assert _call_webhook(json_data={"update_id": 1})[1] == 200
+
+
 def test_webhook_400_when_empty_body(monkeypatch: pytest.MonkeyPatch) -> None:
     _wire_webhook(monkeypatch, queue=_FakeWhQueue(), loop=object(), bot=object())
     body, code = _call_webhook()
