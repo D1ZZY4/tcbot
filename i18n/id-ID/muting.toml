@@ -43,13 +43,13 @@ body = """
 `/tcunmute @username` cabut mute segera di semua grup
 Atau balas sebuah pesan lalu jalankan `/tcm`."""
 
-# Runtime strings for the mute/unmute executors (muting_flow.py).
+# Runtime strings for the mute/unmute executors (mute_flow.py).
 # [note] plain sends use plain=True; [summary]/[unmute] render rich HTML.
-# [applied] renders the unmute fan-out line; {applied} carries it whole.
+# [applied] renders the unmute fan-out line, [muted] the mute fan-out line;
+# {applied} carries the chosen line whole.
 # Placeholders: {user} pre-formatted user reference, {dur} pre-formatted
-# bold duration, {reason} raw reason text, {done}/{total}/{failed} ints,
-# {sample} raw group names, {applied} prebuilt applied line, {note}
-# prebuilt failure line.
+# bold duration, {reason} raw reason text, {done}/{total}/{failed}/{pending}
+# ints, {sample} raw group names, {applied} prebuilt applied line.
 
 [note]
 groups_fail = "{user} tidak bisa di-mute: daftar grup gagal dimuat dari database, jadi tidak ada grup yang disentuh. Cek log lalu coba lagi dengan /tcmute setelah database pulih."
@@ -67,10 +67,16 @@ full = "Dipulihkan di {total}/{total} grup."
 progress = "Dipulihkan di {done}/{total} grup sejauh ini ({failed} gagal: {sample}{more}); {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
 progress_clean = "Dipulihkan di {done}/{total} grup sejauh ini; {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
 
+[muted]
+empty = "Belum ada grup terhubung yang dikonfigurasi."
+none = "PERINGATAN: mute tidak diterapkan di grup mana pun ({total}/{total} gagal). Cek hak admin bot di: {sample}{more}"
+partial = "PERINGATAN: mute tidak diterapkan di {failed} grup: {sample}{more} ({done}/{total} diterapkan)."
+full = "Diterapkan ke {total}/{total} grup."
+progress = "Diterapkan ke {done}/{total} grup sejauh ini ({failed} gagal: {sample}{more}); {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
+progress_clean = "Diterapkan ke {done}/{total} grup sejauh ini; {pending} masih menunggu pengiriman dan dicoba ulang otomatis."
+
 [summary]
-body = "{user} telah di-mute {dur}.\n*Alasan:* {reason}\nDiterapkan ke {done}/{total} grup.{note}"
-partial = "\nPERINGATAN: mute tidak diterapkan di {failed} grup: {sample}{more}. Catatan mute tetap disimpan agar pembatasan bisa dicoba ulang."
-pending = "\n{pending} grup masih menunggu pengiriman dan dicoba ulang otomatis."
+body = "{user} telah di-mute {dur}.\n*Alasan:* {reason}\n{applied}"
 
 [unmute]
 body = "{user} telah di-unmute.\n{applied}"

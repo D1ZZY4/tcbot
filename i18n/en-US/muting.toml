@@ -43,13 +43,13 @@ body = """
 `/tcunmute @username` lift mute immediately across all groups
 Or reply to a message and run `/tcm`."""
 
-# Runtime strings for the mute/unmute executors (muting_flow.py).
+# Runtime strings for the mute/unmute executors (mute_flow.py).
 # [note] plain sends use plain=True; [summary]/[unmute] render rich HTML.
-# [applied] renders the unmute fan-out line; {applied} carries it whole.
+# [applied] renders the unmute fan-out line, [muted] the mute fan-out line;
+# {applied} carries the chosen line whole.
 # Placeholders: {user} pre-formatted user reference, {dur} pre-formatted
 # bold duration, {reason} raw reason text, {done}/{total}/{failed}/{pending}
-# ints, {sample} raw group names, {applied} prebuilt applied line, {note}
-# prebuilt failure line.
+# ints, {sample} raw group names, {applied} prebuilt applied line.
 
 [note]
 groups_fail = "{user} could not be muted: the group list could not be loaded from the database, so no groups were touched. Check the logs and retry with /tcmute once the database recovers."
@@ -67,10 +67,16 @@ full = "Restored in {total}/{total} groups."
 progress = "Restored in {done}/{total} groups so far ({failed} failed: {sample}{more}); {pending} still awaiting delivery, retried automatically."
 progress_clean = "Restored in {done}/{total} groups so far; {pending} still awaiting delivery, retried automatically."
 
+[muted]
+empty = "No connected groups configured."
+none = "WARNING: mute not enforced in any group ({total}/{total} failed). Check bot admin rights in: {sample}{more}"
+partial = "WARNING: the mute did not land in {failed} group(s): {sample}{more} ({done}/{total} applied)."
+full = "Applied to {total}/{total} groups."
+progress = "Applied to {done}/{total} groups so far ({failed} failed: {sample}{more}); {pending} still awaiting delivery, retried automatically."
+progress_clean = "Applied to {done}/{total} groups so far; {pending} still awaiting delivery, retried automatically."
+
 [summary]
-body = "{user} has been muted {dur}.\n*Reason:* {reason}\nApplied to {done}/{total} groups.{note}"
-partial = "\nWARNING: the mute did not land in {failed} group(s): {sample}{more}. The record is kept so the restriction can be retried."
-pending = "\n{pending} group(s) are still awaiting delivery and are retried automatically."
+body = "{user} has been muted {dur}.\n*Reason:* {reason}\n{applied}"
 
 [unmute]
 body = "{user} has been unmuted.\n{applied}"

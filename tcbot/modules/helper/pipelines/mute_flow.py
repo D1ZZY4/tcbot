@@ -239,37 +239,11 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
             catch_all=True,
         )
         return
-    enforced_role = await demote_before_enforcement(
-        bot,
-        target_id,
-        target_fname,
-        trigger="mute",
-        executor_id=admin_id,
-        executor_fname=admin_fname,
-    )
-    if enforced_role == "owner":
-        # * The target became Owner after the entry gates. The protected role
-        # * cannot be demoted, and the helper returns it so the mute must stop
-        # * before any group is restricted.
-        log.warning(
-            "Mute fan-out refused: target=%d became Owner before enforcement", target_id
-        )
-        await safe_edit_message(
-            bot,
-            prompt_chat,
-            prompt_id,
-            t(
-                "identity.refuse.mute.owner",
-                locale,
-                line=Safe(user_ref(target_id, target_fname)),
-            ),
-            reply_markup=None,
-            log_level="debug",
-            log_label="Mute Owner protection",
-            catch_all=True,
-        )
-        return
-    applied = 0
+    # * The pre-write gate above is the only protected-target check that can
+    # * still stop this mute. The decision and its durable run are already
+    # * committed here, so a later "owner" verdict could not retract them and
+    # * would only tell the moderator the action was refused while the worker
+    # * delivered it. Ban and warn follow the same single pre-write gate.
     total = len(groups)
     failed = 0
     pending = 0
@@ -291,7 +265,6 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         failed_targets = db.enforcement_db.failed_report_targets(report)
         delivery = db.enforcement_db.delivery_outcome(report, len(groups))
         total = delivery.total
-        applied = delivery.applied
         failed = delivery.failed
         pending = delivery.pending
         for group in failed_targets:
@@ -313,40 +286,27 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         ]
         results = await fan_out(restrict_coros)
         outcome = summarize_fanout(groups, results, action="Mute", target_id=target_id)
-        applied = outcome.applied
         total = outcome.total
         failed = outcome.failed
         failed_targets = [grp for grp, _exc in outcome.transient]
     proof_link: str | None = proof_upload.link if proof_upload else None
     proof_btn = buttons.action_proof_btn(target_id, proof_link, locale)
-    notes: list[str] = []
-    if failed:
-        notes.append(
-            t(
-                "muting.summary.partial",
-                locale,
-                done=applied,
-                total=total,
-                failed=failed,
-                sample=", ".join(
-                    str(grp.get("title") or grp.get("chat_id", 0))
-                    for grp in failed_targets[:5]
-                ),
-                more=" ..." if failed > 5 else "",
-            )
-        )
-    if pending:
-        notes.append(t("muting.summary.pending", locale, pending=pending))
-    note = "".join(notes)
+    transient = [(grp, RuntimeError("delivery failed")) for grp in failed_targets]
+    applied_line = replies.applied_summary(
+        locale,
+        "muting.muted",
+        total=total,
+        failed=failed,
+        pending=pending,
+        transient=transient,
+    )
     summary = t(
         "muting.summary.body",
         locale,
         user=Safe(user_ref(target_id, target_fname)),
         dur=Safe(bold(dur_str)),
         reason=reason_text,
-        done=applied,
-        total=total,
-        note=Safe(note),
+        applied=Safe(applied_line),
     )
     log_text = messages.mute_log(
         target_id,

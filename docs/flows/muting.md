@@ -81,9 +81,9 @@ sequenceDiagram
     Flow->>DB: active_groups and with_primary_groups
     Flow->>Bot: upload_proof_for_action optional
     Flow->>Guard: enforcement_refusal again after proof
+    Flow->>Bot: demote_before_enforcement trigger mute
     Flow->>DB: record_mute with until and enforcement chats
     DB-->>Flow: decision id and apply run id
-    Flow->>Bot: demote_before_enforcement trigger mute
     Flow->>Work: deliver_queued_run for apply run
     Work->>Bot: restrict_chat_member in each group
     Work-->>Flow: run report and delivery outcome
@@ -93,8 +93,9 @@ sequenceDiagram
 `mutes_db.record_mute()` writes the decision, case, optional proof archive, rule
 links, and apply run in one transaction with idempotency key
 `moderation:{action_id}:apply:v1`. A failed write aborts before any group is
-touched. `demote_before_enforcement()` is best effort: it must never block
-enforcement after the decision is committed.
+touched. `demote_before_enforcement()` is best effort and runs before that
+write: it must never block enforcement once the decision is committed, and a
+later demote verdict could not retract a queued delivery run.
 
 A later mute supersedes the prior one: a new permanent mute clears the expiry,
 and a new timed mute keeps the later of the new and stored deadlines. The
