@@ -126,6 +126,7 @@ _DYNAMIC_KEY_PREFIXES = (
     "kicking.",
     "muting.",
     "netspeed.result.field.",
+    "privacy.msg.item",
     "privacy.section.",
     "proof.action.",
     "reason.",
@@ -236,6 +237,12 @@ def test_t_default_and_explicit() -> None:
     assert t("button.cancel", "xx-YY", catalog=catalog) == t(
         "button.cancel", "en-US", catalog=catalog
     )
+
+
+def test_t_custom_catalog_without_default_locale() -> None:
+    """A key present in the requested locale must not require en-US."""
+    catalog = {"id-ID": {"greeting": "Halo {name}."}}
+    assert t("greeting", "id-ID", catalog=catalog, name="Dizzy") == "Halo Dizzy."
 
 
 def test_t_escapes_string_values() -> None:

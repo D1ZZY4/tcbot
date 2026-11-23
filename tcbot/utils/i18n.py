@@ -412,7 +412,9 @@ def t(
         raise I18nError(f"i18n key {key!r} takes keyword placeholders only")
     data = catalog if catalog is not None else _ensure_loaded()
     canonical = _canonical_locale(locale, data) or DEFAULT_LOCALE
-    template = data.get(canonical, {}).get(key, data[DEFAULT_LOCALE].get(key))
+    template = data.get(canonical, {}).get(key)
+    if template is None:
+        template = data.get(DEFAULT_LOCALE, {}).get(key)
     if template is None:
         log.error("i18n missing key %r (locale %r)", key, locale)
         return f"[{key}]" if plain else esc(f"[{key}]")
