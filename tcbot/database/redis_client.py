@@ -80,7 +80,10 @@ _HEALTH_CHECK_INTERVAL_S: int = 30
 # * shared cache is optional, so a dead Redis must never delay a request;
 # * the reconnect runs on the cache's own schedule instead.
 _RECONNECT_BACKOFF_S: float = 30.0
-_reconnect_attempted_at: float = 0.0
+# * monotonic() starts near zero on a fresh host. Zero would make the first
+# * reconnect look recent and skip it for the whole backoff window on a
+# * short-lived process, so the sentinel must predate any reading.
+_reconnect_attempted_at: float = float("-inf")
 
 
 # ──────────────────────── Public API ────────────────────────────── #
@@ -134,11 +137,15 @@ async def _connect_locked(url: str) -> None:
         # * A failed or cancelled PING must not orphan the pool's sockets:
         # * the pool was passed explicitly, so client.aclose() would leave
         # * it behind. Re-raise after cleanup so cancellation still wins.
+        mark_op(ok=False)
         try:
             await pool.aclose()
         except Exception as exc:
             log.debug("Redis pool cleanup after failed PING: %s", exc)
         raise
+    # * A reconnect can succeed without a cache operation following it. Update
+    # * liveness here so /health does not keep reporting the old outage.
+    mark_op(ok=True)
     _client = c
     _pool = pool
     _connected_url = url

@@ -17,6 +17,14 @@ def _reset_liveness(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(redis_client_mod, "_liveness", None)
 
 
+def test_reconnect_sentinel_does_not_mask_the_first_attempt() -> None:
+    """A zero sentinel would skip the first reconnect on a short-lived host.
+
+    monotonic() starts near zero, so the first attempt must predate any reading.
+    """
+    assert redis_client_mod._reconnect_attempted_at < 0
+
+
 def test_mark_op_tracks_liveness_through_failures_and_recovery() -> None:
     redis_client_mod.mark_op(ok=True)
     assert redis_client_mod.liveness() is True
