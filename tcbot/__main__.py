@@ -40,7 +40,7 @@ from tcbot.enforcement_worker import run as run_enforcement_worker
 from tcbot.modules import get_handlers, handler_group
 from tcbot.modules.helper.decorators import global_rate_limit_handler
 from tcbot.modules.helper.extraction import refresh as identity_refresh
-from tcbot.modules.helper.pipelines import connected_flow, stats_flow
+from tcbot.modules.helper.pipelines import connected_flow
 from tcbot.modules.helper.pipelines.ban_flow import drain_proof_sessions
 from tcbot.notification_worker import configure as configure_notification_worker
 from tcbot.notification_worker import run as run_notification_worker
@@ -427,7 +427,6 @@ async def _post_stop(app: Application) -> None:
     await _asyncio_report_tasks.drain()
     await identity_refresh.identity_refresh_tasks.drain()
     await connected_flow.harvest_tasks.drain()
-    await stats_flow.title_refresh_tasks.drain()
     await drain_proof_sessions()
     await error_reporter.drain_pending()
 

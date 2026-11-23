@@ -34,7 +34,6 @@ from tcbot.utils.dispatch import gather_bounded, throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, divider, esc, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page, paginate
-from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.time_and_date import date_or_unknown, time_or_unknown
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
@@ -45,9 +44,6 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# ────────────────────────── Title refresh ───────────────────────── #
-
-
 # * Five rows keep each table well inside Telegram's rich-message limits
 # * (32768 UTF-8 characters, 500 blocks) while staying easy to scan.
 _PAGE_SIZE = 5
@@ -56,30 +52,6 @@ SEARCH_KEY = "stats_search_active"
 RESULTS_KEY = "stats_search_results"
 MSG_KEY = "stats_search_msg_id"
 CHAT_KEY = "stats_search_chat_id"
-# * Owner of the in-flight background group-title refreshes.
-title_refresh_tasks = TaskTracker("group title refresh")
-
-
-async def _refresh_group_title(bot: Bot, chat_id: int) -> None:
-    """Verify a group title live and persist renames."""
-    try:
-        live_chat = await asyncio.wait_for(
-            bot.get_chat(chat_id), timeout=TELEGRAM_LOOKUP_TIMEOUT
-        )
-    except Exception as exc:
-        log.debug("background title check failed for %d: %s", chat_id, exc)
-        return
-    if live_chat is None or not live_chat.title:
-        return
-    try:
-        await db.groups_db.refresh_group_title(chat_id, live_chat.title)
-    except Exception as exc:
-        log.debug("background title refresh failed for %d: %s", chat_id, exc)
-
-
-def launch_group_title_refresh(bot: Bot, chat_id: int) -> None:
-    """Fire-and-forget group title sync for detail views."""
-    title_refresh_tasks.spawn(_refresh_group_title(bot, chat_id))
 
 
 # ─────────────────────── Overview and roster ────────────────────── #

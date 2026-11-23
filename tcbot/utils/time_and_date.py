@@ -37,24 +37,6 @@ def fmt_time(dt: datetime) -> str:
     return to_utc(dt).strftime("%H:%M")
 
 
-def fmt_date_or_unknown(value: datetime | None, locale: str | None = None) -> str:
-    """Return the escaped calendar date, or a localized Unknown fallback."""
-    return (
-        esc(fmt_date(value))
-        if value
-        else t("common.action.unknown_date", locale, plain=True)
-    )
-
-
-def fmt_time_or_unknown(value: datetime | None, locale: str | None = None) -> str:
-    """Return the escaped clock time, or a localized Unknown fallback."""
-    return (
-        esc(fmt_time(value))
-        if value
-        else t("common.action.unknown_date", locale, plain=True)
-    )
-
-
 def fmt_dt_raw(dt: datetime) -> str:
     """Format dt as DD-MM-YYYY | HH:MM in UTC (legacy combined form).
 

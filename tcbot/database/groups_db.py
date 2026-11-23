@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import (
@@ -98,38 +98,6 @@ async def get_group_titles(chat_ids: list[int]) -> dict[int, str]:
         )
     )
     return {int(d["chat_id"]): d.get("title") or str(d["chat_id"]) for d in rows}
-
-
-async def refresh_group_title(chat_id: int, title: str) -> bool:
-    """Update the stored title when live Telegram reports a different one.
-
-    Returns True when a change was written (and the groups cache
-    invalidated), False when already current or the group is unknown.
-    Single atomic update: the filter skips the write when the
-    stored title already matches, so the common no-change path costs one
-    round trip instead of two and a concurrent refresh cannot clobber a
-    newer title with a stale read.
-    """
-    affected = await db_call(
-        lambda: run(
-            telegram_chats.update()
-            .where(
-                telegram_chats.c.chat_id == chat_id,
-                # * A stored NULL never matches ``!= title``: SQL NULL
-                # * comparisons yield NULL. The primary group is registered
-                # * with no title at boot, so its title must be fillable.
-                or_(
-                    telegram_chats.c.title.is_(None),
-                    telegram_chats.c.title != title,
-                ),
-            )
-            .values(title=title, updated_at=utc_now())
-        )
-    )
-    if affected == 0:
-        return False
-    active_groups_cache.invalidate(_ALL_GROUPS_KEY)
-    return True
 
 
 async def is_connected(chat_id: int, *, fresh: bool = False) -> bool:
