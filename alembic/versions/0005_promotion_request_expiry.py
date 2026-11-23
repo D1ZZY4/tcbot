@@ -110,12 +110,22 @@ def downgrade() -> None:
     if status_sql is not None and "expired" in status_sql:
         # * The narrow check validates existing rows when it is created, so
         # * requests the sweep already expired must first be folded into a
-        # * terminal state the old check accepts.
+        # * terminal state the old check accepts. The lifecycle guard from
+        # * 0004 rejects a status change on a resolved row, so suspend that
+        # * one trigger; the downgrade transaction restores it on rollback.
+        op.execute(
+            "ALTER TABLE promotion_requests "
+            "DISABLE TRIGGER trg_promotion_requests_lifecycle"
+        )
         op.execute(
             sa.text(
                 "UPDATE promotion_requests SET status = 'cancelled' "
                 "WHERE status = 'expired'"
             )
+        )
+        op.execute(
+            "ALTER TABLE promotion_requests "
+            "ENABLE TRIGGER trg_promotion_requests_lifecycle"
         )
         op.drop_constraint(_STATUS_CHECK, _TABLE, type_="check")
         op.create_check_constraint(_STATUS_CHECK, _TABLE, _OLD_STATUS)

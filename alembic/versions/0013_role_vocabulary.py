@@ -29,6 +29,17 @@ down_revision: str | None = "0012_rules_publication"
 branch_labels: str | None = None
 depends_on: str | None = None
 
+# * The guards reinstalled below reject exactly the facts this revision must
+# * rewrite: an immutable role key, an immutable requested role, and the
+# * deletion of a system role definition. Alembic runs the revision in one
+# * transaction, so disabling these user triggers is rolled back with the
+# * migration on any failure; no other trigger on these tables is touched.
+_MIGRATION_TRIGGERS: tuple[tuple[str, str], ...] = (
+    ("promotion_requests", "trg_promotion_requests_lifecycle"),
+    ("role_assignments", "trg_role_assignments_guard_update"),
+    ("role_definitions", "trg_role_definitions_guard_system"),
+)
+
 _FINAL_ROLES = (
     (
         "owner",
@@ -63,6 +74,8 @@ def upgrade() -> None:
     # * carries the old guard whose BEFORE DELETE trigger returned NULL and
     # * silently suppressed the stale-definition deletes below.
     apply_schema(op.get_bind())
+    for table, trigger in _MIGRATION_TRIGGERS:
+        op.execute(f"ALTER TABLE {table} DISABLE TRIGGER {trigger}")
 
     for key, display, priority, description in _FINAL_ROLES:
         op.execute(
@@ -112,6 +125,9 @@ def upgrade() -> None:
         ") THEN RAISE EXCEPTION 'Legacy role vocabulary remains after 0013'; "
         "END IF; END $check$"
     )
+
+    for table, trigger in _MIGRATION_TRIGGERS:
+        op.execute(f"ALTER TABLE {table} ENABLE TRIGGER {trigger}")
 
 
 def downgrade() -> None:
