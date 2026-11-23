@@ -165,20 +165,19 @@ async def execute_kick(
             parse_mode=None,
         )
         return
-    # * Demote before the ban lands: a role-holding target must not keep
-    # * federation rank while the ban is live. This closes the TOCTOU
-    # * window the cancelable reason and proof steps opened.
-    # * Best-effort by design: the audit row above already exists, so a
-    # * lookup failure must not skip the enforcement.
-    await demote_before_enforcement(
-        ctx.bot,
-        target_id,
-        target_name,
-        trigger="kick",
-        executor_id=admin_id,
-        executor_fname=admin_fname,
-    )
     try:
+        # * The demote belongs inside the protected block: the audit row now
+        # * exists, so cancellation here must still mark it failed instead of
+        # * leaving a completed kick with no enforcement and no repair.
+        # * Best-effort by design: a lookup failure must not skip enforcement.
+        await demote_before_enforcement(
+            ctx.bot,
+            target_id,
+            target_name,
+            trigger="kick",
+            executor_id=admin_id,
+            executor_fname=admin_fname,
+        )
         await asyncio.wait_for(
             ctx.bot.ban_chat_member(chat_id, target_id),
             timeout=TELEGRAM_LOOKUP_TIMEOUT,

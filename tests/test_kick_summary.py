@@ -113,6 +113,30 @@ def test_summary_edits_prompt_when_known(_kick_no_io: None) -> None:
     assert bot.replies == []
 
 
+def test_cancellation_during_demote_marks_the_kick_failed(
+    _kick_no_io: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cancelled demote must not leave a completed kick with no repair."""
+    failed: list[int] = []
+
+    async def _logged(*args: Any, **kwargs: Any) -> int:
+        return 55
+
+    async def _cancelled_demote(*args: Any, **kwargs: Any) -> None:
+        raise asyncio.CancelledError
+
+    async def _mark_failed(action_id: int) -> None:
+        failed.append(action_id)
+
+    monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
+    monkeypatch.setattr(kick_flow, "demote_before_enforcement", _cancelled_demote)
+    monkeypatch.setattr(db.kicks_db, "mark_kick_failed", _mark_failed)
+
+    with pytest.raises(asyncio.CancelledError):
+        _run(_FakeBot())
+    assert failed == [55]
+
+
 def test_summary_replies_when_prompt_unknown(_kick_no_io: None) -> None:
     bot = _run(_FakeBot())
     assert bot.edits == []
