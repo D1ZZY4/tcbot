@@ -15,10 +15,6 @@ from tcbot.database.base import rule_publications
 from tcbot.database.engine import db_call, fetch_all, run
 from tcbot.utils.time_and_date import utc_now
 
-# * The slot index coalesces the nullable thread id, so name the index
-# * instead of listing columns: an inferred ON CONFLICT would not match it.
-_SLOT_CONSTRAINT = "uq_rule_publications_slot"
-
 
 async def upsert_slot(
     *,
@@ -50,8 +46,19 @@ async def upsert_slot(
         lambda: fetch_all(
             pg_insert(rule_publications)
             .values(values)
+            # * The schema creates a plain UNIQUE INDEX, not a named
+            # * constraint, so ON CONFLICT ON CONSTRAINT would be refused by
+            # * PostgreSQL. Target the indexed expression list instead; the
+            # * nullable thread id must be coalesced exactly as in the index.
             .on_conflict_do_update(
-                constraint=_SLOT_CONSTRAINT,
+                index_elements=[
+                    rule_publications.c.rule_set_id,
+                    rule_publications.c.locale,
+                    rule_publications.c.chat_id,
+                    func.coalesce(rule_publications.c.message_thread_id, 0),
+                    rule_publications.c.category_key,
+                    rule_publications.c.part_index,
+                ],
                 set_={
                     "rule_set_version_id": version_id,
                     "content_hash": content_hash,

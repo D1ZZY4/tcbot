@@ -322,6 +322,18 @@ class RulesEditor:
                 ctx.bot,
             )
         except Exception as exc:
+            # * A channel failure can happen after promote_version committed.
+            # * Refresh the cached snapshot so the next step opens a fresh
+            # * draft instead of writing to a published version. A failed
+            # * lookup keeps the draft snapshot, which is correct when no
+            # * promotion happened.
+            try:
+                published = await db.rules_db.published_version(int(set_doc["id"]))
+            except Exception:
+                log.warning("Published-version refresh failed after publish error")
+                published = None
+            if published is not None:
+                flow_scope(ctx, update)["rules_version"] = published
             await self._edit_or_reply(
                 update,
                 t("rules.publish.error", locale, error=str(exc)),
