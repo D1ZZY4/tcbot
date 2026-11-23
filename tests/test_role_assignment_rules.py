@@ -14,7 +14,11 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules.helper.identity import Identity
-from tcbot.modules.helper.pipelines import promote_flow, transfer_flow
+from tcbot.modules.helper.pipelines import (
+    promote_request,
+    promote_steps,
+    transfer_owner,
+)
 
 # ─────────────────────────── Promotion rules ───────────────────────────── #
 
@@ -85,31 +89,33 @@ def _install_promote(
     monkeypatch.setattr(db.users_cache, "upsert_user", _upsert)
     monkeypatch.setattr(db.bans_db, "get_active_ban", _ban)
     monkeypatch.setattr(db.queues_db, "enqueue", _enqueue)
-    monkeypatch.setattr(promote_flow, "locale_for_user", _locale)
+    monkeypatch.setattr(promote_request, "locale_for_user", _locale)
     _ = current_role
     return seen
 
 
 def test_available_roles_follow_the_executor_rank() -> None:
     """The Owner assigns every role; an Admin only the sub-roles."""
-    assert promote_flow.Promote.available_roles_for("owner") == [
+    assert promote_steps.Promote.available_roles_for("owner") == [
         "admin",
         "developer",
         "moderator",
     ]
-    assert promote_flow.Promote.available_roles_for("admin") == [
+    assert promote_steps.Promote.available_roles_for("admin") == [
         "developer",
         "moderator",
     ]
-    assert promote_flow.Promote.available_roles_for("developer") == []
-    assert promote_flow.Promote.available_roles_for("moderator") == []
+    assert promote_steps.Promote.available_roles_for("developer") == []
+    assert promote_steps.Promote.available_roles_for("moderator") == []
 
 
 def test_owner_assigns_admin_directly(monkeypatch: pytest.MonkeyPatch) -> None:
     """A Owner promotion of Admin writes the admin record."""
     seen = _install_promote(monkeypatch)
     ok, _text = asyncio.run(
-        promote_flow.Promote.execute(_bot(), 1, "Owner", 42, "Target", "admin", "en-US")
+        promote_steps.Promote.execute(
+            _bot(), 1, "Owner", 42, "Target", "admin", "en-US"
+        )
     )
     assert ok is True
     assert seen["added"] == [(42, 1)]
@@ -122,7 +128,9 @@ def test_admin_promotion_to_admin_queues_a_request(
     """An Admin may not grant Admin; the request goes to the Owner."""
     seen = _install_promote(monkeypatch, executor_role="admin")
     ok, _text = asyncio.run(
-        promote_flow.Promote.execute(_bot(), 1, "Admin", 42, "Target", "admin", "en-US")
+        promote_steps.Promote.execute(
+            _bot(), 1, "Admin", 42, "Target", "admin", "en-US"
+        )
     )
     assert ok is True
     assert seen["added"] == []
@@ -133,7 +141,7 @@ def test_admin_assigns_a_subrole_directly(monkeypatch: pytest.MonkeyPatch) -> No
     """An Admin may grant Developer and Moderator directly."""
     seen = _install_promote(monkeypatch, executor_role="admin")
     ok, _text = asyncio.run(
-        promote_flow.Promote.execute(
+        promote_steps.Promote.execute(
             _bot(),
             1,
             "Admin",
@@ -151,7 +159,7 @@ def test_developer_may_not_assign_any_role(monkeypatch: pytest.MonkeyPatch) -> N
     """A Developer has no assignment rights."""
     seen = _install_promote(monkeypatch, executor_role="developer")
     ok, _text = asyncio.run(
-        promote_flow.Promote.execute(
+        promote_steps.Promote.execute(
             _bot(),
             1,
             "Developer",
@@ -172,7 +180,7 @@ def test_promotion_refuses_a_higher_ranked_target(
     """A target that already outranks the new role is refused."""
     seen = _install_promote(monkeypatch, current_role="admin")
     ok, _text = asyncio.run(
-        promote_flow.Promote.execute(
+        promote_steps.Promote.execute(
             _bot(),
             1,
             "Owner",
@@ -190,7 +198,7 @@ def test_promotion_refuses_the_owner(monkeypatch: pytest.MonkeyPatch) -> None:
     """The Owner role is never assignable through a promotion."""
     seen = _install_promote(monkeypatch, current_role="owner")
     ok, _text = asyncio.run(
-        promote_flow.Promote.execute(
+        promote_steps.Promote.execute(
             _bot(),
             1,
             "Owner",
@@ -256,7 +264,7 @@ def _install_transfer(
         _ = (args, kwargs)
         return 42, "Target"
 
-    monkeypatch.setattr(transfer_flow, "extract_target", _extract)
+    monkeypatch.setattr(transfer_owner, "extract_target", _extract)
     monkeypatch.setattr(db.users_roles, "transfer_ownership", _transfer)
     monkeypatch.setattr(db.users_roles, "is_owner", _is_owner)
     monkeypatch.setattr(db.users_roles, "remove_role", _remove_role)
@@ -264,12 +272,12 @@ def _install_transfer(
     async def _safe_reply(*args: Any, **kwargs: Any) -> None:
         _ = (args, kwargs)
 
-    monkeypatch.setattr(transfer_flow, "reply_rich", _safe_reply)
+    monkeypatch.setattr(transfer_owner, "reply_rich", _safe_reply)
     monkeypatch.setattr(db.bans_db, "get_active_ban", _ban)
     monkeypatch.setattr(db.users_cache, "upsert_user", _upsert)
-    monkeypatch.setattr(transfer_flow.identity, "classify", _classify)
-    monkeypatch.setattr(transfer_flow.identity, "verify_not_bot", _verify)
-    monkeypatch.setattr(transfer_flow.error_reporter, "set_owner", lambda uid: None)
+    monkeypatch.setattr(transfer_owner.identity, "classify", _classify)
+    monkeypatch.setattr(transfer_owner.identity, "verify_not_bot", _verify)
+    monkeypatch.setattr(transfer_owner.error_reporter, "set_owner", lambda uid: None)
     return seen
 
 
@@ -302,7 +310,7 @@ def test_transfer_grants_ownership_and_keeps_the_old_owner(
     seen = _install_transfer(monkeypatch)
     ctx = SimpleNamespace(bot=_bot())
     asyncio.run(
-        transfer_flow.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
+        transfer_owner.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
     )
     assert seen["owner"] == [42]
     assert seen["admins"] == [1]
@@ -317,7 +325,7 @@ def test_transfer_refuses_a_banned_target(monkeypatch: pytest.MonkeyPatch) -> No
     seen = _install_transfer(monkeypatch, banned=True)
     ctx = SimpleNamespace(bot=_bot())
     asyncio.run(
-        transfer_flow.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
+        transfer_owner.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
     )
     assert seen["owner"] == []
     assert seen["admins"] == []
@@ -331,7 +339,7 @@ def test_transfer_refuses_when_the_owner_changed_mid_flight(
     seen = _install_transfer(monkeypatch, owner_still_current=False)
     ctx = SimpleNamespace(bot=_bot())
     asyncio.run(
-        transfer_flow.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
+        transfer_owner.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
     )
     assert seen["owner"] == []
     assert seen["admins"] == []
@@ -343,7 +351,7 @@ def test_transfer_refuses_a_bot_target(monkeypatch: pytest.MonkeyPatch) -> None:
     seen = _install_transfer(monkeypatch, bot_target=True)
     ctx = SimpleNamespace(bot=_bot())
     asyncio.run(
-        transfer_flow.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
+        transfer_owner.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
     )
     assert seen["owner"] == []
 
@@ -355,7 +363,7 @@ def test_a_failed_transfer_keeps_the_current_owner(
     seen = _install_transfer(monkeypatch, add_admin_fails=True)
     ctx = SimpleNamespace(bot=_bot())
     asyncio.run(
-        transfer_flow.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
+        transfer_owner.execute_transfer(_transfer_update(), ctx)  # type: ignore[arg-type]
     )
     assert seen["owner"] == []
     assert seen["admins"] == []

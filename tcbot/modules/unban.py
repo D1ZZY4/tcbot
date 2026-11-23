@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Federation unban command entry point: validates permissions and delegates to unban_flow."""
+"""Federation unban command entry point: validates permissions and delegates to unban_actions."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from tcbot.modules.helper import decorators, extraction, guards, identity
 from tcbot.modules.helper.guards import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich
-from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
-from tcbot.modules.helper.pipelines.unban_flow import execute_unban
+from tcbot.modules.helper.pipelines.demote_actions import demote_before_unban
+from tcbot.modules.helper.pipelines.unban_actions import execute_unban
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger

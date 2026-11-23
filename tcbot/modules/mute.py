@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Group mute and unmute command handlers: validates permissions and delegates to mute_flow."""
+"""Group mute and unmute command handlers: validates permissions and delegates to mute_actions."""
 
 from __future__ import annotations
 
@@ -12,18 +12,18 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
 
 from tcbot.modules.helper import decorators, extraction, targets
 from tcbot.modules.helper.messages import replies, reply_rich, reply_rich_result
-from tcbot.modules.helper.pipelines.mute_flow import (
-    execute_unmute,
-    mute_conversation,
-    proof,
-    reason,
-)
-from tcbot.modules.helper.pipelines.reason_flow import (
+from tcbot.modules.helper.pipelines.mod_action_steps import (
     WAITING_PROOF,
     WAITING_REASON,
     is_reason_too_long,
     parse_inline_reason,
     reason_too_long_text,
+)
+from tcbot.modules.helper.pipelines.mute_actions import (
+    execute_unmute,
+    mute_conversation,
+    proof,
+    reason,
 )
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import code, esc, t, user_ref

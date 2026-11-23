@@ -5,7 +5,7 @@
 """Shared rules-picker step for moderation flows.
 
 The picker is deliberately independent of a specific moderation action: a
-flow stores the selected item ids and an optional note in its conversation
+conversation scope stores the selected item ids and an optional note in its conversation
 scope, then passes them to the decision writer. When no rules are published
 the flow simply skips this step, so moderation never stalls on missing
 content.

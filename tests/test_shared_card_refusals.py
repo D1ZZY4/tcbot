@@ -13,8 +13,8 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules.helper.messages import replies
-from tcbot.modules.helper.pipelines import connected_flow, promo_decision_flow
-from tcbot.modules.helper.pipelines.connected_flow import BuildConnection
+from tcbot.modules.helper.pipelines import connect_added, promote_decision
+from tcbot.modules.helper.pipelines.connect_added import BuildConnection
 from tcbot.utils.i18n import t
 
 
@@ -80,7 +80,7 @@ def _install_promo_common(
     async def _request_by_id(request_id: str) -> dict[str, Any] | None:
         return request
 
-    monkeypatch.setattr(promo_decision_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(promote_decision, "locale_for_update", _locale)
     monkeypatch.setattr(db.users_roles, "is_owner", _owner)
     monkeypatch.setattr(db.queues_db, "get_request_by_id", _request_by_id)
 
@@ -93,7 +93,7 @@ def test_promo_non_owner_tap_keeps_the_decision_card(
     query = _FakeQuery("promo_approve:req-1")
 
     asyncio.run(
-        promo_decision_flow.execute_promo_decision(
+        promote_decision.execute_promo_decision(
             _promo_update(query, 5),  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
         )
@@ -116,7 +116,7 @@ def test_promo_owner_lookup_failure_keeps_the_decision_card(
     query = _FakeQuery("promo_approve:req-1")
 
     asyncio.run(
-        promo_decision_flow.execute_promo_decision(
+        promote_decision.execute_promo_decision(
             _promo_update(query, 5),  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
         )
@@ -146,7 +146,7 @@ def test_promo_approve_refuses_the_current_owner(
     query = _FakeQuery("promo_approve:req-1")
 
     asyncio.run(
-        promo_decision_flow.execute_promo_decision(
+        promote_decision.execute_promo_decision(
             _promo_update(query, 1),  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
         )
@@ -189,7 +189,7 @@ def _install_join(monkeypatch: pytest.MonkeyPatch, status: str | None) -> _JoinB
         return "en-US"
 
     bot = _JoinBot(status)
-    monkeypatch.setattr(connected_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(connect_added, "locale_for_update", _locale)
     return bot
 
 

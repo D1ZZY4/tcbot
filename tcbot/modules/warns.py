@@ -15,14 +15,14 @@ from tcbot.modules.helper import decorators, extraction, guards, identity, targe
 from tcbot.modules.helper.guards import resolve_and_check
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, reply_rich_result
-from tcbot.modules.helper.pipelines.reason_flow import (
+from tcbot.modules.helper.pipelines.mod_action_steps import (
     WAITING_PROOF,
     WAITING_REASON,
     is_reason_too_long,
     parse_inline_reason,
     reason_too_long_text,
 )
-from tcbot.modules.helper.pipelines.warn_flow import (
+from tcbot.modules.helper.pipelines.warn_actions import (
     execute_resetwarns,
     execute_unwarn,
     execute_warnlist,

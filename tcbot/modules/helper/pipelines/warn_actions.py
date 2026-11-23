@@ -16,16 +16,19 @@ from tcbot import database as db
 from tcbot.modules.helper import buttons, guards, messages
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, send_log
-from tcbot.modules.helper.pipelines.demote_flow import Demote, demote_before_enforcement
-from tcbot.modules.helper.pipelines.proof_flow import (
-    BuildProof,
-    ProofUpload,
-    upload_proof_for_action,
+from tcbot.modules.helper.pipelines.demote_actions import (
+    Demote,
+    demote_before_enforcement,
 )
-from tcbot.modules.helper.pipelines.reason_flow import (
+from tcbot.modules.helper.pipelines.mod_action_steps import (
     BuildReason,
     build_modaction_conv,
     rules_from_scope,
+)
+from tcbot.modules.helper.pipelines.proof_steps import (
+    BuildProof,
+    ProofUpload,
+    upload_proof_for_action,
 )
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
@@ -859,7 +862,7 @@ def warn_conversation(
     *,
     escape_filter: BaseFilter | None = None,
 ) -> object:
-    """Return the warn ConversationHandler via the central reason_flow factory."""
+    """Return the warn ConversationHandler via the central mod_action_steps factory."""
     return build_modaction_conv(
         reason,
         proof,

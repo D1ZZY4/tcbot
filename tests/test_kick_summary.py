@@ -13,7 +13,7 @@ import pytest
 from telegram.error import BadRequest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import kick_flow
+from tcbot.modules.helper.pipelines import kick_actions
 
 
 class _FakeBot:
@@ -93,7 +93,7 @@ def _kick_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _run(bot: _FakeBot, **kwargs: Any) -> _FakeBot:
     asyncio.run(
-        kick_flow.execute_kick(
+        kick_actions.execute_kick(
             _FakeUpdate(bot),  # type: ignore[arg-type]
             _FakeCtx(bot),  # type: ignore[arg-type]
             33,
@@ -130,7 +130,7 @@ def test_cancellation_during_demote_marks_the_kick_failed(
         failed.append(action_id)
 
     monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
-    monkeypatch.setattr(kick_flow, "demote_before_enforcement", _cancelled_demote)
+    monkeypatch.setattr(kick_actions, "demote_before_enforcement", _cancelled_demote)
     monkeypatch.setattr(db.kicks_db, "mark_kick_failed", _mark_failed)
 
     with pytest.raises(asyncio.CancelledError):

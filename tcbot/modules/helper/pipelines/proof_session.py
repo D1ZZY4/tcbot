@@ -40,7 +40,7 @@ class ProofSession:
 class ProofSessionRegistry:
     """Owns the live proof sessions and their shutdown contract.
 
-    The registry is independent of the ban executor: the flow creates a
+    The registry is independent of the ban executor: the conversation creates a
     session, attaches its flush task, and consumes the same object. Keeping
     the lifecycle here makes it testable without importing the executor.
     """

@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Role-change workflow: move an existing staff member between assignable tiers."""
+"""Promotion and role-change steps: the single owner of the grant table."""
 
 from __future__ import annotations
 
@@ -32,7 +32,11 @@ from tcbot.modules.helper.messages import (
     send_log,
     send_text,
 )
-from tcbot.modules.helper.pipelines.promote_flow import Promote
+from tcbot.modules.helper.pipelines.promote_request import (
+    assign_admin,
+    assign_subrole,
+    request_admin,
+)
 from tcbot.modules.helper.targets import resolve_executor_target
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
@@ -45,19 +49,118 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
+class Promote:
+    """All federation-promotion logic."""
+
+    @staticmethod
+    def available_roles_for(executor_role: str | None) -> list[str]:
+        """Return the tiers an executor with the given role may hand out."""
+        if executor_role == "owner":
+            return ["admin", "developer", "moderator"]
+        if executor_role == "admin":
+            return ["developer", "moderator"]
+        return []
+
+    @classmethod
+    async def request_admin(
+        cls,
+        bot: Bot,
+        admin_id: int,
+        target_id: int,
+        target_fname: str,
+        target_username: str | None = None,
+        locale: str | None = None,
+    ) -> tuple[bool, str]:
+        """Enqueue an Admin promotion request and notify the Owner."""
+        return await request_admin(
+            bot, admin_id, target_id, target_fname, target_username, locale
+        )
+
+    @classmethod
+    async def execute(
+        cls,
+        bot: Bot,
+        admin_id: int,
+        admin_fname: str,
+        target_id: int,
+        target_fname: str,
+        role: str,
+        locale: str | None = None,
+    ) -> tuple[bool, str]:
+        """Execute a role assignment. Returns (success, reply text).
+
+        Both roles are read fresh at the mutation point so a demotion or
+        ownership transfer during earlier lookups cannot still grant rank.
+        A failed lookup refuses the grant.
+        """
+        role_results = await asyncio.gather(
+            db.users_roles.get_effective_role(admin_id, fresh=True),
+            db.users_roles.get_effective_role(target_id, fresh=True),
+            return_exceptions=True,
+        )
+        throw_if_cancelled(role_results)
+        executor_result, target_result = role_results
+        if isinstance(executor_result, BaseException):
+            log.warning(
+                "Promote.execute executor role lookup failed for %d: %s",
+                admin_id,
+                executor_result,
+            )
+            return False, t("admins.error.role_lookup_failed", locale)
+        if isinstance(target_result, BaseException):
+            log.warning(
+                "Promote.execute target role lookup failed for %d: %s",
+                target_id,
+                target_result,
+            )
+            return False, t("admins.error.role_lookup_failed", locale)
+        executor_role = executor_result
+        current_role = target_result
+        allowed = cls.available_roles_for(executor_role)
+        if current_role == "owner":
+            return False, t("admins.promote.target_is_owner", locale)
+        if db.users_roles.role_rank(current_role) >= db.users_roles.role_rank(role):
+            return False, t(
+                "admins.promote.holds_role",
+                locale,
+                role=db.users_roles.role_label(current_role),
+            )
+        refusal = await banned_target_refusal(
+            target_id, locale, log_label="promote ban-guard"
+        )
+        if refusal is not None:
+            return False, refusal
+        if role == "admin":
+            if executor_role == "owner":
+                return await assign_admin(
+                    bot, admin_id, admin_fname, target_id, target_fname, locale
+                )
+            if executor_role == "admin":
+                return await cls.request_admin(
+                    bot, admin_id, target_id, target_fname, locale=locale
+                )
+            return False, t("admins.promote.no_assign_perms", locale)
+        if role not in allowed:
+            return False, t("admins.promote.no_assign_perms", locale)
+        return await assign_subrole(
+            bot,
+            admin_id,
+            admin_fname,
+            target_id,
+            target_fname,
+            current_role,
+            role,
+            locale,
+        )
+
+
+# ───────────────────────── Role change steps ──────────────────────── #
+
+
 def is_role_change_request(
     current_role: str | None, requested_role: str | None, executor_role: str | None
 ) -> bool:
-    """Return True when a promote-style request against a roled target is a change.
-
-    A user who already holds a federation role cannot receive a fresh grant:
-    ``Promote.execute`` refuses any rank at or below their current one, and the
-    identity refusal used to reject the Admin target before the change could
-    run. Such a request is a role change when the requested tier is one the
-    executor may grant directly, or when no tier was given (show the picker).
-    A tier the executor cannot grant (Admin for an Admin) stays on the
-    promotion path so an Admin can still queue an Admin request for the Owner.
-    """
+    """Return True when a promote-style request against a roled target is a change."""
     if current_role not in db.users_roles.STAFF_ROLES:
         return False
     if requested_role is None:
@@ -74,15 +177,7 @@ async def change_role_for_staff(
     role: str,
     locale: str | None = None,
 ) -> tuple[bool, str]:
-    """Move an existing staff member to another assignable role.
-
-    Unlike a promotion this accepts a lower target tier, so Admin to
-    Moderator and Moderator to Developer are both possible. The Owner is
-    never a valid target, the executor must outrank the current role, and a
-    banned user cannot hold any federation role. Every role is re-read fresh
-    at the mutation point so a demotion or transfer between the prompt and the
-    tap cannot still grant the rank the executor held at entry.
-    """
+    """Move an existing staff member to another assignable role."""
     role_results = await asyncio.gather(
         db.users_roles.get_effective_role(admin_id, fresh=True),
         db.users_roles.get_effective_role(target_id, fresh=True),
@@ -165,13 +260,7 @@ async def role_change_prompt(
     target_fname: str | None,
     locale: str | None,
 ) -> None:
-    """Show the role-change picker for an already-roled target.
-
-    The command resolves the origin and the target; this workflow owns the
-    fresh role read, the protected-target and permission checks, and the
-    picker itself. Both ``/tcsetrole`` and the role-change branch of
-    ``/tcpromote`` land here so they can never drift apart.
-    """
+    """Show the role-change picker for an already-roled target."""
     msg = update.effective_message
     admin = update.effective_user
     if msg is None or admin is None:
@@ -195,9 +284,6 @@ async def role_change_prompt(
             parse_mode=None,
         )
         return
-    # * The mutation gate requires the executor to strictly outrank the
-    # * target's current role (only the Owner is exempt). Refuse here too, so
-    # * staff are not shown a picker whose every button would be rejected.
     if (
         executor_role != "owner"
         and current_role
@@ -234,18 +320,14 @@ async def role_change_prompt(
     )
 
 
-# ───────────────────────── Role-change command ────────────────────────── #
+# ───────────────────────── Role-change command ─────────────────────── #
 
 
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_setrole(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Open the picker that moves an existing staff member to another tier.
-
-    The entry owns the origin and target resolution; the picker and the
-    mutation are shared with the role-change branch of ``/tcpromote``.
-    """
+    """Open the picker that moves an existing staff member to another tier."""
     admin = update.effective_user
     msg = update.effective_message
     if admin is None or msg is None:
@@ -281,7 +363,7 @@ async def cmd_setrole(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-# ───────────────────────── Role-change callbacks ───────────────────────── #
+# ───────────────────────── Role-change callbacks ───────────────────── #
 
 
 @decorators.ratelimiter(decorators.THROTTLE_STAFF)

@@ -12,12 +12,12 @@ from typing import Any, cast
 
 import pytest
 
-from tcbot.modules.helper.pipelines import ban_flow
-from tcbot.modules.helper.pipelines.proof_flow import BuildProof
-from tcbot.modules.helper.pipelines.reason_flow import (
+from tcbot.modules.helper.pipelines import ban_actions
+from tcbot.modules.helper.pipelines.mod_action_steps import (
     BuildReason,
     _ModActionFlow,
 )
+from tcbot.modules.helper.pipelines.proof_steps import BuildProof
 from tcbot.modules.helper.scope import callback_is_current, flow_scope
 
 _CHAT = -100
@@ -85,7 +85,7 @@ def test_stale_cancel_does_not_end_a_new_kick_flow(
 ) -> None:
     """A button on an old prompt cannot cancel the flow it left behind."""
     monkeypatch.setattr(
-        "tcbot.modules.helper.pipelines.reason_flow.locale_for_update",
+        "tcbot.modules.helper.pipelines.mod_action_steps.locale_for_update",
         _noop_locale,
     )
     flow = _ModActionFlow(
@@ -107,7 +107,7 @@ def test_stale_cancel_does_not_end_a_new_kick_flow(
 def test_fresh_cancel_still_ends_the_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     """A tap on the live prompt keeps the original cancel behaviour."""
     monkeypatch.setattr(
-        "tcbot.modules.helper.pipelines.reason_flow.locale_for_update",
+        "tcbot.modules.helper.pipelines.mod_action_steps.locale_for_update",
         _noop_locale,
     )
     flow = _ModActionFlow(
@@ -134,13 +134,13 @@ def test_stale_ban_cancel_keeps_the_live_session(
     async def _cancel(_scope: Any) -> None:
         cancelled.append(True)
 
-    monkeypatch.setattr(ban_flow, "_cancel_proof_session", _cancel)
+    monkeypatch.setattr(ban_actions, "_cancel_proof_session", _cancel)
     monkeypatch.setattr(
-        "tcbot.modules.helper.pipelines.ban_flow.locale_for_update", _noop_locale
+        "tcbot.modules.helper.pipelines.ban_actions.locale_for_update", _noop_locale
     )
     update, ctx, details = _make(_LIVE_ID + 1)
 
-    result = asyncio.run(ban_flow.on_cancel_proof(update, ctx))
+    result = asyncio.run(ban_actions.on_cancel_proof(update, ctx))
 
     assert result is None
     assert cancelled == []

@@ -13,7 +13,7 @@ from typing import Any, cast
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import rules_flow
+from tcbot.modules.helper.pipelines import rules_editor
 
 
 def test_editor_allowed_reads_the_capability_fresh(
@@ -29,9 +29,9 @@ def test_editor_allowed_reads_the_capability_fresh(
     monkeypatch.setattr(db.users_roles, "has_permission", _has_permission)
     update = SimpleNamespace(effective_user=SimpleNamespace(id=7))
 
-    assert asyncio.run(rules_flow.editor_allowed(cast("Any", update))) is False
+    assert asyncio.run(rules_editor.editor_allowed(cast("Any", update))) is False
     allowed.set()
-    assert asyncio.run(rules_flow.editor_allowed(cast("Any", update))) is True
+    assert asyncio.run(rules_editor.editor_allowed(cast("Any", update))) is True
 
 
 def test_category_action_refuses_a_revoked_editor(
@@ -49,8 +49,8 @@ def test_category_action_refuses_a_revoked_editor(
     async def _answer() -> None:
         return None
 
-    monkeypatch.setattr(rules_flow, "editor_allowed", _no_permission)
-    monkeypatch.setattr(rules_flow, "refuse_editor", _no_permission)
+    monkeypatch.setattr(rules_editor, "editor_allowed", _no_permission)
+    monkeypatch.setattr(rules_editor, "refuse_editor", _no_permission)
     monkeypatch.setattr(db.rules_db, "move_category", _move)
     update = SimpleNamespace(
         callback_query=SimpleNamespace(
@@ -61,7 +61,7 @@ def test_category_action_refuses_a_revoked_editor(
     )
 
     asyncio.run(
-        rules_flow.rules_editor.cat_action(
+        rules_editor.rules_editor.cat_action(
             cast("Any", update), cast("Any", SimpleNamespace())
         )
     )
@@ -92,17 +92,17 @@ def test_typed_item_writes_to_the_fresh_draft(monkeypatch: pytest.MonkeyPatch) -
     def _scope(update: Any, ctx: Any) -> dict[str, Any]:
         return scope
 
-    monkeypatch.setattr(rules_flow.rules_editor, "_set_and_draft", _draft)
-    monkeypatch.setattr(rules_flow, "flow_scope", _scope)
+    monkeypatch.setattr(rules_editor.rules_editor, "_set_and_draft", _draft)
+    monkeypatch.setattr(rules_editor, "flow_scope", _scope)
     monkeypatch.setattr(db.rules_db, "add_item", _add_item)
-    monkeypatch.setattr(rules_flow.rules_editor, "items", _items)
+    monkeypatch.setattr(rules_editor.rules_editor, "items", _items)
 
     update = SimpleNamespace(
         effective_message=SimpleNamespace(text="https://example.com/rule"),
         effective_user=SimpleNamespace(id=7),
     )
     asyncio.run(
-        rules_flow.rules_editor.on_text(cast("Any", update), cast("Any", object()))
+        rules_editor.rules_editor.on_text(cast("Any", update), cast("Any", object()))
     )
 
     assert calls and calls[0][0] == 99

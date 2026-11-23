@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""About verification step of the group connection flow."""
+"""About verification step of the group connection steps."""
 
 from __future__ import annotations
 

@@ -12,8 +12,8 @@ from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, fil
 
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.messages import replies
-from tcbot.modules.helper.pipelines.appeal_review_flow import LOCK_HOURS
-from tcbot.modules.helper.pipelines.appeal_submit_flow import REF_PATTERN, appeal
+from tcbot.modules.helper.pipelines.appeal_review import LOCK_HOURS
+from tcbot.modules.helper.pipelines.appeal_submit import REF_PATTERN, appeal
 from tcbot.utils.i18n import Safe, bold, pre, t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 

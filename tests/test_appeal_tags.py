@@ -16,8 +16,8 @@ from telegram import Update
 
 from tcbot import cfg
 from tcbot.modules import appeals
-from tcbot.modules.helper.pipelines import appeal_submit_flow
-from tcbot.modules.helper.pipelines.appeal_submit_flow import (
+from tcbot.modules.helper.pipelines import appeal_submit
+from tcbot.modules.helper.pipelines.appeal_submit import (
     WAITING_APPEAL,
     handle_group_appeal,
     starts_with_appeal_tag,
@@ -69,10 +69,10 @@ def test_a_long_ordinary_word_does_not_reject_a_group_appeal(
         called.append(1)
         return WAITING_APPEAL
 
-    monkeypatch.setattr(appeal_submit_flow, "locale_for_update", _locale)
-    monkeypatch.setattr(appeal_submit_flow.db.bans_db, "get_active_ban", _active)
+    monkeypatch.setattr(appeal_submit, "locale_for_update", _locale)
+    monkeypatch.setattr(appeal_submit.db.bans_db, "get_active_ban", _active)
     monkeypatch.setattr(
-        appeal_submit_flow,
+        appeal_submit,
         "cfg",
         dataclasses.replace(cfg, main_group=-1001),
     )

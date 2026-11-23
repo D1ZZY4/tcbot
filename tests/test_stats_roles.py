@@ -13,7 +13,7 @@ import pytest
 
 from tcbot import database as db
 from tcbot.database import users_roles
-from tcbot.modules.helper.pipelines.stats_flow import Stats
+from tcbot.modules.helper.pipelines.stats_panels import Stats
 from tests.postgres_support import reset_community, seed_users
 
 if TYPE_CHECKING:

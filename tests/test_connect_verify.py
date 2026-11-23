@@ -12,11 +12,11 @@ from typing import Any
 
 import pytest
 
-from tcbot.modules.helper.pipelines import connect_verify, connected_flow
+from tcbot.modules.helper.pipelines import connect_added, connect_verify
 
 
 def test_verify_keyboard_advances_then_connects() -> None:
-    flow = connected_flow.BuildConnection("TCF")
+    flow = connect_added.BuildConnection("TCF")
     for step in (0, 1, 2, 3):
         markup = flow.verify_keyboard(step, "en-US")
         callbacks = [
@@ -32,7 +32,7 @@ def test_verify_keyboard_advances_then_connects() -> None:
 
 
 def test_verify_prompt_shows_requirements_scope_then_confirmation() -> None:
-    flow = connected_flow.BuildConnection("TCF")
+    flow = connect_added.BuildConnection("TCF")
     for step, marker in enumerate(("1.", "2.", "3.")):
         text = flow.verify_prompt(step, "en-US")
         assert "Before connecting" in text
@@ -68,7 +68,7 @@ def test_non_owner_cannot_advance_the_verification(
         async def get_chat_member(self, chat_id: int, user_id: int) -> Any:
             return SimpleNamespace(status="member")
 
-    flow = connected_flow.BuildConnection("TCF")
+    flow = connect_added.BuildConnection("TCF")
     update = SimpleNamespace(
         callback_query=_Query(),
         effective_chat=SimpleNamespace(id=-1001),

@@ -95,7 +95,9 @@ async def _seed(folder: Path, user_id: int, *, dry_run: bool) -> int:
         for key in category_keys:
             if key not in existing:
                 await db.rules_db.add_category(set_id, key, key)
-        draft = await db.rules_db.open_draft(set_id, user_id)
+        # * The draft items are replaced below, so cloning the published
+        # * version would only add hundreds of writes for rows we discard.
+        draft = await db.rules_db.open_draft(set_id, user_id, clone_items=False)
         version_id = int(draft["id"])
         # * open_draft clones the published version. A reseed must replace it,
         # * not stack another copy of every document on top of the old one.

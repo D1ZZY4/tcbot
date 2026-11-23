@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.messages import rules as rules_msg
-from tcbot.modules.helper.pipelines import reason_flow, rules_step
+from tcbot.modules.helper.pipelines import mod_action_steps, rules_picker
 
 
 def _item(item_id: int, category: str = "Conduct", *, order: int = 1) -> dict:
@@ -33,8 +33,19 @@ def test_rich_category_view_uses_privacy_style_blocks() -> None:
     assert "<hr/>" in html
     assert "<ul>" in html
     assert "<b>Rule 1</b>" in html
-    assert "Back returns to the topic index" in html
+    assert "Use Prev and Next" in html
     assert "<table" not in html
+
+
+def test_rich_category_view_marks_the_page_position() -> None:
+    """A paginated topic shows its position and keeps the same rich blocks."""
+    payload = rules_msg.rich_category_view(
+        "cheat", [_item(1)], "en-US", page=2, total=17
+    )
+    html = payload["html"]
+    assert "Topic 3 of 17" in html
+    assert "<h2>" in html
+    assert "<ul>" in html
 
 
 def test_utf16_units_count_astral_characters_twice() -> None:
@@ -93,19 +104,19 @@ def test_content_hash_changes_with_text() -> None:
 
 def test_picker_toggle_and_callbacks_round_trip() -> None:
     """A toggle flips one id and the callback payload parses back to it."""
-    data = rules_step.callback_for(42)
-    assert rules_step.item_id_from_callback(data) == 42
-    assert rules_step.item_id_from_callback("rules_step:done") is None
-    assert rules_step.toggle([1, 2], 2) == [1]
-    assert rules_step.toggle([1], 3) == [1, 3]
+    data = rules_picker.callback_for(42)
+    assert rules_picker.item_id_from_callback(data) == 42
+    assert rules_picker.item_id_from_callback("rules_step:done") is None
+    assert rules_picker.toggle([1, 2], 2) == [1]
+    assert rules_picker.toggle([1], 3) == [1, 3]
 
 
 def test_rules_scope_round_trips_selection_and_note() -> None:
     """A flow stores the picker result under its action-prefixed keys."""
     scope = {"kick_rules": [1, 2], "kick_rules_note": "not covered"}
-    assert reason_flow.rules_from_scope(scope, "kick") == ([1, 2], "not covered")
-    assert reason_flow.rules_from_scope({}, "warn") == ([], None)
-    assert reason_flow.WAITING_RULES != reason_flow.WAITING_PROOF
+    assert mod_action_steps.rules_from_scope(scope, "kick") == ([1, 2], "not covered")
+    assert mod_action_steps.rules_from_scope({}, "warn") == ([], None)
+    assert mod_action_steps.WAITING_RULES != mod_action_steps.WAITING_PROOF
 
 
 def test_picker_markup_offers_all_controls() -> None:
@@ -116,4 +127,4 @@ def test_picker_markup_offers_all_controls() -> None:
     }
     assert "rules_step:other" in callbacks
     assert "rules_step:done" in callbacks
-    assert rules_step.callback_for(1) in callbacks
+    assert rules_picker.callback_for(1) in callbacks

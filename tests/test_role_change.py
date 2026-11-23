@@ -16,9 +16,9 @@ from tcbot import database as db
 from tcbot.modules import admins
 from tcbot.modules.helper.buttons import role_change_btn
 from tcbot.modules.helper.identity import Identity
-from tcbot.modules.helper.pipelines import roles_flow
-from tcbot.modules.helper.pipelines.promote_flow import Promote
-from tcbot.modules.helper.pipelines.roles_flow import (
+from tcbot.modules.helper.pipelines import promote_steps as role_change
+from tcbot.modules.helper.pipelines.promote_steps import (
+    Promote,
     change_role_for_staff,
     is_role_change_request,
 )
@@ -55,9 +55,9 @@ def _wire(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.users_roles, "change_role", _change)
-    monkeypatch.setattr(roles_flow, "banned_target_refusal", _no_ban)
-    monkeypatch.setattr(roles_flow, "send_log", lambda *_a, **_k: asyncio.sleep(0))
-    monkeypatch.setattr(roles_flow, "locale_for_user", _locale)
+    monkeypatch.setattr(role_change, "banned_target_refusal", _no_ban)
+    monkeypatch.setattr(role_change, "send_log", lambda *_a, **_k: asyncio.sleep(0))
+    monkeypatch.setattr(role_change, "locale_for_user", _locale)
     return calls
 
 
@@ -173,7 +173,7 @@ def test_promote_command_routes_an_admin_target_to_the_change_flow(
     monkeypatch.setattr(admins, "require_federation_origin", _origin)
     monkeypatch.setattr(admins, "resolve_executor_target", _resolve)
     monkeypatch.setattr(admins, "classify_and_load_role", _classify)
-    monkeypatch.setattr(roles_flow, "change_role_for_staff", _change)
+    monkeypatch.setattr(role_change, "change_role_for_staff", _change)
     monkeypatch.setattr(admins, "reply_rich", _reply)
 
     msg = SimpleNamespace(

@@ -12,7 +12,7 @@ from typing import Any, cast
 
 from telegram import Bot, Message
 
-from tcbot.modules.helper.pipelines import proof_flow
+from tcbot.modules.helper.pipelines import proof_steps
 
 
 def _photo_message(file_id: str, message_id: int) -> Message:
@@ -131,7 +131,7 @@ def test_a_gallery_and_a_document_are_all_recorded() -> None:
             raise AssertionError("a gallery must not fall back to single sends")
 
     items, expected = asyncio.run(
-        proof_flow.upload_proof_items(
+        proof_steps.upload_proof_items(
             cast("Bot", _Bot()),
             messages,
             "cap",
@@ -155,7 +155,7 @@ def test_a_video_keeps_its_media_type_and_duration() -> None:
     bot = type("Bot", (), {"send_video": _send_video})()
 
     items, expected = asyncio.run(
-        proof_flow.upload_proof_items(
+        proof_steps.upload_proof_items(
             cast("Bot", bot),
             [_video_message("v1", 7)],
             "cap",
@@ -188,7 +188,7 @@ def test_a_failed_chunk_marks_the_upload_partial() -> None:
             raise AssertionError("a gallery must not fall back to single sends")
 
     items, expected = asyncio.run(
-        proof_flow.upload_proof_items(
+        proof_steps.upload_proof_items(
             cast("Bot", _Bot()),
             messages,
             "cap",
@@ -221,7 +221,7 @@ def test_caption_lands_on_the_first_chunk_that_succeeds() -> None:
             raise AssertionError("a gallery must not fall back to single sends")
 
     items, expected = asyncio.run(
-        proof_flow.upload_proof_items(
+        proof_steps.upload_proof_items(
             cast("Bot", _Bot()),
             messages,
             "cap",
@@ -249,7 +249,7 @@ def test_an_animation_is_sent_as_an_animation() -> None:
             raise AssertionError("an animation must not be sent as a document")
 
     items, expected = asyncio.run(
-        proof_flow.upload_proof_items(
+        proof_steps.upload_proof_items(
             cast("Bot", _Bot()),
             [_animation_message("a1", 8)],
             "cap",
@@ -284,7 +284,7 @@ def test_a_gallery_and_an_animation_are_both_archived() -> None:
             raise AssertionError("a gallery must not fall back to single sends")
 
     items, expected = asyncio.run(
-        proof_flow.upload_proof_items(
+        proof_steps.upload_proof_items(
             cast("Bot", _Bot()),
             [
                 _photo_message("p1", 1),

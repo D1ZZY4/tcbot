@@ -311,6 +311,27 @@ def _resolve_webhook_secret() -> str:
     return explicit
 
 
+def _infra_chat_ids_from_env() -> tuple[int, ...]:
+    """Read extra deployment-owned chat ids from ``INFRA_CHAT_IDS``.
+
+    Only negative chat ids are accepted: a positive value names a user and
+    must never be treated as an infrastructure destination. Bad entries are
+    skipped with a warning instead of weakening the guard.
+    """
+    ids: list[int] = []
+    for raw in _env_list("INFRA_CHAT_IDS"):
+        try:
+            value = int(raw)
+        except ValueError:
+            log.warning("Ignoring non-numeric INFRA_CHAT_IDS entry.")
+            continue
+        if value < 0:
+            ids.append(value)
+        else:
+            log.warning("Ignoring positive INFRA_CHAT_IDS entry.")
+    return tuple(dict.fromkeys(ids))
+
+
 def _chat_id_from_env(key: str) -> int:
     """Read a plain chat-id env var; unset or invalid values resolve to 0."""
     raw = os.getenv(key, "").strip()
@@ -425,6 +446,7 @@ class Configs:
     api_hash: str = field(repr=False)
     mtproto_session: str
     sentry_dsn: str = field(repr=False)
+    extra_infra_chats: tuple[int, ...]
 
     def is_primary_group(self, chat_id: int | None) -> bool:
         """Check whether the chat is the main group.
@@ -455,6 +477,7 @@ class Configs:
             self.logs[0],
             self.logs_errors[0],
             self.appeals[0],
+            *self.extra_infra_chats,
         }
 
     @property
@@ -518,6 +541,7 @@ class Configs:
             api_hash=os.getenv("API_HASH", "").strip(),
             mtproto_session=_env_or("MTPROTO_SESSION", "tcbot_mtproto"),
             sentry_dsn=os.getenv("SENTRY_DSN", "").strip(),
+            extra_infra_chats=_infra_chat_ids_from_env(),
         )
 
 

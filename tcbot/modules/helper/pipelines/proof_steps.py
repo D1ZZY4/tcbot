@@ -41,7 +41,7 @@ log = get_logger(__name__)
 # * (animations), and files. Voice notes, video notes, and stickers stay
 # * rejected: they are not visual evidence. Single owner shared by every
 # * proof receiver and unexpected-type handler so the two can never drift
-# * apart within a flow or across flows.
+# * apart within one conversation or across conversations.
 PROOF_MEDIA_FILTER: BaseFilter = (
     filters.PHOTO | filters.VIDEO | filters.ANIMATION | filters.Document.ALL
 )

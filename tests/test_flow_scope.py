@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest
 
-from tcbot.modules.helper.pipelines import ban_flow
+from tcbot.modules.helper.pipelines import ban_actions
 from tcbot.modules.helper.pipelines.proof_session import ProofSessionRegistry
 from tcbot.modules.helper.scope import clear_flow_scope, conversation_key, flow_scope
 
@@ -172,7 +172,7 @@ def test_the_ban_proof_session_snapshots_its_own_conversation(
     A. Without the scope the flush would ban the group B target.
     """
     registry = ProofSessionRegistry()
-    monkeypatch.setattr(ban_flow, "proof_sessions", registry)
+    monkeypatch.setattr(ban_actions, "proof_sessions", registry)
 
     ctx = _FakeCtx()
     group_a = _FakeUpdate(chat_id=100, user_id=42)
@@ -190,7 +190,7 @@ def test_the_ban_proof_session_snapshots_its_own_conversation(
     update_a.effective_message = object()
 
     async def _scenario() -> int:
-        outcome = await ban_flow.on_proof_received(update_a, ctx)  # type: ignore[arg-type]
+        outcome = await ban_actions.on_proof_received(update_a, ctx)  # type: ignore[arg-type]
         session = registry[(100, 42)]
         assert session.meta["ban_target_id"] == 111
         assert registry.get((200, 42)) is None
@@ -199,4 +199,4 @@ def test_the_ban_proof_session_snapshots_its_own_conversation(
             await asyncio.gather(session.flush_task, return_exceptions=True)
         return outcome
 
-    assert asyncio.run(_scenario()) == ban_flow.WAITING_PROOF
+    assert asyncio.run(_scenario()) == ban_actions.WAITING_PROOF

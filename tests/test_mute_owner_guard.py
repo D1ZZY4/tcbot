@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import mute_flow
+from tcbot.modules.helper.pipelines import mute_actions
 
 
 class _FakeBot:
@@ -109,18 +109,18 @@ def test_a_late_owner_verdict_cannot_hide_a_committed_mute(
     async def _send_log(*args: Any, **kwargs: Any) -> object:
         return object()
 
-    monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(mute_actions, "locale_for_update", _locale)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(mute_flow, "demote_before_enforcement", _demote)
+    monkeypatch.setattr(mute_actions, "demote_before_enforcement", _demote)
     monkeypatch.setattr(db.mutes_db, "record_mute", _record)
-    monkeypatch.setattr(mute_flow.enforcement_worker, "deliver_queued_run", _deliver)
+    monkeypatch.setattr(mute_actions.enforcement_worker, "deliver_queued_run", _deliver)
     monkeypatch.setattr(db.enforcement_db, "run_report", _report)
-    monkeypatch.setattr(mute_flow, "send_log", _send_log)
+    monkeypatch.setattr(mute_actions, "send_log", _send_log)
 
     bot = _FakeBot()
     asyncio.run(
-        mute_flow._execute_mute(
+        mute_actions._execute_mute(
             bot,  # type: ignore[arg-type]
             _FakeUpdate(),  # type: ignore[arg-type]
             _meta(),  # type: ignore[arg-type]

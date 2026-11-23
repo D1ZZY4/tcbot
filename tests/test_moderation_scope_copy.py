@@ -12,7 +12,7 @@ from pathlib import Path
 from tcbot.modules.helper.buttons.flows import connect_verify_btn
 from tcbot.modules.helper.messages import panels
 from tcbot.modules.helper.pipelines import connect_verify
-from tcbot.modules.helper.pipelines.connected_flow import BuildConnection
+from tcbot.modules.helper.pipelines.connect_added import BuildConnection
 
 _ROOT = Path(__file__).resolve().parents[1]
 _LOCALES = ("en-US", "id-ID")

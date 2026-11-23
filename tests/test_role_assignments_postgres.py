@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from tcbot.database import engine as engine_module
 from tcbot.database import users_cache, users_roles
 from tcbot.database.base import role_assignments
-from tcbot.modules.helper.pipelines import promote_flow
+from tcbot.modules.helper.pipelines import promote_steps
 from tests.postgres_support import reset_community, seed_users
 
 if TYPE_CHECKING:
@@ -87,9 +87,9 @@ async def test_the_admin_promotion_keeps_the_granted_role(
         _ = kwargs
         return None
 
-    monkeypatch.setattr(promote_flow, "send_log", _send_log)
+    monkeypatch.setattr(promote_steps, "send_log", _send_log)
 
-    ok, _text = await promote_flow.assign_admin(
+    ok, _text = await promote_steps.assign_admin(
         _FakeBot(),  # type: ignore[arg-type]
         1,
         "Founder",

@@ -26,7 +26,8 @@ from telegram.ext import ConversationHandler
 from tcbot import database as db
 from tcbot.modules import kick as kicking
 from tcbot.modules.helper import targets
-from tcbot.modules.helper.pipelines import demote_flow, kick_flow
+from tcbot.modules.helper.pipelines import demote_actions as demote
+from tcbot.modules.helper.pipelines import kick_actions
 from tcbot.modules.helper.targets import ModTarget
 
 
@@ -103,7 +104,7 @@ def test_the_kick_entry_does_not_demote(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(targets, "resolve_mod_target", _resolve)
-    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_demote))
+    monkeypatch.setattr(demote.Demote, "execute", staticmethod(_demote))
 
     msg = _FakeMsg()
     ctx = _FakeCtx()
@@ -142,7 +143,7 @@ def test_the_kick_executor_demotes_before_the_fan_out(
         return "admin"
 
     monkeypatch.setattr(
-        kick_flow, "demote_before_enforcement", _demote_before_enforcement
+        kick_actions, "demote_before_enforcement", _demote_before_enforcement
     )
 
     # * The kick executor writes its audit row before it enforces.
@@ -169,7 +170,7 @@ def test_the_kick_executor_demotes_before_the_fan_out(
     ctx.bot = _Bot()  # type: ignore[assignment]
 
     asyncio.run(
-        kick_flow.execute_kick(
+        kick_actions.execute_kick(
             update,  # type: ignore[arg-type]
             ctx,  # type: ignore[arg-type]
             999,

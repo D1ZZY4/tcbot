@@ -13,8 +13,12 @@ import pytest
 from telegram.error import BadRequest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import connected_flow
-from tcbot.modules.helper.pipelines.connected_flow import _REPLAY_CAP, BuildConnection
+from tcbot.modules.helper.pipelines import connect_common, connect_replay
+from tcbot.modules.helper.pipelines.connect_added import BuildConnection
+from tcbot.modules.helper.pipelines.connect_replay import (
+    _REPLAY_CAP,
+    _REPLAY_QUEUE_ATTEMPTS,
+)
 
 
 class _FakeBot:
@@ -136,7 +140,7 @@ def test_complete_join_stops_at_the_replay_budget(
     replay kept the connect handler running for a quarter of an hour.
     The unreached users become durable work instead of being lost.
     """
-    monkeypatch.setattr(connected_flow, "_REPLAY_BUDGET_S", 0.0)
+    monkeypatch.setattr(connect_replay, "_REPLAY_BUDGET_S", 0.0)
     queued = _install_world(monkeypatch, ban_uids=[11, 22, 33])
     bot = _FakeBot()
     blind = asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
@@ -179,7 +183,7 @@ def test_a_transient_replay_queue_failure_is_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A short database blip must not drop the unapplied remainder."""
-    monkeypatch.setattr(connected_flow, "_REPLAY_QUEUE_BACKOFF", 0.0)
+    monkeypatch.setattr(connect_replay, "_REPLAY_QUEUE_BACKOFF", 0.0)
     attempts = 0
 
     async def _flaky_queue(chat_id: int, user_ids: list[int], by: int | None) -> int:
@@ -190,7 +194,7 @@ def test_a_transient_replay_queue_failure_is_retried(
         return len(user_ids)
 
     queued = _install_world(monkeypatch, ban_uids=[11, 22, 33])
-    monkeypatch.setattr(connected_flow, "_REPLAY_BUDGET_S", 0.0)
+    monkeypatch.setattr(connect_replay, "_REPLAY_BUDGET_S", 0.0)
     monkeypatch.setattr(db.enforcement_db, "queue_connect_replay", _flaky_queue)
     bot = _FakeBot()
 
@@ -205,7 +209,7 @@ def test_an_exhausted_replay_queue_failure_is_surfaced(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An active group must never silently miss federation decisions."""
-    monkeypatch.setattr(connected_flow, "_REPLAY_QUEUE_BACKOFF", 0.0)
+    monkeypatch.setattr(connect_replay, "_REPLAY_QUEUE_BACKOFF", 0.0)
     attempts = 0
 
     async def _broken_queue(chat_id: int, user_ids: list[int], by: int | None) -> int:
@@ -214,21 +218,21 @@ def test_an_exhausted_replay_queue_failure_is_surfaced(
         raise RuntimeError("db down")
 
     _install_world(monkeypatch, ban_uids=[11, 22, 33])
-    monkeypatch.setattr(connected_flow, "_REPLAY_BUDGET_S", 0.0)
+    monkeypatch.setattr(connect_replay, "_REPLAY_BUDGET_S", 0.0)
     monkeypatch.setattr(db.enforcement_db, "queue_connect_replay", _broken_queue)
     bot = _FakeBot()
 
     with pytest.raises(RuntimeError, match="connect replay queue failed"):
         asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
 
-    assert attempts == connected_flow._REPLAY_QUEUE_ATTEMPTS
+    assert attempts == _REPLAY_QUEUE_ATTEMPTS
 
 
 def test_a_failed_replay_undoes_the_activation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A failed queue write must not leave an active, unenforced group."""
-    monkeypatch.setattr(connected_flow, "_REPLAY_QUEUE_BACKOFF", 0.0)
+    monkeypatch.setattr(connect_replay, "_REPLAY_QUEUE_BACKOFF", 0.0)
 
     async def _broken_queue(chat_id: int, user_ids: list[int], by: int | None) -> int:
         raise RuntimeError("db down")
@@ -240,7 +244,7 @@ def test_a_failed_replay_undoes_the_activation(
         return True
 
     _install_world(monkeypatch, ban_uids=[11, 22, 33])
-    monkeypatch.setattr(connected_flow, "_REPLAY_BUDGET_S", 0.0)
+    monkeypatch.setattr(connect_replay, "_REPLAY_BUDGET_S", 0.0)
     monkeypatch.setattr(db.enforcement_db, "queue_connect_replay", _broken_queue)
     monkeypatch.setattr(db.groups_db, "deactivate_group", _deactivate)
 
@@ -256,7 +260,7 @@ def test_a_missing_welcome_permission_is_reported() -> None:
     bot.chat_member_payload = {"can_send_welcome_messages": False}
 
     note = asyncio.run(
-        connected_flow._welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
+        connect_common.welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
     )
 
     assert "Welcome Messages" in note
@@ -267,7 +271,7 @@ def test_a_granted_welcome_permission_has_no_note() -> None:
     bot.chat_member_payload = {"can_send_welcome_messages": True}
 
     note = asyncio.run(
-        connected_flow._welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
+        connect_common.welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
     )
 
     assert note == ""
@@ -278,7 +282,7 @@ def test_an_older_server_without_the_field_has_no_note() -> None:
     bot.chat_member_payload = {"status": "administrator"}
 
     note = asyncio.run(
-        connected_flow._welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
+        connect_common.welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
     )
 
     assert note == ""
@@ -292,7 +296,7 @@ def test_a_welcome_permission_probe_failure_has_no_note() -> None:
 
     bot.do_api_request = _boom  # type: ignore[method-assign]
     note = asyncio.run(
-        connected_flow._welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
+        connect_common.welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
     )
 
     assert note == ""

@@ -26,7 +26,7 @@ from tcbot.modules.helper.messages import (
     send_log,
     send_text,
 )
-from tcbot.modules.helper.pipelines.demote_flow import demote_before_unban
+from tcbot.modules.helper.pipelines.demote_actions import demote_before_unban
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, t, user_ref
 from tcbot.utils.logger import get_logger

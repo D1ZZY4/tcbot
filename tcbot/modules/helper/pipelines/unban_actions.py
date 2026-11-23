@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Unban flow - invoked directly by the unban command."""
+"""Unban executor - invoked directly by the unban command."""
 
 from __future__ import annotations
 

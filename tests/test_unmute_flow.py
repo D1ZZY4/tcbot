@@ -15,7 +15,7 @@ import pytest
 from tcbot import database as db
 from tcbot import enforcement_worker
 from tcbot.modules.helper.messages import replies
-from tcbot.modules.helper.pipelines import mute_flow
+from tcbot.modules.helper.pipelines import mute_actions
 from tcbot.utils.i18n import Safe, t, user_ref
 
 
@@ -105,9 +105,9 @@ def _install(
         calls["reports"].append(run_id)
         return report
 
-    monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(mute_actions, "locale_for_update", _locale)
     monkeypatch.setattr(
-        mute_flow,
+        mute_actions,
         "cfg",
         SimpleNamespace(main_group=-1, exec_group=-2, logs=(-3, None)),
     )
@@ -141,7 +141,7 @@ def test_no_mute_replies_without_revoking_or_queueing(
 ) -> None:
     calls = _install(monkeypatch, mute=None, groups=[])
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert calls["revoke"] == []
     assert calls["deliver"] == []
     assert msg.replies == [_no_mute()]
@@ -150,7 +150,7 @@ def test_no_mute_replies_without_revoking_or_queueing(
 def test_read_failure_replies_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _install(monkeypatch, mute=RuntimeError("db down"), groups=[])
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert calls["revoke"] == []
     assert msg.replies == [_retry()]
 
@@ -160,7 +160,7 @@ def test_groups_failure_keeps_the_record_for_a_retry(
 ) -> None:
     calls = _install(monkeypatch, groups=RuntimeError("db down"))
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert calls["revoke"] == []
     assert msg.replies == [_retry()]
 
@@ -172,7 +172,7 @@ def test_a_failed_revocation_reports_a_retry(monkeypatch: pytest.MonkeyPatch) ->
         revoke=RuntimeError("db down"),
     )
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert calls["deliver"] == []
     assert msg.replies == [_retry()]
 
@@ -184,7 +184,7 @@ def test_a_lost_race_reports_no_mute(monkeypatch: pytest.MonkeyPatch) -> None:
         revoke=(0, None),
     )
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert calls["deliver"] == []
     assert msg.replies == [_no_mute()]
 
@@ -203,7 +203,7 @@ def test_the_run_targets_every_group_including_the_primary(
         ),
     )
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert calls["revoke"] == [(42, 9, [5, -1])]
     assert calls["deliver"] == [7]
 
@@ -220,7 +220,7 @@ def test_a_full_restore_announces_completion(monkeypatch: pytest.MonkeyPatch) ->
         ),
     )
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert len(msg.replies) == 1
     assert "has been unmuted" in msg.replies[0]
     assert "2/2" in msg.replies[0]
@@ -241,7 +241,7 @@ def test_a_partial_restore_names_the_failed_group(
         ),
     )
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert len(msg.replies) == 1
     assert "some groups only" in msg.replies[0]
     assert "2/3" in msg.replies[0]
@@ -259,7 +259,7 @@ def test_a_total_failure_reports_every_group(monkeypatch: pytest.MonkeyPatch) ->
         ),
     )
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert len(msg.replies) == 1
     assert "could not be unmuted yet" in msg.replies[0]
     assert "2/2" in msg.replies[0]
@@ -279,7 +279,7 @@ def test_an_unsettled_run_is_reported_as_queued(
         ),
     )
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert len(msg.replies) == 1
     assert "queued" in msg.replies[0]
 
@@ -289,7 +289,7 @@ def test_a_run_without_a_report_is_reported_as_queued(
 ) -> None:
     _install(monkeypatch, groups=[{"chat_id": 5, "title": "G"}], report=None)
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert len(msg.replies) == 1
     assert "queued" in msg.replies[0]
 
@@ -303,10 +303,10 @@ def test_an_unmute_without_a_connected_group_closes_empty(
         report=_report([]),
     )
     monkeypatch.setattr(
-        mute_flow, "cfg", SimpleNamespace(main_group=0, logs=(-3, None))
+        mute_actions, "cfg", SimpleNamespace(main_group=0, logs=(-3, None))
     )
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert calls["revoke"] == [(42, 9, [])]
     assert len(msg.replies) == 1
     assert "has been unmuted" in msg.replies[0]
@@ -323,7 +323,7 @@ def test_a_failed_inline_delivery_stays_queued(
         report=_report([{"chat_id": 5, "status": "pending", "title": "G"}]),
     )
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(mute_flow.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
+    asyncio.run(mute_actions.execute_unmute(_update(msg), _ctx(bot), 42, "T"))
     assert calls["reports"] == [7]
     assert len(msg.replies) == 1
     assert "queued" in msg.replies[0]

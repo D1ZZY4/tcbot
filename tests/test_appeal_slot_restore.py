@@ -23,7 +23,7 @@ from sqlalchemy import select
 from tcbot import database as db
 from tcbot.database import engine as engine_module
 from tcbot.database.base import moderation_actions, moderation_appeals
-from tcbot.modules.helper.pipelines import appeal_review_flow
+from tcbot.modules.helper.pipelines import appeal_review
 from tests.postgres_support import (
     reset_community,
     seed_action,
@@ -152,8 +152,8 @@ def _wire(monkeypatch: pytest.MonkeyPatch, *, claimed: bool = True) -> dict[str,
     monkeypatch.setattr(db.bans_db, "clear_review", _clear)
     monkeypatch.setattr(db.users_cache, "get_first_name", _fname)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
-    monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale)
-    monkeypatch.setattr(appeal_review_flow, "locale_for_user", _locale_user)
+    monkeypatch.setattr(appeal_review, "locale_for_update", _locale)
+    monkeypatch.setattr(appeal_review, "locale_for_user", _locale_user)
     return record
 
 
@@ -161,7 +161,7 @@ def _run_decision(query: _FakeQuery, reviewer_id: int = 1) -> None:
     """Run the review callback for the given reviewer."""
     ctx = type("Ctx", (), {"bot": _FakeBot()})()
     asyncio.run(
-        appeal_review_flow.AppealReviewMixin().on_decision(
+        appeal_review.AppealReviewMixin().on_decision(
             _fake_update(query, reviewer_id),  # type: ignore[arg-type]
             ctx,  # type: ignore[arg-type]
         )

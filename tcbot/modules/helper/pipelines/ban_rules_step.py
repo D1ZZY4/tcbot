@@ -5,7 +5,7 @@
 """Rules picker step for the ban conversation.
 
 Ban collects its reason inline, so the picker sits between the command and
-the proof prompt. The handlers live outside ``ban_flow`` to keep that module
+the proof prompt. The handlers live outside ``ban_actions`` to keep that module
 within the project's file budget.
 """
 
@@ -30,15 +30,15 @@ from tcbot.modules.helper.messages import (
     reply_rich_result,
     safe_edit_cb,
 )
-from tcbot.modules.helper.pipelines import rules_step
-from tcbot.modules.helper.pipelines.ban_confirmation import stale_ban_callback
-from tcbot.modules.helper.pipelines.ban_flow import (
+from tcbot.modules.helper.pipelines import rules_picker
+from tcbot.modules.helper.pipelines.ban_actions import (
     BAN_USER_DATA_KEYS,
     WAITING_PROOF,
     on_cancel_proof,
     proof_prompt_content,
 )
-from tcbot.modules.helper.pipelines.reason_flow import MAX_RULES_NOTE_LEN
+from tcbot.modules.helper.pipelines.ban_confirmation import stale_ban_callback
+from tcbot.modules.helper.pipelines.mod_action_steps import MAX_RULES_NOTE_LEN
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -71,7 +71,7 @@ async def _render(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         try:
             await safe_edit_cb(
                 q,
-                rules_step.picker_text(items, selected, locale),
+                rules_picker.picker_text(items, selected, locale),
                 reply_markup=rules_btn.picker_btn(items, selected, locale),
             )
             if q.message is not None:
@@ -83,7 +83,7 @@ async def _render(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         try:
             sent = await reply_rich_result(
                 update.effective_message,
-                rules_step.picker_text(items, selected, locale),
+                rules_picker.picker_text(items, selected, locale),
                 reply_markup=rules_btn.picker_btn(items, selected, locale),
             )
             scope["ban_prompt_msg_id"] = sent.message_id
@@ -147,10 +147,10 @@ async def on_ban_rules_toggle(
         return WAITING_BAN_RULES
     if await stale_ban_callback(update, ctx):
         return None
-    item_id = rules_step.item_id_from_callback(q.data)
+    item_id = rules_picker.item_id_from_callback(q.data)
     scope = flow_scope(ctx, update)
     if item_id is not None:
-        scope["ban_rules"] = rules_step.toggle(scope.get("ban_rules", []), item_id)
+        scope["ban_rules"] = rules_picker.toggle(scope.get("ban_rules", []), item_id)
     await q.answer()
     return await _render(update, ctx)
 

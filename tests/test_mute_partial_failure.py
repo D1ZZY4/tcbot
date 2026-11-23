@@ -14,8 +14,8 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import mute_flow
-from tcbot.modules.helper.pipelines.mute_flow import execute_unmute
+from tcbot.modules.helper.pipelines import mute_actions
+from tcbot.modules.helper.pipelines.mute_actions import execute_unmute
 from tcbot.utils.i18n import Safe, t, user_ref
 
 
@@ -77,14 +77,14 @@ def _mute_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
         # * enforcement-time rank check passes.
         return "moderator" if user_id == 1 else None
 
-    monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(mute_actions, "locale_for_update", _locale)
     monkeypatch.setattr(db.groups_db, "active_groups", _no_groups)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
 
 
 def _run(bot: _FakeBot) -> None:
     asyncio.run(
-        mute_flow._execute_mute(
+        mute_actions._execute_mute(
             bot,  # type: ignore[arg-type]
             _FakeUpdate(),  # type: ignore[arg-type]
             _meta(),  # type: ignore[arg-type]
@@ -239,15 +239,15 @@ def test_unmute_total_failure_keeps_its_delivery_run(
     async def _deliver(bot: Any, run_id: int) -> bool:
         return True
 
-    monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(mute_actions, "locale_for_update", _locale)
     monkeypatch.setattr(
-        mute_flow, "cfg", SimpleNamespace(main_group=-1, logs=(-3, None))
+        mute_actions, "cfg", SimpleNamespace(main_group=-1, logs=(-3, None))
     )
     monkeypatch.setattr(db.mutes_db, "get_active_mute", _active_mute)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
     monkeypatch.setattr(db.mutes_db, "revoke_mute_and_queue_unmute", _revoke)
     monkeypatch.setattr(db.enforcement_db, "run_report", _report)
-    monkeypatch.setattr(mute_flow.enforcement_worker, "deliver_queued_run", _deliver)
+    monkeypatch.setattr(mute_actions.enforcement_worker, "deliver_queued_run", _deliver)
 
     msg = _UnmuteMsg()
     asyncio.run(

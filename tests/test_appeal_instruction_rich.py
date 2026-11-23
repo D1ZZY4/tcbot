@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from tcbot.modules.helper.pipelines.appeal_submit_flow import instruction_text
+from tcbot.modules.helper.pipelines.appeal_submit import instruction_text
 
 
 def test_instruction_text_uses_heading_and_checklist() -> None:

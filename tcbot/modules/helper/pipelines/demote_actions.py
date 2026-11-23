@@ -182,7 +182,7 @@ class Demote:
             if isinstance(dm_result, Forbidden) or is_benign_telegram_error(dm_result):
                 # * Expected when the target never started the bot, blocked
                 # * it, or deleted the account ("Chat not found"): info-level
-                # * only, mirroring the ban-flow PM handling. Error-level here
+                # * only, mirroring the ban executor PM handling. Error-level here
                 # * would ship a no-action-needed report to LOG_ERRORS.
                 log.info(
                     "Cannot DM demoted user %d "

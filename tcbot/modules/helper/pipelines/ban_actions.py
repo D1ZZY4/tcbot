@@ -35,17 +35,17 @@ from tcbot.modules.helper.pipelines.ban_confirmation import (
     on_ban_update_continue,
     stale_ban_callback,
 )
-from tcbot.modules.helper.pipelines.demote_flow import (
+from tcbot.modules.helper.pipelines.demote_actions import (
     demote_before_enforcement,
-)
-from tcbot.modules.helper.pipelines.proof_flow import (
-    PROOF_MEDIA_FILTER,
-    BuildProof,
-    upload_proof_media,
 )
 from tcbot.modules.helper.pipelines.proof_session import (
     ProofSession,
     proof_sessions,
+)
+from tcbot.modules.helper.pipelines.proof_steps import (
+    PROOF_MEDIA_FILTER,
+    BuildProof,
+    upload_proof_media,
 )
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
@@ -974,7 +974,7 @@ def ban_conversation(
         entry_points=[MessageHandler(entry_filter, entry_fn)],
         states=states,
         fallbacks=[
-            # * Only this flow's own re-entry command may end proof collection.
+            # * Only this conversation's own re-entry command may end proof collection.
             # * Swallowing other commands loses the moderator's intent: /tcunban
             # * sent here would cancel the ban and never unban anyone.
             MessageHandler(

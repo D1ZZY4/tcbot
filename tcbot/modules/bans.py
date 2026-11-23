@@ -23,7 +23,7 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     reply_rich_result,
 )
-from tcbot.modules.helper.pipelines.ban_flow import (
+from tcbot.modules.helper.pipelines.ban_actions import (
     BAN_USER_DATA_KEYS,
     WAITING_UPDATE_CONFIRM,
     ban_conversation,
@@ -32,7 +32,7 @@ from tcbot.modules.helper.pipelines.ban_rules_step import (
     BAN_RULES_STATES,
     show_ban_rules,
 )
-from tcbot.modules.helper.pipelines.reason_flow import (
+from tcbot.modules.helper.pipelines.mod_action_steps import (
     is_reason_too_long,
     parse_inline_reason,
     reason_too_long_text,

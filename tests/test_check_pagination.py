@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import check_flow
+from tcbot.modules.helper.pipelines import check_panels
 
 
 async def _fake_name(uid: int) -> str:
@@ -60,11 +60,11 @@ def test_ban_list_render_passes_skip_limit(
     async def _count(user_id: int) -> int:
         return 23
 
-    monkeypatch.setattr(check_flow, "_name", _fake_name)
+    monkeypatch.setattr(check_panels, "_name", _fake_name)
     monkeypatch.setattr(db.bans_db, "user_bans", fake_db.fetch)
     monkeypatch.setattr(db.bans_db, "user_ban_count", _count)
 
-    text, _markup = asyncio.run(check_flow.Check.bans_list(42, 2, None))
+    text, _markup = asyncio.run(check_panels.Check.bans_list(42, 2, None))
     assert fake_db.calls == [(42, 10, 5)]
     assert "23 total" in text
     assert "page 3/5" in text
@@ -77,11 +77,11 @@ def test_ban_list_render_uses_rich_blocks(monkeypatch: pytest.MonkeyPatch) -> No
     async def _count(user_id: int) -> int:
         return 1
 
-    monkeypatch.setattr(check_flow, "_name", _fake_name)
+    monkeypatch.setattr(check_panels, "_name", _fake_name)
     monkeypatch.setattr(db.bans_db, "user_bans", fake_db.fetch)
     monkeypatch.setattr(db.bans_db, "user_ban_count", _count)
 
-    text, _markup = asyncio.run(check_flow.Check.bans_list(42, 0, None))
+    text, _markup = asyncio.run(check_panels.Check.bans_list(42, 0, None))
 
     assert "<p>" in text
     assert "<li>" in text
@@ -96,11 +96,11 @@ def test_ban_list_render_clamps_out_of_range_page(
     async def _count(user_id: int) -> int:
         return 3
 
-    monkeypatch.setattr(check_flow, "_name", _fake_name)
+    monkeypatch.setattr(check_panels, "_name", _fake_name)
     monkeypatch.setattr(db.bans_db, "user_bans", fake_db.fetch)
     monkeypatch.setattr(db.bans_db, "user_ban_count", _count)
 
-    text, _markup = asyncio.run(check_flow.Check.bans_list(42, 99, None))
+    text, _markup = asyncio.run(check_panels.Check.bans_list(42, 99, None))
     assert fake_db.calls == [(42, 0, 5)]
     assert "3 total" in text
     assert "page 1/1" in text
@@ -114,11 +114,11 @@ def test_ban_list_render_count_fail_falls_back(
     async def _boom(user_id: int) -> int:
         raise RuntimeError("count down")
 
-    monkeypatch.setattr(check_flow, "_name", _fake_name)
+    monkeypatch.setattr(check_panels, "_name", _fake_name)
     monkeypatch.setattr(db.bans_db, "user_bans", fake_db.fetch)
     monkeypatch.setattr(db.bans_db, "user_ban_count", _boom)
 
-    text, _markup = asyncio.run(check_flow.Check.bans_list(42, 0, None))
+    text, _markup = asyncio.run(check_panels.Check.bans_list(42, 0, None))
     assert fake_db.calls == [(42, 0, 5)]
     assert "2 total" in text
 
@@ -145,13 +145,13 @@ def test_kick_list_marks_a_failed_delivery(
     async def _count(user_id: int) -> int:
         return 1
 
-    monkeypatch.setattr(check_flow, "_name", _fake_name)
+    monkeypatch.setattr(check_panels, "_name", _fake_name)
     monkeypatch.setattr(db.kicks_db, "user_kicks", _fetch)
     monkeypatch.setattr(db.kicks_db, "user_kick_count", _count)
     monkeypatch.setattr(db.groups_db, "get_group_titles", _group_titles)
     monkeypatch.setattr(db.users_cache, "get_first_names_batch", _no_names)
 
-    text, _markup = asyncio.run(check_flow.Check.kicks_list(42, 0, None))
+    text, _markup = asyncio.run(check_panels.Check.kicks_list(42, 0, None))
 
     assert "did not complete" in text
 
@@ -188,13 +188,13 @@ def test_warns_in_group_uses_server_side_page(
     async def _count(user_id: int, chat_id: int) -> int:
         return 8
 
-    monkeypatch.setattr(check_flow, "_name", _fake_name)
+    monkeypatch.setattr(check_panels, "_name", _fake_name)
     monkeypatch.setattr(db.warns_db, "warn_count", _count)
     monkeypatch.setattr(db.warns_db, "get_warns", _get_warns)
     monkeypatch.setattr(db.groups_db, "get_group_titles", _group_titles)
     monkeypatch.setattr(db.users_cache, "get_first_names_batch", _no_names)
 
-    text, _markup = asyncio.run(check_flow.Check.warns_in_group(42, 22, 1, None))
+    text, _markup = asyncio.run(check_panels.Check.warns_in_group(42, 22, 1, None))
     assert calls == [(42, 22, 5, 5, True)]
     assert "8 total" in text
     assert "page 2/2" in text

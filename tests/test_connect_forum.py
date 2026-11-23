@@ -14,7 +14,7 @@ import pytest
 from telegram.constants import ChatMemberStatus
 
 from tcbot.modules import connect as connect_module
-from tcbot.modules.helper.pipelines import connected_flow
+from tcbot.modules.helper.pipelines import connect_added
 
 
 class _FakeBot:
@@ -87,19 +87,19 @@ async def test_forum_prompt_is_sent_without_an_attributed_adder(
         return "en-US"
 
     monkeypatch.setattr(
-        connected_flow,
+        connect_added,
         "cfg",
         SimpleNamespace(
             is_primary_group=lambda _chat_id: False,
             is_infrastructure_chat=lambda _chat_id: False,
         ),
     )
-    monkeypatch.setattr(connected_flow, "locale_for_update", _locale)
-    monkeypatch.setattr(connected_flow.db.groups_db, "get_pending", _get_pending)
-    monkeypatch.setattr(connected_flow.db.groups_db, "is_connected", _is_connected)
-    monkeypatch.setattr(connected_flow.db.groups_db, "add_pending", _add_pending)
+    monkeypatch.setattr(connect_added, "locale_for_update", _locale)
+    monkeypatch.setattr(connect_added.db.groups_db, "get_pending", _get_pending)
+    monkeypatch.setattr(connect_added.db.groups_db, "is_connected", _is_connected)
+    monkeypatch.setattr(connect_added.db.groups_db, "add_pending", _add_pending)
 
-    await connected_flow.connection.on_bot_added(
+    await connect_added.connection.on_bot_added(
         _forum_update(None),  # type: ignore[arg-type]
         ctx,  # type: ignore[arg-type]
     )
@@ -122,21 +122,19 @@ async def test_bot_added_to_infrastructure_group_sends_no_connect_prompt(
         return "en-US"
 
     monkeypatch.setattr(
-        connected_flow,
+        connect_added,
         "cfg",
         _NS(
             is_primary_group=lambda _chat_id: False,
             is_infrastructure_chat=lambda _chat_id: True,
         ),
     )
-    monkeypatch.setattr(connected_flow, "locale_for_update", _locale)
-    monkeypatch.setattr(connected_flow.db.groups_db, "get_pending", _must_not_be_called)
-    monkeypatch.setattr(
-        connected_flow.db.groups_db, "is_connected", _must_not_be_called
-    )
-    monkeypatch.setattr(connected_flow.db.groups_db, "add_pending", _must_not_be_called)
+    monkeypatch.setattr(connect_added, "locale_for_update", _locale)
+    monkeypatch.setattr(connect_added.db.groups_db, "get_pending", _must_not_be_called)
+    monkeypatch.setattr(connect_added.db.groups_db, "is_connected", _must_not_be_called)
+    monkeypatch.setattr(connect_added.db.groups_db, "add_pending", _must_not_be_called)
 
-    await connected_flow.connection.on_bot_added(
+    await connect_added.connection.on_bot_added(
         _forum_update(SimpleNamespace(id=4242)),  # type: ignore[arg-type]
         _NS(bot=bot),  # type: ignore[arg-type]
     )
@@ -168,21 +166,21 @@ async def test_join_prompt_uses_the_rich_transport_with_buttons(
         return "en-US"
 
     monkeypatch.setattr(
-        connected_flow,
+        connect_added,
         "cfg",
         _NS(
             is_primary_group=lambda _chat_id: False,
             is_infrastructure_chat=lambda _chat_id: False,
         ),
     )
-    monkeypatch.setattr(connected_flow, "locale_for_update", _locale)
-    monkeypatch.setattr(connected_flow, "send_text", _send_text)
-    monkeypatch.setattr(connected_flow.db.groups_db, "get_pending", _get_pending)
-    monkeypatch.setattr(connected_flow.db.groups_db, "is_connected", _is_connected)
-    monkeypatch.setattr(connected_flow.db.groups_db, "add_pending", _add_pending)
+    monkeypatch.setattr(connect_added, "locale_for_update", _locale)
+    monkeypatch.setattr(connect_added, "send_text", _send_text)
+    monkeypatch.setattr(connect_added.db.groups_db, "get_pending", _get_pending)
+    monkeypatch.setattr(connect_added.db.groups_db, "is_connected", _is_connected)
+    monkeypatch.setattr(connect_added.db.groups_db, "add_pending", _add_pending)
 
     bot = _FakeBot()
-    await connected_flow.connection.on_bot_added(
+    await connect_added.connection.on_bot_added(
         _forum_update(None),  # type: ignore[arg-type]
         _NS(bot=bot),  # type: ignore[arg-type]
     )
@@ -217,19 +215,19 @@ async def test_forum_prompt_records_the_adder_when_known(
         return "en-US"
 
     monkeypatch.setattr(
-        connected_flow,
+        connect_added,
         "cfg",
         SimpleNamespace(
             is_primary_group=lambda _chat_id: False,
             is_infrastructure_chat=lambda _chat_id: False,
         ),
     )
-    monkeypatch.setattr(connected_flow, "locale_for_update", _locale)
-    monkeypatch.setattr(connected_flow.db.groups_db, "get_pending", _get_pending)
-    monkeypatch.setattr(connected_flow.db.groups_db, "is_connected", _is_connected)
-    monkeypatch.setattr(connected_flow.db.groups_db, "add_pending", _add_pending)
+    monkeypatch.setattr(connect_added, "locale_for_update", _locale)
+    monkeypatch.setattr(connect_added.db.groups_db, "get_pending", _get_pending)
+    monkeypatch.setattr(connect_added.db.groups_db, "is_connected", _is_connected)
+    monkeypatch.setattr(connect_added.db.groups_db, "add_pending", _add_pending)
 
-    await connected_flow.connection.on_bot_added(
+    await connect_added.connection.on_bot_added(
         _forum_update(SimpleNamespace(id=4242)),  # type: ignore[arg-type]
         ctx,  # type: ignore[arg-type]
     )
@@ -266,7 +264,7 @@ async def test_join_decision_refuses_an_infrastructure_chat(
         effective_user=_NS(id=42, first_name="Owner"),
     )
     monkeypatch.setattr(
-        connected_flow,
+        connect_added,
         "cfg",
         _NS(
             is_primary_group=lambda _chat_id: False,
@@ -274,7 +272,7 @@ async def test_join_decision_refuses_an_infrastructure_chat(
         ),
     )
 
-    await inspect.unwrap(connected_flow.connection.on_join_decision)(
+    await inspect.unwrap(connect_added.connection.on_join_decision)(
         update,  # type: ignore[arg-type]
         _NS(bot=_FakeBot()),  # type: ignore[arg-type]
     )

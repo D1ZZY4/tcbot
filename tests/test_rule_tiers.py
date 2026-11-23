@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from scripts import seed_rules
 from tcbot.modules.helper.messages.rules import category_label, rich_category_view
-from tcbot.modules.helper.pipelines.rules_step import picker_text
+from tcbot.modules.helper.pipelines.rules_picker import picker_text
 
 
 def test_seed_uses_document_stems_as_categories() -> None:

@@ -13,7 +13,7 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules.helper import guards
-from tcbot.modules.helper.pipelines import promote_flow
+from tcbot.modules.helper.pipelines import promote_steps
 
 # ─────────────────────────── Promotion guards ─────────────────────────── #
 
@@ -111,7 +111,7 @@ def test_promote_execute_refuses_a_banned_target(
     monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
 
     ok, text = asyncio.run(
-        promote_flow.Promote.execute(
+        promote_steps.Promote.execute(
             _bot(),
             1,
             "Owner",
@@ -145,7 +145,7 @@ def test_promote_execute_rechecks_the_executor_rank(
     monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
 
     ok, text = asyncio.run(
-        promote_flow.Promote.execute(
+        promote_steps.Promote.execute(
             _bot(),
             1,
             "Owner",
@@ -178,7 +178,9 @@ def test_promote_execute_fails_closed_on_a_role_lookup_error(
     monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
 
     ok, _text = asyncio.run(
-        promote_flow.Promote.execute(_bot(), 1, "Owner", 42, "Target", "admin", "en-US")
+        promote_steps.Promote.execute(
+            _bot(), 1, "Owner", 42, "Target", "admin", "en-US"
+        )
     )
     assert ok is False
     assert granted == []
@@ -200,7 +202,7 @@ def test_promote_execute_allows_a_clean_target(
     monkeypatch.setattr(db.users_cache, "upsert_user", _noop_user_upsert)
 
     ok, _text = asyncio.run(
-        promote_flow.Promote.execute(
+        promote_steps.Promote.execute(
             _bot(),
             1,
             "Owner",
@@ -240,7 +242,7 @@ def test_promote_execute_rechecks_the_target_rank(
     monkeypatch.setattr(db.users_cache, "upsert_user", _noop_user_upsert)
 
     ok, text = asyncio.run(
-        promote_flow.Promote.execute(
+        promote_steps.Promote.execute(
             _bot(), 1, "Owner", 42, "Target", "developer", "en-US"
         )
     )
@@ -265,7 +267,7 @@ def test_promote_request_refuses_a_banned_target(
     monkeypatch.setattr(db.queues_db, "enqueue", _enqueue)
 
     ok, _text = asyncio.run(
-        promote_flow.request_admin(_bot(), 1, 42, "Target", locale="en-US")
+        promote_steps.request_admin(_bot(), 1, 42, "Target", locale="en-US")
     )
     assert ok is False
     assert enqueued == []

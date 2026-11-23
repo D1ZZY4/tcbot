@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
@@ -14,12 +14,11 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.buttons import rules as rules_btn
-from tcbot.modules.helper.buttons.menus import open_pm_btn
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, safe_edit_cb
 from tcbot.modules.helper.messages import rich_edit as rich_msg
 from tcbot.modules.helper.messages import rules as rules_msg
-from tcbot.modules.helper.pipelines.rules_flow import build_rules_conv
+from tcbot.modules.helper.pipelines.rules_editor import build_rules_conv
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
@@ -60,23 +59,21 @@ async def cmd_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None:
         return
     locale = await locale_for_update(update)
-    if update.effective_chat is not None and update.effective_chat.type != "private":
-        await reply_rich(
-            msg,
-            t("rules.editor.open_pm", locale, plain=True),
-            parse_mode=None,
-            reply_markup=open_pm_btn(ctx.bot.username or "", "rules", locale),
-        )
-        return
     published = await db.rules_db.published_rules()
-    if published is None or not published.get("items"):
+    if (
+        published is None
+        or not published.get("items")
+        or not published.get("categories")
+    ):
         await reply_rich(
             msg, t("rules.menu.empty", locale, plain=True), parse_mode=None
         )
         return
-    text = rules_msg.rules_menu(locale, cfg.community_name)
-    markup = rules_btn.rules_menu_btn(published["categories"], locale)
-    await reply_rich(msg, text, reply_markup=markup)
+    await reply_rich(
+        msg,
+        rules_msg.rules_menu(locale, cfg.community_name),
+        reply_markup=rules_btn.rules_index_btn(published["categories"], locale),
+    )
 
 
 # ─────────────────────────── Callbacks ─────────────────────────── #
@@ -123,24 +120,41 @@ async def _acknowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await query.answer(t("rules.ack.recorded", locale, plain=True), show_alert=True)
 
 
-async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Render one published category in the read-only menu."""
+def _page_from_data(data: str | None) -> int:
+    """Parse a page index from a callback payload, defaulting to the first page."""
+    try:
+        return max(0, int(str(data).split(":", 1)[1]))
+    except ValueError, IndexError:
+        return 0
+
+
+def _section_label(item: dict[str, Any]) -> str:
+    """Return the section name stored in an item title after the category prefix."""
+    title = str(item.get("title") or "Rules")
+    return title.split(":", 1)[1].strip() if ":" in title else title
+
+
+def _category_sections(items: list[dict[str, Any]]) -> list[str]:
+    """Return section names in stored display order, without duplicates."""
+    sections: list[str] = []
+    for item in items:
+        label = _section_label(item)
+        if label not in sections:
+            sections.append(label)
+    return sections
+
+
+async def _edit_payload(
+    update: Update,
+    ctx: ContextTypes.DEFAULT_TYPE,
+    payload: dict[str, Any],
+    markup: Any,
+    fallback: str,
+) -> None:
+    """Edit the tapped panel as a rich message, with a plain fallback."""
     query = update.callback_query
-    if query is None or query.data is None:
+    if query is None:
         return
-    await query.answer()
-    key = query.data.split(":", 1)[-1]
-    published = await db.rules_db.published_rules()
-    if published is None:
-        return
-    items = [item for item in published["items"] if item["category_key"] == key]
-    category = next(
-        (cat["title"] for cat in published["categories"] if cat["category_key"] == key),
-        key,
-    )
-    locale = await locale_for_update(update)
-    text = rules_msg.category_view(str(category), items, locale)
-    markup = rules_btn.category_back_btn(locale)
     message = query.message
     if message is not None and getattr(message, "chat", None) is not None:
         try:
@@ -148,51 +162,157 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 ctx.bot,
                 message.chat.id,
                 message.message_id,
-                rules_msg.rich_category_view(str(category), items, locale),
+                payload,
                 reply_markup=markup,
             )
             return
         except Exception as exc:
-            log.debug("Rich category view edit failed: %s", exc)
-    await safe_edit_cb(query, text, reply_markup=markup)
+            log.debug("Rich rules panel edit failed: %s", exc)
+    await safe_edit_cb(query, fallback, reply_markup=markup)
 
 
-async def on_rules_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Return from a category view to the published menu."""
+async def _show_index(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE, page: int
+) -> None:
+    """Render a page of category buttons, two per row."""
+    query = update.callback_query
+    if query is None:
+        return
+    published = await db.rules_db.published_rules()
+    if published is None or not published.get("categories"):
+        return
+    locale = await locale_for_update(update)
+    categories = published["categories"]
+    per_page = rules_btn._RULES_PER_PAGE
+    total = max(1, (len(categories) + per_page - 1) // per_page)
+    page = max(0, min(page, total - 1))
+    chunk = categories[page * per_page : (page + 1) * per_page]
+    rows = [
+        f"<p>{rules_msg.category_label(str(cat['category_key']), locale, str(cat['title']))}</p>"
+        for cat in chunk
+    ]
+    payload = rules_msg.rich_index_page(
+        t("rules.menu.body", locale, community=cfg.community_name), rows
+    )
+    await _edit_payload(
+        update,
+        ctx,
+        payload,
+        rules_btn.rules_index_btn(categories, locale, page=page),
+        t("rules.menu.body", locale, community=cfg.community_name),
+    )
+
+
+async def on_rules_index(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show a page of the topic index."""
     query = update.callback_query
     if query is None:
         return
     await query.answer()
-    locale = await locale_for_update(update)
-    text = rules_msg.rules_menu(locale, cfg.community_name)
+    await _show_index(update, ctx, _page_from_data(query.data))
+
+
+async def on_rules_prev(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the previous topic page."""
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+    await _show_index(update, ctx, _page_from_data(query.data))
+
+
+async def on_rules_next(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the next topic page."""
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+    await _show_index(update, ctx, _page_from_data(query.data))
+
+
+async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render one category with its short description and section buttons."""
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
     published = await db.rules_db.published_rules()
-    markup = rules_btn.rules_menu_btn(
-        published["categories"] if published else [], locale
+    if published is None:
+        return
+    key = str(query.data or "").split(":", 1)[-1]
+    category = next(
+        (cat for cat in published["categories"] if str(cat["category_key"]) == key),
+        None,
     )
-    await safe_edit_cb(query, text, parse_mode=None, reply_markup=markup)
+    if category is None:
+        return
+    locale = await locale_for_update(update)
+    items = [item for item in published["items"] if item["category_key"] == key]
+    label = rules_msg.category_label(key, locale, str(category["title"]))
+    description = t(f"rules.description.{key}", locale, plain=True)
+    payload = rules_msg.rich_category_index(
+        key, str(category["title"]), description, locale
+    )
+    if ctx.user_data is not None:
+        ctx.user_data["rules_current_category"] = key
+    sections = _category_sections(items)
+    await _edit_payload(
+        update,
+        ctx,
+        payload,
+        rules_btn.category_sections_btn(sections, locale),
+        f"{label}\n{t(f'rules.description.{key}', locale, plain=True)}",
+    )
 
 
-async def on_rules_page(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show the next page of the public rules category menu."""
+async def on_rules_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Render the items of one section inside the current category."""
     query = update.callback_query
     if query is None or query.data is None:
         return
     await query.answer()
-    try:
-        page = int(query.data.split(":", 1)[1])
-    except ValueError, IndexError:
-        return
-    locale = await locale_for_update(update)
     published = await db.rules_db.published_rules()
-    markup = rules_btn.rules_menu_btn(
-        published["categories"] if published else [], locale, page=page
+    if published is None:
+        return
+    index = _page_from_data(query.data)
+    state = ctx.user_data if ctx.user_data is not None else {}
+    key = str(state.get("rules_current_category") or "")
+    if not key:
+        return
+    items = [item for item in published["items"] if item["category_key"] == key]
+    sections = _category_sections(items)
+    if index >= len(sections):
+        return
+    section = sections[index]
+    section_items = [item for item in items if _section_label(item) == section]
+    payload = rules_msg.rich_section_page(
+        key, section, section_items, await locale_for_update(update)
     )
-    await safe_edit_cb(
-        query,
-        rules_msg.rules_menu(locale, cfg.community_name),
-        parse_mode=None,
-        reply_markup=markup,
+    await _edit_payload(
+        update,
+        ctx,
+        payload,
+        rules_btn.category_sections_btn(sections, await locale_for_update(update)),
+        f"{key}: {section}",
     )
+
+
+async def on_rules_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle a stale Back tap from a keyboard emitted before pagination."""
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+    await _show_index(update, ctx, 0)
+
+
+async def on_rules_page(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle a stale More tap by opening the requested topic page."""
+    query = update.callback_query
+    if query is None:
+        return
+    await query.answer()
+    await _show_index(update, ctx, _page_from_data(query.data))
 
 
 _RULES_CMDS = build_prefixed_filters("rules")
@@ -205,6 +325,10 @@ __handlers__ = [
     MessageHandler(_RULES_START, cmd_rules),
     MessageHandler(_RULES_CMDS, cmd_rules),
     CallbackQueryHandler(_acknowledge, pattern=r"^rules_ack:\d+:\d+$"),
+    CallbackQueryHandler(on_rules_index, pattern=r"^rules_index:\d+$"),
+    CallbackQueryHandler(on_rules_section, pattern=r"^rules_section:\d+$"),
+    CallbackQueryHandler(on_rules_prev, pattern=r"^rules_prev:\d+$"),
+    CallbackQueryHandler(on_rules_next, pattern=r"^rules_next:\d+$"),
     CallbackQueryHandler(on_rules_show, pattern=r"^rules_show:"),
     CallbackQueryHandler(on_rules_menu, pattern=r"^rules_menu$"),
     CallbackQueryHandler(on_rules_page, pattern=r"^rules_page:\d+$"),

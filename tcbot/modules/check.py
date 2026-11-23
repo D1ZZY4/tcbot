@@ -28,7 +28,7 @@ from tcbot.modules.helper.messages import (
     safe_edit_cb,
 )
 from tcbot.modules.helper.messages.rich_text import blocks
-from tcbot.modules.helper.pipelines.check_flow import Check
+from tcbot.modules.helper.pipelines.check_panels import Check
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger

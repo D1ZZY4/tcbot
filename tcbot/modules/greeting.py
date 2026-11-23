@@ -35,7 +35,7 @@ from tcbot.modules.helper.messages import (
     reply_rich_result,
     send_text,
 )
-from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
+from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, t, user_ref
 from tcbot.utils.logger import get_logger
@@ -663,7 +663,7 @@ async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 # ──────────────────────────── Handlers ──────────────────────────── #
 
 # NOTE: The bot's own chat-member updates (MY_CHAT_MEMBER) are handled
-# exclusively by connected_flow.connection.on_bot_added, registered in
+# exclusively by connect_added.connection.on_bot_added, registered in
 # connect.py. That single handler covers bot-added/promoted (join prompt,
 # pending completion), bot-demoted (admin-rights-lost warning to mod channel),
 # and bot-removed/kicked (federation group auto-deactivation). No second

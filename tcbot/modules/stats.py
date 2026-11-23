@@ -28,7 +28,7 @@ from tcbot.modules.helper.messages import (
     safe_edit_message,
     send_text,
 )
-from tcbot.modules.helper.pipelines.stats_flow import (
+from tcbot.modules.helper.pipelines.stats_panels import (
     CHAT_KEY,
     MSG_KEY,
     RESULTS_KEY,

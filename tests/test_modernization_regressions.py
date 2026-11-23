@@ -22,7 +22,7 @@ from tcbot.database import users_cache
 from tcbot.modules import netspeed
 from tcbot.modules.helper import guards
 from tcbot.modules.helper.extraction import refresh as refresh_mod
-from tcbot.modules.helper.pipelines import mute_flow, proof_flow, stats_flow
+from tcbot.modules.helper.pipelines import mute_actions, proof_steps, stats_panels
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitBreaker, CircuitState
 from tcbot.utils.time_and_date import parse_duration, utc_now
@@ -108,7 +108,7 @@ def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:
     bot.send_document = AsyncMock(side_effect=AssertionError("no single send"))
 
     items, expected = asyncio.run(
-        proof_flow.upload_proof_items(bot, msgs, "cap", 1, None)  # type: ignore[arg-type]
+        proof_steps.upload_proof_items(bot, msgs, "cap", 1, None)  # type: ignore[arg-type]
     )
     assert [item.archive_message_id for item in items] == [1] * 11
     assert expected == 11
@@ -166,17 +166,17 @@ def test_unmute_partial_queues_a_durable_delivery(
     ctx = MagicMock()
     ctx.bot.send_message = AsyncMock()
 
-    monkeypatch.setattr(mute_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(mute_actions, "locale_for_update", _locale)
     monkeypatch.setattr(
-        mute_flow, "cfg", SimpleNamespace(main_group=-1, logs=(-3, None))
+        mute_actions, "cfg", SimpleNamespace(main_group=-1, logs=(-3, None))
     )
     monkeypatch.setattr(db.mutes_db, "get_active_mute", _active)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
     monkeypatch.setattr(db.mutes_db, "revoke_mute_and_queue_unmute", _revoke)
     monkeypatch.setattr(db.enforcement_db, "run_report", _report)
-    monkeypatch.setattr(mute_flow.enforcement_worker, "deliver_queued_run", _deliver)
+    monkeypatch.setattr(mute_actions.enforcement_worker, "deliver_queued_run", _deliver)
 
-    asyncio.run(mute_flow.execute_unmute(update, ctx, 33, "Target"))  # type: ignore[arg-type]
+    asyncio.run(mute_actions.execute_unmute(update, ctx, 33, "Target"))  # type: ignore[arg-type]
     assert revoked == [(33, 1, [1, 2, -1])]
     msg.reply_text.assert_awaited_once()
 
@@ -244,9 +244,9 @@ def test_staff_roster_resolves_live_on_numeric_fallback(
     monkeypatch.setattr(db.users_roles, "all_admins", _admins)
     monkeypatch.setattr(db.users_roles, "all_by_role", _by_role)
     monkeypatch.setattr(db.users_cache, "get_mention_data_batch", _mention)
-    monkeypatch.setattr(stats_flow, "sync_user_identity", _sync)
+    monkeypatch.setattr(stats_panels, "sync_user_identity", _sync)
 
-    text, _ = asyncio.run(stats_flow.Stats.staff_roster("en-US", bot=MagicMock()))
+    text, _ = asyncio.run(stats_panels.Stats.staff_roster("en-US", bot=MagicMock()))
     assert "Sang Kucing" in text
     admins_section = text.split("Admins")[1].split("Developers")[0]
     assert "- 8679231509" not in admins_section
@@ -288,7 +288,7 @@ def test_staff_roster_renders_separate_rich_blocks(
     monkeypatch.setattr(db.users_roles, "all_by_role", _by_role)
     monkeypatch.setattr(db.users_cache, "get_mention_data_batch", _mention)
 
-    text, _ = asyncio.run(stats_flow.Stats.staff_roster("en-US"))
+    text, _ = asyncio.run(stats_panels.Stats.staff_roster("en-US"))
 
     assert "<hr/>" in text
     assert "<p><b>Admins (2)</b></p>" in text
@@ -408,9 +408,9 @@ def test_user_table_renders_the_stored_profile_timestamps(
 
     monkeypatch.setattr(db.users_cache, "total_users", AsyncMock(return_value=1))
     monkeypatch.setattr(db.users_cache, "all_users_page", AsyncMock(return_value=page))
-    monkeypatch.setattr(stats_flow, "date_or_unknown", _date)
+    monkeypatch.setattr(stats_panels, "date_or_unknown", _date)
 
-    text, markup = asyncio.run(stats_flow.Stats.users_list(0, "en-US"))
+    text, markup = asyncio.run(stats_panels.Stats.users_list(0, "en-US"))
 
     assert rendered == [first_seen, last_seen]
     assert "<table" in text

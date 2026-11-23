@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import appeal_review_flow
+from tcbot.modules.helper.pipelines import appeal_review
 from tcbot.utils.i18n import t
 
 
@@ -57,11 +57,11 @@ def test_ban_read_failure_alerts_and_keeps_card(
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.bans_db, "get_ban", _boom)
-    monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(appeal_review, "locale_for_update", _locale)
 
     query = _FakeQuery("appeal_approve_abc_1")
     asyncio.run(
-        appeal_review_flow.AppealReviewMixin().on_decision(
+        appeal_review.AppealReviewMixin().on_decision(
             _FakeUpdate(query),  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
         )

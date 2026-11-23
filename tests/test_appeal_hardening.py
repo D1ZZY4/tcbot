@@ -14,7 +14,8 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import appeal_review_flow, demote_flow
+from tcbot.modules.helper.pipelines import appeal_review
+from tcbot.modules.helper.pipelines import demote_actions as demote
 from tcbot.utils.i18n import t
 
 
@@ -83,10 +84,10 @@ def test_self_review_is_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.bans_db, "get_ban", _ban)
-    monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(appeal_review, "locale_for_update", _locale)
     query = _FakeQuery("appeal_approve_abc_1")
     asyncio.run(
-        appeal_review_flow.AppealReviewMixin().on_decision(
+        appeal_review.AppealReviewMixin().on_decision(
             _fake_update(query, 7),  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
         )
@@ -134,11 +135,11 @@ def _wire_approve(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(db.users_cache, "get_first_name", _fname)
     monkeypatch.setattr(db.bans_db, "approve_appeal_and_queue_unban", _approve)
     monkeypatch.setattr(
-        appeal_review_flow.enforcement_worker, "deliver_queued_run", _deliver
+        appeal_review.enforcement_worker, "deliver_queued_run", _deliver
     )
     monkeypatch.setattr(db.enforcement_db, "run_report", _report)
-    monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale_update)
-    monkeypatch.setattr(appeal_review_flow, "locale_for_user", _locale_user)
+    monkeypatch.setattr(appeal_review, "locale_for_update", _locale_update)
+    monkeypatch.setattr(appeal_review, "locale_for_user", _locale_user)
     return record
 
 
@@ -157,7 +158,7 @@ def _run_approve(query: _FakeQuery, approver_role: str = "owner") -> None:
         "appeal_submitted_at": None,
         "appeal_log_msg_id": 0,
     }
-    mixin = appeal_review_flow.AppealVerdictsMixin()
+    mixin = appeal_review.AppealVerdictsMixin()
     mixin.community_name = "Test"
     asyncio.run(
         mixin._approve_appeal(
@@ -196,7 +197,7 @@ def test_approve_demotes_staff_before_deactivate(
         return True
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+    monkeypatch.setattr(demote.Demote, "execute", staticmethod(_fake_demote))
 
     query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query)
@@ -223,7 +224,7 @@ def test_approve_blocks_when_demote_is_a_noop_and_the_role_survives(
         return False
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+    monkeypatch.setattr(demote.Demote, "execute", staticmethod(_fake_demote))
 
     query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query)
@@ -249,7 +250,7 @@ def test_approve_blocks_when_the_demote_raises(
         raise RuntimeError("database down")
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+    monkeypatch.setattr(demote.Demote, "execute", staticmethod(_fake_demote))
 
     query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query)
@@ -281,7 +282,7 @@ def test_approve_blocks_when_the_approver_does_not_outrank_the_target(
         return True
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+    monkeypatch.setattr(demote.Demote, "execute", staticmethod(_fake_demote))
 
     query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query, approver_role="admin")
@@ -308,7 +309,7 @@ def test_approve_proceeds_when_the_approver_outranks_the_target(
         return True
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+    monkeypatch.setattr(demote.Demote, "execute", staticmethod(_fake_demote))
 
     query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query, approver_role="owner")
@@ -335,7 +336,7 @@ def test_approve_proceeds_when_the_role_is_already_gone(
         return False
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(demote_flow.Demote, "execute", staticmethod(_fake_demote))
+    monkeypatch.setattr(demote.Demote, "execute", staticmethod(_fake_demote))
 
     query = _FakeQuery("appeal_approve_abc_1")
     _run_approve(query)
@@ -374,11 +375,11 @@ def test_stale_review_card_cannot_decide_a_newer_appeal(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.bans_db, "get_ban", _ban)
     monkeypatch.setattr(db.bans_db, "claim_appeal_decision", _claim)
-    monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(appeal_review, "locale_for_update", _locale)
 
     query = _FakeQuery("appeal_approve_abc_1")
     asyncio.run(
-        appeal_review_flow.AppealReviewMixin().on_decision(
+        appeal_review.AppealReviewMixin().on_decision(
             _fake_update(query, 1),  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
         )
@@ -420,11 +421,11 @@ def test_a_live_legacy_card_is_still_accepted(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.bans_db, "get_ban", _ban)
     monkeypatch.setattr(db.bans_db, "claim_appeal_decision", _claim)
-    monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(appeal_review, "locale_for_update", _locale)
 
     query = _FakeQuery("appeal_approve_abc", message_id=1)
     asyncio.run(
-        appeal_review_flow.AppealReviewMixin().on_decision(
+        appeal_review.AppealReviewMixin().on_decision(
             _fake_update(query, 1),  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
         )
@@ -455,7 +456,7 @@ def test_reject_refuses_a_target_the_reviewer_does_not_outrank(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.bans_db, "reject_appeal", _reject)
     monkeypatch.setattr(db.users_cache, "get_first_name", _fname)
-    monkeypatch.setattr(appeal_review_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(appeal_review, "locale_for_update", _locale)
 
     ban: dict[str, Any] = {
         "ban_id": "abc",
@@ -468,7 +469,7 @@ def test_reject_refuses_a_target_the_reviewer_does_not_outrank(
     }
     admin = type("Admin", (), {"id": 1, "first_name": "Admin"})()
     query = _FakeQuery("appeal_reject_abc_1")
-    mixin = appeal_review_flow.AppealVerdictsMixin()
+    mixin = appeal_review.AppealVerdictsMixin()
     mixin.community_name = "Test"
     asyncio.run(
         mixin._reject_appeal(

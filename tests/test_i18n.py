@@ -51,7 +51,7 @@ from tcbot.modules.helper import buttons
 from tcbot.modules.helper.identity import can_manage_group
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
 from tcbot.modules.helper.messages import replies
-from tcbot.modules.helper.pipelines.appeal_review_flow import LOCK_HOURS
+from tcbot.modules.helper.pipelines.appeal_review import LOCK_HOURS
 from tcbot.utils.i18n import (
     DEFAULT_LOCALE,
     I18nError,
@@ -132,6 +132,7 @@ _DYNAMIC_KEY_PREFIXES = (
     "proof.action.",
     "reason.",
     "rules.category.",
+    "rules.description.",
     "stats.",
     "unbanning.",
     "warnings.",

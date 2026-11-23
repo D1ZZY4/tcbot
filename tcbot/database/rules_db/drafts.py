@@ -21,11 +21,15 @@ from tcbot.database.rules_db.sets import WORKING_LOCALE
 from tcbot.utils.time_and_date import utc_now
 
 
-async def open_draft(set_id: int, user_id: int) -> dict[str, Any]:
+async def open_draft(
+    set_id: int, user_id: int, *, clone_items: bool = True
+) -> dict[str, Any]:
     """Return the open draft, cloning the published version when needed.
 
     A clone takes the current category catalogue as its snapshot, so a later
     rename or reorder cannot change the presentation of an older version.
+    Callers that immediately replace the draft contents can skip the clone
+    with ``clone_items=False``.
     """
     existing = await db_call(
         lambda: fetch_one(
@@ -77,7 +81,7 @@ async def open_draft(set_id: int, user_id: int) -> dict[str, Any]:
             .returning(rule_set_versions.c.id)
         )
         version_id = int(created.scalar_one())
-        if published is None:
+        if published is None or not clone_items:
             return version_id
         categories = (
             (
@@ -108,27 +112,33 @@ async def open_draft(set_id: int, user_id: int) -> dict[str, Any]:
             .mappings()
             .all()
         )
+        copied_at = utc_now()
+        rows = []
         for item in old_items:
             title, order = snapshots.get(
                 str(item["category_key"]), (str(item["category_key"]), 100)
             )
-            await sess.execute(
-                rule_items.insert().values(
-                    rule_set_version_id=version_id,
-                    rule_key=item["rule_key"],
-                    category_key=item["category_key"],
-                    category_title=title,
-                    category_sort_order=order,
-                    title=item["title"],
-                    body=item["body"],
-                    content_format=item["content_format"],
-                    sort_order=item["sort_order"],
-                    is_mandatory=item["is_mandatory"],
-                    reference_url=item["reference_url"],
-                    metadata=item["metadata"],
-                    created_at=utc_now(),
-                )
+            rows.append(
+                {
+                    "rule_set_version_id": version_id,
+                    "rule_key": item["rule_key"],
+                    "category_key": item["category_key"],
+                    "category_title": title,
+                    "category_sort_order": order,
+                    "title": item["title"],
+                    "body": item["body"],
+                    "content_format": item["content_format"],
+                    "sort_order": item["sort_order"],
+                    "is_mandatory": item["is_mandatory"],
+                    "reference_url": item["reference_url"],
+                    "metadata": item["metadata"],
+                    "created_at": copied_at,
+                }
             )
+        # * One executemany round trip: the old per-row loop spent the whole
+        # * database call budget on a published version with hundreds of items.
+        if rows:
+            await sess.execute(rule_items.insert(), rows)
         return version_id
 
     version_id = await run_transaction(_work)

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from tcbot.database.rules_db import categories as categories_db
-from tcbot.modules.helper.pipelines import rules_flow
+from tcbot.modules.helper.pipelines import rules_editor_steps
 
 # * The longest emitted payload is "rules_cat_rename:<key>".
 _LONGEST_PREFIX_LEN = len("rules_cat_rename:")
@@ -15,7 +15,7 @@ _LONGEST_PREFIX_LEN = len("rules_cat_rename:")
 
 def test_editor_slug_is_bounded() -> None:
     long_title = "a" * 120
-    slug = rules_flow._slug(long_title)
+    slug = rules_editor_steps.slug(long_title)
 
     assert len(slug.encode()) + _LONGEST_PREFIX_LEN <= 64
 

@@ -17,8 +17,8 @@ from telegram.ext import CallbackQueryHandler, ConversationHandler, MessageHandl
 from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.messages import rules as rules_msg
-from tcbot.modules.helper.pipelines import rules_flow
-from tcbot.modules.helper.pipelines.rules_flow import (
+from tcbot.modules.helper.pipelines import rules_editor, rules_editor_steps
+from tcbot.modules.helper.pipelines.rules_editor import (
     WAITING_CONFIRM_DISCARD,
     WAITING_EDITOR_MENU,
     build_rules_conv,
@@ -64,7 +64,7 @@ def test_completed_editor_steps_are_forgotten() -> None:
         "rules_item_body": "No spam",
         "rules_category": {"category_key": "spam"},
     }
-    rules_flow._clear_item_step(scope)
+    rules_editor_steps.clear_item_step(scope)
     assert scope == {"rules_category": {"category_key": "spam"}}
 
     scope.update(
@@ -75,7 +75,7 @@ def test_completed_editor_steps_are_forgotten() -> None:
             "rules_category_key": "spam",
         }
     )
-    rules_flow._clear_editor_scope(scope)
+    rules_editor_steps.clear_editor_scope(scope)
     assert scope == {}
 
 
@@ -93,7 +93,7 @@ def test_editor_and_confirmation_callbacks_are_wired() -> None:
     assert unverified == []
 
 
-def test_every_rules_menu_offers_close_and_submenus_offer_back() -> None:
+def test_every_editor_submenu_offers_close_and_back() -> None:
     category = {"category_key": "example", "title": "Example"}
     submenus = (
         rules_btn.categories_btn([category]),
@@ -101,8 +101,6 @@ def test_every_rules_menu_offers_close_and_submenus_offer_back() -> None:
         rules_btn.confirm_btn("rules_discard_yes", "rules_discard_no"),
         rules_btn.prompt_btn("rules_panel"),
         rules_btn.preview_btn(),
-        rules_btn.rules_menu_btn([category]),
-        rules_btn.category_back_btn(),
     )
     for markup in submenus:
         callbacks = {
@@ -112,9 +110,31 @@ def test_every_rules_menu_offers_close_and_submenus_offer_back() -> None:
             if isinstance(b.callback_data, str)
         }
         assert "close_msg" in callbacks
-        assert "back_to_start" in callbacks or any(
-            cb.startswith("rules_") for cb in callbacks
-        )
+        assert any(cb.startswith("rules_") for cb in callbacks)
+
+
+def test_public_rules_pages_navigate_with_prev_next_and_close() -> None:
+    """The read-only menu is a paged topic view, with no topic buttons or Back."""
+    first = rules_btn.rules_page_btn(0, 3, "en-US")
+    middle = rules_btn.rules_page_btn(1, 3, "en-US")
+    last = rules_btn.rules_page_btn(2, 3, "en-US")
+
+    def _callbacks(markup: Any) -> set[str]:
+        return {
+            b.callback_data
+            for row in markup.inline_keyboard
+            for b in row
+            if isinstance(b.callback_data, str)
+        }
+
+    assert _callbacks(first) == {"rules_next:1", "close_msg"}
+    assert _callbacks(middle) == {"rules_prev:0", "rules_next:2", "close_msg"}
+    assert _callbacks(last) == {"rules_prev:1", "close_msg"}
+    for markup in (first, middle, last):
+        callbacks = _callbacks(markup)
+        assert "back_to_start" not in callbacks
+        assert "rules_menu" not in callbacks
+        assert "rules_show:example" not in callbacks
 
 
 def test_editor_root_has_close_but_no_back() -> None:
@@ -168,11 +188,11 @@ def test_rename_prompt_edits_the_invoking_message(
     async def _reply(*_args: Any, **_kwargs: Any) -> None:
         replies.append(_args)
 
-    monkeypatch.setattr(rules_flow, "editor_allowed", _allowed)
-    monkeypatch.setattr(rules_flow.rules_editor, "_set_and_draft", _draft)
-    monkeypatch.setattr(rules_flow, "safe_edit_cb", _edit)
-    monkeypatch.setattr(rules_flow, "reply_rich", _reply)
-    monkeypatch.setattr(rules_flow, "flow_scope", lambda _ctx, _update: {})
+    monkeypatch.setattr(rules_editor, "editor_allowed", _allowed)
+    monkeypatch.setattr(rules_editor.rules_editor, "_set_and_draft", _draft)
+    monkeypatch.setattr(rules_editor, "safe_edit_cb", _edit)
+    monkeypatch.setattr(rules_editor, "reply_rich", _reply)
+    monkeypatch.setattr(rules_editor, "flow_scope", lambda _ctx, _update: {})
 
     update = SimpleNamespace(
         callback_query=SimpleNamespace(
@@ -182,7 +202,7 @@ def test_rename_prompt_edits_the_invoking_message(
         effective_message=None,
     )
     asyncio.run(
-        rules_flow.rules_editor.cat_action(cast("Any", update), cast("Any", None))
+        rules_editor.rules_editor.cat_action(cast("Any", update), cast("Any", None))
     )
 
     assert len(edits) == 1
@@ -207,6 +227,13 @@ def test_the_editor_enters_through_the_tcrules_command() -> None:
     ]
     assert entry_patterns == []
     assert conv.entry_points
+
+
+def test_the_editor_accepts_the_short_alias() -> None:
+    """`/tcrls` is the rules editor alias; `/tcr` remains repair's alias."""
+    rendered = repr(rules_editor_steps._TCRULES_CMDS)
+    assert "tcrls" in rendered
+    assert "PrefixedCommand(tcr)" not in rendered
 
 
 def test_the_open_in_pm_deep_link_starts_the_editor() -> None:
@@ -251,17 +278,17 @@ def test_preview_stays_in_the_editor_with_back_and_close(
 
     monkeypatch.setattr(db.rules_db, "list_items", _items)
     monkeypatch.setattr(rules_msg, "preview", _preview)
-    monkeypatch.setattr(rules_flow, "safe_edit_cb", _edit)
-    monkeypatch.setattr(rules_flow.rules_editor, "_locale", _locale)
+    monkeypatch.setattr(rules_editor, "safe_edit_cb", _edit)
+    monkeypatch.setattr(rules_editor.rules_editor, "_locale", _locale)
     monkeypatch.setattr(
-        rules_flow,
+        rules_editor,
         "flow_scope",
         lambda _ctx, _update: {"rules_version": {"id": 2}},
     )
 
     update = _callback_update()
     result = asyncio.run(
-        rules_flow.rules_editor.preview(cast("Any", update), cast("Any", None))
+        rules_editor.rules_editor.preview(cast("Any", update), cast("Any", None))
     )
 
     assert result == WAITING_EDITOR_MENU
@@ -271,8 +298,8 @@ def test_preview_stays_in_the_editor_with_back_and_close(
         for b in row
         if isinstance(b.callback_data, str)
     }
-    assert "rules_panel" in callbacks
     assert "close_msg" in callbacks
+    assert "rules_panel" not in callbacks
 
 
 def test_empty_draft_publish_shows_guidance(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -298,16 +325,16 @@ def test_empty_draft_publish_shows_guidance(monkeypatch: pytest.MonkeyPatch) -> 
     async def _locale(_update: Any) -> str:
         return "en-US"
 
-    monkeypatch.setattr(rules_flow, "editor_allowed", _allowed)
-    monkeypatch.setattr(rules_flow.rules_editor, "_set_and_draft", _draft)
+    monkeypatch.setattr(rules_editor, "editor_allowed", _allowed)
+    monkeypatch.setattr(rules_editor.rules_editor, "_set_and_draft", _draft)
     monkeypatch.setattr(db.rules_db, "all_items", _all_items)
-    monkeypatch.setattr(rules_flow, "publish_rules", _publish)
-    monkeypatch.setattr(rules_flow, "safe_edit_cb", _edit)
-    monkeypatch.setattr(rules_flow.rules_editor, "_locale", _locale)
+    monkeypatch.setattr(rules_editor, "publish_rules", _publish)
+    monkeypatch.setattr(rules_editor, "safe_edit_cb", _edit)
+    monkeypatch.setattr(rules_editor.rules_editor, "_locale", _locale)
 
     update = _callback_update()
     result = asyncio.run(
-        rules_flow.rules_editor.publish(cast("Any", update), cast("Any", None))
+        rules_editor.rules_editor.publish(cast("Any", update), cast("Any", None))
     )
 
     assert result == WAITING_EDITOR_MENU

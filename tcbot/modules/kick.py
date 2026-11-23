@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Group kick command entry point: validates permissions and delegates to kick_flow."""
+"""Group kick command entry point: validates permissions and delegates to kick_actions."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from tcbot.modules.helper import decorators, targets
 from tcbot.modules.helper.messages import replies, reply_rich, reply_rich_result
-from tcbot.modules.helper.pipelines.kick_flow import kick_conversation, proof, reason
-from tcbot.modules.helper.pipelines.reason_flow import (
+from tcbot.modules.helper.pipelines.kick_actions import kick_conversation, proof, reason
+from tcbot.modules.helper.pipelines.mod_action_steps import (
     WAITING_PROOF,
     WAITING_REASON,
     is_reason_too_long,

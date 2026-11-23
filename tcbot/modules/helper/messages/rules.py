@@ -255,8 +255,51 @@ async def preview(items: list[dict[str, Any]], locale: str | None) -> str:
 
 
 def rules_menu(locale: str | None, community_name: str) -> str:
-    """Render the public /rules menu text."""
+    """Render the public /rules topic index text."""
     return t("rules.menu.body", locale, community=community_name)
+
+
+def rich_index_page(intro: str, category_rows: list[str]) -> dict[str, Any]:
+    """Render the topic index with rich paragraphs and a divider."""
+    return rich_msg.html_message(
+        heading(t("rules.menu.index_title", None, plain=True)),
+        paragraph(intro),
+        divider(),
+        *(paragraph(row) for row in category_rows),
+    )
+
+
+def rich_section_page(
+    category: str, section: str, items: list[dict[str, Any]], locale: str | None
+) -> dict[str, Any]:
+    """Render one section of a category as a rich block with a footer."""
+    label = category_label(str(category), locale, str(category))
+    title = t("rules.menu.section", locale, category=label, section=section, plain=True)
+    lines = [
+        f"{rich_bold(str(item['title']))}\n{rich_esc(str(item['body']))}"
+        for item in items
+    ]
+    return rich_msg.html_message(
+        heading(title),
+        divider(),
+        bullet_list(lines),
+        divider(),
+        footer(t("rules.menu.category_footer", locale, plain=True)),
+    )
+
+
+def rich_category_index(
+    key: str, title: str, description: str, locale: str | None
+) -> dict[str, Any]:
+    """Render a category heading with its one-line description."""
+    label = category_label(key, locale, title)
+    return rich_msg.html_message(
+        heading(t("rules.menu.category", locale, category=label, plain=True)),
+        divider(),
+        paragraph(description),
+        divider(),
+        footer(t("rules.menu.category_footer", locale, plain=True)),
+    )
 
 
 def category_view(
@@ -275,32 +318,42 @@ def category_view(
 
 
 def rich_category_view(
-    category: str, items: list[dict[str, Any]], locale: str | None
+    category: str,
+    items: list[dict[str, Any]],
+    locale: str | None,
+    *,
+    page: int | None = None,
+    total: int | None = None,
 ) -> dict[str, Any]:
-    """Build a rich category page in the Privacy Policy layout.
+    """Build one rich rules page holding a single topic and its rules.
 
-    A category is one short topic page: heading, divider, a plain list of its
-    rules, then a footer. The index owns navigation, so the page never dumps
-    every topic into one message.
+    The public menu is paginated one topic per page. The optional page numbers
+    render a position marker so a reader knows where they are in the set; the
+    Prev and Next buttons live in the keyboard, not in this renderer.
     """
     label = category_label(str(category), locale, str(category))
     heading_text = t("rules.menu.category", locale, category=label, plain=True)
-    if not items:
-        return rich_msg.html_message(
-            heading(heading_text),
-            paragraph(t("rules.menu.no_rules", locale)),
+    blocks = [heading(heading_text)]
+    if page is not None and total is not None:
+        blocks.append(
+            paragraph(t("rules.menu.page", locale, page=page + 1, total=total))
         )
+    if not items:
+        blocks.append(paragraph(t("rules.menu.no_rules", locale)))
+        return rich_msg.html_message(*blocks)
     lines = [
         f"{rich_bold(str(item['title']))}\n{rich_esc(str(item['body']))}"
         for item in items
     ]
-    return rich_msg.html_message(
-        heading(heading_text),
-        divider(),
-        bullet_list(lines),
-        divider(),
-        footer(t("rules.menu.category_footer", locale, plain=True)),
+    blocks.extend(
+        (
+            divider(),
+            bullet_list(lines),
+            divider(),
+            footer(t("rules.menu.category_footer", locale, plain=True)),
+        )
     )
+    return rich_msg.html_message(*blocks)
 
 
 def selected_summary(titles: list[str], note: str | None, locale: str | None) -> str:

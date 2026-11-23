@@ -2,19 +2,11 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Conversation editor for community rules.
-
-The editor keeps one draft per rule set and locale. Every mutation happens
-on that draft, so a published version stays immutable and a failed edit can
-never change what members already agreed to. The flow owns only the dialog:
-persistence lives in ``rules_db`` and rendering in ``messages.rules``.
-"""
+"""Conversation editor for community rules drafts and publication."""
 
 from __future__ import annotations
 
-import asyncio
-import re
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from telegram.ext import (
     CallbackQueryHandler,
@@ -27,101 +19,33 @@ from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.buttons.menus import open_pm_btn
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, reply_rich, safe_edit_cb
+from tcbot.modules.helper.messages import reply_rich, safe_edit_cb
 from tcbot.modules.helper.messages import rules as rules_msg
+from tcbot.modules.helper.pipelines.rules_editor_steps import (
+    _BODY_MAX,
+    _TCRULES_CMDS,
+    _TITLE_MAX,
+    _URL_MAX,
+    WAITING_CONFIRM_DISCARD,
+    WAITING_EDITOR_MENU,
+    clear_editor_scope,
+    clear_item_step,
+    editor_allowed,
+    refuse_editor,
+    slug,
+)
 from tcbot.modules.helper.pipelines.rules_publish import publish_rules
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
+from tcbot.utils.pagination import clamp_page
+from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 if TYPE_CHECKING:
     from telegram import Update
     from telegram.ext import ContextTypes
 
 log = get_logger(__name__)
-
-_TCRULES_CMDS = build_prefixed_filters("tcrules")
-
-# * One interactive state owns every editor callback and text step. The
-# * pending step itself lives in the flow scope, so a typo in the old five
-# * state layout could never strand a prompt with no reachable handler.
-WAITING_EDITOR_MENU = 0
-WAITING_CONFIRM_DISCARD = 5
-
-_TITLE_MAX: int = 200
-_BODY_MAX: int = 3500
-_URL_MAX: int = 500
-
-
-async def editor_allowed(update: Update) -> bool:
-    """Re-check the editor capability on every editor surface.
-
-    A capability can be revoked while a panel or a dialog stays open, so
-    every mutation re-reads the permission instead of trusting the command
-    that opened the editor. A lookup failure rejects.
-    """
-    uid = update.effective_user.id if update.effective_user else 0
-    try:
-        return await db.users_roles.has_permission(uid, "rules.manage")
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.warning("rules.manage lookup failed for %d: %s", uid, exc)
-        return False
-
-
-_EDITOR_SCOPE_KEYS = (
-    "rules_set",
-    "rules_version",
-    "rules_step",
-    "rules_item_title",
-    "rules_item_body",
-    "rules_category",
-    "rules_category_key",
-)
-
-
-def _clear_item_step(scope: dict[str, Any]) -> None:
-    """Forget a completed text step so a later chat message cannot repeat it."""
-    for key in ("rules_step", "rules_item_title", "rules_item_body"):
-        scope.pop(key, None)
-
-
-def _clear_editor_scope(scope: dict[str, Any]) -> None:
-    """Drop every editor key so a later session starts clean."""
-    for key in _EDITOR_SCOPE_KEYS:
-        scope.pop(key, None)
-
-
-async def refuse_editor(update: Update) -> None:
-    """Answer the callback and explain why an editor action was refused."""
-    query = update.callback_query
-    if query is not None:
-        try:
-            await query.answer()
-        except Exception as exc:
-            log.debug("editor refusal answer failed: %s", exc)
-    msg = query.message if query is not None else update.effective_message
-    if msg is not None:
-        await reply_rich(
-            cast("Any", msg),
-            replies.refuse_permission(await locale_for_update(update), plain=True),
-            log_label="rules editor refusal",
-            parse_mode=None,
-        )
-
-
-# * Telegram caps callback_data at 64 bytes. The longest category callback is
-# * "rules_cat_rename:" (17 bytes) plus a numeric collision suffix, so the
-# * slug must leave room for both.
-_SLUG_MAX = 40
-
-
-def _slug(title: str) -> str:
-    """Derive a stable category slug from a display title."""
-    base = re.sub(r"[^a-z0-9]+", "-", title.strip().lower()).strip("-")
-    return base[:_SLUG_MAX] or "category"
 
 
 class RulesEditor:
@@ -134,9 +58,6 @@ class RulesEditor:
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
     ) -> tuple[dict[str, Any], dict[str, Any]] | None:
         """Ensure a community set and open its working draft."""
-        # * A capability can be revoked while the editor conversation stays
-        # * open. Every path that reaches this draft-opening write must
-        # * re-check, not just the panel entry point.
         if not await editor_allowed(update):
             await refuse_editor(update)
             return None
@@ -212,8 +133,6 @@ class RulesEditor:
         if action == "rules_cat_rename":
             scope["rules_category_key"] = key
             scope["rules_step"] = "rename_category"
-            # * A callback prompt edits the tapped message; a fresh reply
-            # * would strand the category keyboard above a new question.
             await self._edit_or_reply(
                 update,
                 t("rules.editor.ask_rename", await self._locale(update), plain=True),
@@ -305,8 +224,6 @@ class RulesEditor:
         set_doc, version = opened
         items = await db.rules_db.all_items(int(version["id"]))
         if not items:
-            # * An empty draft has nothing to publish. Guide the reader into
-            # * the editor instead of surfacing a technical publish error.
             await self._edit_or_reply(
                 update,
                 t("rules.publish.empty", locale),
@@ -324,9 +241,7 @@ class RulesEditor:
         except Exception as exc:
             # * A channel failure can happen after promote_version committed.
             # * Refresh the cached snapshot so the next step opens a fresh
-            # * draft instead of writing to a published version. A failed
-            # * lookup keeps the draft snapshot, which is correct when no
-            # * promotion happened.
+            # * draft instead of writing to a published version.
             try:
                 published = await db.rules_db.published_version(int(set_doc["id"]))
             except Exception:
@@ -340,9 +255,6 @@ class RulesEditor:
                 rules_btn.editor_panel_btn(locale, has_content=True),
             )
             return WAITING_EDITOR_MENU
-        # * The cached version is still marked draft after publish. Refresh it
-        # * from the database so the next mutation opens a fresh draft instead
-        # * of appending rows to the now immutable published version.
         try:
             published = await db.rules_db.published_version(int(set_doc["id"]))
         except Exception as exc:
@@ -373,9 +285,6 @@ class RulesEditor:
         user = update.effective_user
         if msg is None or user is None or not msg.text:
             return ConversationHandler.END
-        # * A step can be set by a stale button long after the open draft was
-        # * published. Re-open the draft before any typed answer writes to it,
-        # * so a published, member-visible version can never gain new items.
         opened = await self._set_and_draft(update, ctx)
         if opened is None:
             return ConversationHandler.END
@@ -394,10 +303,10 @@ class RulesEditor:
                 )
                 return WAITING_EDITOR_MENU
             category = await db.rules_db.add_category(
-                int(set_doc["id"]), _slug(text), text
+                int(set_doc["id"]), slug(text), text
             )
             scope["rules_category"] = category
-            _clear_item_step(scope)
+            clear_item_step(scope)
             return await self.categories(update, ctx)
 
         if step == "rename_category":
@@ -458,9 +367,7 @@ class RulesEditor:
             title = scope.get("rules_item_title")
             body = scope.get("rules_item_body")
             if not category or not title or not body:
-                # * A stale step can outlive its category selection. Fail with
-                # * the generic guidance instead of raising on a missing key.
-                _clear_item_step(scope)
+                clear_item_step(scope)
                 await reply_rich(
                     msg,
                     t("rules.editor.unexpected", locale, plain=True),
@@ -477,10 +384,8 @@ class RulesEditor:
                     text or None,
                 )
             except ValueError as exc:
-                # * A publish between the draft check and this write must not
-                # * surface as an unhandled handler exception.
                 log.warning("Rules item write refused: %s", exc)
-                _clear_item_step(scope)
+                clear_item_step(scope)
                 await reply_rich(
                     msg,
                     t("rules.editor.unexpected", locale, plain=True),
@@ -488,11 +393,9 @@ class RulesEditor:
                     parse_mode=None,
                 )
                 return WAITING_EDITOR_MENU
-            _clear_item_step(scope)
+            clear_item_step(scope)
             return await self.items(update, ctx)
 
-        # * Typing while simply viewing the panel is unexpected input, not a
-        # * request to leave. Keep the conversation and its draft alive.
         await reply_rich(
             msg,
             t("rules.editor.unexpected", locale, plain=True),
@@ -512,14 +415,15 @@ class RulesEditor:
         set_doc, _version = opened
         set_id = int(set_doc["id"])
         categories = await db.rules_db.list_categories(set_id)
-        locale = await self._locale(update)
-        text = rules_msg.category_list(categories, locale)
-        markup = rules_btn.categories_btn(categories, locale)
+        text = rules_msg.category_list(categories, await self._locale(update))
+        markup = rules_btn.categories_btn(categories, await self._locale(update))
         await self._edit_or_reply(update, text, markup)
         return WAITING_EDITOR_MENU
 
-    async def items(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """List the items of the selected draft category."""
+    async def items(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, page: int = 0
+    ) -> int:
+        """List at most five items of the selected draft category."""
         q = update.callback_query
         if q is not None:
             await q.answer()
@@ -528,25 +432,39 @@ class RulesEditor:
         category = scope.get("rules_category")
         category_key = str(category["category_key"]) if category else None
         items = await db.rules_db.list_items(version_id, category_key)
+        total_pages, page = clamp_page(len(items), page, 5)
+        chunk = items[page * 5 : (page + 1) * 5]
         locale = await self._locale(update)
-        text = rules_msg.item_list(items, locale)
-        markup = rules_btn.items_btn(items, locale)
-        await self._edit_or_reply(update, text, markup)
+        await self._edit_or_reply(
+            update,
+            rules_msg.item_list(chunk, locale),
+            rules_btn.editor_items_page_btn(page, total_pages, locale),
+        )
         return WAITING_EDITOR_MENU
+
+    async def items_page(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+        """Show another page of the editor item list."""
+        query = update.callback_query
+        page = 0
+        if query is not None and query.data:
+            try:
+                page = int(query.data.split(":", 1)[1])
+            except ValueError, IndexError:
+                page = 0
+        return await self.items(update, ctx, page)
 
     async def ask_category_title(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
     ) -> int:
-        """Ask the staff member for a new category title."""
+        """Ask for a new category title."""
         q = update.callback_query
         if q is not None:
             await q.answer()
         flow_scope(ctx, update)["rules_step"] = "category_title"
-        locale = await self._locale(update)
         await self._edit_or_reply(
             update,
-            t("rules.editor.ask_category", locale, plain=True),
-            rules_btn.prompt_btn("rules_panel", locale),
+            t("rules.editor.ask_category", await self._locale(update), plain=True),
+            rules_btn.prompt_btn("rules_panel", await self._locale(update)),
         )
         return WAITING_EDITOR_MENU
 
@@ -557,29 +475,46 @@ class RulesEditor:
         q = update.callback_query
         if q is not None:
             await q.answer()
-        scope = flow_scope(ctx, update)
-        scope["rules_step"] = "item_title"
-        locale = await self._locale(update)
+        flow_scope(ctx, update)["rules_step"] = "item_title"
         await self._edit_or_reply(
             update,
-            t("rules.editor.ask_title", locale, plain=True),
-            rules_btn.prompt_btn("rules_categories", locale),
+            t("rules.editor.ask_title", await self._locale(update), plain=True),
+            rules_btn.prompt_btn("rules_categories", await self._locale(update)),
         )
         return WAITING_EDITOR_MENU
 
-    async def preview(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """Render the draft exactly as the channel will see it."""
+    async def preview(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, page: int = 0
+    ) -> int:
+        """Render at most five draft items exactly as the channel will see them."""
         q = update.callback_query
         if q is not None:
             await q.answer()
         scope = flow_scope(ctx, update)
         version_id = int(scope["rules_version"]["id"])
         items = await db.rules_db.list_items(version_id)
-        locale = await self._locale(update)
-        text = await rules_msg.preview(items, locale)
-        # * Keep the editor open: Back returns to the main panel, Close exits.
-        await self._edit_or_reply(update, text, rules_btn.preview_btn(locale))
+        total_pages, page = clamp_page(len(items), page, 5)
+        chunk = items[page * 5 : (page + 1) * 5]
+        text = await rules_msg.preview(chunk, await self._locale(update))
+        await self._edit_or_reply(
+            update,
+            text,
+            rules_btn.editor_preview_page_btn(
+                page, total_pages, await self._locale(update)
+            ),
+        )
         return WAITING_EDITOR_MENU
+
+    async def preview_page(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+        """Show another page of the draft preview."""
+        query = update.callback_query
+        page = 0
+        if query is not None and query.data:
+            try:
+                page = int(query.data.split(":", 1)[1])
+            except ValueError, IndexError:
+                page = 0
+        return await self.preview(update, ctx, page)
 
     async def ask_discard(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Ask for confirmation before removing the draft."""
@@ -606,9 +541,10 @@ class RulesEditor:
         version_id = scope.get("rules_version", {}).get("id")
         if version_id is not None:
             await db.rules_db.discard_draft(int(version_id))
-        _clear_editor_scope(scope)
-        locale = await self._locale(update)
-        await self._edit_or_reply(update, t("rules.editor.discarded", locale), None)
+        clear_editor_scope(scope)
+        await self._edit_or_reply(
+            update, t("rules.editor.discarded", await self._locale(update)), None
+        )
         return ConversationHandler.END
 
     async def cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -616,19 +552,16 @@ class RulesEditor:
         q = update.callback_query
         if q is not None:
             await q.answer()
-        _clear_editor_scope(flow_scope(ctx, update))
-        locale = await self._locale(update)
-        await self._edit_or_reply(update, t("rules.editor.cancelled", locale), None)
+        clear_editor_scope(flow_scope(ctx, update))
+        await self._edit_or_reply(
+            update, t("rules.editor.cancelled", await self._locale(update)), None
+        )
         return ConversationHandler.END
 
     async def ignore_foreign_cancel(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
     ) -> int:
-        """Answer a moderation picker Cancel without closing the editor.
-
-        That callback belongs to a ban or reason flow. A stale tap must not
-        end an unrelated rules session, so the editor stays open.
-        """
+        """Answer a moderation picker Cancel without closing the editor."""
         q = update.callback_query
         if q is not None:
             try:
@@ -652,15 +585,7 @@ rules_editor = RulesEditor()
 
 
 def build_rules_conv() -> ConversationHandler:
-    """Build the single-state editor conversation used by ``/tcrules``.
-
-    Every panel callback and text step lives in one state. The pending step
-    is owned by the flow scope, so a button always has a reachable handler
-    and a typed answer always returns to the same menu.
-    """
-    # * The group's Open in PM button uses a deep link. Registering it as an
-    # * entry point starts the editor conversation, so its buttons keep working
-    # * after the reader follows the link.
+    """Build the single-state editor conversation used by ``/tcrules``."""
     _TCRULES_START = filters.ChatType.PRIVATE & filters.Regex(r"^/start\s+tcrules$")
     return ConversationHandler(
         entry_points=[
@@ -674,6 +599,12 @@ def build_rules_conv() -> ConversationHandler:
                     rules_editor.categories, pattern=r"^rules_edit_draft$"
                 ),
                 CallbackQueryHandler(rules_editor.preview, pattern=r"^rules_preview$"),
+                CallbackQueryHandler(
+                    rules_editor.preview_page, pattern=r"^rules_preview_page:\d+$"
+                ),
+                CallbackQueryHandler(
+                    rules_editor.items_page, pattern=r"^rules_items_page:\d+$"
+                ),
                 CallbackQueryHandler(
                     rules_editor.settings, pattern=r"^rules_settings$"
                 ),
@@ -708,8 +639,6 @@ def build_rules_conv() -> ConversationHandler:
                 CallbackQueryHandler(
                     rules_editor.cancel, pattern=r"^rules_discard_no$"
                 ),
-                # * The confirmation keyboard still shows Back and Close.
-                # * Close is global; Back must return to the panel from here.
                 CallbackQueryHandler(rules_editor.panel, pattern=r"^rules_panel$"),
             ],
         },

@@ -390,7 +390,7 @@ async def _paged_records(
         records = await db_call(target_id, skip=page * _PAGE_SIZE, limit=_PAGE_SIZE)
         fetch_failed = False
     except Exception:
-        log.exception("check_flow %s list fetch failed for %d", log_label, target_id)
+        log.exception("check_panels %s list fetch failed for %d", log_label, target_id)
         records = []
         fetch_failed = True
     if count_failed:
@@ -591,7 +591,7 @@ class CheckEventsMixin:
             warns_failed = False
         except Exception:
             log.exception(
-                "check_flow warns_in_group fetch failed for %d/%d", target_id, chat_id
+                "check_panels warns_in_group fetch failed for %d/%d", target_id, chat_id
             )
             warns = []
             warns_failed = True

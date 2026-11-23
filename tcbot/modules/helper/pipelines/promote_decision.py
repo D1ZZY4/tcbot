@@ -63,10 +63,9 @@ async def execute_promo_decision(
         return
     # * request_id is known from q.data, so the record fetch fires
     # * speculatively alongside the ownership check. The locale resolves in
-    # * the same batch: every message below renders in it, and one
-    # * resolution per handler keeps the catalog lookup off the critical
-    # * path. The query is answered per branch, never here: Telegram accepts
-    # * one answer, so an early ack would swallow every alert below.
+    # * the same batch so one resolution per handler keeps the catalog off the
+    # * critical path. The query is answered per branch, never here: Telegram
+    # * accepts one answer, so an early ack would swallow every alert below.
     locale, is_owner, req_result = await asyncio.gather(
         locale_for_update(update),
         db.users_roles.is_owner(admin.id, fresh=True),
@@ -75,15 +74,12 @@ async def execute_promo_decision(
     )
     throw_if_cancelled((locale, is_owner, req_result))
     if isinstance(locale, BaseException):
-        # * Locale resolution never raises; the branch only narrows the type
-        # * for the gather that reports every failure as an exception.
         locale = None
     if isinstance(is_owner, BaseException):
-        log.warning("on_promo_decision owner check failed: %s", is_owner)
-        # * The card is shared (the Owner DM, or the log channel when the
-        # * DM fails), so a refused tap must leave its buttons in place. An
-        # * edit here would let any reader of the card destroy the Owner's
-        # * only decision surface.
+        log.warning("promote_decision owner check failed: %s", is_owner)
+        # * The card is shared, so a refused tap must leave its buttons in
+        # * place: an edit would let any reader destroy the Owner's only
+        # * decision surface.
         await answer_alert(q, t("admins.error.role_lookup_failed", locale, plain=True))
         return
     if not is_owner:
@@ -97,7 +93,7 @@ async def execute_promo_decision(
             t("admins.error.request_not_found", locale, plain=True),
             parse_mode=None,
             log_level="debug",
-            log_label="on_promo_decision db-error",
+            log_label="promote_decision db-error",
             catch_all=True,
         )
         return
@@ -108,20 +104,18 @@ async def execute_promo_decision(
             t("admins.error.request_not_found", locale, plain=True),
             parse_mode=None,
             log_level="debug",
-            log_label="on_promo_decision not-found",
+            log_label="promote_decision not-found",
             catch_all=True,
         )
         return
     req = req_result
     # * A concurrent tap may have resolved the request after our fetch.
-    # * resolve() below is atomic, but refuse early so a stale card never
-    # * shows a second success message.
     if req.get("status") != "pending":
         await answer_ack(q)
         await cb_error_edit(
             q,
             t("admins.error.request_not_found", locale, plain=True),
-            log_label="on_promo_decision resolved",
+            log_label="promote_decision resolved",
             parse_mode=None,
         )
         return
@@ -130,9 +124,8 @@ async def execute_promo_decision(
 
     if action == "promo_approve":
         # * A request can outlive an ownership transfer. Approving it would
-        # * rewrite the owner assignment as an Admin, leaving the federation
-        # * without an Owner, so the Owner role is refused here. The
-        # * request stays pending; the transfer cancels it separately.
+        # * rewrite the owner assignment as Admin, so the Owner role is
+        # * refused here and the request stays pending.
         try:
             target_role = await db.users_roles.get_effective_role(target_id, fresh=True)
         except asyncio.CancelledError:
@@ -148,13 +141,9 @@ async def execute_promo_decision(
                 q, t("admins.promote.target_is_owner", locale, plain=True)
             )
             return
-        # * A banned target must not gain rank through a queued request:
-        # * the request may have been filed before the ban landed, and the
-        # * Owner's tap must not override the ban.
+        # * A banned target must not gain rank through a queued request.
         ban_refusal = await banned_target_refusal(
-            target_id,
-            locale,
-            log_label="promo_approve ban-guard",
+            target_id, locale, log_label="promo_approve ban-guard"
         )
         if ban_refusal is not None:
             await answer_ack(q)
@@ -166,11 +155,7 @@ async def execute_promo_decision(
             )
             return
         # * Resolve-first claim, then grant: the atomic resolve decides a
-        # * concurrent approve/reject race. Granting before the claim (old
-        # * order) could add admin after a winning reject, granting rank
-        # * against the resolved intent. If add_admin fails after a won
-        # * claim, the request stays approved and the operator grants
-        # * manually; that availability gap is safer than a privilege race.
+        # * concurrent approve/reject race before any privilege is written.
         try:
             db_resolve_r = await db.queues_db.resolve(request_id, "approved", admin.id)
         except Exception:
@@ -208,14 +193,9 @@ async def execute_promo_decision(
                 parse_mode=None,
             )
             return
-        # * The decision is reached and the role is granted; ack now, before
-        # * the notification fan-out, so the spinner stops without a second
-        # * answer on any later branch.
         await answer_ack(q)
-        # * The assignment already revoked the role the target held
-        # * before it, in the same transaction. A second revocation
-        # * afterwards would also revoke the admin role it had just
-        # * written, so the promoted user would end up with no role.
+        # * The assignment already revoked the previous role in the same
+        # * transaction; a second revocation would strip the new admin role.
         cleanup_r = await asyncio.gather(
             db.users_cache.upsert_user(target_id, None, target_fname),
             return_exceptions=True,
@@ -236,16 +216,12 @@ async def execute_promo_decision(
         )
         card_text = getattr(q.message, "text", "") if q.message is not None else ""
         if not card_text:
-            # * A rich card may have no plain .text; rebuild it from the
-            # * request so the decision suffix never becomes the whole card.
             card_text = promote_request_log(
                 target_id, target_fname, req.get("username"), request_id
             )
         decision_text = card_text + t(
             "admins.decision.approved_suffix", locale, name=admin.first_name
         )
-        # * The target reads their own locale: a direct message to one
-        # * user resolves the recipient's preference, not the card's.
         target_locale = await locale_for_user(target_id)
         notify_results = await asyncio.gather(
             safe_edit_cb(q, decision_text, reply_markup=None),
@@ -259,10 +235,7 @@ async def execute_promo_decision(
                     plain=True,
                 ),
             ),
-            send_log(
-                ctx.bot,
-                log_text,
-            ),
+            send_log(ctx.bot, log_text),
             return_exceptions=True,
         )
         throw_if_cancelled(notify_results)
@@ -271,9 +244,7 @@ async def execute_promo_decision(
                 log.debug("promo_approve notify[%d] failed: %s", i, r)
 
     elif action == "promo_reject":
-        # * Resolve first and atomically: only the winner may mutate the UI,
-        # * so a lost race shows an error instead of a "Rejected" card over
-        # * a still-pending request.
+        # * Resolve first and atomically: only the winner may mutate the UI.
         try:
             resolved = await db.queues_db.resolve(request_id, "rejected", admin.id)
         except Exception:
@@ -312,10 +283,7 @@ async def execute_promo_decision(
                 target_id,
                 t("admins.decision.reject_dm", target_locale, plain=True),
             ),
-            send_log(
-                ctx.bot,
-                log_text,
-            ),
+            send_log(ctx.bot, log_text),
             return_exceptions=True,
         )
         throw_if_cancelled(reject_results)

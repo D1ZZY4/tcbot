@@ -11,10 +11,13 @@ from typing import Any
 
 from telegram.ext import MessageHandler
 
-from tcbot.modules.helper.pipelines.appeal_submit_flow import build_handler
-from tcbot.modules.helper.pipelines.ban_flow import ban_conversation
-from tcbot.modules.helper.pipelines.proof_flow import BuildProof
-from tcbot.modules.helper.pipelines.reason_flow import BuildReason, build_modaction_conv
+from tcbot.modules.helper.pipelines.appeal_submit import build_handler
+from tcbot.modules.helper.pipelines.ban_actions import ban_conversation
+from tcbot.modules.helper.pipelines.mod_action_steps import (
+    BuildReason,
+    build_modaction_conv,
+)
+from tcbot.modules.helper.pipelines.proof_steps import BuildProof
 from tcbot.utils.prefixes import build_prefixed_filters
 
 

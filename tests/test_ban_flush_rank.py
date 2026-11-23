@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from tcbot.modules.helper.pipelines import ban_flow
+from tcbot.modules.helper.pipelines import ban_actions
 from tcbot.modules.helper.pipelines.proof_session import (
     ProofSession,
     ProofSessionRegistry,
@@ -24,7 +24,7 @@ class _DummyBot:
 
 
 def _prefilled_scope() -> dict[str, Any]:
-    return dict.fromkeys(ban_flow.BAN_USER_DATA_KEYS, "value")
+    return dict.fromkeys(ban_actions.BAN_USER_DATA_KEYS, "value")
 
 
 def _install_fast_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -33,7 +33,7 @@ def _install_fast_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fast(delay: float, *args: Any, **kwargs: Any) -> None:
         await real_sleep(0)
 
-    monkeypatch.setattr(ban_flow.asyncio, "sleep", _fast)
+    monkeypatch.setattr(ban_actions.asyncio, "sleep", _fast)
 
 
 def _session(
@@ -59,16 +59,16 @@ def _run_flush(
     registry = ProofSessionRegistry()
     executed: list[Any] = []
     _install_fast_sleep(monkeypatch)
-    monkeypatch.setattr(ban_flow, "proof_sessions", registry)
+    monkeypatch.setattr(ban_actions, "proof_sessions", registry)
 
     async def _fake_execute(bot: Any, msgs: Any, meta: Any) -> None:
         executed.append((bot, msgs, meta))
 
-    monkeypatch.setattr(ban_flow, "_execute_ban", _fake_execute)
+    monkeypatch.setattr(ban_actions, "_execute_ban", _fake_execute)
 
     async def _scenario() -> None:
         registry[key] = session
-        await ban_flow._flush_session(key, _DummyBot())  # type: ignore[arg-type]
+        await ban_actions._flush_session(key, _DummyBot())  # type: ignore[arg-type]
 
     asyncio.run(_scenario())
     return registry, executed
@@ -90,12 +90,12 @@ def test_flush_releases_the_session_when_cancelled_during_the_window(
     key = (11, 22)
     registry = ProofSessionRegistry()
     session = _session()
-    monkeypatch.setattr(ban_flow, "proof_sessions", registry)
+    monkeypatch.setattr(ban_actions, "proof_sessions", registry)
 
     async def _scenario() -> None:
         registry[key] = session
         task = asyncio.create_task(
-            ban_flow._flush_session(key, _DummyBot())  # type: ignore[arg-type]
+            ban_actions._flush_session(key, _DummyBot())  # type: ignore[arg-type]
         )
         await asyncio.sleep(0)
         task.cancel()

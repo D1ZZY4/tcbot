@@ -39,7 +39,7 @@ from tcbot.modules.helper.messages import (
 from tcbot.modules.helper.messages.links import display as display_community_link
 from tcbot.modules.helper.messages.rich_format import heading
 from tcbot.modules.helper.messages.rich_list import checklist
-from tcbot.modules.helper.pipelines.appeal_review_flow import AppealReviewMixin
+from tcbot.modules.helper.pipelines.appeal_review import AppealReviewMixin
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import pre, t
@@ -587,7 +587,7 @@ async def post_appeal(
     return ConversationHandler.END
 
 
-# ───────────────────────── Submission flow ──────────────────────── #
+# ───────────────────────── Submission steps ──────────────────────── #
 
 
 class AppealSubmitMixin(SubmitMessageMixin):

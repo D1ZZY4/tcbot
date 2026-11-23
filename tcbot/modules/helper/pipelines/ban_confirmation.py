@@ -81,6 +81,6 @@ async def on_ban_update_continue(
 
 def _ban_keys() -> tuple[str, ...]:
     """Return the ban payload keys; imported late to avoid a module cycle."""
-    from tcbot.modules.helper.pipelines.ban_flow import BAN_USER_DATA_KEYS  # noqa: PLC0415
+    from tcbot.modules.helper.pipelines.ban_actions import BAN_USER_DATA_KEYS  # noqa: PLC0415
 
     return BAN_USER_DATA_KEYS

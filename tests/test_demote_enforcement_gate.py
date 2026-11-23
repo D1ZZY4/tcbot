@@ -18,8 +18,8 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import demote_flow
-from tcbot.modules.helper.pipelines.demote_flow import (
+from tcbot.modules.helper.pipelines import demote_actions as demote
+from tcbot.modules.helper.pipelines.demote_actions import (
     Demote,
     demote_before_enforcement,
 )
@@ -127,9 +127,9 @@ def test_enforcement_dm_uses_the_localized_verb(
         return "en-US"
 
     monkeypatch.setattr(Demote, "remove_role", staticmethod(_removed))
-    monkeypatch.setattr(demote_flow, "send_text", _send_text)
-    monkeypatch.setattr(demote_flow, "send_log", _send_log)
-    monkeypatch.setattr(demote_flow, "locale_for_user", _locale)
+    monkeypatch.setattr(demote, "send_text", _send_text)
+    monkeypatch.setattr(demote, "send_log", _send_log)
+    monkeypatch.setattr(demote, "locale_for_user", _locale)
     asyncio.run(
         Demote.execute(
             object(),  # type: ignore[arg-type]

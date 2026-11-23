@@ -14,8 +14,8 @@ import pytest
 from telegram.ext import ConversationHandler
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import appeal_submit_flow
-from tcbot.modules.helper.pipelines.appeal_submit_flow import (
+from tcbot.modules.helper.pipelines import appeal_submit
+from tcbot.modules.helper.pipelines.appeal_submit import (
     WAITING_APPEAL,
     AppealSubmitMixin,
 )
@@ -86,12 +86,12 @@ def test_review_post_failure_stays_retryable(
     async def _set_appeal_log(*args: Any, **kwargs: Any) -> None:
         return None
 
-    monkeypatch.setattr(appeal_submit_flow, "locale_for_update", _locale)
+    monkeypatch.setattr(appeal_submit, "locale_for_update", _locale)
     monkeypatch.setattr(db.bans_db, "get_ban", _get_ban)
     monkeypatch.setattr(db.bans_db, "set_appeal_log_msg", _set_appeal_log)
     monkeypatch.setattr(db.users_cache, "upsert_user", _upsert)
     monkeypatch.setattr(
-        appeal_submit_flow,
+        appeal_submit,
         "cfg",
         SimpleNamespace(
             appeals=(-1001, None),

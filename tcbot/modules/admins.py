@@ -28,11 +28,11 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     safe_edit_cb,
 )
-from tcbot.modules.helper.pipelines import roles_flow
-from tcbot.modules.helper.pipelines.demote_flow import Demote
-from tcbot.modules.helper.pipelines.promo_decision_flow import execute_promo_decision
-from tcbot.modules.helper.pipelines.promote_flow import Promote
-from tcbot.modules.helper.pipelines.transfer_flow import execute_transfer
+from tcbot.modules.helper.pipelines import promote_steps as role_change
+from tcbot.modules.helper.pipelines.demote_actions import Demote
+from tcbot.modules.helper.pipelines.promote_decision import execute_promo_decision
+from tcbot.modules.helper.pipelines.promote_steps import Promote
+from tcbot.modules.helper.pipelines.transfer_owner import execute_transfer
 from tcbot.modules.helper.targets import classify_and_load_role, resolve_executor_target
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, t, user_ref
@@ -154,13 +154,13 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * Admin to Moderator; the old promote identity refusal rejected every
     # * Admin target before the change could run. Route these through the
     # * role-change workflow, and show its picker when no role was given.
-    if roles_flow.is_role_change_request(entry_role, role, executor_role):
+    if role_change.is_role_change_request(entry_role, role, executor_role):
         refusal = identity.refuse_message("demote", ident, locale)
         if refusal is not None:
             await reply_rich(msg, refusal, log_label="cmd_promote change-refusal")
             return
         if role is not None:
-            _, text = await roles_flow.change_role_for_staff(
+            _, text = await role_change.change_role_for_staff(
                 ctx.bot,
                 admin.id,
                 admin.first_name,
@@ -171,7 +171,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
             await reply_rich(msg, text, log_label="cmd_promote role-change result")
         else:
-            await roles_flow.role_change_prompt(
+            await role_change.role_change_prompt(
                 update,
                 executor_role=executor_role,
                 target_id=target_id,
@@ -693,7 +693,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """Transfer federation ownership to another user.
 
     Validates the origin and the target and hands the transfer to
-    ``transfer_flow.execute_transfer``, which replaces the owner record
+    ``transfer_owner.execute_transfer``, which replaces the owner record
     first and keeps the previous Owner as Admin.
     """
     msg = update.effective_message
@@ -910,7 +910,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
     Owner-only callback; the executor (owner re-check, request fetch,
     approve/reject writes, notifications) lives in
-    ``promo_decision_flow.execute_promo_decision``.
+    ``promote_decision.execute_promo_decision``.
     """
     await execute_promo_decision(update, ctx)
 
@@ -918,7 +918,7 @@ async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 # ──────────────────────────── Handlers ──────────────────────────── #
 
 _PMT_CMDS = build_prefixed_filters("tcpromote") | build_prefixed_filters("tcp")
-_SETROLE_CMDS = build_prefixed_filters("tcsetrole") | build_prefixed_filters("tcsr")
+_SETROLE_CMDS = build_prefixed_filters("tcsetrole")
 _DMT_CMDS = build_prefixed_filters("tcdemote") | build_prefixed_filters("tcd")
 _TF_CMDS = build_prefixed_filters("transferowner") | build_prefixed_filters("tfowner")
 _PMTREQ_CMDS = build_prefixed_filters("tcpromoterequests") | build_prefixed_filters(
@@ -930,7 +930,7 @@ _PMTLIST_CMDS = build_prefixed_filters("tcpromotelist") | build_prefixed_filters
 
 __handlers__ = [
     MessageHandler(_PMT_CMDS, cmd_promote),
-    MessageHandler(_SETROLE_CMDS, roles_flow.cmd_setrole),
+    MessageHandler(_SETROLE_CMDS, role_change.cmd_setrole),
     MessageHandler(_DMT_CMDS, cmd_demote),
     MessageHandler(_TF_CMDS, cmd_transfer),
     MessageHandler(_PMTREQ_CMDS, cmd_promote_request),
@@ -943,10 +943,10 @@ __handlers__ = [
         on_promote_role_cancel, pattern=r"^promo_role_cancel:\d+(:\d+)?$"
     ),
     CallbackQueryHandler(
-        roles_flow.on_role_change_btn, pattern=r"^role_change:[a-z]+:\d+(:\d+)?$"
+        role_change.on_role_change_btn, pattern=r"^role_change:[a-z]+:\d+(:\d+)?$"
     ),
     CallbackQueryHandler(
-        roles_flow.on_role_change_cancel, pattern=r"^role_change_cancel:\d+(:\d+)?$"
+        role_change.on_role_change_cancel, pattern=r"^role_change_cancel:\d+(:\d+)?$"
     ),
     CallbackQueryHandler(on_demote_confirm, pattern=r"^demote_confirm:\d+(:\d+)?$"),
     CallbackQueryHandler(on_demote_cancel, pattern=r"^demote_cancel:\d+(:\d+)?$"),

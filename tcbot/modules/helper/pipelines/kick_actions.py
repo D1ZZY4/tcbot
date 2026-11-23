@@ -19,16 +19,16 @@ from tcbot.modules.helper.messages import (
     safe_edit_message,
     send_log,
 )
-from tcbot.modules.helper.pipelines.demote_flow import demote_before_enforcement
-from tcbot.modules.helper.pipelines.proof_flow import (
-    BuildProof,
-    ProofUpload,
-    upload_proof_for_action,
-)
-from tcbot.modules.helper.pipelines.reason_flow import (
+from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
+from tcbot.modules.helper.pipelines.mod_action_steps import (
     BuildReason,
     build_modaction_conv,
     rules_from_scope,
+)
+from tcbot.modules.helper.pipelines.proof_steps import (
+    BuildProof,
+    ProofUpload,
+    upload_proof_for_action,
 )
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
@@ -359,7 +359,7 @@ async def execute_kick(
                     kick_action_id,
                 )
             # * A cancellation after the ban landed but before the unban is
-            # * the one case with no in-flow repair: mark failed, then queue
+            # * the one case with no in-place repair: mark failed, then queue
             # * the durable reconcile run before the cancellation propagates.
             await _queue_unban_repair()
         raise
@@ -423,7 +423,7 @@ async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def kick_conversation(entry_fn: Callable[..., Any], entry_filter: BaseFilter) -> object:
-    """Return the kick ConversationHandler via the central reason_flow factory."""
+    """Return the kick ConversationHandler via the central mod_action_steps factory."""
     return build_modaction_conv(
         reason,
         proof,

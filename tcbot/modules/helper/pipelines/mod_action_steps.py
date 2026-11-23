@@ -33,8 +33,8 @@ from tcbot.modules.helper.messages import (
     safe_edit_cb,
     safe_edit_message,
 )
-from tcbot.modules.helper.pipelines import rules_step
-from tcbot.modules.helper.pipelines.proof_flow import (
+from tcbot.modules.helper.pipelines import rules_picker
+from tcbot.modules.helper.pipelines.proof_steps import (
     PROOF_MEDIA_FILTER,
     BuildProof,
 )
@@ -77,7 +77,7 @@ WAITING_RULES_NOTE = 3
 MAX_REASON_LEN: int = 1000
 MAX_RULES_NOTE_LEN: int = 200
 
-# * Re-entry commands of each moderation flow. They stay in the fallback so
+# * Re-entry commands of each moderation conversation. They stay in the fallback so
 # * starting the same action again still ends the previous conversation.
 _OWN_COMMANDS: dict[str, tuple[str, ...]] = {
     "kick": ("tckick", "tck"),
@@ -166,7 +166,7 @@ class BuildReason:
         )
 
 
-# ──────────────────────── Shared flow state ─────────────────────── #
+# ──────────────────────── Shared conversation state ─────────────────────── #
 
 
 class _FlowBase:
@@ -247,7 +247,7 @@ class _FlowBase:
         return WAITING_PROOF
 
     def _callback_is_live(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> bool:
-        """Reject a tap on a button left behind by an earlier flow."""
+        """Reject a tap on a button left behind by an earlier conversation."""
         return callback_is_current(
             update,
             flow_scope(ctx, update),
@@ -256,7 +256,7 @@ class _FlowBase:
         )
 
     async def _ignore_stale_callback(self, update: Update) -> None:
-        """Acknowledge a stale tap without touching the current flow."""
+        """Acknowledge a stale tap without touching the current conversation."""
         query = update.callback_query
         if query is None:
             return
@@ -268,7 +268,7 @@ class _FlowBase:
     def _clear_scope(self, ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> None:
         """Remove all action keys from the conversation scope.
 
-        Only this action's keys go: another flow may hold its own payload
+        Only this action's keys go: another conversation may hold its own payload
         in the same conversation scope.
         """
         scope = flow_scope(ctx, update)
@@ -500,7 +500,7 @@ class _ReasonStepMixin(_FlowBase):
         locale = await locale_for_update(update)
         if not text:
             # * filters.TEXT accepts whitespace-only messages, and the
-            # * database rejects a blank reason. Keep the flow open instead
+            # * database rejects a blank reason. Keep the conversation open instead
             # * of storing "".
             await reply_rich(
                 msg,
@@ -581,7 +581,7 @@ class _ReasonStepMixin(_FlowBase):
             published = await db.rules_db.published_rules() if may_pick else None
             if published is not None and published.get("items"):
                 markup = rules_btn.picker_btn(published["items"], [], locale)
-                text = rules_step.picker_text(published["items"], [], locale)
+                text = rules_picker.picker_text(published["items"], [], locale)
                 if await self._edit_prompt(update, ctx, text, markup):
                     return WAITING_RULES
                 return ConversationHandler.END
@@ -629,7 +629,7 @@ class _RulesStepMixin(_FlowBase):
         await self._edit_prompt(
             update,
             ctx,
-            rules_step.picker_text(items, selected, locale),
+            rules_picker.picker_text(items, selected, locale),
             rules_btn.picker_btn(items, selected, locale),
         )
         return WAITING_RULES
@@ -643,10 +643,10 @@ class _RulesStepMixin(_FlowBase):
         if not self._callback_is_live(update, ctx):
             await self._ignore_stale_callback(update)
             return None
-        item_id = rules_step.item_id_from_callback(q.data)
+        item_id = rules_picker.item_id_from_callback(q.data)
         scope = flow_scope(ctx, update)
         if item_id is not None:
-            scope[self._rules_key] = rules_step.toggle(
+            scope[self._rules_key] = rules_picker.toggle(
                 scope.get(self._rules_key, []), item_id
             )
         await q.answer()
@@ -789,7 +789,7 @@ class _ModActionFlow(_ReasonStepMixin, _RulesStepMixin, _ProofStepMixin, _FlowBa
                 self._on_proof_unexpected,
             ),
         ]
-        # * Every command except this flow's own re-entry must reach its own
+        # * Every command except this conversation's own re-entry must reach its own
         # * handler. A fallback that swallows them loses the moderator's intent
         # * (for example /tcunban during proof collection).
         fallback_filter = ALL_PREFIXES_CMD_FILTER & ~build_conversation_escape_filter(

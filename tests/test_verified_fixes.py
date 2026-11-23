@@ -17,9 +17,9 @@ from tcbot.modules.helper import buttons, guards
 from tcbot.modules.helper.ban_info import build_ban_detail
 from tcbot.modules.helper.buttons import nav_row
 from tcbot.modules.helper.messages import replies
-from tcbot.modules.helper.pipelines.connected_flow import BuildConnection
-from tcbot.modules.helper.pipelines.proof_flow import BuildProof
-from tcbot.modules.helper.pipelines.reason_flow import BuildReason
+from tcbot.modules.helper.pipelines.connect_added import BuildConnection
+from tcbot.modules.helper.pipelines.mod_action_steps import BuildReason
+from tcbot.modules.helper.pipelines.proof_steps import BuildProof
 from tcbot.utils.i18n import esc
 
 
