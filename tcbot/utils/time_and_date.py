@@ -91,6 +91,10 @@ _SECS_PER_DAY: int = 86_400
 _DAYS_PER_YEAR: int = 365
 _DAYS_PER_MONTH: int = 30
 _MAX_DURATION_DAYS: int = 36500
+# * Telegram treats a restriction shorter than 30 seconds as permanent. A
+# * 60-second floor keeps the stored expiry and the actual Telegram state in
+# * agreement even after API-call latency.
+_MIN_TELEGRAM_RESTRICTION_SECONDS: int = 60
 
 # * Seconds in one unit of each accepted suffix. A dict lookup keeps the
 # * conversion to the requested unit only: building every unit eagerly
@@ -131,6 +135,8 @@ def parse_duration(raw: str) -> timedelta | None:
         return None
     if result.days > _MAX_DURATION_DAYS:
         return None
+    if result < timedelta(seconds=_MIN_TELEGRAM_RESTRICTION_SECONDS):
+        return timedelta(seconds=_MIN_TELEGRAM_RESTRICTION_SECONDS)
     return result
 
 

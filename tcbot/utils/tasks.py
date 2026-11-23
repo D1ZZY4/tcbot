@@ -91,27 +91,24 @@ class TaskTracker:
         live = [task for task in list(self._tasks) if not task.done()]
         if not live:
             return
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(*live, return_exceptions=True), timeout=timeout
-            )
+        # * asyncio.wait() leaves pending tasks running on timeout; wait_for()
+        # * would cancel them and then wait indefinitely for that cancellation,
+        # * which a task suppressing one CancelledError can stretch forever.
+        _, pending = await asyncio.wait(live, timeout=timeout)
+        if not pending:
             return
-        except TimeoutError:
+        log.debug(
+            "%s: %d task(s) still running after %.1fs; cancelling.",
+            self._label,
+            len(pending),
+            timeout,
+        )
+        for task in pending:
+            task.cancel()
+        _, pending = await asyncio.wait(pending, timeout=timeout)
+        if pending:
             log.debug(
-                "%s: %d task(s) still running after %.0fs; cancelling.",
+                "%s: %d task(s) survived cancellation; leaving them.",
                 self._label,
-                len(live),
-                timeout,
+                len(pending),
             )
-        for task in live:
-            if not task.done():
-                task.cancel()
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(
-                    *[task for task in live if not task.done()], return_exceptions=True
-                ),
-                timeout=timeout,
-            )
-        except TimeoutError:
-            log.debug("%s: tasks survived cancellation; leaving them.", self._label)
