@@ -11,7 +11,7 @@ import contextlib
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from telegram import Bot, CallbackQuery, Update, User
+from telegram import Bot, CallbackQuery, InlineKeyboardMarkup, Update, User
 from telegram.ext import ContextTypes
 
 from tcbot import cfg, enforcement_worker
@@ -298,7 +298,9 @@ class ApproveMixin:
                     locale,
                     admin=Safe(user_ref(admin.id, admin.first_name)),
                 ),
-                reply_markup=None,
+                # * An empty markup is sent explicitly: omitting it leaves the
+                # * old Approve/Reject buttons on a card that is already decided.
+                reply_markup=InlineKeyboardMarkup([]),
             ),
             _update_or_send_log(
                 bot,
@@ -445,7 +447,7 @@ class RejectMixin:
                     staff_locale,
                     admin=Safe(user_ref(admin.id, admin.first_name)),
                 ),
-                reply_markup=None,
+                reply_markup=InlineKeyboardMarkup([]),
             )
         except asyncio.CancelledError:
             raise

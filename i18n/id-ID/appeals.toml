@@ -46,8 +46,8 @@ Kamu akan diberi tahu bot dalam kedua kasus."""
 
 # Runtime strings for appeal submission (appeal_submit_flow.py).
 # All send plain (PM replies, alerts, plain edits): plain=True.
-# Placeholders: {hours}/{remaining}/{max} ints, {community}/{handle}/
-# {logs} raw config values.
+# Placeholders: {hours}/{remaining}/{max} ints, {community}/{handle}
+# raw config values, {log_link} a complete example message URL.
 
 [submit]
 not_private = "Buka tautan ini di PM bot."
@@ -72,7 +72,7 @@ clarify_item = "- *Klarifikasi:* (penjelasan jujur tentang yang terjadi)"
 agree_item = "- *Persetujuan:* (komitmen untuk tidak mengulangi pelanggaran)"
 example_label = "*Contoh:*"
 example_body = """#appeal
-Tautan log: https://t.me/{logs}/1
+Tautan log: {log_link}
 Klarifikasi: Saya spam tanpa sengaja karena auto-clicker.
 Persetujuan: Saya tidak akan memakai alat otomatisasi apa pun di grup lagi."""
 channel = "Kanal Log: {handle}"

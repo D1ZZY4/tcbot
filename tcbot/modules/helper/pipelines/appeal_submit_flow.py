@@ -117,16 +117,34 @@ def _cooldown_remaining_h(rejected_at: datetime | None) -> int | None:
     return (total + _SECONDS_PER_HOUR - 1) // _SECONDS_PER_HOUR
 
 
+def _example_log_link(log_channel: str) -> str:
+    """Build a usable example message link from a log channel display value.
+
+    The caller resolves the channel to a full URL or a numeric chat id. The
+    example template needs one complete link, never a URL nested inside
+    another. A numeric supergroup id uses the ``t.me/c/`` form.
+    """
+    raw = log_channel.strip()
+    if raw.lstrip("-").isdigit():
+        return message_link(int(raw), 1)
+    if raw.startswith("https://t.me/"):
+        tail = raw[len("https://t.me/") :].rstrip("/")
+        first = tail.split("/", 1)[0]
+        if "+" not in first and first != "c":
+            return f"https://t.me/{first.lstrip('@')}/1"
+        return raw
+    return f"https://t.me/{raw.lstrip('@')}/1"
+
+
 def instruction_text(
     *, community_name: str, log_channel: str, locale: str | None
 ) -> str:
     """Render the multi-line rich instruction prompt."""
-    log_handle = log_channel.lstrip("@")
     example = pre(
         t(
             "appeals.instruction.example_body",
             locale,
-            logs=log_handle,
+            log_link=_example_log_link(log_channel),
             plain=True,
         )
     )

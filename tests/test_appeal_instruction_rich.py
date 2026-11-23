@@ -16,3 +16,25 @@ def test_instruction_text_uses_heading_and_checklist() -> None:
     assert "Log link" in text and "Clarification" in text and "Agreement" in text
     assert text.count("- *Log link:*") == 0
     assert "<blockquote" not in text
+    assert "https://t.me/logs/1" in text
+
+
+def test_instruction_example_link_is_not_nested() -> None:
+    """A resolved channel URL must not be pasted into another t.me URL."""
+    text = instruction_text(
+        community_name="TCF",
+        log_channel="https://t.me/FedLogs",
+        locale="en-US",
+    )
+    assert "https://t.me/https://" not in text
+    assert "https://t.me/FedLogs/1" in text
+
+
+def test_instruction_example_link_handles_a_numeric_chat() -> None:
+    """A supergroup id produces a t.me/c/ example link."""
+    text = instruction_text(
+        community_name="TCF",
+        log_channel="-1001234567890",
+        locale="en-US",
+    )
+    assert "https://t.me/c/1234567890/1" in text

@@ -46,8 +46,8 @@ You will be notified by the bot either way."""
 
 # Runtime strings for appeal submission (appeal_submit_flow.py).
 # All send plain (PM replies, alerts, plain edits): plain=True.
-# Placeholders: {hours}/{remaining}/{max} ints, {community}/{handle}/
-# {logs} raw config values.
+# Placeholders: {hours}/{remaining}/{max} ints, {community}/{handle}
+# raw config values, {log_link} a complete example message URL.
 
 [submit]
 not_private = "Please open this link in my private messages."
@@ -72,7 +72,7 @@ clarify_item = "- *Clarification:* (your honest explanation of what happened)"
 agree_item = "- *Agreement:* (your commitment not to repeat the violation)"
 example_label = "*Example:*"
 example_body = """#appeal
-Log link: https://t.me/{logs}/1
+Log link: {log_link}
 Clarification: I spammed unintentionally due to an auto-clicker.
 Agreement: I will not use any automation tools in the group again."""
 channel = "Log Channel: {handle}"
