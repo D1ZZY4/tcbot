@@ -2039,9 +2039,16 @@ BEGIN
       RAISE EXCEPTION 'Enforcement run % does not exist', NEW.run_id;
     END IF;
 
+    -- * The deployment main group is registered as an inactive connected
+    -- * chat, but moderation is deliberately enforced there. The application
+    -- * publishes its id as a session GUC; every other inactive chat stays
+    -- * excluded from durable delivery.
     IF NOT EXISTS (
       SELECT 1 FROM %SCHEMA%.connected_chats AS cc
-      WHERE cc.chat_id = NEW.chat_id AND cc.is_active
+      WHERE cc.chat_id = NEW.chat_id
+        AND (cc.is_active
+             OR cc.chat_id = nullif(
+                 current_setting('tcbot.primary_chat_id', true), '')::bigint)
     ) THEN
       RAISE EXCEPTION 'Enforcement target must be an active connected chat';
     END IF;
@@ -2073,7 +2080,10 @@ BEGIN
 
     IF NOT EXISTS (
       SELECT 1 FROM %SCHEMA%.connected_chats AS cc
-      WHERE cc.chat_id = NEW.chat_id AND cc.is_active
+      WHERE cc.chat_id = NEW.chat_id
+        AND (cc.is_active
+             OR cc.chat_id = nullif(
+                 current_setting('tcbot.primary_chat_id', true), '')::bigint)
     ) THEN
       RAISE EXCEPTION 'Cannot retry enforcement for a chat that is no longer active';
     END IF;

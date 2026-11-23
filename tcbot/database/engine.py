@@ -375,7 +375,7 @@ async def connect() -> None:
         pool_pre_ping=True,
         connect_args={
             "connect_timeout": _CONNECT_TIMEOUT_S,
-            "options": schema_options(cfg.db_schema),
+            "options": schema_options(cfg.db_schema, primary_chat_id=cfg.main_group),
         },
     )
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)

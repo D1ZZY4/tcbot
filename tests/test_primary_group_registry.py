@@ -7,11 +7,13 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from tcbot.database import groups_db
+from tcbot.database.connection_options import schema_options
 
 
 class _StatementCapture:
@@ -57,3 +59,26 @@ def test_primary_group_is_anchored_inactive(monkeypatch: pytest.MonkeyPatch) -> 
     # * inactive, so conflict forces the same value instead of preserving it.
     assert "ON CONFLICT" in compiled
     assert "DO UPDATE SET is_active = false" in compiled
+
+
+def test_primary_chat_id_is_published_to_the_database_session() -> None:
+    """The enforcement trigger needs the main group id as a session GUC."""
+    options = schema_options("public", primary_chat_id=-1003872207988)
+    assert "-c search_path=public" in options
+    assert "-c tcbot.primary_chat_id=-1003872207988" in options
+    assert "tcbot.primary_chat_id" not in schema_options("public")
+
+
+def test_enforcement_target_trigger_admits_the_primary_chat() -> None:
+    """The trigger must not reject the inactive main group it is told about."""
+    sql = (
+        Path(__file__).resolve().parents[1]
+        / "tcbot"
+        / "database"
+        / "schema"
+        / "functions.sql"
+    ).read_text(encoding="utf-8")
+    start = sql.index("prepare_moderation_enforcement_target")
+    body = sql[start : sql.index("$$;", start)]
+    assert body.count("tcbot.primary_chat_id") == 2
+    assert "cc.is_active" in body

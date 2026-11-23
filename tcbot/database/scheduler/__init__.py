@@ -187,7 +187,7 @@ def _build_job_store(database_url: str) -> SQLAlchemyJobStore:
             # * The job table belongs to the same schema as the rest of the
             # * application. Without the search path a deployment that names
             # * a schema would create and read the table in ``public``.
-            "options": schema_options(cfg.db_schema),
+            "options": schema_options(cfg.db_schema, primary_chat_id=cfg.main_group),
         },
     )
     store = _PreparedJobStore(engine=engine, tablename=_JOBSTORE_TABLE)

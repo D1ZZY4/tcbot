@@ -29,7 +29,7 @@ def normalize_database_url(url: str) -> str:
     return url
 
 
-def schema_options(schema: str) -> str:
+def schema_options(schema: str, *, primary_chat_id: int = 0) -> str:
     """Return the libpq options that scope a connection to *schema*.
 
     The schema is named explicitly because a pooler in transaction mode
@@ -37,5 +37,14 @@ def schema_options(schema: str) -> str:
     hands out. Every engine that belongs to the application uses this
     helper, so the async engine, the migration connection, and the
     scheduler job store cannot drift onto different schemas.
+
+    The primary chat id travels as a session GUC because the enforcement
+    target trigger runs inside the database and has no bind parameters.
+    The main group is registered as an inactive connected chat, so the
+    trigger must know which inactive chat is the deployment origin it is
+    allowed to enforce in.
     """
-    return f"-c search_path={schema} {TIMEZONE_OPTION}"
+    options = f"-c search_path={schema} {TIMEZONE_OPTION}"
+    if primary_chat_id:
+        options += f" -c tcbot.primary_chat_id={primary_chat_id}"
+    return options
