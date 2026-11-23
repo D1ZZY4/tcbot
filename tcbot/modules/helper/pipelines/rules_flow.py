@@ -361,9 +361,13 @@ class RulesEditor:
         user = update.effective_user
         if msg is None or user is None or not msg.text:
             return ConversationHandler.END
-        if not await editor_allowed(update):
-            await refuse_editor(update)
+        # * A step can be set by a stale button long after the open draft was
+        # * published. Re-open the draft before any typed answer writes to it,
+        # * so a published, member-visible version can never gain new items.
+        opened = await self._set_and_draft(update, ctx)
+        if opened is None:
             return ConversationHandler.END
+        set_doc, version = opened
         scope = flow_scope(ctx, update)
         step = scope.get("rules_step")
         text = msg.text.strip()
@@ -378,7 +382,7 @@ class RulesEditor:
                 )
                 return WAITING_EDITOR_MENU
             category = await db.rules_db.add_category(
-                int(scope["rules_set"]["id"]), _slug(text), text
+                int(set_doc["id"]), _slug(text), text
             )
             scope["rules_category"] = category
             _clear_item_step(scope)
@@ -393,7 +397,7 @@ class RulesEditor:
                 )
                 return WAITING_EDITOR_MENU
             await db.rules_db.rename_category(
-                int(scope["rules_set"]["id"]),
+                int(set_doc["id"]),
                 str(scope.get("rules_category_key") or ""),
                 text,
             )
@@ -438,13 +442,40 @@ class RulesEditor:
                     msg, t("rules.editor.bad_url", locale, plain=True), parse_mode=None
                 )
                 return WAITING_EDITOR_MENU
-            await db.rules_db.add_item(
-                int(scope["rules_version"]["id"]),
-                str(scope["rules_category"]["category_key"]),
-                str(scope["rules_item_title"]),
-                str(scope["rules_item_body"]),
-                text or None,
-            )
+            category = scope.get("rules_category")
+            title = scope.get("rules_item_title")
+            body = scope.get("rules_item_body")
+            if not category or not title or not body:
+                # * A stale step can outlive its category selection. Fail with
+                # * the generic guidance instead of raising on a missing key.
+                _clear_item_step(scope)
+                await reply_rich(
+                    msg,
+                    t("rules.editor.unexpected", locale, plain=True),
+                    log_label="rules editor incomplete item",
+                    parse_mode=None,
+                )
+                return WAITING_EDITOR_MENU
+            try:
+                await db.rules_db.add_item(
+                    int(version["id"]),
+                    str(category["category_key"]),
+                    str(title),
+                    str(body),
+                    text or None,
+                )
+            except ValueError as exc:
+                # * A publish between the draft check and this write must not
+                # * surface as an unhandled handler exception.
+                log.warning("Rules item write refused: %s", exc)
+                _clear_item_step(scope)
+                await reply_rich(
+                    msg,
+                    t("rules.editor.unexpected", locale, plain=True),
+                    log_label="rules editor version changed",
+                    parse_mode=None,
+                )
+                return WAITING_EDITOR_MENU
             _clear_item_step(scope)
             return await self.items(update, ctx)
 

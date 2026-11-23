@@ -67,3 +67,42 @@ def test_category_action_refuses_a_revoked_editor(
     )
 
     assert moved == []
+
+
+def test_typed_item_writes_to_the_fresh_draft(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stale Add-item step must never append to a published version."""
+    calls: list[tuple[Any, ...]] = []
+    scope: dict[str, Any] = {
+        "rules_version": {"id": 12, "status": "published"},
+        "rules_step": "item_url",
+        "rules_item_title": "No spam",
+        "rules_item_body": "Be kind",
+        "rules_category": {"category_key": "general"},
+    }
+
+    async def _draft(update: Any, ctx: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        return {"id": 3}, {"id": 99, "status": "draft"}
+
+    async def _add_item(*args: Any) -> None:
+        calls.append(args)
+
+    async def _items(update: Any, ctx: Any) -> int:
+        return 0
+
+    def _scope(update: Any, ctx: Any) -> dict[str, Any]:
+        return scope
+
+    monkeypatch.setattr(rules_flow.rules_editor, "_set_and_draft", _draft)
+    monkeypatch.setattr(rules_flow, "flow_scope", _scope)
+    monkeypatch.setattr(db.rules_db, "add_item", _add_item)
+    monkeypatch.setattr(rules_flow.rules_editor, "items", _items)
+
+    update = SimpleNamespace(
+        effective_message=SimpleNamespace(text="https://example.com/rule"),
+        effective_user=SimpleNamespace(id=7),
+    )
+    asyncio.run(
+        rules_flow.rules_editor.on_text(cast("Any", update), cast("Any", object()))
+    )
+
+    assert calls and calls[0][0] == 99

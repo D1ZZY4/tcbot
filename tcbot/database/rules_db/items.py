@@ -38,16 +38,24 @@ async def list_items(
 
 
 async def _set_id(version_id: int) -> int:
-    """Return the rule set a version belongs to."""
+    """Return the rule set a draft version belongs to.
+
+    A published version is immutable: members already see its items and may
+    have acknowledged it. Refusing the write here keeps a stale editor step
+    from adding rules to it even if a caller skips the flow-level draft check.
+    """
     row = await db_call(
         lambda: fetch_one(
-            select(rule_set_versions.c.rule_set_id).where(
-                rule_set_versions.c.id == version_id
-            )
+            select(
+                rule_set_versions.c.rule_set_id,
+                rule_set_versions.c.status,
+            ).where(rule_set_versions.c.id == version_id)
         )
     )
     if row is None:
         raise ValueError(f"Unknown rule version {version_id}")
+    if row["status"] != "draft":
+        raise ValueError(f"Rule version {version_id} is not a draft")
     return int(row["rule_set_id"])
 
 
