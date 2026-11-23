@@ -15,33 +15,47 @@ import pytest
 from tcbot.modules.helper.pipelines import connect_added, connect_verify
 
 
-def test_verify_keyboard_advances_then_connects() -> None:
+def test_verify_keyboard_navigates_then_connects() -> None:
     flow = connect_added.BuildConnection("TCF")
-    for step in (0, 1, 2, 3):
+    for step in (0, 1, 2, 3, 4):
         markup = flow.verify_keyboard(step, "en-US")
-        callbacks = [
-            button.callback_data for row in markup.inline_keyboard for button in row
+        navigation = [button.callback_data for button in markup.inline_keyboard[0]]
+        expected = ([f"tc_verify_{step - 1}"] if step > 0 else []) + [
+            f"tc_verify_{step + 1}"
         ]
-        assert callbacks[0] == f"tc_verify_{step + 1}"
-        assert callbacks[1] == "tc_cancel"
-    final = flow.verify_keyboard(4, "en-US")
-    callbacks = [
-        button.callback_data for row in final.inline_keyboard for button in row
-    ]
-    assert callbacks == ["tc_join", "tc_cancel"]
+        assert navigation == expected
+        assert [b.callback_data for b in markup.inline_keyboard[1]] == ["tc_cancel"]
+    final = flow.verify_keyboard(5, "en-US")
+    navigation = [button.callback_data for button in final.inline_keyboard[0]]
+    assert navigation == ["tc_verify_4", "tc_join"]
+    assert [b.callback_data for b in final.inline_keyboard[1]] == ["tc_cancel"]
 
 
 def test_verify_prompt_shows_requirements_scope_then_confirmation() -> None:
     flow = connect_added.BuildConnection("TCF")
-    for step, marker in enumerate(("1.", "2.", "3.")):
+    welcome = flow.verify_prompt(0, "en-US")
+    assert "Connected to TCF" in welcome
+    assert "What we will check together" in welcome
+    assert "<ul>" in welcome
+    for step in (1, 2, 3, 4, 5):
         text = flow.verify_prompt(step, "en-US")
-        assert "Before connecting" in text
-        assert marker in text
-    scope = flow.verify_prompt(3, "en-US")
-    assert "Moderation scope" in scope
-    assert "mutes apply in every connected group" in scope
-    final = flow.verify_prompt(4, "en-US")
-    assert "three requirements and the moderation scope" in final
+        assert "<h2>" in text
+        assert "<hr/>" in text
+        assert "<p>" in text
+        assert "<details" in text and "Why this matters" in text
+    scope = flow.verify_prompt(4, "en-US")
+    assert "Federation bans and mutes" in scope
+    assert "Warnings stay in the group" in scope
+    final = flow.verify_prompt(5, "en-US")
+    assert "Ready to connect" in final
+    assert "Only the group owner can press Connect" in final
+
+
+def test_welcome_page_follows_the_reader_locale() -> None:
+    """The first-add page uses the localized catalog, not the default text."""
+    flow = connect_added.BuildConnection("TCF")
+    assert "Connected to TCF" in flow.verify_prompt(0, "en-US")
+    assert "Terhubung ke TCF" in flow.verify_prompt(0, "id-ID")
 
 
 def test_non_owner_cannot_advance_the_verification(

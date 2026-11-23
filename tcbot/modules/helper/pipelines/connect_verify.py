@@ -25,9 +25,10 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-# * Three membership requirements, one moderation-scope notice, then a final
-# * confirmation. The last page reveals the Connect button.
-VERIFY_STEPS: int = 5
+# * A welcome page, three membership requirements, one moderation-scope page,
+# * then a final confirmation. Every page has Prev/Next navigation; the last
+# * page reveals the Connect button.
+VERIFY_STEPS: int = 6
 
 
 async def handle_verify_step(
@@ -57,7 +58,7 @@ async def handle_verify_step(
         step = int(q.data[len(flow.verify_callback) + 1 :]) if q.data else -1
     except ValueError:
         step = -1
-    if step < 1 or step >= VERIFY_STEPS:
+    if step < 0 or step >= VERIFY_STEPS:
         await answer_alert(q, t("about.error.invalid_section", locale, plain=True))
         return
 

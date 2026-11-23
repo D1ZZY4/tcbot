@@ -74,27 +74,50 @@ def connect_verify_btn(
     join_callback: str,
     cancel_callback: str,
     locale: str | None = None,
+    *,
+    total_steps: int = 6,
 ) -> InlineKeyboardMarkup:
-    """Verification step: Continue until the final confirmation, then Connect."""
-    if step >= 4:
-        label, callback = t("button.connect", locale, plain=True), join_callback
+    """Verification wizard: a navigation row plus a separate Cancel row.
+
+    Prev returns to the previous page, Next advances, and Connect appears only
+    on the last page. Keeping navigation and Cancel on separate rows makes the
+    owner's path obvious and keeps a mis-tap on Cancel away from Next.
+    """
+    navigation: list[InlineKeyboardButton] = []
+    if step > 0:
+        navigation.append(
+            InlineKeyboardButton(
+                t("button.prev", locale, plain=True),
+                callback_data=f"{verify_callback}_{step - 1}",
+                style=KeyboardButtonStyle.SUCCESS,
+            )
+        )
+    if step >= total_steps - 1:
+        navigation.append(
+            InlineKeyboardButton(
+                t("button.connect", locale, plain=True),
+                callback_data=join_callback,
+                style=KeyboardButtonStyle.PRIMARY,
+            )
+        )
     else:
-        label = t("button.next", locale, plain=True)
-        callback = f"{verify_callback}_{step + 1}"
+        navigation.append(
+            InlineKeyboardButton(
+                t("button.next", locale, plain=True),
+                callback_data=f"{verify_callback}_{step + 1}",
+                style=KeyboardButtonStyle.SUCCESS,
+            )
+        )
     return InlineKeyboardMarkup(
         [
+            navigation,
             [
-                InlineKeyboardButton(
-                    label,
-                    callback_data=callback,
-                    style=KeyboardButtonStyle.PRIMARY,
-                ),
                 InlineKeyboardButton(
                     t("button.cancel", locale, plain=True),
                     callback_data=cancel_callback,
                     style=KeyboardButtonStyle.DANGER,
-                ),
-            ]
+                )
+            ],
         ]
     )
 

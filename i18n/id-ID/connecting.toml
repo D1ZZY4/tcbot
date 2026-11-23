@@ -59,14 +59,38 @@ connecting = "Menghubungkan... menerapkan ban dan mute federasi yang ada. Bisa p
 perms_required = "Jadikan bot admin dengan izin yang dibutuhkan (hapus pesan, ban pengguna, undang via tautan) lalu coba lagi."
 welcome_perm_missing = "Bot belum punya izin admin Welcome Messages yang baru. Berikan izin itu di pengaturan administrator grup jika ingin pesan sambutan native Telegram tersedia."
 
-# Lima halaman verifikasi saat bot ditambahkan ke grup (connect_verify.py).
-# Tiga syarat keanggotaan dari about/keanggotaan.md, cakupan moderasi dari
-# about/federasi.md, lalu konfirmasi terakhir. Judul dan isi memakai blok rich;
-# label tombol dan alert tetap plain.
+# Enam halaman verifikasi saat bot ditambahkan ke grup (connect_verify.py).
+# Halaman 0 adalah sapaan pengenalan; halaman 1-3 menjelaskan tiga syarat
+# keanggotaan yang disesuaikan dari about/keanggotaan.md, halaman 4 berisi
+# cakupan moderasi dari about/federasi.md, dan halaman 5 konfirmasi terakhir.
+# Setiap halaman memakai blok rich dan navigasi Prev/Next; Connect hanya muncul
+# di halaman terakhir.
 [verify]
-heading = "Sebelum menghubungkan"
-step_1 = "1. Admin grup menyetujui dan persetujuan dicatat di grup koordinasi admin atau kanal resmi TCF."
-step_2 = "2. Grup tercantum dalam daftar anggota di kanal resmi TCF."
-step_3 = "3. Persetujuan belum ditarik kembali."
-step_4 = "Cakupan moderasi: ban dan mute federasi berlaku di semua grup terhubung. Kick hanya mengeluarkan target dari grup ini. Warn disimpan per grup dan memicu ban federasi otomatis saat mencapai batas."
-final = "Anda telah menyetujui ketiga syarat dan cakupan moderasi. Apakah Anda benar-benar ingin grup ini bergabung dengan federasi?"
+welcome_title = "Terhubung ke {community}"
+welcome_intro = "Saya ditambahkan di sini untuk menjaga keamanan {community}. Menghubungkan grup ini membuat ban dan mute federasi ditegakkan otomatis di sini, sementara kick dan peringatan tetap di grup. Sebelum ada perubahan, pemilik grup meninjau beberapa poin dari aturan keanggotaan."
+welcome_points_title = "Yang akan kita periksa bersama"
+welcome_point_1 = "Persetujuan admin grup ini tercatat di koordinator atau kanal resmi."
+welcome_point_2 = "Grup ini tercantum dalam daftar anggota federasi."
+welcome_point_3 = "Persetujuan itu masih berlaku dan belum ditarik."
+welcome_hint = "Hanya pemilik grup yang bisa melanjutkan. Belum ada yang terhubung sampai Anda mengetuk `Connect`."
+why = "Mengapa ini penting"
+page_1_title = "Persetujuan tercatat"
+page_1_body = "Sebuah grup menjadi bagian federasi hanya bila administratornya menyetujui dan keputusan itu ditulis. Catatannya disimpan di grup koordinasi admin atau di kanal resmi."
+page_1_detail = "Nama atau logo yang sama saja bukan bukti afiliasi. Catatan persetujuan inilah yang membuat grup lain tahu bahwa grup ini diterima."
+page_1_note = "Jika persetujuan belum pernah dicatat, minta admin mencatatnya sebelum menghubungkan."
+page_2_title = "Tercantum di federasi"
+page_2_body = "Grup yang disetujui juga tercantum dalam daftar anggota resmi. Daftar itu cara anggota dan staf membedakan grup anggota dari grup lain yang namanya mirip."
+page_2_detail = "Daftar dikelola oleh TCF, bukan oleh grup ini. Menghubungkan bot di sini tidak otomatis menambahkan grup ke daftar tersebut."
+page_2_note = "Jika grup belum ada di sana, minta admin mengajukan pencantuman terlebih dahulu."
+page_3_title = "Persetujuan masih berlaku"
+page_3_body = "Persetujuan bisa ditarik. Keanggotaan berlangsung selama keputusan yang tercatat masih berlaku."
+page_3_detail = "Jika kelak ditarik, grup dapat diputus dan kehilangan keanggotaan federasi. Untuk kembali, diperlukan persetujuan baru yang tercatat."
+page_3_note = "Anda mengonfirmasi kondisi hari ini; tidak ada janji tentang kondisi di kemudian hari."
+page_4_title = "Arti keanggotaan federasi"
+page_4_body = "Ban dan mute federasi ditegakkan di semua grup terhubung, termasuk grup ini. Kick hanya mengeluarkan target dari grup ini. Warn disimpan di grup tempatnya diberikan, dan saat mencapai batas memicu ban federasi."
+page_4_detail = "Inilah sebabnya bot memerlukan izin admin di sini. Penilaian lokal tetap di tangan admin grup ini; pembatasan federasi dibagi agar keputusan dari grup lain dihormati di sini."
+page_4_note = "Anggota tetap memiliki hak normal kecuali ada keputusan tercatat yang berlaku pada mereka."
+page_5_title = "Siap menghubungkan"
+page_5_body = "Anda telah meninjau poin keanggotaan dan cakupan moderasi. Menghubungkan akan mendaftarkan grup ini, memutar ulang ban dan mute aktif, serta menyalakan penegakan federasi mulai sekarang."
+page_5_detail = "Putaran ulang dibatasi. Jika sebagian pembatasan belum bisa diterapkan, bot mengantreannya dan terus mencoba; catatan koneksi mencatat hasilnya."
+page_5_note = "Hanya pemilik grup yang bisa menekan Connect. Cancel membiarkan grup ini apa adanya."

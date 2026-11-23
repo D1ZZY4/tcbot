@@ -59,14 +59,37 @@ connecting = "Connecting... applying existing federation bans and mutes. This ca
 perms_required = "Please make the bot an admin with the required permissions (delete messages, ban users, invite users) and try again."
 welcome_perm_missing = "The bot does not have the new Welcome Messages admin right. Grant it in the group's administrator settings if you want Telegram's native welcome message to be available."
 
-# Five-page verification shown when the bot is added to a group (connect_verify.py).
-# Three membership requirements from about/keanggotaan.md, the moderation scope
-# from about/federasi.md, then a final confirmation. Heading and body render as
-# rich blocks; button labels and alerts stay plain.
+# Six-page verification shown when the bot is added to a group (connect_verify.py).
+# Page 0 is an orientation welcome; pages 1-3 explain the membership requirements
+# adapted from about/keanggotaan.md, page 4 is the moderation scope from
+# about/federasi.md, and page 5 is the final confirmation. Every page uses rich
+# blocks and Prev/Next navigation; Connect appears only on the last page.
 [verify]
-heading = "Before connecting"
-step_1 = "1. The group admin approves and the approval is recorded in the admin coordination group or the official TCF channel."
-step_2 = "2. The group is listed in the member list on the official TCF channel."
-step_3 = "3. The approval has not been withdrawn."
-step_4 = "Moderation scope: federation bans and mutes apply in every connected group. A kick removes the target from this group only. Warnings are kept per group and trigger an automatic federation ban at the limit."
-final = "You have confirmed the three requirements and the moderation scope. Do you really want this group to join the federation?"
+welcome_title = "Connected to {community}"
+welcome_intro = "I was added here to help keep {community} safe. Connecting this group means federation bans and mutes are enforced here automatically, while kicks and warnings stay local. Before anything changes, the group owner reviews a few points from our membership rules."
+welcome_points_title = "What we will check together"
+welcome_point_1 = "This group's admin approval is on record with the coordinators or the official channel."
+welcome_point_2 = "The group is listed among the federation members."
+welcome_point_3 = "That approval is still in force and has not been withdrawn."
+welcome_hint = "Only the group owner can continue. Nothing is connected until you tap `Connect`."
+why = "Why this matters"
+page_1_title = "Approval on record"
+page_1_body = "A group belongs to the federation only when its administrators agree and that decision is written down. The record is kept in the admin coordination group or on the official channel."
+page_1_detail = "A shared name or logo is not affiliation by itself. The recorded approval is what lets other groups know this one was accepted."
+page_1_note = "If the approval was never recorded, ask the admins to record it before connecting."
+page_2_title = "Listed with the federation"
+page_2_body = "An approved group is also published on the official member list. That list is how members and staff separate a real member group from an unrelated group with a similar name."
+page_2_detail = "The list is maintained by TCF, not by this group. Connecting the bot here does not add the group to that list."
+page_2_note = "If the group is missing there, ask the admins to request inclusion first."
+page_3_title = "Approval still stands"
+page_3_body = "Approval can be withdrawn. Membership lasts only while the recorded decision is still in force."
+page_3_detail = "If it is withdrawn later, the group can be disconnected and lose its federation membership. A fresh recorded approval is needed to come back."
+page_3_note = "You are confirming the situation today; nobody is asked to promise anything about the future."
+page_4_title = "What federation membership means"
+page_4_body = "Federation bans and mutes are enforced in every connected group, including this one. A kick removes someone from this group only. Warnings stay in the group where they were issued, and reaching the limit triggers a federation ban."
+page_4_detail = "This is why the bot needs admin rights here. Local judgments stay with this group's admins; federation-wide restrictions are shared so a decision made elsewhere is respected here."
+page_4_note = "Members keep their normal rights unless a recorded decision applies to them."
+page_5_title = "Ready to connect"
+page_5_body = "You have reviewed the membership points and the moderation scope. Connecting registers this group, replays active bans and mutes, and turns on federation enforcement from now on."
+page_5_detail = "The replay is bounded. If some restrictions cannot be applied immediately, the bot queues them and keeps retrying, and the connection log records the result."
+page_5_note = "Only the group owner can press Connect. Cancel leaves this group exactly as it is."

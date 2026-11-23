@@ -21,11 +21,12 @@ from tcbot.modules.helper.buttons import connect_join_btn, connect_verify_btn
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import safe_edit_message, send_text
 from tcbot.modules.helper.messages.rich_format import divider, heading, paragraph
+from tcbot.modules.helper.messages.rich_list import details
 from tcbot.modules.helper.pipelines.connect_common import welcome_permission_note
 from tcbot.modules.helper.pipelines.connect_decision import ConnectionDecisionMixin
 from tcbot.modules.helper.pipelines.connect_replay import ConnectionReplayMixin
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.i18n import bold, code, t
+from tcbot.utils.i18n import bold, bullet_list, code, t
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -287,10 +288,63 @@ class BuildConnection(
 
     def verify_prompt(self, step: int, locale: str | None = None) -> str:
         """Build one rich verification page shown before connecting."""
-        title = t("connecting.verify.heading", locale, plain=True)
-        key = "final" if step >= 4 else f"step_{step + 1}"
-        body = t(f"connecting.verify.{key}", locale)
-        return "\n".join((heading(title), divider(), paragraph(body)))
+        if step == 0:
+            return self._welcome_prompt(locale)
+        key = f"page_{step}"
+        title = t(f"connecting.verify.{key}_title", locale, plain=True)
+        body = t(f"connecting.verify.{key}_body", locale)
+        detail = t(f"connecting.verify.{key}_detail", locale)
+        note = t(f"connecting.verify.{key}_note", locale, plain=True)
+        return "\n".join(
+            (
+                heading(title),
+                paragraph(body),
+                divider(),
+                details(
+                    t("connecting.verify.why", locale, plain=True),
+                    paragraph(detail),
+                    open=True,
+                ),
+                divider(),
+                paragraph(note),
+            )
+        )
+
+    def _welcome_prompt(self, locale: str | None = None) -> str:
+        """Introduce the bot on first add before the requirement pages.
+
+        The welcome is an orientation, not a wall of rules: it says why the
+        bot is here, what connecting changes, and what the owner will review.
+        The three membership points are summarized here and detailed one by
+        one on the following pages, so nothing is copied from the policy
+        document verbatim and no page repeats another.
+        """
+        title = t(
+            "connecting.verify.welcome_title",
+            locale,
+            community=self.community_name,
+            plain=True,
+        )
+        intro = t(
+            "connecting.verify.welcome_intro", locale, community=self.community_name
+        )
+        points_title = t("connecting.verify.welcome_points_title", locale, plain=True)
+        points = [
+            t(f"connecting.verify.welcome_point_{number}", locale)
+            for number in (1, 2, 3)
+        ]
+        hint = t("connecting.verify.welcome_hint", locale)
+        return "\n".join(
+            (
+                heading(title),
+                paragraph(intro),
+                divider(),
+                paragraph(points_title),
+                bullet_list(points),
+                divider(),
+                paragraph(hint),
+            )
+        )
 
     def verify_keyboard(
         self, step: int, locale: str | None = None
@@ -302,6 +356,7 @@ class BuildConnection(
             self.join_callback,
             self.cancel_callback,
             locale,
+            total_steps=6,
         )
 
     def connected_message(self, locale: str | None = None) -> str:

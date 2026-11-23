@@ -38,19 +38,20 @@ def test_about_item_counts_match_both_catalogs() -> None:
 
 def test_verify_pages_match_both_catalogs() -> None:
     """The step count and the page keys stay in sync across locales."""
-    assert connect_verify.VERIFY_STEPS == 5
+    assert connect_verify.VERIFY_STEPS == 6
     for locale in _LOCALES:
         verify = _catalog(locale, "connecting")["verify"]
         assert isinstance(verify, dict)
         for step in range(1, connect_verify.VERIFY_STEPS):
-            key = "final" if step >= 4 else f"step_{step}"
-            assert key in verify
+            for suffix in ("title", "body", "detail", "note"):
+                assert f"page_{step}_{suffix}" in verify
+        assert "why" in verify
 
 
 def test_connect_button_revealed_only_on_the_final_step() -> None:
     """An owner cannot skip the moderation-scope page."""
-    early = connect_verify_btn(3, "tc_verify", "tc_join", "tc_cancel", "en-US")
-    final = connect_verify_btn(4, "tc_verify", "tc_join", "tc_cancel", "en-US")
+    early = connect_verify_btn(4, "tc_verify", "tc_join", "tc_cancel", "en-US")
+    final = connect_verify_btn(5, "tc_verify", "tc_join", "tc_cancel", "en-US")
     early_data = [b.callback_data for row in early.inline_keyboard for b in row]
     final_data = [b.callback_data for row in final.inline_keyboard for b in row]
     assert "tc_join" not in early_data
@@ -60,7 +61,7 @@ def test_connect_button_revealed_only_on_the_final_step() -> None:
 def test_verify_prompt_uses_rich_blocks_for_the_scope_page() -> None:
     """The moderation-scope page renders as real rich blocks."""
     flow = BuildConnection("TCF")
-    text = flow.verify_prompt(3, "en-US")
+    text = flow.verify_prompt(4, "en-US")
     assert "<h2>" in text
     assert "<hr/>" in text
     assert "<p>" in text
