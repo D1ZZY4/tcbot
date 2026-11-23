@@ -10,6 +10,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from telegram.error import BadRequest, Forbidden
 from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg, enforcement_worker
@@ -285,16 +286,21 @@ async def _should_remove(bot: Bot, grp: GroupDoc) -> bool:
             timeout=_MEMBERSHIP_CHECK_TIMEOUT,
         )
         return member.status in ("left", "kicked")
-    except Exception as exc:
-        # ! CRITICAL: fail closed. A transient Telegram/DB error must not look
-        # ! like "bot has left" or cleanup mass-deactivates healthy groups.
+    except (BadRequest, Forbidden) as exc:
+        # * A service refusal means the bot reached Telegram; keep the group.
         log.warning(
             "Could not verify membership for %d, keeping group: %s", chat_id, exc
         )
         return False
+    except Exception:
+        # ! CRITICAL: fail closed by keeping the group, but re-raise so fan_out
+        # ! records the transport failure against the shared circuit. Swallowing
+        # ! it here would make every timeout look like a successful probe.
+        log.exception("Could not verify membership for %d; keeping group", chat_id)
+        raise
 
 
-@decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
+@decorators.ratelimiter(decorators.THROTTLE_BULK)
 @decorators.staff_only
 @decorators.log_execution
 async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
