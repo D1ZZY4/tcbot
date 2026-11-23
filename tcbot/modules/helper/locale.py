@@ -132,8 +132,9 @@ async def locale_for_chat(chat: object) -> str:
     falls back to the default locale. Resolution never raises.
     """
     chat_id = getattr(chat, "id", 0)
-    chat_type = getattr(chat, "type", None)
-    effective_type = chat_type if isinstance(chat_type, str) else "group"
+    # * This helper reads only the group row, so the preference tier must be
+    # * the group tier regardless of a stray private type on the object.
+    effective_type = "group"
     try:
         group_locale = await db.groups_db.get_group_locale(chat_id)
     except asyncio.CancelledError:

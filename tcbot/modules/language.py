@@ -296,7 +296,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 )
             return
         try:
-            await db.groups_db.set_group_locale(chat.id, locale)
+            saved = await db.groups_db.set_group_locale(chat.id, locale)
         except Exception:
             log.exception("set_group_locale failed for chat %d", chat.id)
             await answer_ack(q)
@@ -305,6 +305,19 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     msg,
                     t("common.retry", tapper_locale),
                     log_label="language group-save-fail",
+                )
+            return
+        if not saved:
+            # * An infrastructure chat without a settings row is an UPDATE
+            # * that matches nothing. Never claim the locale was saved when
+            # * no row changed; the next render would still use the default.
+            log.warning("set_group_locale matched no row for chat %d", chat.id)
+            await answer_ack(q)
+            if msg is not None:
+                await reply_rich(
+                    msg,
+                    t("common.retry", tapper_locale),
+                    log_label="language group-no-row",
                 )
             return
     else:
