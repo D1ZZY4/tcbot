@@ -1,0 +1,60 @@
+bringing up nodes...
+bringing up nodes...
+
+........................sssssssssssssssssss..................sssssssssss [  5%]
+sss.........................................................ssssss...... [ 10%]
+....ss.....ssssss..............................................sssssss.. [ 15%]
+..............................ssss.ss......ss..s.ss....s.ss...sssssssss. [ 20%]
+s..ss....sssssss.........ss...sssss..................................... [ 25%]
+........................................................................ [ 30%]
+.....sss................................................................ [ 35%]
+.............................s.......................................... [ 40%]
+.......................................sss.................sssssss...... [ 45%]
+...ssssss...............ssssss..............................sssss....... [ 50%]
+.......ss..............................................sss.s.s.ssss.sss. [ 55%]
+ss.sss.s..............................s.sss.ss.......................... [ 60%]
+...............................................................sss.sssss [ 65%]
+s.sssssss.s..................s.......................................... [ 70%]
+............................sssssss............................sssss.... [ 75%]
+...........s............................................................ [ 80%]
+............s......................ss.sssssssss......................... [ 86%]
+.....................................sssssssssssssssssssss..s.s........s [ 91%]
+s.............................................................sssssss... [ 96%]
+.....................sssssssssss...sssss...............                  [100%]
+=============================== warnings summary ===============================
+tcbot/modules/helper/pipelines/appeal_submit_flow.py:849
+tcbot/modules/helper/pipelines/appeal_submit_flow.py:849
+tcbot/modules/helper/pipelines/appeal_submit_flow.py:849
+tcbot/modules/helper/pipelines/appeal_submit_flow.py:849
+tests/test_conversation_command_escape.py::test_appeal_fallback_lets_help_through
+  /home/runner/work/tcbot/tcbot/tcbot/modules/helper/pipelines/appeal_submit_flow.py:849: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+    return ConversationHandler(
+
+tcbot/modules/helper/pipelines/reason_flow.py:820
+tcbot/modules/helper/pipelines/reason_flow.py:820
+tcbot/modules/helper/pipelines/reason_flow.py:820
+tcbot/modules/helper/pipelines/reason_flow.py:820
+tests/test_conversation_command_escape.py::test_kick_fallback_lets_other_commands_through
+  /home/runner/work/tcbot/tcbot/tcbot/modules/helper/pipelines/reason_flow.py:820: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+    return ConversationHandler(
+
+tests/test_conversation_command_escape.py::test_ban_fallback_lets_other_commands_through
+tests/test_conversation_command_escape.py::test_ban_fallback_still_ends_on_reentry
+  /home/runner/work/tcbot/tcbot/tcbot/modules/helper/pipelines/ban_flow.py:947: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+    return ConversationHandler(
+
+tests/test_i18n.py::test_get_help_matches_default_import
+tests/test_rules_editor_wiring.py::test_editor_and_confirmation_callbacks_are_wired
+tests/test_rules_editor_wiring.py::test_the_editor_enters_through_the_tcrules_command
+tests/test_rules_editor_wiring.py::test_the_open_in_pm_deep_link_starts_the_editor
+tests/test_layering.py::test_stats_search_handler_runs_after_group_zero_conversations
+  /home/runner/work/tcbot/tcbot/tcbot/modules/helper/pipelines/rules_flow.py:653: PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message. Read this FAQ entry to learn more about the per_* settings: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do.
+    return ConversationHandler(
+
+tests/test_notification_worker.py::test_a_rate_limit_reply_does_not_trip_the_shared_circuit
+tests/test_notification_worker.py::test_a_rate_limit_reply_does_not_trip_the_shared_circuit
+  /home/runner/work/tcbot/tcbot/.venv/lib/python3.14/site-packages/telegram/error.py:243: PTBDeprecationWarning: Deprecated since version v22.2: In a future major version attribute `retry_after` will be of type `datetime.timedelta`. You can opt-in early by setting `PTB_TIMEDELTA=true` or ``PTB_TIMEDELTA=1`` as an environment variable.
+    return get_timedelta_value(  # type: ignore[return-value]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1181 passed, 242 skipped, 19 warnings in 17.18s
