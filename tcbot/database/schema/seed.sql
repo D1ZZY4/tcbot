@@ -1,6 +1,8 @@
 -- The reference data of the community: the role catalog, the permission catalog,
 -- the retention contract, and the job registry.
-INSERT INTO %SCHEMA%.community_settings (singleton_key, community, description, default_locale, timezone, settings) VALUES ('global', NULL, NULL, NULL, NULL, '{}') ON CONFLICT (singleton_key) DO UPDATE SET community = EXCLUDED.community, description = EXCLUDED.description, default_locale = EXCLUDED.default_locale, timezone = EXCLUDED.timezone, settings = EXCLUDED.settings;
+-- * Mutable operator configuration, not reference data: keep values set at
+-- * runtime across every apply_schema() call.
+INSERT INTO %SCHEMA%.community_settings (singleton_key, community, description, default_locale, timezone, settings) VALUES ('global', NULL, NULL, NULL, NULL, '{}') ON CONFLICT (singleton_key) DO NOTHING;
 
 INSERT INTO %SCHEMA%.role_definitions (role_key, display_name, priority, is_system, description) VALUES ('admin', 'Admin', 80, TRUE, 'Community administrator responsible for staff, moderation, groups, rules, and operations.'),
     ('developer', 'Developer', 60, TRUE, 'Technical and operational staff role for development, diagnostics, and approved moderation tasks.'),

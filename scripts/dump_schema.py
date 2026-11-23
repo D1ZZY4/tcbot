@@ -205,12 +205,11 @@ def _write(name: str, statements: list[str], schema: str, header: str) -> None:
 _SEED_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "community_settings",
+        # * Mutable operator configuration, not reference data: regenerating
+        # * the seed must not reset values configured at runtime.
         "INSERT INTO %SCHEMA%.community_settings "
         "(singleton_key, community, description, default_locale, timezone, settings) "
-        "VALUES {values} ON CONFLICT (singleton_key) DO UPDATE SET "
-        "community = EXCLUDED.community, description = EXCLUDED.description, "
-        "default_locale = EXCLUDED.default_locale, timezone = EXCLUDED.timezone, "
-        "settings = EXCLUDED.settings",
+        "VALUES {values} ON CONFLICT (singleton_key) DO NOTHING",
         (
             "singleton_key",
             "community",
@@ -264,13 +263,14 @@ _SEED_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         "scheduled_jobs",
         "INSERT INTO %SCHEMA%.scheduled_jobs "
         "(job_key, job_kind, description, schedule_spec, timeout_seconds, "
-        "is_enabled, idempotency_scope) "
+        "is_enabled, idempotency_scope, job_owner) "
         "VALUES {values} ON CONFLICT (job_key) DO UPDATE SET "
         "job_kind = EXCLUDED.job_kind, description = EXCLUDED.description, "
         "schedule_spec = EXCLUDED.schedule_spec, "
         "timeout_seconds = EXCLUDED.timeout_seconds, "
         "is_enabled = EXCLUDED.is_enabled, "
-        "idempotency_scope = EXCLUDED.idempotency_scope",
+        "idempotency_scope = EXCLUDED.idempotency_scope, "
+        "job_owner = EXCLUDED.job_owner",
         (
             "job_key",
             "job_kind",
@@ -279,6 +279,7 @@ _SEED_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "timeout_seconds",
             "is_enabled",
             "idempotency_scope",
+            "job_owner",
         ),
     ),
 )
