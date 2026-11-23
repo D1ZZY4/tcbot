@@ -297,11 +297,17 @@ async def drain_pending() -> None:
     ]
     if not live:
         return
-    try:
-        await asyncio.wait_for(
-            asyncio.gather(*live, return_exceptions=True), timeout=10
-        )
-    except TimeoutError:
+    # * wait_for would cancel the gather on timeout and with it the wrapped
+    # * futures, dropping deliveries the comment below only defers. wait()
+    # * leaves pending deliveries running and still lets us retrieve the
+    # * exceptions of the ones that finished.
+    done, pending = await asyncio.wait(live, timeout=10)
+    for task in done:
+        if not task.cancelled():
+            exc = task.exception()
+            if exc is not None:
+                log.debug("Cross-thread error delivery failed at shutdown: %s", exc)
+    if pending:
         log.debug("Cross-thread error deliveries still running; leaving them.")
 
 
