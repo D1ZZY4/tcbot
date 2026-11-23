@@ -99,8 +99,8 @@ async def _seed(folder: Path, user_id: int, *, dry_run: bool) -> int:
         # * version would only add hundreds of writes for rows we discard.
         draft = await db.rules_db.open_draft(set_id, user_id, clone_items=False)
         version_id = int(draft["id"])
-        # * open_draft clones the published version. A reseed must replace it,
-        # * not stack another copy of every document on top of the old one.
+        # * An existing draft may hold stale items; replace them all so the
+        # * published version contains exactly the parsed documents.
         await db.rules_db.clear_draft_items(version_id)
         for category, title, body in items:
             await db.rules_db.add_item(version_id, category, title, body)

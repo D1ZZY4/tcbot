@@ -15,10 +15,11 @@ prints the message of every guard it can reach.
 
 Usage:
 
-    uv run python scripts/print_guard_messages.py [database-url]
+    uv run python scripts/print_guard_messages.py
 
-The database URL may be omitted: the script then reads ``DATABASE_URL``
-from the environment or from ``config.env``.
+The script reads ``DATABASE_URL`` from the environment or from ``config.env``.
+The URL is never accepted as a command-line argument, so credentials do not
+leak into the process listing or shell history.
 """
 
 from __future__ import annotations
@@ -126,16 +127,13 @@ _PROBES: tuple[tuple[str, str], ...] = (
 )
 
 
-def _database_url(argument: str | None) -> str:
+def _database_url() -> str:
     """Return the database URL the probe runs against."""
-    if argument:
-        return argument
     load_dotenv(find_dotenv("config.env") or find_dotenv(".env"))
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
         raise SystemExit(
-            "DATABASE_URL is required; pass it as an argument or set it in "
-            "the environment."
+            "DATABASE_URL is required; set it in the environment or config.env."
         )
     return url
 
@@ -158,7 +156,7 @@ def _scoped_url(url: str, schema: str) -> str:
 
 def main() -> int:
     """Build the schema and print every guard message."""
-    url = _database_url(sys.argv[1] if len(sys.argv) > 1 else None)
+    url = _database_url()
     scoped = _scoped_url(url, PROBE_SCHEMA)
     engine = create_engine(_sync_url(scoped), pool_pre_ping=True)
     with engine.begin() as conn:

@@ -18,10 +18,11 @@ that every seeded row arrived in the community tables.
 
 Usage:
 
-    uv run python scripts/check_migration.py <database-url>
+    uv run python scripts/check_migration.py
 
-The database URL may be omitted: the script then reads ``DATABASE_URL``
-from the environment or from ``config.env``.
+The script reads ``DATABASE_URL`` from the environment or from ``config.env``.
+The URL is never accepted as a command-line argument, so credentials do not
+leak into the process listing or shell history.
 """
 
 from __future__ import annotations
@@ -154,16 +155,13 @@ _REMOVED_TABLES: tuple[str, ...] = (
 )
 
 
-def _database_url(argument: str | None) -> str:
+def _database_url() -> str:
     """Return the database URL the check runs against."""
-    if argument:
-        return argument
     load_dotenv(find_dotenv("config.env") or find_dotenv(".env"))
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
         raise SystemExit(
-            "DATABASE_URL is required; pass it as an argument or set it in "
-            "the environment."
+            "DATABASE_URL is required; set it in the environment or config.env."
         )
     return url
 
@@ -216,14 +214,14 @@ def _scalar(conn: Connection, statement: str) -> int:
     return int(conn.execute(text(statement)).scalar() or 0)
 
 
-def _verify(engine: object) -> list[str]:
+def _verify(engine: object, schema: str) -> list[str]:
     """Return the failures of the migrated database."""
     failures: list[str] = []
     with engine.connect() as conn:  # type: ignore[attr-defined]
         surviving = _scalar(
             conn,
             "SELECT count(*) FROM information_schema.tables "
-            "WHERE table_schema = current_schema() AND table_name IN "
+            f"WHERE table_schema = {schema!r} AND table_name IN "
             f"({', '.join(repr(name) for name in _REMOVED_TABLES)})",
         )
         if surviving:
@@ -439,7 +437,7 @@ def _verify(engine: object) -> list[str]:
 
 def main() -> int:
     """Run the migration check and report the result."""
-    url = _database_url(sys.argv[1] if len(sys.argv) > 1 else None)
+    url = _database_url()
     scoped = _scoped_url(url, CHECK_SCHEMA)
     # * The schema is created before anything connects to it: a search
     # * path that names a schema nobody created falls back to the next
@@ -457,7 +455,7 @@ def main() -> int:
         command.upgrade(config, LEGACY_REVISION)
         _seed_legacy(engine)
         command.upgrade(config, "head")
-        failures = _verify(engine)
+        failures = _verify(engine, CHECK_SCHEMA)
     finally:
         with engine.begin() as conn:
             conn.execute(text(f'DROP SCHEMA IF EXISTS "{CHECK_SCHEMA}" CASCADE'))

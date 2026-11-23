@@ -17,10 +17,11 @@ succeed, and reports every invariant that did not hold.
 
 Usage:
 
-    uv run python scripts/check_schema.py [database-url]
+    uv run python scripts/check_schema.py
 
-The database URL may be omitted: the script then reads ``DATABASE_URL``
-from the environment or from ``config.env``.
+The script reads ``DATABASE_URL`` from the environment or from ``config.env``.
+The URL is never accepted as a command-line argument, so credentials do not
+leak into the process listing or shell history.
 """
 
 from __future__ import annotations
@@ -52,16 +53,13 @@ from tcbot.database.schema import apply_schema, drop_schema  # noqa: E402
 CHECK_SCHEMA: str = "development"
 
 
-def _database_url(argument: str | None) -> str:
+def _database_url() -> str:
     """Return the database URL the check runs against."""
-    if argument:
-        return argument
     load_dotenv(find_dotenv("config.env") or find_dotenv(".env"))
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
         raise SystemExit(
-            "DATABASE_URL is required; pass it as an argument or set it in "
-            "the environment."
+            "DATABASE_URL is required; set it in the environment or config.env."
         )
     return url
 
@@ -347,7 +345,7 @@ def _check(engine: object) -> list[str]:
 
 def main() -> int:
     """Run the invariant checks and report the result."""
-    url = _database_url(sys.argv[1] if len(sys.argv) > 1 else None)
+    url = _database_url()
     scoped = _scoped_url(url, CHECK_SCHEMA)
     # * The schema is created before anything connects to it: a search
     # * path that names a schema nobody created falls back to the next
