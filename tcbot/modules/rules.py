@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
@@ -59,7 +60,16 @@ async def cmd_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if msg is None:
         return
     locale = await locale_for_update(update)
-    published = await db.rules_db.published_rules()
+    try:
+        published = await db.rules_db.published_rules()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.warning("The public rules menu could not load the published version.")
+        await reply_rich(
+            msg, t("common.err.db_retry", locale, plain=True), parse_mode=None
+        )
+        return
     if (
         published is None
         or not published.get("items")
@@ -101,22 +111,38 @@ async def _acknowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     locale = await locale_for_update(update)
-    current = await db.rules_db.published_rules()
-    if current is None or int(current["version"]["id"]) != version_id:
-        await query.answer(t("rules.ack.outdated", locale, plain=True), show_alert=True)
+    try:
+        current = await db.rules_db.published_rules()
+        if current is None or int(current["version"]["id"]) != version_id:
+            await query.answer(
+                t("rules.ack.outdated", locale, plain=True), show_alert=True
+            )
+            return
+        if not current["set"].get("requires_acknowledgement"):
+            await query.answer(
+                t("rules.ack.disabled", locale, plain=True), show_alert=True
+            )
+            return
+        if await db.rules_db.has_acknowledged(version_id, user.id):
+            await query.answer(
+                t("rules.ack.already", locale, plain=True), show_alert=True
+            )
+            return
+        await db.rules_db.record_acknowledgement(
+            version_id,
+            user.id,
+            getattr(query.message, "chat_id", None),
+            getattr(query.message, "message_id", None),
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        # * The button would otherwise spin forever with no answer at all.
+        log.warning("Rule acknowledgement could not be recorded for %s.", user.id)
+        await query.answer(
+            t("common.err.db_retry", locale, plain=True), show_alert=True
+        )
         return
-    if not current["set"].get("requires_acknowledgement"):
-        await query.answer(t("rules.ack.disabled", locale, plain=True), show_alert=True)
-        return
-    if await db.rules_db.has_acknowledged(version_id, user.id):
-        await query.answer(t("rules.ack.already", locale, plain=True), show_alert=True)
-        return
-    await db.rules_db.record_acknowledgement(
-        version_id,
-        user.id,
-        getattr(query.message, "chat_id", None),
-        getattr(query.message, "message_id", None),
-    )
     await query.answer(t("rules.ack.recorded", locale, plain=True), show_alert=True)
 
 
@@ -178,21 +204,25 @@ async def _show_index(
     query = update.callback_query
     if query is None:
         return
-    published = await db.rules_db.published_rules()
+    locale = await locale_for_update(update)
+    try:
+        published = await db.rules_db.published_rules()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.warning("The rules index could not load the published version.")
+        await safe_edit_cb(
+            query, t("common.err.db_retry", locale, plain=True), parse_mode=None
+        )
+        return
     if published is None or not published.get("categories"):
         return
-    locale = await locale_for_update(update)
     categories = published["categories"]
     per_page = rules_btn._RULES_PER_PAGE
     total = max(1, (len(categories) + per_page - 1) // per_page)
     page = max(0, min(page, total - 1))
-    chunk = categories[page * per_page : (page + 1) * per_page]
-    rows = [
-        f"<p>{rules_msg.category_label(str(cat['category_key']), locale, str(cat['title']))}</p>"
-        for cat in chunk
-    ]
     payload = rules_msg.rich_index_page(
-        t("rules.menu.body", locale, community=cfg.community_name), rows
+        t("rules.menu.body", locale, community=cfg.community_name), locale
     )
     await _edit_payload(
         update,
@@ -236,7 +266,17 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if query is None:
         return
     await query.answer()
-    published = await db.rules_db.published_rules()
+    locale = await locale_for_update(update)
+    try:
+        published = await db.rules_db.published_rules()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.warning("The rules category could not load the published version.")
+        await safe_edit_cb(
+            query, t("common.err.db_retry", locale, plain=True), parse_mode=None
+        )
+        return
     if published is None:
         return
     key = str(query.data or "").split(":", 1)[-1]
@@ -271,7 +311,17 @@ async def on_rules_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     if query is None or query.data is None:
         return
     await query.answer()
-    published = await db.rules_db.published_rules()
+    locale = await locale_for_update(update)
+    try:
+        published = await db.rules_db.published_rules()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.warning("The rules section could not load the published version.")
+        await safe_edit_cb(
+            query, t("common.err.db_retry", locale, plain=True), parse_mode=None
+        )
+        return
     if published is None:
         return
     index = _page_from_data(query.data)
@@ -285,14 +335,12 @@ async def on_rules_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
     section = sections[index]
     section_items = [item for item in items if _section_label(item) == section]
-    payload = rules_msg.rich_section_page(
-        key, section, section_items, await locale_for_update(update)
-    )
+    payload = rules_msg.rich_section_page(key, section, section_items, locale)
     await _edit_payload(
         update,
         ctx,
         payload,
-        rules_btn.category_sections_btn(sections, await locale_for_update(update)),
+        rules_btn.category_sections_btn(sections, locale),
         f"{key}: {section}",
     )
 

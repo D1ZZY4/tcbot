@@ -259,13 +259,16 @@ def rules_menu(locale: str | None, community_name: str) -> str:
     return t("rules.menu.body", locale, community=community_name)
 
 
-def rich_index_page(intro: str, category_rows: list[str]) -> dict[str, Any]:
-    """Render the topic index with rich paragraphs and a divider."""
+def rich_index_page(intro: str, locale: str | None = None) -> dict[str, Any]:
+    """Render the topic index heading and intro; categories live in the keyboard.
+
+    The category names must not be repeated as text above the buttons. A long
+    list pushes the keyboard down and duplicates what the buttons already say.
+    """
     return rich_msg.html_message(
-        heading(t("rules.menu.index_title", None, plain=True)),
+        heading(t("rules.menu.index_title", locale, plain=True)),
         paragraph(intro),
         divider(),
-        *(paragraph(row) for row in category_rows),
     )
 
 
@@ -300,21 +303,6 @@ def rich_category_index(
         divider(),
         footer(t("rules.menu.category_footer", locale, plain=True)),
     )
-
-
-def category_view(
-    category: str, items: list[dict[str, Any]], locale: str | None
-) -> str:
-    """Render one category of the public read-only menu."""
-    label = category_label(str(category), locale, str(category))
-    header = t("rules.menu.category", locale, category=label)
-    if not items:
-        return f"{header}\n\n{t('rules.menu.no_rules', locale)}"
-    lines = []
-    for number, item in enumerate(items, start=1):
-        lines.append(f"{number}. {esc(str(item['title']))}")
-        lines.append(esc(str(item["body"])))
-    return f"{header}\n\n" + "\n".join(lines)
 
 
 def rich_category_view(
