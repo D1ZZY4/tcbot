@@ -3,7 +3,7 @@
 This page documents the PostgreSQL persistence layer in `tcbot/database/`:
 schemas, the engine boundary, tables, schema objects, domain helpers, migrations,
 and cache. The decision and worker lifecycle is in
-[Persistence](../architecture/runtime.md) and the flow diagrams in
+[Persistence](../flows/persistence.md) and the flow diagrams in
 [the system spine](../flows/system.md).
 
 ## Schemas
