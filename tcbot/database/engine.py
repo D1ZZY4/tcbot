@@ -364,6 +364,10 @@ async def connect() -> None:
     await asyncio.to_thread(migrations.upgrade_head, url, cfg.db_schema)
     _engine = create_async_engine(
         url,
+        # * SQLAlchemy otherwise embeds bound parameter values in exception
+        # * strings. MTProto writes bind the raw auth key, so a statement
+        # * error would leak session credentials into logs and error reports.
+        hide_parameters=True,
         pool_size=cfg.db_pool_size,
         max_overflow=cfg.db_max_overflow,
         pool_timeout=_POOL_TIMEOUT_S,

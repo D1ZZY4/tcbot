@@ -98,6 +98,15 @@ def test_shared_kwargs_cover_server_timeouts(
     assert "timezone=UTC" in connect_args["options"]
 
 
+def test_engine_hides_bound_parameters(
+    captured_engine_kwargs: dict[str, Any],
+) -> None:
+    """A failed statement must not print bound values into logs or reports."""
+    _connect()
+
+    assert captured_engine_kwargs["hide_parameters"] is True
+
+
 def test_shared_kwargs_size_the_connection_pool(
     captured_engine_kwargs: dict[str, Any],
 ) -> None:

@@ -129,15 +129,19 @@ async def _retry_write(
             # * A unique violation is fencing control flow, never a
             # * transient failure: it must reach the caller.
             raise
-        except CircuitOpenError as exc:
-            log.warning("MTProto write failed (circuit open): %s", exc, exc_info=True)
+        except CircuitOpenError:
+            log.warning("MTProto write failed (circuit open).")
             return None
         except (OperationalError, InterfaceError) as exc:
             if _is_connectivity_failure(exc):
                 # * The server could not be reached: the connect timeout
                 # * already elapsed, so retrying only delays the degrade.
+                # * Log only the error class and SQLSTATE: the statement may
+                # * bind the MTProto auth key, which must never reach a log.
                 log.warning(
-                    "MTProto write failed (connectivity): %s", exc, exc_info=True
+                    "MTProto write failed (connectivity): %s sqlstate=%s",
+                    type(exc).__name__,
+                    _sqlstate(exc),
                 )
                 return None
             if not _is_transient_write_error(exc) or attempt == _MAX_WRITE_RETRIES - 1:
@@ -145,16 +149,20 @@ async def _retry_write(
                 # * instead of propagating to Pyrogram's handle_updates task,
                 # * which would crash update handling for the whole session.
                 log.warning(
-                    "MTProto write failed (non-transient): %s", exc, exc_info=True
+                    "MTProto write failed (non-transient): %s sqlstate=%s",
+                    type(exc).__name__,
+                    _sqlstate(exc),
                 )
                 return None
             last_exc = exc
             delay = _RETRY_BASE_DELAY * (2**attempt)
             log.debug(
-                "MTProto write attempt %d/%d failed (transient): %s; retrying in %.1fs",
+                "MTProto write attempt %d/%d failed (transient): %s sqlstate=%s; "
+                "retrying in %.1fs",
                 attempt + 1,
                 _MAX_WRITE_RETRIES,
-                exc,
+                type(exc).__name__,
+                _sqlstate(exc),
                 delay,
             )
             await asyncio.sleep(delay)
