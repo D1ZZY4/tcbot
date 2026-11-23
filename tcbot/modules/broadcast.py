@@ -26,7 +26,7 @@ from tcbot.modules.helper.messages import (
 )
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
-from tcbot.utils.dispatch import count_transient_errors, fan_out, throw_if_cancelled
+from tcbot.utils.dispatch import fan_out, throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, esc, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
@@ -157,9 +157,10 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             await send_text(ctx.bot, chat_id, esc(broadcast_text))
 
     results = await fan_out([_send_one(grp) for grp in groups])
-    # * Benign per-group refusals (bot removed, chat gone) are not operator
-    # * failures; count only transient errors like every other fan-out.
-    failed = count_transient_errors(results)
+    # * Every refusal is a lost delivery here. Unlike moderation, where a
+    # * benign refusal means "nothing to enforce", a broadcast promises the
+    # * message reached the group, so CHAT_NOT_FOUND must be reported as failed.
+    failed = sum(isinstance(result, BaseException) for result in results)
     success = len(results) - failed
 
     for grp, r in zip(groups, results, strict=True):
