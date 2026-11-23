@@ -173,7 +173,7 @@ Current stack:
 
 - Python 3.14 project target (`pyproject.toml` requires `>=3.14`)
 - `python-telegram-bot[rate-limiter]>=22.8,<23`, tracking the latest compatible release
-- APScheduler 3.11.3 with `AsyncIOScheduler` + `SQLAlchemyJobStore` for persistent scheduled jobs
+- `apscheduler[sqlalchemy]>=3.11.3,<4` with `AsyncIOScheduler` + `SQLAlchemyJobStore` for persistent scheduled jobs
 - PostgreSQL via SQLAlchemy 2.1 async with Psycopg 3; every call runs through `db_call`
 - Flask keep-alive / health-check server
 - Optional Redis L2 cache (`redis[hiredis]>=8.1,<9`) with in-memory L1 fallback
@@ -248,7 +248,7 @@ Current stack:
 │   │   ├── kick.py           /tckick command
 │   │   ├── mute.py           /tcmute command
 │   │   ├── warns.py          /tcwarn command
-│   │   ├── appeals.py        /appeal flow
+│   │   ├── appeals.py        Appeal flow (/start appeal_<ref> deep link, #appeal)
 │   │   ├── admins.py         Role commands (/tcpromote, /tcsetrole, /tcdemote, /transferowner, …)
 │   │   ├── language.py       /language command
 │   │   ├── connect.py        /tcconnect command
@@ -281,12 +281,17 @@ Current stack:
 │       ├── transport.py        Shared PTB HTTP timeouts, pool size, and lookup budget
 │       └── update_processor.py Per-conversation update serialization for PTB
 ├── docs/                     Developer documentation grouped by category
+├── about/                     Bundled About source documents (federasi, keanggotaan, klarifikasi)
+├── acknowledge/               Bundled self-acknowledgement source document
+├── rules/                     Bundled rule documents seeded by scripts/seed_rules.py
+├── alembic/                   Alembic environment and versioned schema migrations
 ├── .agents/                   Style rules
 ├── .github/                   CI workflows (lint, type-check, tests, runner)
 ├── i18n/                      Localized message catalogs (en-US source of truth)
 ├── tests/                     Automated checks (run with the dummy-env suite)
 ├── scripts/                   One-shot operator tools (migration checks, schema checks, hot-path benchmark)
 ├── config.env.example        Environment variable template
+├── alembic.ini               Alembic configuration
 ├── docker-compose.yml        Local bot + PostgreSQL + Redis compose setup
 ├── Dockerfile                Container image definition
 ├── .python-version           Pinned Python for uv (3.14)

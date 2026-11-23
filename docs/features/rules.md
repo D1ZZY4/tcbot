@@ -53,23 +53,46 @@ operation is recorded on its slot and reconciled by the next publish.
 - `MAIN_CHANNEL` must be configured or publication is refused.
 - Channel text is split into parts of at most 4000 UTF-16 units, grouped by
   category with a version and timestamp footer.
-- Each part is hashed with SHA-256 and stored on its slot. A matching message id
-  and hash mean the slot is edited in place; a changed or missing message is
-  sent fresh. A deleted post is treated as missing and re-sent.
+- Each part is hashed with SHA-256 and stored on its slot. A slot with an
+  existing message is edited in place, including when its text changed. A slot
+  without a message id, or a post that no longer exists, is sent fresh and the
+  new id is recorded. A failed channel operation is marked on the slot.
 
 Run states are `running`, `completed`, `partial`, and `failed`. Slot states are
 `pending`, `synced`, `missing`, `failed`, and `retired`.
 
-## Enforcement tiers
+## Categories
 
-The published set uses two categories. `mandatory` holds federation-wide rules
-(cheating, scams, doxing, content involving minors, harassment, malware, and the
-enforcement procedure) and is the only tier that can justify a federation ban.
-`optional` holds group-level guidance; a group owner may keep a stricter local
-rule or ignore it, and it never becomes a federation ban by itself. The public
-menu explains the split and the moderation picker prefixes a selection with its
-category title. The seed script retires the older topic categories when it
-re-tiers documents.
+A category groups one topic from the operator's rule documents. The seed script
+creates one category per document stem, such as `cheat` or
+`doxing-dan-privasi`, and the public pages show the localized label from
+`i18n/<locale>/rules.toml`; the stored title is a fallback for unknown keys.
+A new community starts with the editable `mandatory` and `optional` defaults
+until a seed or a staff edit replaces them, and the seed retires those two
+buckets when it writes the topic categories. Staff can add, rename, reorder,
+and retire categories from the editor. The moderation picker prefixes a
+selection with its localized category title.
+
+## Seeding from Markdown
+
+`scripts/seed_rules.py` converts operator Markdown into the plain-text items
+the bot stores. It reads `rules/*.md` by default and accepts `--rules-dir` for
+another folder. Each `##` section becomes one item, the document H1 prefixes
+each title, and inline Markdown is stripped so members never see literal
+syntax. A section longer than the 3500-character body cap is an error rather
+than a silent truncation.
+
+```bash
+uv run python scripts/seed_rules.py --dry-run
+uv run python scripts/seed_rules.py --user-id 123456789
+```
+
+A dry run prints the parsed categories and item titles without writing to the
+database. A real run opens a draft, replaces its items with the parsed set,
+publishes it as one new version, and retires the superseded default buckets.
+`--user-id` records the creator and publisher and defaults to `OWNER_ID`; the
+database URL comes from `config.env`, `.env`, or the environment. Rule bodies
+have one content locale, so the seed always publishes en-US.
 
 ## Acknowledgement
 

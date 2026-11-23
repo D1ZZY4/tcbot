@@ -40,12 +40,14 @@ a worker that is not allowed to own that schema.
 
 ## Auto-fix workflow
 
-`auto-fix.yml` runs Ruff format and `ruff check --fix`, captures Pyright and
-Pytest output, and uses free GitHub Models inference for a short fix summary
-when issues remain. It targets the fixed branch `auto-fix/ruff` and serializes
-runs with concurrency group `auto-fix-ruff`. On pushes it opens or updates a PR;
-on PR events it posts a comment with the commands to apply the deterministic
-fixes locally.
+`auto-fix.yml` runs Ruff format and `ruff check --fix`, then records the real
+exit codes of the Ruff, Pyright, and Pytest capture steps. A non-zero code from
+any of them triggers free GitHub Models inference for a short fix summary. The
+PR body and step summary show those codes and the logs, and the PR asks for
+review rather than claiming it is safe to merge. It targets the fixed branch
+`auto-fix/ruff` and serializes runs with concurrency group `auto-fix-ruff`. On
+pushes it opens or updates a PR; on PR events it posts a comment with the
+commands to apply the deterministic fixes locally.
 
 The workflow needs `contents: write`, `pull-requests: write`, and `models: read`.
 If `gh pr create` reports that GitHub Actions is not permitted to create
@@ -57,10 +59,12 @@ manually after flipping the toggle.
 
 `dependency-update.yml` copies `uv.lock`, runs `uv lock --upgrade`, and opens a
 PR on branch `deps/auto-update-<date>` when the lock changed. It validates with
-`ruff format --check`, `ruff check`, and `import tcbot`, then generates a
-Conventional Commit title and body through GitHub Models with a static
-fallback. It retries PR creation with `BOT_PAT` when `github.token` lacks
-permission, and sends a plain HTML Telegram notification to `OWNER_ID`.
+`ruff format --check`, `ruff check`, `pyright`, `import tcbot`, and the
+service-free Pytest group; a failing check stops before the PR is opened. It
+then generates a Conventional Commit title and body through GitHub Models with
+a static fallback. It retries PR creation with `BOT_PAT` when `github.token`
+lacks permission, and sends a plain HTML Telegram notification to `OWNER_ID`
+only when the PR was created.
 
 ## 24/7 runner
 

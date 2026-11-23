@@ -10,6 +10,9 @@ owns, and how the process comes up. The flows drawn as diagrams are in
 <project root>/
 ├── tcbot/                  Application package
 ├── alembic/                Alembic migration scripts and revisions
+├── about/                  Bundled About source documents
+├── acknowledge/            Bundled self-acknowledgement source document
+├── rules/                  Bundled rule documents for scripts/seed_rules.py
 ├── i18n/                   TOML translation catalogs (en-US is the source)
 ├── tests/                  Pytest suite
 ├── scripts/                One-shot operator tools

@@ -44,11 +44,11 @@ sequenceDiagram
     participant Sched as APScheduler
     participant PTB as Telegram Application
     Main->>Config: load environment and validate required secrets
-    Main->>DB: apply Alembic migrations in a worker thread
-    Main->>DB: connect engine and prime caches
-    Main->>Sched: register expiry retention and reconciliation jobs
     Main->>PTB: build application and discover modules
     PTB->>PTB: register command callback and message handlers
+    Main->>DB: connect engine and apply Alembic migrations in a worker thread
+    Main->>DB: seed owner and destinations, then prime caches
+    Main->>Sched: register expiry retention and reconciliation jobs
     Main->>PTB: set webhook or start polling fallback
 ```
 
