@@ -29,10 +29,16 @@ class _FakeBot:
     def __init__(self) -> None:
         self.sent: list[tuple[int, str, dict[str, Any]]] = []
         self.banned: list[tuple[int, int]] = []
+        self.unbanned: list[tuple[int, int]] = []
         self.restricted: list[tuple[int, int]] = []
 
     async def ban_chat_member(self, chat_id: int, user_id: int) -> None:
         self.banned.append((chat_id, user_id))
+
+    async def unban_chat_member(
+        self, chat_id: int, user_id: int, **kwargs: Any
+    ) -> None:
+        self.unbanned.append((chat_id, user_id))
 
     async def restrict_chat_member(
         self, chat_id: int, user_id: int, **kwargs: Any
@@ -234,6 +240,47 @@ def test_a_secondary_group_still_gets_the_ban_notice(
     assert bot.banned == [(-1001, 42)]
     assert len(message.replies) == 1
     assert bot.sent and bot.sent[0][0] == 42
+
+
+def test_a_ban_lookup_outage_removes_the_joiner_instead_of_admitting_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unverifiable ban state is not a clean join.
+
+    A banned user who joins during a database outage must not stay in the
+    group with full rights. The fail-closed path removes them so the next join
+    is checked against a healthy database.
+    """
+    monkeypatch.setattr(greeting, "cfg", _cfg())
+
+    async def _harvest(*args: object, **kwargs: object) -> None:
+        return None
+
+    async def _boom(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("db down")
+
+    async def _mute(*args: object, **kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(db.users_cache, "harvest_user_identity", _harvest)
+    monkeypatch.setattr(db.bans_db, "get_active_ban", _boom)
+    monkeypatch.setattr(db.mutes_db, "get_active_mute", _mute)
+    bot = _FakeBot()
+    message = _FakeMessage()
+
+    asyncio.run(
+        greeting._handle_member(
+            cast("User", _FakeUser()),
+            cast("Message", message),
+            cast("Chat", _FakeChat()),
+            cast("Bot", bot),
+            "en-US",
+        )
+    )
+
+    assert bot.banned == [(-1001, 42)]
+    assert bot.unbanned == [(-1001, 42)]
+    assert message.replies == [], "no false welcome or ban notice on an outage"
 
 
 def test_join_enforcement_never_bans_the_protected_owner(

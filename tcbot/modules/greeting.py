@@ -186,6 +186,55 @@ async def _ack_markup(member_id: int, locale: str) -> object | None:
         return None
 
 
+async def _ban_state_with_retry(user_id: int) -> BanDoc | None:
+    """Read the active ban once, then retry once after a brief pause.
+
+    A single transient pool or circuit failure must not decide moderation.
+    The retry is bounded so a join handler never blocks on a dead database.
+    """
+    try:
+        return await db.bans_db.get_active_ban(user_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        await asyncio.sleep(0.1)
+        return await db.bans_db.get_active_ban(user_id)
+
+
+async def _fail_closed_join(bot: Bot, chat_id: int, user_id: int, source: str) -> None:
+    """Remove a joiner whose ban state could not be proven clean.
+
+    A join request is declined on the same outage in ``on_join_request``. A
+    member who already joined cannot be declined, so a bounded ban followed by
+    an immediate unban is the equivalent: they must join again once the
+    database is reachable and enforcement can be decided. No ban record exists
+    in this path, so no "you are banned" notice is sent.
+    """
+    try:
+        await asyncio.wait_for(
+            bot.ban_chat_member(chat_id, user_id), timeout=TELEGRAM_LOOKUP_TIMEOUT
+        )
+        await asyncio.wait_for(
+            bot.unban_chat_member(chat_id, user_id, only_if_banned=True),
+            timeout=TELEGRAM_LOOKUP_TIMEOUT,
+        )
+        log.error(
+            "Fail-closed removal on %s for uid=%d in chat=%d: ban state unverifiable",
+            source,
+            user_id,
+            chat_id,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "Fail-closed removal failed on %s for uid=%d in chat=%d",
+            source,
+            user_id,
+            chat_id,
+        )
+
+
 async def _handle_member(
     member: User,
     msg: Message,
@@ -215,21 +264,23 @@ async def _handle_member(
             member.first_name,
             member.last_name,
         ),
-        db.bans_db.get_active_ban(member.id),
+        _ban_state_with_retry(member.id),
         db.mutes_db.get_active_mute(member.id),
         return_exceptions=True,
     )
     # ! CRITICAL: a cancelled read must propagate, never degrade into a
     # ! clean greet: shutdown would otherwise welcome a banned joiner.
     throw_if_cancelled((harvest_r, ban, mute))
-    # * When an enforcement read fails we cannot prove the joiner is
-    # * clean, so the welcome below is skipped: greeting an unverified
-    # * user as safe is worse than staying silent until the next event.
+    # * An unverifiable ban state is not a clean join: remove the member so a
+    # * later join is checked against a healthy database. Staying silent while
+    # * leaving them in the group would let a banned user in during an outage.
     _enforcement_blind = False
     if isinstance(ban, BaseException):
         log.error("get_active_ban failed on join for uid=%d: %s", member.id, ban)
         ban = None
         _enforcement_blind = True
+        await _fail_closed_join(bot, chat.id, member.id, "new_member")
+        return
     if isinstance(mute, BaseException):
         log.error("get_active_mute failed on join for uid=%d: %s", member.id, mute)
         mute = None
@@ -410,7 +461,7 @@ async def on_join_request_approved(
             user.id, user.username, user.first_name, user.last_name or None
         ),
         db.mutes_db.get_active_mute(user.id),
-        db.bans_db.get_active_ban(user.id),
+        _ban_state_with_retry(user.id),
         return_exceptions=True,
     )
     # ! CRITICAL: cancellation must propagate before any enforcement
@@ -423,8 +474,9 @@ async def on_join_request_approved(
             chat.id,
             ban,
         )
-        # * Fail closed: suppress welcome and mute enforcement until ban
-        # * state is proven clean; the join-time enforcement re-checks it.
+        # * No later event re-checks an approved request, so silence would
+        # * leave a possibly banned member in the group indefinitely.
+        await _fail_closed_join(ctx.bot, chat.id, user.id, "join_request_approved")
         return
     if ban:
         # * The request-time decline in on_join_request can be beaten by a
@@ -545,7 +597,7 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         db.users_cache.harvest_user_identity(
             user.id, user.username, user.first_name, user.last_name or None
         ),
-        db.bans_db.get_active_ban(user.id),
+        _ban_state_with_retry(user.id),
         return_exceptions=True,
     )
     throw_if_cancelled((harvest_r, ban))
