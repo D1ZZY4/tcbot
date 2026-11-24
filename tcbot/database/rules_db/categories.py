@@ -20,7 +20,6 @@ from tcbot.database.engine import (
     run,
     run_returning,
     run_transaction,
-    session,
 )
 from tcbot.utils.time_and_date import utc_now
 
@@ -168,7 +167,7 @@ async def move_category(set_id: int, category_key: str, delta: int) -> None:
         return
     current, neighbour = rows[index], rows[other]
 
-    async with session() as sess:
+    async def _work(sess: AsyncSession) -> None:
         await sess.execute(
             rule_categories.update()
             .where(rule_categories.c.id == current["id"])
@@ -179,3 +178,5 @@ async def move_category(set_id: int, category_key: str, delta: int) -> None:
             .where(rule_categories.c.id == neighbour["id"])
             .values(sort_order=current["sort_order"], updated_at=utc_now())
         )
+
+    await run_transaction(_work)

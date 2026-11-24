@@ -118,7 +118,7 @@ def _connection_options(url: str) -> str:
     ``options`` parameter in the URL, and the connection parameter
     replaces both of them when it is set.
     """
-    parts: list[str] = [f"-c search_path={_db_schema()}"]
+    parts: list[str] = []
     url_options = make_url(url).query.get("options")
     if url_options:
         # * A repeated query parameter arrives as a tuple; libpq takes the
@@ -131,6 +131,10 @@ def _connection_options(url: str) -> str:
     if env_options:
         parts.append(env_options)
     parts.append(TIMEZONE_OPTION)
+    # * libpq applies the last occurrence of a repeated option, so the
+    # * configured schema has to come last or URL/PGOPTIONS search paths
+    # * would silently redirect the migration into another schema.
+    parts.append(f"-c search_path={_db_schema()}")
     return " ".join(parts)
 
 
