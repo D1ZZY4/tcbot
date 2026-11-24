@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from io import BytesIO
+
 from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.context import Ctx
@@ -17,6 +19,7 @@ from tcbot.modules.helper.pipelines.rules_editor_steps import (
     _BODY_MAX,
     _TITLE_MAX,
     _URL_MAX,
+    _URL_SKIP,
     WAITING_EDITOR_MENU,
     WAITING_MARKDOWN,
     clear_item_step,
@@ -351,7 +354,17 @@ class RulesDraftEditor:
             return WAITING_MARKDOWN
         try:
             payload = await ctx.bot.download_media(document, in_memory=True)
-            text = bytes(payload).decode("utf-8")
+            if isinstance(payload, list):
+                payload = payload[0] if len(payload) == 1 else None
+            if isinstance(payload, BytesIO):
+                data = payload.getvalue()
+            elif isinstance(payload, bytes | bytearray):
+                data = bytes(payload)
+            else:
+                data = None
+            if data is None:
+                raise ValueError("unexpected download payload")
+            text = data.decode("utf-8")
             items = parse_document(text, name)
             description = parse_description(text)
         except Exception as exc:
@@ -419,7 +432,19 @@ class RulesDraftEditor:
         q = ctx.callback_query
         if q is not None:
             await q.answer()
-        flow_scope(ctx)["rules_step"] = "item_title"
+        scope = flow_scope(ctx)
+        if not isinstance(scope.get("rules_category"), dict):
+            # * Add Item is also on the root menu, where no category has been
+            # * selected. Pick the first stored category deterministically so
+            # * the typed title and body are not discarded at the URL step.
+            opened = await set_and_draft(ctx)
+            if opened is None:
+                return ConversationHandler.END
+            categories = await db.rules_db.list_categories(int(opened[0]["id"]))
+            if not categories:
+                return await self.categories(ctx)
+            scope["rules_category"] = categories[0]
+        scope["rules_step"] = "item_title"
         locale = await self._locale(ctx)
         await edit_or_reply(
             ctx,
@@ -510,8 +535,13 @@ class RulesDraftEditor:
             return WAITING_EDITOR_MENU
 
         if step == "item_url":
-            if text and (
-                len(text) > _URL_MAX or not text.startswith(("https://", "http://"))
+            skip_url = text == _URL_SKIP
+            if (
+                text
+                and not skip_url
+                and (
+                    len(text) > _URL_MAX or not text.startswith(("https://", "http://"))
+                )
             ):
                 await reply_rich(
                     msg, t("rules.editor.bad_url", locale, plain=True), parse_mode=None
@@ -535,7 +565,7 @@ class RulesDraftEditor:
                     str(category["category_key"]),
                     str(title),
                     str(body),
-                    text or None,
+                    None if skip_url or not text else text,
                 )
             except ValueError:
                 log.warning("Rules item write refused for version %s", version["id"])

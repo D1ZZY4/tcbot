@@ -31,6 +31,9 @@ WAITING_MARKDOWN = 6
 _TITLE_MAX: int = 200
 _BODY_MAX: int = 3500
 _URL_MAX: int = 500
+# * A single dash is the documented "no reference URL" sentinel in the typed
+# * item flow; any other non-URL text is rejected by the URL validator.
+_URL_SKIP: str = "-"
 _SLUG_MAX: int = 40
 
 _EDITOR_SCOPE_KEYS = (

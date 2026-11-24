@@ -33,6 +33,7 @@ from tcbot.modules.helper.pipelines.rules_editor_steps import (
     set_and_draft,
 )
 from tcbot.modules.helper.pipelines.rules_publish import publish_rules
+from tcbot.modules.helper.rich.edit import callback_text_of
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import canonical_locale, display_name, t
 from tcbot.utils.logger import get_logger
@@ -123,13 +124,16 @@ class RulesEditor:
         if not await editor_allowed(ctx):
             await refuse_editor(ctx)
             return WAITING_EDITOR_MENU
-        chosen = canonical_locale(q.data.split(":", 1)[-1])
+        chosen = canonical_locale(callback_text_of(q).split(":", 1)[-1])
         if chosen is None:
             await q.answer()
             return await self._render_language_picker(ctx)
         scope = flow_scope(ctx)
         scope["rules_content_locale"] = chosen
         scope.pop("rules_version", None)
+        # * A category from the previous locale must not be reused for items
+        # * typed into the newly chosen draft.
+        scope.pop("rules_category", None)
         return await self.panel(ctx)
 
     async def publish(self, ctx: Ctx) -> int:

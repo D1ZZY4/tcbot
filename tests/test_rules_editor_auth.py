@@ -101,3 +101,82 @@ def test_typed_item_writes_to_the_fresh_draft(monkeypatch: pytest.MonkeyPatch) -
     asyncio.run(rules_editor_draft.rules_draft_editor.on_text(cast("Any", update)))
 
     assert calls and calls[0][0] == 99
+
+
+def test_typed_dash_skips_the_reference_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The documented '-' sentinel stores no URL instead of being rejected."""
+    calls: list[tuple[Any, ...]] = []
+    scope: dict[str, Any] = {
+        "rules_version": {"id": 12, "status": "draft"},
+        "rules_step": "item_url",
+        "rules_item_title": "No spam",
+        "rules_item_body": "Be kind",
+        "rules_category": {"category_key": "general"},
+    }
+
+    async def _draft(ctx: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        return {"id": 3}, {"id": 12, "status": "draft"}
+
+    async def _add_item(*args: Any) -> None:
+        calls.append(args)
+
+    async def _items(ctx: Any) -> int:
+        return 0
+
+    async def _reply(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _locale(ctx: Any) -> str:
+        return "en-US"
+
+    monkeypatch.setattr(rules_editor_draft, "set_and_draft", _draft)
+    monkeypatch.setattr(db.rules_db, "add_item", _add_item)
+    monkeypatch.setattr(rules_editor_draft.rules_draft_editor, "items", _items)
+    monkeypatch.setattr(rules_editor_draft, "reply_rich", _reply)
+    monkeypatch.setattr(rules_editor_draft.rules_draft_editor, "_locale", _locale)
+
+    update = SimpleNamespace(
+        effective_message=SimpleNamespace(text="-"),
+        effective_user=SimpleNamespace(id=7),
+        user_data=scope,
+    )
+    asyncio.run(rules_editor_draft.rules_draft_editor.on_text(cast("Any", update)))
+
+    assert calls and calls[0][4] is None
+
+
+def test_add_item_from_root_picks_a_category(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Add Item without a selected category must not discard typed input."""
+    scope: dict[str, Any] = {}
+
+    async def _answer() -> None:
+        return None
+
+    async def _draft(ctx: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        return {"id": 3}, {"id": 12, "status": "draft"}
+
+    async def _categories(set_id: int) -> list[dict[str, Any]]:
+        return [{"id": 1, "category_key": "general"}]
+
+    async def _locale(ctx: Any) -> str:
+        return "en-US"
+
+    async def _edit(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(rules_editor_draft, "set_and_draft", _draft)
+    monkeypatch.setattr(db.rules_db, "list_categories", _categories)
+    monkeypatch.setattr(rules_editor_draft, "edit_or_reply", _edit)
+    monkeypatch.setattr(rules_editor_draft.rules_draft_editor, "_locale", _locale)
+
+    ctx = SimpleNamespace(
+        callback_query=SimpleNamespace(answer=_answer),
+        effective_message=None,
+        user_data=scope,
+    )
+    asyncio.run(rules_editor_draft.rules_draft_editor.ask_item_title(cast("Any", ctx)))
+
+    assert scope["rules_category"]["category_key"] == "general"
+    assert scope["rules_step"] == "item_title"
