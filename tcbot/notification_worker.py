@@ -244,4 +244,16 @@ async def _process_task(bot: Client, task: dict[str, object]) -> None:
         )
         return
     _cb.telegram.record_success()
-    await _complete(state="sent", expected_attempts=attempts)
+    try:
+        await _complete(state="sent", expected_attempts=attempts)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        # * The edit already landed. A failed settlement must not reach
+        # * run_once's ceiling handler, which would record a delivered card
+        # * as failed. Leave the claim pending for the next tick.
+        log.exception(
+            "Review-card edit landed for action=%d but its settlement write "
+            "failed; leaving the task pending for retry.",
+            action_id,
+        )

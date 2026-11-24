@@ -261,6 +261,33 @@ def test_a_rejected_appeal_closes_its_still_active_ban_card(
     assert completed[0]["state"] == "sent"
 
 
+def test_a_failed_sent_settlement_does_not_record_a_failed_card(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A landed edit must not be reported as failed when only its write fails."""
+    completed: list[dict[str, Any]] = []
+    task = {**_task(), "attempts": notification_worker._MAX_ATTEMPTS}
+    _wire(monkeypatch)
+
+    async def _claim(limit: int = 10, *, retry_after: Any) -> list[dict[str, object]]:
+        return [task]
+
+    async def _complete(task_id: int, **kwargs: Any) -> None:
+        completed.append({"task_id": task_id, **kwargs})
+        if kwargs.get("state") == "sent":
+            raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(db.notifications_db, "claim_due_tasks", _claim)
+    monkeypatch.setattr(db.notifications_db, "complete_task", _complete)
+
+    bot = _Bot()
+
+    asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert len(bot.edits) == 1
+    assert [entry["state"] for entry in completed] == ["sent"]
+
+
 def test_an_invalid_task_is_settled_instead_of_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
