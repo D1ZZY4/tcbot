@@ -41,6 +41,7 @@ BEGIN
         'rule_set_versions',
         'rule_items',
         'rule_categories',
+        'rule_category_content',
         'rule_publication_runs',
         'rule_publications',
         'rule_acknowledgements',

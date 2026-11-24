@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 from tcbot.database import migrations
 from tcbot.database.base import metadata
@@ -42,10 +44,17 @@ class _FakeMigrationContext:
 
 
 class _FakeScripts:
-    """Script-directory double exposing the single head revision."""
+    """Script-directory double exposing the real single head revision.
+
+    Deriving the head from the checked-in Alembic scripts keeps this test
+    meaningful when a new revision is added: a hardcoded value would keep
+    passing while production stamped an obsolete revision.
+    """
 
     def get_heads(self) -> list[str]:
-        return ["0013_role_vocabulary"]
+        root = Path(__file__).resolve().parent.parent
+        scripts = ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
+        return list(scripts.get_heads())
 
 
 def _patch_inspector(monkeypatch: pytest.MonkeyPatch, tables: set[str]) -> None:
@@ -69,7 +78,7 @@ def test_a_bootstrapped_schema_is_stamped_at_the_head_revision(
 
     migrations.stamp_bootstrap_schema(context, object(), _FakeScripts())  # type: ignore[arg-type]
 
-    assert context.stamped == ["0013_role_vocabulary"]
+    assert context.stamped == _FakeScripts().get_heads()
 
 
 def test_the_legacy_index_migration_skips_a_bootstrapped_schema(

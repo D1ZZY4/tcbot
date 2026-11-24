@@ -314,9 +314,13 @@ BEGIN
            decision_note = p_decision_note
      WHERE request_id = p_request_id;
 
+    -- * The audit entity_id must be the numeric primary key: the audit guard
+    -- * validates promotion_request ids against promotion_requests.id. Passing
+    -- * the public short text id aborted the whole rejection.
     INSERT INTO %SCHEMA%.audit_events (event_key, entity_type, entity_id, subject_user_id, actor_user_id, payload)
-    VALUES ('role.promotion.rejected', 'promotion_request', p_request_id, v_request.target_user_id, p_actor_user_id,
-            jsonb_build_object('role_key', v_request.requested_role_key,
+    VALUES ('role.promotion.rejected', 'promotion_request', v_request.id::text, v_request.target_user_id, p_actor_user_id,
+            jsonb_build_object('request_id', p_request_id,
+                               'role_key', v_request.requested_role_key,
                                'decision_note', p_decision_note));
 END;
 $$;

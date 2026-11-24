@@ -218,7 +218,16 @@ BEGIN
         INSERT INTO %SCHEMA%.moderation_enforcement_targets (run_id, chat_id)
         SELECT r.id, cc.chat_id
         FROM %SCHEMA%.moderation_enforcement_runs AS r
-        JOIN %SCHEMA%.connected_chats AS cc ON cc.is_active
+        -- * The inactive main group is still an enforcement destination; it
+        -- * must receive the erasure revoke like every active connected chat.
+        JOIN %SCHEMA%.connected_chats AS cc ON (
+            cc.is_active
+            OR cc.chat_id = coalesce(
+                nullif(current_setting('tcbot.primary_chat_id', true), '')::bigint,
+                (SELECT cs.primary_chat_id FROM %SCHEMA%.community_settings AS cs
+                  WHERE cs.singleton_key = 'global')
+            )
+        )
         WHERE r.idempotency_key = format('moderation:%s:revoke:erasure:v1', v_action_id)
         ON CONFLICT (run_id, chat_id) DO NOTHING;
     END LOOP;

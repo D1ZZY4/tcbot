@@ -757,7 +757,17 @@ BEGIN
     INSERT INTO %SCHEMA%.moderation_enforcement_targets (run_id, chat_id)
     SELECT r.id, cc.chat_id
     FROM %SCHEMA%.moderation_enforcement_runs AS r
-    JOIN %SCHEMA%.connected_chats AS cc ON cc.is_active
+    -- * The main group is registered inactive on purpose but is a permanent
+    -- * enforcement destination. Without this carve-out a timed ban or mute
+    -- * would never be lifted there, leaving Telegram restricted forever.
+    JOIN %SCHEMA%.connected_chats AS cc ON (
+        cc.is_active
+        OR cc.chat_id = coalesce(
+            nullif(current_setting('tcbot.primary_chat_id', true), '')::bigint,
+            (SELECT cs.primary_chat_id FROM %SCHEMA%.community_settings AS cs
+              WHERE cs.singleton_key = 'global')
+        )
+    )
     WHERE r.id = ANY(v_run_ids)
       AND NOT EXISTS (
           SELECT 1 FROM %SCHEMA%.moderation_enforcement_targets AS t

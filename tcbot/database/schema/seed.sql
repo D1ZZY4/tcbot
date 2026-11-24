@@ -187,6 +187,7 @@ INSERT INTO %SCHEMA%.retention_policies (target_table, data_class, retention_day
     ('role_permissions', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
     ('rule_acknowledgements', 'history', NULL, NULL, TRUE, 'Decision history. Retained permanently; removal requires a legal and operator process.'),
     ('rule_categories', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
+    ('rule_category_content', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
     ('rule_items', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),
     ('rule_publication_runs', 'history', NULL, NULL, TRUE, 'Publication history. Retained permanently; removal requires a legal and operator process.'),
     ('rule_publications', 'reference', NULL, NULL, TRUE, 'Reference data. Retained permanently.'),

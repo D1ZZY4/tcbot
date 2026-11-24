@@ -1,7 +1,7 @@
 -- The database functions that own the state transitions.
 CREATE OR REPLACE FUNCTION %SCHEMA%.audit_scheduler_drift() RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'pg_catalog, public, cron'
+    SET search_path TO pg_catalog, '%SCHEMA%', cron
     AS $$
 DECLARE
     v_total   integer;
@@ -272,7 +272,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION %SCHEMA%.scheduler_drift_report() RETURNS TABLE(job_key text, in_registry boolean, registered_in_cron boolean, cron_active boolean, cron_schedule text, cron_command text)
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'pg_catalog, public, cron'
+    SET search_path TO pg_catalog, '%SCHEMA%', cron
     AS $$
 BEGIN
     RETURN QUERY
