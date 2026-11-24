@@ -15,7 +15,7 @@ from pyrogram.types import ChatPermissions
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.modules.helper import buttons, guards, messages
-from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.context import Ctx, display_name
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     replies,
@@ -517,7 +517,7 @@ async def execute_unmute(
         target_id,
         target_name,
         admin.id,
-        admin.first_name,
+        display_name(admin),
     )
     results = await asyncio.gather(
         send_log(

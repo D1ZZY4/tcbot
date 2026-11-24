@@ -12,7 +12,7 @@ from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.database import documents as docs
 from tcbot.modules.helper import guards, messages
-from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.context import Ctx, display_name
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import reply_rich, send_log
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -239,7 +239,7 @@ async def execute_unban(
     # * a self-unban in the audit trail.
     if admin is not None:
         _log_admin_id: int = admin.id
-        _log_admin_fname: str = admin.first_name
+        _log_admin_fname: str = display_name(admin)
     else:
         _log_admin_id = 0
         _log_admin_fname = "anonymous admin"

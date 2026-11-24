@@ -75,7 +75,7 @@ async def execute_warn(
     if admin is None:
         return
     admin_id = admin.id
-    admin_fname = admin.first_name
+    admin_fname = display_name(admin)
     locale = await locale_for_update(ctx)
     warn_limit = cfg.warn_limit
     # * Re-check the executor against the target before anything is

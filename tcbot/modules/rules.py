@@ -15,7 +15,7 @@ from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.buttons import rules as rules_btn
-from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.context import Ctx, chat_id_of
 from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, safe_edit_cb
@@ -181,11 +181,12 @@ async def _edit_payload(
     if query is None:
         return
     message = query.message
-    if message is not None and getattr(message, "chat", None) is not None:
+    chat = getattr(message, "chat", None)
+    if message is not None and chat is not None:
         try:
             await rich_edit.edit_rich(
                 ctx.bot,
-                message.chat.id,
+                chat_id_of(chat),
                 message.id,
                 payload,
                 reply_markup=markup,

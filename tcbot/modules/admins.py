@@ -91,7 +91,7 @@ async def cmd_promote(ctx: Ctx) -> None:
     """
     admin = ctx.effective_user
     msg = ctx.effective_message
-    if admin is None or msg is None:
+    if admin is None or msg is None or msg.chat is None:
         return
     locale = await locale_for_update(ctx)
     if not await require_federation_origin(
@@ -426,7 +426,7 @@ async def cmd_demote(ctx: Ctx) -> None:
     """
     admin = ctx.effective_user
     msg = ctx.effective_message
-    if admin is None or msg is None:
+    if admin is None or msg is None or msg.chat is None:
         return
     locale = await locale_for_update(ctx)
     if not await require_federation_origin(
@@ -691,7 +691,7 @@ async def cmd_transfer(ctx: Ctx) -> None:
     first and keeps the previous Owner as Admin.
     """
     msg = ctx.effective_message
-    if msg is None:
+    if msg is None or msg.chat is None:
         return
     locale = await locale_for_update(ctx)
     if not await require_federation_origin(

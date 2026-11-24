@@ -209,7 +209,7 @@ async def resolve_staff_target(
     """
     msg = ctx.effective_message
     admin = ctx.effective_user
-    if msg is None or admin is None:
+    if msg is None or admin is None or msg.chat is None:
         return None
     locale = await locale_for_update(ctx)
     if not await guards.require_federation_origin(
@@ -276,7 +276,7 @@ async def resolve_mod_target(
     """
     msg = ctx.effective_message
     admin = ctx.effective_user
-    if msg is None or admin is None or ctx.user_data is None:
+    if msg is None or admin is None or msg.chat is None or ctx.user_data is None:
         return None
     locale = await locale_for_update(ctx)
     if not await guards.require_federation_origin(

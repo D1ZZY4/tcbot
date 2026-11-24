@@ -2,5 +2,10 @@
   "venvPath": ".",
   "venv": ".venv",
   "reportMissingImports": true,
-  "reportMissingTypeStubs": false
+  "reportMissingTypeStubs": false,
+  "exclude": [
+    "tests",
+    ".venv",
+    "**/__pycache__"
+  ]
 }

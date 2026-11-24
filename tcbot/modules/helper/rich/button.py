@@ -298,22 +298,21 @@ def button_from_cell(cell: dict[str, object]) -> str | None:
     copy = cell.get("copy_text")
     if isinstance(copy, dict) and isinstance(copy.get("text"), str):
         return button(label, copy=copy["text"], style=style_value)
-    if isinstance(cell.get("switch_inline_query"), str):
+    switch_query = cell.get("switch_inline_query")
+    if isinstance(switch_query, str):
+        return button(label, switch_inline_query=switch_query, style=style_value)
+    switch_current = cell.get("switch_inline_query_current_chat")
+    if isinstance(switch_current, str):
         return button(
             label,
-            switch_inline_query=cell["switch_inline_query"],
+            switch_inline_query_current_chat=switch_current,
             style=style_value,
         )
-    if isinstance(cell.get("switch_inline_query_current_chat"), str):
+    switch_chosen = cell.get("switch_inline_query_chosen_chat")
+    if isinstance(switch_chosen, str):
         return button(
             label,
-            switch_inline_query_current_chat=cell["switch_inline_query_current_chat"],
-            style=style_value,
-        )
-    if isinstance(cell.get("switch_inline_query_chosen_chat"), str):
-        return button(
-            label,
-            switch_inline_query_chosen_chat=cell["switch_inline_query_chosen_chat"],
+            switch_inline_query_chosen_chat=switch_chosen,
             allow_user_chats=bool(cell.get("allow_user_chats", False)),
             allow_bot_chats=bool(cell.get("allow_bot_chats", False)),
             allow_group_chats=bool(cell.get("allow_group_chats", False)),

@@ -13,7 +13,7 @@ from typing import Any
 from pyrogram.enums import ChatMemberStatus
 
 from tcbot import cfg
-from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.context import Ctx, chat_id_of
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_ack, answer_alert, safe_edit_cb
 from tcbot.utils.i18n import t
@@ -59,7 +59,7 @@ async def handle_verify_step(flow: Any, ctx: Ctx) -> None:
 
     try:
         membership = await asyncio.wait_for(
-            ctx.bot.get_chat_member(chat.id, user.id),
+            ctx.bot.get_chat_member(chat_id_of(chat), user.id),
             timeout=TELEGRAM_LOOKUP_TIMEOUT,
         )
     except asyncio.CancelledError:

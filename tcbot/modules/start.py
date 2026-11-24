@@ -14,7 +14,7 @@ from pyrogram.types import CallbackQuery
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, decorators
-from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.context import Ctx, chat_id_of
 from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
@@ -252,7 +252,9 @@ async def on_close(ctx: Ctx) -> None:
     await q.answer()
     try:
         if q.message is not None:
-            await ctx.bot.delete_messages(q.message.chat.id, q.message.id)
+            chat = getattr(q.message, "chat", None)
+            if chat is not None:
+                await ctx.bot.delete_messages(chat_id_of(chat), q.message.id)
     except Exception as exc:
         log.debug("Close button could not delete the panel: %s", exc)
 

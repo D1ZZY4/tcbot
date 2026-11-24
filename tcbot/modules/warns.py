@@ -213,7 +213,7 @@ async def cmd_unwarn(ctx: Ctx) -> None:
 async def cmd_warnlist(ctx: Ctx) -> None:
     """Reply with a paginated warning history for the specified target user."""
     msg = ctx.effective_message
-    if msg is None:
+    if msg is None or msg.chat is None:
         return
     admin = ctx.effective_user
     if admin is None:

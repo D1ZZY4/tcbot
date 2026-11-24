@@ -13,7 +13,7 @@ from pyrogram import Client
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, decorators, messages
-from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.context import Ctx, display_name
 from tcbot.modules.helper.guards import (
     action_owner_mismatch,
     banned_target_refusal,
@@ -327,7 +327,7 @@ async def cmd_setrole(ctx: Ctx) -> None:
     """Open the picker that moves an existing staff member to another tier."""
     admin = ctx.effective_user
     msg = ctx.effective_message
-    if admin is None or msg is None:
+    if admin is None or msg is None or msg.chat is None:
         return
     locale = await locale_for_update(ctx)
     if not await require_federation_origin(
@@ -401,7 +401,7 @@ async def on_role_change_btn(ctx: Ctx) -> None:
     _, text = await change_role_for_staff(
         ctx.bot,
         admin.id,
-        admin.first_name,
+        display_name(admin),
         target_id,
         target_fname,
         role,

@@ -326,9 +326,10 @@ async def _args_target(
         if chat is not None:
             if not _is_private_chat(chat):
                 return None
-            return chat.id, await _best_name(
-                chat.id, chat.first_name, chat.username, arg
-            )
+            uid = chat.id
+            if uid is None:
+                return None
+            return uid, await _best_name(uid, chat.first_name, chat.username, arg)
         # * Client API username lookups miss some existing accounts; one MTProto
         # * exact-username resolve before giving up (deterministic, no fuzzy).
         hit = await db.mtproto.resolve_username(arg)
@@ -430,7 +431,10 @@ async def _entity_target(msg: Message, bot: Client | None) -> tuple[int, str] | 
                 if chat is not None:
                     if not _is_private_chat(chat):
                         continue
-                    return chat.id, await _best_name(chat.id, chat.first_name, uname)
+                    uid = chat.id
+                    if uid is None:
+                        continue
+                    return uid, await _best_name(uid, chat.first_name, uname)
                 hit = await db.mtproto.resolve_username(uname)
                 if hit is not None:
                     uid, fname, _ = hit

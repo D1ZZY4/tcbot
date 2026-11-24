@@ -75,7 +75,7 @@ def with_back_row(
 def _build_topic_rows(
     topics: list[tuple[str, str]],
     *,
-    style: KeyboardButtonStyle | None = None,
+    style: KeyboardButtonStyle = KeyboardButtonStyle.PRIMARY,
 ) -> list[list[InlineKeyboardButton]]:
     """Pair topics into two-column rows, odd leftover on its own row."""
     rows: list[list[InlineKeyboardButton]] = []

@@ -91,7 +91,7 @@ async def send_rich(
 ) -> Message:
     """Send a rich message through Kurigram's native MTProto transport."""
     payload, _embedded = _message_with_buttons(message, reply_markup)
-    return await bot.send_rich_message(
+    sent = await bot.send_rich_message(
         chat_id,
         _input_rich(payload),
         message_thread_id=message_thread_id,
@@ -102,6 +102,9 @@ async def send_rich(
             else None
         ),
     )
+    if sent is None:
+        raise RuntimeError("Telegram returned no message for the rich send")
+    return sent
 
 
 async def send_text(
@@ -135,10 +138,13 @@ async def reply_rich_result(
     has no ``message_thread_id`` parameter of its own.
     """
     payload, _embedded = _message_with_buttons(html_message(text), reply_markup)
-    return await msg.reply_rich(
+    sent = await msg.reply_rich(
         _input_rich(payload),
         disable_notification=disable_notification,
     )
+    if sent is None:
+        raise RuntimeError("Telegram returned no message for the rich reply")
+    return sent
 
 
 async def reply_rich(

@@ -131,7 +131,7 @@ async def _on_any_update(client: Client, update: object) -> None:
 
 
 async def _error_handler(
-    client: Client,
+    client: object,
     exc: BaseException,
     handler: object,
     update: object,

@@ -65,7 +65,10 @@ async def effective_locale(chat_type: object, user_id: int, chat_id: int) -> str
     default locale; a successful read that finds nothing consults the
     community default. Resolution never raises. Cancellation propagates.
     """
-    effective_type: str = getattr(chat_type, "value", chat_type) or "private"
+    candidate: object = getattr(chat_type, "value", chat_type)
+    effective_type: str = (
+        candidate if isinstance(candidate, str) and candidate else "private"
+    )
     if effective_type == "private":
         try:
             user_locale = await db.settings_db.get_user_locale(user_id)

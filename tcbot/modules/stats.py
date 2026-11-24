@@ -444,7 +444,10 @@ _STATS_CMDS = build_prefixed_filters("tcstats") | build_prefixed_filters("tcs")
 def _deferred_message_handler(filter_, callback):
     """Register a free-text handler in a later Kurigram group."""
     handler = MessageHandler(filter_, callback)
-    handler.handler_group = 5
+    # * Kurigram handlers have no declared group attribute; the registry reads
+    # * this label with getattr. Use object.__setattr__ so both the type checker
+    # * and Ruff agree that this is an intentional dynamic registration label.
+    object.__setattr__(handler, "handler_group", 5)
     return handler
 
 

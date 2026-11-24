@@ -68,7 +68,10 @@ async def post_appeal(
     appeal_msg_id: int | None = None
     try:
         fwd = await msg.forward(appeal_chat, message_thread_id=appeal_thread)
-        appeal_msg_id = fwd.id
+        # * Kurigram returns a list for an album forward; a single appeal
+        # * message is the only shape that yields a usable link id.
+        if fwd is not None and not isinstance(fwd, list):
+            appeal_msg_id = fwd.id
     except Exception:
         log.exception("Appeal forward failed")
     appeal_link = (

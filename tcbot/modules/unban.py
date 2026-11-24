@@ -84,7 +84,7 @@ async def cmd_unban(ctx: Ctx) -> None:
     locale = await locale_for_update(ctx)
     msg = ctx.effective_message
     admin = ctx.effective_user
-    if msg is None or admin is None:
+    if msg is None or admin is None or msg.chat is None:
         return
     if not await guards.require_federation_origin(
         msg,
