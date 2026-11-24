@@ -357,7 +357,16 @@ def _import_legacy_data(bind) -> None:
         )
     )
 
-    # * The promotion requests.
+    # * The promotion requests. The lifecycle guard installed by apply_schema
+    # * only admits newly created pending rows, but a legacy import must carry
+    # * the resolved status and resolution fields across verbatim. Suspend the
+    # * guard for this one insert inside the migration transaction so a
+    # * legacy deployment with a decided request can upgrade at all.
+    bind.execute(
+        text(
+            "ALTER TABLE promotion_requests DISABLE TRIGGER trg_promotion_requests_lifecycle"
+        )
+    )
     bind.execute(
         text(
             """
@@ -388,6 +397,11 @@ def _import_legacy_data(bind) -> None:
             FROM legacy_promotion_requests p
             ON CONFLICT (request_id) DO NOTHING
             """
+        )
+    )
+    bind.execute(
+        text(
+            "ALTER TABLE promotion_requests ENABLE TRIGGER trg_promotion_requests_lifecycle"
         )
     )
 
@@ -562,9 +576,16 @@ def _import_mutes(bind) -> None:
         bind.execute(
             text(
                 "SELECT m.id, m.user_id, m.admin_id, m.reason, m.chat_id, "
-                "m.timestamp, m.duration_secs, am.until_date, c.id AS case_id "
+                "m.timestamp, m.duration_secs, am.until_date, "
+                "am.user_id AS active_user_id, c.id AS case_id "
                 "FROM mutes m "
-                "LEFT JOIN legacy_active_mutes am ON am.user_id = m.user_id "
+                # * active_mutes holds one live row per user while mutes is an
+                # * event history. Joining on user_id alone copied that one
+                # * deadline onto every historical mute, so more than one
+                # * imported mute claimed status='active' and the unique index
+                # * aborted the upgrade. Match the event by its timestamp.
+                "LEFT JOIN legacy_active_mutes am "
+                "  ON am.user_id = m.user_id AND am.timestamp = m.timestamp "
                 "LEFT JOIN moderation_cases c "
                 "  ON c.metadata ->> 'legacy_table' = 'mutes' "
                 " AND c.metadata ->> 'legacy_id' = "
@@ -575,15 +596,44 @@ def _import_mutes(bind) -> None:
         .all()
     )
     now = bind.execute(text("SELECT now()")).scalar()
+    # * The insert guard only admits a new action in its initial status, but
+    # * the import must carry historical statuses across. Suspend that one
+    # * guard inside the migration transaction; the other insert trigger still
+    # * assigns and validates the external reference.
+    bind.execute(
+        text(
+            "ALTER TABLE moderation_actions "
+            "DISABLE TRIGGER trg_moderation_actions_prepare_insert"
+        )
+    )
+    # * Import the in-force event last so it is the only row left active. Two
+    # * active mutes for one target would violate the unique index.
     ordered = sorted(
         rows,
-        key=lambda row: (
-            row["until_date"] is not None and row["until_date"] > now,
-            str(row["id"]),
-        ),
+        key=lambda row: (not _mute_is_in_force(row, now), str(row["id"])),
     )
     for row in ordered:
         _import_mute(bind, row, now)
+    bind.execute(
+        text(
+            "ALTER TABLE moderation_actions "
+            "ENABLE TRIGGER trg_moderation_actions_prepare_insert"
+        )
+    )
+
+
+def _mute_is_in_force(row: Mapping[str, Any], now: datetime) -> bool:
+    """Whether this legacy event is the user's live mute.
+
+    A NULL until_date is the legacy representation of a permanent mute and
+    counts as in force, mirroring the legacy ``_not_expired_clause``. The
+    active-row join is required: NULL on an unmatched historical event must
+    not be mistaken for a permanent live mute.
+    """
+    if row["active_user_id"] is None:
+        return False
+    until_date = row["until_date"]
+    return until_date is None or until_date > now
 
 
 def _import_mute(bind, row: Mapping[str, Any], now: datetime) -> None:
@@ -594,12 +644,29 @@ def _import_mute(bind, row: Mapping[str, Any], now: datetime) -> None:
     legacy_id = f"{row['id']}-{row['user_id']}-{row['timestamp']}"
     until_date = row["until_date"]
     created_at = row["timestamp"]
-    in_force = until_date is not None and until_date > now
+    in_force = _mute_is_in_force(row, now)
     expires_at = until_date
     if expires_at is not None and expires_at <= created_at:
         expires_at = created_at + timedelta(seconds=1)
 
-    action_id = bind.execute(
+    # * Write the final status in one insert. Inserting every event as active
+    # * and demoting it in a second statement broke as soon as a user had more
+    # * than one historical mute: the second active row hit the unique index
+    # * before the demotion could run.
+    if in_force:
+        status = "active"
+        revoked_at = None
+        revoked_by = None
+    elif until_date is not None and until_date <= now:
+        status = "expired"
+        revoked_at = created_at
+        revoked_by = row["admin_id"] or 0
+    else:
+        status = "revoked"
+        revoked_at = created_at
+        revoked_by = row["admin_id"] or 0
+
+    bind.execute(
         text(
             """
             INSERT INTO moderation_actions (
@@ -612,6 +679,8 @@ def _import_mute(bind, row: Mapping[str, Any], now: datetime) -> None:
                 created_at,
                 expires_at,
                 status,
+                revoked_at,
+                revoked_by_user_id,
                 external_ref,
                 metadata,
                 case_id,
@@ -620,10 +689,10 @@ def _import_mute(bind, row: Mapping[str, Any], now: datetime) -> None:
             )
             VALUES (
                 'mute', 'community', :target, :actor, :reason, :duration,
-                :created_at, :expires_at, 'active', :external_ref,
-                CAST(:metadata AS jsonb), :case_id, 'system', :origin_chat_id
+                :created_at, :expires_at, :status, :revoked_at, :revoked_by,
+                :external_ref, CAST(:metadata AS jsonb), :case_id, 'system',
+                :origin_chat_id
             )
-            RETURNING id
             """
         ),
         {
@@ -633,6 +702,9 @@ def _import_mute(bind, row: Mapping[str, Any], now: datetime) -> None:
             "duration": row["duration_secs"],
             "created_at": created_at,
             "expires_at": expires_at,
+            "status": status,
+            "revoked_at": revoked_at,
+            "revoked_by": revoked_by,
             "external_ref": hashlib.sha256(
                 f"mute:{row['id']}:{row['user_id']}".encode()
             ).hexdigest()[:16],
@@ -647,28 +719,6 @@ def _import_mute(bind, row: Mapping[str, Any], now: datetime) -> None:
             ).decode(),
             "case_id": int(case_id),
             "origin_chat_id": row["chat_id"],
-        },
-    ).scalar()
-    if action_id is None or in_force:
-        return
-
-    bind.execute(
-        text(
-            """
-            UPDATE moderation_actions
-            SET status = :status,
-                revoked_at = :revoked_at,
-                revoked_by_user_id = :revoked_by
-            WHERE id = :id
-            """
-        ),
-        {
-            "status": "expired"
-            if until_date is not None and until_date <= now
-            else "revoked",
-            "revoked_at": created_at,
-            "revoked_by": row["admin_id"] or 0,
-            "id": int(action_id),
         },
     )
 

@@ -82,8 +82,10 @@ _LEGACY_ROWS: tuple[str, ...] = (
     """,
     """
     INSERT INTO promotion_requests
-        (request_id, target_id, username, first_name, promoted_by, status, requested_date)
-    VALUES ('req0000001', 4, 'mod', 'Mod', 1, 'pending', now())
+        (request_id, target_id, username, first_name, promoted_by, status,
+         requested_date, resolved_date, resolved_by)
+    VALUES ('req0000001', 4, 'mod', 'Mod', 1, 'pending', now(), NULL, NULL),
+           ('req0000002', 4, 'mod', 'Mod', 1, 'rejected', now(), now(), 1)
     """,
     """
     INSERT INTO bans
@@ -96,11 +98,14 @@ _LEGACY_ROWS: tuple[str, ...] = (
     """,
     """
     INSERT INTO mutes (user_id, chat_id, reason, admin_id, timestamp, duration_secs)
-    VALUES (5, -100, 'mute reason', 1, now(), 3600)
+    VALUES (5, -100, 'mute reason', 1, now(), 3600),
+           (5, -100, 'older mute', 1, now() - interval '30 days', 3600),
+           (6, -100, 'permanent mute', 1, now(), 3600)
     """,
     """
     INSERT INTO active_mutes (user_id, until_date, timestamp)
-    VALUES (5, now() + interval '1 hour', now())
+    VALUES (5, now() + interval '1 hour', now()),
+           (6, NULL, now())
     """,
     """
     INSERT INTO warns (user_id, chat_id, reason, admin_id, timestamp)
@@ -261,7 +266,7 @@ def test_the_legacy_decisions_move_over(migrated_schema: str) -> None:
                 ).all()
             )
             assert counts.get("ban") == 2
-            assert counts.get("mute") == 1
+            assert counts.get("mute") == 3
             assert counts.get("warn") == 3
             assert counts.get("kick") == 1
             # * Every decision points at the case that holds it.
@@ -319,6 +324,62 @@ def test_the_active_ban_keeps_its_state_and_its_proof(migrated_schema: str) -> N
                 )
                 == 1
             )
+    finally:
+        engine.dispose()
+
+
+def test_only_the_live_legacy_mute_is_imported_as_active(
+    migrated_schema: str,
+) -> None:
+    """One live row per user must not make every historical mute active."""
+    url = configured_database_url()
+    assert url is not None
+    engine = create_engine(
+        sync_database_url(url),
+        pool_pre_ping=True,
+        connect_args={"options": f"-c search_path={migrated_schema}"},
+    )
+    try:
+        with engine.connect() as conn:
+            active = conn.execute(
+                text(
+                    "SELECT target_user_id, expires_at FROM moderation_actions "
+                    "WHERE action_type = 'mute' AND status = 'active' "
+                    "ORDER BY target_user_id"
+                )
+            ).all()
+            # * User 5 keeps exactly one active mute; the older event is
+            # * revoked. User 6 had a NULL until_date (permanent) and must
+            # * also be active, not mistakenly dropped.
+            active_rows = [(int(r[0]), r[1]) for r in active]
+            assert active_rows[0][0] == 5
+            assert active_rows[0][1] is not None
+            assert active_rows[1] == (6, None)
+            assert len(active_rows) == 2
+    finally:
+        engine.dispose()
+
+
+def test_a_decided_legacy_promotion_request_survives_the_import(
+    migrated_schema: str,
+) -> None:
+    """Terminal legacy requests import without tripping the lifecycle guard."""
+    url = configured_database_url()
+    assert url is not None
+    engine = create_engine(
+        sync_database_url(url),
+        pool_pre_ping=True,
+        connect_args={"options": f"-c search_path={migrated_schema}"},
+    )
+    try:
+        with engine.connect() as conn:
+            rows = dict(
+                conn.execute(
+                    text("SELECT request_id, status FROM promotion_requests")
+                ).all()
+            )
+            assert rows.get("req0000001") == "pending"
+            assert rows.get("req0000002") == "rejected"
     finally:
         engine.dispose()
 
