@@ -88,8 +88,8 @@ All user-facing formatted messages are rich messages owned by the focused
 modules under `tcbot/modules/helper/rich/`: `formats.py` (headings, text,
 quotes, highlights, code, footnotes, dividers), `style.py` (HTML escaping and
 bold, italic, underline, strike, spoiler), `list.py` (lists and details),
-`table.py`, `buttons.py` (every rich button feature and inline-markup
-conversion), `link.py` (links and ID-based mentions), and `media.py` (photo,
+`table.py`, `button.py` (every rich button feature and inline-markup
+conversion), `link.py` (links, ID-based mentions, and Telegram URL builders), and `media.py` (photo,
 video, slideshow, collage). `text.py` exposes `style(text)`, a verbatim
 passthrough, and `blocks()`, which converts a rendered multiline fragment into
 rich block markup. `msg.py` owns the `send_rich_message` transport and `edit.py`
@@ -107,8 +107,9 @@ so inline keyboards and rich markup stay consistent.
 - Plain notices and callback alerts stay unparsed; they are not rich messages.
 - Kurigram speaks MTProto directly and is the sole Telegram framework. Its
   native rich-message API carries all HTML formatting; the same client also
-  handles commands and long-polling updates. All rich send and edit helpers live
-  in `messages/`.
+  handles commands and long-polling updates. Rich send and edit helpers live in
+  `rich/msg.py` and `rich/edit.py` and are re-exported from `messages/` for
+  stable import paths.
 
 ## Autonomous Engineering Loop
 
@@ -238,13 +239,12 @@ Current stack:
 │   │   │   ├── locale.py     Render-locale resolution (per-update locale)
 │   │   │   ├── messages/       Safe edits, channel delivery, and federation log renderers
 │   │   │   │   ├── audit_logs.py    Audit-log builders
-│   │   │   │   ├── links.py         Telegram link builders (`t.me/c/...`, appeal deep links)
 │   │   │   │   ├── panels.py        Shared information and profile panels
 │   │   │   │   ├── rules.py         Rules rendering, hashing, and selected summaries
 │   │   │   │   └── replies.py       Localized reply functions and HelpEntry shape
-│   │   │   ├── rich/           Rich HTML blocks, buttons, and send/edit transports
-│   │   │   │   ├── buttons.py      Rich buttons and inline-markup conversion
-│   │   │   │   ├── link.py         Links and ID-based mentions
+│   │   │   ├── rich/           Rich HTML blocks, links, buttons, and send/edit transports
+│   │   │   │   ├── button.py       Rich buttons and inline-markup conversion
+│   │   │   │   ├── link.py         Links, mentions, and Telegram URL builders
 │   │   │   │   ├── msg.py          Rich send transport
 │   │   │   │   └── edit.py         Safe-edit transport helpers
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
@@ -387,7 +387,7 @@ Important non-secret/runtime variables include:
 - `WARN_LIMIT`: per-group warn threshold that triggers auto-ban; default `3`.
 - `WARN_EXPIRY_DAYS`: days after which warn records expire; default `0` (disabled).
 - `FED_WARN_LIMIT`: federation-wide warn threshold that triggers auto-ban; default `0` (disabled).
-- Community menu links are derived from `MAIN_CHANNEL`, `MAIN_GROUP`, `LOGS`, and `APPEALS` through `tcbot/modules/helper/messages/links.py`; no static `COMMUNITY_*_URL` variables remain.
+- Community menu links are derived from `MAIN_CHANNEL`, `MAIN_GROUP`, `LOGS`, and `APPEALS` through `tcbot/modules/helper/rich/link.py`; no static `COMMUNITY_*_URL` variables remain.
 
 Use `config.env.example` as the complete template.
 

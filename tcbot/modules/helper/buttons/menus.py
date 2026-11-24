@@ -14,7 +14,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot import cfg
 from tcbot.modules.helper.buttons.common import back_button, back_markup
-from tcbot.modules.helper.messages import links as community_links
+from tcbot.modules.helper.rich import link as community_links
 from tcbot.utils.i18n import t
 
 

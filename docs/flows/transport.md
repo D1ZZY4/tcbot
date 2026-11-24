@@ -17,8 +17,8 @@ and `skip_entity_detection` only when requested. `blocks_message(blocks)` return
 `buttons_from_markup()` and, when rows exist and `message["html"]` is a string,
 appends the rows to the HTML with a newline. It returns `(payload, embedded)`.
 The send and edit helpers always embed convertible buttons as rich markup.
-No inline keyboard is attached as a fallback; a cell that cannot convert is
-rendered as a disabled rich button instead.
+Conversion is all-or-nothing: one unmappable cell keeps the whole keyboard as
+native inline markup instead of embedding any rich button rows.
 
 | Field | Set by | Meaning |
 |---|---|---|
@@ -226,7 +226,7 @@ a direct Kurigram send leaves the HTML tags visible to users.
 | Roles | `promoted`, `demoted`, `ownership_transferred`, `promote_request_log`, `promote_approved_log`, `promote_rejected_log` |
 | Groups and broadcast | `group_connected_log`, `group_connection_rejected_log`, `group_disconnected_log`, `group_bot_removed_log`, `broadcast_log` |
 
-`modules/helper/messages/links.py` owns every link builder:
+`modules/helper/rich/link.py` owns every link builder:
 
 | Function | Output |
 |---|---|

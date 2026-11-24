@@ -37,11 +37,6 @@ from tcbot.modules.helper.messages.audit_logs import (
     unwarn_log,
     warn_log,
 )
-from tcbot.modules.helper.messages.links import (
-    appeal_deep_link,
-    chat_id_to_link_id,
-    message_link,
-)
 from tcbot.modules.helper.messages.panels import (
     about_msg,
     about_section_labels,
@@ -62,6 +57,11 @@ from tcbot.modules.helper.rich.edit import (
     safe_edit_cb,
     safe_edit_message,
     send_log,
+)
+from tcbot.modules.helper.rich.link import (
+    appeal_deep_link,
+    chat_id_to_link_id,
+    message_link,
 )
 from tcbot.modules.helper.rich.msg import (
     reply_rich,

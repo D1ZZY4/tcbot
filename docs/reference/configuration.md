@@ -44,7 +44,7 @@ fail at load time with an actionable message. The template is
 
 All four destinations accept `chat_id` or `chat_id/thread_id`. A thread id must
 be positive; a non-positive segment is dropped. Community menu links derive
-from these ids through `messages/links.py`; no static URL variables remain.
+from these ids through `rich/link.py`; no static URL variables remain.
 
 ## Database and cache
 

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from pyrogram import filters
+from pyrogram import ContinuePropagation, filters
 
 from tcbot import cfg
 from tcbot import database as db
@@ -30,10 +30,10 @@ from tcbot.modules.helper.messages import (
     reply_rich_result,
     safe_edit_cb,
 )
-from tcbot.modules.helper.messages.links import display as display_community_link
 from tcbot.modules.helper.pipelines.appeal_post import clear_appeal_state, post_appeal
 from tcbot.modules.helper.pipelines.appeal_review import AppealReviewMixin
 from tcbot.modules.helper.rich.formats import heading
+from tcbot.modules.helper.rich.link import display as display_community_link
 from tcbot.modules.helper.rich.list import checklist
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import pre, t
@@ -211,6 +211,12 @@ class SubmitMessageMixin:
         text = msg.text.strip()
         locale = await locale_for_update(ctx)
         if not starts_with_appeal_tag(text):
+            # * This state handler is flattened into group 0. With no active
+            # * appeal it must let another module's text handler see the update.
+            if not isinstance(ctx.user_data, dict) or not ctx.user_data.get(
+                "appeal_ban_id"
+            ):
+                raise ContinuePropagation()
             await reply_rich(
                 msg,
                 t("appeals.submit.unexpected", locale, plain=True),

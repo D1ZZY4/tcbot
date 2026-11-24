@@ -15,7 +15,7 @@ from tcbot.modules.helper import buttons as btn
 from tcbot.modules.helper.buttons import menus as menu_btn
 from tcbot.modules.helper.buttons import rules as rule_btn
 from tcbot.modules.helper.buttons.common import close_btn
-from tcbot.modules.helper.messages import links as community_links
+from tcbot.modules.helper.rich import link as community_links
 
 
 def test_every_open_in_pm_button_shares_the_start_menu_link() -> None:

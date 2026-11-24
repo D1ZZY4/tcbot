@@ -13,7 +13,7 @@ from typing import Any, cast
 import pytest
 from pyrogram import Client
 
-from tcbot.modules.helper.messages import links as community_links
+from tcbot.modules.helper.rich import link as community_links
 
 
 @pytest.fixture(autouse=True)

@@ -67,7 +67,7 @@ Commonly configured values:
 | `MTPROTO_SESSION` | `tcbot_mtproto` | Namespace for the shared MTProto session in PostgreSQL. |
 
 Community menu links derive from `MAIN_CHANNEL`, `MAIN_GROUP`, `LOGS`, and
-`APPEALS` through `messages/links.py`; no static URL variables remain.
+`APPEALS` through `rich/link.py`; no static URL variables remain.
 
 ## Run locally
 

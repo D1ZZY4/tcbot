@@ -15,7 +15,7 @@ from pyrogram.types import InputMediaPhoto, InputMediaVideo, Message
 
 from tcbot import cfg
 from tcbot.modules.helper.messages.audit_logs import proof_caption_new
-from tcbot.modules.helper.messages.links import message_link
+from tcbot.modules.helper.rich.link import message_link
 from tcbot.modules.helper.rich.media import slideshow
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
@@ -236,7 +236,7 @@ async def upload_proof_items(
         return await bot.send_document(
             proof_chat,
             source.file_id,
-            caption=cap,
+            caption=cap or "",
             parse_mode=None,
             message_thread_id=proof_thread,
         )
@@ -245,7 +245,8 @@ async def upload_proof_items(
         if gallery:
             if len(gallery) == 1:
                 sent = await _send_single(gallery[0], caption)
-                landed.append(_landed_item(sent, gallery[0], len(landed)))
+                if sent is not None:
+                    landed.append(_landed_item(sent, gallery[0], len(landed)))
                 log.info(
                     "Proof media uploaded: message_id=%s",
                     landed[0].archive_message_id,
@@ -310,7 +311,8 @@ async def upload_proof_items(
             log.exception("Proof single media upload failed; continuing")
             continue
         caption_landed = True
-        landed.append(_landed_item(sent, source, len(landed)))
+        if sent is not None:
+            landed.append(_landed_item(sent, source, len(landed)))
     if landed and singles:
         log.info(
             "Proof single media uploaded alongside message_id=%s",
