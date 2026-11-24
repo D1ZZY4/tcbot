@@ -39,28 +39,36 @@ Or reply to a message and run `/c`."""
 
 [profile]
 admin_fallback = "Admin"
-title = "*Profile*"
-activity = "*Federation Activity*"
-name = "*Name:* {user}"
-id = "ID: {id}"
-username = "Username: @{name}"
-username_none = "Username: (none)"
+title = "Profile"
+activity = "Federation Activity"
+username_none = "(none)"
 yes = "Yes"
 yes_ban = "Yes ({ban})"
 no = "No"
-role = "*Role:* {role}"
-assigned_by = "   Assigned by: {by}"
-assigned_at = "   Assigned date: {date}\n   Assigned time: {time}"
-active_ban = "Active Ban: {state}"
-active_mute = "Active Mute: {state}"
 unknown = "Unknown - retry in a moment"
-total_bans = "*Total Bans:* {n}"
-warnings = "Warnings: {active} active across {groups} group(s) ({total} total historical)"
-kicks = "Kicks: {n}"
-mutes = "Mutes: {n}"
-appeals = "Appeals: {n}"
 regular = "Regular user"
 caveat = "Some counters could not be loaded; totals above may be incomplete."
+
+# Row labels for the profile tables. Values are built in Python from the
+# state strings above, so only short labels belong here.
+[profile.table]
+field = "Field"
+value = "Value"
+name = "Name"
+id = "ID"
+username = "Username"
+username_value = "@{name}"
+role = "Role"
+assigned_by = "Assigned by"
+assigned_at = "Assigned"
+active_ban = "Active Ban"
+active_mute = "Active Mute"
+total_bans = "Total Bans"
+warnings = "Warnings"
+warnings_detail = "{active} active across {groups} group(s) ({total} total historical)"
+kicks = "Kicks"
+mutes = "Mutes"
+appeals = "Appeals"
 
 [profile.button]
 bans = "Bans ({n})"
@@ -87,13 +95,17 @@ item = "{i}. {status}\n   *Ban ID:* {ban}\n   Date: {date} | Time: {time}"
 
 [warns]
 empty = "*Warnings*\n\nNo warning records for {user}."
-header = "*Warnings*: {n} total across {groups} group(s)"
-group_line = "- {title}: {n}"
+header = "Warnings: {n} total across {groups} group(s)"
 group_button = "{title} ({n})"
 in_empty = "*Warnings in* {title}\n\nNo warning records here."
 in_header = "*Warnings in* {title}: {n} total, page {page}/{pages}"
 in_item = "{i}.\n   Date: {date} | Time: {time}\n   {reason}\n   By {admin}"
 db_fail = "Could not load warning groups. The database is unreachable, try again in a bit."
+
+# Column labels for the per-group warning summary table.
+[warns.table]
+group = "Group"
+count = "Warnings"
 
 [events]
 kicks_heading = "Kicks"

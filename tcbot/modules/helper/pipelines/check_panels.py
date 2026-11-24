@@ -31,9 +31,11 @@ from tcbot.modules.helper.extraction import (
     launch_identity_refresh,
 )
 from tcbot.modules.helper.identity import Identity, classify, profile_note
+from tcbot.modules.helper.messages.rich_format import divider, footer, heading
+from tcbot.modules.helper.messages.rich_table import table
 from tcbot.modules.helper.messages.rich_text import blocks
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.i18n import Safe, bold, code, italic, t, user_ref
+from tcbot.utils.i18n import Safe, bold, code, esc, italic, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page
 from tcbot.utils.time_and_date import (
@@ -183,11 +185,6 @@ class CheckProfileMixin:
                 else t("checking.profile.regular", locale)
             )
         )
-        uname_part = (
-            t("checking.profile.username", locale, name=uname or "")
-            if uname
-            else t("checking.profile.username_none", locale)
-        )
         active_ban_doc = cast("BanDoc | None", active_ban)
         if ban_failed:
             active_part = t("checking.profile.unknown", locale)
@@ -213,52 +210,67 @@ class CheckProfileMixin:
                 if active_mute
                 else t("checking.profile.no", locale)
             )
-        role_lines = [t("checking.profile.role", locale, role=Safe(bold(role_label)))]
+
+        def label(key: str) -> str:
+            return t(f"checking.profile.table.{key}", locale, plain=True)
+
+        uname_value = (
+            t("checking.profile.table.username_value", locale, name=esc(uname))
+            if uname
+            else t("checking.profile.username_none", locale, plain=True)
+        )
+        identity_rows: list[list[str]] = [
+            [label("name"), Safe(user_ref(target_id, fname))],
+            [label("id"), Safe(code(str(target_id)))],
+            [label("username"), Safe(uname_value)],
+            [label("role"), Safe(bold(role_label))],
+        ]
         if role and role != "owner" and role_by_id:
             by_name = await db.users_cache.get_first_name(role_by_id, str(role_by_id))
-            role_lines.append(
-                t(
-                    "checking.profile.assigned_by",
-                    locale,
-                    by=Safe(user_ref(role_by_id, by_name)),
-                )
+            identity_rows.append(
+                [label("assigned_by"), Safe(user_ref(role_by_id, by_name))]
             )
         if role and role != "owner" and role_at:
-            role_lines.append(
-                t(
-                    "checking.profile.assigned_at",
-                    locale,
-                    date=Safe(fmt_date(role_at)),
-                    time=Safe(fmt_time(role_at)),
-                )
+            identity_rows.append(
+                [
+                    label("assigned_at"),
+                    Safe(f"{fmt_date(role_at)} | {fmt_time(role_at)}"),
+                ]
             )
-        role_block = Safe("\n".join(role_lines))
-        uname_line = Safe(uname_part)
-        active_ban_line = Safe(
-            t("checking.profile.active_ban", locale, state=Safe(active_part))
-        )
-        active_mute_line = Safe(
-            t("checking.profile.active_mute", locale, state=Safe(active_mute_part))
-        )
-        text = (
-            (f"{identity_note}\n\n" if identity_note else "")
-            + f"{t('checking.profile.title', locale)}\n\n"
-            + f"{t('checking.profile.name', locale, user=Safe(user_ref(target_id, fname)))}\n"
-            + f"{t('checking.profile.id', locale, id=Safe(code(str(target_id))))}\n"
-            + f"{uname_line}\n"
-            + f"{role_block}\n\n"
-            + f"{t('checking.profile.activity', locale)}\n\n"
-            + f"{active_ban_line}\n"
-            + f"{active_mute_line}\n"
-            + f"{t('checking.profile.total_bans', locale, n=ban_total)}\n"
-            + f"{t('checking.profile.warnings', locale, active=fed_warn_total, groups=len(warn_groups) if warn_groups is not None else 0, total=warn_total)}\n"
-            + f"{t('checking.profile.kicks', locale, n=kick_total)}\n"
-            + f"{t('checking.profile.mutes', locale, n=mute_total)}\n"
-            + f"{t('checking.profile.appeals', locale, n=appeal_total)}"
-        )
+        headers = [label("field"), label("value")]
+        activity_rows: list[list[str]] = [
+            [label("active_ban"), Safe(active_part)],
+            [label("active_mute"), Safe(active_mute_part)],
+            [label("total_bans"), str(ban_total)],
+            [
+                label("warnings"),
+                Safe(
+                    t(
+                        "checking.profile.table.warnings_detail",
+                        locale,
+                        active=fed_warn_total,
+                        groups=len(warn_groups) if warn_groups is not None else 0,
+                        total=warn_total,
+                    )
+                ),
+            ],
+            [label("kicks"), str(kick_total)],
+            [label("mutes"), str(mute_total)],
+            [label("appeals"), str(appeal_total)],
+        ]
+        blocks_out = [
+            heading(t("checking.profile.title", locale, plain=True), 2),
+            divider(),
+            table(headers, identity_rows, raw_cells=True, compact=True, striped=True),
+            heading(t("checking.profile.activity", locale, plain=True), 2),
+            divider(),
+            table(headers, activity_rows, raw_cells=True, compact=True, striped=True),
+        ]
+        if identity_note:
+            blocks_out.insert(0, identity_note)
         if counts_failed:
-            text += f"\n\n{t('checking.profile.caveat', locale)}"
-        return blocks(text), check_profile_btn(
+            blocks_out.append(footer(t("checking.profile.caveat", locale, plain=True)))
+        return "\n".join(blocks_out), check_profile_btn(
             target_id,
             ban_total=ban_total,
             appeal_total=appeal_total,
@@ -532,30 +544,38 @@ class CheckEventsMixin:
             log.debug("Group titles fallback for check view: %s", exc)
             titles = {}
         total = sum(c for _, c in groups)
-        lines = [
-            t(
-                "checking.warns.header",
-                locale,
-                n=total,
-                groups=len(groups),
-            )
-            + "\n"
-        ]
         warn_groups: list[tuple[str, int, int]] = []
+        rows: list[list[str]] = []
         for cid, count in groups:
             title = titles.get(cid) or str(cid)
-            lines.append(
-                t(
-                    "checking.warns.group_line",
-                    locale,
-                    title=title,
-                    n=Safe(bold(str(count))),
-                )
-            )
+            rows.append([Safe(esc(title)), Safe(bold(str(count)))])
             warn_groups.append((title, count, cid))
-        return blocks("\n".join(lines)), check_warn_groups_btn(
-            target_id, warn_groups, locale=locale
+        text = (
+            heading(
+                t(
+                    "checking.warns.header",
+                    locale,
+                    plain=True,
+                    n=total,
+                    groups=len(groups),
+                ),
+                2,
+            )
+            + "\n"
+            + divider()
+            + "\n"
+            + table(
+                [
+                    t("checking.warns.table.group", locale, plain=True),
+                    t("checking.warns.table.count", locale, plain=True),
+                ],
+                rows,
+                raw_cells=True,
+                compact=True,
+                striped=True,
+            )
         )
+        return text, check_warn_groups_btn(target_id, warn_groups, locale=locale)
 
     @classmethod
     async def warns_in_group(
