@@ -6,15 +6,24 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 
 from tcbot.database.base import chat_members, telegram_users
 from tcbot.database.cache import CACHE_MISS, user_mention_cache
 from tcbot.database.documents import UserDoc
-from tcbot.database.engine import db_call, fetch_all, fetch_one, fetch_value, run
+from tcbot.database.engine import (
+    constraint_name,
+    db_call,
+    fetch_all,
+    fetch_one,
+    fetch_value,
+    run,
+)
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
@@ -454,16 +463,27 @@ async def upsert_user(
     # * keeps the stored column instead of clearing it.
     # * The first sighting is not overwritten: the conflict action leaves
     # * first_seen_at alone, so the moment the profile arrived stays readable.
-    await db_call(
-        lambda: run(
-            pg_insert(telegram_users)
-            .values(**values)
-            .on_conflict_do_update(
-                index_elements=["user_id"],
-                set_=updates,
+    try:
+        await db_call(
+            lambda: run(
+                pg_insert(telegram_users)
+                .values(**values)
+                .on_conflict_do_update(
+                    index_elements=["user_id"],
+                    set_=updates,
+                )
             )
         )
-    )
+    except asyncio.CancelledError:
+        raise
+    except IntegrityError as exc:
+        if constraint_name(exc) != "ck_telegram_users_erased_identity":
+            raise
+        # * The database refused to repopulate an erased profile. Drop the
+        # * stale mention entry too, so no process keeps serving the name it
+        # * just tried to write back.
+        user_mention_cache.invalidate(user_id)
+        return
     # * Populate the mention cache when the write carried every field, so
     # * the next change check hits L1 and an unchanged profile is not
     # * rewritten on every message. A partial write (username or last name

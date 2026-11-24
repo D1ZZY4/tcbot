@@ -246,6 +246,32 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION %SCHEMA%.guard_erased_user_identity() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN
+  -- * Erasure keeps the identity row for history but clears its profile.
+  -- * Ordinary updates harvest that profile from every later Telegram
+  -- * update, so without this guard an erased account is repopulated and
+  -- * cannot be erased again. Clearing fields is always allowed, which
+  -- * lets the erasure sweep itself run and be repeated.
+  IF TG_OP = 'UPDATE' AND OLD.erased_at IS NOT NULL THEN
+    IF (NEW.username IS NOT NULL AND btrim(NEW.username) <> '')
+       OR (NEW.first_name IS NOT NULL AND btrim(NEW.first_name) <> '')
+       OR (NEW.last_name IS NOT NULL AND btrim(NEW.last_name) <> '')
+       OR (NEW.language_code IS NOT NULL AND btrim(NEW.language_code) <> '')
+       OR NEW.is_premium THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '23514',
+        CONSTRAINT = 'ck_telegram_users_erased_identity',
+        MESSAGE = 'An erased user identity cannot be repopulated';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION %SCHEMA%.guard_telegram_chat_type_change() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'pg_catalog'

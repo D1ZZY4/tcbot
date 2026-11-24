@@ -189,9 +189,12 @@ file `tests/test_formatter.py` pins these shapes.
 | `is_placeholder_name(name)` | True for empty, `User <id>`, or bare numeric names. |
 | `erasure_db.request_erasure(user_id, reason)` | Queues an account erasure by calling the SQL function `request_user_erasure(:user_id, :reason, 'operator')`. |
 
-The erasure function refuses an unknown user, an already erased user, and an
-empty reason in the database layer, so callers do not duplicate those rules.
-Username shape validation stays in `safe_username()` at the input boundary; the
-cache stores usernames exactly as observed on real updates and only the lowercase
-form is indexed for lookup. Erasure cache invalidation follows the sweep order
-described in [Persistence](persistence.md).
+The erasure function refuses an unknown user and an empty reason in the database
+layer, so callers do not duplicate those rules. A repeat request is allowed:
+`trg_telegram_users_guard_erased_identity` rejects any later harvest that tries
+to repopulate the cleared profile, and `upsert_user` drops the stale mention
+entry when that guard fires. Username shape validation stays in
+`safe_username()` at the input boundary; the cache stores usernames exactly as
+observed on real updates and only the lowercase form is indexed for lookup.
+Erasure cache invalidation follows the sweep order described in
+[Persistence](persistence.md).

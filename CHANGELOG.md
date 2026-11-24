@@ -18,6 +18,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Fixed
 
+- **An erased profile stays erased when later updates arrive** (`tcbot/database/schema/functions/identity.sql`, `triggers.sql`, `functions/maintenance.sql`, `tcbot/database/users_cache.py`, `alembic/versions/0020_erased_identity_guard.py`): identity harvesting used to write the name and username back onto the anonymised row, and a second erasure was refused forever. A database guard now rejects repopulation, the application drops the stale mention entry, and repeat erasures are allowed. Behavior changes: a request against an already-erased account can be filed again to clean up older rows.
 - **Every send and edit now uses rich buttons only** (`tcbot/modules/helper/rich/msg.py`, `edit.py`, `button.py`): replies and safe edits no longer bypass the button converter, and no inline keyboard is attached as a fallback. Behavior changes: inline keyboards are replaced by `<tg-button-row>` markup in sent and edited messages.
 - **Dead MTProto keys keep their operator guidance** (`tcbot/error_reporter.py`): `AuthKeyDuplicated` derives from `RPCError` in Kurigram, so the generic Telegram label used to win over the auth-key label. Behavior changes: duplicate-key incidents are labelled as MTProto auth failures again.
 - **Group owners are accepted by `/tcconnect` again** (`tcbot/modules/connect.py`): Kurigram reports the group Creator as `owner`, not `creator`.

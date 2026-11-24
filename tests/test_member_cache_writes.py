@@ -6,9 +6,12 @@
 
 from __future__ import annotations
 
+import asyncio
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from tcbot import database as db
 from tcbot.database import users_cache
@@ -90,6 +93,45 @@ async def test_a_partial_write_invalidates_rather_than_lying(
     await db.users_cache.upsert_user(7, None, "Alice")
 
     assert user_mention_cache.get(7) is CACHE_MISS
+
+
+def test_an_erased_profile_write_is_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A harvest that tries to repopulate an erased row must not crash the update."""
+    invalidated: list[int] = []
+
+    async def _deny(_op: Any, **_kwargs: Any) -> Any:
+        orig = SimpleNamespace(
+            diag=SimpleNamespace(constraint_name="ck_telegram_users_erased_identity")
+        )
+        raise IntegrityError("insert", {}, orig)
+
+    class _Cache:
+        def invalidate(self, key: int) -> None:
+            invalidated.append(key)
+
+    monkeypatch.setattr(users_cache, "db_call", _deny)
+    monkeypatch.setattr(users_cache, "user_mention_cache", _Cache())
+
+    asyncio.run(users_cache.upsert_user(7, "alice", "Alice"))
+
+    assert invalidated == [7]
+
+
+def test_other_integrity_errors_still_propagate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the erasure guard is swallowed; a real write error must surface."""
+
+    async def _deny(_op: Any, **_kwargs: Any) -> Any:
+        orig = SimpleNamespace(diag=SimpleNamespace(constraint_name="other_constraint"))
+        raise IntegrityError("insert", {}, orig)
+
+    monkeypatch.setattr(users_cache, "db_call", _deny)
+
+    with pytest.raises(IntegrityError):
+        asyncio.run(users_cache.upsert_user(7, "alice", "Alice"))
 
 
 def test_a_resolved_identity_stays_process_local(

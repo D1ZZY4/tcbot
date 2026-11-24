@@ -75,7 +75,7 @@ function bodies, escape strings, and nested comments.
 The seed defines role priorities (owner 100, admin 80, developer 60, moderator
 40), permissions, and other reference data.
 
-`alembic/versions/` holds numbered revisions; the current head is `0018`.
+`alembic/versions/` holds numbered revisions; the current head is `0020`.
 `database/migrations.py` applies them at startup under an advisory lock so two
 instances cannot migrate concurrently. A schema bootstrapped from metadata but
 missing `alembic_version` is stamped at the head revision before the normal

@@ -282,11 +282,10 @@ BEGIN
         RAISE EXCEPTION 'User % does not exist', p_user_id;
     END IF;
 
-    IF EXISTS (SELECT 1 FROM %SCHEMA%.telegram_users
-               WHERE user_id = p_user_id AND erased_at IS NOT NULL) THEN
-        RAISE EXCEPTION 'User % was already erased', p_user_id;
-    END IF;
-
+    -- * A repeat request is allowed: identity harvesting can briefly
+    -- * repopulate an older erased row before the guard was installed, and
+    -- * the partial unique index on open requests already deduplicates.
+    -- * The sweep is idempotent and writes another audit event.
     INSERT INTO %SCHEMA%.telegram_user_erasures (user_id, reason, source, status)
     VALUES (p_user_id, p_reason, p_source, 'pending')
     ON CONFLICT DO NOTHING
