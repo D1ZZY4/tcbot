@@ -400,14 +400,18 @@ async def upload_proof_items(
         # * A gallery failure must not discard single media evidence: fall
         # * through to the single-item loop below.
         log.exception("Proof gallery upload failed; trying single media")
-    for index, source in enumerate(singles):
+    # * The caption belongs to the first item that actually lands, not the
+    # * first source in the list: a failed first send must not leave the landed
+    # * evidence unlabelled. Track "already captioned" instead of the source
+    # * index, which never advances back after a failure.
+    caption_landed = bool(landed)
+    for source in singles:
         try:
-            sent = await _send_single(
-                source, caption if not landed and index == 0 else None
-            )
+            sent = await _send_single(source, None if caption_landed else caption)
         except Exception:
             log.exception("Proof single media upload failed; continuing")
             continue
+        caption_landed = True
         landed.append(_landed_item(sent, source, len(landed)))
     if landed and singles:
         log.info(

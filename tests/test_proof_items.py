@@ -236,6 +236,38 @@ def test_caption_lands_on_the_first_chunk_that_succeeds() -> None:
     assert all(item.caption is None for item in captured[1][1:])
 
 
+def test_caption_lands_on_the_first_standalone_item_that_succeeds() -> None:
+    """A failed first document must not drop the caption from the second."""
+    messages = [_document_message("d0", 1), _document_message("d1", 2)]
+    captured: list[str | None] = []
+    calls = 0
+
+    class _Bot:
+        async def send_document(self, *args: Any, **kwargs: Any) -> Any:
+            nonlocal calls
+            calls += 1
+            captured.append(kwargs.get("caption"))
+            if calls == 1:
+                raise RuntimeError("flood wait on first document")
+            return SimpleNamespace(message_id=500 + calls)
+
+    items, expected = asyncio.run(
+        proof_steps.upload_proof_items(
+            cast("Bot", _Bot()),
+            messages,
+            "cap",
+            -100,
+            None,  # type: ignore[arg-type]
+        )
+    )
+
+    assert expected == 2
+    assert len(items) == 1
+    # * The first send failed, so the caption must still be present on the
+    # * second (landing) call rather than being lost with the source index.
+    assert captured[-1] == "cap"
+
+
 def test_an_animation_is_sent_as_an_animation() -> None:
     """A GIF keeps its animation kind instead of becoming a document."""
     sent: list[tuple[str, str]] = []

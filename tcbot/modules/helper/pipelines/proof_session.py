@@ -105,46 +105,45 @@ class ProofSessionRegistry:
         their silence window.
         """
         waiting: dict[asyncio.Task[None], ProofSession] = {}
+        executing: list[asyncio.Task[None]] = []
         for session in self._sessions.values():
             task = session.flush_task
-            if task is None or task.done() or session.flushing:
+            if task is None or task.done():
                 continue
-            waiting[task] = session
-        if not waiting:
-            # * Give an in-flight execution the same bounded grace period
-            # * before returning; it is never cancelled here.
-            executing = [
-                session.flush_task
-                for session in self._sessions.values()
-                if session.flush_task is not None and session.flushing
-            ]
-            live = [task for task in executing if not task.done()]
-            if live:
-                # * asyncio.wait leaves the tasks running on timeout instead
-                # * of cancelling a ban already in flight.
-                await asyncio.wait(live, timeout=_PROOF_DRAIN_TIMEOUT_S)
+            if session.flushing:
+                executing.append(task)
+            else:
+                waiting[task] = session
+
+        # * Wait on both sets together so an in-flight ban always receives its
+        # * grace period even when an idle session is present. Splitting this
+        # * into two branches previously skipped the executing set whenever
+        # * any session was still in its silence window.
+        all_live = [*executing, *waiting]
+        if not all_live:
             return
         # * asyncio.wait leaves tasks running on timeout. wait_for(gather(...))
         # * would cancel a session that crossed into _execute_ban during the
         # * window, producing a partial ban with no summary.
-        _done, pending = await asyncio.wait(
-            list(waiting), timeout=_PROOF_DRAIN_TIMEOUT_S
-        )
-        if not pending:
+        _done, pending = await asyncio.wait(all_live, timeout=_PROOF_DRAIN_TIMEOUT_S)
+        # * Never cancel a task that is executing or that crossed into
+        # * execution during the grace window; only idle sessions are dropped.
+        to_cancel = [
+            task for task in pending if task in waiting and not waiting[task].flushing
+        ]
+        if not to_cancel:
             return
         log.warning(
             "Proof collection still waiting after %.0fs; cancelling.",
             _PROOF_DRAIN_TIMEOUT_S,
         )
-        to_cancel = [task for task in pending if not waiting[task].flushing]
         for task in to_cancel:
             if not task.done():
                 task.cancel()
-        if to_cancel:
-            await asyncio.gather(
-                *[task for task in to_cancel if not task.done()],
-                return_exceptions=True,
-            )
+        await asyncio.gather(
+            *[task for task in to_cancel if not task.done()],
+            return_exceptions=True,
+        )
 
 
 proof_sessions = ProofSessionRegistry()
