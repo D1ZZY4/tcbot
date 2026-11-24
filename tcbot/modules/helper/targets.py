@@ -10,9 +10,13 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from pyrogram import Client
+from pyrogram.types import Message, User
+
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import extraction, guards, identity
+from tcbot.modules.helper.context import Ctx, chat_id_of
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -23,16 +27,11 @@ from tcbot.utils.prefixes import parse_cmd_args
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from telegram import Bot, Message, Update, User
-    from telegram.ext import ContextTypes
-
     from tcbot.database.users_roles import RoleName
     from tcbot.modules.helper.identity import Identity
 
     # * Signature of the executor a single-action command delegates to.
-    StaffAction = Callable[
-        [Update, ContextTypes.DEFAULT_TYPE, int, str], Awaitable[None]
-    ]
+    StaffAction = Callable[[Ctx, int, str], Awaitable[None]]
 
 log = get_logger(__name__)
 
@@ -75,11 +74,11 @@ class StaffTarget:
 # * so a demotion in another process is never hidden by the role-cache TTL;
 # * the target resolution still runs in the same gather.
 async def resolve_executor_target(
+    ctx: Ctx,
     msg: Message,
     admin_id: int,
-    update: Update,
     args: list[str],
-    bot: Bot | None,
+    bot: Client | None,
     *,
     action: str,
     locale: str | None = None,
@@ -95,10 +94,10 @@ async def resolve_executor_target(
     DB reads behind locale resolution do not run twice per command.
     """
     if locale is None:
-        locale = await locale_for_update(update)
+        locale = await locale_for_update(ctx)
     _exec_r, _target_r = await asyncio.gather(
         db.users_roles.get_effective_role(admin_id, fresh=True),
-        extraction.extract_target(update, args, bot),
+        extraction.extract_target(ctx, args, bot),
         return_exceptions=True,
     )
     throw_if_cancelled((_exec_r, _target_r))
@@ -139,7 +138,7 @@ async def resolve_executor_target(
 
 
 async def classify_and_load_role(
-    bot: Bot,
+    bot: Client,
     admin_id: int,
     target_id: int,
     target_fname: str | None,
@@ -191,8 +190,7 @@ async def classify_and_load_role(
 
 
 async def resolve_staff_target(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     *,
     action: str,
     min_role: RoleName,
@@ -209,14 +207,14 @@ async def resolve_staff_target(
     classification, so a bot is refused rather than acted on. Cancellation
     always propagates.
     """
-    msg = update.effective_message
-    admin = update.effective_user
+    msg = ctx.effective_message
+    admin = ctx.effective_user
     if msg is None or admin is None:
         return None
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     if not await guards.require_federation_origin(
         msg,
-        chat_id=msg.chat.id,
+        chat_id=chat_id_of(msg.chat),
         chat_type=msg.chat.type,
         locale=locale,
         allow_private=False,
@@ -224,7 +222,7 @@ async def resolve_staff_target(
     ):
         return None
     args = parse_cmd_args(msg.text)
-    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
+    target_id, target_name = await extraction.extract_target(ctx, args, ctx.bot)
     if not target_id:
         await reply_rich(
             msg,
@@ -242,9 +240,7 @@ async def resolve_staff_target(
         action=action,
         min_role=min_role,
         target_is_bot=(
-            await identity.is_proven_bot(update, target_id, ctx.bot)
-            if bot_check
-            else None
+            await identity.is_proven_bot(ctx, target_id, ctx.bot) if bot_check else None
         ),
     )
     if classified is None:
@@ -263,8 +259,7 @@ async def resolve_staff_target(
 
 
 async def resolve_mod_target(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     *,
     action: str,
     min_role: RoleName,
@@ -279,14 +274,14 @@ async def resolve_mod_target(
     on any failure. The caller keeps only duty-specific parsing (reason,
     duration) and conversation setup. Cancellation always propagates.
     """
-    msg = update.effective_message
-    admin = update.effective_user
+    msg = ctx.effective_message
+    admin = ctx.effective_user
     if msg is None or admin is None or ctx.user_data is None:
         return None
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     if not await guards.require_federation_origin(
         msg,
-        chat_id=msg.chat.id,
+        chat_id=chat_id_of(msg.chat),
         chat_type=msg.chat.type,
         locale=locale,
         allow_private=allow_private,
@@ -298,7 +293,7 @@ async def resolve_mod_target(
     # * ID/@username overrides the reply target, and the consumed flag
     # * tells the reason parser to drop args[0] as the target token.
     (target_id, target_name), has_explicit_target = await extraction.extract_mod_target(
-        update, args, ctx.bot
+        ctx, args, ctx.bot
     )
     if not target_id:
         await reply_rich(
@@ -312,7 +307,7 @@ async def resolve_mod_target(
     # * target is refused instead of warned; other actions classify bots
     # * from the identity cache alone.
     target_is_bot = (
-        await identity.is_proven_bot(update, target_id, ctx.bot) if bot_check else None
+        await identity.is_proven_bot(ctx, target_id, ctx.bot) if bot_check else None
     )
     classified = await guards.classify_and_check(
         ctx.bot,
@@ -344,8 +339,7 @@ async def resolve_mod_target(
 
 
 async def run_staff_action(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     *,
     action: str,
     min_role: RoleName,
@@ -360,11 +354,10 @@ async def run_staff_action(
     action. This helper owns that sequence so the three commands cannot
     drift apart in the checks they run or in the notice they emit.
     """
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
     resolved = await resolve_staff_target(
-        update,
         ctx,
         action=action,
         min_role=min_role,
@@ -377,4 +370,4 @@ async def run_staff_action(
     )
     if notice is not None:
         await reply_rich(msg, notice, log_label=f"{log_prefix} notice")
-    await execute(update, ctx, resolved.target_id, resolved.target_name)
+    await execute(ctx, resolved.target_id, resolved.target_name)

@@ -22,7 +22,7 @@ from tcbot.database import users_cache
 from tcbot.modules import netspeed
 from tcbot.modules.helper import guards
 from tcbot.modules.helper.extraction import refresh as refresh_mod
-from tcbot.modules.helper.pipelines import mute_actions, proof_steps, stats_panels
+from tcbot.modules.helper.pipelines import mute_actions, proof_post, stats_panels
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitBreaker, CircuitState
 from tcbot.utils.time_and_date import parse_duration, utc_now
@@ -84,7 +84,7 @@ def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:
     msgs = []
     for i in range(11):
         m = MagicMock()
-        m.photo = [MagicMock(file_id=f"p{i}")]
+        m.photo = MagicMock(file_id=f"p{i}", file_unique_id=f"u{i}")
         m.video = None
         m.animation = None
         m.document = None
@@ -97,6 +97,7 @@ def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:
         out = []
         for _ in media:
             r = MagicMock()
+            r.id = 1
             r.message_id = 1
             out.append(r)
         return out
@@ -108,7 +109,7 @@ def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:
     bot.send_document = AsyncMock(side_effect=AssertionError("no single send"))
 
     items, expected = asyncio.run(
-        proof_steps.upload_proof_items(bot, msgs, "cap", 1, None)  # type: ignore[arg-type]
+        proof_post.upload_proof_items(bot, msgs, "cap", 1, None)  # type: ignore[arg-type]
     )
     assert [item.archive_message_id for item in items] == [1] * 11
     assert expected == 11
@@ -153,6 +154,11 @@ def test_unmute_partial_queues_a_durable_delivery(
 
     msg = MagicMock()
     msg.reply_text = AsyncMock()
+
+    async def _reply(payload: Any, **kw: Any) -> Any:
+        return await msg.reply_text(getattr(payload, "html", ""), **kw)
+
+    msg.reply_rich = AsyncMock(side_effect=_reply)
     msg.chat = MagicMock(id=1, type="group")
 
     class _FakeUser:
@@ -165,6 +171,7 @@ def test_unmute_partial_queues_a_durable_delivery(
 
     ctx = MagicMock()
     ctx.bot.send_message = AsyncMock()
+    ctx.bot.send_rich_message = AsyncMock()
 
     monkeypatch.setattr(mute_actions, "locale_for_update", _locale)
     monkeypatch.setattr(
@@ -176,7 +183,9 @@ def test_unmute_partial_queues_a_durable_delivery(
     monkeypatch.setattr(db.enforcement_db, "run_report", _report)
     monkeypatch.setattr(mute_actions.enforcement_worker, "deliver_queued_run", _deliver)
 
-    asyncio.run(mute_actions.execute_unmute(update, ctx, 33, "Target"))  # type: ignore[arg-type]
+    asyncio.run(
+        mute_actions.execute_unmute(update, ctx, 33, "Target")  # type: ignore[arg-type]
+    )
     assert revoked == [(33, 1, [1, 2, -1])]
     msg.reply_text.assert_awaited_once()
 

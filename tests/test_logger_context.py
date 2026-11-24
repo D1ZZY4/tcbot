@@ -61,10 +61,10 @@ async def test_log_execution_clears_context_after_success(monkeypatch: Any) -> N
     cleared: list[bool] = []
     monkeypatch.setattr(tracing, "clear_request_context", lambda: cleared.append(True))
 
-    async def _ok(update: Any, ctx: Any) -> str:
+    async def _ok(ctx: Any) -> str:
         return "done"
 
-    assert await tracing.log_execution(_ok)(_wrapped_update(), None) == "done"
+    assert await tracing.log_execution(_ok)(_wrapped_update()) == "done"
     assert cleared == [True]
 
 
@@ -75,10 +75,10 @@ async def test_log_execution_clears_context_when_handler_raises(
     cleared: list[bool] = []
     monkeypatch.setattr(tracing, "clear_request_context", lambda: cleared.append(True))
 
-    async def _boom(update: Any, ctx: Any) -> None:
+    async def _boom(ctx: Any) -> None:
         raise RuntimeError("boom")
 
     with pytest.raises(RuntimeError, match="boom"):
-        await tracing.log_execution(_boom)(_wrapped_update(), None)
+        await tracing.log_execution(_boom)(_wrapped_update())
 
     assert cleared == [True]

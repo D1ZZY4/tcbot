@@ -13,13 +13,11 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING
+
+from pyrogram import Client
 
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
-
-if TYPE_CHECKING:
-    from telegram import Bot
 
 log = get_logger(__name__)
 
@@ -76,7 +74,7 @@ def _cached(chat_id: int) -> str | None:
     return value
 
 
-async def resolve(bot: Bot, chat_id: int) -> str | None:
+async def resolve(bot: Client, chat_id: int) -> str | None:
     """Return a public link for *chat_id*, or None when Telegram has none."""
     if chat_id == 0:
         return None
@@ -108,7 +106,7 @@ async def resolve(bot: Bot, chat_id: int) -> str | None:
         return value
 
 
-async def display(bot: Bot, chat_id: int) -> str:
+async def display(bot: Client, chat_id: int) -> str:
     """Return a public link, falling back to the numeric chat id."""
     return await resolve(bot, chat_id) or str(chat_id)
 

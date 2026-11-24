@@ -9,7 +9,9 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from telegram import Bot, ChatPermissions
+from pyrogram import Client
+from pyrogram.enums import ChatMembersFilter
+from pyrogram.types import ChatPermissions
 
 from tcbot import database as db
 from tcbot.modules.helper import messages
@@ -33,6 +35,17 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
+
+async def _chat_admins(bot: Client, chat_id: int) -> list:
+    """Collect the chat's administrators from Kurigram's async generator."""
+    return [
+        member
+        async for member in bot.get_chat_members(
+            chat_id, filter=ChatMembersFilter.ADMINISTRATORS
+        )
+    ]
+
+
 _REPLAY_CAP: int = 500
 # * Telegram admits 20 requests a minute per group, so a long ban or mute
 # * list cannot be enforced in one pass. The replay runs until this budget
@@ -54,7 +67,7 @@ class ConnectionReplayMixin:
 
     @staticmethod
     async def _replay_bans(
-        bot: Bot, chat_id: int, ban_uids: list[int], deadline: float
+        bot: Client, chat_id: int, ban_uids: list[int], deadline: float
     ) -> tuple[int, list[int]]:
         """Fan out every active federation ban into the new group."""
         pending = list(ban_uids)
@@ -77,7 +90,7 @@ class ConnectionReplayMixin:
 
     @staticmethod
     async def _replay_mutes(
-        bot: Bot, chat_id: int, mute_docs: list[ActiveMuteDoc], deadline: float
+        bot: Client, chat_id: int, mute_docs: list[ActiveMuteDoc], deadline: float
     ) -> tuple[int, list[ActiveMuteDoc]]:
         """Fan out every active federation mute into the new group."""
         _mute_perms = ChatPermissions(can_send_messages=False)
@@ -113,7 +126,7 @@ class ConnectionReplayMixin:
         chat_title: str,
         owner_id: int,
         owner_fname: str,
-        bot: Bot,
+        bot: Client,
     ) -> bool:
         """Connect the group and replay active bans and mutes. Returns blind flag."""
         (
@@ -127,7 +140,7 @@ class ConnectionReplayMixin:
             db.bans_db.active_ban_user_ids(),
             db.mutes_db.active_mute_docs(),
             asyncio.wait_for(
-                bot.get_chat_administrators(chat_id), timeout=TELEGRAM_LOOKUP_TIMEOUT
+                _chat_admins(bot, chat_id), timeout=TELEGRAM_LOOKUP_TIMEOUT
             ),
             db.groups_db.add_group(chat_id, chat_title, owner_id),
             return_exceptions=True,

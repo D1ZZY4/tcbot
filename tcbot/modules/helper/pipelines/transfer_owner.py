@@ -7,13 +7,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
-
-from telegram.ext import ContextTypes
 
 from tcbot import database as db
 from tcbot import error_reporter
 from tcbot.modules.helper import identity
+from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.extraction import extract_target
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
@@ -27,13 +25,10 @@ from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import parse_cmd_args
 
-if TYPE_CHECKING:
-    from telegram import Update
-
 log = get_logger(__name__)
 
 
-async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def execute_transfer(ctx: Ctx) -> None:
     """Transfer federation ownership to another user.
 
     Resolves the new owner target and runs the identity checks, then swaps
@@ -42,15 +37,15 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     leaving the federation ownerless or the former Owner without a role.
     Logs and the confirmation reply run in parallel afterward.
     """
-    locale = await locale_for_update(update)
-    current_owner = update.effective_user
-    msg = update.effective_message
+    locale = await locale_for_update(ctx)
+    current_owner = ctx.effective_user
+    msg = ctx.effective_message
     if current_owner is None or msg is None:
         return
 
     args = parse_cmd_args(msg.text)
     try:
-        target_id, target_fname = await extract_target(update, args, ctx.bot)
+        target_id, target_fname = await extract_target(ctx, args, ctx.bot)
     except Exception:
         log.exception("extract_target failed during transfer")
         await reply_rich(
@@ -90,7 +85,7 @@ async def execute_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     # * A bot owner would brick federation leadership, so transfer fails
     # * closed on an indeterminate check: only a verified human proceeds.
     # * Promotion keeps the best-effort gate where unknown stays allowed.
-    verified_human = await identity.verify_not_bot(update, target_id, ctx.bot)
+    verified_human = await identity.verify_not_bot(ctx, target_id, ctx.bot)
     if verified_human is False:
         await reply_rich(
             msg,

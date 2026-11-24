@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from telegram.error import BadRequest
+from pyrogram.errors import BadRequest
 
 from tcbot import cfg
 from tcbot.database import enforcement_db
@@ -17,7 +17,7 @@ from tcbot.database.rules_db import sets as rules_sets
 from tcbot.database.rules_db.categories import _available_key
 from tcbot.database.schema import SCHEMA_FILES, _schema_of
 from tcbot.database.schema.loader import file_statements
-from tcbot.modules.helper.messages.rich_edit import _edit_via
+from tcbot.modules.helper.rich.edit import _edit_via
 from tests.postgres_support import identity_db_call
 
 

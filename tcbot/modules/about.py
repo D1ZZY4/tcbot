@@ -6,11 +6,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from telegram.ext import CallbackQueryHandler, ContextTypes
-
 from tcbot.modules.helper import buttons, decorators
+from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.handlers import CallbackQueryHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     about_msg,
@@ -18,10 +16,8 @@ from tcbot.modules.helper.messages import (
     about_section_msg,
     answer_and_edit,
 )
+from tcbot.modules.helper.rich.edit import callback_text_of
 from tcbot.utils.i18n import t
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 __module_name__ = None
 
@@ -34,13 +30,13 @@ _SECTION_COUNT = len(about_section_labels("en-US"))
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_about_menu(ctx: Ctx) -> None:
     """Render the About section index when the About button is tapped."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
 
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     await answer_and_edit(
         q,
         about_msg(locale),
@@ -50,18 +46,19 @@ async def on_about_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_about_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_about_section(ctx: Ctx) -> None:
     """Render one About section page."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    if not q.data:
+    data = callback_text_of(q)
+    if not data:
         await q.answer()
         return
 
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     try:
-        idx = int(q.data[len(_SECTION_PREFIX) :])
+        idx = int(data[len(_SECTION_PREFIX) :])
     except ValueError:
         await q.answer(
             t("about.error.invalid_section", locale, plain=True), show_alert=True

@@ -9,12 +9,14 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
+from pyrogram.types import CallbackQuery, InlineKeyboardMarkup
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, decorators, extraction
 from tcbot.modules.helper.ban_info import build_ban_detail, build_ban_summary
+from tcbot.modules.helper.context import Ctx, display_name
+from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ack_and_render,
@@ -27,8 +29,8 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     safe_edit_cb,
 )
-from tcbot.modules.helper.messages.rich_text import blocks
 from tcbot.modules.helper.pipelines.check_panels import Check
+from tcbot.modules.helper.rich.text import blocks
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
@@ -36,8 +38,6 @@ from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
-
-    from telegram import CallbackQuery, InlineKeyboardMarkup, Update
 
     from tcbot.database.documents import BanDoc
 
@@ -105,18 +105,18 @@ async def _load_ban_for_callback(
 
 @decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
-async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_checkme(ctx: Ctx) -> None:
     """Show the caller's federation status (ban / staff role / clean record).
 
     Fetches the caller role and active ban in parallel. Returns
     role-aware replies for staff members and regular users.
     Provides an appeal deep-link when the caller is actively banned.
     """
-    user = update.effective_user
-    msg = update.effective_message
+    user = ctx.effective_user
+    msg = ctx.effective_message
     if user is None or msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     # * Bots and the anonymous-admin placeholder hold no federation records;
     # * without this guard an anonymous-admin /checkme would get a misleading
     # * "You're clean" verdict for an ID that can never be banned or staffed.
@@ -128,7 +128,7 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode=None,
         )
         return
-    fname = user.first_name or str(user.id)
+    fname = display_name(user)
 
     # * No identity.classify() call: executor == target always yields
     # * kind="self", so its owner/admin branches could never fire;
@@ -167,7 +167,10 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             blocks(text),
             log_label="checkme banned-staff",
             reply_markup=buttons.checkme_ban_btn(
-                ctx.bot.username or "", str(ban.get("ban_id", "")), proof_link, locale
+                (await ctx.bot_identity()).username or "",
+                str(ban.get("ban_id", "")),
+                proof_link,
+                locale,
             ),
         )
         return
@@ -212,19 +215,19 @@ async def cmd_checkme(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_checkme_detail(ctx: Ctx) -> None:
     """Show detailed ban information from the /checkme ban card.
 
     Fetches the ban record, answers the query and builds the detail view in
     parallel, then edits the message to the full detail card with a back button.
     """
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     ban_id = await _ban_id_from_query(q)
     if ban_id is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
 
     ban = await _load_ban_for_callback(q, ban_id, locale, log_label="checkme_detail")
     if ban is None:
@@ -257,20 +260,20 @@ async def on_checkme_detail(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_checkme_back(ctx: Ctx) -> None:
     """Return to the ban summary card from the detail view.
 
     Fetches the ban record, answers the query and resolves display names in
     parallel, then edits the message back to the summary card with the appeal
     and detail keyboard.
     """
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     ban_id = await _ban_id_from_query(q)
     if ban_id is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
 
     ban = await _load_ban_for_callback(q, ban_id, locale, log_label="checkme_back")
     if ban is None:
@@ -299,7 +302,7 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         q,
         blocks(text),
         reply_markup=buttons.checkme_ban_btn(
-            ctx.bot.username or "", ban_id, proof_link, locale
+            (await ctx.bot_identity()).username or "", ban_id, proof_link, locale
         ),
     )
 
@@ -309,19 +312,19 @@ async def on_checkme_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
 @decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
-async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_check(ctx: Ctx) -> None:
     """Show a comprehensive profile (identity + bans + warns + kicks + mutes + appeals)."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    locale = await locale_for_update(update)
-    user = update.effective_user
+    locale = await locale_for_update(ctx)
+    user = ctx.effective_user
     args = parse_cmd_args(msg.text)
     # * Read-only view: a typed target always beats the quoted message,
     # * so /check shows who was asked about, never who was quoted. When
     # * the arg resolves to nobody, the reply target still stands.
     target_id, target_fname = await extraction.extract_target(
-        update, args, ctx.bot, prefer_explicit=True
+        ctx, args, ctx.bot, prefer_explicit=True
     )
     if not target_id:
         await reply_rich(
@@ -360,9 +363,9 @@ async def cmd_check(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
-async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_check_main(ctx: Ctx) -> None:
     """Render the top-level profile summary for the checked user."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     numbers = callback_numbers(q, 2)
@@ -370,8 +373,8 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await q.answer()
         return
     target_id = numbers[0]
-    tapper = update.effective_user
-    locale = await locale_for_update(update)
+    tapper = ctx.effective_user
+    locale = await locale_for_update(ctx)
     await ack_and_render(
         q,
         Check.profile(
@@ -391,13 +394,13 @@ async def on_check_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _render_paged_list(
-    update: Update,
+    ctx: Ctx,
     render: Callable[
         [int, int, str | None], Awaitable[tuple[str, InlineKeyboardMarkup]]
     ],
 ) -> None:
     """Render one paged history list of the checked user."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     numbers = callback_numbers(q, 3)
@@ -405,22 +408,22 @@ async def _render_paged_list(
         await q.answer()
         return
     target_id, page = numbers
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     await ack_and_render(q, render(target_id, page, locale))
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
-async def on_check_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_check_bans(ctx: Ctx) -> None:
     """Render a paginated list for the checked user."""
-    await _render_paged_list(update, Check.bans_list)
+    await _render_paged_list(ctx, Check.bans_list)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
-async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_check_ban_item(ctx: Ctx) -> None:
     """Render the full detail view for a single federation ban record."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     args = callback_args(q, 3)
@@ -433,15 +436,15 @@ async def on_check_ban_item(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         await q.answer()
         return
     ban_id = args[1]
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     await ack_and_render(q, Check.ban_detail(target_id, ban_id, locale))
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
-async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_check_warns(ctx: Ctx) -> None:
     """Render the per-group warning summary for the checked user."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     numbers = callback_numbers(q, 2)
@@ -449,15 +452,15 @@ async def on_check_warns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         await q.answer()
         return
     target_id = numbers[0]
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     await ack_and_render(q, Check.warns_by_group(target_id, locale))
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
-async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_check_warn_chat(ctx: Ctx) -> None:
     """Render a paginated list of warnings for the checked user in a specific group."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     numbers = callback_numbers(q, 4)
@@ -465,7 +468,7 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         await q.answer()
         return
     target_id, chat_id, page = numbers
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     await ack_and_render(
         q,
         Check.warns_in_group(target_id, chat_id, page, locale),
@@ -474,23 +477,23 @@ async def on_check_warn_chat(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
-async def on_check_kicks(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_check_kicks(ctx: Ctx) -> None:
     """Render a paginated list for the checked user."""
-    await _render_paged_list(update, Check.kicks_list)
+    await _render_paged_list(ctx, Check.kicks_list)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
-async def on_check_mutes(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_check_mutes(ctx: Ctx) -> None:
     """Render a paginated list for the checked user."""
-    await _render_paged_list(update, Check.mutes_list)
+    await _render_paged_list(ctx, Check.mutes_list)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK_DEEP)
 @decorators.log_execution
-async def on_check_appeals(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_check_appeals(ctx: Ctx) -> None:
     """Render a paginated list for the checked user."""
-    await _render_paged_list(update, Check.appeals_list)
+    await _render_paged_list(ctx, Check.appeals_list)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

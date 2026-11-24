@@ -8,12 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from types import SimpleNamespace
 from typing import Any
 
 from pyrogram.session.session import AuthKeyNotFound
 from sqlalchemy.exc import OperationalError
-from telegram.error import Conflict
 
 from tcbot import __main__ as runtime_errors
 from tcbot import error_reporter
@@ -245,7 +243,7 @@ def test_asyncio_handler_auth_key_not_found_parks_once(monkeypatch: Any) -> None
 def test_error_handler_suppresses_database_outage(
     monkeypatch: Any, caplog: Any
 ) -> None:
-    """The PTB handler path drops a database outage before log.error."""
+    """The error handler drops a database outage before log.error."""
     reported: list[Any] = []
 
     async def _fake_report(exc: BaseException, context: Any = None) -> None:
@@ -253,9 +251,13 @@ def test_error_handler_suppresses_database_outage(
 
     monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
 
-    ctx = SimpleNamespace(error=_database_outage())
+    exc = _database_outage()
     with caplog.at_level(logging.DEBUG, logger="tcbot.__main__"):
-        asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]
+        asyncio.run(
+            runtime_errors._error_handler(  # type: ignore[arg-type]
+                object(), exc, object(), object(), {}, {}
+            )
+        )
     assert reported == []
     assert "Unhandled exception for update" not in caplog.text
 
@@ -275,16 +277,20 @@ def test_error_handler_reports_when_benign_check_raises(
     monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
     monkeypatch.setattr(error_reporter, "_benign", _boom)
 
-    ctx = SimpleNamespace(error=ValueError("boom"))
+    exc = ValueError("boom")
     with caplog.at_level(logging.DEBUG, logger="tcbot.__main__"):
-        asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]
+        asyncio.run(
+            runtime_errors._error_handler(  # type: ignore[arg-type]
+                object(), exc, object(), object(), {}, {}
+            )
+        )
     assert len(reported) == 1 and isinstance(reported[0], ValueError)
     assert "Unhandled exception for update" in caplog.text
     assert "benign check failed" in caplog.text
 
 
 def test_error_handler_suppresses_circuit_open(monkeypatch: Any, caplog: Any) -> None:
-    """The PTB handler path drops CircuitOpenError before log.error."""
+    """The error handler drops CircuitOpenError before log.error."""
     reported: list[Any] = []
 
     async def _fake_report(exc: BaseException, context: Any = None) -> None:
@@ -292,11 +298,13 @@ def test_error_handler_suppresses_circuit_open(monkeypatch: Any, caplog: Any) ->
 
     monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
 
-    ctx = SimpleNamespace(
-        error=CircuitOpenError("Circuit [postgres] is OPEN; call rejected.")
-    )
+    exc = CircuitOpenError("Circuit [postgres] is OPEN; call rejected.")
     with caplog.at_level(logging.DEBUG, logger="tcbot.__main__"):
-        asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]
+        asyncio.run(
+            runtime_errors._error_handler(  # type: ignore[arg-type]
+                object(), exc, object(), object(), {}, {}
+            )
+        )
     assert reported == []
     assert "Unhandled exception for update" not in caplog.text
 
@@ -316,9 +324,15 @@ def test_error_handler_names_the_poll_conflict(monkeypatch: Any, caplog: Any) ->
 
     monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
 
-    ctx = SimpleNamespace(error=Conflict("terminated by other getUpdates request"))
+    conflict = error_reporter.PollingConflictError("another getUpdates consumer")
     with caplog.at_level(logging.DEBUG, logger="tcbot.__main__"):
-        asyncio.run(runtime_errors._error_handler(object(), ctx))  # type: ignore[arg-type]
+        asyncio.run(
+            runtime_errors._error_handler(  # type: ignore[arg-type]
+                object(), conflict, object(), object(), {}, {}
+            )
+        )
     assert "another instance is polling this bot" in caplog.text
     assert "Unhandled exception for update" not in caplog.text
-    assert len(reported) == 1 and isinstance(reported[0], Conflict)
+    assert len(reported) == 1 and isinstance(
+        reported[0], error_reporter.PollingConflictError
+    )

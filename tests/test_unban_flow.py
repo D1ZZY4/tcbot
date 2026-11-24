@@ -114,7 +114,7 @@ def _install(
     async def _deliver(bot: _FakeBot, run_id: int) -> bool:
         for group in selected_groups:
             try:
-                await bot.unban_chat_member(group["chat_id"], 42, only_if_banned=True)
+                await bot.unban_chat_member(group["chat_id"], 42)
             except Exception:
                 failed_chats.append(int(group["chat_id"]))
         return True

@@ -85,30 +85,30 @@ checkout, but vendor behavior and current APIs come from the documentation.
 ## Rich Messages
 
 All user-facing formatted messages are rich messages owned by the focused
-modules under `tcbot/modules/helper/messages/`: `rich_format.py` (headings,
-text, quotes, highlights, code, footnotes, dividers), `rich_style.py` (HTML
-escaping and bold, italic, underline, strike, spoiler), `rich_list.py` (lists
-and details), `rich_table.py`, `rich_link.py` (links, ID-based mentions, and
-every rich button feature), and `rich_media.py` (photo, video, slideshow for
-proof, collage). `rich_text.py` exposes `style(text)`, a verbatim passthrough,
-and `blocks()`, which converts a rendered multiline fragment into rich block
-markup. `rich_msg.py` owns the `do_api_request` send transport, while
-`rich_edit.py` uses PTB's native rich `edit_message_text` with `api_kwargs`;
-there is no parse mode and no MarkdownV2 fallback. Every send and edit must go
-through these helpers: a direct PTB `send_message`, `reply_text`, or
-`edit_message_text` cannot render rich HTML and exposes raw tags to users.
+modules under `tcbot/modules/helper/rich/`: `formats.py` (headings, text,
+quotes, highlights, code, footnotes, dividers), `style.py` (HTML escaping and
+bold, italic, underline, strike, spoiler), `list.py` (lists and details),
+`table.py`, `buttons.py` (every rich button feature and inline-markup
+conversion), `link.py` (links and ID-based mentions), and `media.py` (photo,
+video, slideshow, collage). `text.py` exposes `style(text)`, a verbatim
+passthrough, and `blocks()`, which converts a rendered multiline fragment into
+rich block markup. `msg.py` owns the `send_rich_message` transport and `edit.py`
+owns the native rich edit helpers. Both build Kurigram `InputRichMessage`
+payloads, so rich HTML is rendered by the client itself; there is no parse mode
+and no MarkdownV2 fallback. Every send and edit must go through these helpers
+so inline keyboards and rich markup stay consistent.
 
-- Route new sends and edits through `rich_msg.py` (`send_rich`, `reply_rich`)
-  and `rich_edit.py` (`edit_rich` and the safe-edit helpers). Every send uses a
-  `rich_message` payload. Keyboard cells that cannot be expressed as rich
-  buttons keep their inline keyboard representation.
+- Route new sends and edits through `msg.py` (`send_rich`, `reply_rich`) and
+  `edit.py` (`edit_rich` and the safe-edit helpers). Every send uses a
+  `rich_message` payload. Markup cells that cannot be expressed as rich
+  buttons keep their inline representation.
 - Shared markup helpers (`esc`, `bold`, `code`, `user_ref`, and the rest) and
   localized wording come from `tcbot/utils/i18n.py`.
 - Plain notices and callback alerts stay unparsed; they are not rich messages.
-- Kurigram speaks MTProto directly and does expose a native rich-message API,
-  but this project keeps PTB as the sole rich-message transport. All rich send
-  and edit helpers live in `messages/`; MTProto is used only for identity
-  lookups.
+- Kurigram speaks MTProto directly and is the sole Telegram framework. Its
+  native rich-message API carries all HTML formatting; the same client also
+  handles commands and long-polling updates. All rich send and edit helpers live
+  in `messages/`.
 
 ## Autonomous Engineering Loop
 
@@ -174,7 +174,7 @@ Treat it as large-scale infrastructure: the bot may serve 50+ groups with thousa
 Current stack:
 
 - Python 3.14 project target (`pyproject.toml` requires `>=3.14`)
-- `python-telegram-bot[rate-limiter]>=22.8,<23`, tracking the latest compatible release
+- `kurigram[fast]>=2.2.27,<3`, the sole Telegram framework, driven by native long polling
 - `apscheduler[sqlalchemy]>=3.11.3,<4` with `AsyncIOScheduler` + `SQLAlchemyJobStore` for persistent scheduled jobs
 - PostgreSQL via SQLAlchemy 2.1 async with Psycopg 3; every call runs through `db_call`
 - Flask keep-alive / health-check server
@@ -194,7 +194,7 @@ Current stack:
 │   ├── __init__.py           Config loader, env parsing, immutable Configs model
 │   ├── __main__.py           App lifecycle, builder, errors, and main startup
 │   ├── error_reporter.py     Error classification, dedup, and shipping to LOGS_ERRORS
-│   ├── alive.py              Flask keep-alive and webhook receiver
+│   ├── alive.py              Flask keep-alive and health/metrics endpoints
 │   ├── enforcement_worker.py Expiry revoke queue consumer and Telegram delivery
 │   ├── notification_worker.py Retry the review-card edits through the durable outbox
 │   ├── database/             PostgreSQL helpers, one package per table/domain
@@ -237,13 +237,16 @@ Current stack:
 │   │   │   ├── identity.py   Self/bot/Telegram/Owner/staff classification
 │   │   │   ├── locale.py     Render-locale resolution (per-update locale)
 │   │   │   ├── messages/       Safe edits, channel delivery, and federation log renderers
-│   │   │   │   ├── rich_edit.py    Safe-edit transport helpers
 │   │   │   │   ├── audit_logs.py    Audit-log builders
 │   │   │   │   ├── links.py         Telegram link builders (`t.me/c/...`, appeal deep links)
 │   │   │   │   ├── panels.py        Shared information and profile panels
-│   │   │   │   ├── rich_text.py    Rich text passthrough (style)
 │   │   │   │   ├── rules.py         Rules rendering, hashing, and selected summaries
 │   │   │   │   └── replies.py       Localized reply functions and HelpEntry shape
+│   │   │   ├── rich/           Rich HTML blocks, buttons, and send/edit transports
+│   │   │   │   ├── buttons.py      Rich buttons and inline-markup conversion
+│   │   │   │   ├── link.py         Links and ID-based mentions
+│   │   │   │   ├── msg.py          Rich send transport
+│   │   │   │   └── edit.py         Safe-edit transport helpers
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
 │   │   │   └── scope.py       Per-conversation payload scope for the moderation flows
 │   │   ├── bans.py           /tcban command
@@ -280,8 +283,8 @@ Current stack:
 │       ├── secrets.py         Constant-time secret comparison for inbound credentials
 │       ├── tasks.py           Background task lifecycle owner (TaskTracker)
 │       ├── time_and_date.py    Central clock: UTC store/display + measure + durations
-│       ├── transport.py        Shared PTB HTTP timeouts, pool size, and lookup budget
-│       └── update_processor.py Per-conversation update serialization for PTB
+│       ├── transport.py        Shared Telegram lookup timeout budget
+│       └── update_processor.py Per-conversation key and serialization helpers
 ├── docs/                     Developer documentation grouped by category
 ├── about/                     Bundled About source documents (federasi, keanggotaan, klarifikasi)
 ├── acknowledge/               Bundled self-acknowledgement source document
@@ -366,7 +369,7 @@ Important non-secret/runtime variables include:
 - `COMMUNITY_NAME`: display name used in bot messages and logs.
 - `PREFIXES`: command prefix list, default `['/', '!', '.']`.
 - `PORT`: Flask keep-alive port, default `5000`; invalid or out-of-range values fall back to `5000`.
-- `BIND_HOST`: listener interface for the keep-alive and webhook server, default `0.0.0.0`; use `127.0.0.1` behind a local reverse proxy.
+- `BIND_HOST`: listener interface for the keep-alive and health server, default `0.0.0.0`; use `127.0.0.1` behind a local reverse proxy.
 - `MAIN_GROUP`: main community group chat id.
 - `MAIN_CHANNEL`: main community channel chat id; the rules publication target. A positive value is treated as unset.
 - `LOGS`, `LOGS_ERRORS`, `APPEALS`: log and appeal destinations; values may be `chat_id` or `chat_id/thread_id` (channel, group, or forum thread). `PROOFS` is required and belongs in the list above.
@@ -375,8 +378,6 @@ Important non-secret/runtime variables include:
 - `LOG_LEVEL`: bot log level.
 - `SENTRY_DSN`: optional Sentry DSN for production error monitoring (observability extra); empty disables monitoring.
 - `MODULES_LOAD`, `MODULES_NO_LOAD`: optional module allowlist/denylist.
-- `WEBHOOK_URL`: explicit webhook URL for production; overrides `REPLIT_DEV_DOMAIN`.
-- `WEBHOOK_SECRET`: optional webhook secret for Telegram to sign update payloads.
 - `REDIS_URL`: optional Redis connection URL for L2 cache.
 - `DB_POOL_SIZE`: PostgreSQL connection pool size; default `5`.
 - `DB_MAX_OVERFLOW`: extra connections the pool may open under load; default `5`.

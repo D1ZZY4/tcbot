@@ -6,11 +6,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from telegram.ext import ContextTypes, ConversationHandler
-
 from tcbot.modules.helper import decorators, targets
+from tcbot.modules.helper.context import Ctx, chat_id_of
+from tcbot.modules.helper.handlers import ConversationHandler
 from tcbot.modules.helper.messages import replies, reply_rich, reply_rich_result
 from tcbot.modules.helper.pipelines.kick_actions import kick_conversation, proof, reason
 from tcbot.modules.helper.pipelines.mod_action_steps import (
@@ -24,9 +22,6 @@ from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -69,7 +64,7 @@ __help__: replies.HelpEntry = get_help()
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.basic_mod_only
 @decorators.log_execution
-async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def cmd_kick(ctx: Ctx) -> int:
     """Entry point for the kick flow.
 
     Resolves the target, runs identity and role checks in parallel, demotes
@@ -82,7 +77,6 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * refuses private origins up front via allow_private=False; it also
     # * blocks disconnected groups from kicking in a non-federation chat.
     resolved = await targets.resolve_mod_target(
-        update,
         ctx,
         action="kick",
         min_role="moderator",
@@ -121,12 +115,12 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * flow strips a federation role and tells the target they were
     # * kicked without anything ever happening to them.
 
-    scope = flow_scope(ctx, update)
+    scope = flow_scope(ctx)
     scope.update(
         {
             "kick_target_id": target_id,
             "kick_target_name": target_name or str(target_id),
-            "kick_prompt_chat": msg.chat.id,
+            "kick_prompt_chat": chat_id_of(msg.chat),
         }
     )
 
@@ -142,7 +136,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                 ),
                 reply_markup=proof.keyboard(locale),
             )
-            scope["kick_prompt_id"] = prompt.message_id
+            scope["kick_prompt_id"] = prompt.id
         except Exception as exc:
             log.debug("cmd_kick proof-prompt reply failed: %s", exc)
             for key in (*_KICK_KEYS, "kick_reason"):
@@ -156,7 +150,7 @@ async def cmd_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             reason.prompt(target_mention, "kick", locale=locale),
             reply_markup=reason.keyboard(locale),
         )
-        scope["kick_prompt_id"] = prompt.message_id
+        scope["kick_prompt_id"] = prompt.id
     except Exception as exc:
         log.debug("cmd_kick reason-prompt reply failed: %s", exc)
         for key in _KICK_KEYS:

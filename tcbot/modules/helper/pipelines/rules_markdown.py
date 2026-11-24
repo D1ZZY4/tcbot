@@ -15,13 +15,13 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
-from tcbot.modules.helper.messages.rich_format import (
+from tcbot.modules.helper.rich.formats import (
     code,
     divider,
     heading,
     paragraph,
 )
-from tcbot.modules.helper.messages.rich_style import bold, esc, italic
+from tcbot.modules.helper.rich.style import bold, esc, italic
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

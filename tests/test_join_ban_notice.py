@@ -11,6 +11,8 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
+from pyrogram import Client
+from pyrogram.types import Chat, Message, User
 
 from tcbot import database as db
 from tcbot.database.types import BanId
@@ -18,8 +20,6 @@ from tcbot.modules import greeting
 from tcbot.modules.helper.buttons import join_ban_btn
 
 if TYPE_CHECKING:
-    from telegram import Bot, Chat, Message, User
-
     from tcbot.database.documents import BanDoc
 
 
@@ -119,7 +119,7 @@ def test_the_group_notice_and_the_dm_are_different(
 
     asyncio.run(
         greeting._send_join_ban_notices(
-            cast("Bot", bot),
+            cast("Client", bot),
             cast("Chat", _FakeChat()),
             cast("User", _FakeUser()),
             _ban_payload(),
@@ -129,22 +129,21 @@ def test_the_group_notice_and_the_dm_are_different(
     )
 
     assert len(message.replies) == 1
-    group_text, group_kwargs = message.replies[0]
+    group_text, _group_kwargs = message.replies[0]
     assert "<b>First name:</b> Alice" in group_text
     assert "<b>Username:</b> @alice" in group_text
     assert "<b>Ban ID:</b>" in group_text
 
     assert len(bot.sent) == 1
-    dm_chat_id, dm_text, dm_kwargs = bot.sent[0]
+    dm_chat_id, dm_text, _dm_kwargs = bot.sent[0]
     assert dm_chat_id == 42
     assert "banned from TCF" in dm_text
     assert "Federation Chat" in dm_text
     assert dm_text != group_text
 
-    for kwargs in (group_kwargs, dm_kwargs):
-        markup = kwargs["reply_markup"]
-        labels = [[button.text for button in row] for row in markup.inline_keyboard]
-        assert labels == [["↝ View Log", "🖈 View Proof"], ["🗩 Submit Appeal"]]
+    for text in (group_text, dm_text):
+        assert "<tg-button-row>" in text
+        assert "View Log" in text and "View Proof" in text and "Submit Appeal" in text
 
 
 def test_the_dm_follows_the_banned_users_locale(
@@ -161,7 +160,7 @@ def test_the_dm_follows_the_banned_users_locale(
 
     asyncio.run(
         greeting._send_join_ban_notices(
-            cast("Bot", bot),
+            cast("Client", bot),
             cast("Chat", _FakeChat()),
             cast("User", _FakeUser()),
             _ban_payload(),
@@ -171,13 +170,11 @@ def test_the_dm_follows_the_banned_users_locale(
     )
 
     assert bot.sent
-    dm_chat_id, dm_text, dm_kwargs = bot.sent[-1]
+    dm_chat_id, dm_text, _dm_kwargs = bot.sent[-1]
     assert dm_chat_id == 42
     assert "Kamu di-ban federasi" in dm_text
     assert "Ajukan Banding" in dm_text
-    markup = dm_kwargs["reply_markup"]
-    labels = [[button.text for button in row] for row in markup.inline_keyboard]
-    assert any("Banding" in label for row in labels for label in row)
+    assert "<tg-button-row>" in dm_text
 
 
 def test_connection_lookup_outage_still_enforces(
@@ -231,7 +228,7 @@ def test_a_secondary_group_still_gets_the_ban_notice(
             cast("User", _FakeUser()),
             cast("Message", message),
             cast("Chat", _FakeChat()),
-            cast("Bot", bot),
+            cast("Client", bot),
             "en-US",
             greet=False,
         )
@@ -273,7 +270,7 @@ def test_a_ban_lookup_outage_removes_the_joiner_instead_of_admitting_them(
             cast("User", _FakeUser()),
             cast("Message", message),
             cast("Chat", _FakeChat()),
-            cast("Bot", bot),
+            cast("Client", bot),
             "en-US",
         )
     )
@@ -311,7 +308,7 @@ def test_join_enforcement_never_bans_the_protected_owner(
             cast("User", _FakeUser()),
             cast("Message", _FakeMessage()),
             cast("Chat", _FakeChat()),
-            cast("Bot", bot),
+            cast("Client", bot),
             "en-US",
         )
     )
@@ -347,7 +344,7 @@ def test_join_enforcement_never_mutes_the_protected_owner(
             cast("User", _FakeUser()),
             cast("Message", _FakeMessage()),
             cast("Chat", _FakeChat()),
-            cast("Bot", bot),
+            cast("Client", bot),
             "en-US",
             greet=False,
         )

@@ -21,11 +21,11 @@ import asyncio
 from typing import Any
 
 import pytest
-from telegram.ext import ConversationHandler
 
 from tcbot import database as db
 from tcbot.modules import kick as kicking
 from tcbot.modules.helper import targets
+from tcbot.modules.helper.handlers import ConversationHandler
 from tcbot.modules.helper.pipelines import demote_actions as demote
 from tcbot.modules.helper.pipelines import kick_actions
 from tcbot.modules.helper.targets import ModTarget

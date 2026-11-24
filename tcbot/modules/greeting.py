@@ -9,20 +9,21 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from telegram import ChatPermissions
-from telegram.constants import ChatMemberStatus
-from telegram.ext import (
-    ChatJoinRequestHandler,
-    ChatMemberHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
+from pyrogram import Client, filters
+from pyrogram.enums import ChatMemberStatus
+from pyrogram.types import Chat, ChatPermissions, Message, User
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, decorators
 from tcbot.modules.helper.buttons import rules as rules_btn
+from tcbot.modules.helper.context import Ctx, bot_identity, chat_id_of, display_name
+from tcbot.modules.helper.handlers import (
+    CHAT_MEMBER,
+    ChatJoinRequestHandler,
+    ChatMemberHandler,
+    MessageHandler,
+)
 from tcbot.modules.helper.locale import (
     locale_for_chat,
     locale_for_update,
@@ -42,8 +43,6 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
-    from telegram import Bot, Chat, Message, Update, User
-
     from tcbot.database.documents import BanDoc
 
 log = get_logger(__name__)
@@ -55,8 +54,8 @@ log = get_logger(__name__)
 # * Matches the fan_out Telegram cap; members beyond the bound wait.
 _MAX_CONCURRENT_JOINS: int = 10
 
-# * One global bound for ALL concurrent join updates (not per-update): the
-# * update processor runs different conversations in parallel, so each
+# * One global bound for ALL concurrent join updates (not per-ctx): the
+# * ctx processor runs different conversations in parallel, so each
 # * new-member callback would otherwise get its own Semaphore(10), making
 # * the effective Telegram+database concurrency N*10 with no ceiling.
 _join_sem = asyncio.Semaphore(_MAX_CONCURRENT_JOINS)
@@ -86,7 +85,7 @@ async def _in_federation(chat_id: int, *, action: str) -> bool | None:
 
 
 async def _send_join_ban_notices(
-    bot: Bot,
+    bot: Client,
     chat: Chat,
     member: User,
     ban: BanDoc,
@@ -108,16 +107,17 @@ async def _send_join_ban_notices(
     log_url = message_link(logs_chat, log_id, logs_thread) if log_id else None
     proof_url = message_link(proof_chat, proof_id, proof_thread) if proof_id else None
     ban_id = str(ban.get("ban_id") or "")
+    bot_username = (await bot_identity(bot)).username or ""
     appeal_url = (
-        appeal_deep_link(bot.username, ban_id) if bot.username and ban_id else None
+        appeal_deep_link(bot_username, ban_id) if bot_username and ban_id else None
     )
     keyboard = buttons.join_ban_btn(log_url, proof_url, appeal_url, locale)
     group_text = t(
         "greeting.notice.banned_group",
         locale,
-        user=Safe(user_ref(member.id, member.first_name, member.username)),
+        user=Safe(user_ref(member.id, display_name(member), member.username)),
         uid=Safe(code(str(member.id))),
-        first=member.first_name or "-",
+        first=display_name(member),
         last=member.last_name or "-",
         username=f"@{member.username}" if member.username else "-",
         ban=Safe(code(ban_id)) if ban_id else "-",
@@ -125,7 +125,7 @@ async def _send_join_ban_notices(
     group_send = (
         reply_rich_result(reply_to, group_text, reply_markup=keyboard)
         if reply_to is not None
-        else send_text(bot, chat.id, group_text, reply_markup=keyboard)
+        else send_text(bot, chat_id_of(chat), group_text, reply_markup=keyboard)
     )
     # * The DM goes to the banned member, so it follows their locale, not
     # * the group's. Every other ban DM resolves the recipient this way.
@@ -134,7 +134,7 @@ async def _send_join_ban_notices(
         "greeting.notice.banned_dm",
         dm_locale,
         community=cfg.community_name,
-        group=chat.title or str(chat.id),
+        group=chat.title or str(chat_id_of(chat)),
         reason=ban.get("reason") or "-",
         ban=Safe(code(ban_id)) if ban_id else "-",
     )
@@ -154,14 +154,14 @@ async def _send_join_ban_notices(
         log.warning(
             "Join ban group notice failed for uid=%d in chat=%d: %s",
             member.id,
-            chat.id,
+            chat_id_of(chat),
             group_result,
         )
     if isinstance(dm_result, BaseException):
         log.debug(
             "Join ban DM failed for uid=%d in chat=%d: %s",
             member.id,
-            chat.id,
+            chat_id_of(chat),
             dm_result,
         )
 
@@ -201,7 +201,9 @@ async def _ban_state_with_retry(user_id: int) -> BanDoc | None:
         return await db.bans_db.get_active_ban(user_id)
 
 
-async def _fail_closed_join(bot: Bot, chat_id: int, user_id: int, source: str) -> None:
+async def _fail_closed_join(
+    bot: Client, chat_id: int, user_id: int, source: str
+) -> None:
     """Remove a joiner whose ban state could not be proven clean.
 
     A join request is declined on the same outage in ``on_join_request``. A
@@ -215,7 +217,7 @@ async def _fail_closed_join(bot: Bot, chat_id: int, user_id: int, source: str) -
             bot.ban_chat_member(chat_id, user_id), timeout=TELEGRAM_LOOKUP_TIMEOUT
         )
         await asyncio.wait_for(
-            bot.unban_chat_member(chat_id, user_id, only_if_banned=True),
+            bot.unban_chat_member(chat_id, user_id),
             timeout=TELEGRAM_LOOKUP_TIMEOUT,
         )
         log.error(
@@ -239,7 +241,7 @@ async def _handle_member(
     member: User,
     msg: Message,
     chat: Chat,
-    bot: Bot,
+    bot: Client,
     locale: str,
     *,
     greet: bool = True,
@@ -261,7 +263,7 @@ async def _handle_member(
         db.users_cache.harvest_user_identity(
             member.id,
             member.username,
-            member.first_name,
+            display_name(member),
             member.last_name,
         ),
         _ban_state_with_retry(member.id),
@@ -279,7 +281,7 @@ async def _handle_member(
         log.error("get_active_ban failed on join for uid=%d: %s", member.id, ban)
         ban = None
         _enforcement_blind = True
-        await _fail_closed_join(bot, chat.id, member.id, "new_member")
+        await _fail_closed_join(bot, chat_id_of(chat), member.id, "new_member")
         return
     if isinstance(mute, BaseException):
         log.error("get_active_mute failed on join for uid=%d: %s", member.id, mute)
@@ -292,7 +294,7 @@ async def _handle_member(
         # * unless the verdict names the protected Owner, which the guard
         # * below skips.
         enforced_role = await demote_before_enforcement(
-            bot, member.id, member.first_name, trigger="ban"
+            bot, member.id, display_name(member), trigger="ban"
         )
         if enforced_role == "owner":
             # * The protected Owner is never a valid enforcement target. The
@@ -300,14 +302,14 @@ async def _handle_member(
             return
         try:
             await asyncio.wait_for(
-                bot.ban_chat_member(chat.id, member.id),
+                bot.ban_chat_member(chat_id_of(chat), member.id),
                 timeout=TELEGRAM_LOOKUP_TIMEOUT,
             )
         except Exception:
             log.exception(
                 "Ban on join failed for uid=%d in chat=%d",
                 member.id,
-                chat.id,
+                chat_id_of(chat),
             )
             return
         await _send_join_ban_notices(
@@ -322,13 +324,13 @@ async def _handle_member(
 
     if mute:
         enforced_role = await demote_before_enforcement(
-            bot, member.id, member.first_name, trigger="mute"
+            bot, member.id, display_name(member), trigger="mute"
         )
         if enforced_role == "owner":
             log.warning(
                 "Skipping mute re-apply against the protected Owner uid=%d in chat=%d",
                 member.id,
-                chat.id,
+                chat_id_of(chat),
             )
         else:
             until = mute.get("until_date")
@@ -336,20 +338,20 @@ async def _handle_member(
             try:
                 await asyncio.wait_for(
                     bot.restrict_chat_member(
-                        chat.id, member.id, permissions=perms, until_date=until
+                        chat_id_of(chat), member.id, permissions=perms, until_date=until
                     ),
                     timeout=TELEGRAM_LOOKUP_TIMEOUT,
                 )
                 log.info(
                     "Re-applied active federation mute for uid=%d in chat=%d",
                     member.id,
-                    chat.id,
+                    chat_id_of(chat),
                 )
             except Exception:
                 log.exception(
                     "Mute re-apply on join failed for uid=%d in chat=%d",
                     member.id,
-                    chat.id,
+                    chat_id_of(chat),
                 )
 
     if greet and not _enforcement_blind:
@@ -359,7 +361,7 @@ async def _handle_member(
             t(
                 "greeting.welcome.body",
                 locale,
-                user=Safe(user_ref(member.id, member.first_name, member.username)),
+                user=Safe(user_ref(member.id, display_name(member), member.username)),
                 community=cfg.community_name,
             ),
             log_label=f"Welcome for uid={member.id}",
@@ -368,7 +370,7 @@ async def _handle_member(
 
 
 @decorators.log_execution
-async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_new_member(ctx: Ctx) -> None:
     """Enforce bans on new members in all connected groups; greet only in the main group.
 
     Previously this handler returned early for chats that were not the main
@@ -378,15 +380,15 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ``_handle_member`` with ``greet=False`` for them so bans are enforced
     everywhere without producing welcome-message noise in secondary groups.
     """
-    msg = update.effective_message
-    chat = update.effective_chat
+    msg = ctx.effective_message
+    chat = ctx.effective_chat
     if msg is None or chat is None:
         return
 
-    is_primary = cfg.is_primary_group(chat.id)
+    is_primary = cfg.is_primary_group(chat_id_of(chat))
 
     # * Only act in connected federation groups; skip all other chats.
-    if await _in_federation(chat.id, action="new_member") is False:
+    if await _in_federation(chat_id_of(chat), action="new_member") is False:
         return
 
     # * One chat, one locale: resolve once for the whole batch below.
@@ -397,14 +399,14 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * bursting Telegram traffic. Failures stay per-member via
     # * return_exceptions=True, as before.
     # * Shared global semaphore (module-level _join_sem); do not re-create a
-    # * per-update Semaphore here.
+    # * per-ctx Semaphore here.
 
     async def _bounded(m: User) -> None:
         async with _join_sem:
             await _handle_member(m, msg, chat, ctx.bot, locale, greet=is_primary)
 
     join_results = await asyncio.gather(
-        *[_bounded(m) for m in msg.new_chat_members],
+        *[_bounded(m) for m in (msg.new_chat_members or ())],
         return_exceptions=True,
     )
     throw_if_cancelled(join_results)
@@ -417,16 +419,14 @@ async def on_new_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ):
             log.error(
                 "Join enforcement failed in chat=%d: %s",
-                chat.id,
+                chat_id_of(chat),
                 failure,
                 exc_info=failure,
             )
 
 
 @decorators.log_execution
-async def on_join_request_approved(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def on_join_request_approved(ctx: Ctx) -> None:
     """Re-apply an active federation mute or ban when a join request is approved.
 
     ``on_join_request`` declines banned users at request time, but an active
@@ -440,25 +440,26 @@ async def on_join_request_approved(
     ``via_join_request`` distinguishes this from a regular invite-link/added
     join (already handled by ``on_new_member``), so no double-enforcement.
     """
-    cmu = update.chat_member
+    cmu = ctx.chat_member
     if cmu is None or not cmu.via_join_request:
         return
-    if cmu.new_chat_member.status != ChatMemberStatus.MEMBER:
+    new_member = cmu.new_chat_member
+    if new_member is None or new_member.status != ChatMemberStatus.MEMBER:
         return
 
-    user = cmu.new_chat_member.user
-    if user.is_bot:
+    user = new_member.user
+    if user is None or user.is_bot:
         return
 
     chat = cmu.chat
-    if await _in_federation(chat.id, action="join_request_approved") is False:
+    if await _in_federation(chat_id_of(chat), action="join_request_approved") is False:
         return
 
     # * Identity harvest in parallel with mute/ban lookups.
     # * harvest_user_identity skips the DB write when identity is unchanged (L1 hit).
     harvest_r, mute, ban = await asyncio.gather(
         db.users_cache.harvest_user_identity(
-            user.id, user.username, user.first_name, user.last_name or None
+            user.id, user.username, display_name(user), user.last_name or None
         ),
         db.mutes_db.get_active_mute(user.id),
         _ban_state_with_retry(user.id),
@@ -471,12 +472,14 @@ async def on_join_request_approved(
         log.error(
             "get_active_ban failed for uid=%d on join_request_approved in chat=%d: %s",
             user.id,
-            chat.id,
+            chat_id_of(chat),
             ban,
         )
         # * No later event re-checks an approved request, so silence would
         # * leave a possibly banned member in the group indefinitely.
-        await _fail_closed_join(ctx.bot, chat.id, user.id, "join_request_approved")
+        await _fail_closed_join(
+            ctx.bot, chat_id_of(chat), user.id, "join_request_approved"
+        )
         return
     if ban:
         # * The request-time decline in on_join_request can be beaten by a
@@ -485,20 +488,20 @@ async def on_join_request_approved(
         # * Checked before the mute-failure early-return below so a mute-DB
         # * outage cannot disable ban enforcement on this path.
         enforced_role = await demote_before_enforcement(
-            ctx.bot, user.id, user.first_name, trigger="ban"
+            ctx.bot, user.id, display_name(user), trigger="ban"
         )
         if enforced_role == "owner":
             return
         try:
             await asyncio.wait_for(
-                ctx.bot.ban_chat_member(chat.id, user.id),
+                ctx.bot.ban_chat_member(chat_id_of(chat), user.id),
                 timeout=TELEGRAM_LOOKUP_TIMEOUT,
             )
         except Exception:
             log.exception(
                 "Ban on join_request_approved failed for uid=%d in chat=%d",
                 user.id,
-                chat.id,
+                chat_id_of(chat),
             )
             return
         locale = await locale_for_chat(chat)
@@ -515,7 +518,7 @@ async def on_join_request_approved(
         log.warning(
             "get_active_mute failed for uid=%d on join_request_approved in chat=%d: %s",
             user.id,
-            chat.id,
+            chat_id_of(chat),
             mute,
         )
         return
@@ -523,13 +526,13 @@ async def on_join_request_approved(
         return
 
     enforced_role = await demote_before_enforcement(
-        ctx.bot, user.id, user.first_name, trigger="mute"
+        ctx.bot, user.id, display_name(user), trigger="mute"
     )
     if enforced_role == "owner":
         log.warning(
             "Skipping mute re-apply against the protected Owner uid=%d in chat=%d",
             user.id,
-            chat.id,
+            chat_id_of(chat),
         )
         return
     until = mute.get("until_date")
@@ -537,29 +540,29 @@ async def on_join_request_approved(
     try:
         await asyncio.wait_for(
             ctx.bot.restrict_chat_member(
-                chat.id, user.id, permissions=perms, until_date=until
+                chat_id_of(chat), user.id, permissions=perms, until_date=until
             ),
             timeout=TELEGRAM_LOOKUP_TIMEOUT,
         )
         log.info(
             "Re-applied active federation mute on approved join_request for uid=%d in chat=%d",
             user.id,
-            chat.id,
+            chat_id_of(chat),
         )
     except Exception:
         log.exception(
             "Mute re-apply on join_request_approved failed for uid=%d in chat=%d",
             user.id,
-            chat.id,
+            chat_id_of(chat),
         )
 
 
 @decorators.log_execution
-async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_join_request(ctx: Ctx) -> None:
     """Decline join requests from federation-banned users in connected groups.
 
     When a group has join-request mode enabled (invite links require admin
-    approval), Telegram delivers a ``ChatJoinRequest`` update instead of a
+    approval), Telegram delivers a ``ChatJoinRequest`` ctx instead of a
     ``new_chat_member`` status. Without this handler a banned user could
     bypass enforcement by requesting to join and waiting for an admin (or an
     auto-approve bot) to accept them.
@@ -568,7 +571,7 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     federation ban. Non-banned users are left for the normal approval flow.
     Also opportunistically caches the requesting user's identity.
     """
-    request = update.chat_join_request
+    request = ctx.chat_join_request
     if request is None:
         return
 
@@ -577,7 +580,7 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     chat = request.chat
-    if await _in_federation(chat.id, action="join_request") is False:
+    if await _in_federation(chat_id_of(chat), action="join_request") is False:
         return
 
     # * The protected Owner is never a valid enforcement target, whichever
@@ -595,7 +598,7 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     # * harvest_user_identity skips the DB write when identity is unchanged (L1 hit).
     harvest_r, ban = await asyncio.gather(
         db.users_cache.harvest_user_identity(
-            user.id, user.username, user.first_name, user.last_name or None
+            user.id, user.username, display_name(user), user.last_name or None
         ),
         _ban_state_with_retry(user.id),
         return_exceptions=True,
@@ -605,18 +608,18 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         log.error(
             "get_active_ban failed for uid=%d on join_request in chat=%d: %s",
             user.id,
-            chat.id,
+            chat_id_of(chat),
             ban,
         )
         # * Fail closed on outage: decline rather than allow a possibly
         # * banned user to enter until state is proven clean.
         try:
-            await ctx.bot.decline_chat_join_request(chat.id, user.id)
+            await ctx.bot.decline_chat_join_request(chat_id_of(chat), user.id)
         except Exception as exc:
             log.warning(
                 "Failed to decline join request for uid=%d in chat=%d: %s",
                 user.id,
-                chat.id,
+                chat_id_of(chat),
                 exc,
             )
         return
@@ -625,30 +628,30 @@ async def on_join_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         return  # not banned; let the normal approval flow proceed
 
     try:
-        await ctx.bot.decline_chat_join_request(chat.id, user.id)
+        await ctx.bot.decline_chat_join_request(chat_id_of(chat), user.id)
         log.info(
             "Declined join request from federation-banned user uid=%d in chat=%d",
             user.id,
-            chat.id,
+            chat_id_of(chat),
         )
     except Exception as exc:
         log.warning(
             "Failed to decline join request for uid=%d in chat=%d: %s",
             user.id,
-            chat.id,
+            chat_id_of(chat),
             exc,
         )
 
 
 @decorators.log_execution
-async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_left_member(ctx: Ctx) -> None:
     """Announce when a non-bot member leaves the main group."""
-    msg = update.effective_message
-    chat = update.effective_chat
+    msg = ctx.effective_message
+    chat = ctx.effective_chat
     if msg is None or chat is None:
         return
 
-    if not cfg.is_primary_group(chat.id):
+    if not cfg.is_primary_group(chat_id_of(chat)):
         return
 
     member = msg.left_chat_member
@@ -657,30 +660,30 @@ async def on_left_member(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
             msg,
             t(
                 "greeting.left.body",
-                await locale_for_update(update),
-                user=Safe(user_ref(member.id, member.first_name, member.username)),
+                await locale_for_update(ctx),
+                user=Safe(user_ref(member.id, display_name(member), member.username)),
             ),
             log_label="left-member",
         )
 
 
 @decorators.log_execution
-async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_chat_migration(ctx: Ctx) -> None:
     """Update group records when a basic group migrates to a supergroup.
 
     Telegram delivers two status updates on migration:
     - ``migrate_to_chat_id`` in the old basic group (bot may no longer have
       write access at that point, so we only log it).
     - ``migrate_from_chat_id`` in the new supergroup, which carries both IDs;
-      this is where we perform the DB update.
+      this is where we perform the DB ctx.
     """
-    msg = update.effective_message
+    msg = ctx.effective_message
     if not msg:
         return
 
     if msg.migrate_from_chat_id:
         old_id = msg.migrate_from_chat_id
-        new_id = update.effective_chat.id if update.effective_chat else None
+        new_id = chat_id_of(ctx.effective_chat) if ctx.effective_chat else None
         if old_id and new_id and old_id != new_id:
             # * The repoint moves the whole group in one transaction: the
             # * registry, the configuration, the membership, the open
@@ -707,7 +710,7 @@ async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         log.info(
             "Chat migrate_to received: chat_id=%d -> %d "
             "(will be recorded via migrate_from in the supergroup)",
-            update.effective_chat.id if update.effective_chat else 0,
+            chat_id_of(ctx.effective_chat) if ctx.effective_chat else 0,
             msg.migrate_to_chat_id,
         )
 
@@ -719,12 +722,20 @@ async def on_chat_migration(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 # connect.py. That single handler covers bot-added/promoted (join prompt,
 # pending completion), bot-demoted (admin-rights-lost warning to mod channel),
 # and bot-removed/kicked (federation group auto-deactivation). No second
-# ChatMemberHandler is registered here to avoid PTB group-0 shadowing.
+# ChatMemberHandler is registered here to avoid Kurigram group-0 shadowing.
+
+_MIGRATE_FILTER = filters.create(
+    lambda _, __, ctx: bool(
+        getattr(ctx, "migrate_to_chat_id", None)
+        or getattr(ctx, "migrate_from_chat_id", None)
+    ),
+    name="Migrate",
+)
 
 __handlers__ = [
     ChatJoinRequestHandler(on_join_request),
-    ChatMemberHandler(on_join_request_approved, ChatMemberHandler.CHAT_MEMBER),
-    MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, on_new_member),
-    MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, on_left_member),
-    MessageHandler(filters.StatusUpdate.MIGRATE, on_chat_migration),
+    ChatMemberHandler(on_join_request_approved, CHAT_MEMBER),
+    MessageHandler(filters.new_chat_members, on_new_member),
+    MessageHandler(filters.left_chat_member, on_left_member),
+    MessageHandler(_MIGRATE_FILTER, on_chat_migration),
 ]

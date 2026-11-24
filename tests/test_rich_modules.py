@@ -6,15 +6,14 @@
 
 from __future__ import annotations
 
-from tcbot.modules.helper.messages import (
-    rich_format,
-    rich_link,
-    rich_list,
-    rich_media,
-    rich_style,
-    rich_table,
-    rich_text,
-)
+from tcbot.modules.helper.rich import button as rich_buttons
+from tcbot.modules.helper.rich import formats as rich_format
+from tcbot.modules.helper.rich import link as rich_link
+from tcbot.modules.helper.rich import list as rich_list
+from tcbot.modules.helper.rich import media as rich_media
+from tcbot.modules.helper.rich import style as rich_style
+from tcbot.modules.helper.rich import table as rich_table
+from tcbot.modules.helper.rich import text as rich_text
 from tcbot.utils.i18n import t
 
 
@@ -61,54 +60,58 @@ def test_table_module_owns_tables() -> None:
     assert "<td>&lt;x&gt;</td>" in html
 
 
-def test_link_module_owns_links_and_buttons() -> None:
+def test_link_module_owns_links_and_mentions() -> None:
     assert rich_link.link("t.me", "https://t.me") == ('<a href="https://t.me">t.me</a>')
     assert rich_link.mention(0, "Anon") == "<b>Anon</b>"
-    assert rich_link.button("Go", data="go", style="green") == (
+    assert rich_buttons.button("Go", data="go", style="green") == (
         '<tg-button type="callback_data" data="go" style="success">Go</tg-button>'
     )
-    assert rich_link.button("Copy", copy="v") == (
+    assert rich_buttons.button("Copy", copy="v") == (
         '<tg-button type="copy_text" text="v">Copy</tg-button>'
     )
-    assert rich_link.button_row([rich_link.button("Go", data="go")], align="right") == (
+    assert rich_buttons.button_row(
+        [rich_buttons.button("Go", data="go")], align="right"
+    ) == (
         '<tg-button-row align="right">'
         '<tg-button type="callback_data" data="go">Go</tg-button></tg-button-row>'
     )
 
 
 def test_button_subfeatures_cover_the_documented_api() -> None:
-    assert rich_link.url_button("Go", "https://x").startswith('<tg-button type="url"')
-    assert rich_link.copy_button("Copy", "v") == (
+    assert rich_buttons.url_button("Go", "https://x").startswith(
+        '<tg-button type="url"'
+    )
+    assert rich_buttons.copy_button("Copy", "v") == (
         '<tg-button type="copy_text" text="v">Copy</tg-button>'
     )
-    assert rich_link.web_app_button("App", "https://x") == (
+    assert rich_buttons.web_app_button("App", "https://x") == (
         '<tg-button type="web_app" url="https://x">App</tg-button>'
     )
-    assert rich_link.login_button(
+    assert rich_buttons.login_button(
         "Login", "https://x", forward_text="f", request_write_access=True
     ) == (
         '<tg-button type="login_url" url="https://x" forward-text="f"'
         " request-write-access>Login</tg-button>"
     )
-    assert rich_link.switch_button("S", "q") == (
+    assert rich_buttons.switch_button("S", "q") == (
         '<tg-button type="switch_inline_query" query="q">S</tg-button>'
     )
-    assert rich_link.switch_current_button("S", "q") == (
+    assert rich_buttons.switch_current_button("S", "q") == (
         '<tg-button type="switch_inline_query_current_chat" query="q">S</tg-button>'
     )
-    assert rich_link.switch_chosen_button(
+    assert rich_buttons.switch_chosen_button(
         "S", "q", allow_user_chats=True, allow_channel_chats=True
     ) == (
         '<tg-button type="switch_inline_query_chosen_chat" query="q"'
         " allow-user-chats allow-channel-chats>S</tg-button>"
     )
-    assert rich_link.disabled_button("No") == (
+    assert rich_buttons.disabled_button("No") == (
         '<tg-button type="disabled">No</tg-button>'
     )
-    assert rich_link.button("CB", data="d", style="link") == (
+    assert rich_buttons.button("CB", data="d", style="link") == (
         '<tg-button type="callback_data" data="d" style="link">CB</tg-button>'
     )
-    assert rich_link.button_rows([["a"], ["b"]]) == (
+    assert rich_buttons.button_rows([["a"], ["b"]]) == (
         "<tg-button-row>a</tg-button-row>\n<tg-button-row>b</tg-button-row>"
     )
 
@@ -120,7 +123,7 @@ def test_button_colours_map_to_api_styles() -> None:
         ("green", "success"),
         ("red", "danger"),
     ):
-        rendered = rich_link.button("OK", data="d", style=friendly)
+        rendered = rich_buttons.button("OK", data="d", style=friendly)
         expected = f' style="{api}"' if api else ""
         assert (
             rendered
@@ -129,20 +132,20 @@ def test_button_colours_map_to_api_styles() -> None:
 
 
 def test_button_row_supports_all_documented_alignments() -> None:
-    one = rich_link.button("Go", data="go")
+    one = rich_buttons.button("Go", data="go")
     for align in ("left", "center", "right"):
-        assert rich_link.button_row([one], align=align) == (
+        assert rich_buttons.button_row([one], align=align) == (
             f'<tg-button-row align="{align}">{one}</tg-button-row>'
         )
     # * An unsupported value is dropped rather than shipped to Telegram.
-    assert rich_link.button_row([one], align="full") == (
+    assert rich_buttons.button_row([one], align="full") == (
         f"<tg-button-row>{one}</tg-button-row>"
     )
     # * A single-button row is the supported full-width layout.
-    assert rich_link.button_row([one]).count("<tg-button ") == 1
+    assert rich_buttons.button_row([one]).count("<tg-button ") == 1
 
 
-def test_media_module_owns_media_and_proof_slideshow() -> None:
+def test_media_module_owns_media_and_slideshow() -> None:
     assert rich_media.photo("https://x/i.jpg") == '<img src="https://x/i.jpg"/>'
     assert rich_media.video("https://x/v.mp4") == (
         '<video src="https://x/v.mp4"></video>'
@@ -150,14 +153,14 @@ def test_media_module_owns_media_and_proof_slideshow() -> None:
     assert rich_media.collage(["https://x/i.jpg"]) == (
         '<tg-collage><img src="https://x/i.jpg"/></tg-collage>'
     )
-    assert rich_media.proof_slideshow(["https://x/i.jpg"]) == (
+    assert rich_media.slideshow(["https://x/i.jpg"]) == (
         '<tg-slideshow><img src="https://x/i.jpg"/></tg-slideshow>'
     )
 
 
 def test_focused_modules_stay_distinct() -> None:
     assert rich_format.heading is not rich_style.bold
-    assert rich_table.table is not rich_link.button
+    assert rich_table.table is not rich_buttons.button
     assert rich_media.slideshow is not rich_list.details
 
 

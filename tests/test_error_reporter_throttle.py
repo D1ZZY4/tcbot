@@ -20,10 +20,10 @@ class _FakeBot:
         self.calls: list[str] = []
         self.fail_first = True
 
-    async def do_api_request(
-        self, _endpoint: str, *, api_kwargs: dict[str, Any], **_kwargs: Any
+    async def send_rich_message(
+        self, _chat_id: int, rich_message: Any, **_kwargs: Any
     ) -> None:
-        text = api_kwargs.get("rich_message", {}).get("html", "")
+        text = rich_message.html
         self.calls.append(text)
         if self.fail_first and len(self.calls) == 1:
             self.fail_first = False

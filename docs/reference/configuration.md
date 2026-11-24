@@ -26,8 +26,6 @@ fail at load time with an actionable message. The template is
 | `PREFIXES` | `["/", "!", "."]` | Python-style list or comma-separated values. |
 | `PORT` | `5000` | `auto`, invalid, or out-of-range values resolve to 5000. |
 | `BIND_HOST` | `0.0.0.0` | Listener interface; `127.0.0.1` behind a reverse proxy. |
-| `WEBHOOK_URL` | empty | Public HTTPS base URL. Empty falls back to polling. |
-| `WEBHOOK_SECRET` | random | 1-256 characters from `A-Z`, `a-z`, `0-9`, underscore, hyphen. Invalid values fail at load. |
 | `LOG_LEVEL` | `INFO` | `NOTSET`, `DEBUG`, `INFO`, `WARNING`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`. |
 | `SENTRY_DSN` | empty | Opt-in error monitoring with the observability extra. |
 | `MODULES_LOAD` | empty | Comma-separated allowlist of module names. |
@@ -72,11 +70,9 @@ from these ids through `messages/links.py`; no static URL variables remain.
 
 ## Platform-injected variables
 
-These are read by the config loader but are not operator settings:
-`REPLIT_DEV_DOMAIN`, `REPLIT_SLUG`, `REPLIT_OWNER`, `REPLIT_APP_NAME`,
-`REPLIT_IDENTITY`, and `REPLIT_DEPLOYMENT`. The dev domain is used as the
-webhook base only when a Replit runtime marker proves this process is the
-Replit application.
+Platform variables such as `REPLIT_DEV_DOMAIN`, `REPLIT_SLUG`, and
+`REPLIT_DEPLOYMENT` may exist in the environment, but the bot does not read
+them. Polling needs no public endpoint, dev domain, or inbound port.
 
 `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` are `docker-compose.yml`
 variables, not read by the bot.
@@ -84,7 +80,6 @@ variables, not read by the bot.
 ## Secrets policy
 
 Never commit real credentials, put them in command-line arguments, or print
-them to logs. `Configs` excludes token, database URL, Redis URL, webhook secret,
-API hash, and Sentry DSN from its `repr`. The webhook route compares the secret
-in constant time. Operator scripts read the connection string from the
-environment rather than hardcoding it.
+them to logs. `Configs` excludes token, database URL, Redis URL, API hash,
+and Sentry DSN from its `repr`. Operator scripts read the connection string
+from the environment rather than hardcoding it.

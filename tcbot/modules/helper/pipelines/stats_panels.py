@@ -9,12 +9,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
-from telegram import (
-    Bot,
-    CallbackQuery,
-    InlineKeyboardMarkup,
-    Message,
-)
+from pyrogram import Client
+from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from tcbot import cfg
 from tcbot import database as db
@@ -26,10 +22,11 @@ from tcbot.modules.helper.buttons import (
     stats_search_results_nav_btn,
     stats_search_row,
 )
+from tcbot.modules.helper.context import Ctx, chat_id_of
 from tcbot.modules.helper.extraction import sync_user_identity
-from tcbot.modules.helper.messages.rich_list import bullet_list
-from tcbot.modules.helper.messages.rich_table import table
-from tcbot.modules.helper.messages.rich_text import blocks
+from tcbot.modules.helper.rich.list import bullet_list
+from tcbot.modules.helper.rich.table import table
+from tcbot.modules.helper.rich.text import blocks
 from tcbot.utils.dispatch import gather_bounded, throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, divider, esc, t, user_ref
 from tcbot.utils.logger import get_logger
@@ -38,8 +35,6 @@ from tcbot.utils.time_and_date import date_or_unknown, time_or_unknown
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
-    from telegram.ext import ContextTypes
-
     from tcbot.database.documents import BanDoc
 
 log = get_logger(__name__)
@@ -204,7 +199,7 @@ class OverviewViews:
 
     @classmethod
     async def staff_roster(
-        cls, locale: str | None = None, *, bot: Bot | None = None
+        cls, locale: str | None = None, *, bot: Client | None = None
     ) -> tuple[str, InlineKeyboardMarkup]:
         """Full staff breakdown: Owner, Admins, Developers, Moderators."""
         owner_id, admins, developers, moderators = await asyncio.gather(
@@ -495,7 +490,7 @@ class SearchViews:
     @classmethod
     def open_search(
         cls,
-        ctx: ContextTypes.DEFAULT_TYPE,
+        ctx: Ctx,
         q: CallbackQuery,
         locale: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup]:
@@ -506,12 +501,12 @@ class SearchViews:
             return blocks(text), cls._search_panel_btn(locale)
         ud = cast("dict[str, object]", ctx.user_data)
         ud[SEARCH_KEY] = True
-        ud[MSG_KEY] = msg.message_id
-        ud[CHAT_KEY] = msg.chat_id
+        ud[MSG_KEY] = msg.id
+        ud[CHAT_KEY] = chat_id_of(msg.chat)
         return blocks(text), cls._search_panel_btn(locale)
 
     @staticmethod
-    def clear_search(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    def clear_search(ctx: Ctx) -> None:
         """Forget any in-flight search context."""
         ud = cast("dict[str, object]", ctx.user_data)
         for key in (SEARCH_KEY, RESULTS_KEY, MSG_KEY, CHAT_KEY, "stats_last_query"):

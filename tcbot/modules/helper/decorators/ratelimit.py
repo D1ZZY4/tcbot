@@ -13,8 +13,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from telegram.ext import ApplicationHandlerStop, ContextTypes
-
+from tcbot.modules.helper.context import Ctx
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -25,9 +24,6 @@ from tcbot import database as db
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich
 from tcbot.utils.time_and_date import monotonic
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -260,34 +256,32 @@ async def _throttle_tier(uid: int) -> str:
     return "regular"
 
 
-async def global_rate_limit_handler(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def global_rate_limit_handler(ctx: Ctx) -> None:
     """Universal per-user rate limiter - registered at group -1."""
-    uid = update.effective_user.id if update.effective_user else None
+    uid = ctx.effective_user.id if ctx.effective_user else None
     if not uid:
         return
 
     # * ── button press ─────────────────────────────────────────────────────────
-    if update.callback_query:
+    if ctx.callback_query:
         if await _is_exempt(uid):
             return
         wait = await _cbq_limiter.check(uid)
         if wait:
             try:
-                await update.callback_query.answer(
+                await ctx.callback_query.answer(
                     replies.rate_limit_text(
-                        wait, await locale_for_update(update), plain=True
+                        wait, await locale_for_update(ctx), plain=True
                     ),
                     show_alert=True,
                 )
             except Exception as exc:
                 log.debug("CBQ rate-limit answer failed: %s", exc)
-            raise ApplicationHandlerStop
+            return
         return
 
     # * ── command message ──────────────────────────────────────────────────────
-    msg = update.effective_message
+    msg = ctx.effective_message
     text = (msg.text or "") if msg else ""
     if not text:
         return
@@ -307,13 +301,11 @@ async def global_rate_limit_handler(
         if msg:
             await reply_rich(
                 msg,
-                replies.rate_limit_text(
-                    wait, await locale_for_update(update), plain=True
-                ),
+                replies.rate_limit_text(wait, await locale_for_update(ctx), plain=True),
                 log_label="Command rate-limit",
                 parse_mode=None,
             )
-        raise ApplicationHandlerStop
+        return
 
 
 # ──────────────────── Per-handler rate limiter factory ──────────────────── #
@@ -346,34 +338,34 @@ def ratelimiter[R](
         )
 
         @functools.wraps(func)
-        async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> R | None:
+        async def _wrapper(ctx: Ctx) -> R | None:
             """Block the call and notify the user if the rate limit is exceeded."""
-            uid = update.effective_user.id if update.effective_user else None
+            uid = ctx.effective_user.id if ctx.effective_user else None
             if uid:
                 # * The Owner bypasses per-handler quotas (incident response
                 # * must never stall on a throttle); everyone else shares the
                 # * same bucket. Fail-closed via _is_exempt, cancellation
                 # * propagates.
                 if await _is_exempt(uid):
-                    return await func(update, ctx)
+                    return await func(ctx)
                 wait = await _limiter.check(uid)
                 if wait:
-                    if update.callback_query:
+                    if ctx.callback_query:
                         try:
-                            await update.callback_query.answer(
+                            await ctx.callback_query.answer(
                                 replies.rate_limit_text(
-                                    wait, await locale_for_update(update), plain=True
+                                    wait, await locale_for_update(ctx), plain=True
                                 ),
                                 show_alert=True,
                             )
                         except Exception as exc:
                             log.debug("Callback rate-limit answer failed: %s", exc)
                         return None
-                    if update.effective_message:
+                    if ctx.effective_message:
                         await reply_rich(
-                            update.effective_message,
+                            ctx.effective_message,
                             replies.rate_limit_text(
-                                wait, await locale_for_update(update), plain=True
+                                wait, await locale_for_update(ctx), plain=True
                             ),
                             log_label="Message rate-limit",
                             parse_mode=None,
@@ -382,7 +374,7 @@ def ratelimiter[R](
                     # * No surface exists to tell the user why, so block the
                     # * call instead of running it past its quota.
                     return None
-            return await func(update, ctx)
+            return await func(ctx)
 
         return _wrapper
 

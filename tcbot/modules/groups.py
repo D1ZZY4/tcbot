@@ -7,22 +7,18 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
-
-from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.utils.logger import get_logger
-
-if TYPE_CHECKING:
-    from telegram import Update
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.buttons import tcgroups_btn
+from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import render_groups, replies, reply_rich, safe_edit
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
+from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
 
 log = get_logger(__name__)
@@ -55,10 +51,10 @@ __help__: replies.HelpEntry = get_help()
 
 @decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
-async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_tcfgroups(ctx: Ctx) -> None:
     """Reply with the list of all currently active connected groups (truncated to fit)."""
-    locale = await locale_for_update(update)
-    msg = update.effective_message
+    locale = await locale_for_update(ctx)
+    msg = ctx.effective_message
     if msg is None:
         return
 
@@ -93,10 +89,8 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ────────────── Callback Handlers (Details & Simple) ────────────── #
 
 
-async def _toggle(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE, *, detailed: bool
-) -> None:
-    q = update.callback_query
+async def _toggle(ctx: Ctx, *, detailed: bool) -> None:
+    q = ctx.callback_query
     if q is None or q.message is None:
         # * Answer first so the client spinner never hangs on a dead tap.
         if q is not None:
@@ -105,7 +99,7 @@ async def _toggle(
             except Exception as exc:
                 log.debug("groups toggle answer failed: %s", exc)
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
 
     cbq_msg = q.message  # type: ignore[assignment]
     # * No per-user snapshot: active_groups() is already L1+L2 cached
@@ -137,16 +131,16 @@ async def _toggle(
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_groups_details(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_groups_details(ctx: Ctx) -> None:
     """Switch the groups listing to detailed view (shows full chat IDs)."""
-    await _toggle(update, ctx, detailed=True)
+    await _toggle(ctx, detailed=True)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_groups_simple(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_groups_simple(ctx: Ctx) -> None:
     """Switch the groups listing to simple view (condensed, no full chat IDs)."""
-    await _toggle(update, ctx, detailed=False)
+    await _toggle(ctx, detailed=False)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

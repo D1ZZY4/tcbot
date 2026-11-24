@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from telegram.error import BadRequest, TimedOut
+from pyrogram.errors import BadRequest
 
 from tcbot import database as db
 from tcbot.modules import broadcast
@@ -106,7 +106,7 @@ def test_broadcast_counts_only_transient_failures(
         monkeypatch,
         {
             101: BadRequest("USER_NOT_PARTICIPANT"),
-            102: TimedOut("slow"),
+            102: TimeoutError("slow"),
         },
     )
     assert msg.status.edits

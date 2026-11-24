@@ -8,16 +8,16 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import Literal, Protocol
+
+from pyrogram import Client
 
 from tcbot import database as db
+from tcbot.modules.helper.context import Ctx, bot_identity
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
-
-if TYPE_CHECKING:
-    from telegram import Bot, Update
 
 log = get_logger(__name__)
 
@@ -27,7 +27,7 @@ log = get_logger(__name__)
 # * also surfaces on forwarded service messages but never as an action target.
 TELEGRAM_USER_ID = 777000
 
-# * Telegram's internal ID for the GroupAnonymousBot placeholder, which appears
+# * Telegram's internal ID for the GroupAnonymousClient placeholder, which appears
 # * as the sender when a real admin posts using "send message as group" mode.
 # * The true identity is unknown to the bot, so federation commands are refused.
 ANONYMOUS_BOT_ID = 1087968824
@@ -36,7 +36,7 @@ ANONYMOUS_BOT_ID = 1087968824
 def is_anon_admin(user: object) -> bool:
     """Return True when ``user`` is the anonymous admin placeholder.
 
-    Single owner for the GroupAnonymousBot check. The placeholder appears
+    Single owner for the GroupAnonymousClient check. The placeholder appears
     as the sender when a real admin posts through "send message as group",
     so the true identity is unknown and every federation command must
     refuse it.
@@ -50,7 +50,7 @@ IdentityKind = Literal[
     "this_bot",  # this bot is the target
     "other_bot",  # any other Telegram bot
     "telegram",  # Telegram service account
-    "anon_admin",  # GroupAnonymousBot
+    "anon_admin",  # GroupAnonymousClient
     "owner",  # the federation Owner
     "admin",  # federation Admin (staff)
     "developer",  # federation Developer (custom role)
@@ -83,7 +83,7 @@ class Identity:
 
 
 async def classify(
-    bot: Bot,
+    bot: Client,
     executor_id: int,
     target_id: int,
     target_fname: str | None = None,
@@ -110,7 +110,7 @@ async def classify(
     fail-closed without asking every caller for a second role read.
     Cancellation always propagates.
     """
-    # * Both are independent reads; run them in parallel. The role is read
+    # * Clienth are independent reads; run them in parallel. The role is read
     # * fresh: the refusal table is keyed on the role kind, so a cached
     # * role could show a Owner as an ordinary user for the whole cache
     # * TTL and let the action reach its prompt.
@@ -143,7 +143,7 @@ async def classify(
 
     if target_id == executor_id:
         return Identity("self", target_id, target_fname, target_username, is_bot=False)
-    if target_id == bot.id:
+    if target_id == (await bot_identity(bot)).id:
         return Identity(
             "this_bot", target_id, target_fname, target_username, is_bot=True
         )
@@ -176,9 +176,7 @@ def _line(ident: Identity) -> str:
     return user_ref(ident.target_id, ident.fname, ident.username)
 
 
-async def verify_not_bot(
-    update: Update, target_id: int, bot: Bot | None
-) -> bool | None:
+async def verify_not_bot(ctx: Ctx, target_id: int, bot: Client | None) -> bool | None:
     """Return True when the target is verified human, False when verified bot.
 
     ``None`` means indeterminate (membership probe failed or absent and
@@ -188,16 +186,17 @@ async def verify_not_bot(
     best-effort ``is_proven_bot`` gate instead, where off-group promotions
     of unknown targets stay allowed by design. Cancellation propagates.
     """
-    msg = getattr(update, "effective_message", None)
+    msg = getattr(ctx, "effective_message", None)
     reply = getattr(msg, "reply_to_message", None) if msg is not None else None
     sender = getattr(reply, "from_user", None) if reply is not None else None
     if sender is not None and sender.id == target_id:
         return not bool(sender.is_bot)
-    chat = getattr(update, "effective_chat", None)
+    chat = getattr(ctx, "effective_chat", None)
     if (
         bot is not None
         and chat is not None
-        and getattr(chat, "type", None) != "private"
+        and getattr(getattr(chat, "type", None), "value", getattr(chat, "type", None))
+        != "private"
     ):
         try:
             member = await asyncio.wait_for(
@@ -240,7 +239,7 @@ async def _mtproto_bot_hit(target_id: int) -> bool | None:
         return None
 
 
-async def is_proven_bot(update: Update, target_id: int, bot: Bot | None) -> bool:
+async def is_proven_bot(ctx: Ctx, target_id: int, bot: Client | None) -> bool:
     """Return True only when the target is verified to be a bot account.
 
     Best-effort by design and only ever positive: a quoted sender names
@@ -252,13 +251,13 @@ async def is_proven_bot(update: Update, target_id: int, bot: Bot | None) -> bool
     transfer, where a bot target would otherwise receive privilege or
     brick the federation.
     """
-    return (await verify_not_bot(update, target_id, bot)) is False
+    return (await verify_not_bot(ctx, target_id, bot)) is False
 
 
 class _MemberLookup(Protocol):
     """Anything exposing the ``get_chat_member`` coroutine ``can_manage_group`` needs.
 
-    Structural instead of ``Bot`` so test doubles and the real client both
+    Structural instead of ``Client`` so test doubles and the real client both
     satisfy it; the bot is only used for the bounded membership probe.
     """
 
@@ -270,7 +269,7 @@ async def can_manage_group(
 ) -> bool:
     """Return True when ``user_id`` may manage federation settings for a group.
 
-    Granted to federation staff, or to the group's Telegram creator. Both
+    Granted to federation staff, or to the group's Telegram creator. Clienth
     lookups fail closed: a staff-role or membership failure denies, so an
     outage never grants. Cancellation always propagates.
 
@@ -292,7 +291,8 @@ async def can_manage_group(
             "group permission member check failed for %d/%d: %s", chat_id, user_id, exc
         )
         return False
-    return getattr(member, "status", None) == "creator"
+    status = getattr(member, "status", None)
+    return getattr(status, "value", status) == "owner"
 
 
 # ────────────────── Per-action witty refusals ───────────────────── #

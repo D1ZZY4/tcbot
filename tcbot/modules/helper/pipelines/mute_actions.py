@@ -9,11 +9,13 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from telegram import Bot, ChatPermissions, Update
+from pyrogram import Client
+from pyrogram.types import ChatPermissions
 
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.modules.helper import buttons, guards, messages
+from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     replies,
@@ -27,11 +29,11 @@ from tcbot.modules.helper.pipelines.mod_action_steps import (
     build_modaction_conv,
     rules_from_scope,
 )
-from tcbot.modules.helper.pipelines.proof_steps import (
-    BuildProof,
+from tcbot.modules.helper.pipelines.proof_post import (
     ProofUpload,
     upload_proof_for_action,
 )
+from tcbot.modules.helper.pipelines.proof_steps import BuildProof
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
     fan_out,
@@ -46,8 +48,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import timedelta
 
-    from telegram.ext import ContextTypes
-    from telegram.ext.filters import BaseFilter
+    from pyrogram.filters import Filter as BaseFilter
 
 log = get_logger(__name__)
 
@@ -57,7 +58,7 @@ proof = BuildProof("mute")
 # ────────────────────────── Mute executor ───────────────────────── #
 
 
-async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
+async def _execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
     """Apply a federation-wide mute across all connected groups."""
     target_id = meta.get("mute_target_id")
     admin_id = meta.get("mute_admin_id")
@@ -65,7 +66,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
         log.warning("_execute_mute called with incomplete mute state; aborting")
         return
     target_fname = meta.get("mute_target_fname") or str(target_id)
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     reason_text = meta.get("mute_reason") or replies.no_reason(locale, plain=True)
     duration: timedelta | None = meta.get("mute_duration")
     proof_msgs = meta.get("mute_proof_msgs")
@@ -74,7 +75,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     dur_str = fmt_duration(duration, locale)
     perms = ChatPermissions(can_send_messages=False)
     admin_fname = meta.get("mute_admin_fname", "Admin")
-    chat_id = update.effective_chat.id if update.effective_chat else None
+    chat_id = ctx.effective_chat.id if ctx.effective_chat else None
     if chat_id is None:
         log.warning("_execute_mute called without effective_chat")
         return
@@ -334,7 +335,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     if isinstance(log_send_r, BaseException):
         log.error("Mute log send failed: %s", log_send_r)
     if isinstance(edit_r, BaseException):
-        msg = update.effective_message
+        msg = ctx.effective_message
         if msg:
             await reply_rich(
                 msg, summary, log_label="Mute summary fallback", reply_markup=proof_btn
@@ -345,8 +346,7 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
 
 
 async def execute_unmute(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     target_id: int,
     target_name: str,
 ) -> None:
@@ -357,11 +357,11 @@ async def execute_unmute(
     worker even though the record is already revoked. A partial restore is
     reported with the failed group names and retried automatically.
     """
-    msg = update.effective_message
-    admin = update.effective_user
+    msg = ctx.effective_message
+    admin = ctx.effective_user
     if msg is None or admin is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     try:
         active_mute = await db.mutes_db.get_active_mute(target_id)
     except Exception:
@@ -537,15 +537,15 @@ async def execute_unmute(
 # ──────────────────────── Executor adapter ──────────────────────── #
 
 
-async def _exec_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def _exec_mute(ctx: Ctx) -> None:
     """Copy mute data from the conversation scope, clean up, then call _execute_mute."""
     meta: dict[str, Any] = {}
     if ctx.user_data is not None:
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         meta = {k: v for k, v in scope.items() if k.startswith("mute_")}
         for k in list(meta):
             scope.pop(k, None)
-    await _execute_mute(ctx.bot, update, meta)
+    await _execute_mute(ctx.bot, ctx, meta)
 
 
 # ─────────────────── ConversationHandler factory ────────────────── #

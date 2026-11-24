@@ -10,10 +10,10 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from telegram.ext import ConversationHandler
 
 from tcbot import database as db
 from tcbot.modules import kick as kicking
+from tcbot.modules.helper.handlers import ConversationHandler
 from tcbot.modules.helper.messages import replies
 
 if TYPE_CHECKING:

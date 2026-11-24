@@ -33,8 +33,8 @@ owns, and how the process comes up. The flows drawn as diagrams are in
 | Path | Responsibility |
 |---|---|
 | `tcbot/__init__.py` | Environment parsing and the immutable `Configs` model. `cfg` is built on first access. |
-| `tcbot/__main__.py` | Application lifecycle, builder, handler registration, webhook or polling transport, and shutdown drains. |
-| `tcbot/alive.py` | Flask keep-alive server, `/health`, `/metrics`, and the `/webhook` receiver. |
+| `tcbot/__main__.py` | Application lifecycle, builder, handler registration, Kurigram polling transport, and shutdown drains. |
+| `tcbot/alive.py` | Flask keep-alive server with `/health` and `/metrics`. |
 | `tcbot/error_reporter.py` | Error classification, scrubbing, deduplication, throttling, and shipping to the error destination or Owner DM. |
 | `tcbot/enforcement_worker.py` | Deliver queued `apply`, `revoke`, and `reconcile` runs to Telegram. |
 | `tcbot/notification_worker.py` | Retry review-card edits from the durable notification outbox. |
@@ -51,19 +51,20 @@ See [Database](database.md), [Security](security.md), and [Runtime](runtime.md).
 1. Set up logging and initialize Sentry when a DSN is configured.
 2. Start the Flask keep-alive server on `cfg.bind_host` and `cfg.port`. The port
    is probed first so a bind failure fails fast.
-3. Build the PTB `Application` with shared HTTP timeouts, the `AIORateLimiter`,
-   and a keyed update processor that serializes updates per `(chat, user)`.
-4. Register handlers: the global rate-limit `TypeHandler` at group `-1`, all
-   module handlers, the member-cache harvester at group `10`, and the error handler.
-5. Run either webhook mode or polling. Webhook mode calls `set_webhook`,
-   verifies the registered URL, and wires the Flask receiver before Telegram
-   starts posting.
-6. `post_init` connects PostgreSQL, applies migrations, seeds the Owner,
-   registers infrastructure destinations, connects Redis and MTProto, attaches
-   the error reporter, starts the scheduler, and warms hot caches.
+3. Create the single Kurigram client (bot token and API credentials) and discover
+   the active modules.
+4. Register the member-cache harvester at group `10`, all module handlers, and the
+   error handler. Per-handler `ratelimiter()` decorators provide throttling.
+5. `init_shared_subsystems()` connects PostgreSQL, applies migrations, seeds the
+   Owner, registers infrastructure destinations, connects Redis, starts the
+   Kurigram session, attaches the error reporter, starts the scheduler, and warms
+   hot caches.
+6. Enter the native long-polling idle loop. There is one transport in every
+   environment.
 
-Shutdown drains Bot-dependent work in `post_stop` while the Bot client is still
-available, then closes external clients in `post_shutdown`.
+Shutdown runs `_shutdown_subsystems()`, which stops the scheduler and drains
+proof uploads, identity refreshes and error reports before closing the client and
+every external connection.
 
 ## Module discovery and registration
 
@@ -75,9 +76,9 @@ sorted so registration order is deterministic. `MODULES_LOAD` and
 exits startup with an error. Each module exposes `__handlers__` and, where it
 describes itself, `get_help(locale)`.
 
-`register_handlers()` attaches, in order, the global rate-limit handler, the
-collected module handlers, the member-cache harvester, and the error handler.
-Most module handlers sit in PTB group `0`. A handler that consumes free text and
+`register_handlers()` attaches, in order, the member-cache harvester, the
+collected module handlers, and the error handler.
+Most module handlers sit in Kurigram group `0`. A handler that consumes free text and
 must not shadow an active conversation declares a `handler_group`, which the
 caller honours when registering it; the stats ban-search input uses this to run
 in a later group. Commands are matched by `build_prefixed_filters()` against all
@@ -91,7 +92,7 @@ Handlers are small orchestration functions. A typical handler guards
 once with `locale_for_update`; delegates authorization to decorators and guards;
 delegates persistence to `*_db.py` helpers; delegates multi-step work to a
 domain-named pipeline module; and sends replies through the `messages` helpers
-(`reply_rich`, defined in `messages/rich_msg.py`).
+(`reply_rich`, defined in `rich/msg.py`).
 
 Decorator order is fixed: `ratelimiter()` outermost, the required authorization
 guard second, and `log_execution` innermost. Message-event handlers are exempt
@@ -124,8 +125,8 @@ at the package root as `tcbot/error_reporter.py`. See [Runtime](runtime.md).
 
 | Service | Owner | Notes |
 |---|---|---|
-| Telegram transport | PTB `Application` | Webhook is the production path; polling is the local fallback. |
-| HTTP health and webhook | Flask in a daemon thread | Updates cross into the asyncio loop through `asyncio.run_coroutine_threadsafe`. |
+| Telegram transport | Single Kurigram client | Native long polling is the only path. |
+| HTTP health | Flask in a daemon thread | Serves only `/`, `/health` and `/metrics`; it never receives Telegram updates. |
 | PostgreSQL | `database/engine.py` | Every call runs through `db_call` with a circuit breaker and timeout. |
 | Cache | `database/cache/` | In-memory L1 always, optional Redis L2. |
 | Scheduling | `database/scheduler/` | APScheduler with a SQLAlchemy job store; optional pg_cron ownership for database-only jobs. |

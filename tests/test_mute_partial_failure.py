@@ -124,9 +124,9 @@ def test_the_decision_write_failure_leaves_every_group_untouched(
 
     assert bot.restricts == []
     assert len(bot.edits) == 1
-    assert bot.edits[0]["kwargs"]["chat_id"] == 22
-    assert bot.edits[0]["kwargs"]["message_id"] == 44
-    assert bot.edits[0]["args"][0] == _expected_db_fail()
+    assert bot.edits[0]["args"][0] == 22
+    assert bot.edits[0]["args"][1] == 44
+    assert bot.edits[0]["kwargs"]["rich_message"].html == _expected_db_fail()
 
 
 def test_a_cancelled_decision_propagates_without_touching_a_group(
@@ -161,7 +161,7 @@ def test_the_decision_write_failure_is_not_reported_as_success(
     _run(bot)
 
     assert len(bot.edits) == 1
-    assert bot.edits[0]["args"][0] == _expected_db_fail()
+    assert bot.edits[0]["kwargs"]["rich_message"].html == _expected_db_fail()
 
 
 # ─────────────── Unmute total failure keeps its delivery run ────────────── #

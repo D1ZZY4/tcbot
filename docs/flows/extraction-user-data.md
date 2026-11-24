@@ -170,7 +170,7 @@ itself stays instant.
 ## Mention formatting
 
 All clickable user mentions are ID-based. `utils.i18n.user_ref(user_id, name,
-username=None)` delegates to `modules/helper/messages/rich_link.py`, which
+username=None)` delegates to `modules/helper/rich/link.py`, which
 ignores `username` and renders `<a href="tg://user?id={user_id}">{name}</a>` for
 a positive id. A non-positive id renders as bold text, so an anonymous admin or
 service account is never linked. The numeric id is the single source of truth;

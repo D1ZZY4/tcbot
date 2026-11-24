@@ -595,7 +595,7 @@ def test_the_owner_tier_refreshes_the_effective_role_cache(
     def _cache_role(user_id: int, role: str | None) -> None:
         cached[user_id] = role
 
-    async def _handler(update: Any, ctx: Any) -> None:
+    async def _handler(ctx: Any) -> None:
         return None
 
     monkeypatch.setattr(db.users_roles, "get_owner_id", _owner_id)
@@ -607,7 +607,7 @@ def test_the_owner_tier_refreshes_the_effective_role_cache(
     )
 
     guarded = auth.owner_only(_handler)
-    asyncio.run(guarded(update, SimpleNamespace()))
+    asyncio.run(guarded(update))
 
     assert cached == {1: "owner"}
 
@@ -638,11 +638,11 @@ def test_role_tiers_fail_closed_when_role_lookup_errors(
     async def _boom(*args: Any, **kwargs: Any) -> str:
         raise RuntimeError("role store unavailable")
 
-    async def _handler(update: Any, ctx: Any) -> None:
+    async def _handler(ctx: Any) -> None:
         calls.append(True)
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
-    asyncio.run(tier(_handler)(_auth_update(), SimpleNamespace()))
+    asyncio.run(tier(_handler)(_auth_update()))
 
     assert calls == []
 
@@ -656,11 +656,11 @@ def test_owner_tier_fails_closed_when_owner_lookup_errors(
     async def _boom(*, fresh: bool = False) -> int:
         raise RuntimeError("role store unavailable")
 
-    async def _handler(update: Any, ctx: Any) -> None:
+    async def _handler(ctx: Any) -> None:
         calls.append(True)
 
     monkeypatch.setattr(db.users_roles, "get_owner_id", _boom)
-    asyncio.run(auth.owner_only(_handler)(_auth_update(), SimpleNamespace()))
+    asyncio.run(auth.owner_only(_handler)(_auth_update()))
 
     assert calls == []
 
@@ -682,12 +682,12 @@ def test_auth_tiers_propagate_cancellation(
     async def _cancelled(*args: Any, **kwargs: Any) -> Any:
         raise asyncio.CancelledError
 
-    async def _handler(update: Any, ctx: Any) -> None:
+    async def _handler(ctx: Any) -> None:
         return None
 
     monkeypatch.setattr(db.users_roles, lookup, _cancelled)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(tier(_handler)(_auth_update(), SimpleNamespace()))
+        asyncio.run(tier(_handler)(_auth_update()))
 
 
 @pytest.mark.parametrize(
@@ -707,11 +707,11 @@ def test_role_tiers_invoke_handler_when_rank_is_sufficient(
     async def _role(user_id: int, *, fresh: bool = False) -> str:
         return role
 
-    async def _handler(update: Any, ctx: Any) -> None:
+    async def _handler(ctx: Any) -> None:
         calls.append(True)
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    asyncio.run(tier(_handler)(_auth_update(), SimpleNamespace()))
+    asyncio.run(tier(_handler)(_auth_update()))
 
     assert calls == [True]
 
@@ -723,14 +723,14 @@ def test_unknown_tier_refuses_even_the_owner(monkeypatch: pytest.MonkeyPatch) ->
     async def _owner_role(user_id: int, *, fresh: bool = False) -> str:
         return "owner"
 
-    async def _handler(update: Any, ctx: Any) -> None:
+    async def _handler(ctx: Any) -> None:
         calls.append(True)
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _owner_role)
     gate = auth._auth_only(
         label="typo", refusal="mod_only", min_role=cast("Any", "admn")
     )
-    asyncio.run(gate(_handler)(_auth_update(), SimpleNamespace()))
+    asyncio.run(gate(_handler)(_auth_update()))
 
     assert calls == []
 
@@ -749,10 +749,10 @@ def test_role_tiers_reject_a_user_with_no_role(
     async def _no_role(user_id: int, *, fresh: bool = False) -> str | None:
         return None
 
-    async def _handler(update: Any, ctx: Any) -> None:
+    async def _handler(ctx: Any) -> None:
         calls.append(True)
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _no_role)
-    asyncio.run(tier(_handler)(_auth_update(), SimpleNamespace()))
+    asyncio.run(tier(_handler)(_auth_update()))
 
     assert calls == []

@@ -80,31 +80,24 @@ def test_typed_item_writes_to_the_fresh_draft(monkeypatch: pytest.MonkeyPatch) -
         "rules_category": {"category_key": "general"},
     }
 
-    async def _draft(update: Any, ctx: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    async def _draft(ctx: Any) -> tuple[dict[str, Any], dict[str, Any]]:
         return {"id": 3}, {"id": 99, "status": "draft"}
 
     async def _add_item(*args: Any) -> None:
         calls.append(args)
 
-    async def _items(update: Any, ctx: Any) -> int:
+    async def _items(ctx: Any) -> int:
         return 0
 
-    def _scope(update: Any, ctx: Any) -> dict[str, Any]:
-        return scope
-
     monkeypatch.setattr(rules_editor_draft, "set_and_draft", _draft)
-    monkeypatch.setattr(rules_editor_draft, "flow_scope", _scope)
     monkeypatch.setattr(db.rules_db, "add_item", _add_item)
     monkeypatch.setattr(rules_editor_draft.rules_draft_editor, "items", _items)
 
     update = SimpleNamespace(
         effective_message=SimpleNamespace(text="https://example.com/rule"),
         effective_user=SimpleNamespace(id=7),
+        user_data=scope,
     )
-    asyncio.run(
-        rules_editor_draft.rules_draft_editor.on_text(
-            cast("Any", update), cast("Any", object())
-        )
-    )
+    asyncio.run(rules_editor_draft.rules_draft_editor.on_text(cast("Any", update)))
 
     assert calls and calls[0][0] == 99

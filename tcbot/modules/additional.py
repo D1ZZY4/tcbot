@@ -6,19 +6,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from telegram.ext import CallbackQueryHandler, ContextTypes
-
 from tcbot import cfg
 from tcbot.modules.helper import buttons, decorators
+from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.handlers import CallbackQueryHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit
-from tcbot.modules.helper.messages.rich_text import blocks
+from tcbot.modules.helper.rich.text import blocks
 from tcbot.utils.i18n import t
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 __module_name__ = None
 
@@ -41,13 +36,13 @@ def additional_msg(locale: str | None = None) -> str:
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_additional_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_additional_menu(ctx: Ctx) -> None:
     """Render the Additional Info page when the button is tapped."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
 
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     await answer_and_edit(
         q,
         additional_msg(locale),

@@ -7,7 +7,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+
+from pyrogram import Client
 
 from tcbot import cfg
 from tcbot import database as db
@@ -19,14 +20,11 @@ from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 
-if TYPE_CHECKING:
-    from telegram import Bot
-
 log = get_logger(__name__)
 
 
 async def assign_admin(
-    bot: Bot,
+    bot: Client,
     admin_id: int,
     admin_fname: str,
     target_id: int,
@@ -78,7 +76,7 @@ async def assign_admin(
 
 
 async def assign_subrole(
-    bot: Bot,
+    bot: Client,
     admin_id: int,
     admin_fname: str,
     target_id: int,
@@ -133,7 +131,7 @@ async def assign_subrole(
 
 
 async def request_admin(
-    bot: Bot,
+    bot: Client,
     admin_id: int,
     target_id: int,
     target_fname: str,

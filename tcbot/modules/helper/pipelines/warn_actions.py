@@ -9,11 +9,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from telegram import Message, Update
+from pyrogram.types import Message
 
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.modules.helper import buttons, guards, messages
+from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, send_log
 from tcbot.modules.helper.pipelines.demote_actions import (
@@ -25,11 +26,11 @@ from tcbot.modules.helper.pipelines.mod_action_steps import (
     build_modaction_conv,
     rules_from_scope,
 )
-from tcbot.modules.helper.pipelines.proof_steps import (
-    BuildProof,
+from tcbot.modules.helper.pipelines.proof_post import (
     ProofUpload,
     upload_proof_for_action,
 )
+from tcbot.modules.helper.pipelines.proof_steps import BuildProof
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
     fan_out,
@@ -44,8 +45,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Any
 
-    from telegram.ext import ContextTypes
-    from telegram.ext.filters import BaseFilter
+    from pyrogram.filters import Filter as BaseFilter
 
 log = get_logger(__name__)
 
@@ -56,28 +56,27 @@ proof = BuildProof("warn")
 
 
 async def execute_warn(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     target_id: int,
     target_name: str,
     reason_text: str,
     proof_msgs: list[Message] | None = None,
 ) -> None:
     """Issue a warning and ban the target if a warn threshold is reached."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    chat = update.effective_chat
+    chat = ctx.effective_chat
     if chat is None:
         return
-    chat_id = chat.id
+    chat_id = chat_id_of(chat)
     chat_title = chat.title or str(chat_id)
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         return
     admin_id = admin.id
     admin_fname = admin.first_name
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     warn_limit = cfg.warn_limit
     # * Re-check the executor against the target before anything is
     # * recorded or uploaded. The entry command compared the two roles,
@@ -133,7 +132,7 @@ async def execute_warn(
             parse_mode=None,
         )
         return
-    rule_ids, rule_note = rules_from_scope(flow_scope(ctx, update), "warn")
+    rule_ids, rule_note = rules_from_scope(flow_scope(ctx), "warn")
     try:
         count = await db.warns_db.add_warn(
             target_id,
@@ -370,7 +369,7 @@ async def execute_warn(
             log_msg = None
         if ban_id and log_msg is not None:
             try:
-                await db.bans_db.set_log_message_id(ban_id, log_msg.message_id)
+                await db.bans_db.set_log_message_id(ban_id, log_msg.id)
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -581,20 +580,19 @@ async def _clear_warns_after_threshold_ban(
 
 
 async def execute_unwarn(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     target_id: int,
     target_name: str,
 ) -> None:
     """Remove one warning from the target in the current group."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    chat = update.effective_chat
+    chat = ctx.effective_chat
     if chat is None:
         return
-    chat_id = chat.id
-    locale = await locale_for_update(update)
+    chat_id = chat_id_of(chat)
+    locale = await locale_for_update(ctx)
     try:
         count = await db.warns_db.warn_count(target_id, chat_id)
     except Exception:
@@ -621,7 +619,7 @@ async def execute_unwarn(
         return
     chat_title = chat.title or str(chat_id)
     warn_limit = cfg.warn_limit
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         return
     try:
@@ -663,7 +661,7 @@ async def execute_unwarn(
         target_id,
         target_name,
         admin.id,
-        admin.first_name,
+        display_name(admin),
         new_count,
         warn_limit,
         chat_id,
@@ -692,20 +690,19 @@ async def execute_unwarn(
 
 
 async def execute_warnlist(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     target_id: int,
     target_name: str,
 ) -> None:
     """Reply with the numbered list of active warnings for the target."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    chat = update.effective_chat
+    chat = ctx.effective_chat
     if chat is None:
         return
-    chat_id = chat.id
-    locale = await locale_for_update(update)
+    chat_id = chat_id_of(chat)
+    locale = await locale_for_update(ctx)
     try:
         # * Cap the numbered render: a pathological history must not
         # * become an unbounded message. Total count stays honest via
@@ -762,24 +759,23 @@ async def execute_warnlist(
 
 
 async def execute_resetwarns(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     target_id: int,
     target_name: str,
 ) -> None:
     """Clear all active warnings for the target in the current group."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         return
-    chat = update.effective_chat
+    chat = ctx.effective_chat
     if chat is None:
         return
-    chat_id = chat.id
+    chat_id = chat_id_of(chat)
     chat_title = chat.title or str(chat_id)
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     removed = 0
     try:
         removed = await db.warns_db.clear_warns(target_id, chat_id)
@@ -807,7 +803,7 @@ async def execute_resetwarns(
         target_id,
         target_name,
         admin.id,
-        admin.first_name,
+        display_name(admin),
         removed,
         chat_id,
         chat_title,
@@ -840,20 +836,18 @@ async def execute_resetwarns(
 # ──────────────────────── Executor adapter ──────────────────────── #
 
 
-async def _exec_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def _exec_warn(ctx: Ctx) -> None:
     """Pop warn data from the conversation scope and call execute_warn."""
     if ctx.user_data is None:
         log.warning("_exec_warn called without user_data")
         return
-    scope = flow_scope(ctx, update)
+    scope = flow_scope(ctx)
     target_id = scope.pop("warn_target_id", 0)
     target_name = scope.pop("warn_target_name", "")
     reason_text = scope.pop("warn_reason", "")
     proof_msgs = scope.pop("warn_proof_msgs", None)
     scope.pop("warn_extra_info", None)
-    await execute_warn(
-        update, ctx, target_id, target_name, reason_text, proof_msgs=proof_msgs
-    )
+    await execute_warn(ctx, target_id, target_name, reason_text, proof_msgs=proof_msgs)
 
 
 # ─────────────────── ConversationHandler factory ────────────────── #

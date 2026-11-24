@@ -10,9 +10,15 @@ import asyncio
 from types import SimpleNamespace
 from typing import Any, cast
 
-from telegram import Bot, Message
+from pyrogram import Client
+from pyrogram.types import Message
 
-from tcbot.modules.helper.pipelines import proof_steps
+from tcbot.modules.helper.pipelines import proof_post
+
+
+def _sent(message_id: int, **kwargs: Any) -> Any:
+    """Build a Kurigram-shaped sent-message double with both id aliases."""
+    return SimpleNamespace(id=message_id, message_id=message_id, **kwargs)
 
 
 def _photo_message(file_id: str, message_id: int) -> Message:
@@ -26,12 +32,13 @@ def _photo_message(file_id: str, message_id: int) -> Message:
     return cast(
         "Message",
         SimpleNamespace(
-            photo=[size],
+            photo=size,
             video=None,
             animation=None,
             document=None,
             caption=None,
             chat=SimpleNamespace(id=5),
+            id=message_id,
             message_id=message_id,
         ),
     )
@@ -56,6 +63,7 @@ def _video_message(file_id: str, message_id: int) -> Message:
             document=None,
             caption="clip",
             chat=SimpleNamespace(id=5),
+            id=message_id,
             message_id=message_id,
         ),
     )
@@ -77,6 +85,7 @@ def _document_message(file_id: str, message_id: int) -> Message:
             ),
             caption=None,
             chat=SimpleNamespace(id=5),
+            id=message_id,
             message_id=message_id,
         ),
     )
@@ -101,6 +110,7 @@ def _animation_message(file_id: str, message_id: int) -> Message:
             document=None,
             caption="gif",
             chat=SimpleNamespace(id=5),
+            id=message_id,
             message_id=message_id,
         ),
     )
@@ -117,12 +127,12 @@ def test_a_gallery_and_a_document_are_all_recorded() -> None:
     class _Bot:
         async def send_media_group(self, *args: Any, **kwargs: Any) -> list[Any]:
             return [
-                SimpleNamespace(message_id=next(sent_ids), media_group_id="g1"),
-                SimpleNamespace(message_id=next(sent_ids), media_group_id="g1"),
+                _sent(next(sent_ids), media_group_id="g1"),
+                _sent(next(sent_ids), media_group_id="g1"),
             ]
 
         async def send_document(self, *args: Any, **kwargs: Any) -> Any:
-            return SimpleNamespace(message_id=next(sent_ids))
+            return _sent(next(sent_ids))
 
         async def send_photo(self, *args: Any, **kwargs: Any) -> Any:
             raise AssertionError("a gallery must not fall back to single sends")
@@ -131,8 +141,8 @@ def test_a_gallery_and_a_document_are_all_recorded() -> None:
             raise AssertionError("a gallery must not fall back to single sends")
 
     items, expected = asyncio.run(
-        proof_steps.upload_proof_items(
-            cast("Bot", _Bot()),
+        proof_post.upload_proof_items(
+            cast("Client", _Bot()),
             messages,
             "cap",
             -100,
@@ -150,13 +160,13 @@ def test_a_gallery_and_a_document_are_all_recorded() -> None:
 
 def test_a_video_keeps_its_media_type_and_duration() -> None:
     async def _send_video(*args: Any, **kwargs: Any) -> Any:
-        return SimpleNamespace(message_id=55)
+        return _sent(55)
 
     bot = type("Bot", (), {"send_video": _send_video})()
 
     items, expected = asyncio.run(
-        proof_steps.upload_proof_items(
-            cast("Bot", bot),
+        proof_post.upload_proof_items(
+            cast("Client", bot),
             [_video_message("v1", 7)],
             "cap",
             -100,
@@ -182,14 +192,14 @@ def test_a_failed_chunk_marks_the_upload_partial() -> None:
             calls += 1
             if calls == 2:
                 raise RuntimeError("flood wait")
-            return [SimpleNamespace(message_id=200 + i) for i in range(10)]
+            return [_sent(200 + i) for i in range(10)]
 
         async def send_photo(self, *args: Any, **kwargs: Any) -> Any:
             raise AssertionError("a gallery must not fall back to single sends")
 
     items, expected = asyncio.run(
-        proof_steps.upload_proof_items(
-            cast("Bot", _Bot()),
+        proof_post.upload_proof_items(
+            cast("Client", _Bot()),
             messages,
             "cap",
             -100,
@@ -215,14 +225,14 @@ def test_caption_lands_on_the_first_chunk_that_succeeds() -> None:
             captured.append(args[1])
             if calls == 1:
                 raise RuntimeError("flood wait on first chunk")
-            return [SimpleNamespace(message_id=300 + i) for i in range(len(args[1]))]
+            return [_sent(300 + i) for i in range(len(args[1]))]
 
         async def send_photo(self, *args: Any, **kwargs: Any) -> Any:
             raise AssertionError("a gallery must not fall back to single sends")
 
     items, expected = asyncio.run(
-        proof_steps.upload_proof_items(
-            cast("Bot", _Bot()),
+        proof_post.upload_proof_items(
+            cast("Client", _Bot()),
             messages,
             "cap",
             -100,
@@ -249,11 +259,11 @@ def test_caption_lands_on_the_first_standalone_item_that_succeeds() -> None:
             captured.append(kwargs.get("caption"))
             if calls == 1:
                 raise RuntimeError("flood wait on first document")
-            return SimpleNamespace(message_id=500 + calls)
+            return _sent(500 + calls)
 
     items, expected = asyncio.run(
-        proof_steps.upload_proof_items(
-            cast("Bot", _Bot()),
+        proof_post.upload_proof_items(
+            cast("Client", _Bot()),
             messages,
             "cap",
             -100,
@@ -275,14 +285,14 @@ def test_an_animation_is_sent_as_an_animation() -> None:
     class _Bot:
         async def send_animation(self, *args: Any, **kwargs: Any) -> Any:
             sent.append(("animation", str(args[1])))
-            return SimpleNamespace(message_id=61)
+            return _sent(61)
 
         async def send_document(self, *args: Any, **kwargs: Any) -> Any:
             raise AssertionError("an animation must not be sent as a document")
 
     items, expected = asyncio.run(
-        proof_steps.upload_proof_items(
-            cast("Bot", _Bot()),
+        proof_post.upload_proof_items(
+            cast("Client", _Bot()),
             [_animation_message("a1", 8)],
             "cap",
             -100,
@@ -304,20 +314,20 @@ def test_a_gallery_and_an_animation_are_both_archived() -> None:
     class _Bot:
         async def send_media_group(self, *args: Any, **kwargs: Any) -> list[Any]:
             return [
-                SimpleNamespace(message_id=100, media_group_id="g1"),
-                SimpleNamespace(message_id=101, media_group_id="g1"),
+                _sent(100, media_group_id="g1"),
+                _sent(101, media_group_id="g1"),
             ]
 
         async def send_animation(self, *args: Any, **kwargs: Any) -> Any:
             sent.append(("animation", str(args[1])))
-            return SimpleNamespace(message_id=102)
+            return _sent(102)
 
         async def send_photo(self, *args: Any, **kwargs: Any) -> Any:
             raise AssertionError("a gallery must not fall back to single sends")
 
     items, expected = asyncio.run(
-        proof_steps.upload_proof_items(
-            cast("Bot", _Bot()),
+        proof_post.upload_proof_items(
+            cast("Client", _Bot()),
             [
                 _photo_message("p1", 1),
                 _photo_message("p2", 2),

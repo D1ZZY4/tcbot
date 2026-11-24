@@ -5,7 +5,7 @@
 """Inline rich text styles: bold, italic, underline, strike, spoiler, sub/sup.
 
 Inline styling lives here. Code and preformatted blocks are in
-``rich_format``; links and mentions are in ``rich_link``.
+``rich.formats``; links and mentions are in ``rich.link``.
 """
 
 from __future__ import annotations

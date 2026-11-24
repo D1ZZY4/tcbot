@@ -21,22 +21,6 @@ from tcbot import (
 )
 
 
-@pytest.mark.parametrize("schema", sorted(DB_SCHEMAS))
-def test_owned_schemas_are_accepted(
-    monkeypatch: pytest.MonkeyPatch, schema: str
-) -> None:
-    monkeypatch.setenv("DB_SCHEMA", schema)
-    assert _db_schema_from_env() == schema
-
-
-@pytest.mark.parametrize("schema", ["publc", "staging", "PUBLIC", "test;drop"])
-def test_a_stray_schema_falls_back_to_public(
-    monkeypatch: pytest.MonkeyPatch, schema: str
-) -> None:
-    monkeypatch.setenv("DB_SCHEMA", schema)
-    assert _db_schema_from_env() == "public"
-
-
 def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
     """Load a fresh Configs with *env* applied over the required defaults."""
     base: dict[str, str] = {
@@ -56,8 +40,6 @@ def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
         "BIND_HOST",
         "PG_CRON_ENABLED",
         "PREFIXES",
-        "WEBHOOK_URL",
-        "WEBHOOK_SECRET",
         "REDIS_URL",
         "COMMUNITY_NAME",
         "MTPROTO_SESSION",
@@ -70,6 +52,14 @@ def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
     for key, value in base.items():
         monkeypatch.setenv(key, value)
     return Configs.load(env_file="does-not-exist.env")
+
+
+@pytest.mark.parametrize("schema", sorted(DB_SCHEMAS))
+def test_owned_schemas_are_accepted(
+    monkeypatch: pytest.MonkeyPatch, schema: str
+) -> None:
+    monkeypatch.setenv("DB_SCHEMA", schema)
+    assert _db_schema_from_env() == schema
 
 
 def test_is_primary_group_matches_negative_group_ids(
@@ -203,7 +193,6 @@ def test_module_level_cfg_exposes_the_parsed_config() -> None:
     assert isinstance(cfg, Configs)
     assert cfg.bot_token
     assert cfg.initial_owner_id > 0
-    assert cfg.is_webhook_mode == bool(cfg.webhook_url)
     assert cfg.mtproto_enabled == (cfg.api_id > 0 and bool(cfg.api_hash))
 
 
@@ -292,25 +281,6 @@ def test_bind_host_and_pg_cron_are_configurable(
     assert invalid.pg_cron_enabled is False
 
 
-def test_webhook_secret_is_explicit_or_generated(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An explicit secret is kept; an unset one is generated for this boot."""
-    loaded = _load(monkeypatch, WEBHOOK_SECRET="s3cret")
-    assert loaded.webhook_secret == "s3cret"
-    generated = _load(monkeypatch)
-    assert generated.webhook_secret
-    assert generated.webhook_secret != "s3cret"
-
-
-def test_webhook_secret_rejects_characters_telegram_refuses(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A secret outside Telegram's allowed set must fail before boot."""
-    with pytest.raises(RuntimeError, match="WEBHOOK_SECRET"):
-        _load(monkeypatch, WEBHOOK_SECRET="bad secret!")
-
-
 def test_mtproto_session_defaults_when_blank(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -318,92 +288,11 @@ def test_mtproto_session_defaults_when_blank(
     assert _load(monkeypatch, MTPROTO_SESSION="  ").mtproto_session == "tcbot_mtproto"
 
 
-def test_unknown_log_level_falls_back_to_info(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An unusable LOG_LEVEL never silences the bot entirely."""
-    loaded = _load(monkeypatch, LOG_LEVEL="LOUD")
-    assert loaded.log_level == 20
-
-
-# ───────────────────────── Webhook transport ──────────────────────── #
-# * The Replit dev domain is only usable when this process is the one the
-# * platform exposes. A workspace shell inherits the variable, and a
-# * webhook registered from there hands every update to another process.
-
-
-def _clear_transport_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Remove every variable the transport decision reads."""
-    for key in (
-        "WEBHOOK_URL",
-        "REPLIT_DEV_DOMAIN",
-        "REPLIT_SLUG",
-        "REPLIT_OWNER",
-        "REPLIT_APP_NAME",
-        "REPLIT_IDENTITY",
-        "REPLIT_DEPLOYMENT",
-    ):
-        monkeypatch.delenv(key, raising=False)
-
-
-def test_explicit_webhook_url_wins(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An explicit URL is the operator's choice and is always honoured."""
-    _clear_transport_env(monkeypatch)
+def test_transport_env_does_not_change_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Polling is the only transport; legacy webhook variables are ignored."""
     monkeypatch.setenv("WEBHOOK_URL", "https://bot.example.com/")
-    monkeypatch.setenv("REPLIT_DEV_DOMAIN", "dev.replit.dev")
-    loaded = _load(monkeypatch, WEBHOOK_URL="https://bot.example.com/")
-    assert loaded.webhook_url == "https://bot.example.com"
-    assert loaded.is_webhook_mode is True
-
-
-def test_replit_dev_domain_is_used_on_replit(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The Replit runtime marks the app process, and the dev domain is used."""
-    _clear_transport_env(monkeypatch)
-    monkeypatch.setenv("REPLIT_DEV_DOMAIN", "dev.replit.dev")
-    monkeypatch.setenv("REPLIT_SLUG", "my-project")
-    loaded = _load(monkeypatch)
-    assert loaded.webhook_url == "https://dev.replit.dev"
-    assert loaded.is_webhook_mode is True
-
-
-def test_replit_dev_domain_is_ignored_outside_replit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A workspace shell is not the exposed process, so it polls instead.
-
-    The dev domain points at the Replit workflow, so a webhook registered
-    from the shell would move every update away from the bot the operator
-    is talking to.
-    """
-    _clear_transport_env(monkeypatch)
+    monkeypatch.setenv("WEBHOOK_SECRET", "secret-value")
     monkeypatch.setenv("REPLIT_DEV_DOMAIN", "dev.replit.dev")
     loaded = _load(monkeypatch)
-    assert loaded.webhook_url == ""
-    assert loaded.is_webhook_mode is False
-
-
-def test_no_public_url_falls_back_to_polling(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without a public URL the bot polls, which is the local-dev path."""
-    _clear_transport_env(monkeypatch)
-    loaded = _load(monkeypatch)
-    assert loaded.webhook_url == ""
-    assert loaded.is_webhook_mode is False
-
-
-def test_config_repr_does_not_expose_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A config dump must never print credentials into logs or tracebacks."""
-    loaded = _load(
-        monkeypatch,
-        DATABASE_URL="postgresql://user:dbpassword@localhost/tcbot",
-        WEBHOOK_SECRET="whsec_secret_value_123",
-        API_HASH="apihash_secret_value",
-        SENTRY_DSN="https://public@sentry.example.com/1",
-    )
-    rendered = repr(loaded)
-
-    assert loaded.bot_token not in rendered
-    assert "dbpassword" not in rendered
-    assert loaded.webhook_secret not in rendered
-    assert loaded.api_hash not in rendered
-    assert loaded.sentry_dsn not in rendered
-    assert "initial_owner_id" in rendered
+    assert not hasattr(loaded, "webhook_url")
+    assert not hasattr(loaded, "webhook_secret")

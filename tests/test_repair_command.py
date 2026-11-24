@@ -67,10 +67,24 @@ def test_tcrepair_lists_the_unsettled_runs(
     monkeypatch.setattr(maintenance.db.enforcement_db, "list_unsettled_runs", _list)
     monkeypatch.setattr(maintenance, "locale_for_update", _locale)
 
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "admin"
+
+    async def _owner(*, fresh: bool = False) -> int:
+        return 1
+
+    monkeypatch.setattr(maintenance.db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(maintenance.db.users_roles, "get_owner_id", _owner)
+
     message = _Message("/tcrepair")
-    update = SimpleNamespace(effective_message=message)
-    ctx = SimpleNamespace(bot=object())
-    asyncio.run(inspect.unwrap(maintenance.cmd_repair)(update, ctx))
+    ctx = SimpleNamespace(
+        bot=object(),
+        effective_message=message,
+        effective_user=SimpleNamespace(id=1, first_name="Admin"),
+        effective_chat=None,
+        user_data={},
+    )
+    asyncio.run(inspect.unwrap(maintenance.cmd_repair)(ctx))
 
     assert message.replies
     assert "42" in message.replies[-1]
@@ -94,10 +108,24 @@ def test_tcrepair_retries_one_run_through_the_worker(
     monkeypatch.setattr(maintenance.enforcement_worker, "deliver_queued_run", _deliver)
     monkeypatch.setattr(maintenance, "locale_for_update", _locale)
 
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "admin"
+
+    async def _owner(*, fresh: bool = False) -> int:
+        return 1
+
+    monkeypatch.setattr(maintenance.db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(maintenance.db.users_roles, "get_owner_id", _owner)
+
     message = _Message("/tcrepair retry 42 -1001")
-    update = SimpleNamespace(effective_message=message)
-    ctx = SimpleNamespace(bot=object())
-    asyncio.run(inspect.unwrap(maintenance.cmd_repair)(update, ctx))
+    ctx = SimpleNamespace(
+        bot=object(),
+        effective_message=message,
+        effective_user=SimpleNamespace(id=1, first_name="Admin"),
+        effective_chat=None,
+        user_data={},
+    )
+    asyncio.run(inspect.unwrap(maintenance.cmd_repair)(ctx))
 
     assert seen == [(42, -1001)]
     assert delivered == [42]
@@ -114,11 +142,24 @@ def test_tcrepair_rejects_an_incomplete_retry(
     monkeypatch.setattr(maintenance.db.enforcement_db, "redrive_run", _redrive)
     monkeypatch.setattr(maintenance, "locale_for_update", _locale)
 
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "admin"
+
+    async def _owner(*, fresh: bool = False) -> int:
+        return 1
+
+    monkeypatch.setattr(maintenance.db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(maintenance.db.users_roles, "get_owner_id", _owner)
+
     message = _Message("/tcrepair retry")
-    update = SimpleNamespace(effective_message=message)
-    asyncio.run(
-        inspect.unwrap(maintenance.cmd_repair)(update, SimpleNamespace(bot=object()))
+    ctx = SimpleNamespace(
+        bot=object(),
+        effective_message=message,
+        effective_user=SimpleNamespace(id=1, first_name="Admin"),
+        effective_chat=None,
+        user_data={},
     )
+    asyncio.run(inspect.unwrap(maintenance.cmd_repair)(ctx))
 
     assert message.replies
     assert "Usage" in message.replies[-1]

@@ -13,9 +13,11 @@ import re
 import threading
 import traceback
 from itertools import islice
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-import telegram.error as _te
+from pyrogram import Client
+from pyrogram.errors import BadRequest, FloodWait, Forbidden, RPCError, Unauthorized
 
 from tcbot import cfg
 from tcbot.database import engine as db_engine
@@ -28,9 +30,27 @@ from tcbot.utils.time_and_date import monotonic
 if TYPE_CHECKING:
     import logging
 
-    from telegram import Bot
 
 log = get_logger("tcbot.error_reporter")
+
+
+class PollingConflictError(RuntimeError):
+    """Another process is already polling the same bot identity."""
+
+
+# * Kurigram names Telegram failures differently from the old framework. The
+# * reporter classifies by exception type, so keep one small local namespace
+# * with the categories it needs.
+_te = SimpleNamespace(
+    RetryAfter=FloodWait,
+    TimedOut=TimeoutError,
+    Conflict=PollingConflictError,
+    BadRequest=BadRequest,
+    Forbidden=Forbidden,
+    InvalidToken=Unauthorized,
+    NetworkError=OSError,
+    TelegramError=RPCError,
+)
 
 # * Log-noise patterns come from log_execution wrapping every handler.
 _BENIGN_PATTERNS: tuple[str, ...] = (
@@ -109,8 +129,8 @@ _ACTION_HINTS: tuple[tuple[str, str], ...] = (
     ("Rate Limit", "Telegram asked to slow down; no action needed unless it persists."),
     ("Timed Out", "Transient Telegram hiccup; retry the action."),
     ("Polling Conflict", "Two bot instances are polling; stop the duplicate."),
-    ("Invalid Token", "Token revoked or wrong; update BOT_TOKEN and restart."),
-    ("Forbidden", "Bot lacks admin rights in the target chat; re-promote it."),
+    ("Invalid Token", "Token revoked or wrong; set BOT_TOKEN and restart."),
+    ("Forbidden", "Client lacks admin rights in the target chat; re-promote it."),
     ("Bad Request", "Check the reported call arguments for a bad ID or text."),
     ("Network", "Transient connectivity issue; retry the action."),
     ("Timeout", "Operation exceeded its deadline; retry the action."),
@@ -137,6 +157,10 @@ def _classify(exc: BaseException | None) -> str:
     """Return a human-readable label tag for the exception."""
     if exc is None:
         return "[?] Unknown"
+    # * AuthKeyDuplicated subclasses RPCError in Kurigram; match dead keys
+    # * before the generic branch so they keep the operator hint.
+    if type(exc).__name__ in _MTPROTO_AUTH_TYPES:
+        return "[~] MTProto Auth Key Invalidated"
     if isinstance(exc, _te.RetryAfter):
         return "[~] Rate Limit: Flood Wait"
     if isinstance(exc, _te.TimedOut):
@@ -172,8 +196,6 @@ def _classify(exc: BaseException | None) -> str:
         x in mod for x in ("httpx", "aiohttp", "urllib3", "ssl")
     ):
         return "[~] Network / Server Error"
-    if type(exc).__name__ in _MTPROTO_AUTH_TYPES:
-        return "[~] MTProto Auth Key Invalidated"
     return "[!] Code Bug"
 
 
@@ -182,18 +204,20 @@ def _classify(exc: BaseException | None) -> str:
 _report_tasks = TaskTracker("error report shipping")
 
 # * Set once during post-init via attach(); owner_id refreshable via set_owner().
-_bot: Bot | None = None
+_bot: Client | None = None
 _chat_id: int = 0
 _thread_id: int | None = None
 _owner_id: int = 0
-# * The loop the reporter ships on. A log record can be emitted from the
-# * Flask webhook thread, where spawn() has no running loop; the reporter
-# * hands that delivery to this loop instead of dropping it.
+# * The loop the reporter ships on. A log record can be emitted from a worker
+# * thread such as the keep-alive server, where spawn() has no running loop;
+# * the reporter hands that delivery to this loop instead of dropping it.
 _loop: asyncio.AbstractEventLoop | None = None
 _cross_thread: set[concurrent.futures.Future[None]] = set()
 
 
-def attach(bot: Bot, chat_id: int, thread_id: int | None, *, owner_id: int = 0) -> None:
+def attach(
+    bot: Client, chat_id: int, thread_id: int | None, *, owner_id: int = 0
+) -> None:
     """Inject bot, log channel, and owner DM target; zero chat falls back to owner DM."""
     global _bot, _chat_id, _thread_id, _owner_id, _loop
     _bot = bot
@@ -251,9 +275,9 @@ def _schedule_record(record: logging.LogRecord) -> None:
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        # * A log record emitted from a worker thread (the Flask webhook
-        # * receiver) has no running loop here. Hand the delivery to the
-        # * loop the reporter was attached on instead of dropping it.
+        # * A log record emitted from a worker thread has no running loop
+        # * here. Hand the delivery to the loop the reporter was attached on
+        # * instead of dropping it.
         loop = _loop
         if loop is not None and loop.is_running():
             # * The loop can close between is_running() and scheduling. Close
@@ -330,9 +354,9 @@ _OWNER_BUDGET: int = 3
 _OWNER_MAX: int = 1000
 _owner_sent: dict[tuple[object, ...], tuple[float, int]] = {}
 # * The logger sink runs on whatever thread emitted the record, including
-# * the Flask webhook thread, while report_exc runs on the event loop. Both
-# * prune and mutate the dedupe maps, so their multi-step updates share a
-# * lock instead of relying on the GIL for compound operations.
+# * the keep-alive server thread, while report_exc runs on the event loop.
+# * Clients prune and mutate the dedupe maps, so their multi-step updates
+# * share a lock instead of relying on the GIL for compound operations.
 _dedupe_lock = threading.Lock()
 
 
@@ -503,11 +527,10 @@ def _scrub_secrets(text: str) -> str:
     """
     try:
         configured = (
-            cfg.bot_token,
-            cfg.database_url,
-            cfg.api_hash,
-            cfg.webhook_secret,
-            cfg.redis_url,
+            getattr(cfg, "bot_token", ""),
+            getattr(cfg, "database_url", ""),
+            getattr(cfg, "api_hash", ""),
+            getattr(cfg, "redis_url", ""),
             getattr(cfg, "sentry_dsn", ""),
         )
     except Exception:
@@ -562,9 +585,9 @@ def build_error_report_payload(
     live in an expandable block. Every dynamic value is redacted before it
     is placed in the rich HTML payload.
     """
-    from tcbot.modules.helper.messages.rich_format import code, heading, pre  # noqa: PLC0415
-    from tcbot.modules.helper.messages.rich_list import bullet_list, details  # noqa: PLC0415
-    from tcbot.modules.helper.messages.rich_style import esc as html_esc  # noqa: PLC0415
+    from tcbot.modules.helper.rich.formats import code, heading, pre  # noqa: PLC0415
+    from tcbot.modules.helper.rich.list import bullet_list, details  # noqa: PLC0415
+    from tcbot.modules.helper.rich.style import esc as html_esc  # noqa: PLC0415
 
     if record and record.exc_info and record.exc_info[1]:
         exc = exc or record.exc_info[1]
@@ -611,7 +634,7 @@ async def _ship_throttled(payload: dict[str, Any]) -> None:
             suppressed = _suppressed_in_window
             _suppressed_in_window = 0
             try:
-                from tcbot.modules.helper.messages.rich_msg import (  # noqa: PLC0415
+                from tcbot.modules.helper.rich.msg import (  # noqa: PLC0415
                     html_message,
                     send_rich,
                 )
@@ -634,7 +657,7 @@ async def _ship_throttled(payload: dict[str, Any]) -> None:
         return
     _sent_in_window += 1
     try:
-        from tcbot.modules.helper.messages.rich_msg import send_rich  # noqa: PLC0415
+        from tcbot.modules.helper.rich.msg import send_rich  # noqa: PLC0415
 
         await send_rich(
             _bot,
@@ -658,7 +681,7 @@ async def send_to_owner(payload: dict[str, Any]) -> None:
     if not _bot or not _owner_id:
         return
     try:
-        from tcbot.modules.helper.messages.rich_msg import send_rich  # noqa: PLC0415
+        from tcbot.modules.helper.rich.msg import send_rich  # noqa: PLC0415
 
         await send_rich(_bot, _owner_id, payload)
     except Exception as exc:

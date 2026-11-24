@@ -78,8 +78,6 @@ jobs:
       MTPROTO_SESSION:         ${{ secrets.MTPROTO_SESSION }}
       API_ID:                  ${{ secrets.API_ID }}
       API_HASH:                ${{ secrets.API_HASH }}
-      WEBHOOK_URL:             ${{ secrets.WEBHOOK_URL }}
-      WEBHOOK_SECRET:          ${{ secrets.WEBHOOK_SECRET }}
       ALBUM_DEBOUNCE_SECONDS:  ${{ secrets.ALBUM_DEBOUNCE_SECONDS }}
       MODULES_LOAD:            ${{ secrets.MODULES_LOAD }}
       MODULES_NO_LOAD:         ${{ secrets.MODULES_NO_LOAD }}
@@ -138,7 +136,7 @@ jobs:
           # * Bounded graceful stop shared by the window-end path, the
           # * self-preempt break above, and the TERM/INT trap below.
           # * uv forwards the SIGTERM to the bot child (since 0.5.x,
-          # * handled by PTB), so any cancellation gets the same 60 s wait
+          # * handled by the Kurigram client), so cancellation gets the same 60 s wait
           # * as a normal window end instead of dying mid-write.
           stop_bot_gracefully() {
             if [ -n "${BOT_PID:-}" ] && kill -0 "$BOT_PID" 2>/dev/null; then

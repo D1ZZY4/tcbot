@@ -7,17 +7,18 @@ state constants are in [reference/callbacks.md](../reference/callbacks.md).
 
 ## Payload shape
 
-`modules/helper/messages/rich_msg.py` owns payload assembly and sends.
+`modules/helper/rich/msg.py` owns payload assembly and sends.
 `html_message(*blocks, rtl=False, skip_entity_detection=False)` returns a
 dictionary with `html` as the newline-joined non-empty blocks. It adds `is_rtl`
 and `skip_entity_detection` only when requested. `blocks_message(blocks)` returns
 `{"blocks": blocks}` for callers that supply explicit block objects.
 
 `_message_with_buttons(message, reply_markup)` converts the markup with
-`keyboard_rows()` and, when rows exist and `message["html"]` is a string,
+`buttons_from_markup()` and, when rows exist and `message["html"]` is a string,
 appends the rows to the HTML with a newline. It returns `(payload, embedded)`.
-The send and edit helpers add `reply_markup` to the API call only when
-`embedded` is false.
+The send and edit helpers always embed convertible buttons as rich markup.
+No inline keyboard is attached as a fallback; a cell that cannot convert is
+rendered as a disabled rich button instead.
 
 | Field | Set by | Meaning |
 |---|---|---|
@@ -33,16 +34,14 @@ The send and edit helpers add `reply_markup` to the API call only when
 ```mermaid
 flowchart TD
     CALL[reply_rich or send_rich] --> BUILT[html_message payload]
-    BUILT --> CONVERT{keyboard_rows returns rows and html is a string?}
+    BUILT --> CONVERT{buttons_from_markup returns rows and html is a string?}
     CONVERT -->|yes| EMBED[Append tg-button-row markup to html]
     CONVERT -->|no| INLINE[Keep reply_markup as inline keyboard]
-    EMBED --> API[Bot.do_api_request sendRichMessage]
+    EMBED --> API[Client.send_rich_message with InputRichMessage]
     INLINE --> API
     API --> MSG[Message returned by send_rich]
-    REPLY[reply_rich] --> NORICH{get_bot is a real PTB Bot with do_api_request?}
-    NORICH -->|no| PLAIN[msg.reply_text fallback for test doubles]
-    NORICH -->|yes| SEND[send_rich with chat id and reply_to_message_id]
-    SEND -->|exception| LOG[log.debug log_label]
+    REPLY[reply_rich] --> SEND[msg.reply_rich with InputRichMessage]
+    SEND -->|exception| LOG[log.debug or log.warning by log_label]
 ```
 
 | Helper | Signature summary | Returns |
@@ -52,36 +51,30 @@ flowchart TD
 | `html_message` | `html_message(*blocks, rtl=False, skip_entity_detection=False)` | payload dictionary |
 | `blocks_message` | `blocks_message(blocks)` | payload dictionary |
 
-`reply_rich` is the single fire-and-forget reply owner for commands and flows.
-It reads the bot through `msg.get_bot()`; if that is not a PTB `Bot`, it falls
-back to `msg.reply_text(text, **kwargs)` for lightweight test doubles.
-`parse_mode` is accepted for call-site compatibility and discarded with
-`_ = parse_mode`. `send_rich` raises `RuntimeError` when the bot has no
-`do_api_request` support.
+`reply_rich` is the single fire-and-forget reply owner for commands and flows. It
+calls `msg.reply_rich()` with a native `InputRichMessage`, so rich HTML is rendered
+by Kurigram itself. There is no bot lookup, no test-double fallback and no
+capability check. `parse_mode` is accepted for call-site compatibility and
+discarded with `_ = parse_mode`.
 
 ## Edits
 
 ```mermaid
 flowchart TD
-    CALL[safe_edit, safe_edit_cb or safe_edit_message] --> READY{Real PTB Bot with chat and message id?}
-    READY -->|no| PTB[PTB edit_text or edit_message_text fallback]
-    READY -->|yes| RICH[edit_rich with html_message payload]
-    PTB --> BAD{BadRequest in _IGNORED?}
-    RICH --> BAD
-    BAD -->|yes| IGNORE[Return silently]
-    BAD -->|no| LEVEL[Log at log_level with log_label]
-    PTB --> CATCH{catch_all enabled?}
-    RICH --> CATCH
+    CALL[safe_edit, safe_edit_cb or safe_edit_message] --> RICH[Native edit with rich_message payload]
+    RICH --> BAD{Text matches _IGNORED?}
+    BAD -->|yes| DONE[Return silently or False]
+    BAD -->|no| CATCH{catch_all enabled?}
     CATCH -->|no| RAISE[Re-raise]
-    CATCH -->|yes| LEVEL
+    CATCH -->|yes| LEVEL[Log at log_level with log_label]
 ```
 
 | Helper | Signature summary | Notes |
 |---|---|---|
-| `edit_rich` | `edit_rich(bot, chat_id, message_id, message, *, reply_markup=None)` | Calls PTB's native `bot.edit_message_text` with the rich payload in `api_kwargs` and returns `Message`. Raises `RuntimeError` when the bot lacks `edit_message_text`. |
-| `safe_edit` | `safe_edit(msg, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits a `Message`; falls back to `msg.edit_text`. |
-| `safe_edit_cb` | `safe_edit_cb(q, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits `q.message`; falls back to `q.edit_message_text`. |
-| `safe_edit_message` | `safe_edit_message(bot, chat_id, message_id, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits by id; falls back to `bot.edit_message_text`. |
+| `edit_rich` | `edit_rich(bot, chat_id, message_id, message, *, reply_markup=None)` | Calls `bot.edit_message_text(..., rich_message=InputRichMessage(...))` and returns the edited `Message`. |
+| `safe_edit` | `safe_edit(msg, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits via `msg.edit_text(rich_message=...)`. |
+| `safe_edit_cb` | `safe_edit_cb(q, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits via `q.edit_message_text(rich_message=...)`. |
+| `safe_edit_message` | `safe_edit_message(bot, chat_id, message_id, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits by id via `bot.edit_message_text(rich_message=...)`. |
 | `cb_error_edit` | `cb_error_edit(q, text, *, log_label, parse_mode=None, log_level="warning")` | `safe_edit_cb` with an explicitly empty inline keyboard and `catch_all=True`. |
 | `clear_markup_cb` | `clear_markup_cb(q)` | Removes the inline keyboard only; keeps `_IGNORED` BadRequests silent. |
 
@@ -89,23 +82,23 @@ flowchart TD
 and `"chat not found"`. `_edit_via()` and `safe_edit_message()` return `True`
 on success or an unchanged message, and `False` when the target message is
 gone so a caller that owns a durable slot can send a fresh post instead of
-re-editing a dead id. Other `BadRequest`s are logged and return `False`;
-`catch_all` applies only to non-`BadRequest` exceptions. `parse_mode` is
-accepted and ignored by the safe helpers.
+re-editing a dead id. Unexpected exceptions are logged and return `False`, or are
+re-raised when `catch_all` is false. `parse_mode` is accepted and ignored by the
+safe helpers.
 
 ## Inline keyboard to rich buttons
 
-`modules/helper/messages/rich_link.py` owns `keyboard_rows(reply_markup)` and
-`keyboard_button(cell)`. `keyboard_rows` is all-or-nothing: one unmappable cell
-makes the whole keyboard stay inline. `_markup_dict()` accepts a dict directly
-or calls `to_dict()` on a PTB markup object.
+`modules/helper/rich/button.py` owns `buttons_from_markup(reply_markup)` and
+`button_from_cell(cell)`. `buttons_from_markup` is all-or-nothing: one unmappable
+cell makes the whole keyboard stay inline. `_markup_dict()` accepts a dict directly
+or calls `to_dict()` on a Kurigram markup object.
 
 ```mermaid
 flowchart TD
     MARKUP[reply_markup] --> DICT[_markup_dict]
     DICT --> CELLS{inline_keyboard list present and non-empty?}
     CELLS -->|no| INLINE[Keep inline keyboard]
-    CELLS -->|yes| EACH[For each cell: keyboard_button]
+    CELLS -->|yes| EACH[For each cell: button_from_cell]
     EACH --> TEXT{text is a string?}
     TEXT -->|no| INLINE
     TEXT -->|yes| DATA{callback_data present?}
@@ -125,20 +118,21 @@ HTML already ends with one, so the last content line never sits flush against
 the keyboard. That separator is added only when buttons are embedded.
 
 The rich button tags are `<tg-button ...>label</tg-button>` inside
-`<tg-button-row align="...">`. `button()` in `rich_link.py` can emit callback,
+`<tg-button-row align="...">`. `button()` in `rich/button.py` can emit callback,
 url, copy-text, Web App, login URL, three switch-inline-query variants, and
-disabled buttons for direct rich callers.
+disabled buttons for direct rich callers. `button_from_cell()` maps every one of
+those Kurigram cell types, so normal keyboards ship as rich buttons.
 
 | Condition | Result |
 |---|---|
 | `callback_data` longer than 64 bytes (`_CALLBACK_MAX_BYTES = 64`) | Whole keyboard stays inline. |
-| Cell with `web_app`, `login_url`, `switch_inline_query*`, `copy_text`, or `disabled` | `keyboard_button()` returns `None`; whole keyboard stays inline. |
-| Cell without string `text`, or with neither `callback_data` nor `url` | `keyboard_button()` returns `None`; whole keyboard stays inline. |
-| Unsupported PTB style value | Style is dropped to `None`; the button still converts. |
+| Cell with `web_app`, `login_url`, `switch_inline_query*`, `copy_text`, or `disabled` | `button_from_cell()` returns `None`; whole keyboard stays inline. |
+| Cell without string `text`, or with neither `callback_data` nor `url` | `button_from_cell()` returns `None`; whole keyboard stays inline. |
+| Unsupported Kurigram style value | Style is dropped to `None`; the button still converts. |
 | Payload has `blocks` rather than `html` | `_message_with_buttons()` does not embed; `reply_markup` stays inline. |
 | No markup at all | No buttons in either representation. |
 
-Accepted PTB styles are `primary`, `success`, `danger`, and `link`. Friendly
+Accepted Kurigram styles are `primary`, `success`, `danger`, and `link`. Friendly
 names map as `default` to empty, `blue` to `primary`, `green` to `success`, and
 `red` to `danger`. Rows hold up to eight buttons; an unknown alignment is
 ignored. Which style each button uses is a semantic decision documented in
@@ -148,7 +142,7 @@ ignored. Which style each button uses is a semantic decision documented in
 
 Rich HTML collapses plain newline characters, so a catalog string or a view
 built with `"\n".join(lines)` must be grouped into real blocks before sending.
-`messages/rich_text.py::blocks()` owns that conversion:
+`rich/text.py::blocks()` owns that conversion:
 
 | Input lines | Rich output |
 |---|---|
@@ -179,19 +173,19 @@ preformatted example block.
 | `answer_and_edit(q, text, **kwargs)` | `q.answer()` and `safe_edit_cb()` in one `asyncio.gather(..., return_exceptions=True)`. |
 | `ack_and_render(q, data_coro)` | `q.answer()` parallel to a data coroutine returning `(text, markup)`, then `safe_edit_cb()`. |
 | `cb_error_edit(q, text, *, log_label, ...)` | Ack-style replacement of the message with a notice and no keyboard. |
-| `clear_markup_cb(q)` | `q.edit_message_reply_markup(reply_markup=None)` only. |
+| `clear_markup_cb(q)` | `q.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))` to remove the keyboard. |
 
 Callback answers are plain text and have no rich equivalent. Handlers call
 `await q.answer()` before visible work; the shared answer helpers are used where
 the call site needs either a silent ack or an alert. `callback_args`,
-`callback_args_optional`, and `callback_numbers` in `rich_edit.py` split `q.data`
+`callback_args_optional`, and `callback_numbers` in `rich/edit.py` split `q.data`
 on `:` and return `None` on malformed payloads.
 
 ## Parse mode
 
 No parse mode is selected anywhere in the application. `reply_rich`,
 `safe_edit`, `safe_edit_cb`, `safe_edit_message`, and `cb_error_edit` accept a
-`parse_mode` argument and discard it. Direct PTB fallback calls pass no parse
+`parse_mode` argument and discard it. Direct Kurigram fallback calls pass no parse
 mode; some appeal call sites pass `parse_mode=None` explicitly. There is no
 application-level default parse-mode setting in `__main__.py`.
 
@@ -202,19 +196,18 @@ one style convention: `` `code` `` for commands and IDs, `*bold*` for field
 labels, and `~italic~` for short secondary qualifiers. Titles use `heading()`
 at the panel boundary, and a divider separates content from any keyboard.
 Rich HTML escaping for button labels and attributes is `esc()` in
-`rich_style.py`, backed by `html.escape`. The richer formatting primitives live in `rich_format.py`
+`rich/style.py`, backed by `html.escape`. The richer formatting primitives live in `rich/formats.py`
 (`heading`, `paragraph`, `quote` with an optional author, `pull_quote`,
 `highlight` with an optional author, `code`, `pre`, `code_block`, `footnote`,
 `footnote_ref`, `divider`, `footer`, `anchor`, `math`, `math_block`, `time_tag`,
-`emoji`), `rich_style.py` (`bold`, `italic`, `underline`, `strike`, `spoiler`,
-`subscript`, `superscript`), `rich_list.py` (`bullet_list`, `ordered_list` with
-`start`/`marker`/`reversed_order`, `checklist`, `details`), `rich_table.py`
-(`table`), and `rich_media.py` (`photo`, `video`, `slideshow`,
-`proof_slideshow`, `collage`).
-`rich_text.py` exposes `style(text)`, a verbatim passthrough, and `blocks()`,
+`emoji`), `rich/style.py` (`bold`, `italic`, `underline`, `strike`, `spoiler`,
+`subscript`, `superscript`), `rich/list.py` (`bullet_list`, `ordered_list` with
+`start`/`marker`/`reversed_order`, `checklist`, `details`), `rich/table.py`
+(`table`), and `rich/media.py` (`photo`, `video`, `slideshow`, `collage`).
+`rich/text.py` exposes `style(text)`, a verbatim passthrough, and `blocks()`,
 which converts a rendered multiline fragment into rich block markup. Rich
 messages carry their own markup, so sends and edits must use the rich helpers;
-a direct PTB send leaves the HTML tags visible to users.
+a direct Kurigram send leaves the HTML tags visible to users.
 
 ## Audit logs and deep links
 
@@ -222,9 +215,8 @@ a direct PTB send leaves the HTML tags visible to users.
 `detail_field`, `field`, `code_field`, `mention_field`, `link_field`, `raw`,
 `section`, `date`, and `build`. Field entries render as rich bulleted lists;
 `raw` keeps free-form prose and `section` inserts a divider between lists.
-`send_log(bot, text, **kwargs)` in `rich_edit.py` posts to `cfg.logs`
-(chat and thread) through `send_rich`; it falls back to `bot.send_message` for a
-non-rich-ready bot.
+`send_log(bot, text, **kwargs)` in `rich/edit.py` always posts to `cfg.logs`
+(chat and thread) through `send_rich`.
 
 | Builder group | Names |
 |---|---|
@@ -252,8 +244,8 @@ A URL button is dropped when its link is empty: `additional_menu_btn()`,
 ## Error reports
 
 `error_reporter.py` builds a rich payload with `build_error_report_payload()`
-using `rich_format.heading`, `rich_list.details`, `rich_list.bullet_list`,
-`rich_format.code`, and `rich_format.pre`. Every dynamic value passes through
+using `rich.formats.heading`, `rich.list.details`, `rich.list.bullet_list`,
+`rich.formats.code`, and `rich.formats.pre`. Every dynamic value passes through
 `_scrub_secrets()` before placement in the HTML. `_ship_throttled()` sends to
 the configured error destination with `send_rich`, capped at 20 reports per 60
 seconds and rolling the suppressed count into one summary.

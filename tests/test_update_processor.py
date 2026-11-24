@@ -4,7 +4,7 @@
 
 """The keyed update processor keeps one conversation ordered.
 
-python-telegram-bot documents that ``ConversationHandler`` "heavily relies on
+A conversation handler "heavily relies on
 incoming updates being processed one by one", yet the stock
 ``concurrent_updates=True`` starts every update immediately with no ordering
 guarantee. Two taps on the same button could therefore interleave inside a
@@ -22,7 +22,6 @@ import inspect
 from typing import Any
 
 import pytest
-from telegram import Update
 
 from tcbot.utils.update_processor import KeyedUpdateProcessor, conversation_key
 
@@ -37,11 +36,10 @@ class _FakeUser:
         self.id = user_id
 
 
-class _FakeUpdate(Update):
-    """Minimal Update double carrying only an effective chat and user."""
+class _FakeUpdate:
+    """Minimal update double carrying only an effective chat and user."""
 
     def __init__(self, chat_id: int, user_id: int) -> None:
-        super().__init__(update_id=0)
         self._chat = _FakeChat(chat_id)
         self._user = _FakeUser(user_id)
 
@@ -190,8 +188,8 @@ def test_a_queued_update_closes_its_coroutine_on_cancellation() -> None:
 def test_a_burst_on_one_conversation_does_not_starve_the_others() -> None:
     """Updates queued on one conversation must not occupy the global slots.
 
-    PTB's ``BaseUpdateProcessor.process_update`` takes a global concurrency
-    slot before the per-key lock, so every update waiting on a busy
+    A global concurrency slot taken before the per-key lock would make every
+    update waiting on a busy
     conversation used to hold a slot. A burst large enough to fill the cap
     then starved every other chat in the federation. The processor takes
     the key lock first, so the cap bounds the handlers that run.

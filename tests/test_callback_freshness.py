@@ -40,7 +40,7 @@ def _make(
 
     query = SimpleNamespace(
         data="kick_cancel",
-        message=SimpleNamespace(chat=SimpleNamespace(id=_CHAT), message_id=update_id),
+        message=SimpleNamespace(chat=SimpleNamespace(id=_CHAT), id=update_id),
         answer=_answer,
         edit_message_text=_noop,
     )

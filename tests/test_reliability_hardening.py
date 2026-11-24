@@ -10,7 +10,7 @@ import asyncio
 import contextlib
 from datetime import timedelta
 
-from tcbot.modules.helper.messages.rich_link import user_ref
+from tcbot.modules.helper.rich.link import user_ref
 from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.time_and_date import parse_duration
 

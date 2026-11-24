@@ -19,13 +19,13 @@ each destructive command individually.
 
 ```mermaid
 flowchart TD
-    U([Update]) --> G["TypeHandler(Update, global_rate_limit_handler), group -1"]
+    U([Update]) --> G["per-handler ratelimiter decorator"]
     G --> Q{"update type"}
     Q -->|callback_query| CB{"Owner exempt?"}
     CB -->|yes| PASS[Pass to module handlers]
     CB -->|no| CBL{"_cbq_limiter.check: 20 / 10 s?"}
     CBL -->|allowed| PASS
-    CBL -->|wait| CBSTOP[answer with alert, raise ApplicationHandlerStop]
+    CBL -->|wait| CBSTOP[answer with alert, stop]
     Q -->|command message| TXT{"Starts with a configured prefix?"}
     TXT -->|no| PASS
     TXT -->|yes| TIER["_throttle_tier(uid): exempt / staff / regular"]
@@ -35,13 +35,12 @@ flowchart TD
     SL --> CHK{"wait returned?"}
     RL --> CHK
     CHK -->|no| PASS
-    CHK -->|yes| STOP[Reply with wait seconds, raise ApplicationHandlerStop]
+    CHK -->|yes| STOP[Reply with wait seconds, stop]
     PASS --> H[Module handlers, then per-handler ratelimiter]
 ```
 
-The global handler is registered in `tcbot/__main__.py` as
-`TypeHandler(Update, global_rate_limit_handler)` at
-`_HANDLER_GROUP_RATE_LIMITER = -1`, before all module handlers. It returns
+Rate limiting is applied by the per-handler `ratelimiter()` decorator. There is
+no globally registered flood handler in the Kurigram runtime. It returns
 immediately for plain chat messages that do not start with a configured prefix,
 so ordinary conversation is never rate limited.
 
@@ -147,9 +146,8 @@ two-level cache in `database/cache/twolevel.py`.
 
 ## Flood wait and retry storm avoidance
 
-- A throttled command answers once with the computed wait and raises
-  `ApplicationHandlerStop`, so later handlers in the same group never see the
-  update and the user gets no duplicate work.
+- A throttled command answers once with the computed wait and stops, so the user
+  gets no duplicate work.
 - A throttled callback answers with `show_alert=True` so the client spinner
   clears immediately.
 - The wait is derived from the oldest timestamp in the window, so a user sees

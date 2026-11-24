@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.messages import message_link
-from tcbot.modules.helper.messages.rich_format import heading
-from tcbot.modules.helper.messages.rich_table import table
+from tcbot.modules.helper.rich.formats import heading
+from tcbot.modules.helper.rich.table import table
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, divider, t, user_ref
 from tcbot.utils.logger import get_logger

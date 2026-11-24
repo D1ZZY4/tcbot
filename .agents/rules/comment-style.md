@@ -64,9 +64,9 @@ Bad:
 
 ```python
 # The main function that starts the entire bot application.
-# Configures PTB Application and registers all handlers.
+# Configures the bot application and registers all handlers.
 def main() -> None:
-    """Configure and start the PTB application..."""
+    """Configure and start the bot application..."""
 ```
 
 The comments duplicate the function's name and docstring.

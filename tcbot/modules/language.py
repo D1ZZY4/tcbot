@@ -7,14 +7,14 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
 
-from telegram import InlineKeyboardMarkup
-from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
+from pyrogram.types import InlineKeyboardMarkup
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, decorators
+from tcbot.modules.helper.context import Ctx, chat_id_of
+from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.identity import can_manage_group
 from tcbot.modules.helper.locale import effective_locale
 from tcbot.modules.helper.messages import (
@@ -23,7 +23,7 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     safe_edit_cb,
 )
-from tcbot.modules.helper.messages.rich_format import heading, quote
+from tcbot.modules.helper.rich.formats import heading, quote
 from tcbot.utils.i18n import (
     Safe,
     available_locales,
@@ -35,9 +35,6 @@ from tcbot.utils.i18n import (
 )
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -75,9 +72,9 @@ _LIST_PATTERN: str = rf"^lang:list:{_SCOPE_RE}$"
 _SET_PATTERN: str = rf"^lang:set:{_SCOPE_RE}:{_LOCALE_RE}$"
 
 
-def _chat_scope(chat_type: str | None) -> str:
+def _chat_scope(chat_type: object) -> str:
     """Map a chat type to the locale scope it reads: user in PM, group otherwise."""
-    return "user" if chat_type == "private" else "group"
+    return "user" if getattr(chat_type, "value", chat_type) == "private" else "group"
 
 
 def _options_btn(scope: str, locale: str) -> InlineKeyboardMarkup:
@@ -128,17 +125,17 @@ def _confirmation_text(scope: str, chosen: str) -> str:
 
 @decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
-async def cmd_language(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_language(ctx: Ctx) -> None:
     """Show the language panel: personal in PM, group-wide in groups."""
-    msg = update.effective_message
-    user = update.effective_user
-    chat = update.effective_chat
+    msg = ctx.effective_message
+    user = ctx.effective_user
+    chat = ctx.effective_chat
     if msg is None or user is None or chat is None:
         return
     scope = _chat_scope(chat.type)
-    locale = await effective_locale(chat.type, user.id, chat.id)
+    locale = await effective_locale(chat.type, user.id, chat_id_of(chat))
     if scope == "group":
-        permitted = await can_manage_group(ctx.bot, chat.id, user.id)
+        permitted = await can_manage_group(ctx.bot, chat_id_of(chat), user.id)
     else:
         permitted = True
     if permitted:
@@ -155,17 +152,17 @@ async def cmd_language(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_language_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_language_menu(ctx: Ctx) -> None:
     """Open the personal language panel from the start-menu Language button."""
-    q = update.callback_query
-    user = update.effective_user
-    chat = update.effective_chat
+    q = ctx.callback_query
+    user = ctx.effective_user
+    chat = ctx.effective_chat
     if q is None or user is None or chat is None:
         if q is not None:
             await q.answer()
         return
     await q.answer()
-    locale = await effective_locale(chat.type, user.id, chat.id)
+    locale = await effective_locale(chat.type, user.id, chat_id_of(chat))
     await safe_edit_cb(
         q,
         _panel_text("user", locale),
@@ -184,16 +181,19 @@ async def on_language_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_lang_list(ctx: Ctx) -> None:
     """Re-render the option list (Back target of confirmations)."""
-    q = update.callback_query
-    user = update.effective_user
-    chat = update.effective_chat
+    q = ctx.callback_query
+    user = ctx.effective_user
+    chat = ctx.effective_chat
     if q is None or q.data is None or user is None or chat is None:
         if q is not None:
             await q.answer()
         return
-    match = re.fullmatch(_LIST_PATTERN, q.data)
+    data = q.data
+    if isinstance(data, bytes):
+        data = data.decode("utf-8", "replace")
+    match = re.fullmatch(_LIST_PATTERN, data)
     if match is None:
         await q.answer()
         return
@@ -202,11 +202,11 @@ async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await q.answer()
         return
     if scope == "group" and not await can_manage_group(
-        ctx.bot, chat.id, user.id, fresh=True
+        ctx.bot, chat_id_of(chat), user.id, fresh=True
     ):
         # * Re-rendering the group panel is a group-management action, so
         # * the same check the save path applies guards the Back target.
-        denied_locale = await effective_locale(chat.type, user.id, chat.id)
+        denied_locale = await effective_locale(chat.type, user.id, chat_id_of(chat))
         try:
             await q.answer(
                 t("language.denied", denied_locale, plain=True), show_alert=True
@@ -215,7 +215,7 @@ async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             log.debug("language denied answer failed: %s", exc)
         return
     await q.answer()
-    locale = await effective_locale(chat.type, user.id, chat.id)
+    locale = await effective_locale(chat.type, user.id, chat_id_of(chat))
     back_callback = "back_to_start" if scope == "user" else None
     await safe_edit_cb(
         q,
@@ -235,17 +235,20 @@ async def on_lang_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_lang_set(ctx: Ctx) -> None:
     """Save the tapped locale and edit the panel into a confirmation."""
-    q = update.callback_query
-    user = update.effective_user
-    chat = update.effective_chat
-    msg = update.effective_message
+    q = ctx.callback_query
+    user = ctx.effective_user
+    chat = ctx.effective_chat
+    msg = ctx.effective_message
     if q is None or q.data is None or user is None or chat is None:
         if q is not None:
             await q.answer()
         return
-    match = re.fullmatch(_SET_PATTERN, q.data)
+    data = q.data
+    if isinstance(data, bytes):
+        data = data.decode("utf-8", "replace")
+    match = re.fullmatch(_SET_PATTERN, data)
     if match is None:
         await q.answer()
         return
@@ -258,7 +261,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * reader's own setting is still resolvable. The query is answered per
     # * branch: Telegram accepts one answer, so an ack here would make the
     # * denial alerts impossible to show.
-    tapper_locale = await effective_locale(chat.type, user.id, chat.id)
+    tapper_locale = await effective_locale(chat.type, user.id, chat_id_of(chat))
     if not is_known_locale(raw_locale):
         try:
             await q.answer(
@@ -269,7 +272,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     locale = raw_locale
     if scope == "group":
-        if not await can_manage_group(ctx.bot, chat.id, user.id, fresh=True):
+        if not await can_manage_group(ctx.bot, chat_id_of(chat), user.id, fresh=True):
             try:
                 await q.answer(
                     t("language.denied", tapper_locale, plain=True), show_alert=True
@@ -282,12 +285,12 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             # * even though they are not connected federation groups, so
             # * their locale stays configurable.
             connected = (
-                cfg.is_primary_group(chat.id)
-                or cfg.is_infrastructure_chat(chat.id)
-                or await db.groups_db.is_connected(chat.id, fresh=True)
+                cfg.is_primary_group(chat_id_of(chat))
+                or cfg.is_infrastructure_chat(chat_id_of(chat))
+                or await db.groups_db.is_connected(chat_id_of(chat), fresh=True)
             )
         except Exception as exc:
-            log.debug("language is_connected failed for %d: %s", chat.id, exc)
+            log.debug("language is_connected failed for %d: %s", chat_id_of(chat), exc)
             connected = False
         if not connected:
             await answer_ack(q)
@@ -299,9 +302,9 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 )
             return
         try:
-            saved = await db.groups_db.set_group_locale(chat.id, locale)
+            saved = await db.groups_db.set_group_locale(chat_id_of(chat), locale)
         except Exception:
-            log.exception("set_group_locale failed for chat %d", chat.id)
+            log.exception("set_group_locale failed for chat %d", chat_id_of(chat))
             await answer_ack(q)
             if msg is not None:
                 await reply_rich(
@@ -314,7 +317,7 @@ async def on_lang_set(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             # * An infrastructure chat without a settings row is an UPDATE
             # * that matches nothing. Never claim the locale was saved when
             # * no row changed; the next render would still use the default.
-            log.warning("set_group_locale matched no row for chat %d", chat.id)
+            log.warning("set_group_locale matched no row for chat %d", chat_id_of(chat))
             await answer_ack(q)
             if msg is not None:
                 await reply_rich(

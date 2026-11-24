@@ -66,9 +66,7 @@ def test_member_cache_skips_when_at_cap(monkeypatch: pytest.MonkeyPatch) -> None
                 "last_name": None,
             },
         )()
-        update = type("Upd", (), {"effective_user": user})()
-        ctx = type("Ctx", (), {"user_data": {}})()
-        await members._update_member_cache(update, ctx)  # type: ignore[arg-type]
+        await members._cache_identity(object(), user)  # type: ignore[arg-type]
         assert (
             members._member_cache_tasks.pending == members._MEMBER_CACHE_MAX_CONCURRENT
         )

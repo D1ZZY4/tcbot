@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import asyncio
 from enum import Enum
-from typing import TYPE_CHECKING
 
-from telegram.error import Forbidden
+from pyrogram import Client
+from pyrogram.errors import Forbidden
 
 from tcbot import cfg
 from tcbot import database as db
@@ -20,9 +20,6 @@ from tcbot.modules.helper.messages import send_log, send_text
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, t
 from tcbot.utils.logger import get_logger
-
-if TYPE_CHECKING:
-    from telegram import Bot
 
 log = get_logger(__name__)
 
@@ -77,7 +74,7 @@ class Demote:
     @classmethod
     async def execute(
         cls,
-        bot: Bot,
+        bot: Client,
         target_id: int,
         target_fname: str,
         target_role: str,
@@ -201,7 +198,7 @@ class Demote:
 
 
 async def demote_before_enforcement(
-    bot: Bot,
+    bot: Client,
     target_id: int,
     target_fname: str,
     *,
@@ -271,7 +268,7 @@ async def demote_before_enforcement(
 
 
 async def demote_before_unban(
-    bot: Bot,
+    bot: Client,
     target_id: int,
     target_fname: str,
     target_role: str,

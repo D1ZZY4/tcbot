@@ -10,21 +10,21 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from telegram import InlineKeyboardMarkup, Update
-from telegram.ext import (
-    CallbackQueryHandler,
-    ContextTypes,
-    ConversationHandler,
-    MessageHandler,
-    filters,
-)
-from telegram.ext.filters import BaseFilter
+from pyrogram import filters
+from pyrogram.filters import Filter as BaseFilter
+from pyrogram.types import InlineKeyboardMarkup
 
 from tcbot import database as db
 from tcbot.modules.helper import guards
 from tcbot.modules.helper.buttons import reason_step_btn
 from tcbot.modules.helper.buttons import rules as rules_btn
+from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.extraction import parse_user_id_token
+from tcbot.modules.helper.handlers import (
+    CallbackQueryHandler,
+    ConversationHandler,
+    MessageHandler,
+)
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     replies,
@@ -34,10 +34,7 @@ from tcbot.modules.helper.messages import (
     safe_edit_message,
 )
 from tcbot.modules.helper.pipelines import rules_picker
-from tcbot.modules.helper.pipelines.proof_steps import (
-    PROOF_MEDIA_FILTER,
-    BuildProof,
-)
+from tcbot.modules.helper.pipelines.proof_steps import PROOF_MEDIA_FILTER, BuildProof
 from tcbot.modules.helper.scope import (
     callback_is_current,
     clear_flow_scope,
@@ -210,13 +207,12 @@ class _FlowBase:
 
     async def _edit_prompt(
         self,
-        update: Update,
-        ctx: ContextTypes.DEFAULT_TYPE,
+        ctx: Ctx,
         text: str,
         markup: InlineKeyboardMarkup,
     ) -> bool:
         """Edit the shared prompt message, replying when it cannot be edited."""
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         chat_id = scope.get(self._prompt_chat_key)
         message_id = scope.get(self._prompt_id_key)
         try:
@@ -225,7 +221,7 @@ class _FlowBase:
                     ctx.bot, chat_id, message_id, text, reply_markup=markup
                 )
             else:
-                msg = update.effective_message
+                msg = ctx.effective_message
                 if msg is None:
                     return False
                 await reply_rich_result(msg, text, reply_markup=markup)
@@ -234,30 +230,26 @@ class _FlowBase:
             log.debug("%s prompt edit failed: %s", self.action, exc)
             return False
 
-    async def _show_proof_prompt(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, prompt_txt: str
-    ) -> int:
+    async def _show_proof_prompt(self, ctx: Ctx, prompt_txt: str) -> int:
         """Render the proof prompt and enter the proof state."""
-        locale = await locale_for_update(update)
-        if not await self._edit_prompt(
-            update, ctx, prompt_txt, self.proof.keyboard(locale)
-        ):
-            self._clear_scope(ctx, update)
+        locale = await locale_for_update(ctx)
+        if not await self._edit_prompt(ctx, prompt_txt, self.proof.keyboard(locale)):
+            self._clear_scope(ctx)
             return ConversationHandler.END
         return WAITING_PROOF
 
-    def _callback_is_live(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> bool:
+    def _callback_is_live(self, ctx: Ctx) -> bool:
         """Reject a tap on a button left behind by an earlier conversation."""
         return callback_is_current(
-            update,
-            flow_scope(ctx, update),
+            ctx,
+            flow_scope(ctx),
             chat_key=self._prompt_chat_key,
             message_key=self._prompt_id_key,
         )
 
-    async def _ignore_stale_callback(self, update: Update) -> None:
+    async def _ignore_stale_callback(self, ctx: Ctx) -> None:
         """Acknowledge a stale tap without touching the current conversation."""
-        query = update.callback_query
+        query = ctx.callback_query
         if query is None:
             return
         try:
@@ -265,23 +257,21 @@ class _FlowBase:
         except Exception as exc:
             log.debug("%s stale callback answer failed: %s", self.action, exc)
 
-    def _clear_scope(self, ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> None:
+    def _clear_scope(self, ctx: Ctx) -> None:
         """Remove all action keys from the conversation scope.
 
         Only this action's keys go: another conversation may hold its own payload
         in the same conversation scope.
         """
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         prefix = f"{self.action}_"
-        clear_flow_scope(ctx, update, keys=[k for k in scope if k.startswith(prefix)])
+        clear_flow_scope(ctx, keys=[k for k in scope if k.startswith(prefix)])
 
-    async def _recheck_tapper(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> bool:
+    async def _recheck_tapper(self, ctx: Ctx) -> bool:
         """Re-verify the tapper still meets min_role."""
-        q = update.callback_query
-        tap_user = update.effective_user
-        tap_msg = update.effective_message
+        q = ctx.callback_query
+        tap_user = ctx.effective_user
+        tap_msg = ctx.effective_message
         if tap_user is None or tap_msg is None:
             if q is not None:
                 try:
@@ -298,20 +288,18 @@ class _FlowBase:
                 await q.answer()
             except Exception as exc:
                 log.debug("%s recheck q.answer failed: %s", self.action, exc)
-        self._clear_scope(ctx, update)
+        self._clear_scope(ctx)
         return False
 
-    async def _on_cancel(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int | None:
-        q = update.callback_query
+    async def _on_cancel(self, ctx: Ctx) -> int | None:
+        q = ctx.callback_query
         if q is None:
             return ConversationHandler.END
-        if not self._callback_is_live(update, ctx):
-            await self._ignore_stale_callback(update)
+        if not self._callback_is_live(ctx):
+            await self._ignore_stale_callback(ctx)
             return None
-        self._clear_scope(ctx, update)
-        locale = await locale_for_update(update)
+        self._clear_scope(ctx)
+        locale = await locale_for_update(ctx)
         results = await asyncio.gather(
             q.answer(),
             safe_edit_cb(
@@ -331,12 +319,12 @@ class _FlowBase:
             )
         return ConversationHandler.END
 
-    async def _on_end_conv(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        self._clear_scope(ctx, update)
-        if update.effective_message:
-            locale = await locale_for_update(update)
+    async def _on_end_conv(self, ctx: Ctx) -> int:
+        self._clear_scope(ctx)
+        if ctx.effective_message:
+            locale = await locale_for_update(ctx)
             await reply_rich(
-                update.effective_message,
+                ctx.effective_message,
                 t(
                     "reason.cancel.via_command",
                     locale,
@@ -355,11 +343,11 @@ class _FlowBase:
 class _ProofStepMixin(_FlowBase):
     """Proof buffer, Done/Skip execution, and unexpected handlers."""
 
-    async def _on_proof(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        msg = update.effective_message
+    async def _on_proof(self, ctx: Ctx) -> int:
+        msg = ctx.effective_message
         if msg is None or ctx.user_data is None:
             return WAITING_PROOF
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         if scope.get(self._exec_key):
             return ConversationHandler.END
         if msg.photo or msg.video or msg.animation or msg.document:
@@ -367,18 +355,16 @@ class _ProofStepMixin(_FlowBase):
             scope[self._proof_msgs_key] = [*existing, msg]
         return WAITING_PROOF
 
-    async def _on_done_proof(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int | None:
+    async def _on_done_proof(self, ctx: Ctx) -> int | None:
         """Execute with everything collected once the moderator taps Done."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is None or ctx.user_data is None:
             return ConversationHandler.END
-        if not self._callback_is_live(update, ctx):
-            await self._ignore_stale_callback(update)
+        if not self._callback_is_live(ctx):
+            await self._ignore_stale_callback(ctx)
             return None
-        scope = flow_scope(ctx, update)
-        locale = await locale_for_update(update)
+        scope = flow_scope(ctx)
+        locale = await locale_for_update(ctx)
         msgs: list = scope.get(self._proof_msgs_key, [])
         if not msgs:
             try:
@@ -406,7 +392,7 @@ class _ProofStepMixin(_FlowBase):
         # * would let both taps through and the loser would run with an
         # * empty target.
         scope[self._exec_key] = True
-        if not await self._recheck_tapper(update, ctx):
+        if not await self._recheck_tapper(ctx):
             scope.pop(self._exec_key, None)
             return ConversationHandler.END
         try:
@@ -414,23 +400,21 @@ class _ProofStepMixin(_FlowBase):
         except Exception as exc:
             log.debug("%s done-proof q.answer failed: %s", self.action, exc)
         try:
-            await self.executor(update, ctx)
+            await self.executor(ctx)
         except BaseException:
-            self._clear_scope(ctx, update)
+            self._clear_scope(ctx)
             raise
-        self._clear_scope(ctx, update)
+        self._clear_scope(ctx)
         return ConversationHandler.END
 
-    async def _on_skip_proof(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int | None:
-        q = update.callback_query
+    async def _on_skip_proof(self, ctx: Ctx) -> int | None:
+        q = ctx.callback_query
         if q is None or ctx.user_data is None:
             return WAITING_PROOF
-        if not self._callback_is_live(update, ctx):
-            await self._ignore_stale_callback(update)
+        if not self._callback_is_live(ctx):
+            await self._ignore_stale_callback(ctx)
             return None
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         if scope.get(self._exec_key):
             try:
                 await q.answer()
@@ -441,31 +425,29 @@ class _ProofStepMixin(_FlowBase):
         # * Done button does, so a concurrent double tap cannot run the
         # * executor twice.
         scope[self._exec_key] = True
-        if not await self._recheck_tapper(update, ctx):
+        if not await self._recheck_tapper(ctx):
             scope.pop(self._exec_key, None)
             return ConversationHandler.END
         qa_result, exec_result = await asyncio.gather(
             q.answer(),
-            self.executor(update, ctx),
+            self.executor(ctx),
             return_exceptions=True,
         )
         throw_if_cancelled((qa_result, exec_result))
         if isinstance(qa_result, BaseException):
             log.debug("%s skip-proof q.answer failed: %s", self.action, qa_result)
         if isinstance(exec_result, BaseException):
-            self._clear_scope(ctx, update)
+            self._clear_scope(ctx)
             raise exec_result
-        self._clear_scope(ctx, update)
+        self._clear_scope(ctx)
         return ConversationHandler.END
 
-    async def _on_proof_unexpected(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def _on_proof_unexpected(self, ctx: Ctx) -> int:
         """Reject unexpected message types during proof collection."""
-        if update.effective_message:
-            locale = await locale_for_update(update)
+        if ctx.effective_message:
+            locale = await locale_for_update(ctx)
             await reply_rich(
-                update.effective_message,
+                ctx.effective_message,
                 t(
                     "proof.unexpected.body",
                     locale,
@@ -485,21 +467,19 @@ class _ProofStepMixin(_FlowBase):
 class _ReasonStepMixin(_FlowBase):
     """Reason-text, skip-reason, and unexpected handlers."""
 
-    async def _on_reason_text(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
-        msg = update.effective_message
+    async def _on_reason_text(self, ctx: Ctx) -> int:
+        msg = ctx.effective_message
         if msg is None or msg.text is None:
             return WAITING_REASON
         if ctx.user_data is None:
             return WAITING_REASON
-        if not await self._recheck_tapper(update, ctx):
+        if not await self._recheck_tapper(ctx):
             return ConversationHandler.END
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         text = msg.text.strip()
-        locale = await locale_for_update(update)
+        locale = await locale_for_update(ctx)
         if not text:
-            # * filters.TEXT accepts whitespace-only messages, and the
+            # * filters.text accepts whitespace-only messages, and the
             # * database rejects a blank reason. Keep the conversation open instead
             # * of storing "".
             await reply_rich(
@@ -522,21 +502,19 @@ class _ReasonStepMixin(_FlowBase):
         prompt_txt = self.proof.step_prompt(
             self._get_target(scope, locale), self.action, text, extra_info, locale
         )
-        return await self._after_reason(update, ctx, prompt_txt)
+        return await self._after_reason(ctx, prompt_txt)
 
-    async def _on_skip_reason(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int | None:
-        q = update.callback_query
+    async def _on_skip_reason(self, ctx: Ctx) -> int | None:
+        q = ctx.callback_query
         if q is None or ctx.user_data is None:
             return WAITING_REASON
-        if not self._callback_is_live(update, ctx):
-            await self._ignore_stale_callback(update)
+        if not self._callback_is_live(ctx):
+            await self._ignore_stale_callback(ctx)
             return None
-        if not await self._recheck_tapper(update, ctx):
+        if not await self._recheck_tapper(ctx):
             return ConversationHandler.END
-        scope = flow_scope(ctx, update)
-        locale = await locale_for_update(update)
+        scope = flow_scope(ctx)
+        locale = await locale_for_update(ctx)
         scope[self._reason_key] = replies.no_reason(locale, plain=True)
         extra_info = scope.get(self._extra_info_key, "")
         prompt_txt = self.proof.step_prompt(
@@ -560,19 +538,17 @@ class _ReasonStepMixin(_FlowBase):
             log.debug(
                 "%s prompt edit failed (skip-reason step): %s", self.action, results[1]
             )
-            self._clear_scope(ctx, update)
+            self._clear_scope(ctx)
             return ConversationHandler.END
-        return await self._after_reason(update, ctx, prompt_txt)
+        return await self._after_reason(ctx, prompt_txt)
 
-    async def _after_reason(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, prompt_txt: str
-    ) -> int:
+    async def _after_reason(self, ctx: Ctx, prompt_txt: str) -> int:
         """Move to the rules picker when rules exist, otherwise to proof."""
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         scope[self._rules_key] = []
-        locale = await locale_for_update(update)
+        locale = await locale_for_update(ctx)
         if self.rules_enabled:
-            uid = update.effective_user.id if update.effective_user else 0
+            uid = ctx.effective_user.id if ctx.effective_user else 0
             try:
                 may_pick = await db.users_roles.has_permission(uid, "rules.view")
             except Exception as exc:
@@ -582,19 +558,17 @@ class _ReasonStepMixin(_FlowBase):
             if published is not None and published.get("items"):
                 markup = rules_btn.picker_btn(published["items"], [], locale)
                 text = rules_picker.picker_text(published["items"], [], locale)
-                if await self._edit_prompt(update, ctx, text, markup):
+                if await self._edit_prompt(ctx, text, markup):
                     return WAITING_RULES
                 return ConversationHandler.END
-        return await self._show_proof_prompt(update, ctx, prompt_txt)
+        return await self._show_proof_prompt(ctx, prompt_txt)
 
-    async def _on_reason_unexpected(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def _on_reason_unexpected(self, ctx: Ctx) -> int:
         """Reject non-text messages during reason collection."""
-        if update.effective_message:
-            locale = await locale_for_update(update)
+        if ctx.effective_message:
+            locale = await locale_for_update(ctx)
             await reply_rich(
-                update.effective_message,
+                ctx.effective_message,
                 t(
                     "reason.unexpected.body",
                     locale,
@@ -619,63 +593,54 @@ class _RulesStepMixin(_FlowBase):
         published = await db.rules_db.published_rules()
         return published["items"] if published else []
 
-    async def _render_picker(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
-        scope = flow_scope(ctx, update)
+    async def _render_picker(self, ctx: Ctx) -> int:
+        scope = flow_scope(ctx)
         selected: list[int] = scope.get(self._rules_key, [])
-        locale = await locale_for_update(update)
+        locale = await locale_for_update(ctx)
         items = await self._picker_items()
         await self._edit_prompt(
-            update,
             ctx,
             rules_picker.picker_text(items, selected, locale),
             rules_btn.picker_btn(items, selected, locale),
         )
         return WAITING_RULES
 
-    async def _on_rules_toggle(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int | None:
-        q = update.callback_query
+    async def _on_rules_toggle(self, ctx: Ctx) -> int | None:
+        q = ctx.callback_query
         if q is None or q.data is None:
             return WAITING_RULES
-        if not self._callback_is_live(update, ctx):
-            await self._ignore_stale_callback(update)
+        if not self._callback_is_live(ctx):
+            await self._ignore_stale_callback(ctx)
             return None
         item_id = rules_picker.item_id_from_callback(q.data)
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         if item_id is not None:
             scope[self._rules_key] = rules_picker.toggle(
                 scope.get(self._rules_key, []), item_id
             )
         await q.answer()
-        return await self._render_picker(update, ctx)
+        return await self._render_picker(ctx)
 
-    async def _on_rules_clear(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int | None:
-        q = update.callback_query
+    async def _on_rules_clear(self, ctx: Ctx) -> int | None:
+        q = ctx.callback_query
         if q is None:
             return WAITING_RULES
-        if not self._callback_is_live(update, ctx):
-            await self._ignore_stale_callback(update)
+        if not self._callback_is_live(ctx):
+            await self._ignore_stale_callback(ctx)
             return None
-        flow_scope(ctx, update)[self._rules_key] = []
+        flow_scope(ctx)[self._rules_key] = []
         await q.answer()
-        return await self._render_picker(update, ctx)
+        return await self._render_picker(ctx)
 
-    async def _on_rules_done(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int | None:
-        q = update.callback_query
+    async def _on_rules_done(self, ctx: Ctx) -> int | None:
+        q = ctx.callback_query
         if q is None:
             return WAITING_RULES
-        if not self._callback_is_live(update, ctx):
-            await self._ignore_stale_callback(update)
+        if not self._callback_is_live(ctx):
+            await self._ignore_stale_callback(ctx)
             return None
-        scope = flow_scope(ctx, update)
-        locale = await locale_for_update(update)
+        scope = flow_scope(ctx)
+        locale = await locale_for_update(ctx)
         if not scope.get(self._rules_key) and not scope.get(self._rules_note_key):
             await q.answer(
                 t("rules.picker.require_selection", locale, plain=True), show_alert=True
@@ -689,36 +654,32 @@ class _RulesStepMixin(_FlowBase):
             scope.get(self._extra_info_key, ""),
             locale,
         )
-        return await self._show_proof_prompt(update, ctx, prompt_txt)
+        return await self._show_proof_prompt(ctx, prompt_txt)
 
-    async def _on_rules_other(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int | None:
-        q = update.callback_query
+    async def _on_rules_other(self, ctx: Ctx) -> int | None:
+        q = ctx.callback_query
         if q is None:
             return WAITING_RULES
-        if not self._callback_is_live(update, ctx):
-            await self._ignore_stale_callback(update)
+        if not self._callback_is_live(ctx):
+            await self._ignore_stale_callback(ctx)
             return None
         await q.answer()
-        msg = update.effective_message
+        msg = ctx.effective_message
         if msg is not None:
             await reply_rich(
                 msg,
-                t("rules.picker.ask_note", await locale_for_update(update), plain=True),
+                t("rules.picker.ask_note", await locale_for_update(ctx), plain=True),
                 log_label=f"{self.action} rules-note",
                 parse_mode=None,
             )
         return WAITING_RULES_NOTE
 
-    async def _on_rules_note_text(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
-        msg = update.effective_message
+    async def _on_rules_note_text(self, ctx: Ctx) -> int:
+        msg = ctx.effective_message
         if msg is None or not msg.text:
             return WAITING_RULES_NOTE
         note = msg.text.strip()
-        locale = await locale_for_update(update)
+        locale = await locale_for_update(ctx)
         if not note or len(note) > MAX_RULES_NOTE_LEN:
             await reply_rich(
                 msg,
@@ -732,7 +693,7 @@ class _RulesStepMixin(_FlowBase):
                 parse_mode=None,
             )
             return WAITING_RULES_NOTE
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         scope[self._rules_note_key] = note
         prompt_txt = self.proof.step_prompt(
             self._get_target(scope, locale),
@@ -741,7 +702,7 @@ class _RulesStepMixin(_FlowBase):
             scope.get(self._extra_info_key, ""),
             locale,
         )
-        return await self._show_proof_prompt(update, ctx, prompt_txt)
+        return await self._show_proof_prompt(ctx, prompt_txt)
 
 
 # ─────────────────── ConversationHandler factory ────────────────── #
@@ -759,11 +720,11 @@ class _ModActionFlow(_ReasonStepMixin, _RulesStepMixin, _ProofStepMixin, _FlowBa
         """Assemble the ConversationHandler from bound callbacks."""
         reason_state: list = [
             MessageHandler(
-                filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, self._on_reason_text
+                filters.text & ~ALL_PREFIXES_CMD_FILTER, self._on_reason_text
             ),
             CallbackQueryHandler(self._on_cancel, pattern=rf"^{self.action}_cancel$"),
             MessageHandler(
-                ~filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
+                ~filters.text & ~ALL_PREFIXES_CMD_FILTER,
                 self._on_reason_unexpected,
             ),
         ]
@@ -820,7 +781,7 @@ class _ModActionFlow(_ReasonStepMixin, _RulesStepMixin, _ProofStepMixin, _FlowBa
             ]
             states[WAITING_RULES_NOTE] = [
                 MessageHandler(
-                    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, self._on_rules_note_text
+                    filters.text & ~ALL_PREFIXES_CMD_FILTER, self._on_rules_note_text
                 ),
                 # * The picker's Cancel button stays visible after "Other".
                 CallbackQueryHandler(self._on_cancel, pattern=r"^rules_step:cancel$"),

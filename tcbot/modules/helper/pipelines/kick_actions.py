@@ -9,9 +9,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from pyrogram.types import Message
+
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, guards, messages
+from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     replies,
@@ -25,11 +28,11 @@ from tcbot.modules.helper.pipelines.mod_action_steps import (
     build_modaction_conv,
     rules_from_scope,
 )
-from tcbot.modules.helper.pipelines.proof_steps import (
-    BuildProof,
+from tcbot.modules.helper.pipelines.proof_post import (
     ProofUpload,
     upload_proof_for_action,
 )
+from tcbot.modules.helper.pipelines.proof_steps import BuildProof
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
@@ -39,9 +42,7 @@ from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from telegram import Message, Update
-    from telegram.ext import ContextTypes
-    from telegram.ext.filters import BaseFilter
+    from pyrogram.filters import Filter as BaseFilter
 
 log = get_logger(__name__)
 
@@ -54,8 +55,7 @@ proof = BuildProof("kick")
 
 
 async def execute_kick(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     target_id: int,
     target_name: str,
     reason_text: str,
@@ -64,16 +64,16 @@ async def execute_kick(
     prompt_id: int | None = None,
 ) -> None:
     """Kick (ban then immediately unban) a user from the current group."""
-    msg = update.effective_message
-    effective_user = update.effective_user
-    effective_chat = update.effective_chat
+    msg = ctx.effective_message
+    effective_user = ctx.effective_user
+    effective_chat = ctx.effective_chat
     if effective_user is None or effective_chat is None or msg is None:
         log.warning("Kick executor called without user, chat, or message")
         return
-    chat_id = effective_chat.id
+    chat_id = chat_id_of(effective_chat)
     admin_id = effective_user.id
-    admin_fname = effective_user.first_name
-    locale = await locale_for_update(update)
+    admin_fname = display_name(effective_user)
+    locale = await locale_for_update(ctx)
 
     # * Re-check the executor against the target before anything is
     # * recorded. The entry command compared the two roles, but the proof
@@ -164,7 +164,7 @@ async def execute_kick(
                     repair_run,
                 )
 
-    rule_ids, rule_note = rules_from_scope(flow_scope(ctx, update), "kick")
+    rule_ids, rule_note = rules_from_scope(flow_scope(ctx), "kick")
     try:
         kick_action_id = await db.kicks_db.log_kick(
             target_id,
@@ -213,7 +213,7 @@ async def execute_kick(
                 await db.kicks_db.mark_kick_failed(kick_action_id)
             except Exception:
                 log.exception(
-                    "Kick status update failed on Owner refusal for action=%s",
+                    "Kick status ctx failed on Owner refusal for action=%s",
                     kick_action_id,
                 )
             await reply_rich(
@@ -256,7 +256,7 @@ async def execute_kick(
         # * know whether the unban failed -- otherwise the admin would see
         # * "kicked" while the user is still banned.
         unban_result, log_send_result = await asyncio.gather(
-            ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
+            ctx.bot.unban_chat_member(chat_id, target_id),
             send_log(
                 ctx.bot,
                 log_text,
@@ -276,7 +276,7 @@ async def execute_kick(
             )
             try:
                 await asyncio.wait_for(
-                    ctx.bot.unban_chat_member(chat_id, target_id, only_if_banned=True),
+                    ctx.bot.unban_chat_member(chat_id, target_id),
                     timeout=TELEGRAM_LOOKUP_TIMEOUT,
                 )
                 log.info("kick unban retry succeeded for target=%d", target_id)
@@ -304,7 +304,7 @@ async def execute_kick(
                         await db.kicks_db.mark_kick_failed(kick_action_id)
                     except Exception:
                         log.exception(
-                            "Kick status update failed for action=%s",
+                            "Kick status ctx failed for action=%s",
                             kick_action_id,
                         )
                     await _queue_unban_repair()
@@ -355,7 +355,7 @@ async def execute_kick(
                 await db.kicks_db.mark_kick_failed(kick_action_id)
             except Exception:
                 log.exception(
-                    "Kick status update failed during cancellation for action=%s",
+                    "Kick status ctx failed during cancellation for action=%s",
                     kick_action_id,
                 )
             # * A cancellation after the ban landed but before the unban is
@@ -374,7 +374,7 @@ async def execute_kick(
             try:
                 await db.kicks_db.mark_kick_failed(kick_action_id)
             except Exception:
-                log.exception("Kick status update failed for action=%s", kick_action_id)
+                log.exception("Kick status ctx failed for action=%s", kick_action_id)
             # * An exception after the ban landed can also strand the user;
             # * queue the same durable reconcile run as the cancellation path.
             await _queue_unban_repair()
@@ -392,23 +392,22 @@ async def execute_kick(
 # ──────────────────────── Executor adapter ──────────────────────── #
 
 
-async def _exec_kick(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def _exec_kick(ctx: Ctx) -> None:
     """Pop kick data from the conversation scope and call execute_kick."""
     if ctx.user_data is None:
         log.warning("_exec_kick called without user_data")
         return
-    scope = flow_scope(ctx, update)
+    scope = flow_scope(ctx)
     target_id = scope.pop("kick_target_id", 0)
     target_name = scope.pop("kick_target_name", "")
     reason_text = scope.pop(
-        "kick_reason", replies.no_reason(await locale_for_update(update), plain=True)
+        "kick_reason", replies.no_reason(await locale_for_update(ctx), plain=True)
     )
     proof_msgs = scope.pop("kick_proof_msgs", None)
     prompt_chat = scope.pop("kick_prompt_chat", None)
     prompt_id = scope.pop("kick_prompt_id", None)
     scope.pop("kick_extra_info", None)
     await execute_kick(
-        update,
         ctx,
         target_id,
         target_name,

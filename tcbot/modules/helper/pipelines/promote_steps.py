@@ -7,13 +7,13 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 
-from telegram.ext import ContextTypes
+from pyrogram import Client
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, decorators, messages
+from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.guards import (
     action_owner_mismatch,
     banned_target_refusal,
@@ -43,9 +43,6 @@ from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import parse_cmd_args
 
-if TYPE_CHECKING:
-    from telegram import Bot, Update
-
 log = get_logger(__name__)
 
 
@@ -64,7 +61,7 @@ class Promote:
     @classmethod
     async def request_admin(
         cls,
-        bot: Bot,
+        bot: Client,
         admin_id: int,
         target_id: int,
         target_fname: str,
@@ -79,7 +76,7 @@ class Promote:
     @classmethod
     async def execute(
         cls,
-        bot: Bot,
+        bot: Client,
         admin_id: int,
         admin_fname: str,
         target_id: int,
@@ -89,7 +86,7 @@ class Promote:
     ) -> tuple[bool, str]:
         """Execute a role assignment. Returns (success, reply text).
 
-        Both roles are read fresh at the mutation point so a demotion or
+        Clienth roles are read fresh at the mutation point so a demotion or
         ownership transfer during earlier lookups cannot still grant rank.
         A failed lookup refuses the grant.
         """
@@ -169,7 +166,7 @@ def is_role_change_request(
 
 
 async def change_role_for_staff(
-    bot: Bot,
+    bot: Client,
     admin_id: int,
     admin_fname: str,
     target_id: int,
@@ -253,7 +250,7 @@ async def change_role_for_staff(
 
 
 async def role_change_prompt(
-    update: Update,
+    ctx: Ctx,
     *,
     executor_role: str | None,
     target_id: int,
@@ -261,8 +258,8 @@ async def role_change_prompt(
     locale: str | None,
 ) -> None:
     """Show the role-change picker for an already-roled target."""
-    msg = update.effective_message
-    admin = update.effective_user
+    msg = ctx.effective_message
+    admin = ctx.effective_user
     if msg is None or admin is None:
         return
     try:
@@ -326,13 +323,13 @@ async def role_change_prompt(
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.staff_only
 @decorators.log_execution
-async def cmd_setrole(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_setrole(ctx: Ctx) -> None:
     """Open the picker that moves an existing staff member to another tier."""
-    admin = update.effective_user
-    msg = update.effective_message
+    admin = ctx.effective_user
+    msg = ctx.effective_message
     if admin is None or msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     if not await require_federation_origin(
         msg,
         chat_id=msg.chat.id,
@@ -343,9 +340,9 @@ async def cmd_setrole(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ):
         return
     resolved = await resolve_executor_target(
+        ctx,
         msg,
         admin.id,
-        update,
         parse_cmd_args(msg.text),
         ctx.bot,
         action="promote",
@@ -355,7 +352,7 @@ async def cmd_setrole(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     executor_role, target_id, target_fname = resolved
     await role_change_prompt(
-        update,
+        ctx,
         executor_role=executor_role,
         target_id=target_id,
         target_fname=target_fname,
@@ -368,9 +365,9 @@ async def cmd_setrole(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
-async def on_role_change_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_role_change_btn(ctx: Ctx) -> None:
     """Apply the role chosen in the picker with fresh rank checks."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     args = callback_args_optional(q, 3)
@@ -383,23 +380,23 @@ async def on_role_change_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
     except ValueError:
         await q.answer()
         return
-    if await action_owner_mismatch(q, update, min_parts=3):
+    if await action_owner_mismatch(q, ctx, min_parts=3):
         return
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         await q.answer()
         return
-    if await check_callback_executor(update, q, admin) is None:
+    if await check_callback_executor(ctx, q, admin) is None:
         return
     if role not in db.users_roles.STAFF_ROLES:
         await cb_error_edit(
             q,
-            replies.err_unknown_role(await locale_for_update(update), plain=True),
+            replies.err_unknown_role(await locale_for_update(ctx), plain=True),
             log_label="on_role_change_btn unknown-role",
             parse_mode=None,
         )
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     target_fname = await db.users_cache.get_first_name(target_id, str(target_id))
     _, text = await change_role_for_staff(
         ctx.bot,
@@ -422,22 +419,22 @@ async def on_role_change_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
 
 @decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
-async def on_role_change_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_role_change_cancel(ctx: Ctx) -> None:
     """Dismiss the role-change picker without changing anything."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    if await cancel_owner_mismatch(q, update):
+    if await cancel_owner_mismatch(q, ctx):
         return
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         await q.answer()
         return
-    if await check_callback_executor(update, q, admin) is None:
+    if await check_callback_executor(ctx, q, admin) is None:
         return
     await safe_edit_cb(
         q,
-        t("admins.error.cancelled", await locale_for_update(update), plain=True),
+        t("admins.error.cancelled", await locale_for_update(ctx), plain=True),
         reply_markup=None,
         parse_mode=None,
         log_level="debug",

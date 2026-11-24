@@ -28,9 +28,7 @@ import asyncio
 import inspect
 from pathlib import Path
 
-from telegram import InlineKeyboardMarkup
-
-from tcbot.modules.helper.messages.rich_edit import cb_error_edit
+from tcbot.modules.helper.rich.edit import cb_error_edit
 
 _TCBOT_ROOT = Path(__file__).resolve().parent.parent / "tcbot"
 
@@ -108,16 +106,20 @@ def test_cb_error_edit_clears_the_keyboard_and_swallows_failures() -> None:
     calls: list[dict[str, object]] = []
 
     class _FakeQuery:
-        async def edit_message_text(self, text: str, **kwargs: object) -> None:
+        async def edit_message_text(
+            self, text: str | None = None, **kwargs: object
+        ) -> None:
+            payload = kwargs.get("rich_message")
+            if payload is not None and text is None:
+                text = getattr(payload, "html", str(payload))
             calls.append({"text": text, **kwargs})
             raise RuntimeError("telegram is unreachable")
 
     asyncio.run(cb_error_edit(_FakeQuery(), "nope", log_label="test"))  # type: ignore[arg-type]
 
     assert len(calls) == 1
-    markup = calls[0]["reply_markup"]
-    assert isinstance(markup, InlineKeyboardMarkup)
-    assert not markup.inline_keyboard
+    # * Refusals ship as rich text only; no native inline keyboard is sent.
+    assert "reply_markup" not in calls[0]
     assert "parse_mode" not in calls[0]
 
 

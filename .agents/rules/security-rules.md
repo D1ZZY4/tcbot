@@ -55,6 +55,5 @@ commands live in [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
 - Do not remove meaningful behavior merely to silence a warning.
 - Treat every moderation flow change as potentially high impact: verify success
   and failure paths, alternate entry points, and state transitions.
-- The webhook route in `alive.py` rejects empty or non-JSON bodies with
-  400 after the timing-safe secret check; do not weaken this without a
-  security review.
+- `alive.py` exposes only keep-alive and health endpoints. `/health` reports
+  `503` while a dependency is degraded; do not weaken that signal.

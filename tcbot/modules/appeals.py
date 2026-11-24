@@ -6,19 +6,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from pyrogram import filters
 
 from tcbot.modules.helper import decorators
+from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.messages import replies
 from tcbot.modules.helper.pipelines.appeal_review import LOCK_HOURS
 from tcbot.modules.helper.pipelines.appeal_submit import REF_PATTERN, appeal
 from tcbot.utils.i18n import Safe, bold, pre, t
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 # ────────────────────── Module & Help Message ───────────────────── #
 
@@ -60,7 +57,7 @@ __help__: replies.HelpEntry = get_help()
 
 # ──────────────────────────── Handlers ──────────────────────────── #
 
-_APPEAL_START_CMDS = filters.ChatType.PRIVATE & filters.Regex(
+_APPEAL_START_CMDS = filters.private & filters.regex(
     rf"^/start\s+appeal_{REF_PATTERN}$"
 )
 
@@ -70,15 +67,15 @@ _APPEAL_START_CMDS = filters.ChatType.PRIVATE & filters.Regex(
 # * Neither entry is covered by the prefixed-command flood ceiling, so each
 # * gets its own per-user budget before the shared flow runs.
 @decorators.ratelimiter(decorators.THROTTLE_STAFF)
-async def on_appeal_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_appeal_decision(ctx: Ctx) -> None:
     """Rate-limit an appeal review decision before delegating to the flow."""
-    await appeal.on_decision(update, ctx)
+    await appeal.on_decision(ctx)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
-async def on_group_appeal(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_group_appeal(ctx: Ctx) -> None:
     """Rate-limit a member's #appeal entry before the submission gate runs."""
-    await appeal.on_group_appeal(update, ctx)
+    await appeal.on_group_appeal(ctx)
 
 
 __handlers__ = [
@@ -90,7 +87,7 @@ __handlers__ = [
     # * DM deep link; the handler itself gates the chat. The filter keeps
     # * ordinary chat messages out of the per-user throttle and the flow.
     MessageHandler(
-        filters.TEXT & ~ALL_PREFIXES_CMD_FILTER & filters.Regex(r"(?i)^\s*#appeal"),
+        filters.text & ~ALL_PREFIXES_CMD_FILTER & filters.regex(r"(?i)^\s*#appeal"),
         on_group_appeal,
     ),
 ]

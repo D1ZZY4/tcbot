@@ -10,8 +10,8 @@ import asyncio
 from typing import Any
 
 import pytest
-from telegram import InlineKeyboardMarkup
-from telegram.error import BadRequest, RetryAfter
+from pyrogram.errors import BadRequest, FloodWait
+from pyrogram.types import InlineKeyboardMarkup
 
 from tcbot import database as db
 from tcbot import notification_worker
@@ -23,7 +23,9 @@ class _Bot:
         self.error = error
         self.edits: list[dict[str, Any]] = []
 
-    async def edit_message_text(self, text: str, **kwargs: Any) -> None:
+    async def edit_message_text(
+        self, chat_id: int, message_id: int, text: str | None = None, **kwargs: Any
+    ) -> None:
         self.edits.append({"text": text, "kwargs": kwargs})
         if self.error is not None:
             raise self.error
@@ -91,7 +93,7 @@ def test_a_rate_limit_reply_does_not_trip_the_shared_circuit(
 ) -> None:
     """A Telegram service answer must not count as a transport failure."""
     completed = _wire(monkeypatch)
-    bot = _Bot(RetryAfter(1))
+    bot = _Bot(FloodWait(1))
 
     _cb.telegram.reset()
     try:

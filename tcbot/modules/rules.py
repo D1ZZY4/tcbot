@@ -7,25 +7,24 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from pyrogram import filters
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
 from tcbot.modules.helper.buttons import rules as rules_btn
+from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, safe_edit_cb
-from tcbot.modules.helper.messages import rich_edit as rich_msg
 from tcbot.modules.helper.messages import rules as rules_msg
 from tcbot.modules.helper.pipelines.rules_editor import build_rules_conv
+from tcbot.modules.helper.rich import edit as rich_edit
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -54,12 +53,12 @@ __help__: replies.HelpEntry = get_help()
 
 @decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
-async def cmd_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_rules(ctx: Ctx) -> None:
     """Show the public read-only rules menu."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     try:
         published = await db.rules_db.published_rules(locale=locale)
     except asyncio.CancelledError:
@@ -89,12 +88,13 @@ async def cmd_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ─────────────────────────── Callbacks ─────────────────────────── #
 
 
-async def _acknowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def _acknowledge(ctx: Ctx) -> None:
     """Record a member's acceptance of the greeting's rule version."""
-    query = update.callback_query
-    if query is None or query.data is None:
+    query = ctx.callback_query
+    data = rich_edit.callback_text_of(query) if query is not None else ""
+    if query is None or not data:
         return
-    parts = query.data.split(":")
+    parts = data.split(":")
     if len(parts) != 3:
         await query.answer()
         return
@@ -103,14 +103,14 @@ async def _acknowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     except ValueError:
         await query.answer()
         return
-    user = update.effective_user
+    user = ctx.effective_user
     if user is None or user.id != member_id:
         await query.answer(
-            t("rules.ack.wrong_member", await locale_for_update(update), plain=True),
+            t("rules.ack.wrong_member", await locale_for_update(ctx), plain=True),
             show_alert=True,
         )
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     try:
         # * Validate against the same authority that built the greeting button.
         # * The button carries the version from acknowledgement_requirement()
@@ -131,8 +131,8 @@ async def _acknowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await db.rules_db.record_acknowledgement(
             version_id,
             user.id,
-            getattr(query.message, "chat_id", None),
-            getattr(query.message, "message_id", None),
+            getattr(getattr(query.message, "chat", None), "id", None),
+            getattr(query.message, "id", None),
         )
     except asyncio.CancelledError:
         raise
@@ -171,23 +171,22 @@ def _category_sections(items: list[dict[str, Any]]) -> list[str]:
 
 
 async def _edit_payload(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     payload: dict[str, Any],
     markup: Any,
     fallback: str,
 ) -> None:
     """Edit the tapped panel as a rich message, with a plain fallback."""
-    query = update.callback_query
+    query = ctx.callback_query
     if query is None:
         return
     message = query.message
     if message is not None and getattr(message, "chat", None) is not None:
         try:
-            await rich_msg.edit_rich(
+            await rich_edit.edit_rich(
                 ctx.bot,
                 message.chat.id,
-                message.message_id,
+                message.id,
                 payload,
                 reply_markup=markup,
             )
@@ -197,14 +196,12 @@ async def _edit_payload(
     await safe_edit_cb(query, fallback, reply_markup=markup)
 
 
-async def _show_index(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE, page: int
-) -> None:
+async def _show_index(ctx: Ctx, page: int) -> None:
     """Render a page of category buttons, two per row."""
-    query = update.callback_query
+    query = ctx.callback_query
     if query is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     try:
         published = await db.rules_db.published_rules(locale=locale)
     except asyncio.CancelledError:
@@ -225,7 +222,6 @@ async def _show_index(
         t("rules.menu.body", locale, community=cfg.community_name), locale
     )
     await _edit_payload(
-        update,
         ctx,
         payload,
         rules_btn.rules_index_btn(categories, locale, page=page),
@@ -233,40 +229,40 @@ async def _show_index(
     )
 
 
-async def on_rules_index(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_rules_index(ctx: Ctx) -> None:
     """Show a page of the topic index."""
-    query = update.callback_query
+    query = ctx.callback_query
     if query is None:
         return
     await query.answer()
-    await _show_index(update, ctx, _page_from_data(query.data))
+    await _show_index(ctx, _page_from_data(rich_edit.callback_text_of(query)))
 
 
-async def on_rules_prev(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_rules_prev(ctx: Ctx) -> None:
     """Show the previous topic page."""
-    query = update.callback_query
+    query = ctx.callback_query
     if query is None:
         return
     await query.answer()
-    await _show_index(update, ctx, _page_from_data(query.data))
+    await _show_index(ctx, _page_from_data(rich_edit.callback_text_of(query)))
 
 
-async def on_rules_next(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_rules_next(ctx: Ctx) -> None:
     """Show the next topic page."""
-    query = update.callback_query
+    query = ctx.callback_query
     if query is None:
         return
     await query.answer()
-    await _show_index(update, ctx, _page_from_data(query.data))
+    await _show_index(ctx, _page_from_data(rich_edit.callback_text_of(query)))
 
 
-async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_rules_show(ctx: Ctx) -> None:
     """Render one category with its short description and section buttons."""
-    query = update.callback_query
+    query = ctx.callback_query
     if query is None:
         return
     await query.answer()
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     try:
         published = await db.rules_db.published_rules(locale=locale)
     except asyncio.CancelledError:
@@ -279,14 +275,14 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if published is None:
         return
-    key = str(query.data or "").split(":", 1)[-1]
+    key = rich_edit.callback_text_of(query).split(":", 1)[-1]
     category = next(
         (cat for cat in published["categories"] if str(cat["category_key"]) == key),
         None,
     )
     if category is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     items = [item for item in published["items"] if item["category_key"] == key]
     label = str(category.get("label") or category.get("title") or key)
     # * Both values are resolved from the database for the reader's locale.
@@ -296,7 +292,6 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ctx.user_data["rules_current_category"] = key
     sections = _category_sections(items)
     await _edit_payload(
-        update,
         ctx,
         payload,
         rules_btn.category_sections_btn(sections, locale),
@@ -304,13 +299,14 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def on_rules_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_rules_section(ctx: Ctx) -> None:
     """Render the items of one section inside the current category."""
-    query = update.callback_query
-    if query is None or query.data is None:
+    query = ctx.callback_query
+    data = rich_edit.callback_text_of(query) if query is not None else ""
+    if query is None or not data:
         return
     await query.answer()
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     try:
         published = await db.rules_db.published_rules(locale=locale)
     except asyncio.CancelledError:
@@ -323,7 +319,7 @@ async def on_rules_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
     if published is None:
         return
-    index = _page_from_data(query.data)
+    index = _page_from_data(data)
     state = ctx.user_data if ctx.user_data is not None else {}
     key = str(state.get("rules_current_category") or "")
     if not key:
@@ -345,7 +341,6 @@ async def on_rules_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         key, section, section_items, locale, category_title=label
     )
     await _edit_payload(
-        update,
         ctx,
         payload,
         rules_btn.rules_section_btn(key, locale),
@@ -353,29 +348,29 @@ async def on_rules_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-async def on_rules_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_rules_menu(ctx: Ctx) -> None:
     """Handle a stale Back tap from a keyboard emitted before pagination."""
-    query = update.callback_query
+    query = ctx.callback_query
     if query is None:
         return
     await query.answer()
-    await _show_index(update, ctx, 0)
+    await _show_index(ctx, 0)
 
 
-async def on_rules_page(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_rules_page(ctx: Ctx) -> None:
     """Handle a stale More tap by opening the requested topic page."""
-    query = update.callback_query
+    query = ctx.callback_query
     if query is None:
         return
     await query.answer()
-    await _show_index(update, ctx, _page_from_data(query.data))
+    await _show_index(ctx, _page_from_data(rich_edit.callback_text_of(query)))
 
 
 _RULES_CMDS = build_prefixed_filters("rules")
 
 # * The Open in PM button on the group surface uses a deep link, so the
 # * reader lands directly on the public rules menu instead of the start menu.
-_RULES_START = filters.ChatType.PRIVATE & filters.Regex(r"^/start\s+rules$")
+_RULES_START = filters.private & filters.regex(r"^/start\s+rules$")
 
 __handlers__ = [
     MessageHandler(_RULES_START, cmd_rules),

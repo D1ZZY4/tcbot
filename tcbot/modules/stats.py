@@ -9,14 +9,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from telegram.ext import (
-    CallbackQueryHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
+from pyrogram import filters
+from pyrogram.types import CallbackQuery, Message
 
 from tcbot.modules.helper import decorators, guards
+from tcbot.modules.helper.context import Ctx, chat_id_of
+from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     ack_and_render,
@@ -41,8 +39,6 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
 
 if TYPE_CHECKING:
-    from telegram import CallbackQuery, Message, Update
-
     from tcbot.database.users_roles import RoleName
 
 log = get_logger(__name__)
@@ -105,7 +101,7 @@ async def _pane_access(
 
 
 async def _require_owner_list(
-    q: CallbackQuery, user_id: int | None, update: Update
+    q: CallbackQuery, user_id: int | None, ctx: Ctx
 ) -> str | None:
     """Return the render locale when the tapper may open the Users list.
 
@@ -113,7 +109,7 @@ async def _require_owner_list(
     tapper gets the Owner-only alert and ``None``. Lookup outages fail
     closed with a retry alert; cancellation propagates.
     """
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     allowed = await _pane_access(
         q,
         user_id,
@@ -124,7 +120,7 @@ async def _require_owner_list(
     return locale if allowed else None
 
 
-async def _require_staff_pane(q: CallbackQuery, update: Update) -> str | None:
+async def _require_staff_pane(q: CallbackQuery, ctx: Ctx) -> str | None:
     """Return the render locale when the tapper may open a staff pane.
 
     The staff roster, the connected-group list, and the federation ban
@@ -132,8 +128,8 @@ async def _require_staff_pane(q: CallbackQuery, update: Update) -> str | None:
     gate. The overview counts stay public. A denied tapper gets the
     staff-only alert and ``None``.
     """
-    tapper = update.effective_user
-    locale = await locale_for_update(update)
+    tapper = ctx.effective_user
+    locale = await locale_for_update(ctx)
     allowed = await _pane_access(
         q,
         tapper.id if tapper is not None else None,
@@ -144,15 +140,15 @@ async def _require_staff_pane(q: CallbackQuery, update: Update) -> str | None:
     return locale if allowed else None
 
 
-async def _require_staff_input(msg: Message, update: Update) -> str | None:
+async def _require_staff_input(msg: Message, ctx: Ctx) -> str | None:
     """Return the render locale when the sender may run the ban search.
 
     The free-text search reads the federation ban list, so it carries the
     same gate as the ban pane it belongs to. The notice is a plain reply
     because the input path has no callback query to alert on.
     """
-    tapper = update.effective_user
-    locale = await locale_for_update(update)
+    tapper = ctx.effective_user
+    locale = await locale_for_update(ctx)
     access = await guards.staff_access(
         tapper.id if tapper is not None else None, min_role="moderator"
     )
@@ -177,15 +173,15 @@ async def _require_staff_input(msg: Message, update: Update) -> str | None:
 
 @decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
-async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_stats(ctx: Ctx) -> None:
     """Send the federation overview message."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    user = update.effective_user
+    user = ctx.effective_user
     text, btn = await Stats.main(
         viewer_id=user.id if user is not None else None,
-        locale=await locale_for_update(update),
+        locale=await locale_for_update(ctx),
     )
     await reply_rich(msg, text, log_label="cmd_stats", reply_markup=btn)
 
@@ -195,12 +191,12 @@ async def cmd_stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_stats_bans_search(ctx: Ctx) -> None:
     """Open the user search prompt within the stats ban view."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    locale = await _require_staff_pane(q, update)
+    locale = await _require_staff_pane(q, ctx)
     if locale is None:
         return
     text, btn = Stats.open_search(ctx, q, locale)
@@ -209,14 +205,14 @@ async def on_stats_bans_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_bans_search_input(ctx: Ctx) -> None:
     """Free-text query message handler; only reacts when the search panel is active."""
     if ctx.user_data is None or not ctx.user_data.get(SEARCH_KEY):
         return
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    locale = await _require_staff_input(msg, update)
+    locale = await _require_staff_input(msg, ctx)
     if locale is None:
         ctx.user_data.pop(SEARCH_KEY, None)
         return
@@ -225,7 +221,7 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     # * accepts input, so a message elsewhere is neither deleted nor rendered
     # * into the wrong card. Pending state stays for the right chat.
     panel_chat = ctx.user_data.get(CHAT_KEY)
-    if panel_chat is not None and msg.chat_id != panel_chat:
+    if panel_chat is not None and chat_id_of(msg.chat) != panel_chat:
         ctx.user_data[SEARCH_KEY] = True
         return
     query = (msg.text or "").strip()
@@ -281,14 +277,12 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         # * query message is already deleted, so send results to its chat
         # * instead of dropping them with no response at all.
         try:
-            await send_text(ctx.bot, msg.chat_id, text, reply_markup=btn)
+            await send_text(ctx.bot, chat_id_of(msg.chat), text, reply_markup=btn)
         except Exception as exc:
             log.debug("Stats search result fallback failed: %s", exc)
 
 
-async def _search_notice(
-    ctx: ContextTypes.DEFAULT_TYPE, msg: Message, locale: str
-) -> None:
+async def _search_notice(ctx: Ctx, msg: Message, locale: str) -> None:
     """Deliver the search failure notice to the open panel or its chat."""
     user_data = ctx.user_data or {}
     chat_id = user_data.get(CHAT_KEY)
@@ -307,7 +301,7 @@ async def _search_notice(
             return
     try:
         await send_text(
-            ctx.bot, msg.chat_id, t("stats.error.db_fail", locale, plain=True)
+            ctx.bot, chat_id_of(msg.chat), t("stats.error.db_fail", locale, plain=True)
         )
     except Exception as exc:
         log.debug("Stats search error notice failed: %s", exc)
@@ -315,12 +309,12 @@ async def _search_notice(
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_stats_search_back(ctx: Ctx) -> None:
     """Return to search results (or the open-search prompt) without re-running the query."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    locale = await _require_staff_pane(q, update)
+    locale = await _require_staff_pane(q, ctx)
     if locale is None:
         return
     results = ctx.user_data.get(RESULTS_KEY, []) if ctx.user_data else []
@@ -339,14 +333,12 @@ async def on_stats_search_back(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_stats_search_cancel(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def on_stats_search_cancel(ctx: Ctx) -> None:
     """Clear the active search and return to the first page of the ban list."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    locale = await _require_staff_pane(q, update)
+    locale = await _require_staff_pane(q, ctx)
     if locale is None:
         return
     Stats.clear_search(ctx)
@@ -358,29 +350,29 @@ async def on_stats_search_cancel(
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_stats_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_stats_main(ctx: Ctx) -> None:
     """Render the top-level stats menu."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    tapper = update.effective_user
+    tapper = ctx.effective_user
     await ack_and_render(
         q,
         Stats.main(
             viewer_id=tapper.id if tapper is not None else None,
-            locale=await locale_for_update(update),
+            locale=await locale_for_update(ctx),
         ),
     )
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_stats_admins(ctx: Ctx) -> None:
     """Render the current staff roster page."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    locale = await _require_staff_pane(q, update)
+    locale = await _require_staff_pane(q, ctx)
     if locale is None:
         return
     await ack_and_render(q, Stats.staff_roster(locale, bot=ctx.bot))
@@ -388,9 +380,9 @@ async def on_stats_admins(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_stats_users(ctx: Ctx) -> None:
     """Render a paginated list of cached users."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     numbers = callback_numbers(q, 2)
@@ -398,9 +390,9 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
         await q.answer()
         return
     page = numbers[0]
-    tapper = update.effective_user
+    tapper = ctx.effective_user
     locale = await _require_owner_list(
-        q, tapper.id if tapper is not None else None, update
+        q, tapper.id if tapper is not None else None, ctx
     )
     if locale is None:
         return
@@ -409,12 +401,12 @@ async def on_stats_users(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_stats_chats(ctx: Ctx) -> None:
     """Render a paginated list of connected groups."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    locale = await _require_staff_pane(q, update)
+    locale = await _require_staff_pane(q, ctx)
     if locale is None:
         return
     numbers = callback_numbers(q, 2)
@@ -427,12 +419,12 @@ async def on_stats_chats(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_stats_bans(ctx: Ctx) -> None:
     """Render a paginated ban-list page and clear any active search state."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    locale = await _require_staff_pane(q, update)
+    locale = await _require_staff_pane(q, ctx)
     if locale is None:
         return
     numbers = callback_numbers(q, 2)
@@ -449,22 +441,18 @@ async def on_stats_bans(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 _STATS_CMDS = build_prefixed_filters("tcstats") | build_prefixed_filters("tcs")
 
 
-class _DeferredMessageHandler(MessageHandler):
-    """A message handler registered after group-0 conversations.
-
-    PTB processes groups in order and stops at the first match in each group.
-    Carrying the target group on the class keeps a free-text handler from
-    swallowing input that belongs to an active conversation.
-    """
-
-    handler_group: int = 5
+def _deferred_message_handler(filter_, callback):
+    """Register a free-text handler in a later Kurigram group."""
+    handler = MessageHandler(filter_, callback)
+    handler.handler_group = 5
+    return handler
 
 
-# * The search prompt consumes free text in its own PTB group. In group 0 it
+# * The search prompt consumes free text in its own group. In group 0 it
 # * would be registered before the later-sorted warn conversation and swallow
 # * the reason the moderator types after /tcwarn.
-_search_input_handler = _DeferredMessageHandler(
-    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER,
+_search_input_handler = _deferred_message_handler(
+    filters.text & ~ALL_PREFIXES_CMD_FILTER,
     on_bans_search_input,
 )
 
@@ -479,7 +467,7 @@ __handlers__ = [
     CallbackQueryHandler(on_stats_search_back, pattern=r"^stats_search_back$"),
     CallbackQueryHandler(on_stats_search_cancel, pattern=r"^stats_search_cancel$"),
     # * Registered in every chat because the panel can be opened from a
-    # * group. Its own PTB group keeps it behind group-0 conversations; it
+    # * group. Its own Kurigram group keeps it behind group-0 conversations; it
     # * also returns immediately unless SEARCH_KEY is set and the message
     # * comes from the chat that owns the panel.
     _search_input_handler,

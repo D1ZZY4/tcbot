@@ -8,14 +8,12 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import pytest
+from pyrogram import Client
 
 from tcbot.modules.helper.messages import links as community_links
-
-if TYPE_CHECKING:
-    from telegram import Bot
 
 
 @pytest.fixture(autouse=True)
@@ -25,7 +23,7 @@ def _clear_link_cache() -> Any:
     community_links.clear()
 
 
-def _bot(chat: Any, *, fail: bool = False) -> Bot:
+def _bot(chat: Any, *, fail: bool = False) -> Client:
     calls: list[int] = []
 
     async def _get_chat(chat_id: int) -> Any:
@@ -36,7 +34,7 @@ def _bot(chat: Any, *, fail: bool = False) -> Bot:
 
     result = SimpleNamespace(get_chat=_get_chat)
     result.calls = calls  # type: ignore[attr-defined]
-    return cast("Bot", result)
+    return cast("Client", result)
 
 
 def test_username_becomes_the_public_link() -> None:

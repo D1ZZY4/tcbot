@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from tcbot.modules.helper.messages.rich_text import style
+from tcbot.modules.helper.rich.text import style
 
 
 def test_style_returns_rich_text_verbatim() -> None:

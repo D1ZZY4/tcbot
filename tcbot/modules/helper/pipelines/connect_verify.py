@@ -8,20 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from telegram.constants import ChatMemberStatus
+from pyrogram.enums import ChatMemberStatus
 
 from tcbot import cfg
+from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_ack, answer_alert, safe_edit_cb
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
-
-if TYPE_CHECKING:
-    from telegram import Update
-    from telegram.ext import ContextTypes
 
 log = get_logger(__name__)
 
@@ -31,13 +28,11 @@ log = get_logger(__name__)
 VERIFY_STEPS: int = 6
 
 
-async def handle_verify_step(
-    flow: Any, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def handle_verify_step(flow: Any, ctx: Ctx) -> None:
     """Advance the About pages shown before a group joins the federation."""
-    q = update.callback_query
-    chat = update.effective_chat
-    user = update.effective_user
+    q = ctx.callback_query
+    chat = ctx.effective_chat
+    user = ctx.effective_user
     if q is None:
         return
     if chat is None or user is None:
@@ -53,7 +48,7 @@ async def handle_verify_step(
             log.debug("Verify step infrastructure answer failed: %s", exc)
         return
 
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     try:
         step = int(q.data[len(flow.verify_callback) + 1 :]) if q.data else -1
     except ValueError:

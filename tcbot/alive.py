@@ -2,19 +2,21 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Keep-alive server - Flask health check and webhook receiver on a single port."""
+"""Keep-alive server: Flask health check and metrics endpoint.
+
+The bot receives updates through Kurigram's native long polling, so this
+server only serves independent operational endpoints (uptime, health and
+optional Prometheus metrics). It never accepts Telegram updates.
+"""
 
 from __future__ import annotations
 
-import asyncio
-import concurrent.futures
 import socket
 import threading
 from typing import TYPE_CHECKING
 
 import msgspec
-from flask import Flask, request
-from telegram import Update
+from flask import Flask
 
 from tcbot import cfg
 from tcbot.database import engine as db_engine
@@ -23,25 +25,16 @@ from tcbot.database import scheduler as sched_mod
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
 from tcbot.utils.logger import get_logger
-from tcbot.utils.secrets import secret_matches
 from tcbot.utils.time_and_date import utc_now
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    import telegram
 
 log = get_logger(__name__)
 
 
 # ───────────────────────── Flask App Setup ──────────────────────── #
 _app = Flask(__name__)
-
-# * An update is a small JSON envelope of ids and text, never media bytes.
-# * Bound it before parsing so one authenticated sender cannot exhaust the
-# * process with a single POST. Flask answers oversized bodies with HTTP 413.
-_MAX_WEBHOOK_BODY_BYTES: int = 1024 * 1024
-_app.config["MAX_CONTENT_LENGTH"] = _MAX_WEBHOOK_BODY_BYTES
 
 
 # ──────────────────── Optional Prometheus metrics ───────────────── #
@@ -83,18 +76,16 @@ class _HealthPayload(msgspec.Struct):
     scheduler: str
     circuit_telegram: str
     circuit_database: str
-    update_queue: int | None
     ts: str
 
 
 @_app.route("/health")
 def health() -> tuple[str, int, dict[str, str]]:
-    """Detailed health status as JSON: database, redis, scheduler, queue, and timestamp.
+    """Detailed health status as JSON: database, redis, scheduler, timestamp.
 
     Returns HTTP 200 when all core subsystems are ready, 503 when degraded.
-    Note: the database and scheduler state reflect the last-known connection
-    status established during startup; no live pings are issued (those require
-    async).
+    The database and scheduler state reflect the last-known connection status
+    established during startup; no live pings are issued (those require async).
     """
     database_ok = db_engine.is_connected()
     scheduler_ok = sched_mod.is_ready()
@@ -147,9 +138,6 @@ def health() -> tuple[str, int, dict[str, str]]:
         scheduler="ok" if scheduler_ok else "error",
         circuit_telegram=tg_state.value,
         circuit_database=db_state.value,
-        # * Backpressure signal: watchdogs page when this climbs, because a
-        # * growing queue means the PTB loop is not keeping up with Telegram.
-        update_queue=_wh_queue.qsize() if _wh_queue is not None else None,
         ts=utc_now().isoformat(timespec="seconds"),
     )
     code = 200 if overall == "ok" else 503
@@ -160,143 +148,10 @@ def health() -> tuple[str, int, dict[str, str]]:
     )
 
 
-# ───────────────────────── Webhook Receiver ─────────────────────── #
-# * State injected by __main__.py after PTB Application is initialized.
-# * Flask runs in a daemon thread; PTB runs in the main asyncio loop.
-# * Updates are passed between threads via asyncio.run_coroutine_threadsafe.
-
-_wh_queue: asyncio.Queue[object] | None = None
-_wh_loop: asyncio.AbstractEventLoop | None = None
-_wh_secret: str = ""
-_wh_bot: telegram.Bot | None = None
-# * Once shutdown starts, PTB stops fetching from update_queue. Acknowledging
-# * a POST after that point would silently drop the update, so the route asks
-# * Telegram to retry until the listener is gone.
-_wh_shutting_down: bool = False
-
-# * A Telegram webhook request must receive a retryable response when the PTB
-# * loop cannot accept the update promptly.  This bounds the synchronous Flask
-# * worker instead of leaving it blocked behind a full update queue.
-_WEBHOOK_ENQUEUE_TIMEOUT_S: float = 1.0
-
-
-def register_webhook(
-    queue: asyncio.Queue[object],
-    loop: asyncio.AbstractEventLoop,
-    secret: str,
-    bot: telegram.Bot,
-) -> None:
-    """Wire PTB's update_queue and event loop into the Flask webhook route.
-
-    Called from __main__.py after app.initialize() and before waiting for
-    shutdown.  Thread-safe: only written once at startup.
-    """
-    global _wh_queue, _wh_loop, _wh_secret, _wh_bot, _wh_shutting_down
-    _wh_queue = queue
-    _wh_loop = loop
-    _wh_secret = secret
-    _wh_bot = bot
-    _wh_shutting_down = False
-    log.info("Webhook receiver registered.")
-
-
-def begin_shutdown() -> None:
-    """Make the webhook route return 503 so Telegram retries in-flight updates.
-
-    Called before the webhook is deleted and PTB is stopped. An update queued
-    after PTB stops fetching would otherwise be acknowledged but never
-    processed, losing moderation and greeting events on every restart.
-    """
-    global _wh_shutting_down
-    _wh_shutting_down = True
-
-
-@_app.route("/webhook", methods=["POST"])
-def webhook_route() -> tuple[str, int]:
-    """Receive Telegram update via webhook POST, validate, and enqueue for PTB."""
-    # * Validate secret token before touching the payload (OWASP guideline).
-    # * Use a timing-safe comparison to prevent timing attacks that could be
-    # * used to brute-force the secret token byte-by-byte.
-    token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if not _wh_secret or not secret_matches(token, _wh_secret):
-        log.warning("Webhook: rejected request with invalid or missing secret token.")
-        return "Forbidden", 403
-
-    if _wh_shutting_down:
-        log.debug("Webhook: update deferred during shutdown.")
-        return "Service unavailable", 503
-
-    if _wh_queue is None or _wh_loop is None or _wh_bot is None:
-        log.warning("Webhook: received update before PTB is ready.")
-        return "Service unavailable", 503
-
-    data = request.get_json(silent=True)
-    if not data:
-        log.warning("Webhook: received request with empty or non-JSON body.")
-        return "Bad request", 400
-
-    try:
-        update = Update.de_json(data, _wh_bot)
-    except Exception:
-        # * A payload that fails to decode can never parse on retry: 400,
-        # * not the 500/503 reserved below for transient failures.
-        log.warning("Webhook: received request that failed to decode.")
-        return "Bad request", 400
-    if update is None:
-        # * de_json returns None for update types not recognized by this PTB version.
-        # * Silently acknowledge so Telegram does not retry.
-        log.debug("Webhook: received unrecognized update type; skipping.")
-        return "OK", 200
-    try:
-        # * Thread-safe: Flask runs in a sync daemon thread; PTB loop is in main thread.
-        put_coro = _wh_queue.put(update)
-        try:
-            future = asyncio.run_coroutine_threadsafe(put_coro, _wh_loop)
-        except Exception:
-            # * The coroutine was never scheduled: close it to avoid a
-            # * "never awaited" RuntimeWarning on top of the outage log.
-            put_coro.close()
-            log.exception("Webhook: PTB event loop rejected the update.")
-            return "Service unavailable", 503
-        try:
-            future.result(timeout=_WEBHOOK_ENQUEUE_TIMEOUT_S)
-        except concurrent.futures.TimeoutError:
-            # * Only a cancelled enqueue may be retried. When cancellation
-            # * does not take (the coroutine already started), the update
-            # * still lands when the queue frees, and a 503 would make
-            # * Telegram deliver the same moderation update twice.
-            if future.cancel():
-                log.warning(
-                    "Webhook: PTB update queue did not accept the update within %.1fs.",
-                    _WEBHOOK_ENQUEUE_TIMEOUT_S,
-                )
-                return "Service unavailable", 503
-            log.warning(
-                "Webhook: PTB update queue accepted the update after %.1fs; "
-                "acknowledging to avoid duplicate delivery.",
-                _WEBHOOK_ENQUEUE_TIMEOUT_S,
-            )
-            return "OK", 200
-        except Exception:
-            log.exception("Webhook: PTB update queue rejected the update.")
-            return "Service unavailable", 503
-    except Exception:
-        log.exception("Webhook: failed to enqueue update.")
-        return "Internal error", 500
-
-    return "OK", 200
-
-
 # ──────────────────────── Server Execution ──────────────────────── #
 # * Blocking call: must run in a separate thread, never on the event loop.
 def _run() -> None:
     """Start the Flask server with production-safe settings."""
-    # * Threaded on purpose: the development server handles one request
-    # * at a time otherwise, so every webhook POST would queue behind the
-    # * previous one. Each POST waits up to a second for the PTB loop to
-    # * accept the update, and Telegram delivers updates concurrently.
-    # * One process, many request threads: the update queue and the event
-    # * loop stay in the main thread, so the threads only do the HTTP work.
     _app.run(
         host=cfg.bind_host,
         port=cfg.port,
@@ -312,7 +167,7 @@ def start_keepalive() -> None:
 
     Probes the port first: a bind failure inside the daemon thread would
     only surface as a thread traceback while the bot runs on headless
-    (no health checks, no webhook delivery). Fail fast at startup instead.
+    (no health checks). Fail fast at startup instead.
     """
     probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:

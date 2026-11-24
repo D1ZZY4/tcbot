@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Rich links, mentions, and the complete button feature set.
+"""Rich button rendering and inline-keyboard conversion for Kurigram.
 
 Button sub-features follow the Bot API 10.3 rich-message specification:
 
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tcbot.modules.helper.messages.rich_style import bold, esc
+from tcbot.modules.helper.rich.style import esc
 
 _STYLES = {
     "default": "",
@@ -33,23 +33,11 @@ _STYLES = {
 # * supported way to give one button a whole row.
 _ALIGNMENTS = frozenset({"left", "center", "right"})
 
-
-def link(text: object, url: str) -> str:
-    """Render an inline link, escaping both label and URL."""
-    return f'<a href="{esc(url)}">{esc(text)}</a>'
-
-
-def user_ref(user_id: int, name: str) -> str:
-    """Mention a user by ID. Non-positive IDs render as bold text."""
-    label = str(name) if name else str(user_id)
-    if user_id <= 0:
-        return bold(label)
-    return link(label, f"tg://user?id={user_id}")
-
-
-def mention(user_id: int, name: str) -> str:
-    """Alias of :func:`user_ref` for call sites that read as a mention."""
-    return user_ref(user_id, name)
+# * Bot API style names accepted from a Kurigram inline keyboard button.
+_RICH_BUTTON_STYLES = frozenset({"primary", "success", "danger", "link"})
+# * Telegram caps callback_data at 64 bytes; a longer payload keeps the
+# * original inline keyboard as the fallback.
+_CALLBACK_MAX_BYTES = 64
 
 
 def _style(style: str | None) -> str:
@@ -220,31 +208,65 @@ def button_rows(rows: list[list[str]], *, align: str | None = None) -> str:
     return "\n".join(button_row(row, align=align) for row in rows if row)
 
 
-# ───────────────────── Inline keyboard to rich buttons ────────────────── #
-
-# * Bot API style names accepted from a PTB inline keyboard button.
-_RICH_BUTTON_STYLES = frozenset({"primary", "success", "danger", "link"})
-# * Telegram caps callback_data at 64 bytes; a longer payload keeps the
-# * original inline keyboard as the fallback.
-_CALLBACK_MAX_BYTES = 64
-
-
 def _markup_dict(reply_markup: Any | None) -> dict[str, Any] | None:
-    """Serialise a PTB markup object or pass a dict through."""
+    """Serialise a Kurigram inline keyboard to the dict shape used here."""
     if reply_markup is None:
         return None
     if isinstance(reply_markup, dict):
         return reply_markup
-    return reply_markup.to_dict()
+    rows = getattr(reply_markup, "inline_keyboard", None)
+    if not isinstance(rows, list):
+        return None
+    encoded: list[list[dict[str, Any]]] = []
+    for row in rows:
+        cells: list[dict[str, Any]] = []
+        for cell in row:
+            data: dict[str, Any] = {"text": getattr(cell, "text", "")}
+            for name in (
+                "callback_data",
+                "url",
+                "style",
+                "switch_inline_query",
+                "switch_inline_query_current_chat",
+                "switch_inline_query_chosen_chat",
+            ):
+                value = getattr(cell, name, None)
+                if value is not None:
+                    data[name] = getattr(value, "value", value)
+            for nested, fields in (
+                ("web_app", ("url",)),
+                ("login_url", ("url", "forward_text", "request_write_access")),
+                ("copy_text", ("text",)),
+            ):
+                obj = getattr(cell, nested, None)
+                if obj is None:
+                    continue
+                data[nested] = {
+                    name: getattr(obj, name, None)
+                    for name in fields
+                    if getattr(obj, name, None) is not None
+                }
+            for flag in (
+                "allow_user_chats",
+                "allow_bot_chats",
+                "allow_group_chats",
+                "allow_channel_chats",
+            ):
+                value = getattr(cell, flag, None)
+                if value is not None:
+                    data[flag] = value
+            cells.append(data)
+        encoded.append(cells)
+    return {"inline_keyboard": encoded}
 
 
-def keyboard_button(cell: dict[str, object]) -> str | None:
-    """Render one inline-keyboard cell as a rich button via :func:`button`.
+def button_from_cell(cell: dict[str, object]) -> str | None:
+    """Render one inline-markup cell as a rich button via :func:`button`.
 
     An unsupported style is dropped, leaving the button in its default
-    color. Returns ``None`` only when the cell has no label, its callback
-    exceeds 64 bytes, or it has no callback or URL. One unmappable cell
-    keeps the whole keyboard inline.
+    color. Every Kurigram action maps to a rich button; ``None`` is returned
+    only when the cell has no label or its callback exceeds 64 bytes. One
+    unmappable cell keeps the whole keyboard inline.
     """
     label = cell.get("text")
     if not isinstance(label, str):
@@ -261,11 +283,67 @@ def keyboard_button(cell: dict[str, object]) -> str | None:
     url = cell.get("url")
     if isinstance(url, str) and url:
         return button(label, url=url, style=style_value)
+    web_app = cell.get("web_app")
+    if isinstance(web_app, dict) and isinstance(web_app.get("url"), str):
+        return button(label, web_app=web_app["url"], style=style_value)
+    login = cell.get("login_url")
+    if isinstance(login, dict) and isinstance(login.get("url"), str):
+        return button(
+            label,
+            login_url=login["url"],
+            forward_text=login.get("forward_text"),
+            request_write_access=bool(login.get("request_write_access", False)),
+            style=style_value,
+        )
+    copy = cell.get("copy_text")
+    if isinstance(copy, dict) and isinstance(copy.get("text"), str):
+        return button(label, copy=copy["text"], style=style_value)
+    if isinstance(cell.get("switch_inline_query"), str):
+        return button(
+            label,
+            switch_inline_query=cell["switch_inline_query"],
+            style=style_value,
+        )
+    if isinstance(cell.get("switch_inline_query_current_chat"), str):
+        return button(
+            label,
+            switch_inline_query_current_chat=cell["switch_inline_query_current_chat"],
+            style=style_value,
+        )
+    if isinstance(cell.get("switch_inline_query_chosen_chat"), str):
+        return button(
+            label,
+            switch_inline_query_chosen_chat=cell["switch_inline_query_chosen_chat"],
+            allow_user_chats=bool(cell.get("allow_user_chats", False)),
+            allow_bot_chats=bool(cell.get("allow_bot_chats", False)),
+            allow_group_chats=bool(cell.get("allow_group_chats", False)),
+            allow_channel_chats=bool(cell.get("allow_channel_chats", False)),
+            style=style_value,
+        )
+    if not any(
+        cell.get(name)
+        for name in (
+            "callback_data",
+            "url",
+            "web_app",
+            "login_url",
+            "copy_text",
+            "switch_inline_query",
+            "switch_inline_query_current_chat",
+            "switch_inline_query_chosen_chat",
+        )
+    ):
+        return button(label, disabled=True, style=style_value)
     return None
 
 
-def keyboard_rows(reply_markup: object | None) -> list[str] | None:
-    """Convert a PTB inline keyboard into rich button rows, all-or-nothing."""
+def buttons_from_markup(reply_markup: object | None) -> list[str] | None:
+    """Convert a Kurigram inline markup into rich button rows.
+
+    Conversion is all-or-nothing: one cell that cannot be expressed as a rich
+    button keeps the whole keyboard as native inline markup, so no button is
+    silently lost.
+    """
     markup = _markup_dict(reply_markup)
     if markup is None:
         return None
@@ -276,29 +354,26 @@ def keyboard_rows(reply_markup: object | None) -> list[str] | None:
     for row in cells:
         if not isinstance(row, list) or not row:
             continue
-        buttons = [keyboard_button(cell) for cell in row]
-        if any(item is None for item in buttons):
+        converted = [button_from_cell(cell) for cell in row]
+        if any(item is None for item in converted):
             return None
-        rows.append(button_row([item for item in buttons if item]))
+        rows.append(button_row([item for item in converted if item]))
     return rows or None
 
 
 __all__ = [
     "button",
+    "button_from_cell",
     "button_row",
     "button_rows",
+    "buttons_from_markup",
     "callback_button",
     "copy_button",
     "disabled_button",
-    "keyboard_button",
-    "keyboard_rows",
-    "link",
     "login_button",
-    "mention",
     "switch_button",
     "switch_chosen_button",
     "switch_current_button",
     "url_button",
-    "user_ref",
     "web_app_button",
 ]

@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from tcbot import database as db
 from tcbot.modules import mute
 from tcbot.modules.helper.identity import Identity
 from tcbot.modules.helper.scope import flow_scope
@@ -31,7 +32,7 @@ class _Message:
         self._first_token = first_token
 
     async def reply_text(self, *args: Any, **kwargs: Any) -> object:
-        return SimpleNamespace(message_id=7)
+        return SimpleNamespace(id=7, message_id=7)
 
 
 def _target(msg: _Message, first_token: str) -> ModTarget:
@@ -62,6 +63,10 @@ def _run(monkeypatch: pytest.MonkeyPatch, first_token: str) -> dict[str, Any]:
     async def _resolve(*args: Any, **kwargs: Any) -> ModTarget:
         return _target(msg, first_token)
 
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "moderator"
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(mute.targets, "resolve_mod_target", _resolve)
 
     result = asyncio.run(inspect.unwrap(mute.cmd_mute)(update, ctx))

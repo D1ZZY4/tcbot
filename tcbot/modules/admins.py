@@ -7,12 +7,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
-
-from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
 
 from tcbot import database as db
 from tcbot.modules.helper import buttons, decorators, extraction, identity
+from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
 from tcbot.modules.helper.guards import (
     action_owner_mismatch,
     can_demote_admin,
@@ -20,6 +18,7 @@ from tcbot.modules.helper.guards import (
     check_callback_executor,
     require_federation_origin,
 )
+from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     callback_args_optional,
@@ -38,9 +37,6 @@ from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -83,7 +79,7 @@ __help__: replies.HelpEntry = get_help()
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.staff_only
 @decorators.log_execution
-async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_promote(ctx: Ctx) -> None:
     """Assign a federation role to a user (admin / developer / moderator).
 
     Fetches the executor role and resolves the target in parallel. Then fetches
@@ -93,14 +89,14 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     given, shows a role-selection keyboard. Identity and rank checks prevent
     self-promotion or promoting above one's own rank.
     """
-    admin = update.effective_user
-    msg = update.effective_message
+    admin = ctx.effective_user
+    msg = ctx.effective_message
     if admin is None or msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     if not await require_federation_origin(
         msg,
-        chat_id=msg.chat.id,
+        chat_id=chat_id_of(msg.chat),
         chat_type=msg.chat.type,
         locale=locale,
         allow_private=True,
@@ -127,7 +123,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     resolved = await resolve_executor_target(
-        msg, admin.id, update, args, ctx.bot, action="promote", locale=locale
+        ctx, msg, admin.id, args, ctx.bot, action="promote", locale=locale
     )
     if resolved is None:
         return
@@ -163,7 +159,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             _, text = await role_change.change_role_for_staff(
                 ctx.bot,
                 admin.id,
-                admin.first_name,
+                display_name(admin),
                 target_id,
                 target_fname or str(target_id),
                 role,
@@ -172,7 +168,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             await reply_rich(msg, text, log_label="cmd_promote role-change result")
         else:
             await role_change.role_change_prompt(
-                update,
+                ctx,
                 executor_role=executor_role,
                 target_id=target_id,
                 target_fname=target_fname,
@@ -188,7 +184,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * Bots hold no actionable identity, so promoting one grants privilege
     # * to a non-actor. Verified-only; unknown stays allowed so off-group
     # * promotions keep working.
-    if await identity.is_proven_bot(update, target_id, ctx.bot):
+    if await identity.is_proven_bot(ctx, target_id, ctx.bot):
         await reply_rich(
             msg,
             t("admins.error.bot_target", locale, plain=True),
@@ -201,7 +197,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         _, text = await Promote.execute(
             ctx.bot,
             admin.id,
-            admin.first_name,
+            display_name(admin),
             target_id,
             target_fname or str(target_id),
             role,
@@ -235,7 +231,7 @@ async def cmd_promote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
-async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_promote_role_btn(ctx: Ctx) -> None:
     """Handle the role-selection inline button from /tcpromote.
 
     New prompts carry the opener as ``promo_role:{role}:{target}:{executor}``
@@ -246,17 +242,17 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     parallel, then delegates to ``Promote.execute`` and edits the prompt to
     the result.
     """
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     if q.data is None:
         await q.answer()
         return
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         await q.answer()
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     args = callback_args_optional(q, 3)
     if args is None:
         await q.answer()
@@ -267,13 +263,13 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     except ValueError:
         await q.answer()
         return
-    if await action_owner_mismatch(q, update, min_parts=3):
+    if await action_owner_mismatch(q, ctx, min_parts=3):
         return
 
-    if await check_callback_executor(update, q, admin) is None:
+    if await check_callback_executor(ctx, q, admin) is None:
         return
 
-    if await identity.is_proven_bot(update, target_id, ctx.bot):
+    if await identity.is_proven_bot(ctx, target_id, ctx.bot):
         await cb_error_edit(
             q,
             t("admins.error.bot_target", locale, plain=True),
@@ -360,7 +356,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     _, text = await Promote.execute(
         ctx.bot,
         admin.id,
-        admin.first_name,
+        display_name(admin),
         target_id,
         target_fname,
         role,
@@ -378,9 +374,7 @@ async def on_promote_role_btn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 
 @decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
-async def on_promote_role_cancel(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def on_promote_role_cancel(ctx: Ctx) -> None:
     """Acknowledge the cancel button and replace the role-selection prompt with a cancellation notice.
 
     New prompts carry the opener as ``promo_role_cancel:{target}:{executor}``
@@ -389,22 +383,22 @@ async def on_promote_role_cancel(
     in-flight buttons name no owner, so the staff-rank check is the only
     gate there: a non-staffer can never collapse the prompt.
     """
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    if await cancel_owner_mismatch(q, update):
+    if await cancel_owner_mismatch(q, ctx):
         return
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         await q.answer()
         return
-    if await check_callback_executor(update, q, admin) is None:
+    if await check_callback_executor(ctx, q, admin) is None:
         return
     await safe_edit_cb(
         q,
         t(
             "admins.error.promote_cancelled",
-            await locale_for_update(update),
+            await locale_for_update(ctx),
             plain=True,
         ),
         reply_markup=None,
@@ -421,7 +415,7 @@ async def on_promote_role_cancel(
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.staff_only
 @decorators.log_execution
-async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_demote(ctx: Ctx) -> None:
     """Remove a user's federation role.
 
     Fetches the executor role and resolves the target in parallel. Then fetches
@@ -430,14 +424,14 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     the target's current role. Identity guards prevent demoting the Owner or
     self without the correct flow.
     """
-    admin = update.effective_user
-    msg = update.effective_message
+    admin = ctx.effective_user
+    msg = ctx.effective_message
     if admin is None or msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     if not await require_federation_origin(
         msg,
-        chat_id=msg.chat.id,
+        chat_id=chat_id_of(msg.chat),
         chat_type=msg.chat.type,
         locale=locale,
         allow_private=True,
@@ -447,7 +441,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     args = parse_cmd_args(msg.text)
 
     resolved = await resolve_executor_target(
-        msg, admin.id, update, args, ctx.bot, action="demote", locale=locale
+        ctx, msg, admin.id, args, ctx.bot, action="demote", locale=locale
     )
     if resolved is None:
         return
@@ -506,7 +500,7 @@ async def cmd_demote(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
-async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_demote_confirm(ctx: Ctx) -> None:
     """Confirm the demote action from the inline keyboard.
 
     New prompts carry the opener as ``demote_confirm:{target}:{executor}``
@@ -517,13 +511,13 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     and mention data in parallel, then executes ``Demote.execute`` and
     edits the prompt to the result.
     """
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     if q.data is None:
         await q.answer()
         return
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         await q.answer()
         return
@@ -536,10 +530,10 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     except ValueError:
         await q.answer()
         return
-    locale = await locale_for_update(update)
-    if await action_owner_mismatch(q, update, min_parts=2):
+    locale = await locale_for_update(ctx)
+    if await action_owner_mismatch(q, ctx, min_parts=2):
         return
-    executor_role = await check_callback_executor(update, q, admin)
+    executor_role = await check_callback_executor(ctx, q, admin)
     if executor_role is None:
         return
 
@@ -617,7 +611,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
             target_fname,
             target_role,
             admin.id,
-            admin.first_name,
+            display_name(admin),
             trigger=None,
         )
     except Exception:
@@ -652,7 +646,7 @@ async def on_demote_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 
 @decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
-async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_demote_cancel(ctx: Ctx) -> None:
     """Acknowledge the cancel button and collapse the demotion confirmation prompt.
 
     New prompts carry the opener as ``demote_cancel:{target}:{executor}``
@@ -661,20 +655,20 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     in-flight buttons name no owner, so the staff-rank check is the only
     gate there: a non-staffer can never collapse the prompt.
     """
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    if await cancel_owner_mismatch(q, update):
+    if await cancel_owner_mismatch(q, ctx):
         return
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         await q.answer()
         return
-    if await check_callback_executor(update, q, admin) is None:
+    if await check_callback_executor(ctx, q, admin) is None:
         return
     await safe_edit_cb(
         q,
-        t("admins.error.cancelled", await locale_for_update(update), plain=True),
+        t("admins.error.cancelled", await locale_for_update(ctx), plain=True),
         reply_markup=None,
         parse_mode=None,
         log_level="debug",
@@ -689,27 +683,27 @@ async def on_demote_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 @decorators.ratelimiter(decorators.THROTTLE_BULK)
 @decorators.owner_only
 @decorators.log_execution
-async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_transfer(ctx: Ctx) -> None:
     """Transfer federation ownership to another user.
 
     Validates the origin and the target and hands the transfer to
     ``transfer_owner.execute_transfer``, which replaces the owner record
     first and keeps the previous Owner as Admin.
     """
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     if not await require_federation_origin(
         msg,
-        chat_id=msg.chat.id,
+        chat_id=chat_id_of(msg.chat),
         chat_type=msg.chat.type,
         locale=locale,
         allow_private=True,
         log_label="cmd_transfer origin",
     ):
         return
-    await execute_transfer(update, ctx)
+    await execute_transfer(ctx)
 
 
 # ───────────────────── Promotion queue commands ────────────────── #
@@ -717,7 +711,7 @@ async def cmd_transfer(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.ratelimiter(decorators.THROTTLE_BULK)
 @decorators.log_execution
-async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_promote_request(ctx: Ctx) -> None:
     """Submit a promotion request to the Owner.
 
     Checks the caller's existing role and any pending request in parallel.
@@ -729,11 +723,11 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     the subject of the request (executor_id == target_id), which would always
     produce an ``Identity("self")`` refusal - incorrect for a self-submission flow.
     """
-    user = update.effective_user
-    msg = update.effective_message
+    user = ctx.effective_user
+    msg = ctx.effective_message
     if user is None or msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
 
     # * Reject anonymous admins: a request from the group placeholder would
     # * reach the Owner with no attributable sender. Real humans send from
@@ -804,7 +798,7 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
         ctx.bot,
         user.id,
         user.id,
-        user.first_name or "unknown",
+        display_name(user),
         user.username or "",
         locale,
     )
@@ -814,12 +808,12 @@ async def cmd_promote_request(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.staff_only
 @decorators.log_execution
-async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_promote_list(ctx: Ctx) -> None:
     """Reply with a formatted list of all pending promotion requests."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     pending_r, total_r = await asyncio.gather(
         db.queues_db.all_pending(),
         db.queues_db.pending_count(),
@@ -905,14 +899,14 @@ async def cmd_promote_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 
 @decorators.ratelimiter(decorators.THROTTLE_STAFF)
 @decorators.log_execution
-async def on_promo_decision(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_promo_decision(ctx: Ctx) -> None:
     """Handle approve / reject decisions on promotion request cards.
 
     Owner-only callback; the executor (owner re-check, request fetch,
     approve/reject writes, notifications) lives in
     ``promote_decision.execute_promo_decision``.
     """
-    await execute_promo_decision(update, ctx)
+    await execute_promo_decision(ctx)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

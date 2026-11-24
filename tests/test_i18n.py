@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import asyncio
 import importlib
+import inspect
 import re
 import string
 from pathlib import Path
@@ -550,18 +551,26 @@ async def test_group_locale_missing_group(locale_db: str) -> None:
 
 def _message(text: str) -> Any:
     return SimpleNamespace(
-        text=text, get_bot=lambda: SimpleNamespace(username="Bot"), chat_id=1
+        text=text,
+        client=SimpleNamespace(me=SimpleNamespace(username="Bot")),
+        chat=SimpleNamespace(id=1),
     )
+
+
+def _matches(filt: Any, msg: Any) -> bool:
+    """Evaluate a Kurigram filter against one message."""
+    result = filt(msg.client, msg)
+    return asyncio.run(result) if inspect.isawaitable(result) else bool(result)
 
 
 def test_command_aliases_match() -> None:
 
     for alias in ("language", "lang", "langs"):
         filt = _PrefixedCommandFilter(alias, ["/", "!", "."])
-        assert filt.filter(_message(f"/{alias}")) is True
+        assert _matches(filt, _message(f"/{alias}")) is True
     filt = _PrefixedCommandFilter("lang", ["/"])
-    assert filt.filter(_message("/language")) is False
-    assert filt.filter(_message("/languag")) is False
+    assert _matches(filt, _message("/language")) is False
+    assert _matches(filt, _message("/languag")) is False
 
 
 def test_module_handlers_registered() -> None:
@@ -1377,7 +1386,7 @@ def test_can_manage_group_matrix(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(users_roles, "is_staff", _staff_true)
         assert await can_manage_group(_FakeBot("member"), 10, 7) is True
         monkeypatch.setattr(users_roles, "is_staff", _staff_false)
-        assert await can_manage_group(_FakeBot("creator"), 10, 7) is True
+        assert await can_manage_group(_FakeBot("owner"), 10, 7) is True
         assert await can_manage_group(_FakeBot("member"), 10, 7) is False
         assert await can_manage_group(_FakeBot("left"), 10, 7) is False
 
@@ -1406,7 +1415,8 @@ def test_cmd_language_pm_panel(monkeypatch: pytest.MonkeyPatch) -> None:
         text, kwargs = message.sent[0]
         assert kwargs.get("parse_mode") is None
         _assert_v2_render_clean(text, "language command panel")
-        assert kwargs["reply_markup"] is not None
+        assert "<tg-button" in text
+        assert "lang:set:user:" in text
 
     asyncio.run(run())
 
@@ -1430,10 +1440,10 @@ def test_language_menu_back_label_resolves(monkeypatch: pytest.MonkeyPatch) -> N
         update, _ = _update(chat_type="private", query=query)
         await language.on_language_menu(update, SimpleNamespace())
         assert len(query.edits) == 1
-        _, kwargs = query.edits[0]
-        back_text = kwargs["reply_markup"].inline_keyboard[-1][0].text
-        assert back_text == t("button.back", DEFAULT_LOCALE, plain=True)
-        assert not back_text.startswith("[")
+        text, _ = query.edits[0]
+        back_text = t("button.back", DEFAULT_LOCALE, plain=True)
+        assert back_text in text
+        assert "<tg-button" in text
 
     asyncio.run(run())
 

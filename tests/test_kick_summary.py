@@ -10,7 +10,7 @@ import asyncio
 from typing import Any
 
 import pytest
-from telegram.error import BadRequest
+from pyrogram.errors import BadRequest
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import kick_actions
@@ -108,9 +108,9 @@ def _run(bot: _FakeBot, **kwargs: Any) -> _FakeBot:
 def test_summary_edits_prompt_when_known(_kick_no_io: None) -> None:
     bot = _run(_FakeBot(), prompt_chat=22, prompt_id=44)
     assert len(bot.edits) == 1
-    assert bot.edits[0]["kwargs"]["chat_id"] == 22
-    assert bot.edits[0]["kwargs"]["message_id"] == 44
-    assert "has been kicked" in bot.edits[0]["args"][0]
+    assert bot.edits[0]["args"][0] == 22
+    assert bot.edits[0]["args"][1] == 44
+    assert "has been kicked" in bot.edits[0]["kwargs"]["rich_message"].html
     assert bot.replies == []
 
 
@@ -192,7 +192,7 @@ def test_a_stranded_kick_queues_its_unban_repair(
     assert queued == [(55, 22, 11)]
     assert failed == [55]
     assert bot.edits
-    assert "WARNING" in bot.edits[0]["args"][0]
+    assert "WARNING" in bot.edits[0]["kwargs"]["rich_message"].html
 
 
 def test_a_benign_retry_after_a_real_refusal_still_queues_repair(

@@ -12,71 +12,71 @@ from pathlib import Path
 
 from tcbot.utils.logger import get_logger
 
-# * All formatting is rich HTML from the helper/messages rich modules. The
-# * imports are lazy (inside the helpers) because that package imports i18n
-# * back; importing at module load would create a cycle.
+# * All formatting is rich HTML from the helper/rich modules. The imports are
+# * lazy (inside the helpers) so catalog loading never depends on the rich
+# * package at module load time.
 _USERNAME_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_]{5,32}$")
 
 
 def esc(text: object) -> str:
     """Escape untrusted text for a rich HTML field."""
-    from tcbot.modules.helper.messages.rich_style import esc as _esc  # noqa: PLC0415
+    from tcbot.modules.helper.rich.style import esc as _esc  # noqa: PLC0415
 
     return _esc(text)
 
 
 def bold(text: object) -> str:
     """Render text in rich bold markup."""
-    from tcbot.modules.helper.messages.rich_style import bold as _bold  # noqa: PLC0415
+    from tcbot.modules.helper.rich.style import bold as _bold  # noqa: PLC0415
 
     return _bold(text)
 
 
 def italic(text: object) -> str:
     """Render text in rich italic markup."""
-    from tcbot.modules.helper.messages.rich_style import italic as _italic  # noqa: PLC0415
+    from tcbot.modules.helper.rich.style import italic as _italic  # noqa: PLC0415
 
     return _italic(text)
 
 
 def underline(text: object) -> str:
     """Render text in rich underline markup."""
-    from tcbot.modules.helper.messages.rich_style import underline as _underline  # noqa: PLC0415
+    from tcbot.modules.helper.rich.style import underline as _underline  # noqa: PLC0415
 
     return _underline(text)
 
 
 def strike(text: object) -> str:
     """Render text in rich strikethrough markup."""
-    from tcbot.modules.helper.messages.rich_style import strike as _strike  # noqa: PLC0415
+    from tcbot.modules.helper.rich.style import strike as _strike  # noqa: PLC0415
 
     return _strike(text)
 
 
 def code(text: object) -> str:
     """Render text as an inline rich code span."""
-    from tcbot.modules.helper.messages.rich_format import code as _code  # noqa: PLC0415
+    from tcbot.modules.helper.rich.formats import code as _code  # noqa: PLC0415
 
     return _code(text)
 
 
 def pre(text: object) -> str:
     """Render text as a rich preformatted block."""
-    from tcbot.modules.helper.messages.rich_format import pre as _pre  # noqa: PLC0415
+    from tcbot.modules.helper.rich.formats import pre as _pre  # noqa: PLC0415
 
     return _pre(text)
 
 
 def link(text: object, url: str) -> str:
     """Render a rich hyperlink from text and a URL."""
-    from tcbot.modules.helper.messages.rich_link import link as _link  # noqa: PLC0415
+    from tcbot.modules.helper.rich.link import link as _link  # noqa: PLC0415
 
     return _link(text, url)
 
 
 def user_ref(user_id: int, name: str, username: str | None = None) -> str:
     """Render a rich, ID-based mention of a user."""
-    from tcbot.modules.helper.messages.rich_link import user_ref as _user_ref  # noqa: PLC0415
+    from tcbot.modules.helper.rich.link import user_ref as _user_ref  # noqa: PLC0415
 
     return _user_ref(user_id, name)
 
@@ -90,21 +90,21 @@ def safe_username(username: str | None) -> str | None:
 
 def divider() -> str:
     """Render the shared rich horizontal rule."""
-    from tcbot.modules.helper.messages.rich_format import divider as _divider  # noqa: PLC0415
+    from tcbot.modules.helper.rich.formats import divider as _divider  # noqa: PLC0415
 
     return _divider()
 
 
 def quote(text: str, *, author: object | None = None) -> str:
     """Render a block quotation, with an optional attributed author."""
-    from tcbot.modules.helper.messages.rich_format import quote as _quote  # noqa: PLC0415
+    from tcbot.modules.helper.rich.formats import quote as _quote  # noqa: PLC0415
 
     return _quote(text, author=author)
 
 
 def heading(text: object, level: int = 2) -> str:
     """Render a rich section heading."""
-    from tcbot.modules.helper.messages.rich_format import (  # noqa: PLC0415
+    from tcbot.modules.helper.rich.formats import (  # noqa: PLC0415
         heading as _heading,
     )
 
@@ -113,7 +113,7 @@ def heading(text: object, level: int = 2) -> str:
 
 def subscript(text: object) -> str:
     """Render text as rich subscript."""
-    from tcbot.modules.helper.messages.rich_style import (  # noqa: PLC0415
+    from tcbot.modules.helper.rich.style import (  # noqa: PLC0415
         subscript as _subscript,
     )
 
@@ -122,7 +122,7 @@ def subscript(text: object) -> str:
 
 def superscript(text: object) -> str:
     """Render text as rich superscript."""
-    from tcbot.modules.helper.messages.rich_style import (  # noqa: PLC0415
+    from tcbot.modules.helper.rich.style import (  # noqa: PLC0415
         superscript as _superscript,
     )
 
@@ -131,7 +131,7 @@ def superscript(text: object) -> str:
 
 def bullet_list(lines: list[str]) -> str:
     """Render already-formatted lines as a rich bulleted block."""
-    from tcbot.modules.helper.messages.rich_list import bullet_list as _bullet_list  # noqa: PLC0415
+    from tcbot.modules.helper.rich.list import bullet_list as _bullet_list  # noqa: PLC0415
 
     return _bullet_list([line for line in lines if line])
 

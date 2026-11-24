@@ -13,9 +13,9 @@ if TYPE_CHECKING:
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper.messages.rich_format import divider, heading
-from tcbot.modules.helper.messages.rich_list import bullet_list
-from tcbot.modules.helper.messages.rich_style import bold as rich_bold
+from tcbot.modules.helper.rich.formats import divider, heading
+from tcbot.modules.helper.rich.list import bullet_list
+from tcbot.modules.helper.rich.style import bold as rich_bold
 from tcbot.utils.i18n import code, esc, link, safe_username, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_date, fmt_time, utc_now

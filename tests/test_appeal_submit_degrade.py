@@ -11,10 +11,10 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from telegram.ext import ConversationHandler
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import appeal_submit
+from tcbot.modules.helper.handlers import ConversationHandler
+from tcbot.modules.helper.pipelines import appeal_post, appeal_submit
 from tcbot.modules.helper.pipelines.appeal_submit import (
     WAITING_APPEAL,
     AppealSubmitMixin,
@@ -35,7 +35,7 @@ class _FakeMsg:
         return object()
 
     async def forward(self, *args: Any, **kwargs: Any) -> object:
-        return SimpleNamespace(message_id=111)
+        return SimpleNamespace(id=111)
 
 
 class _FakeBot:
@@ -48,16 +48,18 @@ class _FakeBot:
     async def send_message(self, chat_id: int, *args: Any, **kwargs: Any) -> object:
         if chat_id == self._main_group:
             raise RuntimeError("review post blew up")
-        return SimpleNamespace(message_id=222)
+        return SimpleNamespace(id=222)
 
     async def edit_message_text(
         self,
-        text: str,
         chat_id: int | None = None,
         message_id: int | None = None,
+        *,
+        rich_message: object = None,
         reply_markup: object = None,
+        **kwargs: Any,
     ) -> object:
-        self.edits.append(text)
+        self.edits.append(str(getattr(rich_message, "html", "") or rich_message))
         return object()
 
 
@@ -91,7 +93,7 @@ def test_review_post_failure_stays_retryable(
     monkeypatch.setattr(db.bans_db, "set_appeal_log_msg", _set_appeal_log)
     monkeypatch.setattr(db.users_cache, "upsert_user", _upsert)
     monkeypatch.setattr(
-        appeal_submit,
+        appeal_post,
         "cfg",
         SimpleNamespace(
             appeals=(-1001, None),
@@ -105,7 +107,7 @@ def test_review_post_failure_stays_retryable(
     update = _update(msg, bot)
     ctx = SimpleNamespace(bot=bot, user_data={})
     # * The appeal payload lives in the (chat, user) conversation scope, not
-    # * in the per-user data PTB shares across chats.
+    # * in a per-user dictionary shared across chats.
     scope = flow_scope(ctx, update)  # type: ignore[arg-type]
     scope["appeal_ban_id"] = "abc123def4"
     scope["appeal_log_msg_id"] = 0

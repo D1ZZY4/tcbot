@@ -15,21 +15,24 @@ direction of data between components.
 
 ```mermaid
 flowchart TD
-    U[Telegram update] --> WEB["alive.py webhook or polling"]
-    WEB --> PTB["python-telegram-bot Application"]
-    PTB --> PROC["update_processor: per-conversation serialization"]
-    PROC --> FILT["prefix and command filters"]
+    U[Telegram update] --> KUR["Kurigram client: native long polling"]
+    KUR --> CTX["Ctx: application context and (chat,user) state"]
+    CTX --> FILT["prefix and command filters"]
     FILT --> DEC["decorators: ratelimiter, tier guard, log_execution"]
     DEC --> CMD["Command handler in tcbot/modules"]
     CMD --> GATE["auth: guards, identity, extraction, targets"]
     GATE --> FLOW["Flow in helper/pipelines"]
     FLOW --> DB[("PostgreSQL via engine.db_call")]
     FLOW --> CACHE[("Redis L1 memory and optional L2 cache")]
-    FLOW --> RICH["rich_msg / rich_edit with rich_message payload"]
+    FLOW --> RICH["rich/msg and rich/edit with InputRichMessage"]
     RICH --> U
     DB --> WK["enforcement_worker, notification_worker, scheduler"]
     WK --> U
 ```
+
+The single Kurigram client is created by `tcbot/database/mtproto.py` and owns the
+bot session. It receives updates through long polling; there is no webhook path,
+HTTP receiver, or second framework in the application.
 
 ## Startup sequence
 
@@ -40,23 +43,23 @@ application, the database, the scheduler, and the Telegram transport.
 sequenceDiagram
     participant Main as __main__.py
     participant Config as Configs
+    participant KUR as Kurigram client
     participant DB as PostgreSQL
     participant Sched as APScheduler
-    participant PTB as Telegram Application
     Main->>Config: load environment and validate required secrets
-    Main->>PTB: build application and discover modules
-    PTB->>PTB: register command callback and message handlers
+    Main->>KUR: discover modules and register handlers
     Main->>DB: connect engine and apply Alembic migrations in a worker thread
     Main->>DB: seed owner and destinations, then prime caches
+    Main->>KUR: start client and connect Redis and the bot session
     Main->>Sched: register expiry retention and reconciliation jobs
-    Main->>PTB: set webhook or start polling fallback
+    Main->>KUR: enter the idle loop
 ```
 
 Module discovery and the `MODULES_LOAD` and `MODULES_NO_LOAD` filters are
-centralized in `tcbot/modules/__init__.py`. Webhook is the production path;
-local development may fall back to polling. Shutdown drains Bot-dependent work
-in `post_stop` while the client is still available, then closes external
-clients in `post_shutdown`.
+centralized in `tcbot/modules/__init__.py`. All deployments use the same
+Kurigram long-polling transport. Shutdown runs `_shutdown_subsystems()` to stop
+the scheduler, drain proof uploads, identity refreshes and error reports, then
+close the client and every external connection.
 
 ## Update dispatch layers
 
@@ -82,14 +85,20 @@ Decorator order is fixed: `ratelimiter()` outermost, the required authorization
 guard second, and `log_execution` innermost. Message-event handlers are exempt
 from per-handler rate limits. Callback queries always call `q.answer()` first.
 
-A `ConversationHandler` owns an update only when one of its state handlers or
-fallbacks matches its `(chat, user)` key. Its command fallback is narrowed with
-`build_conversation_escape_filter()` from `utils/prefixes.py`: every registered
-command except the flow's own re-entry commands passes through to its own handler.
-A moderator who sends `/tcunban` during ban proof collection therefore unbans the
-target instead of silently cancelling the ban, while re-entering the same command
-still ends the previous flow. Commands a module adds must be listed in
-`_ALL_COMMANDS` so they escape as well.
+Rate limiting is applied by the per-handler `ratelimiter()` decorator; there is no
+globally registered flood handler. Flow state is keyed by `(chat, user)` in the
+bounded TTL store owned by `modules/helper/context.py`, so two moderators acting
+in different groups cannot overwrite each other's target, reason or prompt.
+
+The application-level `ConversationHandler` in `modules/helper/handlers.py` groups
+a flow's entry points, state handlers and fallbacks into native Kurigram handlers.
+Its command fallback is narrowed with `build_conversation_escape_filter()` from
+`utils/prefixes.py`: every registered command except the flow's own re-entry
+commands passes through to its own handler. A moderator who sends `/tcunban`
+during ban proof collection therefore unbans the target instead of silently
+cancelling the ban, while re-entering the same command still ends the previous
+flow. Commands a module adds must be listed in `_ALL_COMMANDS` so they escape as
+well.
 
 ## Authorization and target resolution
 
@@ -127,9 +136,9 @@ messages, and appeals live in the community moderation tables. Durable per-group
 work lives in `moderation_enforcement_runs`, `moderation_enforcement_targets`,
 and `moderation_enforcement_attempts`.
 
-User-facing messages render through `rich_msg.py` and `rich_edit.py` using a
-`rich_message` payload. Keyboards are rich buttons; cells that cannot be
-expressed as rich buttons keep their inline keyboard. Plain notices and callback
-alerts stay unparsed. No parse mode is used anywhere. Every decision commits to
-PostgreSQL before any Telegram call, and unfinished per-group deliveries are
-queued for the workers described in [Runtime](../architecture/runtime.md).
+User-facing messages render through `rich/msg.py` and `rich/edit.py` using
+Kurigram's native `InputRichMessage`. Keyboards are rich buttons; cells that
+cannot be expressed as rich buttons keep their inline keyboard. Plain notices and
+callback alerts stay unparsed. No parse mode is used anywhere. Every decision
+commits to PostgreSQL before any Telegram call, and unfinished per-group
+deliveries are queued for the workers described in [Runtime](../architecture/runtime.md).

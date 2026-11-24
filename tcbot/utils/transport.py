@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-# * HTTP timeout values for the PTB ApplicationBuilder (seconds).
+# * HTTP timeout values for the Kurigram client (seconds).
 # * Raised for Replit: first getMe() response can take >15s on this network.
 HTTP_READ_TIMEOUT: int = 60
 HTTP_WRITE_TIMEOUT: int = 30
@@ -23,7 +23,7 @@ TELEGRAM_LOOKUP_TIMEOUT: float = 3.0
 TELEGRAM_ACTION_TIMEOUT: float = 20.0
 
 # * Connection pool size for the underlying httpx client (API calls).
-# * Not used for update fetching in webhook mode; still needed for send/edit/etc.
+# * Shared by every Kurigram API call, including polling and send/edit paths.
 # * Sized above the fan_out cap (10): one full fan-out plus concurrent
 # * handler traffic must never queue on pool exhaustion.
 API_POOL_SIZE: int = 16

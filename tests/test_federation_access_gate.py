@@ -298,12 +298,14 @@ def test_a_role_command_refuses_a_non_federation_group(
     monkeypatch.setattr(db.groups_db, "is_connected", _not_connected)
     msg = _FakeMessage()
     msg.text = text
-    update = SimpleNamespace(
+    ctx = SimpleNamespace(
         effective_message=msg,
         effective_user=SimpleNamespace(id=42, first_name="Admin"),
         effective_chat=msg.chat,
+        bot=None,
+        user_data={},
     )
 
-    asyncio.run(_undecorated(handler)(update, SimpleNamespace(bot=None, user_data={})))
+    asyncio.run(_undecorated(handler)(ctx))
 
     assert msg.replies == [t("common.err.group_not_found", "en-US", plain=True)]

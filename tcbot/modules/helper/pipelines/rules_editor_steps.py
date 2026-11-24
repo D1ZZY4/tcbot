@@ -8,20 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from tcbot import database as db
 from tcbot.database.rules_db.sets import WORKING_LOCALE
+from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, safe_edit_cb
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import canonical_locale
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
-
-if TYPE_CHECKING:
-    from telegram import Update
-    from telegram.ext import ContextTypes
 
 log = get_logger(__name__)
 
@@ -49,14 +46,14 @@ _EDITOR_SCOPE_KEYS = (
 )
 
 
-async def editor_allowed(update: Update) -> bool:
+async def editor_allowed(ctx: Ctx) -> bool:
     """Re-check the editor capability on every editor surface.
 
     A capability can be revoked while a panel or a dialog stays open, so
     every mutation re-reads the permission instead of trusting the command
     that opened the editor. A lookup failure rejects.
     """
-    uid = update.effective_user.id if update.effective_user else 0
+    uid = ctx.effective_user.id if ctx.effective_user else 0
     try:
         return await db.users_roles.has_permission(uid, "rules.manage")
     except asyncio.CancelledError:
@@ -78,19 +75,19 @@ def clear_editor_scope(scope: dict[str, Any]) -> None:
         scope.pop(key, None)
 
 
-async def refuse_editor(update: Update) -> None:
+async def refuse_editor(ctx: Ctx) -> None:
     """Answer the callback and explain why an editor action was refused."""
-    query = update.callback_query
+    query = ctx.callback_query
     if query is not None:
         try:
             await query.answer()
         except Exception as exc:
             log.debug("editor refusal answer failed: %s", exc)
-    msg = query.message if query is not None else update.effective_message
+    msg = query.message if query is not None else ctx.effective_message
     if msg is not None:
         await reply_rich(
             cast("Any", msg),
-            replies.refuse_permission(await locale_for_update(update), plain=True),
+            replies.refuse_permission(await locale_for_update(ctx), plain=True),
             log_label="rules editor refusal",
             parse_mode=None,
         )
@@ -102,20 +99,18 @@ def slug(title: str) -> str:
     return base[:_SLUG_MAX] or "category"
 
 
-def content_locale(ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> str:
+def content_locale(ctx: Ctx) -> str:
     """Return the rule-set language chosen in this editor session."""
-    value = flow_scope(ctx, update).get("rules_content_locale")
+    value = flow_scope(ctx).get("rules_content_locale")
     return canonical_locale(str(value) if value else None) or WORKING_LOCALE
 
 
-async def set_and_draft(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> tuple[dict[str, Any], dict[str, Any]] | None:
+async def set_and_draft(ctx: Ctx) -> tuple[dict[str, Any], dict[str, Any]] | None:
     """Ensure a community set and open the draft for the chosen language."""
-    if not await editor_allowed(update):
-        await refuse_editor(update)
+    if not await editor_allowed(ctx):
+        await refuse_editor(ctx)
         return None
-    scope = flow_scope(ctx, update)
+    scope = flow_scope(ctx)
     set_doc = scope.get("rules_set")
     if set_doc is None:
         set_doc = await db.rules_db.get_or_create_community_set()
@@ -124,19 +119,19 @@ async def set_and_draft(
     if version is None or version.get("status") != "draft":
         version = await db.rules_db.open_draft(
             int(set_doc["id"]),
-            update.effective_user.id if update.effective_user else 0,
-            locale=content_locale(ctx, update),
+            ctx.effective_user.id if ctx.effective_user else 0,
+            locale=content_locale(ctx),
         )
         scope["rules_version"] = version
     return set_doc, version
 
 
-async def edit_or_reply(update: Update, text: str, markup: Any) -> None:
+async def edit_or_reply(ctx: Ctx, text: str, markup: Any) -> None:
     """Edit the invoking message, or reply when there is no callback query."""
-    query = update.callback_query
+    query = ctx.callback_query
     if query is not None:
         await safe_edit_cb(query, text, parse_mode=None, reply_markup=markup)
         return
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is not None:
         await reply_rich(msg, text, reply_markup=markup)

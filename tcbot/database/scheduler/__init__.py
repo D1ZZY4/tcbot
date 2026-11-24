@@ -59,7 +59,7 @@ _sched_stop: asyncio.Event | None = None
 _sched_error: BaseException | None = None
 
 # * Maximum seconds to wait for the scheduler background task to exit cleanly
-# * before declaring it stuck.  10 s matches the PTB shutdown grace window.
+# * before declaring it stuck. Ten seconds is the bot's shutdown grace window.
 _STOP_TIMEOUT_S: float = 10.0
 
 # * Maximum seconds to wait for the scheduler to become ready. The job store
@@ -245,7 +245,7 @@ async def _scheduler_background(
         # * The job store performs blocking database calls (table creation,
         # * job insert/update/lookup) and every one of them would otherwise
         # * stall the event loop for the whole server-selection timeout while
-        # * the database is unreachable, freezing the webhook receiver with it.
+        # * the database is unreachable, freezing every handler with it.
         await loop.run_in_executor(
             _scheduler_pool(),
             functools.partial(

@@ -45,14 +45,17 @@ def test_delivery_sends_rich_with_markdown_fallback(monkeypatch: Any) -> None:
     calls: list[dict[str, Any]] = []
 
     class _Bot:
-        async def do_api_request(
-            self, endpoint: str, *, api_kwargs: Any, return_type: Any
+        async def send_rich_message(
+            self, chat_id: Any, rich_message: Any, **_kwargs: Any
         ) -> str:
-            calls.append({"endpoint": endpoint, **api_kwargs})
+            calls.append(
+                {
+                    "endpoint": "sendRichMessage",
+                    "chat_id": chat_id,
+                    "rich_message": {"html": rich_message.html},
+                }
+            )
             return "sent"
-
-        async def send_message(self, *_args: Any, **_kwargs: Any) -> str:
-            return "fallback"
 
     monkeypatch.setattr(error_reporter, "_bot", _Bot())
     monkeypatch.setattr(error_reporter, "_chat_id", -100)
@@ -69,10 +72,16 @@ def test_owner_dm_uses_the_rich_payload(monkeypatch: Any) -> None:
     calls: list[dict[str, Any]] = []
 
     class _Bot:
-        async def do_api_request(
-            self, endpoint: str, *, api_kwargs: Any, return_type: Any
+        async def send_rich_message(
+            self, chat_id: Any, rich_message: Any, **_kwargs: Any
         ) -> str:
-            calls.append({"endpoint": endpoint, **api_kwargs})
+            calls.append(
+                {
+                    "endpoint": "sendRichMessage",
+                    "chat_id": chat_id,
+                    "rich_message": {"html": rich_message.html},
+                }
+            )
             return "sent"
 
     monkeypatch.setattr(error_reporter, "_bot", _Bot())

@@ -61,8 +61,7 @@ Commonly configured values:
 | `ALBUM_DEBOUNCE_SECONDS` | `4` | Proof silence window, minimum 1. |
 | `WARN_LIMIT`, `WARN_EXPIRY_DAYS`, `FED_WARN_LIMIT` | `3`, `0`, `0` | Warning thresholds and expiry. |
 | `PROMOTION_REQUEST_TTL_DAYS` | `7` | Pending request lifetime; 0 disables expiry. |
-| `PORT`, `BIND_HOST` | `5000`, `0.0.0.0` | Keep-alive and webhook listener. |
-| `WEBHOOK_URL`, `WEBHOOK_SECRET` | empty, random | Webhook transport. |
+| `PORT`, `BIND_HOST` | `5000`, `0.0.0.0` | Keep-alive and health listener. |
 | `SENTRY_DSN` | empty | Opt-in error monitoring with the observability extra. |
 | `MODULES_LOAD`, `MODULES_NO_LOAD` | empty | Module allowlist and denylist. |
 | `MTPROTO_SESSION` | `tcbot_mtproto` | Namespace for the shared MTProto session in PostgreSQL. |
@@ -76,17 +75,16 @@ Community menu links derive from `MAIN_CHANNEL`, `MAIN_GROUP`, `LOGS`, and
 uv run python -m tcbot
 ```
 
-Without a public webhook URL the bot falls back to long polling. Startup loads
-the configuration, starts the Flask health server, connects PostgreSQL, applies
-migrations, seeds the Owner, registers destinations, connects Redis and MTProto,
-starts the scheduler, and discovers handlers. Health endpoints:
+The bot runs a single Kurigram client in native long-polling mode. No public
+URL, webhook secret, or TLS certificate is required. Startup loads the
+configuration, starts the Flask health server, connects PostgreSQL, applies
+migrations, seeds the Owner, registers destinations, connects Redis and the
+Kurigram session, starts the scheduler, and discovers handlers. Health endpoints:
 
 - `GET /` returns `OK`.
 - `GET /health` returns JSON with HTTP 200 when core subsystems are ready and
   503 when degraded. Redis is a hint only; a Redis outage does not page the instance.
 - `GET /metrics` is available when the optional `prometheus-client` extra is installed.
-- `POST /webhook` receives Telegram updates in webhook mode. The route checks the
-  secret token in constant time before touching the payload.
 
 ## Run with Docker Compose
 
@@ -100,18 +98,17 @@ The compose file starts the bot, PostgreSQL, and Redis, and reads runtime
 settings from `.env`. Keep secrets in the environment or the platform secret
 manager, not in committed files.
 
-## Hosted webhook deployment
+## Hosted deployment
 
-Set `WEBHOOK_URL` to the public HTTPS base URL. The bot registers
-`<WEBHOOK_URL>/webhook`, verifies the registered URL, and wires the Flask
-receiver before accepting updates. `WEBHOOK_SECRET` defaults to a random token
-regenerated each restart, which is safe because `set_webhook` uses the current
-value. During shutdown the route returns 503 so Telegram retries in-flight
-updates.
+Run `uv run python -m tcbot` as a long-lived process. The Kurigram client fetches
+updates itself, so no inbound port, public domain, or reverse proxy is needed for
+Telegram traffic. Keep exactly one process per bot token running, since two
+clients polling the same identity conflict. The Flask keep-alive server only
+serves `/`, `/health` and `/metrics`, and can be bound to `127.0.0.1` behind a
+local reverse proxy when those endpoints are scraped privately.
 
-On Replit the dev domain is used only when the process is the Replit
-application itself. A workspace shell that starts the bot by hand polls
-instead. Set `WEBHOOK_URL` explicitly to override this.
+On shutdown the process drains scheduled work, proof uploads, error reports,
+and background tasks before closing the Kurigram session and the database pool.
 
 ## Validate
 

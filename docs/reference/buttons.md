@@ -9,9 +9,8 @@ messages that carry these keyboards are rendered is in
 
 ## Rendering contract
 
-A button is built as a PTB `InlineKeyboardButton` and converted to a rich
-`<tg-button>` by `messages/rich_link.py`. A rich button carries exactly one
-action:
+A button is built as a Kurigram `InlineKeyboardButton` and converted to a rich
+`<tg-button>` by `rich/button.py`. A rich button carries exactly one action:
 
 | Keyword | Action type | Notes |
 |---|---|---|
@@ -25,7 +24,7 @@ action:
 | `switch_inline_query_chosen_chat` | `switch_inline_query_chosen_chat` | With optional chat-type flags. |
 | `disabled` | `disabled` | Inert button. |
 
-Convenience wrappers in `rich_link.py` (`callback_button`, `url_button`,
+Convenience wrappers in `rich/button.py` (`callback_button`, `url_button`,
 `copy_button`, `web_app_button`, `login_button`, `switch_button`,
 `disabled_button`) are thin aliases over `button()`.
 
@@ -48,7 +47,7 @@ Older clients ignore the style field, so color is purely additive.
 
 ### Inline keyboard fallback
 
-`keyboard_rows(reply_markup)` is all-or-nothing: one cell that cannot map keeps
+`buttons_from_markup(reply_markup)` is all-or-nothing: one cell that cannot map keeps
 the whole keyboard inline. A cell fails to map when its `callback_data` exceeds
 64 bytes, it uses an action with no rich equivalent, its text is not a string,
 or it has neither callback data nor a URL. Payloads using `blocks` instead of

@@ -2,32 +2,29 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Bot entry point: lifecycle, errors, and main startup."""
+"""Bot entry point: Kurigram polling lifecycle, errors, and startup."""
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import signal
 import sys
 import traceback
-import warnings
 from typing import TYPE_CHECKING
 
-import telegram.error as te
-from telegram import Bot, LinkPreviewOptions, Update
-from telegram.ext import (
-    AIORateLimiter,
-    Application,
-    ApplicationBuilder,
-    ContextTypes,
-    Defaults,
-    TypeHandler,
+from pyrogram import idle
+from pyrogram.handlers import (
+    CallbackQueryHandler,
+    ChatJoinRequestHandler,
+    ChatMemberUpdatedHandler,
+    ErrorHandler,
+    MessageHandler,
 )
+from pyrogram.types import CallbackQuery, ChatJoinRequest, ChatMemberUpdated, Message
 
 from tcbot import cfg, error_reporter
 from tcbot import database as db
-from tcbot.alive import begin_shutdown, register_webhook, start_keepalive
+from tcbot.alive import start_keepalive
 from tcbot.database import engine as db_engine
 from tcbot.database import mtproto as mtproto_mod
 from tcbot.database import pg_cron, redis_client
@@ -38,8 +35,9 @@ from tcbot.database.engine import connect
 from tcbot.enforcement_worker import configure as configure_enforcement_worker
 from tcbot.enforcement_worker import run as run_enforcement_worker
 from tcbot.modules import get_handlers, handler_group
-from tcbot.modules.helper.decorators import global_rate_limit_handler
+from tcbot.modules.helper.context import bot_identity
 from tcbot.modules.helper.extraction import refresh as identity_refresh
+from tcbot.modules.helper.handlers import current_ctx, shutdown_dispatcher
 from tcbot.modules.helper.pipelines import connect_common
 from tcbot.modules.helper.pipelines.ban_actions import drain_proof_sessions
 from tcbot.notification_worker import configure as configure_notification_worker
@@ -50,17 +48,11 @@ from tcbot.utils.i18n import _ensure_loaded
 from tcbot.utils.logger import ERROR_LEVEL, get_logger
 from tcbot.utils.logger import setup as setup_logging
 from tcbot.utils.tasks import TaskTracker
-from tcbot.utils.transport import (
-    API_POOL_SIZE,
-    HTTP_CONNECT_TIMEOUT,
-    HTTP_POOL_TIMEOUT,
-    HTTP_READ_TIMEOUT,
-    HTTP_WRITE_TIMEOUT,
-)
-from tcbot.utils.update_processor import KeyedUpdateProcessor
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from pyrogram import Client
 
 try:  # Optional performance extra: uvloop replaces the asyncio loop on Linux.
     import uvloop  # type: ignore[reportMissingImports]
@@ -76,68 +68,45 @@ except ImportError:
 
 log = get_logger(__name__)
 
-# ─────────────────────────────── Constants ───────────────────────────────── #
+# ─────────────────────────────── Constants ─────────────────────────────── #
 
-_UPDATES_POOL_SIZE: int = 4
-# * Flood-wait retries for the rate limiter. Telegram answers a request
-# * that exceeds a limit with ``RetryAfter``; without a retry budget the
-# * request fails outright and a federation-wide action silently misses
-# * the affected groups. The limiter waits out the requested delay and
-# * pauses the other requests meanwhile, which is the behaviour Telegram
-# * asks for.
-_RATE_LIMIT_RETRIES: int = 2
-_LINK_PREVIEW_DISABLED: LinkPreviewOptions = LinkPreviewOptions(is_disabled=True)
 _HANDLER_GROUP_RATE_LIMITER: int = -1
 _HANDLER_GROUP_CACHE: int = 10
-_WEBHOOK_PATH: str = "/webhook"
 _FATAL_BORDER_WIDTH: int = 70
 _FATAL_RED: str = "\033[38;5;203m"
 _FATAL_RESET: str = "\033[0m"
 _ERROR_CONTEXT_TEXT_LEN: int = 120
-# * Owners of the fire-and-forget task sets. Every background task the
-# * bot schedules is tracked by one of these, so the shutdown drains them
-# * in one place instead of every owner exposing its own helper.
+_MEMBER_CACHE_MAX_CONCURRENT: int = 20
+_MEMBER_CACHE_DROP_REPORT_EVERY: int = 100
+
 _member_cache_tasks = TaskTracker("member cache")
 _startup_tasks = TaskTracker("startup warm-up")
 _asyncio_report_tasks = TaskTracker("async error reports")
-_MEMBER_CACHE_MAX_CONCURRENT: int = 20
-# * Number of identity harvests dropped since the last report. The
-# * harvest is best-effort, so a saturated pool stops the bot from
-# * tracking new identities; the counter makes that visible instead of
-# * silent.
 _member_cache_drops: int = 0
-_MEMBER_CACHE_DROP_REPORT_EVERY: int = 100
-
-warnings.filterwarnings(
-    "ignore",
-    message=r"If 'per_message=False', 'CallbackQueryHandler'.*",
-    category=UserWarning,
-)
 
 
 # ───────────────────────────── Member cache ────────────────────────────── #
 
 
-async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Cache the effective_user of every update; skip bots and empty names."""
+async def _cache_identity(client: Client, user: object) -> None:
+    """Cache the acting user of every update; skip bots and empty names."""
     global _member_cache_drops
-    user = update.effective_user
-    if not user or user.is_bot or not user.first_name:
+    uid = getattr(user, "id", None)
+    if not uid or getattr(user, "is_bot", False) or not getattr(user, "first_name", ""):
         return
-    uid, uname, fname, lname = user.id, user.username, user.first_name, user.last_name
 
     async def _do_cache() -> None:
         try:
-            await db.users_cache.harvest_user_identity(uid, uname, fname, lname)
+            await db.users_cache.harvest_user_identity(
+                uid,
+                getattr(user, "username", None),
+                str(getattr(user, "first_name", "") or ""),
+                getattr(user, "last_name", None),
+            )
         except Exception as exc:
             log.debug("Member cache update failed for %d: %s", uid, exc)
 
     if _member_cache_tasks.pending >= _MEMBER_CACHE_MAX_CONCURRENT:
-        # * The harvest is best-effort: dropping the update keeps the
-        # * event loop free, but the bot stops tracking that identity.
-        # * Report every hundredth cumulative drop: resetting the counter
-        # * after a report made the next drop look like a new hundred and
-        # * flooded the log once the pool saturated.
         _member_cache_drops += 1
         if _member_cache_drops % _MEMBER_CACHE_DROP_REPORT_EVERY == 0:
             log.warning(
@@ -150,38 +119,44 @@ async def _update_member_cache(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     _member_cache_tasks.spawn(_do_cache())
 
 
-# ──────────────────────────── Error layers ─────────────────────────────── #
+async def _on_any_update(client: Client, update: object) -> None:
+    """Cache identity from a typed Kurigram update that carries a user."""
+    if isinstance(update, (Message, CallbackQuery, ChatMemberUpdated, ChatJoinRequest)):
+        user = update.from_user
+        if user is not None:
+            await _cache_identity(client, user)
 
 
-async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    """Report unhandled PTB handler exceptions to LOG_ERRORS."""
-    exc = ctx.error
-    if exc is None:
-        return
-    if exc is not None and (
-        db_engine.is_connection_error(exc) or isinstance(exc, CircuitOpenError)
-    ):
+# ─────────────────────────────── Error layers ───────────────────────────── #
+
+
+async def _error_handler(
+    client: Client,
+    exc: BaseException,
+    handler: object,
+    update: object,
+    users: object,
+    chats: object,
+) -> None:
+    """Report unhandled Kurigram handler exceptions to LOG_ERRORS."""
+    if db_engine.is_connection_error(exc) or isinstance(exc, CircuitOpenError):
         log.warning("Handler aborted: %s", exc)
         return
     if db_engine.is_pool_timeout(exc):
         log.warning("Database pool saturated (not reported): %s", exc)
         return
-    if isinstance(exc, te.Conflict):
-        # * Another instance is polling this bot. It is an operator
-        # * situation rather than a defect, so the traceback stays out of
-        # * the log. The reporter routes a conflict to the owner DM, which
-        # * is where the operator reads it.
+    if isinstance(exc, (TimeoutError, ConnectionError, OSError)):
+        log.warning("Transient network error (not reported): %s", exc)
+        return
+    if isinstance(exc, error_reporter.PollingConflictError):
+        # * Another instance is polling this bot. It is an operator situation,
+        # * not a defect: keep the traceback out of the log and route one
+        # * actionable report to the owner.
         log.warning(
             "Telegram refused the poll: another instance is polling this "
             "bot. Stop the other instance or give each one its own token."
         )
         await error_reporter.report_exc(exc)
-        return
-    if isinstance(exc, (te.NetworkError, te.TimedOut, te.RetryAfter)):
-        log.warning("Transient Telegram error (not reported): %s", exc)
-        return
-    if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
-        log.warning("Transient network error (not reported): %s", exc)
         return
     try:
         if error_reporter._benign(exc):
@@ -189,44 +164,35 @@ async def _error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None
     except Exception as check_exc:
         log.debug("benign check failed, treating as reportable: %s", check_exc)
     context_parts: list[str] = []
-    if isinstance(update, Update):
-        chat = update.effective_chat
-        # * A private chat must not leak its contents into an operator
-        # * channel: the raw message may carry personal data the sender
-        # * never intended to share, and the chat identifier is private
-        # * too. Private chats keep the display name only.
-        is_private = getattr(chat, "type", None) == "private"
-        if update.effective_user:
-            u = update.effective_user
-            context_parts.append(
-                f"User: {u.first_name}"
-                if is_private
-                else f"User: {u.first_name} ({u.id})"
-            )
-        if chat:
-            c = chat
-            context_parts.append(
-                "Chat: DM" if is_private else f"Chat: {c.title or 'group'} ({c.id})"
-            )
-        if update.effective_message and update.effective_message.text:
-            if not is_private:
-                context_parts.append(
-                    f"Text: {update.effective_message.text[:_ERROR_CONTEXT_TEXT_LEN]}"
-                )
-        elif update.callback_query and not is_private:
-            context_parts.append(f"CBQ data: {update.callback_query.data}")
+    ctx = current_ctx()
+    user = ctx.effective_user if ctx is not None else None
+    chat = ctx.effective_chat if ctx is not None else None
+    msg = ctx.effective_message if ctx is not None else None
+    query = ctx.callback_query if ctx is not None else None
+    is_private = getattr(getattr(chat, "type", None), "value", "") in ("private", "bot")
+    if user is not None:
+        context_parts.append(
+            f"User: {user.first_name}"
+            if is_private
+            else f"User: {user.first_name} ({user.id})"
+        )
+    if chat is not None:
+        context_parts.append(
+            "Chat: DM"
+            if is_private
+            else f"Chat: {getattr(chat, 'title', None) or 'group'} ({chat.id})"
+        )
+    if msg is not None and getattr(msg, "text", None) and not is_private:
+        context_parts.append(f"Text: {msg.text[:_ERROR_CONTEXT_TEXT_LEN]}")
+    if query is not None and query.data:
+        context_parts.append(f"CBQ data: {query.data}")
     context_str = (
         error_reporter.scrub_text(" | ".join(context_parts)) if context_parts else None
     )
-    update_id = update.update_id if isinstance(update, Update) else "?"
-    # * Report with the context first: the log sink also fingerprints this
-    # * exception, so logging first would claim the dedupe slot and ship a
-    # * report without the context assembled above. The log record then
-    # * deduplicates to nothing while still reaching the console.
     await error_reporter.report_exc(exc, context=context_str)
     log.error(
         "Unhandled exception for update %s%s",
-        update_id,
+        getattr(update, "id", "?"),
         f" | {context_str}" if context_str else "",
         exc_info=exc,
     )
@@ -242,40 +208,20 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
         future = context.get("future") or context.get("task")
         if exc is None and future is not None:
             try:
-                done = future.done()
-            except Exception:
-                done = False
-            if done:
-                try:
-                    cancelled = future.cancelled()
-                except Exception:
-                    cancelled = False
-                if cancelled:
-                    log.debug("[asyncio] benign (not reported): cancelled task")
-                    return
-                extracted: BaseException | None = None
-                try:
+                if future.done() and not future.cancelled():
                     with contextlib.suppress(
                         asyncio.CancelledError, asyncio.InvalidStateError
                     ):
-                        extracted = future.exception()
-                except Exception:
-                    extracted = None
-                if extracted is not None:
-                    exc = extracted
-                    log.debug("[asyncio] recovered task exception: %s", exc)
+                        exc = future.exception()
+            except Exception:
+                exc = None
         detail = (
             f"{msg} | Exception: {exc!r} | Task: {future!r}"
             if exc is not None and future is not None
             else (f"{msg} | Task: {future!r}" if future else msg)
         )
-        if isinstance(exc, (te.NetworkError, te.TimedOut, te.RetryAfter)):
+        if isinstance(exc, (TimeoutError, ConnectionError, OSError)):
             log.debug("[asyncio] transient (not reported): %s", exc)
-            return
-        if isinstance(exc, te.Conflict):
-            # * Another instance is polling this bot. The PTB error handler
-            # * reports it to the owner, so the asyncio path only notes it.
-            log.debug("[asyncio] poll conflict (not reported): %s", exc)
             return
         if exc is not None and (
             db_engine.is_connection_error(exc) or isinstance(exc, CircuitOpenError)
@@ -285,18 +231,9 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
         if exc is not None and db_engine.is_pool_timeout(exc):
             log.debug("[asyncio] pool saturated (not reported): %s", exc)
             return
-        if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
-            log.debug("[asyncio] transient (not reported): %s", exc)
-            return
         if error_reporter._is_benign(exc):
             log.debug("[asyncio] benign (not reported): %s", exc)
             return
-        # * The log record reports this incident. An attached exception makes
-        # * report_exc share its fingerprint and dedupe to nothing, so the
-        # * explicit call keeps the real exception as the report subject even
-        # * when the log sink is not attached. With no exception, a synthetic
-        # * RuntimeError would fingerprint differently and ship a duplicate,
-        # * so the log record alone covers that case.
         log.error(
             "[asyncio] %s%s",
             detail,
@@ -309,7 +246,6 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
             or mtproto_mod.is_session_revoked(exc)
         ):
             if mtproto_mod.is_auth_dead():
-                log.debug("[asyncio] dead MTProto auth key suppressed.")
                 return
             _asyncio_report_tasks.spawn(mtproto_mod.handle_auth_failure())
         if exc is not None:
@@ -322,13 +258,7 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
 
 
 def loop_factory() -> Callable[[], asyncio.AbstractEventLoop] | None:
-    """Return the uvloop loop factory, or None when the package is absent.
-
-    The event loop policy API is deprecated in Python 3.14 and removed in
-    3.16, and so is ``uvloop.EventLoopPolicy``. A loop factory is the
-    supported replacement: it makes the loop the transports create a uvloop
-    loop without touching the global policy.
-    """
+    """Return the uvloop loop factory, or None when the package is absent."""
     return None if uvloop is None else uvloop.new_event_loop
 
 
@@ -351,7 +281,7 @@ async def _warm_hot_caches() -> None:
         log.debug("Cache warm-up failed (non-fatal): %s", exc)
 
 
-async def init_shared_subsystems(bot: Bot) -> None:
+async def init_shared_subsystems(client: Client) -> None:
     """Connect PostgreSQL/Redis, start MTProto, and attach the error reporter."""
     _ensure_loaded()
     log.info("Connecting to PostgreSQL...")
@@ -371,8 +301,6 @@ async def init_shared_subsystems(bot: Bot) -> None:
         mtproto_mod.start(),
         return_exceptions=True,
     )
-    # * A cancelled subsystem read is a shutdown, not a startup verdict: the
-    # * cancellation must propagate instead of being left in the result list.
     throw_if_cancelled((destinations_r, owner_r, primary_r, redis_r, mtproto_r))
     if isinstance(destinations_r, BaseException):
         log.warning("Destination registration failed (non-fatal): %s", destinations_r)
@@ -383,60 +311,43 @@ async def init_shared_subsystems(bot: Bot) -> None:
     if isinstance(mtproto_r, BaseException):
         raise mtproto_r
     if mtproto_r is False:
-        log.warning(
-            "MTProto degraded: another live instance owns the shared "
-            "session. Identity lookups run Bot-API-only."
+        # * Kurigram is the only transport now: without its session this
+        # * process cannot receive updates at all, so fail loudly instead of
+        # * exiting 0 and looking healthy to a supervisor.
+        raise RuntimeError(
+            "MTProto session is unavailable (duplicate instance or dead session). "
+            "Stop the other instance or repair the session before starting again."
         )
     lec, let = cfg.logs_errors
-    error_reporter.attach(bot, lec, let, owner_id=cfg.initial_owner_id)
+    error_reporter.attach(client, lec, let, owner_id=cfg.initial_owner_id)
+    # * Cache the bot's own identity once, so display names, links, and
+    # * self-target checks never pay for a lookup inside an update handler.
+    await bot_identity(client)
 
 
-async def _post_init(app: Application) -> None:
-    """Connect subsystems and start the scheduler."""
-    if not cfg.mtproto_enabled:
-        raise RuntimeError(
-            "API_ID/API_HASH are required for MTProto identity resolution; refusing to boot degraded."
-        )
-    await init_shared_subsystems(app.bot)
-    configure_enforcement_worker(app.bot)
-    configure_notification_worker(app.bot)
-    pg_cron_active = await pg_cron.sync_schedules()
-    await sched_mod.start(
-        cfg.database_url,
-        database_jobs_in_pg_cron=pg_cron_active,
-        enforcement_job=run_enforcement_worker,
-        notification_job=run_notification_worker,
-    )
-    _startup_tasks.spawn(_warm_hot_caches())
-    asyncio.get_running_loop().set_exception_handler(_make_asyncio_exc_handler())
-    log.info("Bot initialised.")
+def register_handlers(client: Client) -> None:
+    """Attach the cache harvester, module handlers, and the error handler."""
+    for factory in (
+        MessageHandler,
+        CallbackQueryHandler,
+        ChatMemberUpdatedHandler,
+        ChatJoinRequestHandler,
+    ):
+        client.add_handler(factory(_on_any_update), _HANDLER_GROUP_CACHE)
+    for handler in get_handlers():
+        client.add_handler(handler, handler_group(handler))
+    client.add_handler(ErrorHandler(_error_handler))
 
 
-async def _post_stop(app: Application) -> None:
-    """Drain Bot-dependent work before PTB shuts the HTTP client down.
-
-    PTB calls ``post_stop`` while the Bot client is still initialized and
-    calls ``post_shutdown`` only after ``Bot.shutdown()``. A proof flush,
-    identity refresh, or error report that runs in the later hook can no
-    longer reach Telegram, so the scheduler and every Bot-dependent task
-    are stopped and drained here.
-    """
-    # * Stop the producer first: a running scheduled job must not enqueue
-    # * new work after the trackers below have been drained.
+async def _shutdown_subsystems() -> None:
+    """Stop background work and close every external client."""
+    await shutdown_dispatcher()
     await sched_mod.stop()
     await _asyncio_report_tasks.drain()
     await identity_refresh.identity_refresh_tasks.drain()
     await connect_common.harvest_tasks.drain()
     await drain_proof_sessions()
     await error_reporter.drain_pending()
-
-
-async def _post_shutdown(app: Application) -> None:
-    """Drain the remaining tasks and close every external client."""
-    # * The normal path already stopped the scheduler in ``_post_stop``.
-    # * The failed-bootstrap path can reach this hook directly, so stop it
-    # * here as well before the database is closed.
-    await sched_mod.stop()
     await _member_cache_tasks.drain()
     await _startup_tasks.drain()
     await drain_redis_mutations()
@@ -445,140 +356,43 @@ async def _post_shutdown(app: Application) -> None:
         mtproto_mod.stop(),
         return_exceptions=True,
     )
-    for _result in shutdown_results:
-        if isinstance(_result, BaseException) and not isinstance(
-            _result, asyncio.CancelledError
+    for result in shutdown_results:
+        if isinstance(result, BaseException) and not isinstance(
+            result, asyncio.CancelledError
         ):
-            log.warning("Shutdown step failed (non-fatal): %s", _result)
+            log.warning("Shutdown step failed (non-fatal): %s", result)
     throw_if_cancelled(shutdown_results)
     await close_database()
 
 
-def base_builder() -> ApplicationBuilder:
-    """Return the shared PTB ApplicationBuilder chain for every transport."""
-    return (
-        ApplicationBuilder()
-        .token(cfg.bot_token)
-        .defaults(Defaults(link_preview_options=_LINK_PREVIEW_DISABLED))
-        # * ConversationHandler needs one-by-one update processing. A keyed
-        # * processor serialises the updates of one (chat, user) pair and
-        # * leaves the rest of the federation concurrent.
-        .concurrent_updates(KeyedUpdateProcessor())
-        .connection_pool_size(API_POOL_SIZE)
-        .read_timeout(HTTP_READ_TIMEOUT)
-        .write_timeout(HTTP_WRITE_TIMEOUT)
-        .connect_timeout(HTTP_CONNECT_TIMEOUT)
-        .pool_timeout(HTTP_POOL_TIMEOUT)
-        .rate_limiter(AIORateLimiter(max_retries=_RATE_LIMIT_RETRIES))
-    )
-
-
-def build_application(*, polling: bool) -> Application:
-    """Construct the PTB Application with transport-appropriate pools."""
-    builder = (
-        base_builder()
-        .post_init(_post_init)
-        .post_stop(_post_stop)
-        .post_shutdown(_post_shutdown)
-    )
-    if polling:
-        builder = builder.get_updates_connection_pool_size(_UPDATES_POOL_SIZE)
-    return builder.build()
-
-
-def register_handlers(app: Application) -> None:
-    """Attach the rate limiter, module handlers, cache harvester, and error handler."""
-    app.add_handler(
-        TypeHandler(Update, global_rate_limit_handler),
-        group=_HANDLER_GROUP_RATE_LIMITER,
-    )
-    for handler in get_handlers():
-        app.add_handler(handler, group=handler_group(handler))
-    app.add_handler(
-        TypeHandler(Update, _update_member_cache), group=_HANDLER_GROUP_CACHE
-    )
-    app.add_error_handler(_error_handler)
-
-
-# ─────────────────────────────── Entry point ───────────────────────────── #
-
-
-async def _run_webhook_mode(app: Application) -> None:
-    """Run PTB in webhook mode wired to the Flask receiver."""
-    full_url = f"{cfg.webhook_url}{_WEBHOOK_PATH}"
-    secret = cfg.webhook_secret
-    loop = asyncio.get_running_loop()
-    shutdown_event = asyncio.Event()
-    with contextlib.suppress(NotImplementedError):
-        loop.add_signal_handler(signal.SIGTERM, shutdown_event.set)
-        loop.add_signal_handler(signal.SIGINT, shutdown_event.set)
-    async with app:
-        # * Only this process may delete the webhook it registered. A failed
-        # * boot that never reached set_webhook must not unregister a healthy
-        # * instance sharing the same token.
-        webhook_set = False
-        try:
-            # * The whole lifecycle sits in one try/finally. PTB's
-            # * shutdown() does not run post_shutdown, so a failure after
-            # * connect(), including a failed app.start(), must still
-            # * release the database pool, the Redis pool, the MTProto
-            # * client, and the scheduler.
-            await _post_init(app)
-            await app.start()
-            # * Wire the receiver before Telegram starts posting: the route
-            # * refuses every update until it knows the secret, and a burst
-            # * of 403s would only make Telegram retry the same updates.
-            register_webhook(app.update_queue, loop, secret, app.bot)
-            log.info("Registering webhook at %s ...", full_url)
-            await app.bot.set_webhook(
-                url=full_url,
-                secret_token=secret,
-                allowed_updates=list(Update.ALL_TYPES),
-                # * The outgoing process refuses in-flight POSTs with 503 so
-                # * Telegram retries them here. Dropping pending updates would
-                # * discard those retried moderation and greeting events.
-                # * Delivery is idempotent, so re-delivery is safe.
-                drop_pending_updates=False,
-            )
-            webhook_set = True
-            info = await app.bot.get_webhook_info()
-            if info.url != full_url:
-                raise RuntimeError(
-                    f"Webhook URL mismatch after set_webhook: {info.url!r} != {full_url!r}"
-                )
-            log.info(
-                "Webhook active. Pending updates: %d | Max connections: %s",
-                info.pending_update_count,
-                info.max_connections,
-            )
-            log.info("Bot running in webhook mode. Waiting for updates...")
-            await shutdown_event.wait()
-        except asyncio.CancelledError:
-            log.info("Webhook mode cancelled.")
-            raise
-        finally:
-            log.info("Webhook mode shutting down...")
-            # * Refuse new POSTs before PTB stops fetching, so Telegram
-            # * retries them against the next process instead of accepting a
-            # * 200 for an update nobody will process.
-            begin_shutdown()
-            if webhook_set:
-                try:
-                    await app.bot.delete_webhook(drop_pending_updates=False)
-                except Exception as exc:
-                    log.debug(
-                        "delete_webhook failed during shutdown (non-fatal): %s", exc
-                    )
-            # * stop() refuses an application that never started, which is
-            # * exactly the failed-start path this finally exists for.
-            if app.running:
-                try:
-                    await app.stop()
-                except Exception as exc:
-                    log.warning("PTB application stop failed (non-fatal): %s", exc)
-            await _post_stop(app)
-            await _post_shutdown(app)
-    log.info("Bot shutdown complete.")
+async def _run_polling() -> None:
+    """Run the single Kurigram client through start, idle and shutdown."""
+    client = mtproto_mod.client()
+    register_handlers(client)
+    asyncio.get_running_loop().set_exception_handler(_make_asyncio_exc_handler())
+    started = False
+    try:
+        await init_shared_subsystems(client)
+        configure_enforcement_worker(client)
+        configure_notification_worker(client)
+        pg_cron_active = await pg_cron.sync_schedules()
+        await sched_mod.start(
+            cfg.database_url,
+            database_jobs_in_pg_cron=pg_cron_active,
+            enforcement_job=run_enforcement_worker,
+            notification_job=run_notification_worker,
+        )
+        _startup_tasks.spawn(_warm_hot_caches())
+        started = client.is_connected
+        log.info("Bot initialised. Running Kurigram polling loop...")
+        if started:
+            await idle()
+    except asyncio.CancelledError:
+        log.info("Polling cancelled.")
+        raise
+    finally:
+        await _shutdown_subsystems()
+        log.info("Bot shutdown complete.")
 
 
 def _print_fatal(stage: str, exc: BaseException) -> None:
@@ -597,51 +411,22 @@ def _print_fatal(stage: str, exc: BaseException) -> None:
 
 
 def main() -> None:
-    """Configure and start the PTB application in webhook or polling mode."""
+    """Configure and run the Kurigram polling application."""
     stage = "logging setup"
     try:
         setup_logging(level=cfg.log_level)
         _init_sentry()
-        log.info("Starting %s bot...", cfg.community_name)
+        log.info("Starting %s bot (Kurigram polling)...", cfg.community_name)
+        if not cfg.mtproto_enabled:
+            raise RuntimeError(
+                "API_ID/API_HASH are required for the Kurigram client; refusing to boot."
+            )
         stage = "keepalive server"
         start_keepalive()
-        stage = "PTB application build"
-        use_webhook = cfg.is_webhook_mode
-        app: Application = build_application(polling=not use_webhook)
-        stage = "handler registration"
-        register_handlers(app)
-        if use_webhook:
-            log.info(
-                "Webhook mode detected (URL: %s). Starting webhook transport...",
-                cfg.webhook_url,
-            )
-            stage = "webhook"
-            asyncio.run(_run_webhook_mode(app), loop_factory=loop_factory())
-        else:
-            log.warning(
-                "No public webhook URL is available for this process. "
-                "Falling back to long-polling (local development only)."
-            )
-            log.info("Starting long-polling...")
-            stage = "polling"
-            # * The polling transport builds its own loop through
-            # * asyncio.get_event_loop(), so the uvloop loop is installed
-            # * as the current loop rather than through a policy.
-            factory = loop_factory()
-            if factory is not None:
-                asyncio.set_event_loop(factory())
-            app.run_polling(
-                drop_pending_updates=True,
-                allowed_updates=Update.ALL_TYPES,
-                # * A transient Telegram/proxy outage at boot must not kill
-                # * the process: the 24/7 runner counts every exit as a
-                # * crash and can give up after five of them in ten minutes.
-                # * Retry the bootstrap until the network recovers instead.
-                # * An invalid token still aborts, because PTB re-raises it.
-                bootstrap_retries=-1,
-            )
-    except SystemExit:
-        raise
+        stage = "polling"
+        # * asyncio.run ignores a loop installed with set_event_loop; the
+        # * factory must be passed so uvloop actually owns the event loop.
+        asyncio.run(_run_polling(), loop_factory=loop_factory())
     except KeyboardInterrupt:
         log.info("Shutdown requested (KeyboardInterrupt).")
     except BaseException as exc:
@@ -650,12 +435,7 @@ def main() -> None:
 
 
 def _init_sentry() -> None:
-    """Initialise Sentry when a DSN is configured and the extra is installed.
-
-    Opt-in only: an empty ``SENTRY_DSN`` (or a missing observability extra)
-    is a silent no-op. Failures to initialise degrade to no monitoring
-    instead of blocking startup.
-    """
+    """Initialise Sentry when a DSN is configured and the extra is installed."""
     if not cfg.sentry_dsn or sentry_sdk is None or LoguruIntegration is None:
         return
     try:
@@ -671,31 +451,13 @@ def _init_sentry() -> None:
 
 
 __all__ = [
-    "_ERROR_CONTEXT_TEXT_LEN",
-    "_FATAL_BORDER_WIDTH",
-    "_FATAL_RED",
-    "_FATAL_RESET",
-    "_HANDLER_GROUP_CACHE",
-    "_HANDLER_GROUP_RATE_LIMITER",
-    "_LINK_PREVIEW_DISABLED",
-    "_MEMBER_CACHE_MAX_CONCURRENT",
-    "_UPDATES_POOL_SIZE",
-    "_WEBHOOK_PATH",
-    "_asyncio_report_tasks",
     "_error_handler",
     "_init_sentry",
     "_make_asyncio_exc_handler",
-    "_member_cache_tasks",
-    "_post_init",
-    "_post_shutdown",
-    "_post_stop",
+    "_on_any_update",
     "_print_fatal",
-    "_run_webhook_mode",
-    "_startup_tasks",
-    "_update_member_cache",
-    "_warm_hot_caches",
-    "base_builder",
-    "build_application",
+    "_run_polling",
+    "_shutdown_subsystems",
     "init_shared_subsystems",
     "log",
     "loop_factory",

@@ -7,18 +7,15 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import KeyboardButtonStyle
+from pyrogram import Client
+from pyrogram.enums import ButtonStyle as KeyboardButtonStyle
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot import cfg
 from tcbot.modules.helper.buttons.common import back_button, back_markup
 from tcbot.modules.helper.messages import links as community_links
 from tcbot.utils.i18n import t
-
-if TYPE_CHECKING:
-    from telegram import Bot
 
 
 def main_menu_btn(locale: str | None = None) -> InlineKeyboardMarkup:
@@ -113,7 +110,7 @@ def back_to_start_btn(locale: str | None = None) -> InlineKeyboardMarkup:
 
 
 async def additional_menu_btn(
-    bot: Bot, locale: str | None = None
+    bot: Client, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Community links menu; chats without a public link are omitted.
 

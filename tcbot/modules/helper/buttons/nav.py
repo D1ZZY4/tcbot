@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton
-from telegram.constants import KeyboardButtonStyle
+from pyrogram.enums import ButtonStyle as KeyboardButtonStyle
+from pyrogram.types import InlineKeyboardButton
 
 from tcbot.utils.i18n import t
 

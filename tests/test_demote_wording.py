@@ -110,11 +110,20 @@ def test_the_staff_exemption_demotes_without_claiming_a_ban(
     """The warn threshold demotes a staff holder instead of banning them."""
     record = _wire(monkeypatch)
 
-    message = _FakeMessage()
-    ctx = type("Ctx", (), {"bot": object()})()
+    _message = _FakeMessage()
+    ctx = type(
+        "Ctx",
+        (),
+        {
+            "bot": object(),
+            "effective_message": _message,
+            "effective_chat": _message.chat,
+            "effective_user": type("U", (), {"id": 1, "first_name": "Mod"})(),
+            "user_data": {},
+        },
+    )()
     asyncio.run(
         warn_actions.execute_warn(
-            _fake_update(message),  # type: ignore[arg-type]
             ctx,  # type: ignore[arg-type]
             9,
             "Staff",

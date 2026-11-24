@@ -16,23 +16,20 @@ import threading
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from typing import TYPE_CHECKING
 
 import certifi
-from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot.modules.helper import decorators
+from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.handlers import MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich_result, safe_edit
-from tcbot.modules.helper.messages.rich_format import divider, heading
-from tcbot.modules.helper.messages.rich_table import table
+from tcbot.modules.helper.rich.formats import divider, heading
+from tcbot.modules.helper.rich.table import table
 from tcbot.utils.i18n import Safe, code, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.time_and_date import elapsed_ms, monotonic, utc_now
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -612,12 +609,12 @@ def _render_result(
 @decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.owner_only
 @decorators.log_execution
-async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_ping(ctx: Ctx) -> None:
     """Reply with Telegram API round-trip latency in milliseconds."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     t0 = monotonic()
     try:
         sent = await reply_rich_result(
@@ -643,12 +640,12 @@ async def cmd_ping(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.owner_only
 @decorators.log_execution
-async def cmd_speedtest(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_speedtest(ctx: Ctx) -> None:
     """Run a full network speed test and reply with detailed results."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     full = any(arg.lower() == "full" for arg in parse_cmd_args(msg.text))
     status_key = "netspeed.status.running_full" if full else "netspeed.status.running"
     try:

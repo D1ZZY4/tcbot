@@ -48,7 +48,7 @@ from tcbot.modules.helper.messages.panels import (
     about_section_msg,
     render_groups,
 )
-from tcbot.modules.helper.messages.rich_edit import (
+from tcbot.modules.helper.rich.edit import (
     ack_and_render,
     answer_ack,
     answer_alert,
@@ -63,7 +63,7 @@ from tcbot.modules.helper.messages.rich_edit import (
     safe_edit_message,
     send_log,
 )
-from tcbot.modules.helper.messages.rich_msg import (
+from tcbot.modules.helper.rich.msg import (
     reply_rich,
     reply_rich_result,
     send_text,

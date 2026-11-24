@@ -2,64 +2,38 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Command filter builder for all configured prefixes (/, !, .) and alt-prefix dispatcher."""
+"""Command filter builder for all configured prefixes (/, !, .)."""
 
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING
 
-from telegram.ext import filters
+from pyrogram import filters
 
 from tcbot import cfg
-from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    from telegram import Message
+    from pyrogram import Client
+    from pyrogram.filters import Filter
 
-log = get_logger(__name__)
-
-# * Precompiled: _parse_prefixed_command runs on every incoming message, so
-# * the command/mention shapes must not recompile per call (re module cache
-# * would save us, but explicit is cheaper to reason about).
+# * Precompiled: the parser runs on every incoming message, so the command
+# * shapes must not recompile per call.
 _COMMAND_RE = re.compile(r"[a-z][a-z0-9]*")
 _MENTION_RE = re.compile(r"[A-Za-z0-9_]{5,32}")
-
-
-class _MessageLike(Protocol):
-    text: str | None
-
-    def get_bot(self) -> Any:
-        """Return the bot instance associated with this message."""
-        ...
 
 
 # ──────────────────────── Prefix Resolution ─────────────────────── #
 
 
 def _get_prefixes() -> list[str]:
-    """Return command prefixes from the already-validated runtime configuration.
-
-    Filters out empty strings and whitespace-only entries so a misconfigured
-    ``PREFIXES`` value cannot produce a prefix that matches every message.
-    """
+    """Return command prefixes from the validated runtime configuration."""
     return [p for p in (cfg.prefixes or ["/"]) if p and p.strip()]
 
 
-def _never_match_filter() -> filters.BaseFilter:
-    """Return a valid filter that intentionally never matches any message text."""
-    return filters.Regex(re.compile(r"a^"))
-
-
-def _bot_username_from_message(message: _MessageLike) -> str | None:
-    """Return the current bot username from a PTB message when available."""
-    try:
-        bot = message.get_bot()
-    except AttributeError:
-        return None
-    except RuntimeError:
-        return None
-    return (getattr(bot, "username", None) or "").lstrip("@") or None
+def _never_match_filter() -> Filter:
+    """Return a valid filter that intentionally never matches a message."""
+    return filters.create(lambda _, __, ___: False, name="NeverMatch")
 
 
 def _parse_prefixed_command(
@@ -70,108 +44,79 @@ def _parse_prefixed_command(
     """Parse a lowercase prefixed command and validate any bot mention suffix."""
     if not prefixes:
         return None
-
-    # * Longest prefix first so "..cmd" prefers ".." over "."; callers pass
-    # * the pre-sorted tuple prepared at filter construction (front-loads
-    # * the sort out of this per-message hot path).
     prefix = next((p for p in prefixes if text.startswith(p)), None)
     if prefix is None:
         return None
-
     remainder = text[len(prefix) :]
-    # * Telegram only treats "<prefix><command>" without a space as a
-    # * command. Accepting "/ help" made ordinary prose such as
-    # * "/ warn me" execute a moderation command, so a leading space is
-    # * refused here like the client refuses it.
+    # * A leading space is not a command; accepting it executed moderation on
+    # * ordinary prose such as "/ warn me".
     if not remainder or remainder[0].isspace():
         return None
-
-    _parts = remainder.split(None, 1)
-    if not _parts:
-        return None
-    # * split() never yields empty strings, so _parts[0] is always non-empty.
-    token = _parts[0]
-
+    token = remainder.split(None, 1)[0]
     command, separator, mention = token.partition("@")
-    if not command:
-        return None
-    # * The fullmatch below subsumes lowercase and ASCII checks: only
-    # * [a-z0-9] can pass, so separate lower()/isascii() gates would be dead.
-    if not _COMMAND_RE.fullmatch(command):
+    if not command or not _COMMAND_RE.fullmatch(command):
         return None
     if separator:
         if not mention or not _MENTION_RE.fullmatch(mention):
             return None
         if bot_username is None or mention.casefold() != bot_username.casefold():
             return None
-
     return command, mention or None
 
 
-class _PrefixedCommandFilter(filters.MessageFilter):
-    """PTB message filter for exact lowercase commands and self-only bot mentions."""
-
-    def __init__(self, command: str, prefixes: list[str]) -> None:
-        super().__init__(name=f"PrefixedCommand({command})")
-        self.command = command
-        self.prefixes = tuple(sorted(set(prefixes), key=len, reverse=True))
-
-    def filter(self, message: Message) -> bool:
-        """Return True when the message matches this filter's specific command."""
-        text = message.text or ""
-        # * The username is only consumed for @mention-suffixed commands, so
-        # * skip the lookup when the text holds no "@" (the common case).
-        bot_username = _bot_username_from_message(message) if "@" in text else None
-        parsed = _parse_prefixed_command(
-            text,
-            self.prefixes,
-            bot_username,
-        )
-        return parsed is not None and parsed[0] == self.command
+def _bot_username(client: Client) -> str | None:
+    """Return the current bot username when the client is authorised."""
+    me = getattr(client, "me", None)
+    return (getattr(me, "username", None) or "").lstrip("@") or None
 
 
-class _AnyPrefixedCommandFilter(filters.MessageFilter):
-    """PTB message filter for any valid lowercase command with configured prefixes."""
+def _matcher(command: str | None, prefixes: tuple[str, ...]) -> Filter:
+    """Build a Kurigram filter matching one command or any prefixed command."""
 
-    def __init__(self, prefixes: list[str], *, name: str) -> None:
-        super().__init__(name=name)
-        self.prefixes = tuple(sorted(set(prefixes), key=len, reverse=True))
+    def check(_: Filter, client: Client, update: object) -> bool:
+        message = getattr(update, "text", None)
+        if message is None:
+            return False
+        text = str(message)
+        username = _bot_username(client) if "@" in text else None
+        parsed = _parse_prefixed_command(text, prefixes, username)
+        if parsed is None:
+            return False
+        return command is None or parsed[0] == command
 
-    def filter(self, message: Message) -> bool:
-        """Return True when the message is any valid prefixed command."""
-        text = message.text or ""
-        # * Same lazy username lookup as _PrefixedCommandFilter.filter above.
-        bot_username = _bot_username_from_message(message) if "@" in text else None
-        return (
-            _parse_prefixed_command(
-                text,
-                self.prefixes,
-                bot_username,
-            )
-            is not None
-        )
+    name = f"PrefixedCommand({command})" if command else "AnyPrefixedCommand"
+    return filters.create(check, name=name)
 
 
 # ───────────────────────── Filter Builders ──────────────────────── #
 
 
-def build_prefixed_filters(command: str) -> filters.BaseFilter:
-    """Return a filter matching exact lowercase <prefix><command> for configured prefixes."""
-    return _PrefixedCommandFilter(command.lower(), _get_prefixes())
+def build_prefixed_filters(command: str) -> Filter:
+    """Return a filter matching exact lowercase <prefix><command>."""
+    return _matcher(
+        command.lower(), tuple(sorted(_get_prefixes(), key=len, reverse=True))
+    )
 
 
-# * Includes /, !, .; use in ConversationHandler fallbacks to catch all commands
-_prefixes = _get_prefixes()
-ALL_PREFIXES_CMD_FILTER: filters.BaseFilter = (
-    _AnyPrefixedCommandFilter(_prefixes, name="AnyPrefixedCommand")
-    if _prefixes
-    else _never_match_filter()
+def _PrefixedCommandFilter(command: str, prefixes: list[str] | None = None) -> Filter:
+    """Build a native filter for one command under the configured prefixes."""
+    chosen = prefixes if prefixes is not None else _get_prefixes()
+    return _matcher(command.lower(), tuple(sorted(chosen, key=len, reverse=True)))
+
+
+def _AnyPrefixedCommandFilter(
+    prefixes: list[str] | None = None, *, name: str = ""
+) -> Filter:
+    """Build a native filter matching any prefixed command."""
+    chosen = prefixes if prefixes is not None else _get_prefixes()
+    return _matcher(None, tuple(sorted(chosen, key=len, reverse=True)))
+
+
+_prefixes = tuple(sorted(_get_prefixes(), key=len, reverse=True))
+ALL_PREFIXES_CMD_FILTER: Filter = (
+    _matcher(None, _prefixes) if _prefixes else _never_match_filter()
 )
 
-# * Every command a module registers. A conversation fallback that matches one
-# * of these swallows the user's real command: /tcunban sent during ban proof
-# * collection would cancel the ban and never unban anyone. Each flow passes its
-# * own re-entry commands as exclusions so re-entering still ends the old flow.
 _ALL_COMMANDS: tuple[str, ...] = (
     "bc",
     "c",
@@ -243,14 +188,10 @@ _ALL_COMMANDS: tuple[str, ...] = (
 )
 
 
-def build_conversation_escape_filter(*own_commands: str) -> filters.BaseFilter:
-    """Return a filter for commands that must bypass conversation fallbacks.
-
-    *own_commands* are the calling flow's re-entry commands: they stay out of
-    the escape set so the fallback can still end the previous flow.
-    """
+def build_conversation_escape_filter(*own_commands: str) -> Filter:
+    """Return a filter for commands that bypass conversation fallbacks."""
     excluded = set(own_commands)
-    combined: filters.BaseFilter | None = None
+    combined: Filter | None = None
     for command in _ALL_COMMANDS:
         if command in excluded:
             continue

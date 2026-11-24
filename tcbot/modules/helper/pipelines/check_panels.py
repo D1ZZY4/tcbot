@@ -10,7 +10,8 @@ import asyncio
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
-from telegram import Bot, InlineKeyboardMarkup
+from pyrogram import Client
+from pyrogram.types import InlineKeyboardMarkup
 
 from tcbot import database as db
 from tcbot.modules.helper.ban_info import build_ban_detail
@@ -31,9 +32,9 @@ from tcbot.modules.helper.extraction import (
     launch_identity_refresh,
 )
 from tcbot.modules.helper.identity import Identity, classify, profile_note
-from tcbot.modules.helper.messages.rich_format import divider, footer, heading
-from tcbot.modules.helper.messages.rich_table import table
-from tcbot.modules.helper.messages.rich_text import blocks
+from tcbot.modules.helper.rich.formats import divider, footer, heading
+from tcbot.modules.helper.rich.table import table
+from tcbot.modules.helper.rich.text import blocks
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, esc, italic, t, user_ref
 from tcbot.utils.logger import get_logger
@@ -63,7 +64,7 @@ _BAN_LIST_REASON_LEN = 60
 _BTNS_PER_ROW = 3
 
 
-async def _resolve_user_info(bot: Bot, target_id: int) -> tuple[str, str | None]:
+async def _resolve_user_info(bot: Client, target_id: int) -> tuple[str, str | None]:
     """Return display name instantly from cache; refresh in background."""
     try:
         doc = await db.users_cache.get_user(target_id)
@@ -116,7 +117,7 @@ class CheckProfileMixin:
     @classmethod
     async def profile(
         cls,
-        bot: Bot,
+        bot: Client,
         target_id: int,
         *,
         executor_id: int | None = None,

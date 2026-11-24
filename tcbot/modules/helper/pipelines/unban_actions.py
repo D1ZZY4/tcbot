@@ -7,21 +7,17 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.database import documents as docs
 from tcbot.modules.helper import guards, messages
+from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import reply_rich, send_log
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
-
-if TYPE_CHECKING:
-    from telegram import Update
-    from telegram.ext import ContextTypes
 
 log = get_logger(__name__)
 
@@ -30,8 +26,7 @@ log = get_logger(__name__)
 
 
 async def execute_unban(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     target_id: int,
     target_fname: str,
     *,
@@ -50,9 +45,9 @@ async def execute_unban(
     DB round-trip entirely, saving one network hop on the hot path. Pass ``None`` (the
     default) to let this function fetch the record itself.
     """
-    msg = update.effective_message
-    admin = update.effective_user
-    locale = await locale_for_update(update)
+    msg = ctx.effective_message
+    admin = ctx.effective_user
+    locale = await locale_for_update(ctx)
 
     # * Use the caller-supplied record when available; fall back to a DB fetch.
     # * A failed read fails closed with a retry reply: treating an outage

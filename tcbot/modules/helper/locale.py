@@ -7,14 +7,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 
 from tcbot import database as db
+from tcbot.modules.helper.context import Ctx
 from tcbot.utils.i18n import DEFAULT_LOCALE, is_known_locale, resolve_locale
 from tcbot.utils.logger import get_logger
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -58,7 +55,7 @@ async def _resolve_preference(
     )
 
 
-async def effective_locale(chat_type: str | None, user_id: int, chat_id: int) -> str:
+async def effective_locale(chat_type: object, user_id: int, chat_id: int) -> str:
     """Resolve the locale used to render a message in this chat.
 
     Only the preference the chat type consumes is read: private chats need
@@ -68,7 +65,7 @@ async def effective_locale(chat_type: str | None, user_id: int, chat_id: int) ->
     default locale; a successful read that finds nothing consults the
     community default. Resolution never raises. Cancellation propagates.
     """
-    effective_type = chat_type or "private"
+    effective_type: str = getattr(chat_type, "value", chat_type) or "private"
     if effective_type == "private":
         try:
             user_locale = await db.settings_db.get_user_locale(user_id)
@@ -88,16 +85,16 @@ async def effective_locale(chat_type: str | None, user_id: int, chat_id: int) ->
     return await _resolve_preference(effective_type, group_locale=group_locale)
 
 
-async def locale_for_update(update: Update) -> str:
-    """Resolve the render locale for one incoming update.
+async def locale_for_update(ctx: Ctx) -> str:
+    """Resolve the render locale for one incoming ctx.
 
     Private chats use the sender's personal locale, groups use the group
     locale, so a shared audience always reads one language. Missing
     chat/user info falls back to the default locale; resolution never
     raises.
     """
-    chat = getattr(update, "effective_chat", None)
-    user = getattr(update, "effective_user", None)
+    chat = getattr(ctx, "effective_chat", None)
+    user = getattr(ctx, "effective_user", None)
     if chat is None or user is None:
         return DEFAULT_LOCALE
     return await effective_locale(

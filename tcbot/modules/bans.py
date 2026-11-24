@@ -7,15 +7,16 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
 
-from telegram.ext import ContextTypes, ConversationHandler
+from pyrogram.types import Message
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import BanDoc
 from tcbot.modules.helper import decorators, targets
 from tcbot.modules.helper.buttons import ban_update_confirm_btn
+from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
+from tcbot.modules.helper.handlers import ConversationHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     message_link,
@@ -41,9 +42,6 @@ from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import Safe, code, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
-
-if TYPE_CHECKING:
-    from telegram import Message, Update
 
 log = get_logger(__name__)
 
@@ -80,7 +78,7 @@ __help__: replies.HelpEntry = get_help()
 @decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.mod_only
 @decorators.log_execution
-async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def cmd_ban_start(ctx: Ctx) -> int:
     """Entry point for the federation ban flow.
 
     Resolves the target, validates the inline reason, runs identity and role
@@ -91,7 +89,6 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     ``ConversationHandler.END`` on any failure.
     """
     resolved = await targets.resolve_mod_target(
-        update,
         ctx,
         action="ban",
         min_role="developer",
@@ -139,12 +136,12 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    scope = flow_scope(ctx, update)
+    scope = flow_scope(ctx)
     scope["ban_target_id"] = target_id
     scope["ban_target_fname"] = target_fname or str(target_id)
     scope["ban_reason"] = ban_reason
     scope["ban_admin_id"] = admin.id
-    scope["ban_admin_fname"] = admin.first_name
+    scope["ban_admin_fname"] = display_name(admin)
     scope["ban_locale"] = locale
 
     # * Re-ban check before any side effect: demotion must not land when
@@ -169,13 +166,12 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     if existing is not None:
         return await _ask_update_confirm(
-            msg,
             ctx,
+            msg,
             target_id,
             target_fname,
             ban_reason,
             existing,
-            update,
             locale=locale,
         )
 
@@ -185,17 +181,16 @@ async def cmd_ban_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * without anything ever happening to them. The enforcement-time
     # * demote closes the same role-vs-state invariant.
 
-    return await show_ban_rules(update, ctx)
+    return await show_ban_rules(ctx)
 
 
 async def _ask_update_confirm(
+    ctx: Ctx,
     msg: Message,
-    ctx: ContextTypes.DEFAULT_TYPE,
     target_id: int,
     target_fname: str | None,
     ban_reason: str,
     existing: BanDoc,
-    update: Update,
     locale: str | None = None,
 ) -> int:
     """Show the re-ban confirmation card with log/proof links.
@@ -207,7 +202,7 @@ async def _ask_update_confirm(
     if ctx.user_data is None:
         return ConversationHandler.END
     if locale is None:
-        locale = await locale_for_update(update)
+        locale = await locale_for_update(ctx)
     logs_chat, logs_thread = cfg.logs
     proofs_chat, proofs_thread = cfg.proofs
     log_msg_id = int(existing.get("log_message_id", 0) or 0)
@@ -227,11 +222,11 @@ async def _ask_update_confirm(
         old_reason=str(existing.get("reason", "")),
         new_reason=ban_reason,
     )
-    scope = flow_scope(ctx, update)
+    scope = flow_scope(ctx)
     try:
         prompt = await reply_rich_result(msg, text, reply_markup=kb)
-        scope["ban_prompt_msg_id"] = prompt.message_id
-        scope["ban_prompt_chat_id"] = msg.chat.id
+        scope["ban_prompt_msg_id"] = prompt.id
+        scope["ban_prompt_chat_id"] = chat_id_of(msg.chat)
     except Exception as exc:
         log.debug("cmd_ban_start confirm-prompt reply failed: %s", exc)
         for key in BAN_USER_DATA_KEYS:

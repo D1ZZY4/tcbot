@@ -26,7 +26,7 @@ def _update_with_edited_prompt() -> tuple[Any, Any, dict[str, Any]]:
 
     query = SimpleNamespace(
         data="rules_step:done",
-        message=SimpleNamespace(chat=SimpleNamespace(id=_CHAT), message_id=_MESSAGE),
+        message=SimpleNamespace(chat=SimpleNamespace(id=_CHAT), id=_MESSAGE),
         answer=_answer,
         edit_message_text=_edit,
     )

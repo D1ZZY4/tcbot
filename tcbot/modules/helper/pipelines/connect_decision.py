@@ -10,12 +10,14 @@ import asyncio
 import contextlib
 from typing import TYPE_CHECKING
 
-from telegram import Bot, ChatMember, InlineKeyboardMarkup
-from telegram.constants import ChatMemberStatus
+from pyrogram import Client
+from pyrogram.enums import ChatMemberStatus
+from pyrogram.types import ChatMember, InlineKeyboardMarkup
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import messages
+from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     answer_ack,
@@ -30,10 +32,6 @@ from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
-
-if TYPE_CHECKING:
-    from telegram import Update
-    from telegram.ext import ContextTypes
 
 log = get_logger(__name__)
 
@@ -53,7 +51,7 @@ class ConnectionDecisionMixin:
             chat_title: str,
             owner_id: int,
             owner_fname: str,
-            bot: Bot,
+            bot: Client,
         ) -> bool:
             """Replay decisions into the new group."""
             ...
@@ -96,19 +94,15 @@ class ConnectionDecisionMixin:
             """Notice when admin rights are missing."""
             ...
 
-    async def on_verify_step(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> None:
+    async def on_verify_step(self, ctx: Ctx) -> None:
         """Advance the About verification pages shown before connecting."""
-        await handle_verify_step(self, update, ctx)
+        await handle_verify_step(self, ctx)
 
-    async def on_join_decision(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> None:
+    async def on_join_decision(self, ctx: Ctx) -> None:
         """Handle Connect / Cancel button callbacks on the join prompt."""
-        q = update.callback_query
-        chat = update.effective_chat
-        user = update.effective_user
+        q = ctx.callback_query
+        chat = ctx.effective_chat
+        user = ctx.effective_user
         if q is None:
             return
         if chat is None or user is None:
@@ -117,16 +111,18 @@ class ConnectionDecisionMixin:
             except Exception as exc:
                 log.debug("Join decision answer failed with no chat/user: %s", exc)
             return
-        if cfg.is_primary_group(chat.id) or cfg.is_infrastructure_chat(chat.id):
+        if cfg.is_primary_group(chat_id_of(chat)) or cfg.is_infrastructure_chat(
+            chat_id_of(chat)
+        ):
             try:
                 await q.answer()
             except Exception as exc:
                 log.debug("Join decision infrastructure answer failed: %s", exc)
             return
-        locale = await locale_for_update(update)
+        locale = await locale_for_update(ctx)
         try:
             membership = await asyncio.wait_for(
-                ctx.bot.get_chat_member(chat.id, user.id),
+                ctx.bot.get_chat_member(chat_id_of(chat), user.id),
                 timeout=TELEGRAM_LOOKUP_TIMEOUT,
             )
         except asyncio.CancelledError:
@@ -148,7 +144,9 @@ class ConnectionDecisionMixin:
         if action == self.join_callback:
             try:
                 bot_member = await asyncio.wait_for(
-                    ctx.bot.get_chat_member(chat.id, ctx.bot.id),
+                    ctx.bot.get_chat_member(
+                        chat_id_of(chat), (await ctx.bot_identity()).id
+                    ),
                     timeout=TELEGRAM_LOOKUP_TIMEOUT,
                 )
             except Exception as exc:
@@ -161,13 +159,13 @@ class ConnectionDecisionMixin:
                 )
                 return
             if not self.check_perms(bot_member):
-                prompt_msg_id = q.message.message_id if q.message else 0
+                prompt_msg_id = q.message.id if q.message else 0
                 try:
                     await db.groups_db.add_pending(
-                        chat.id, chat.title or "", user.id, prompt_msg_id
+                        chat_id_of(chat), chat.title or "", user.id, prompt_msg_id
                     )
                 except Exception:
-                    log.exception("add_pending failed for chat %d", chat.id)
+                    log.exception("add_pending failed for chat %d", chat_id_of(chat))
                     await cb_error_edit(
                         q,
                         t("connecting.state.complete_join", locale, plain=True),
@@ -183,9 +181,11 @@ class ConnectionDecisionMixin:
                 )
                 return
             try:
-                already_connected = await db.groups_db.is_connected(chat.id, fresh=True)
+                already_connected = await db.groups_db.is_connected(
+                    chat_id_of(chat), fresh=True
+                )
             except Exception:
-                log.exception("is_connected failed for chat %d", chat.id)
+                log.exception("is_connected failed for chat %d", chat_id_of(chat))
                 with contextlib.suppress(Exception):
                     await safe_edit_cb(
                         q,
@@ -208,10 +208,14 @@ class ConnectionDecisionMixin:
                 )
             try:
                 blind = await self.complete_join(
-                    chat.id, chat.title or "", user.id, user.first_name, ctx.bot
+                    chat_id_of(chat),
+                    chat.title or "",
+                    user.id,
+                    display_name(user),
+                    ctx.bot,
                 )
             except Exception:
-                log.exception("complete_join failed for chat %d", chat.id)
+                log.exception("complete_join failed for chat %d", chat_id_of(chat))
                 with contextlib.suppress(Exception):
                     await safe_edit_cb(
                         q,
@@ -220,7 +224,9 @@ class ConnectionDecisionMixin:
                         parse_mode=None,
                     )
                 return
-            welcome_note = await welcome_permission_note(ctx.bot, chat.id, locale)
+            welcome_note = await welcome_permission_note(
+                ctx.bot, chat_id_of(chat), locale
+            )
             with contextlib.suppress(Exception):
                 await safe_edit_cb(
                     q,
@@ -239,35 +245,41 @@ class ConnectionDecisionMixin:
             # federation group while its database row stays active. Require a
             # still-pending request and a disconnected group before acting.
             try:
-                pending = await db.groups_db.get_pending(chat.id)
-                still_connected = await db.groups_db.is_connected(chat.id, fresh=True)
+                pending = await db.groups_db.get_pending(chat_id_of(chat))
+                still_connected = await db.groups_db.is_connected(
+                    chat_id_of(chat), fresh=True
+                )
             except Exception:
-                log.exception("cancel guard lookup failed for chat %d", chat.id)
+                log.exception(
+                    "cancel guard lookup failed for chat %d", chat_id_of(chat)
+                )
                 return
             if pending is None or still_connected:
                 log.info(
                     "Ignoring stale connect cancel for chat=%d (pending=%s, connected=%s)",
-                    chat.id,
+                    chat_id_of(chat),
                     pending is not None,
                     still_connected,
                 )
                 return
             try:
-                await db.groups_db.remove_pending(chat.id)
+                await db.groups_db.remove_pending(chat_id_of(chat))
             except Exception:
-                log.exception("remove_pending failed for chat %d on cancel", chat.id)
+                log.exception(
+                    "remove_pending failed for chat %d on cancel", chat_id_of(chat)
+                )
             cancel_results = await asyncio.gather(
                 safe_edit_cb(q, self.declined_message(locale), reply_markup=None),
                 send_log(
                     ctx.bot,
                     messages.group_connection_rejected_log(
-                        chat.id,
+                        chat_id_of(chat),
                         chat.title or "Unknown",
                         user.id,
-                        user.first_name,
+                        display_name(user),
                     ),
                 ),
-                ctx.bot.leave_chat(chat.id),
+                ctx.bot.leave_chat(chat_id_of(chat)),
                 return_exceptions=True,
             )
             throw_if_cancelled(cancel_results)
@@ -278,6 +290,6 @@ class ConnectionDecisionMixin:
                     log.warning(
                         "Join cancellation (%s) failed for chat=%d: %s",
                         label,
-                        chat.id,
+                        chat_id_of(chat),
                         result,
                     )

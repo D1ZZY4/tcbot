@@ -2,20 +2,19 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Rich messages: focused builders and the PTB Bot API transport."""
+"""Rich messages: focused builders and the Kurigram native transport."""
 
 from __future__ import annotations
 
 import asyncio
-import warnings
 from typing import Any, cast
 
-import pytest
-from telegram import Bot
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from tcbot.modules.helper.messages import rich_edit
-from tcbot.modules.helper.messages import rich_msg as rc
-from tcbot.modules.helper.messages.rich_format import (
+from tcbot.modules.helper.rich import edit as rich_edit
+from tcbot.modules.helper.rich import msg as rc
+from tcbot.modules.helper.rich.button import button, button_row
+from tcbot.modules.helper.rich.formats import (
     anchor,
     code,
     divider,
@@ -29,9 +28,9 @@ from tcbot.modules.helper.messages.rich_format import (
     pull_quote,
     quote,
 )
-from tcbot.modules.helper.messages.rich_link import button, button_row, link, user_ref
-from tcbot.modules.helper.messages.rich_list import bullet_list, details, ordered_list
-from tcbot.modules.helper.messages.rich_style import (
+from tcbot.modules.helper.rich.link import link, user_ref
+from tcbot.modules.helper.rich.list import bullet_list, details, ordered_list
+from tcbot.modules.helper.rich.style import (
     bold,
     esc,
     italic,
@@ -41,40 +40,34 @@ from tcbot.modules.helper.messages.rich_style import (
     superscript,
     underline,
 )
-from tcbot.modules.helper.messages.rich_table import table
+from tcbot.modules.helper.rich.table import table
 
 
 class _FakeBot:
-    """Record the do_api_request call made by the rich transport."""
+    """Record the native Kurigram rich calls made by the transport."""
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, Any], Any]] = []
 
-    async def do_api_request(
-        self,
-        endpoint: str,
-        api_kwargs: dict[str, Any] | None = None,
-        return_type: Any = None,
+    async def send_rich_message(
+        self, chat_id: int | str, rich_message: Any, **kwargs: Any
     ) -> str:
-        self.calls.append((endpoint, api_kwargs or {}, return_type))
+        self.calls.append(
+            (
+                "sendRichMessage",
+                {"chat_id": chat_id, "rich_message": rich_message, **kwargs},
+                None,
+            )
+        )
         return "sent"
 
     async def edit_message_text(
-        self,
-        text: Any = None,
-        chat_id: int | str | None = None,
-        message_id: int | None = None,
-        api_kwargs: dict[str, Any] | None = None,
-        **_kwargs: Any,
+        self, chat_id: int | str, message_id: int, **kwargs: Any
     ) -> str:
         self.calls.append(
             (
                 "editMessageText",
-                {
-                    "chat_id": chat_id,
-                    "message_id": message_id,
-                    **(api_kwargs or {}),
-                },
+                {"chat_id": chat_id, "message_id": message_id, **kwargs},
                 None,
             )
         )
@@ -167,19 +160,18 @@ def test_message_assembly_uses_exactly_one_content_field() -> None:
     assert rc.blocks_message([{"type": "x"}]) == {"blocks": [{"type": "x"}]}
 
 
-def test_send_rich_goes_through_ptb_do_api_request() -> None:
+def test_send_rich_uses_native_kurigram_rich_message() -> None:
     bot = _FakeBot()
     message = rc.html_message(paragraph("hi"))
     result = asyncio.run(
         rc.send_rich(cast("Any", bot), -100, message, message_thread_id=7)
     )
     assert result == "sent"
-    endpoint, kwargs, return_type = bot.calls[0]
+    endpoint, kwargs, _ = bot.calls[0]
     assert endpoint == "sendRichMessage"
     assert kwargs["chat_id"] == -100
-    assert kwargs["rich_message"] == message
+    assert kwargs["rich_message"].html == message["html"]
     assert kwargs["message_thread_id"] == 7
-    assert return_type is not None
 
 
 def test_edit_rich_uses_edit_message_text_with_rich_field() -> None:
@@ -189,62 +181,51 @@ def test_edit_rich_uses_edit_message_text_with_rich_field() -> None:
     endpoint, kwargs, _ = bot.calls[0]
     assert endpoint == "editMessageText"
     assert kwargs["message_id"] == 55
-    assert kwargs["rich_message"] == message
+    assert kwargs["rich_message"].html == message["html"]
 
 
-def test_edit_rich_does_not_emit_the_ptb_deprecation_warning(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    bot = Bot("123456:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+def test_edit_rich_uses_native_kurigram_rich_message() -> None:
+    """Rich edits go through InputRichMessage, never a raw API escape hatch."""
+    captured: dict[str, Any] = {}
 
-    async def _edit(_self: object, **_kwargs: Any) -> str:
-        return "edited"
+    class _FakeClient:
+        async def edit_message_text(
+            self, chat_id: int, message_id: int, **kwargs: Any
+        ) -> str:
+            captured.update(kwargs)
+            return "edited"
 
-    def _forbidden(_self: object, *_args: Any, **_kwargs: Any) -> None:
-        raise AssertionError("do_api_request must not be used for rich edits")
-
-    monkeypatch.setattr(Bot, "edit_message_text", _edit)
-    monkeypatch.setattr(Bot, "do_api_request", _forbidden)
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        asyncio.run(rich_edit.edit_rich(bot, -100, 5, rc.html_message("x")))
-
-    assert not [w for w in caught if issubclass(w.category, UserWarning)]
+    asyncio.run(
+        rich_edit.edit_rich(_FakeClient(), -100, 5, rc.html_message("<b>x</b>"))  # type: ignore[arg-type]
+    )
+    rich = captured["rich_message"]
+    assert rich.html == "<b>x</b>"
 
 
 def test_reply_markup_is_serialised_for_the_api() -> None:
-    class _Markup:
-        def to_dict(self) -> dict[str, Any]:
-            return {"inline_keyboard": []}
-
+    markup = InlineKeyboardMarkup([])
     bot = _FakeBot()
     asyncio.run(
-        rc.send_rich(
-            cast("Any", bot), -100, rc.html_message("x"), reply_markup=_Markup()
-        )
+        rc.send_rich(cast("Any", bot), -100, rc.html_message("x"), reply_markup=markup)
     )
-    assert bot.calls[0][1]["reply_markup"] == {"inline_keyboard": []}
+    assert "reply_markup" not in bot.calls[0][1]
 
 
 def test_rich_embeds_keyboard_as_rich_buttons() -> None:
-    class _Markup:
-        def to_dict(self) -> dict[str, Any]:
-            return {
-                "inline_keyboard": [
-                    [
-                        {"text": "Go", "callback_data": "go", "style": "primary"},
-                        {"text": "Open", "url": "https://t.me"},
-                    ]
-                ]
-            }
-
+    markup = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("Go", callback_data="go"),
+                InlineKeyboardButton("Open", url="https://t.me"),
+            ]
+        ]
+    )
     bot = _FakeBot()
     message = rc.html_message("<p>body</p>")
-    asyncio.run(rc.send_rich(cast("Any", bot), -100, message, reply_markup=_Markup()))
+    asyncio.run(rc.send_rich(cast("Any", bot), -100, message, reply_markup=markup))
 
     kwargs = bot.calls[0][1]
-    html = kwargs["rich_message"]["html"]
+    html = kwargs["rich_message"].html
     assert "<tg-button-row>" in html
     assert 'type="callback_data" data="go"' in html
     assert 'type="url" url="https://t.me"' in html
@@ -252,31 +233,21 @@ def test_rich_embeds_keyboard_as_rich_buttons() -> None:
     assert message == {"html": "<p>body</p>"}
 
 
-def test_rich_buttons_keep_inline_markup_for_unmappable_cells() -> None:
-    class _Markup:
-        def to_dict(self) -> dict[str, Any]:
-            return {
-                "inline_keyboard": [
-                    [{"text": "App", "web_app": {"url": "https://t.me"}}]
-                ]
-            }
-
+def test_rich_buttons_render_a_disabled_cell_as_a_rich_button() -> None:
+    markup = InlineKeyboardMarkup([[InlineKeyboardButton("App")]])
     bot = _FakeBot()
     asyncio.run(
-        rc.send_rich(
-            cast("Any", bot), -100, rc.html_message("x"), reply_markup=_Markup()
-        )
+        rc.send_rich(cast("Any", bot), -100, rc.html_message("x"), reply_markup=markup)
     )
     kwargs = bot.calls[0][1]
-    assert kwargs["reply_markup"]["inline_keyboard"][0][0]["text"] == "App"
-    assert "tg-button" not in kwargs["rich_message"]["html"]
+    html = kwargs["rich_message"].html
+    assert '<tg-button type="disabled">' in html
+    assert "App</tg-button>" in html
+    assert "reply_markup" not in kwargs
 
 
 def test_rich_edit_embeds_buttons() -> None:
-    class _Markup:
-        def to_dict(self) -> dict[str, Any]:
-            return {"inline_keyboard": [[{"text": "Go", "callback_data": "go"}]]}
-
+    markup = InlineKeyboardMarkup([[InlineKeyboardButton("Go", callback_data="go")]])
     bot = _FakeBot()
     asyncio.run(
         rich_edit.edit_rich(
@@ -284,8 +255,9 @@ def test_rich_edit_embeds_buttons() -> None:
             -100,
             1,
             rc.html_message("x"),
-            reply_markup=_Markup(),
+            reply_markup=markup,
         )
     )
     kwargs = bot.calls[0][1]
-    assert "<tg-button-row>" in kwargs["rich_message"]["html"]
+    assert "<tg-button-row>" in kwargs["rich_message"].html
+    assert "reply_markup" not in kwargs

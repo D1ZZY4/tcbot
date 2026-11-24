@@ -1,7 +1,7 @@
 # TCF Bot - Replit Deployment Guide
 
 Deploying TCF Bot on Replit requires specific configuration for secrets,
-keep-alive, and webhook transport. This guide covers Replit-only setup.
+keep-alive, and Kurigram long polling. This guide covers Replit-only setup.
 
 For general project documentation, see [`README.md`](README.md).
 For contributor rules and code style, see [`AGENTS.md`](AGENTS.md).
@@ -25,10 +25,9 @@ Required secrets:
 Optional secrets:
 
 - `REDIS_URL`: Redis connection URL for L2 cache.
-- `WEBHOOK_SECRET`: Secret token for Telegram webhook validation.
 - `PORT`: Flask keep-alive port. Use a local port that the `[[ports]]`
   mapping in `.replit` publishes. The repository maps both `5000` and
-  `8080`; a webhook only reaches the value you configure, so keep the
+  `8080`; a polling client only reaches the value you configure, so keep the
   mapping and `PORT` in sync. An unset or invalid value falls back to
   `5000`, which the same file publishes.
 
@@ -45,8 +44,7 @@ The Replit run command is:
 uv run python -m tcbot
 ```
 
-This starts the bot in webhook mode when `WEBHOOK_URL` is set, or falls back
-to polling for local development.
+This starts the bot in Kurigram long-polling mode.
 
 ---
 
@@ -58,25 +56,18 @@ The Flask keep-alive server binds to `${BIND_HOST}:${PORT}`. `BIND_HOST`
 defaults to `0.0.0.0`, which is what Replit's proxy expects. The bot starts
 this server automatically before connecting to Telegram.
 
-Set `PORT` to a local port the `[[ports]]` mapping in `.replit` publishes
-(the repository maps `5000` and `8080`). A port without a mapping binds
-fine locally but Telegram webhook deliveries die at the proxy with HTTP 502
-and the bot never replies.
+Set `PORT` to a local port the `[[ports]]` mapping in `.replit` publishes.
+An unmapped port still binds locally, but the health endpoints become
+unreachable through the Replit proxy. Polling needs no inbound port.
 
 If `PORT` is unset, invalid, or outside `1..65535`, the application defaults
 to `5000`, and the `5000` mapping in `.replit` publishes that default.
 
-### Webhook Transport
+### Transport
 
-Production Replit deployments should use webhook mode:
-
-1. Set `WEBHOOK_URL` to your Replit public domain (e.g., `https://your-project.username.repl.co`). When `WEBHOOK_URL` is unset, the bot auto-detects `REPLIT_DEV_DOMAIN`, so an explicit URL is optional on Replit.
-2. Set `WEBHOOK_SECRET` to a random string for request validation.
-3. The bot registers the webhook with Telegram on startup.
-
-The dev domain is only used when the bot runs as the Replit application itself. A workspace shell that starts the bot by hand inherits `REPLIT_DEV_DOMAIN`, but that domain points at the Replit workflow, so the shell polls instead of registering a webhook it would never receive.
-
-Local development without a public URL falls back to polling automatically.
+The bot always uses Kurigram long polling. No public URL, dev domain, or update
+registration with Telegram is required. Replication is achieved by running
+exactly one process per bot token.
 
 ### Nix Configuration
 
@@ -112,8 +103,6 @@ The `uv.lock` file ensures reproducible installs on Replit. Do not commit
 - [ ] `PROOFS` set to the evidence group or channel.
 - [ ] `API_ID` set in Replit Secrets.
 - [ ] `API_HASH` set in Replit Secrets.
-- [ ] `WEBHOOK_URL` set for production webhook mode (optional on Replit: `REPLIT_DEV_DOMAIN` is auto-detected when the bot runs as the Replit application).
-- [ ] `WEBHOOK_SECRET` set for webhook validation.
 - [ ] Run command is `uv run python -m tcbot`.
 - [ ] `uv sync --frozen` has been run after dependency changes.
 - [ ] Flask keep-alive is running on the assigned `PORT`.
@@ -128,10 +117,9 @@ The `uv.lock` file ensures reproducible installs on Replit. Do not commit
 Check the Replit console output for missing environment variables. Ensure all
 required secrets are set in the Replit Secrets manager.
 
-### Webhook not receiving updates
+### Bot does not receive updates
 
-Verify `WEBHOOK_URL` matches the public Replit domain and that Telegram can
-reach it. Check the webhook secret matches between Telegram and Replit Secrets.
+Confirm a single bot process is running; two clients polling the same token conflict.
 
 ### Keep-alive not responding
 
@@ -154,7 +142,7 @@ network allowlist.
 | Aspect | Local Development | Replit Deployment |
 |---|---|---|
 | Secrets | `config.env` file | Replit Secrets manager |
-| Transport | Polling (no public URL) | Webhook (with `WEBHOOK_URL`) |
+| Transport | Kurigram long polling | Kurigram long polling |
 | Dependencies | `uv sync --frozen` | `uv sync --frozen` |
 | Run command | `uv run python -m tcbot` | `uv run python -m tcbot` |
 | PostgreSQL | Local or managed | Managed or external |

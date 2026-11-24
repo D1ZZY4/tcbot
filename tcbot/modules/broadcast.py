@@ -7,14 +7,13 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
-
-from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.modules.helper import decorators, guards, messages
+from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
+from tcbot.modules.helper.handlers import MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     replies,
@@ -30,9 +29,6 @@ from tcbot.utils.dispatch import fan_out, throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, esc, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -66,21 +62,21 @@ __help__: replies.HelpEntry = get_help()
 @decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.staff_only
 @decorators.log_execution
-async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_broadcast(ctx: Ctx) -> None:
     """Send a message or forward a replied-to message to all connected groups.
 
     Accepts an inline text argument or a reply-to-message. Fans out sends to
     every active group via ``fan_out`` with semaphore limiting. Logs the result
     and edits the status message in parallel.
     """
-    locale = await locale_for_update(update)
-    msg = update.effective_message
-    admin = update.effective_user
+    locale = await locale_for_update(ctx)
+    msg = ctx.effective_message
+    admin = ctx.effective_user
     if msg is None or admin is None:
         return
     if not await guards.require_federation_origin(
         msg,
-        chat_id=msg.chat.id,
+        chat_id=chat_id_of(msg.chat),
         chat_type=msg.chat.type,
         locale=locale,
         allow_private=True,
@@ -174,10 +170,10 @@ async def cmd_broadcast(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         preview = ""
 
-    # * send log and update status message in parallel
+    # * send log and ctx status message in parallel
     log_coro = send_log(
         ctx.bot,
-        messages.broadcast_log(admin.id, admin.first_name, preview, success, failed),
+        messages.broadcast_log(admin.id, display_name(admin), preview, success, failed),
     )
     if status is not None:
         edit_r, log_r = await asyncio.gather(

@@ -77,7 +77,7 @@ async def publish_rules(
                     # * edit helper hides "not found" as a benign outcome, so
                     # * use its result instead of trusting the stale id.
                     sent = await send_text(bot, cfg.main_channel, text)
-                    message_id = int(sent.message_id)
+                    message_id = int(sent.id)
                 await rules_db.publications.mark_synced(int(slot["id"]), message_id)
                 synced += 1
             except Exception as exc:

@@ -6,12 +6,12 @@
 
 Uploaded proof media is sent as a plain Bot API media message with a plain
 caption; these helpers render URL-based media inside rich HTML when a caller
-needs it. ``proof_slideshow`` is available for that rich path.
+needs it.
 """
 
 from __future__ import annotations
 
-from tcbot.modules.helper.messages.rich_style import esc
+from tcbot.modules.helper.rich.style import esc
 
 
 def photo(url: str, *, caption: str | None = None) -> str:
@@ -28,11 +28,6 @@ def slideshow(urls: list[str], *, caption: str | None = None) -> str:
     """Render an ordered media slideshow."""
     body = "".join(_media("img", url, self_closing=True) for url in urls)
     return f"<tg-slideshow>{body}{_caption(caption)}</tg-slideshow>"
-
-
-def proof_slideshow(urls: list[str], *, caption: str | None = None) -> str:
-    """Render proof media as a slideshow, the canonical proof layout."""
-    return slideshow(urls, caption=caption)
 
 
 def collage(urls: list[str], *, caption: str | None = None) -> str:
@@ -56,4 +51,4 @@ def _media(
     return f"<figure>{media}{caption_markup}</figure>" if caption_markup else media
 
 
-__all__ = ["collage", "photo", "proof_slideshow", "slideshow", "video"]
+__all__ = ["collage", "photo", "slideshow", "video"]

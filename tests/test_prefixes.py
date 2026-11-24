@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 from types import SimpleNamespace
 from typing import Any
 
@@ -18,10 +20,17 @@ from tcbot.utils.prefixes import (
 
 
 def _message(text: str | None, username: str | None = "Bot") -> Any:
-    """Build a duck-typed stand-in for ``telegram.Message``."""
+    """Build a duck-typed stand-in for a Kurigram message and client."""
     return SimpleNamespace(
-        text=text, get_bot=lambda: SimpleNamespace(username=username)
+        text=text,
+        client=SimpleNamespace(me=SimpleNamespace(username=username)),
     )
+
+
+def _matches(filt: Any, msg: Any) -> bool:
+    """Evaluate a Kurigram filter against one message."""
+    result = filt(msg.client, msg)
+    return asyncio.run(result) if inspect.isawaitable(result) else bool(result)
 
 
 def test_plain_command_parses() -> None:
@@ -79,23 +88,23 @@ def test_short_mention_rejected() -> None:
 
 def test_filter_matches_configured_command() -> None:
     filt = _PrefixedCommandFilter("tcban", ["/", "!", "."])
-    assert filt.filter(_message("/tcban 5")) is True
-    assert filt.filter(_message("!tcban")) is True
-    assert filt.filter(_message("/tckick")) is False
-    assert filt.filter(_message("hello")) is False
+    assert _matches(filt, _message("/tcban 5")) is True
+    assert _matches(filt, _message("!tcban")) is True
+    assert _matches(filt, _message("/tckick")) is False
+    assert _matches(filt, _message("hello")) is False
 
 
 def test_filter_accepts_own_mention_only() -> None:
     # * Telegram usernames need 5+ chars, so the fixture uses a long name.
     filt = _PrefixedCommandFilter("tcb", ["/"])
-    assert filt.filter(_message("/tcb@TestBot", "TestBot")) is True
-    assert filt.filter(_message("/tcb@OtherBot", "TestBot")) is False
+    assert _matches(filt, _message("/tcb@TestBot", "TestBot")) is True
+    assert _matches(filt, _message("/tcb@OtherBot", "TestBot")) is False
 
 
 def test_any_filter_matches_any_command() -> None:
     filt = _AnyPrefixedCommandFilter(["/"], name="Any")
-    assert filt.filter(_message("/tcban")) is True
-    assert filt.filter(_message("plain chat")) is False
+    assert _matches(filt, _message("/tcban")) is True
+    assert _matches(filt, _message("plain chat")) is False
 
 
 def test_parse_cmd_args_splits() -> None:

@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import inspect
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
 import pytest
-from telegram import Update
+from pyrogram.enums import ChatType
+from pyrogram.types import Chat, Message
 
 from tcbot import cfg
 from tcbot.modules import appeals
@@ -65,7 +67,7 @@ def test_a_long_ordinary_word_does_not_reject_a_group_appeal(
     async def _active(_user_id: int) -> dict[str, Any]:
         return {"ban_id": "goodban001", "log_message_id": 0}
 
-    async def _on_message(_update: Any, _ctx: Any) -> int:
+    async def _on_message(_ctx: Any) -> int:
         called.append(1)
         return WAITING_APPEAL
 
@@ -86,50 +88,39 @@ def test_a_long_ordinary_word_does_not_reject_a_group_appeal(
         effective_user=SimpleNamespace(id=42),
         effective_chat=SimpleNamespace(id=-1001),
     )
-    asyncio.run(
-        handle_group_appeal(  # type: ignore[arg-type]
-            update,  # type: ignore[arg-type]
-            SimpleNamespace(user_data={}),  # type: ignore[arg-type]
-            _on_message,
-        )
+    ctx = SimpleNamespace(
+        effective_message=msg,
+        effective_user=update.effective_user,
+        effective_chat=update.effective_chat,
+        user_data={},
     )
+    asyncio.run(handle_group_appeal(ctx, _on_message))  # type: ignore[arg-type]
 
     assert called == [1]
 
 
-def _appeal_update(ban_id: str) -> SimpleNamespace:
-    message = SimpleNamespace(
+def _appeal_update(ban_id: str) -> Message:
+    """Build a real Kurigram message so the native filters can evaluate it."""
+    return Message(
+        id=1,
+        chat=Chat(id=1, type=ChatType.PRIVATE),
         text=f"/start appeal_{ban_id}",
-        chat=SimpleNamespace(type="private"),
     )
-    return SimpleNamespace(
-        effective_chat=SimpleNamespace(type="private"),
-        effective_message=message,
-        channel_post=None,
-        message=message,
-        edited_channel_post=None,
-        edited_message=None,
-        business_message=None,
-        edited_business_message=None,
-        guest_message=None,
-    )
+
+
+def _matches(flt: Any, update: Message) -> bool:
+    """Evaluate a synchronous or asynchronous Kurigram filter."""
+    result = flt(None, update)
+    return asyncio.run(result) if inspect.isawaitable(result) else bool(result)
 
 
 def test_appeal_deep_link_accepts_every_valid_reference() -> None:
     # * The parser accepts 10 to 32 characters; the handler filter has to
     # * accept the same range or a legacy reference produces a dead link.
-    assert appeals._APPEAL_START_CMDS.check_update(
-        cast("Update", _appeal_update("a" * 10))
-    )
-    assert appeals._APPEAL_START_CMDS.check_update(
-        cast("Update", _appeal_update("a" * 32))
-    )
+    assert _matches(appeals._APPEAL_START_CMDS, _appeal_update("a" * 10))
+    assert _matches(appeals._APPEAL_START_CMDS, _appeal_update("a" * 32))
 
 
 def test_appeal_deep_link_rejects_an_invalid_reference() -> None:
-    assert not appeals._APPEAL_START_CMDS.check_update(
-        cast("Update", _appeal_update("a" * 9))
-    )
-    assert not appeals._APPEAL_START_CMDS.check_update(
-        cast("Update", _appeal_update("a" * 33))
-    )
+    assert not _matches(appeals._APPEAL_START_CMDS, _appeal_update("a" * 9))
+    assert not _matches(appeals._APPEAL_START_CMDS, _appeal_update("a" * 33))

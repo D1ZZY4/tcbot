@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, cast
 
-from telegram.constants import KeyboardButtonStyle
+from pyrogram.enums import ButtonStyle as KeyboardButtonStyle
 
 from tcbot.modules.helper import buttons as btn
 from tcbot.modules.helper.buttons import menus as menu_btn

@@ -6,13 +6,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
-
 from tcbot import cfg
 from tcbot.modules.helper import decorators, extraction, guards, identity, targets
+from tcbot.modules.helper.context import Ctx, chat_id_of
 from tcbot.modules.helper.guards import resolve_and_check
+from tcbot.modules.helper.handlers import (
+    ConversationHandler,
+    MessageHandler,
+)
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, reply_rich_result
 from tcbot.modules.helper.pipelines.mod_action_steps import (
@@ -34,9 +35,6 @@ from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import Safe, bold, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -90,7 +88,7 @@ __help__: replies.HelpEntry = get_help()
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.basic_mod_only
 @decorators.log_execution
-async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def cmd_warn(ctx: Ctx) -> int:
     """Entry point for the warn flow.
 
     Resolves the target, runs identity and role checks in parallel, then either
@@ -101,7 +99,6 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     # * Warn audit rows are scoped to the origin chat: only a connected
     # * group (or primary) may create, aggregate, or trigger threshold ban.
     resolved = await targets.resolve_mod_target(
-        update,
         ctx,
         action="warn",
         min_role="moderator",
@@ -141,7 +138,7 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     if notice is not None:
         await reply_rich(msg, notice, log_label="cmd_warn staff notice")
 
-    scope = flow_scope(ctx, update)
+    scope = flow_scope(ctx)
     scope.update(
         {
             "warn_target_id": target_id,
@@ -161,8 +158,8 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                 ),
                 reply_markup=proof.keyboard(locale),
             )
-            scope["warn_prompt_chat"] = msg.chat.id
-            scope["warn_prompt_id"] = prompt.message_id
+            scope["warn_prompt_chat"] = chat_id_of(msg.chat)
+            scope["warn_prompt_id"] = prompt.id
         except Exception as exc:
             log.debug("cmd_warn proof-prompt reply failed: %s", exc)
             for key in (*_WARN_KEYS, "warn_reason"):
@@ -176,8 +173,8 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             reason.prompt(target_mention, "warn", locale=locale),
             reply_markup=reason.keyboard(locale),
         )
-        scope["warn_prompt_chat"] = msg.chat.id
-        scope["warn_prompt_id"] = prompt.message_id
+        scope["warn_prompt_chat"] = chat_id_of(msg.chat)
+        scope["warn_prompt_id"] = prompt.id
     except Exception as exc:
         log.debug("cmd_warn reason-prompt reply failed: %s", exc)
         for key in _WARN_KEYS:
@@ -192,14 +189,13 @@ async def cmd_warn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.basic_mod_only
 @decorators.log_execution
-async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_unwarn(ctx: Ctx) -> None:
     """Remove one warning from the target in the current group.
 
     Resolves the target, runs the identity check, optionally emits a
     staff-action notice, then delegates to ``execute_unwarn``.
     """
     await targets.run_staff_action(
-        update,
         ctx,
         action="unwarn",
         min_role="moderator",
@@ -214,18 +210,18 @@ async def cmd_unwarn(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.basic_mod_only
 @decorators.log_execution
-async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_warnlist(ctx: Ctx) -> None:
     """Reply with a paginated warning history for the specified target user."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     if not await guards.require_federation_origin(
         msg,
-        chat_id=msg.chat.id,
+        chat_id=chat_id_of(msg.chat),
         chat_type=msg.chat.type,
         locale=locale,
         allow_private=False,
@@ -233,7 +229,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ):
         return
     args = parse_cmd_args(msg.text)
-    target_id, target_name = await extraction.extract_target(update, args, ctx.bot)
+    target_id, target_name = await extraction.extract_target(ctx, args, ctx.bot)
     if not target_id:
         await reply_rich(
             msg,
@@ -251,7 +247,7 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if role_result[0] is None:
         return
 
-    await execute_warnlist(update, ctx, target_id, target_name or str(target_id))
+    await execute_warnlist(ctx, target_id, target_name or str(target_id))
 
 
 # ──────────────── Command Reset Warns </resetwarns> ─────────────── #
@@ -260,14 +256,13 @@ async def cmd_warnlist(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.basic_mod_only
 @decorators.log_execution
-async def cmd_resetwarns(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_resetwarns(ctx: Ctx) -> None:
     """Clear all warnings for the target in the current group.
 
     Resolves the target, runs the identity check, optionally emits a
     staff-action notice, then delegates to ``execute_resetwarns``.
     """
     await targets.run_staff_action(
-        update,
         ctx,
         action="resetwarns",
         min_role="moderator",

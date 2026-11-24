@@ -6,18 +6,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from telegram.ext import (
-    CallbackQueryHandler,
-    ConversationHandler,
-    MessageHandler,
-    filters,
-)
+from pyrogram import filters
 
 from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.buttons.menus import open_pm_btn
+from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.handlers import (
+    CallbackQueryHandler,
+    ConversationHandler,
+    MessageHandler,
+)
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import reply_rich
 from tcbot.modules.helper.pipelines.rules_editor_draft import rules_draft_editor
@@ -39,10 +38,6 @@ from tcbot.utils.i18n import canonical_locale, display_name, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
-if TYPE_CHECKING:
-    from telegram import Update
-    from telegram.ext import ContextTypes
-
 log = get_logger(__name__)
 
 
@@ -50,26 +45,26 @@ class RulesEditor:
     """Owns the main menu of one staff member's rules editor."""
 
     @staticmethod
-    async def _locale(update: Update) -> str:
-        return await locale_for_update(update)
+    async def _locale(ctx: Ctx) -> str:
+        return await locale_for_update(ctx)
 
-    async def panel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def panel(self, ctx: Ctx) -> int:
         """Show the editor panel, opening a draft when none exists."""
-        if not await editor_allowed(update):
-            await refuse_editor(update)
+        if not await editor_allowed(ctx):
+            await refuse_editor(ctx)
             return ConversationHandler.END
-        q = update.callback_query
+        q = ctx.callback_query
         if q is not None:
             await q.answer()
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
         set_doc, version = opened
-        chosen = content_locale(ctx, update)
-        locale = await self._locale(update)
+        chosen = content_locale(ctx)
+        locale = await self._locale(ctx)
         rows = await db.rules_db.list_items(int(version["id"]))
         await edit_or_reply(
-            update,
+            ctx,
             t(
                 "rules.editor.panel",
                 locale,
@@ -83,87 +78,84 @@ class RulesEditor:
         )
         return WAITING_EDITOR_MENU
 
-    async def start(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def start(self, ctx: Ctx) -> int:
         """Enter the editor from /tcrules in the moderator's private chat."""
-        msg = update.effective_message
+        msg = ctx.effective_message
         if msg is None:
             return ConversationHandler.END
-        chat = update.effective_chat
-        if chat is not None and chat.type != "private":
-            locale = await self._locale(update)
+        chat = ctx.effective_chat
+        if chat is not None and getattr(chat.type, "value", chat.type) != "private":
+            locale = await self._locale(ctx)
+            bot_username = (await ctx.bot_identity()).username or ""
             await reply_rich(
                 msg,
                 t("rules.editor.open_pm", locale, plain=True),
                 parse_mode=None,
-                reply_markup=open_pm_btn(ctx.bot.username or "", "tcrules", locale),
+                reply_markup=open_pm_btn(bot_username, "tcrules", locale),
             )
             return ConversationHandler.END
-        return await self.choose_language(update, ctx)
+        return await self.choose_language(ctx)
 
-    async def choose_language(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def choose_language(self, ctx: Ctx) -> int:
         """Open the content-language picker built from available catalogs."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is not None:
             await q.answer()
-        if not await editor_allowed(update):
-            await refuse_editor(update)
+        if not await editor_allowed(ctx):
+            await refuse_editor(ctx)
             return WAITING_EDITOR_MENU
-        return await self._render_language_picker(update, ctx)
+        return await self._render_language_picker(ctx)
 
-    async def _render_language_picker(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
-        locale = await self._locale(update)
+    async def _render_language_picker(self, ctx: Ctx) -> int:
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             t("rules.editor.choose_language", locale),
-            rules_btn.rules_language_btn(content_locale(ctx, update), locale),
+            rules_btn.rules_language_btn(content_locale(ctx), locale),
         )
         return WAITING_EDITOR_MENU
 
-    async def set_language(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def set_language(self, ctx: Ctx) -> int:
         """Switch the rule-set language and reopen that locale's draft."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is None or q.data is None:
             return WAITING_EDITOR_MENU
-        if not await editor_allowed(update):
-            await refuse_editor(update)
+        if not await editor_allowed(ctx):
+            await refuse_editor(ctx)
             return WAITING_EDITOR_MENU
         chosen = canonical_locale(q.data.split(":", 1)[-1])
         if chosen is None:
             await q.answer()
-            return await self._render_language_picker(update, ctx)
-        scope = flow_scope(ctx, update)
+            return await self._render_language_picker(ctx)
+        scope = flow_scope(ctx)
         scope["rules_content_locale"] = chosen
         scope.pop("rules_version", None)
-        return await self.panel(update, ctx)
+        return await self.panel(ctx)
 
-    async def publish(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def publish(self, ctx: Ctx) -> int:
         """Publish the open draft and reconcile the channel immediately."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is None:
             return WAITING_EDITOR_MENU
-        if not await editor_allowed(update):
-            await refuse_editor(update)
+        if not await editor_allowed(ctx):
+            await refuse_editor(ctx)
             return WAITING_EDITOR_MENU
         await q.answer()
-        locale = await self._locale(update)
-        opened = await set_and_draft(update, ctx)
+        locale = await self._locale(ctx)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
         set_doc, version = opened
-        chosen = content_locale(ctx, update)
+        chosen = content_locale(ctx)
         items = await db.rules_db.all_items(int(version["id"]))
         if not items:
             await edit_or_reply(
-                update,
+                ctx,
                 t("rules.publish.empty", locale),
                 rules_btn.editor_panel_btn(locale, has_content=False),
             )
             return WAITING_EDITOR_MENU
-        user_id = update.effective_user.id if update.effective_user else 0
+        user_id = ctx.effective_user.id if ctx.effective_user else 0
         try:
             result = await publish_rules(
                 int(set_doc["id"]), int(version["id"]), user_id, ctx.bot, chosen
@@ -179,9 +171,9 @@ class RulesEditor:
                 log.warning("Published-version refresh failed after publish error")
                 published = None
             if published is not None:
-                flow_scope(ctx, update)["rules_version"] = published
+                flow_scope(ctx)["rules_version"] = published
             await edit_or_reply(
-                update,
+                ctx,
                 t("rules.publish.error", locale, error=str(exc)),
                 rules_btn.editor_panel_btn(
                     locale, has_content=True, content_locale=chosen
@@ -198,9 +190,9 @@ class RulesEditor:
             )
             published = None
         if published is not None:
-            flow_scope(ctx, update)["rules_version"] = published
+            flow_scope(ctx)["rules_version"] = published
         await edit_or_reply(
-            update,
+            ctx,
             t(
                 "rules.publish.result",
                 locale,
@@ -211,53 +203,51 @@ class RulesEditor:
         )
         return WAITING_EDITOR_MENU
 
-    async def ask_discard(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def ask_discard(self, ctx: Ctx) -> int:
         """Ask for confirmation before removing the draft."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is not None:
             await q.answer()
-        locale = await self._locale(update)
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             t("rules.editor.confirm_discard", locale),
             rules_btn.confirm_btn("rules_discard_yes", "rules_discard_no", locale),
         )
         return WAITING_CONFIRM_DISCARD
 
-    async def discard(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def discard(self, ctx: Ctx) -> int:
         """Delete the draft; the channel and published version are untouched."""
-        if not await editor_allowed(update):
-            await refuse_editor(update)
+        if not await editor_allowed(ctx):
+            await refuse_editor(ctx)
             return ConversationHandler.END
-        q = update.callback_query
+        q = ctx.callback_query
         if q is not None:
             await q.answer()
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         version_id = scope.get("rules_version", {}).get("id")
         if version_id is not None:
             await db.rules_db.discard_draft(int(version_id))
         clear_editor_scope(scope)
         await edit_or_reply(
-            update, t("rules.editor.discarded", await self._locale(update)), None
+            ctx, t("rules.editor.discarded", await self._locale(ctx)), None
         )
         return ConversationHandler.END
 
-    async def cancel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def cancel(self, ctx: Ctx) -> int:
         """Leave the editor without changing the draft."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is not None:
             await q.answer()
-        clear_editor_scope(flow_scope(ctx, update))
+        clear_editor_scope(flow_scope(ctx))
         await edit_or_reply(
-            update, t("rules.editor.cancelled", await self._locale(update)), None
+            ctx, t("rules.editor.cancelled", await self._locale(ctx)), None
         )
         return ConversationHandler.END
 
-    async def ignore_foreign_cancel(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def ignore_foreign_cancel(self, ctx: Ctx) -> int:
         """Answer a moderation picker Cancel without closing the editor."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is not None:
             try:
                 await q.answer()
@@ -271,7 +261,7 @@ rules_editor = RulesEditor()
 
 def build_rules_conv() -> ConversationHandler:
     """Build the single-state editor conversation used by ``/tcrules``."""
-    _TCRULES_START = filters.ChatType.PRIVATE & filters.Regex(r"^/start\s+tcrules$")
+    _TCRULES_START = filters.private & filters.regex(r"^/start\s+tcrules$")
     return ConversationHandler(
         entry_points=[
             MessageHandler(_TCRULES_CMDS, rules_editor.start),
@@ -345,13 +335,13 @@ def build_rules_conv() -> ConversationHandler:
                 ),
                 CallbackQueryHandler(rules_editor.publish, pattern=r"^rules_publish$"),
                 MessageHandler(
-                    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, rules_draft_editor.on_text
+                    filters.text & ~ALL_PREFIXES_CMD_FILTER, rules_draft_editor.on_text
                 ),
             ],
             WAITING_MARKDOWN: [
-                MessageHandler(filters.Document.ALL, rules_draft_editor.on_markdown),
+                MessageHandler(filters.document, rules_draft_editor.on_markdown),
                 MessageHandler(
-                    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, rules_draft_editor.on_text
+                    filters.text & ~ALL_PREFIXES_CMD_FILTER, rules_draft_editor.on_text
                 ),
                 CallbackQueryHandler(rules_editor.panel, pattern=r"^rules_panel$"),
                 CallbackQueryHandler(

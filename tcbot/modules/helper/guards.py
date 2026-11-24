@@ -10,9 +10,13 @@ import asyncio
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from pyrogram import Client
+from pyrogram.types import CallbackQuery, Message, User
+
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import identity
+from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.locale import effective_locale, locale_for_update
 from tcbot.modules.helper.messages import cb_error_edit, replies, reply_rich
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -21,8 +25,6 @@ from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from typing import Any
-
-    from telegram import Bot, CallbackQuery, Message, Update, User
 
     from tcbot.database.users_roles import RoleName
 
@@ -212,7 +214,7 @@ async def resolve_and_check(
     Replies on the message itself when the executor lacks rank or the target
     outranks the executor, then returns ``(None, None)``.
 
-    Both roles are read fresh. A demotion or a transfer in another process
+    Clienth roles are read fresh. A demotion or a transfer in another process
     must never be hidden behind the cache TTL, and the check must not
     depend on a decorator having run first.
 
@@ -277,7 +279,7 @@ async def resolve_and_check(
 
 
 async def classify_and_check(
-    bot: Bot,
+    bot: Client,
     admin_id: int,
     target_id: int,
     target_name: str | None,
@@ -383,8 +385,8 @@ async def recheck_executor_rank(
 async def require_federation_origin(
     msg: Message,
     *,
-    chat_id: int,
-    chat_type: str,
+    chat_id: int | None,
+    chat_type: object | None,
     locale: str | None,
     allow_private: bool = True,
     log_label: str = "federation origin",
@@ -401,6 +403,11 @@ async def require_federation_origin(
     Fail closed: a connection-state outage replies with the database retry
     notice and blocks the action. Cancellation always propagates.
     """
+    if chat_id is None:
+        return False
+    # * Kurigram exposes chat types as enums; compare their string values.
+    normalized_type = getattr(chat_type, "value", chat_type) or ""
+    chat_type = normalized_type if isinstance(normalized_type, str) else ""
     if chat_type == "private":
         if allow_private:
             return True
@@ -443,7 +450,7 @@ async def require_federation_origin(
 
 
 async def check_callback_staff(
-    admin_id: int, q: CallbackQuery, update: Update, *, min_role: RoleName = "admin"
+    admin_id: int, q: CallbackQuery, ctx: Ctx, *, min_role: RoleName = "admin"
 ) -> str | None:
     """Re-check the staff rank alongside ``q.answer()`` in parallel.
 
@@ -468,7 +475,7 @@ async def check_callback_staff(
     ) > db.users_roles.role_rank(role_r):
         await cb_error_edit(
             q,
-            replies.err_perm_expired(await locale_for_update(update), plain=True),
+            replies.err_perm_expired(await locale_for_update(ctx), plain=True),
             log_label="callback perm-expired",
             parse_mode=None,
         )
@@ -477,7 +484,7 @@ async def check_callback_staff(
 
 
 async def check_callback_executor(
-    update: Update,
+    ctx: Ctx,
     q: CallbackQuery,
     admin: User | None,
     *,
@@ -493,7 +500,7 @@ async def check_callback_executor(
     if identity.is_anon_admin(admin):
         await cb_error_edit(
             q,
-            replies.refuse_anon_admin(await locale_for_update(update), plain=True),
+            replies.refuse_anon_admin(await locale_for_update(ctx), plain=True),
             log_label="callback anon-admin",
             parse_mode=None,
         )
@@ -501,17 +508,15 @@ async def check_callback_executor(
     if admin is None:
         await cb_error_edit(
             q,
-            replies.err_perm_expired(await locale_for_update(update), plain=True),
+            replies.err_perm_expired(await locale_for_update(ctx), plain=True),
             log_label="callback perm-expired",
             parse_mode=None,
         )
         return None
-    return await check_callback_staff(admin.id, q, update, min_role=min_role)
+    return await check_callback_staff(admin.id, q, ctx, min_role=min_role)
 
 
-async def prompt_owner_mismatch(
-    q: Any, update: Update, *, min_parts: int, key: str
-) -> bool:
+async def prompt_owner_mismatch(q: Any, ctx: Ctx, *, min_parts: int, key: str) -> bool:
     """Answer an alert and return True when the tapper is not the prompt owner.
 
     New callbacks carry ``{...}:{executor}`` after the legacy shape; only
@@ -536,12 +541,12 @@ async def prompt_owner_mismatch(
         # * cannot prove who opened the prompt, so the tapper is not
         # * treated as the owner.
         return True
-    tapper = update.effective_user
+    tapper = ctx.effective_user
     if tapper is None or tapper.id == owner_id:
         return False
     try:
         await q.answer(
-            t(key, await locale_for_update(update), plain=True),
+            t(key, await locale_for_update(ctx), plain=True),
             show_alert=True,
         )
     except Exception as exc:
@@ -549,7 +554,7 @@ async def prompt_owner_mismatch(
     return True
 
 
-async def cancel_owner_mismatch(q: Any, update: Update) -> bool:
+async def cancel_owner_mismatch(q: Any, ctx: Ctx) -> bool:
     """Return True when the tapper may not cancel this prompt.
 
     Cancel callbacks carry ``{target}:{executor}`` (3 parts); legacy
@@ -557,18 +562,18 @@ async def cancel_owner_mismatch(q: Any, update: Update) -> bool:
     where the caller's own rank check is the only gate.
     """
     return await prompt_owner_mismatch(
-        q, update, min_parts=2, key="admins.error.not_prompt_owner"
+        q, ctx, min_parts=2, key="admins.error.not_prompt_owner"
     )
 
 
-async def action_owner_mismatch(q: Any, update: Update, *, min_parts: int) -> bool:
+async def action_owner_mismatch(q: Any, ctx: Ctx, *, min_parts: int) -> bool:
     """Return True when the tapper may not act on this prompt.
 
     Action callbacks carry the opener as the last segment; legacy taps
     without it act as the tapper with a fresh rank re-check downstream.
     """
     return await prompt_owner_mismatch(
-        q, update, min_parts=min_parts, key="admins.error.not_prompt_actor"
+        q, ctx, min_parts=min_parts, key="admins.error.not_prompt_actor"
     )
 
 
@@ -579,7 +584,7 @@ def can_demote_admin(executor_role: str | None, target_role: str | None) -> bool
     outrank the target. On top of that, demoting an Admin needs the
     Owner, because an Admin is the tier a demotion would strip.
 
-    Both comparisons run through the shared rank table, so a tier that
+    Clienth comparisons run through the shared rank table, so a tier that
     joins it takes part in the rule instead of slipping past a hardcoded
     name. The Owner stays a named tier, because the Admin rule is about
     that one role and not about a rank number.

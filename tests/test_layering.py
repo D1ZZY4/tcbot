@@ -116,10 +116,10 @@ def _imported_names(path: Path, root: Path = _TCBOT_ROOT) -> set[str]:
 # * modules are the single source of truth for the HTML shapes, including the
 # * divider and the bulleted-list tags.
 _I18N_RICH_LEAVES = (
-    "tcbot.modules.helper.messages.rich_style",
-    "tcbot.modules.helper.messages.rich_format",
-    "tcbot.modules.helper.messages.rich_link",
-    "tcbot.modules.helper.messages.rich_list",
+    "tcbot.modules.helper.rich.style",
+    "tcbot.modules.helper.rich.formats",
+    "tcbot.modules.helper.rich.link",
+    "tcbot.modules.helper.rich.list",
 )
 
 
@@ -342,7 +342,7 @@ def test_every_python_file_starts_with_the_project_header() -> None:
 
 
 def test_no_command_module_uses_the_builtin_command_handler() -> None:
-    """PTB's CommandHandler only matches '/', dropping '!' and '.' commands."""
+    """A framework default command filter would drop '!' and '.' commands."""
     offenders: list[str] = []
     for path in sorted((_TCBOT_ROOT / "modules").glob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))

@@ -10,6 +10,8 @@ import asyncio
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from pyrogram import Client
+
 from tcbot import database as db
 from tcbot.modules.helper.extraction.resolve import _GET_CHAT_TIMEOUT
 from tcbot.utils.logger import get_logger
@@ -19,7 +21,6 @@ from tcbot.utils.time_and_date import to_utc, utc_now
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from telegram import Bot
 
 log = get_logger(__name__)
 
@@ -42,7 +43,7 @@ identity_refresh_tasks = TaskTracker("identity refresh")
 
 
 async def _fetch_live_identity(
-    bot: Bot, target_id: int
+    bot: Client, target_id: int
 ) -> tuple[str, str | None, str | None] | None:
     """Fetch a fresh (first_name, username, last_name) triple from Telegram.
 
@@ -54,7 +55,7 @@ async def _fetch_live_identity(
     changes latency, not the result. Returns ``None`` when nothing resolves.
     The sweep is bounded by ``_RESOLVE_SWEEP_TIMEOUT``.
 
-    Honest limitation: the Bot API cannot enumerate group members, so
+    Honest limitation: the Client API cannot enumerate group members, so
     "fetch every member" is impossible; unknown users resolve per-ID
     across the groups the bot has joined.
     """
@@ -149,9 +150,9 @@ async def _fetch_live_identity(
 
 
 async def sync_user_identity(
-    bot: Bot, target_id: int, *, max_age_seconds: float = _SYNC_MAX_AGE_S
+    bot: Client, target_id: int, *, max_age_seconds: float = _SYNC_MAX_AGE_S
 ) -> tuple[str, str | None, str | None]:
-    """Verify the cached identity against live Telegram and update on mismatch.
+    """Verify the cached identity against live Telegram and ctx on mismatch.
 
     The full sync protocol for explicit detail views (``/check`` profile,
     ``/tcstats`` user card):
@@ -236,7 +237,7 @@ def identity_needs_refresh(doc: Mapping[str, object] | None) -> bool:
     return age > _SYNC_MAX_AGE_S
 
 
-async def _refresh_identity(bot: Bot, target_id: int) -> None:
+async def _refresh_identity(bot: Client, target_id: int) -> None:
     """Run :func:`sync_user_identity` and swallow failures at debug level."""
     try:
         await sync_user_identity(bot, target_id)
@@ -244,7 +245,7 @@ async def _refresh_identity(bot: Bot, target_id: int) -> None:
         log.debug("background identity refresh failed for %d: %s", target_id, exc)
 
 
-def launch_identity_refresh(bot: Bot, target_id: int) -> None:
+def launch_identity_refresh(bot: Client, target_id: int) -> None:
     """Fire-and-forget identity sync for detail views (zero added latency).
 
     The view renders instantly from cache; this refreshes the stored

@@ -4,11 +4,10 @@
 
 """Rich message editing: ``edit_rich`` and the safe edit helpers.
 
-Sending and replying live in ``rich_msg.py``. The safe helpers edit through
-the rich transport when the bot is a real PTB ``Bot`` and fall back to the
-plain PTB edit for test doubles or non-PTB bots. ``send_log`` lives here
-because its log payload is shared with the edit helpers. Callback answers and
-keyboard-only edits have no rich equivalent and remain direct PTB calls.
+Sending and replying live in ``rich.msg``. Every edit goes through a native
+Kurigram rich-message call, with an inline keyboard kept as a real Kurigram
+markup. Callback answers and keyboard-only edits are native Kurigram calls.
+``send_log`` lives here because its payload is shared with the edit helpers.
 """
 
 from __future__ import annotations
@@ -16,12 +15,11 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from telegram import Bot, InlineKeyboardMarkup
-from telegram.error import BadRequest
+from pyrogram.types import InlineKeyboardMarkup
 
 from tcbot import cfg
-from tcbot.modules.helper.messages.rich_link import _markup_dict
-from tcbot.modules.helper.messages.rich_msg import (
+from tcbot.modules.helper.rich.msg import (
+    _input_rich,
     _message_with_buttons,
     html_message,
     send_rich,
@@ -32,7 +30,8 @@ from tcbot.utils.logger import get_logger
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from telegram import CallbackQuery, InlineKeyboardMarkup, Message
+    from pyrogram import Client
+    from pyrogram.types import CallbackQuery, Message
 
 log = get_logger(__name__)
 
@@ -41,33 +40,19 @@ log = get_logger(__name__)
 
 
 async def edit_rich(
-    bot: Bot,
+    bot: Client,
     chat_id: int | str,
     message_id: int,
     message: dict[str, Any],
     *,
     reply_markup: Any | None = None,
 ) -> Message:
-    """Edit a message's rich content.
-
-    PTB exposes ``editMessageText`` natively, so the rich payload is passed
-    through ``api_kwargs`` instead of the generic ``do_api_request`` escape
-    hatch. ``text`` is required by PTB's signature but omitted from the
-    request: the Bot API requires *rich_message* when *text* is absent.
-    """
-    if not hasattr(bot, "edit_message_text"):
-        raise RuntimeError("rich edit needs a Bot with edit_message_text support")
-
-    payload, embedded = _message_with_buttons(message, reply_markup)
-    api_kwargs: dict[str, Any] = {"rich_message": payload, "text": None}
-    markup = _markup_dict(reply_markup)
-    if markup is not None and not embedded:
-        api_kwargs["reply_markup"] = markup
+    """Edit a message through Kurigram's native rich-message transport."""
+    payload, _embedded = _message_with_buttons(message, reply_markup)
     return await bot.edit_message_text(
-        text=None,  # type: ignore[arg-type]
-        chat_id=chat_id,
-        message_id=message_id,
-        api_kwargs=api_kwargs,
+        chat_id,
+        message_id,
+        rich_message=_input_rich(payload),
     )
 
 
@@ -79,22 +64,6 @@ _IGNORED = {"message is not modified", "message to edit not found", "chat not fo
 def _rich_payload(text: str) -> dict[str, Any]:
     """Build the rich payload for any text, including plain notices."""
     return html_message(text)
-
-
-def _bot_of(obj: object) -> Bot | None:
-    """Return the bot of a PTB object, or None for lightweight fakes."""
-    getter = getattr(obj, "get_bot", None)
-    if getter is None:
-        return None
-    try:
-        return getter()
-    except Exception:
-        return None
-
-
-def _rich_ready(bot: object | None) -> bool:
-    """Only a real PTB Bot can reach the Bot API rich-message methods."""
-    return isinstance(bot, Bot)
 
 
 def _log_edit_failure(
@@ -121,15 +90,12 @@ async def _edit_via(
     try:
         await do_edit
         return True
-    except BadRequest as e:
-        text = str(e).lower()
-        if "message is not modified" in text:
+    except Exception as exc:
+        text = str(exc).lower()
+        if "message is not modified" in text or "hasn't changed" in text:
             return True
         if any(i in text for i in _IGNORED):
             return False
-        _log_edit_failure(log_level, log_label, default_msg, e)
-        return False
-    except Exception as exc:
         if not catch_all:
             raise
         _log_edit_failure(log_level, log_label, default_msg, exc)
@@ -148,23 +114,11 @@ async def safe_edit(
 ) -> None:
     """Edit a message as a rich message; swallow harmless not-modified errors."""
     _ = parse_mode
-    rich_bot = _bot_of(msg)
-    if not isinstance(rich_bot, Bot):
-        await _edit_via(
-            msg.edit_text(text, **kwargs),
-            log_level=log_level,
-            log_label=log_label,
-            catch_all=catch_all,
-            default_msg="edit failed: %s",
-        )
-        return
+    markup = kwargs.get("reply_markup")
+    payload, _embedded = _message_with_buttons(_rich_payload(text), markup)
     await _edit_via(
-        edit_rich(
-            rich_bot,
-            msg.chat.id,
-            msg.message_id,
-            _rich_payload(text),
-            reply_markup=kwargs.get("reply_markup"),
+        msg.edit_text(
+            rich_message=_input_rich(payload),
         ),
         log_level=log_level,
         log_label=log_label,
@@ -183,30 +137,13 @@ async def safe_edit_cb(
     parse_mode: Any = None,
     **kwargs: Any,
 ) -> bool:
-    """Edit a callback-query message as a rich message.
-
-    Returns whether the edit actually landed. Callers that must not lose a
-    state change (for example a decided appeal card) use this to queue a
-    durable retry when Telegram refused the edit.
-    """
+    """Edit a callback-query message, returning whether the edit landed."""
     _ = parse_mode
-    target = getattr(q, "message", None)
-    rich_bot = _bot_of(q)
-    if target is None or not isinstance(rich_bot, Bot):
-        return await _edit_via(
-            q.edit_message_text(text, **kwargs),
-            log_level=log_level,
-            log_label=log_label,
-            catch_all=catch_all,
-            default_msg="callback edit failed: %s",
-        )
+    markup = kwargs.get("reply_markup")
+    payload, _embedded = _message_with_buttons(_rich_payload(text), markup)
     return await _edit_via(
-        edit_rich(
-            rich_bot,
-            target.chat.id,
-            target.message_id,
-            _rich_payload(text),
-            reply_markup=kwargs.get("reply_markup"),
+        q.edit_message_text(
+            rich_message=_input_rich(payload),
         ),
         log_level=log_level,
         log_label=log_label,
@@ -216,7 +153,7 @@ async def safe_edit_cb(
 
 
 async def safe_edit_message(
-    bot: Bot,
+    bot: Client,
     chat_id: int | None,
     message_id: int | None,
     text: str,
@@ -227,29 +164,17 @@ async def safe_edit_message(
     parse_mode: Any = None,
     **kwargs: Any,
 ) -> bool:
-    """Edit a message by chat/message ID as a rich message.
-
-    Returns False when the target message is gone so the caller can send a
-    fresh one instead of recording a dead id as synced.
-    """
+    """Edit a message by chat/message ID, returning whether it landed."""
     _ = parse_mode
-    if chat_id is None or message_id is None or not _rich_ready(bot):
-        return await _edit_via(
-            bot.edit_message_text(
-                text, chat_id=chat_id, message_id=message_id, **kwargs
-            ),
-            log_level=log_level,
-            log_label=log_label,
-            catch_all=catch_all,
-            default_msg="message edit failed: %s",
-        )
+    if chat_id is None or message_id is None:
+        return False
+    markup = kwargs.get("reply_markup")
+    payload, _embedded = _message_with_buttons(_rich_payload(text), markup)
     return await _edit_via(
-        edit_rich(
-            bot,
+        bot.edit_message_text(
             chat_id,
             message_id,
-            _rich_payload(text),
-            reply_markup=kwargs.get("reply_markup"),
+            rich_message=_input_rich(payload),
         ),
         log_level=log_level,
         log_label=log_label,
@@ -259,18 +184,13 @@ async def safe_edit_message(
 
 
 async def clear_markup_cb(q: CallbackQuery) -> None:
-    """Remove the inline keyboard from a callback-query message.
-
-    PTB drops ``reply_markup=None`` from the request, which leaves the old
-    keyboard attached. An empty markup serialises to ``{"inline_keyboard": []}``
-    and is the only way to actually clear it through the Bot API.
-    """
+    """Remove the inline keyboard from a callback-query message."""
     try:
         await q.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
-    except BadRequest as e:
-        if any(i in str(e).lower() for i in _IGNORED):
+    except Exception as exc:
+        if any(i in str(exc).lower() for i in _IGNORED):
             return
-        log.warning("clear markup failed: %s", e)
+        log.warning("clear markup failed: %s", exc)
 
 
 async def answer_alert(q: CallbackQuery, text: str) -> None:
@@ -292,7 +212,7 @@ async def answer_ack(q: CallbackQuery) -> None:
 async def answer_and_edit(q: CallbackQuery, text: str, **kwargs: Any) -> None:
     """Answer a callback query and edit its message in parallel."""
     answer_r, edit_r = await asyncio.gather(
-        q.answer(),
+        answer_ack(q),
         safe_edit_cb(q, text, **kwargs),
         return_exceptions=True,
     )
@@ -307,7 +227,7 @@ async def ack_and_render(
     q: CallbackQuery, data_coro: Awaitable[tuple[str, InlineKeyboardMarkup | None]]
 ) -> None:
     """Acknowledge the callback query and run the data coroutine in parallel."""
-    ans, result = await asyncio.gather(q.answer(), data_coro, return_exceptions=True)
+    ans, result = await asyncio.gather(answer_ack(q), data_coro, return_exceptions=True)
     throw_if_cancelled((ans, result))
     if isinstance(result, BaseException):
         log.error("ack_and_render data fetch failed: %s", result)
@@ -316,9 +236,23 @@ async def ack_and_render(
     await safe_edit_cb(q, text, reply_markup=btn)
 
 
+def callback_text(data: str | bytes | None) -> str:
+    """Normalize Kurigram callback data to text."""
+    if data is None:
+        return ""
+    if isinstance(data, bytes):
+        return data.decode("utf-8", "replace")
+    return data
+
+
+def callback_text_of(q: CallbackQuery) -> str:
+    """Return one callback query's data as text."""
+    return callback_text(q.data)
+
+
 def callback_args(q: CallbackQuery, count: int) -> list[str] | None:
     """Return the callback payload arguments, or ``None`` when malformed."""
-    data = q.data
+    data = callback_text_of(q)
     if not data:
         return None
     segments = data.split(":")
@@ -329,7 +263,7 @@ def callback_args(q: CallbackQuery, count: int) -> list[str] | None:
 
 def callback_args_optional(q: CallbackQuery, count: int) -> list[str] | None:
     """Return the callback payload arguments, allowing one extra segment."""
-    data = q.data
+    data = callback_text_of(q)
     if not data:
         return None
     segments = data.split(":")
@@ -357,33 +291,19 @@ async def cb_error_edit(
     parse_mode: Any = None,
     log_level: str = "warning",
 ) -> None:
-    """Replace a callback message with a notice and drop its keyboard.
-
-    PTB drops ``None`` values from the outgoing request, so a plain ``None``
-    leaves the old keyboard attached. An explicitly empty markup serializes
-    to ``{"inline_keyboard": []}``, which Telegram uses to remove it.
-    """
+    """Replace a callback message with a notice and drop its keyboard."""
     await safe_edit_cb(
         q,
         text,
-        parse_mode=parse_mode,
-        reply_markup=InlineKeyboardMarkup([]),
         log_level=log_level,
         log_label=log_label,
         catch_all=True,
     )
 
 
-async def send_log(bot: Bot, text: str, **kwargs: Any) -> Message:
+async def send_log(bot: Client, text: str, **kwargs: Any) -> Message:
     """Post a federation log message to the configured logs destination."""
     chat_id, thread_id = cfg.logs
-    if not _rich_ready(bot):
-        return await bot.send_message(
-            chat_id,
-            text,
-            message_thread_id=thread_id,
-            reply_markup=kwargs.get("reply_markup"),
-        )
     return await send_rich(
         bot,
         chat_id,
@@ -401,6 +321,8 @@ __all__ = [
     "callback_args",
     "callback_args_optional",
     "callback_numbers",
+    "callback_text",
+    "callback_text_of",
     "cb_error_edit",
     "clear_markup_cb",
     "edit_rich",

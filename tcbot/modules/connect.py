@@ -7,18 +7,17 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
-
-from telegram.ext import (
-    CallbackQueryHandler,
-    ChatMemberHandler,
-    ContextTypes,
-    MessageHandler,
-)
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
+from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
+from tcbot.modules.helper.handlers import (
+    MY_CHAT_MEMBER,
+    CallbackQueryHandler,
+    ChatMemberHandler,
+    MessageHandler,
+)
 from tcbot.modules.helper.identity import is_anon_admin
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich
@@ -28,9 +27,6 @@ from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -75,7 +71,7 @@ __help__: replies.HelpEntry = get_help()
 
 @decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.log_execution
-async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_tcconnect(ctx: Ctx) -> None:
     """Request to connect the current group to the federation.
 
     Group-only command. Checks admin status, existing connection, and pending
@@ -84,17 +80,17 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     administrator rights in the group, which is the authorization, so no
     separate owner approval step exists.
     """
-    chat = update.effective_chat
-    user = update.effective_user
-    locale = await locale_for_update(update)
-    msg = update.effective_message
+    chat = ctx.effective_chat
+    user = ctx.effective_user
+    locale = await locale_for_update(ctx)
+    msg = ctx.effective_message
     if chat is None or user is None or msg is None:
         return
 
     # * A connected destination is a group or a supergroup (a forum is a
     # * supergroup). A channel has no member list to moderate, so it is
     # * refused before any Telegram or database work.
-    if chat.type not in ("group", "supergroup"):
+    if getattr(chat.type, "value", chat.type) not in ("group", "supergroup"):
         await reply_rich(
             msg,
             replies.err_group_only(locale, plain=True),
@@ -107,7 +103,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * deployment, not to the federation. They are never managed groups:
     # * the main group already hosts moderation commands as the primary
     # * origin, and the others are record-keeping destinations.
-    if cfg.is_infrastructure_chat(chat.id):
+    if cfg.is_infrastructure_chat(chat_id_of(chat)):
         await reply_rich(
             msg,
             t("connecting.state.infrastructure_chat", locale, plain=True),
@@ -137,19 +133,22 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * extra Telegram round-trip is needed after the early-exit checks.
     member, is_connected, pending, bot_member = await asyncio.gather(
         asyncio.wait_for(
-            ctx.bot.get_chat_member(chat.id, user.id), timeout=TELEGRAM_LOOKUP_TIMEOUT
+            ctx.bot.get_chat_member(chat_id_of(chat), user.id),
+            timeout=TELEGRAM_LOOKUP_TIMEOUT,
         ),
-        db.groups_db.is_connected(chat.id, fresh=True),
-        db.groups_db.get_pending(chat.id),
+        db.groups_db.is_connected(chat_id_of(chat), fresh=True),
+        db.groups_db.get_pending(chat_id_of(chat)),
         asyncio.wait_for(
-            ctx.bot.get_chat_member(chat.id, ctx.bot.id),
+            ctx.bot.get_chat_member(chat_id_of(chat), (await ctx.bot_identity()).id),
             timeout=TELEGRAM_LOOKUP_TIMEOUT,
         ),
         return_exceptions=True,
     )
     throw_if_cancelled((member, is_connected, pending, bot_member))
     if isinstance(member, BaseException):
-        log.debug("get_chat_member failed for %d/%d: %s", chat.id, user.id, member)
+        log.debug(
+            "get_chat_member failed for %d/%d: %s", chat_id_of(chat), user.id, member
+        )
         await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
@@ -158,7 +157,10 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    if member.status not in ("administrator", "creator"):
+    if getattr(member.status, "value", member.status) not in (
+        "administrator",
+        "owner",
+    ):
         await reply_rich(
             msg,
             t("connecting.state.admin_required", locale, plain=True),
@@ -170,7 +172,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * Primary groups are required enforcement destinations, not managed
     # * groups; connecting them would add an ID to the connected-group
     # * registry that the fan-out paths include anyway.
-    if cfg.is_primary_group(chat.id):
+    if cfg.is_primary_group(chat_id_of(chat)):
         await reply_rich(
             msg,
             t("connecting.state.primary_group", locale, plain=True),
@@ -183,7 +185,9 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * the handler cannot tell a fresh request from a duplicate, so it
     # * must not coerce them to False/None and proceed to complete_join.
     if isinstance(is_connected, BaseException):
-        log.warning("is_connected check failed for chat %d: %s", chat.id, is_connected)
+        log.warning(
+            "is_connected check failed for chat %d: %s", chat_id_of(chat), is_connected
+        )
         await reply_rich(
             msg,
             t("connecting.state.connect_failed", locale, plain=True),
@@ -192,7 +196,9 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     if isinstance(pending, BaseException):
-        log.warning("get_pending check failed for chat %d: %s", chat.id, pending)
+        log.warning(
+            "get_pending check failed for chat %d: %s", chat_id_of(chat), pending
+        )
         await reply_rich(
             msg,
             t("connecting.state.connect_failed", locale, plain=True),
@@ -220,7 +226,9 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if isinstance(bot_member, BaseException):
-        log.debug("Could not verify bot permissions for %d: %s", chat.id, bot_member)
+        log.debug(
+            "Could not verify bot permissions for %d: %s", chat_id_of(chat), bot_member
+        )
         await reply_rich(
             msg,
             replies.err_role_verify(locale, plain=True),
@@ -244,10 +252,10 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * failures and left the user with a false confirmation.
     try:
         blind = await connection.complete_join(
-            chat.id, chat.title or "", user.id, user.first_name, ctx.bot
+            chat_id_of(chat), chat.title or "", user.id, display_name(user), ctx.bot
         )
     except Exception:
-        log.exception("complete_join failed for chat %d", chat.id)
+        log.exception("complete_join failed for chat %d", chat_id_of(chat))
         await reply_rich(
             msg,
             t("connecting.state.connect_failed", locale, plain=True),
@@ -262,7 +270,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         connection.connected_blind_message(locale)
         if blind
         else connection.connected_message(locale),
-        log_label=f"connected for chat {chat.id}",
+        log_label=f"connected for chat {chat_id_of(chat)}",
         parse_mode=None,
     )
 
@@ -272,7 +280,7 @@ async def cmd_tcconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 _CONNECT_CMDS = build_prefixed_filters("tcconnect") | build_prefixed_filters("tccon")
 
 __handlers__ = [
-    ChatMemberHandler(connection.on_bot_added, ChatMemberHandler.MY_CHAT_MEMBER),
+    ChatMemberHandler(connection.on_bot_added, MY_CHAT_MEMBER),
     MessageHandler(_CONNECT_CMDS, cmd_tcconnect),
     CallbackQueryHandler(
         connection.on_join_decision,

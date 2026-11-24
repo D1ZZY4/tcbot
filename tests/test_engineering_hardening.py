@@ -20,8 +20,9 @@ from tcbot.database.cache import redis_io
 from tcbot.database.cache.twolevel import TwoLevelCache
 from tcbot.database.scheduler import jobs as scheduler_jobs
 from tcbot.modules.helper.decorators import ratelimit
-from tcbot.modules.helper.messages import rich_media, rich_text
 from tcbot.modules.helper.pipelines.stats_panels import Stats
+from tcbot.modules.helper.rich import media as rich_media
+from tcbot.modules.helper.rich import text as rich_text
 from tcbot.utils import i18n
 
 
@@ -121,8 +122,8 @@ def test_rate_limiter_blocks_an_update_with_no_notification_surface(
     monkeypatch.setattr(ratelimit, "_is_exempt", _exempt)
 
     @ratelimit.ratelimiter(ratelimit.THROTTLE_MODERATION)
-    async def _handler(update: Any, ctx: Any) -> str:
-        _ = (update, ctx)
+    async def _handler(ctx: Any) -> str:
+        _ = ctx
         called.append(True)
         return "ran"
 
@@ -132,7 +133,7 @@ def test_rate_limiter_blocks_an_update_with_no_notification_surface(
         effective_message=None,
     )
 
-    assert asyncio.run(_handler(update, object())) is None
+    assert asyncio.run(_handler(update)) is None
     assert called == []
 
 

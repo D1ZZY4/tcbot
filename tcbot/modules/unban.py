@@ -9,11 +9,11 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, cast
 
-from telegram.ext import ContextTypes, MessageHandler
-
 from tcbot import database as db
 from tcbot.modules.helper import decorators, extraction, guards, identity
+from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
 from tcbot.modules.helper.guards import resolve_and_check
+from tcbot.modules.helper.handlers import MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_unban
@@ -24,8 +24,6 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 
 if TYPE_CHECKING:
-    from telegram import Update
-
     from tcbot.database.documents import BanDoc
 
 log = get_logger(__name__)
@@ -76,21 +74,21 @@ def _cleanup_role(target_role: str | None, ident: identity.Identity) -> str | No
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.mod_only
 @decorators.log_execution
-async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_unban(ctx: Ctx) -> None:
     """Lift the federation ban on a target user after identity and refusal checks.
 
     Speculatively pre-fetches the active ban record in parallel with identity
     classification so that ``execute_unban`` skips a redundant DB round-trip when
     the refusal check passes.
     """
-    locale = await locale_for_update(update)
-    msg = update.effective_message
-    admin = update.effective_user
+    locale = await locale_for_update(ctx)
+    msg = ctx.effective_message
+    admin = ctx.effective_user
     if msg is None or admin is None:
         return
     if not await guards.require_federation_origin(
         msg,
-        chat_id=msg.chat.id,
+        chat_id=chat_id_of(msg.chat),
         chat_type=msg.chat.type,
         locale=locale,
         allow_private=True,
@@ -98,7 +96,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ):
         return
     args = parse_cmd_args(msg.text)
-    target_id, target_fname = await extraction.extract_target(update, args, ctx.bot)
+    target_id, target_fname = await extraction.extract_target(ctx, args, ctx.bot)
     if not target_id:
         await reply_rich(
             msg,
@@ -226,7 +224,7 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 target_fname or str(target_id),
                 effective_staff_role,
                 admin.id,
-                admin.first_name,
+                display_name(admin),
             )
             if not gate.may_proceed:
                 await reply_rich(
@@ -244,7 +242,6 @@ async def cmd_unban(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         await execute_unban(
-            update,
             ctx,
             target_id,
             target_fname or str(target_id),

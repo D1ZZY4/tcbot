@@ -11,7 +11,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from telegram.error import BadRequest, Forbidden
+from pyrogram.errors import BadRequest, Forbidden
 
 from tcbot.modules.helper.pipelines.demote_actions import Demote
 

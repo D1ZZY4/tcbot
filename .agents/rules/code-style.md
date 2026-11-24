@@ -169,7 +169,7 @@ Command and callback handlers use this decorator order:
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.mod_only
 @decorators.log_execution
-async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_example(ctx: Ctx) -> None:
     ...
 ```
 
@@ -181,7 +181,7 @@ Rules:
 4. Message-event handlers are exempt from per-handler rate-limit decorators.
 5. Use `owner_only` for Owner-only actions, `staff_only` for Owner/Admin actions, `mod_only` for federation moderation, and `basic_mod_only` for kick, mute, and warn.
 6. Always call `await q.answer()` before performing other callback-query work.
-7. Never use private PTB attributes such as `q._bot`; use `ctx.bot`.
+7. Never use framework-private client attributes; use `ctx.bot`.
 8. Do not retain `Update`, `Message`, or `CallbackQuery` objects beyond the handler call lifetime.
 9. Wrap repeated Telegram calls so one failure does not stop a multi-target operation.
 10. Use `tcbot.utils.dispatch.fan_out()` for multi-group Telegram operations.
@@ -309,9 +309,9 @@ Concurrency, `asyncio.gather()`, fan-out, timeouts, and cancellation follow [`as
 
 - `tcbot/__main__.py` owns application startup, Flask keep-alive startup, handler registration, database initialization, error reporting, and transport.
 - Keep application lifecycle responsibilities centralized.
-- Preserve explicit PTB lifecycle management and scheduler readiness behavior.
-- Webhook transport is the production path.
-- Local development without a public URL may fall back to polling.
+- Preserve the single Kurigram client lifecycle and scheduler readiness behavior.
+- Kurigram long polling is the only transport in every environment.
+- One process per bot token owns the poll; never start duplicate polling clients.
 - Avoid introducing a second startup or transport ownership path.
 
 ### Modules and Discovery
@@ -324,7 +324,7 @@ Concurrency, `asyncio.gather()`, fan-out, timeouts, and cancellation follow [`as
 
 - Handlers use database helpers instead of direct collection access.
 - Cross-group actions use the bounded dispatch helper.
-- Keep webhook enqueue failures retryable by returning HTTP `503`.
+- Return HTTP `503` from `/health` when a dependency is degraded.
 - Preserve FIFO Redis mutations.
 - Preserve the Redis `v2` namespace and typed JSON values.
 - Use `clear_all()` for prefix-wide cache invalidation.

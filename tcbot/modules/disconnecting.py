@@ -7,13 +7,12 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
-
-from telegram.ext import ContextTypes, MessageHandler
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators, messages
+from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
+from tcbot.modules.helper.handlers import MessageHandler
 from tcbot.modules.helper.identity import can_manage_group, is_anon_admin
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, send_log
@@ -21,9 +20,6 @@ from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -58,7 +54,7 @@ __help__: replies.HelpEntry = get_help()
 
 @decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.log_execution
-async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_tcdisconnect(ctx: Ctx) -> None:
     """Request to disconnect the current group from the federation.
 
     Group-only command. Confirms the group is connected, checks that the
@@ -66,14 +62,14 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     bounded Telegram call), then deactivates the group record first and
     leaves the chat.
     """
-    chat = update.effective_chat
-    user = update.effective_user
-    msg = update.effective_message
+    chat = ctx.effective_chat
+    user = ctx.effective_user
+    msg = ctx.effective_message
     if chat is None or user is None or msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
 
-    if chat.type == "private":
+    if getattr(chat.type, "value", chat.type) == "private":
         await reply_rich(
             msg,
             replies.err_group_only(locale, plain=True),
@@ -86,7 +82,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     # * channel) are required for fan-out and delivery. A legacy active row
     # * must not let this command make the bot leave one of them; the
     # * force-remove path applies the same guard (see cmd_rmtc).
-    if cfg.is_infrastructure_chat(chat.id):
+    if cfg.is_infrastructure_chat(chat_id_of(chat)):
         await reply_rich(
             msg,
             t("disconnecting.state.infrastructure_refused", locale, plain=True),
@@ -96,9 +92,9 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     try:
-        is_connected = await db.groups_db.is_connected(chat.id, fresh=True)
+        is_connected = await db.groups_db.is_connected(chat_id_of(chat), fresh=True)
     except Exception as exc:
-        log.warning("is_connected check failed for chat=%d: %s", chat.id, exc)
+        log.warning("is_connected check failed for chat=%d: %s", chat_id_of(chat), exc)
         await reply_rich(
             msg,
             t("disconnecting.state.status_failed", locale, plain=True),
@@ -120,7 +116,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    if not await can_manage_group(ctx.bot, chat.id, user.id, fresh=True):
+    if not await can_manage_group(ctx.bot, chat_id_of(chat), user.id, fresh=True):
         if is_anon_admin(user):
             msg_text = t("disconnecting.state.anon_admin", locale, plain=True)
         else:
@@ -133,10 +129,10 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     # * Deactivate first: only leave after the DB confirms, otherwise a
     # * deactivate failure leaves a ghost (bot gone, DB still active).
     try:
-        deactivated = await db.groups_db.deactivate_group(chat.id)
+        deactivated = await db.groups_db.deactivate_group(chat_id_of(chat))
     except Exception:
         log.exception(
-            "deactivate_group failed for chat %d during tcdisconnect", chat.id
+            "deactivate_group failed for chat %d during tcdisconnect", chat_id_of(chat)
         )
         deactivated = False
     if not deactivated:
@@ -151,7 +147,7 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         send_log(
             ctx.bot,
             messages.group_disconnected_log(
-                chat.id, chat.title or "Unknown", user.id, user.first_name
+                chat_id_of(chat), chat.title or "Unknown", user.id, display_name(user)
             ),
         ),
         reply_rich(
@@ -164,16 +160,22 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
             ),
             parse_mode=None,
         ),
-        ctx.bot.leave_chat(chat.id),
+        ctx.bot.leave_chat(chat_id_of(chat)),
         return_exceptions=True,
     )
     throw_if_cancelled((log_r, reply_r, leave_r))
     if isinstance(log_r, BaseException):
-        log.debug("tcdisconnect log send failed for chat %d: %s", chat.id, log_r)
+        log.debug(
+            "tcdisconnect log send failed for chat %d: %s", chat_id_of(chat), log_r
+        )
     if isinstance(reply_r, BaseException):
-        log.debug("tcdisconnect reply failed for chat %d: %s", chat.id, reply_r)
+        log.debug(
+            "tcdisconnect reply failed for chat %d: %s", chat_id_of(chat), reply_r
+        )
     if isinstance(leave_r, BaseException):
-        log.debug("tcdisconnect leave_chat failed for chat %d: %s", chat.id, leave_r)
+        log.debug(
+            "tcdisconnect leave_chat failed for chat %d: %s", chat_id_of(chat), leave_r
+        )
 
 
 # ───────────── Command to Force-Remove a Group </rmtc> ──────────── #
@@ -182,16 +184,16 @@ async def cmd_tcdisconnect(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.staff_only
 @decorators.log_execution
-async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_rmtc(ctx: Ctx) -> None:
     """Force-remove a group from the federation by chat ID (staff command).
 
     Parses the numeric chat ID from the command argument, deactivates the group
     record, then fans out a log message, a bot leave, and a confirmation reply
     in parallel.
     """
-    locale = await locale_for_update(update)
-    msg = update.effective_message
-    admin = update.effective_user
+    locale = await locale_for_update(ctx)
+    msg = ctx.effective_message
+    admin = ctx.effective_user
     if msg is None or admin is None:
         return
     args = parse_cmd_args(msg.text)
@@ -259,7 +261,7 @@ async def cmd_rmtc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                     chat_id,
                     str(chat_id),
                     admin.id,
-                    admin.first_name,
+                    display_name(admin),
                 ),
             ),
             ctx.bot.leave_chat(chat_id),

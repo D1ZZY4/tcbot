@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from telegram.ext import BaseHandler
+from pyrogram.handlers import Handler
 
 from tcbot import cfg
+from tcbot.modules.helper.handlers import flatten
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ def _discover_modules() -> list[str]:
 
     Sorted so handler registration order (and the startup log line below)
     is deterministic across filesystems; ``Path`` iteration order is
-    OS-dependent and PTB resolves overlapping filters in registration order.
+    OS-dependent and Kurigram resolves overlapping filters in registration order.
     ``helper/`` holds shared code, never handlers, so it stays excluded.
     """
     this_dir = Path(__file__).parent
@@ -80,14 +81,14 @@ log.info("Modules to load: %s", ALL_MODULES)
 # ─────────────────────── Handler Collection ─────────────────────── #
 
 
-def get_handlers() -> list[BaseHandler[Any, Any, Any]]:
+def get_handlers() -> list[Handler]:
     """Import all active modules and collect their __handlers__ lists.
 
     Imports run first so every failure is reported together before the
     fail-fast exit; collection then follows ``ALL_MODULES`` order, which is
     the sorted discovery order filtered by configuration.
     """
-    handlers: list[BaseHandler[Any, Any, Any]] = []
+    handlers: list[Handler] = []
     mods_found: dict[str, ModuleType] = {}
 
     failed: list[str] = []
@@ -103,24 +104,23 @@ def get_handlers() -> list[BaseHandler[Any, Any, Any]]:
 
     for mod_name in ALL_MODULES:
         # * Present by construction: any missing import raised SystemExit above.
-        mod_handlers: list[BaseHandler[Any, Any, Any]] = getattr(
-            mods_found[mod_name], "__handlers__", []
-        )
+        mod_handlers: list[Handler] = getattr(mods_found[mod_name], "__handlers__", [])
         if not mod_handlers:
             log.warning("Module %s registered no handlers", mod_name)
         if mod_handlers:
-            handlers.extend(mod_handlers)
-            log.debug("Loaded %d handler(s) from %s", len(mod_handlers), mod_name)
+            expanded = flatten(mod_handlers)
+            handlers.extend(expanded)
+            log.debug("Loaded %d handler(s) from %s", len(expanded), mod_name)
 
     return handlers
 
 
-def handler_group(handler: BaseHandler[Any, Any, Any]) -> int:
-    """Return the PTB group a module handler asked to be registered in.
+def handler_group(handler: Handler) -> int:
+    """Return the Kurigram group a module handler asked to be registered in.
 
     Most handlers stay in group 0. A free-text handler that must not shadow an
     active conversation marks itself with ``handler_group`` so the caller can
-    place it in a later group, where PTB only sees it if no group-0 handler
-    consumed the update.
+    place it in a later group, where Kurigram only sees it if no group-0
+    handler consumed the ctx.
     """
     return int(getattr(handler, "handler_group", 0))

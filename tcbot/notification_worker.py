@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import asyncio
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from telegram import InlineKeyboardMarkup
-from telegram.error import BadRequest, Forbidden, NetworkError
+from pyrogram import Client
+from pyrogram.errors import BadRequest, Forbidden
+from pyrogram.types import InlineKeyboardMarkup
 
 from tcbot import database as db
 from tcbot.database.types import as_int
@@ -21,18 +22,15 @@ from tcbot.utils.i18n import resolve_locale, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_ACTION_TIMEOUT
 
-if TYPE_CHECKING:
-    from telegram import Bot
-
 log = get_logger(__name__)
 
-_BOT: Bot | None = None
+_BOT: Client | None = None
 _MAX_TASKS_PER_TICK: int = 10
 _MAX_ATTEMPTS: int = 5
 _RETRY_DELAY = timedelta(minutes=5)
 
 
-def configure(bot: Bot) -> None:
+def configure(bot: Client) -> None:
     """Attach the live bot the scheduled job must use."""
     global _BOT
     _BOT = bot
@@ -51,7 +49,7 @@ async def run() -> None:
         log.exception("Notification worker tick failed.")
 
 
-async def run_once(bot: Bot) -> None:
+async def run_once(bot: Client) -> None:
     """Claim and process the due card edits."""
     # * A card edit skipped by an open circuit never reached Telegram.
     # * Leaving the tasks unclaimed preserves their retry budget for the
@@ -134,7 +132,7 @@ async def _group_locale(chat_id: int) -> str:
     )
 
 
-async def _process_task(bot: Bot, task: dict[str, object]) -> None:
+async def _process_task(bot: Client, task: dict[str, object]) -> None:
     """Edit one card, or record why the retry cannot succeed."""
     task_id = as_int(task.get("id"))
     action_id = as_int(task.get("action_id"))
@@ -191,11 +189,11 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
     try:
         async with asyncio.timeout(TELEGRAM_ACTION_TIMEOUT):
             await bot.edit_message_text(
+                chat_id,
+                message_id,
                 text,
-                chat_id=chat_id,
-                message_id=message_id,
                 parse_mode=None,
-                # * PTB drops None values, so an explicit empty keyboard is
+                # * Kurigram drops None values, so an explicit empty keyboard is
                 # * required to strip the Approve/Reject buttons from a
                 # * decided card on this retry path too.
                 reply_markup=InlineKeyboardMarkup([]),
@@ -209,7 +207,7 @@ async def _process_task(bot: Bot, task: dict[str, object]) -> None:
         # * service answer, including RetryAfter and BadRequest, does not;
         # * otherwise five rate-limit replies would stall every fan-out.
         if isinstance(exc, TimeoutError) or (
-            isinstance(exc, NetworkError) and not isinstance(exc, BadRequest)
+            isinstance(exc, OSError) and not isinstance(exc, BadRequest)
         ):
             _cb.telegram.record_failure()
         else:

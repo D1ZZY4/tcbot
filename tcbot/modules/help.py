@@ -7,25 +7,20 @@
 from __future__ import annotations
 
 import importlib
-from typing import TYPE_CHECKING
 
-from telegram.ext import (
-    CallbackQueryHandler,
-    ContextTypes,
-    MessageHandler,
-)
+from pyrogram.types import CallbackQuery
 
 from tcbot.modules import ALL_MODULES
 from tcbot.modules.helper import buttons, decorators
+from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit, reply_rich
-from tcbot.modules.helper.messages.rich_text import blocks
+from tcbot.modules.helper.rich.edit import callback_text_of
+from tcbot.modules.helper.rich.text import blocks
 from tcbot.utils.i18n import Safe, bold, code, divider, esc, heading, quote, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
-
-if TYPE_CHECKING:
-    from telegram import CallbackQuery, Update
 
 log = get_logger(__name__)
 
@@ -140,15 +135,15 @@ def _module_text(name: str, overview: str, locale: str | None = None) -> str:
 
 @decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
-async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_help(ctx: Ctx) -> None:
     """Show the help index, or a specific topic when an argument is given."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
 
-    botname = ctx.bot.first_name or ""
+    botname = (await ctx.bot_identity()).first_name or ""
     args = parse_cmd_args(msg.text)
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     content = _builder_help(locale)
     name_map = _module_map_for_locale(locale)
 
@@ -216,18 +211,17 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _render_help_index(
-    update: Update,
-    ctx: ContextTypes.DEFAULT_TYPE,
+    ctx: Ctx,
     *,
     with_back_to_start: bool,
 ) -> None:
     """Edit the help index message on the appropriate callback query."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
 
-    botname = ctx.bot.first_name or ""
-    locale = await locale_for_update(update)
+    botname = (await ctx.bot_identity()).first_name or ""
+    locale = await locale_for_update(ctx)
     kb = (
         buttons.help_topics_menu_btn(_topics_for_locale(locale, menu=True), locale)
         if with_back_to_start
@@ -237,14 +231,14 @@ async def _render_help_index(
 
 
 async def _show_module(
+    ctx: Ctx,
     q: CallbackQuery,
-    update: Update,
     menu_key: str,
     *,
     is_menu_path: bool,
 ) -> None:
     """Render a module overview with sub-section buttons + back to help index."""
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     content = _builder_help(locale)
     if menu_key not in content:
         back_btn = (
@@ -277,15 +271,15 @@ async def _show_module(
 
 
 async def _show_section(
+    ctx: Ctx,
     q: CallbackQuery,
-    update: Update,
     mod_slug: str,
     idx: int,
     *,
     is_menu_path: bool,
 ) -> None:
     """Render a single help section + back-to-module button."""
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     content = _builder_help(locale)
     menu_key = f"help_{mod_slug}"
     back_module_cb = ("help_" if is_menu_path else "helpc_") + mod_slug
@@ -332,64 +326,62 @@ async def _show_section(
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_help_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_help_menu(ctx: Ctx) -> None:
     """Render the top-level help index from the start-menu help button (includes back-to-start)."""
-    await _render_help_index(update, ctx, with_back_to_start=True)
+    await _render_help_index(ctx, with_back_to_start=True)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_help_menu_group(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_help_menu_group(ctx: Ctx) -> None:
     """Help tapped from group /start inline; answer with alert, no edit."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
 
     await q.answer(
-        t("help.group.alert", await locale_for_update(update), plain=True),
+        t("help.group.alert", await locale_for_update(ctx), plain=True),
         show_alert=True,
     )
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_helpc_main(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_helpc_main(ctx: Ctx) -> None:
     """Render the top-level help index from a /helpc command callback (no back-to-start button)."""
-    await _render_help_index(update, ctx, with_back_to_start=False)
+    await _render_help_index(ctx, with_back_to_start=False)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_help_topic_any(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_help_topic_any(ctx: Ctx) -> None:
     """Handle help_<mod> and helpc_<mod> module overview callbacks."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    if not q.data:
+    data = callback_text_of(q)
+    if not data:
         await q.answer()
         return
 
-    data = q.data
     if data.startswith("helpc_"):
-        await _show_module(
-            q, update, "help_" + data[len("helpc_") :], is_menu_path=False
-        )
+        await _show_module(ctx, q, "help_" + data[len("helpc_") :], is_menu_path=False)
     else:
-        await _show_module(q, update, data, is_menu_path=True)
+        await _show_module(ctx, q, data, is_menu_path=True)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_help_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_help_section(ctx: Ctx) -> None:
     """Handle helps_<mod>:<idx> and helpcs_<mod>:<idx> section callbacks."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    if not q.data:
+    data = callback_text_of(q)
+    if not data:
         await q.answer()
         return
 
-    data = q.data
     is_menu_path = data.startswith("helps_")
     body = data[len("helps_") :] if is_menu_path else data[len("helpcs_") :]
     try:
@@ -400,13 +392,13 @@ async def on_help_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
         await q.answer(
             t(
                 "help.error.invalid_section",
-                await locale_for_update(update),
+                await locale_for_update(ctx),
                 plain=True,
             ),
             show_alert=True,
         )
         return
-    await _show_section(q, update, mod_slug, idx, is_menu_path=is_menu_path)
+    await _show_section(ctx, q, mod_slug, idx, is_menu_path=is_menu_path)
 
 
 # ──────────────────────────── Handlers ──────────────────────────── #

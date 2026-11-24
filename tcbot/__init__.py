@@ -9,7 +9,6 @@ from __future__ import annotations
 import ast
 import os
 import re
-import secrets
 import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -29,7 +28,7 @@ log = get_logger(__name__)
 # ─────────────────────────────── Env parsing ─────────────────────────────── #
 
 _DEFAULT_PORT: int = 5000
-# * The keep-alive and webhook listener binds every interface by default so
+# * The keep-alive listener binds every interface by default so
 # * a container or hosted process is reachable. An operator behind a local
 # * reverse proxy can set BIND_HOST=127.0.0.1.
 _DEFAULT_BIND_HOST: str = "0.0.0.0"
@@ -55,29 +54,6 @@ DB_SCHEMAS: frozenset[str] = frozenset({"public", "test", "development"})
 # * marked expired, so an old card cannot block a fresh request forever.
 # * Zero disables the expiry and keeps requests pending indefinitely.
 _DEFAULT_PROMOTION_REQUEST_TTL_DAYS: int = 7
-# * Telegram accepts a webhook secret of 1-256 characters from this set. A
-# * value outside it makes set_webhook fail after the bot has started, so it
-# * is refused at configuration load with an actionable message instead.
-_WEBHOOK_SECRET_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_-]{1,256}$")
-_REPLIT_DEV_DOMAIN_VAR: str = "REPLIT_DEV_DOMAIN"
-# * The Replit dev domain is only usable when this process is the one the
-# * Replit platform exposes. The variable is also set in a workspace shell
-# * that starts the bot by hand, and the dev domain there points at the
-# * Replit workflow, not at the shell. Registering it from the shell moves
-# * every update to another process, so the bot answers nothing while it
-# * looks perfectly healthy.
-# *
-# * These variables exist only in the Replit runtime, so one of them proves
-# * the process is the app. An operator who runs the bot somewhere else and
-# * wants the webhook anyway sets ``WEBHOOK_URL`` explicitly.
-_REPLIT_RUNTIME_MARKERS: tuple[str, ...] = (
-    "REPLIT_SLUG",
-    "REPLIT_OWNER",
-    "REPLIT_APP_NAME",
-    "REPLIT_IDENTITY",
-    "REPLIT_DEPLOYMENT",
-)
-
 # * Numeric levels for ``cfg.log_level`` (stdlib-compatible ints consumed by
 # * ``utils.logger.setup``); WARN and FATAL are kept as aliases.
 _LOG_LEVELS: dict[str, int] = {
@@ -204,7 +180,7 @@ def _warn_bot_token_fmt(token: str) -> None:
     if not re.fullmatch(r"\d+:[A-Za-z0-9_-]{35}", token):
         log.warning(
             "BOT_TOKEN format looks unexpected (expected <digits>:<35chars>). "
-            "PTB will fail at startup if the value is wrong."
+            "Telegram will refuse the login if the value is wrong."
         )
 
 
@@ -256,62 +232,6 @@ def _parse_log_level(raw: str) -> int:
         return level
     log.warning("Invalid LOG_LEVEL '%s', defaulting to INFO.", raw)
     return _LOG_LEVELS["INFO"]
-
-
-def _on_replit() -> bool:
-    """Return True when this process runs as the Replit application.
-
-    The check looks for a variable the Replit runtime sets and nothing
-    else sets. A workspace shell inherits the dev domain but none of these,
-    so a bot started by hand there is not the process the platform
-    exposes.
-    """
-    return any(os.getenv(marker, "").strip() for marker in _REPLIT_RUNTIME_MARKERS)
-
-
-def _auto_webhook_url() -> str:
-    """Build the webhook base URL: WEBHOOK_URL, the Replit dev domain, else empty."""
-    explicit = os.getenv("WEBHOOK_URL", "").strip()
-    if explicit:
-        if (
-            explicit.startswith("http://")
-            and "localhost" not in explicit
-            and "127.0.0.1" not in explicit
-        ):
-            log.warning(
-                "WEBHOOK_URL uses plain HTTP; Telegram requires HTTPS outside "
-                "localhost and will refuse the registration."
-            )
-        return explicit.rstrip("/")
-    replit_domain = os.getenv(_REPLIT_DEV_DOMAIN_VAR, "").strip()
-    if not replit_domain:
-        return ""
-    if not _on_replit():
-        # * The dev domain belongs to the Replit workflow, not to this
-        # * process. Registering it here would hand every update to another
-        # * process, so the bot would look healthy and answer nothing.
-        # * Polling is the local fallback and reaches the same bot.
-        log.warning(
-            "%s is set but this process is not the Replit application; "
-            "falling back to polling. Set WEBHOOK_URL to use a webhook "
-            "anyway.",
-            _REPLIT_DEV_DOMAIN_VAR,
-        )
-        return ""
-    return f"https://{replit_domain}"
-
-
-def _resolve_webhook_secret() -> str:
-    """Return WEBHOOK_SECRET, generating a random token when unset."""
-    explicit = os.getenv("WEBHOOK_SECRET", "").strip()
-    if not explicit:
-        return secrets.token_hex(32)
-    if not _WEBHOOK_SECRET_PATTERN.fullmatch(explicit):
-        raise RuntimeError(
-            "WEBHOOK_SECRET must contain 1-256 characters from A-Z, a-z, 0-9, "
-            "underscore, or hyphen."
-        )
-    return explicit
 
 
 def _infra_chat_ids_from_env() -> tuple[int, ...]:
@@ -443,8 +363,6 @@ class Configs:
     warn_expiry_days: int
     fed_warn_limit: int
     warn_limit: int
-    webhook_url: str
-    webhook_secret: str = field(repr=False)
     api_id: int
     api_hash: str = field(repr=False)
     mtproto_session: str
@@ -482,11 +400,6 @@ class Configs:
             self.appeals[0],
             *self.extra_infra_chats,
         }
-
-    @property
-    def is_webhook_mode(self) -> bool:
-        """True when a public webhook URL is available."""
-        return bool(self.webhook_url)
 
     @property
     def mtproto_enabled(self) -> bool:
@@ -538,8 +451,6 @@ class Configs:
             warn_expiry_days=_int_from_env("WARN_EXPIRY_DAYS", 0, minimum=0),
             fed_warn_limit=_int_from_env("FED_WARN_LIMIT", 0, minimum=0),
             warn_limit=_int_from_env("WARN_LIMIT", 3, minimum=1),
-            webhook_url=_auto_webhook_url(),
-            webhook_secret=_resolve_webhook_secret(),
             api_id=_int_from_env("API_ID", 0, minimum=0),
             api_hash=os.getenv("API_HASH", "").strip(),
             mtproto_session=_env_or("MTPROTO_SESSION", "tcbot_mtproto"),
@@ -556,9 +467,8 @@ class Configs:
 # * setting is missing, and the bot reads it while starting up.
 _cfg: Configs | None = None
 # * Two threads can first read ``tcbot.cfg`` before either publishes the
-# * module attribute. Without a lock both build a Configs; when no webhook
-# * secret is set they generate different random tokens, so a direct importer
-# * and the module can end up with different instances.
+# * module attribute. Without a lock both build a Configs, so a direct
+# * importer and the module can end up with different instances.
 _cfg_lock = threading.Lock()
 
 

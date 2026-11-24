@@ -66,10 +66,9 @@ Only six values are required. Everything else has a working default.
 | `API_ID` | Yes | Telegram API ID for MTProto identity lookups; boot refuses without it. |
 | `API_HASH` | Yes | Telegram API hash matching `API_ID`; boot refuses without it. |
 
-Common optional values: `REDIS_URL` (enables the shared cache), `WEBHOOK_URL` (enables webhook transport, otherwise the bot polls), `PORT` (health server port, default `5000`), and the `LOGS`, `LOGS_ERRORS`, `APPEALS` log destinations, which each accept a chat ID or a `chat_id/thread_id` pair.
 
 > [!IMPORTANT]
-> Never commit real secrets. Keep `BOT_TOKEN`, `DATABASE_URL`, passwords, webhook secrets, and private chat IDs out of the repository; use the platform secret manager on hosted deployments.
+> Never commit real secrets. Keep `BOT_TOKEN`, `DATABASE_URL`, passwords, secrets, and private chat IDs out of the repository; use the platform secret manager on hosted deployments.
 
 <details>
 <summary>Full variable reference (all settings in <code>config.env.example</code>)</summary>
@@ -131,8 +130,6 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 
 | Variable | Description |
 |---|---|
-| `WEBHOOK_URL` | Public HTTPS base URL for webhook transport; empty falls back to polling. Auto-detected from `REPLIT_DEV_DOMAIN` only when the bot runs as the Replit application. |
-| `WEBHOOK_SECRET` | Used as-is when set (1-256 characters from `A-Z`, `a-z`, `0-9`, `_`, `-`), auto-generated per restart when empty. |
 | `API_ID` | Required: Telegram API ID for MTProto identity lookups; boot refuses without it. |
 | `API_HASH` | Required: Telegram API hash matching `API_ID`; never commit the real value. |
 | `MTPROTO_SESSION` | Namespace for the shared MTProto session in PostgreSQL (default `tcbot_mtproto`). |
@@ -165,10 +162,9 @@ docker compose up --build
 
 The compose setup reads `.env`, so copy `config.env.example` to `.env` first. Details are in [`docs/getting-started/setup.md`](docs/getting-started/setup.md).
 
-In production set `WEBHOOK_URL` to the public HTTPS base URL so Telegram delivers updates to `POST /webhook`. Requests are validated against `WEBHOOK_SECRET`. On Replit keep secrets in Replit Secrets and use the same run command; see [`replit.md`](replit.md).
 
 > [!CAUTION]
-> Never run two live bot instances with the same token (for example polling locally while webhook mode is deployed). The transports fight over updates and Telegram reports `Conflict` errors.
+> Never run two live bot instances with the same token (for example polling locally while polling mode is deployed). The transports fight over updates and Telegram reports `Conflict` errors.
 
 One pitfall to avoid: committing `config.env` with real values because local testing worked. Keep it untracked and put production values in the host secret manager instead.
 
@@ -185,7 +181,7 @@ Seven CI workflows run automatically. The lint, type-check, test, auto-fix, depe
 - **Auto-Fix** (`auto-fix.yml`): same push/PR triggers plus weekly Monday 04:00 UTC and manual dispatch. Runs `ruff format` + `ruff check --fix`; outside a PR it force-pushes the fixed `auto-fix/ruff` branch and opens a PR, on a PR it comments the local fix commands instead. Needs `contents: write` + `pull-requests: write`.
 - **Dependency Updates** (`dependency-update.yml`): weekly Monday 04:00 UTC and manual dispatch. Runs `uv lock --upgrade`, validates with Ruff plus the import check, then opens a `deps/auto-update-YYYYMMDD` PR labeled `dependencies` against `main` (no-op when the lockfile is unchanged). Sends the owner a Telegram status DM when `BOT_TOKEN`/`OWNER_ID` secrets exist, silently skips otherwise.
 - **CodeQL** (`codeql.yml`): on push/PR to `main` plus weekly Tuesday 15:38 UTC. Scans the `actions` and `python` languages with `build-mode: none`; findings land under the repository Security tab.
-- **Run Bot** (`run-bot.yml`): self-chaining 24/7 runner with webhook-first transport, a watchdog, and a 15-minute cron resurrection fallback.
+- **Run Bot** (`run-bot.yml`): self-chaining 24/7 runner with Kurigram long polling, a watchdog, and a 15-minute cron resurrection fallback.
 
 Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run ruff check .`, the 1000-line file-size budget over `tcbot/`, and `uv run python -c "import tcbot"`. Full reference: [`docs/operations/ci-cd.md`](docs/operations/ci-cd.md).
 </details>
@@ -195,7 +191,6 @@ Mirror the gate locally before pushing: `uv run ruff format --check .`, `uv run 
 
 `.github/workflows/run-bot.yml` runs the bot in 5-hour windows (GitHub hard-caps a job at 6 h) with a crash watchdog, a handover dispatch about 10 minutes before the window ends, and a `*/15` cron resurrection fallback. A push to `main` touching bot code, translations, dependencies, or the runner itself queues a successor run and the live bot hands over gracefully within minutes; docs-only pushes never restart the bot.
 
-1. Repository → Settings → Secrets and variables → Actions: set `BOT_TOKEN`, `DATABASE_URL`, `OWNER_ID`, `PROOFS`, `API_ID`, and `API_HASH` (plus `WEBHOOK_URL`/`WEBHOOK_SECRET` for webhook mode, and `REDIS_URL` when the shared cache is used).
 2. For gap-free chaining add `BOT_PAT`: a Personal Access Token with the `workflow` scope. Without it only the 15-minute cron restarts the bot.
 3. Actions → "TCF Bot - 24/7 Runner" → Run workflow (or wait for the schedule).
 4. Verify in the run logs (`Bot started`, `subsystems ready`); crash tails ship as credential-scrubbed artifacts kept 7 days.
@@ -219,7 +214,6 @@ Single image without compose: `docker build -t tcf-bot .` then `docker run --env
 The repository ships no `Procfile`; deploy the existing `Dockerfile` through the container registry.
 
 1. `heroku create <app> && heroku stack:set container --app <app>` (or set the stack in Dashboard → Settings).
-2. `heroku config:set BOT_TOKEN=... DATABASE_URL=... OWNER_ID=... PROOFS=... API_ID=... API_HASH=... WEBHOOK_URL=https://<app>.herokuapp.com WEBHOOK_SECRET=... --app <app>` (plus `REDIS_URL` from Heroku Data for Redis when needed; never commit secrets).
 3. `heroku container:push worker --app <app> && heroku container:release worker --app <app>`.
 4. `heroku ps:scale worker=1 --app <app>` and verify with `heroku logs --tail --app <app>`.
 
@@ -253,7 +247,6 @@ WantedBy=multi-user.target
 ```
 
 4. `systemctl daemon-reload && systemctl enable --now tcf-bot && journalctl -u tcf-bot -f`.
-5. Webhook mode needs a public HTTPS URL pointing at `PORT` (reverse proxy or tunnel) with `WEBHOOK_URL` set; without one the bot polls, which is fine for one instance. Open the firewall only for what the proxy needs and point the uptime monitor at `GET /health`.
 </details>
 
 <details>
@@ -263,7 +256,6 @@ WantedBy=multi-user.target
 2. Create `C:\tcf-bot\config.env` with `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `PROOFS`, `API_ID`, and `API_HASH`; restrict it to the service account via file ACLs.
 3. Verify once interactively: `uv run python -m tcbot` (expect `subsystems ready`, `Ctrl+C` to stop).
 4. Persist with Task Scheduler: trigger "At startup", action `uv.exe run --frozen python -m tcbot` with start-in `C:\tcf-bot`, "Run whether user is logged on or not", "If the task fails, restart every 1 minute". Prefer a dedicated service account, never an admin's personal session.
-5. Webhook mode needs public HTTPS reaching the host `PORT` (reverse proxy or tunnel) plus `WEBHOOK_URL`; otherwise the bot polls. Monitor `GET /health` and keep exactly one running instance per token.
 </details>
 
 ## Health Check

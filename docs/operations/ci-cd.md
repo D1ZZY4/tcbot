@@ -96,7 +96,7 @@ only when the PR was created.
 | `API_ID`, `API_HASH`, `MTPROTO_SESSION` | Runner | MTProto identity lookups. |
 | `PROOFS`, `LOGS`, `LOGS_ERRORS`, `APPEALS`, `MAIN_GROUP`, `MAIN_CHANNEL`, `INFRA_CHAT_IDS` | Runner | Infrastructure destinations. |
 | `DB_SCHEMA`, `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `REDIS_URL`, `PG_CRON_ENABLED` | Runner | Database and cache configuration. |
-| `WEBHOOK_URL`, `WEBHOOK_SECRET`, `PORT`, `BIND_HOST` | Runner | Webhook transport. |
+| `PORT`, `BIND_HOST` | Runner | Health server listener. |
 | `WARN_LIMIT`, `WARN_EXPIRY_DAYS`, `FED_WARN_LIMIT`, `PROMOTION_REQUEST_TTL_DAYS` | Runner | Moderation policy. |
 | `PREFIXES`, `COMMUNITY_NAME`, `LOG_LEVEL`, `ALBUM_DEBOUNCE_SECONDS` | Runner | Behavior and display. |
 | `MODULES_LOAD`, `MODULES_NO_LOAD`, `SENTRY_DSN` | Runner | Optional features. |

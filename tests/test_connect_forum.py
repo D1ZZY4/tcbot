@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from types import SimpleNamespace as _NS
 
 import pytest
-from telegram.constants import ChatMemberStatus
+from pyrogram.enums import ChatMemberStatus
 
 from tcbot.modules import connect as connect_module
 from tcbot.modules.helper.pipelines import connect_added
@@ -31,7 +31,7 @@ class _FakeBot:
         message_thread_id: int | None = None,
     ) -> SimpleNamespace:
         self.sent.append((chat_id, reply_markup))
-        return SimpleNamespace(message_id=77)
+        return SimpleNamespace(id=77, message_id=77)
 
 
 class _FakeMessage:
@@ -151,7 +151,7 @@ async def test_join_prompt_uses_the_rich_transport_with_buttons(
 
     async def _send_text(bot: object, chat_id: int, text: str, **kwargs: object) -> _NS:
         sent.append({"bot": bot, "chat_id": chat_id, "text": text, **kwargs})
-        return _NS(message_id=77)
+        return _NS(id=77, message_id=77)
 
     async def _get_pending(_chat_id: int) -> None:
         return None
@@ -262,6 +262,8 @@ async def test_join_decision_refuses_an_infrastructure_chat(
         callback_query=q,
         effective_chat=chat,
         effective_user=_NS(id=42, first_name="Owner"),
+        bot=_FakeBot(),
+        user_data={},
     )
     monkeypatch.setattr(
         connect_added,
@@ -272,10 +274,7 @@ async def test_join_decision_refuses_an_infrastructure_chat(
         ),
     )
 
-    await inspect.unwrap(connect_added.connection.on_join_decision)(
-        update,  # type: ignore[arg-type]
-        _NS(bot=_FakeBot()),  # type: ignore[arg-type]
-    )
+    await connect_added.connection.on_join_decision(update)  # type: ignore[arg-type]
 
     # * The guard answers the tap and returns before any member lookup or DB work.
     assert q.answers == 1
@@ -308,6 +307,8 @@ async def test_stale_cancel_does_not_leave_a_connected_group(
         callback_query=q,
         effective_chat=chat,
         effective_user=_NS(id=42, first_name="Owner"),
+        bot=_FakeBot(),
+        user_data={},
     )
 
     class _Bot(_FakeBot):
@@ -322,6 +323,7 @@ async def test_stale_cancel_does_not_leave_a_connected_group(
             self.left.append(chat_id)
 
     bot = _Bot()
+    update.bot = bot
 
     async def _locale(_update: object) -> str:
         return "en-US"

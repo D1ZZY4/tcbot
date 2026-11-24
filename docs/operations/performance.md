@@ -10,7 +10,7 @@ Related pages: [database layer](../architecture/database.md) and
 
 ## Update processing
 
-PTB uses a `KeyedUpdateProcessor` that serializes updates per `(chat, user)`
+Kurigram uses a `KeyedUpdateProcessor` that serializes updates per `(chat, user)`
 pair while leaving other conversations concurrent. A ConversationHandler
 therefore sees one update at a time for one moderator, but a flood in one group
 does not block the rest of the federation.
@@ -108,9 +108,9 @@ with `asyncio.to_thread()`. Background refresh tasks are supervised by
 
 The project ships `py-spy` as a development dependency for profiling, and an
 optional `prometheus-client` endpoint at `/metrics`. The `/health` response
-includes the update queue size as a backpressure signal. Relevant counts in
-logs include enforcement attempt outcomes, member-cache drops, and rate-limit
-waits. Use these signals to decide whether to tune a pool size, a TTL, or a
+reports database, Redis, scheduler, and Telegram circuit state. Relevant
+counts in logs include enforcement attempt outcomes, member-cache drops, and
+rate-limit waits. Use these signals to decide whether to tune a pool size, a TTL, or a
 fan-out bound; do not change them speculatively.
 
 ## Validation hints

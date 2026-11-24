@@ -15,7 +15,7 @@ from tcbot.utils.logger import get_logger
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from telegram import Message
+    from pyrogram.types import Message
 
 log = get_logger(__name__)
 

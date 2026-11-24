@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from telegram.ext import CallbackQueryHandler
+from pyrogram.handlers import CallbackQueryHandler as _CallbackQueryHandler
 
 from tcbot.modules import rules as rules_module
 from tcbot.modules.helper.buttons import rules as rules_btn
@@ -100,11 +100,12 @@ def test_page_index_parses_only_numeric_payloads() -> None:
 
 
 def test_index_and_section_callbacks_are_registered() -> None:
-    patterns = [
-        handler.pattern
-        for handler in rules_module.__handlers__
-        if isinstance(handler, CallbackQueryHandler)
-        and isinstance(handler.pattern, re.Pattern)
-    ]
-    assert any(p.pattern == r"^rules_index:\d+$" for p in patterns)
-    assert any(p.pattern == r"^rules_section:\d+$" for p in patterns)
+    patterns: list[str] = []
+    for handler in rules_module.__handlers__:
+        if not isinstance(handler, _CallbackQueryHandler):
+            continue
+        compiled = getattr(getattr(handler, "filters", None), "p", None)
+        if isinstance(compiled, re.Pattern):
+            patterns.append(compiled.pattern)
+    assert r"^rules_index:\d+$" in patterns
+    assert r"^rules_section:\d+$" in patterns

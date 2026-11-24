@@ -7,12 +7,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
-
-from telegram.ext import ContextTypes
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.modules.helper.context import Ctx, display_name
 from tcbot.modules.helper.guards import banned_target_refusal
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
@@ -27,47 +25,44 @@ from tcbot.modules.helper.messages import (
     send_log,
     send_text,
 )
+from tcbot.modules.helper.rich.edit import callback_text_of
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 
-if TYPE_CHECKING:
-    from telegram import Update
-
 log = get_logger(__name__)
 
 
-async def execute_promo_decision(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def execute_promo_decision(ctx: Ctx) -> None:
     """Handle approve / reject decisions on promotion request cards.
 
     Owner-only callback. Answers the query and fetches the request record in
     parallel. On approve, executes ``Promote.execute`` and updates the card. On
     reject, marks the request resolved and edits the card to show the rejection.
     """
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    if q.data is None:
+    data = callback_text_of(q)
+    if not data:
         await q.answer()
         return
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         await q.answer()
         return
     try:
-        action, request_id = q.data.split(":", 1)
+        action, request_id = data.split(":", 1)
     except ValueError:
         await q.answer()
         return
-    # * request_id is known from q.data, so the record fetch fires
+    # * request_id is known from data, so the record fetch fires
     # * speculatively alongside the ownership check. The locale resolves in
     # * the same batch so one resolution per handler keeps the catalog off the
     # * critical path. The query is answered per branch, never here: Telegram
     # * accepts one answer, so an early ack would swallow every alert below.
     locale, is_owner, req_result = await asyncio.gather(
-        locale_for_update(update),
+        locale_for_update(ctx),
         db.users_roles.is_owner(admin.id, fresh=True),
         db.queues_db.get_request_by_id(request_id),
         return_exceptions=True,
@@ -211,7 +206,7 @@ async def execute_promo_decision(
             target_id,
             target_fname,
             admin.id,
-            admin.first_name,
+            display_name(admin),
             request_id,
         )
         card_text = getattr(q.message, "text", "") if q.message is not None else ""
@@ -220,7 +215,7 @@ async def execute_promo_decision(
                 target_id, target_fname, req.get("username"), request_id
             )
         decision_text = card_text + t(
-            "admins.decision.approved_suffix", locale, name=admin.first_name
+            "admins.decision.approved_suffix", locale, name=display_name(admin)
         )
         target_locale = await locale_for_user(target_id)
         notify_results = await asyncio.gather(
@@ -264,7 +259,7 @@ async def execute_promo_decision(
             target_id,
             target_fname,
             admin.id,
-            admin.first_name,
+            display_name(admin),
             request_id,
         )
         card_text = getattr(q.message, "text", "") if q.message is not None else ""
@@ -273,7 +268,7 @@ async def execute_promo_decision(
                 target_id, target_fname, req.get("username"), request_id
             )
         decision_text = card_text + t(
-            "admins.decision.rejected_suffix", locale, name=admin.first_name
+            "admins.decision.rejected_suffix", locale, name=display_name(admin)
         )
         target_locale = await locale_for_user(target_id)
         reject_results = await asyncio.gather(

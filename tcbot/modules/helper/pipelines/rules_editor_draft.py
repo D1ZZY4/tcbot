@@ -6,16 +6,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from telegram.ext import ConversationHandler
-
 from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
+from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.handlers import ConversationHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import reply_rich
 from tcbot.modules.helper.messages import rules as rules_msg
-from tcbot.modules.helper.messages.rich_style import esc
 from tcbot.modules.helper.pipelines.rules_editor_steps import (
     _BODY_MAX,
     _TITLE_MAX,
@@ -34,59 +31,63 @@ from tcbot.modules.helper.pipelines.rules_markdown import (
     parse_document,
     render_body,
 )
+from tcbot.modules.helper.rich.edit import callback_text_of
+from tcbot.modules.helper.rich.style import esc
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page
 
-if TYPE_CHECKING:
-    from telegram import Update
-    from telegram.ext import ContextTypes
-
 log = get_logger(__name__)
+
+
+def _cb_text(ctx: Ctx) -> str:
+    """Return the callback payload of this context as text."""
+    q = ctx.callback_query
+    return callback_text_of(q) if q is not None else ""
 
 
 class RulesDraftEditor:
     """Owns the draft-facing screens of one staff member's rules editor."""
 
-    async def categories(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def categories(self, ctx: Ctx) -> int:
         """List the categories of the open draft, creating the draft if needed."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is not None:
             await q.answer()
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
         set_doc, _version = opened
         categories = await db.rules_db.list_categories(int(set_doc["id"]))
-        locale = await self._locale(update)
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             rules_msg.category_list(categories, locale),
             rules_btn.categories_btn(categories, locale),
         )
         return WAITING_EDITOR_MENU
 
-    async def cat_action(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def cat_action(self, ctx: Ctx) -> int:
         """Handle rename, reorder, and delete actions on a category."""
-        q = update.callback_query
-        if q is None or q.data is None:
+        q = ctx.callback_query
+        if q is None or not _cb_text(ctx):
             return WAITING_EDITOR_MENU
-        if not await editor_allowed(update):
-            await refuse_editor(update)
+        if not await editor_allowed(ctx):
+            await refuse_editor(ctx)
             return WAITING_EDITOR_MENU
         await q.answer()
-        action, key = q.data.split(":", 1)
-        opened = await set_and_draft(update, ctx)
+        action, key = _cb_text(ctx).split(":", 1)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
         if action == "rules_cat_rename":
-            scope = flow_scope(ctx, update)
+            scope = flow_scope(ctx)
             scope["rules_category_key"] = key
             scope["rules_step"] = "rename_category"
-            locale = await self._locale(update)
+            locale = await self._locale(ctx)
             await edit_or_reply(
-                update,
+                ctx,
                 t("rules.editor.ask_rename", locale, plain=True),
                 rules_btn.prompt_btn("rules_categories", locale),
             )
@@ -98,21 +99,19 @@ class RulesDraftEditor:
             await db.rules_db.move_category(set_id, key, 1)
         elif action == "rules_cat_del":
             await db.rules_db.delete_category(set_id, key)
-        return await self.categories(update, ctx)
+        return await self.categories(ctx)
 
-    async def category_items(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def category_items(self, ctx: Ctx) -> int:
         """Select a category and list the items of the open draft in it."""
-        q = update.callback_query
-        if q is None or q.data is None:
+        q = ctx.callback_query
+        if q is None or not _cb_text(ctx):
             return WAITING_EDITOR_MENU
-        if not await editor_allowed(update):
-            await refuse_editor(update)
+        if not await editor_allowed(ctx):
+            await refuse_editor(ctx)
             return WAITING_EDITOR_MENU
         await q.answer()
-        key = q.data.split(":", 1)[1]
-        opened = await set_and_draft(update, ctx)
+        key = _cb_text(ctx).split(":", 1)[1]
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
         categories = await db.rules_db.list_categories(int(opened[0]["id"]))
@@ -120,14 +119,12 @@ class RulesDraftEditor:
             (cat for cat in categories if str(cat["category_key"]) == key), None
         )
         if match is None:
-            return await self.categories(update, ctx)
-        return await self._render_category(update, ctx, key)
+            return await self.categories(ctx)
+        return await self._render_category(ctx, key)
 
-    async def _render_category(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, key: str
-    ) -> int:
+    async def _render_category(self, ctx: Ctx, key: str) -> int:
         """Render a category page: H1, divider, description, divider, sections."""
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
         categories = await db.rules_db.list_categories(int(opened[0]["id"]))
@@ -135,109 +132,103 @@ class RulesDraftEditor:
             (cat for cat in categories if str(cat["category_key"]) == key), None
         )
         if match is None:
-            return await self.categories(update, ctx)
-        flow_scope(ctx, update)["rules_category"] = match
+            return await self.categories(ctx)
+        flow_scope(ctx)["rules_category"] = match
         rows = await db.rules_db.list_items(int(opened[1]["id"]), key)
-        locale = await self._locale(update)
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             rules_msg.category_editor_panel(match, locale),
             rules_btn.editor_sections_btn(rows, locale),
         )
         return WAITING_EDITOR_MENU
 
-    async def items(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, page: int = 0
-    ) -> int:
+    async def items(self, ctx: Ctx, page: int = 0) -> int:
         """List at most five items of the selected draft category."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is not None:
             await q.answer()
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         version_id = int(scope["rules_version"]["id"])
         category = scope.get("rules_category")
         category_key = str(category["category_key"]) if category else None
         rows = await db.rules_db.list_items(version_id, category_key)
         total_pages, page = clamp_page(len(rows), page, 5)
         chunk = rows[page * 5 : (page + 1) * 5]
-        locale = await self._locale(update)
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             rules_msg.item_list(chunk, locale),
             rules_btn.editor_items_page_btn(page, total_pages, locale),
         )
         return WAITING_EDITOR_MENU
 
-    async def items_page(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def items_page(self, ctx: Ctx) -> int:
         """Show another page of the editor item list."""
-        query = update.callback_query
+        query = ctx.callback_query
         page = 0
-        if query is not None and query.data:
+        if query is not None and _cb_text(ctx):
             try:
-                page = int(query.data.split(":", 1)[1])
+                page = int(_cb_text(ctx).split(":", 1)[1])
             except ValueError, IndexError:
                 page = 0
-        return await self.items(update, ctx, page)
+        return await self.items(ctx, page)
 
-    async def sections(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def sections(self, ctx: Ctx) -> int:
         """Show the draft sections directly, one editable button each."""
-        query = update.callback_query
+        query = ctx.callback_query
         if query is not None:
             await query.answer()
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
         rows = await db.rules_db.list_items(int(opened[1]["id"]))
-        flow_scope(ctx, update).pop("rules_step", None)
-        locale = await self._locale(update)
+        flow_scope(ctx).pop("rules_step", None)
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             t("rules.editor.sections", locale, count=len(rows)),
             rules_btn.editor_sections_btn(rows, locale),
         )
         return WAITING_EDITOR_MENU
 
-    async def _render_section(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def _render_section(self, ctx: Ctx) -> int:
         """Render the open section and its formatting toolbar."""
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         item_id = scope.get("rules_section_id")
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None or item_id is None:
             return ConversationHandler.END
         rows = await db.rules_db.list_items(int(opened[1]["id"]))
         item = next((row for row in rows if int(row["id"]) == int(item_id)), None)
         if item is None:
-            return await self.sections(update, ctx)
-        locale = await self._locale(update)
+            return await self.sections(ctx)
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             f"<b>{esc(str(item['title']))}</b>\n{render_body(str(item['body']))}",
             rules_btn.section_editor_btn(locale),
         )
         return WAITING_EDITOR_MENU
 
-    async def edit_section(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def edit_section(self, ctx: Ctx) -> int:
         """Open one section for editing."""
-        query = update.callback_query
-        if query is None or query.data is None:
+        query = ctx.callback_query
+        if query is None or not _cb_text(ctx):
             return WAITING_EDITOR_MENU
         await query.answer()
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
-        scope = flow_scope(ctx, update)
-        scope["rules_section_id"] = int(query.data.split(":", 1)[-1] or 0)
+        scope = flow_scope(ctx)
+        scope["rules_section_id"] = int(_cb_text(ctx).split(":", 1)[-1] or 0)
         scope.pop("rules_format", None)
-        return await self._render_section(update, ctx)
+        return await self._render_section(ctx)
 
-    async def _append_body(
-        self, ctx: ContextTypes.DEFAULT_TYPE, update: Update, addition: str
-    ) -> None:
-        scope = flow_scope(ctx, update)
+    async def _append_body(self, ctx: Ctx, addition: str) -> None:
+        scope = flow_scope(ctx)
         item_id = scope.get("rules_section_id")
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None or item_id is None:
             return
         rows = await db.rules_db.list_items(int(opened[1]["id"]))
@@ -249,40 +240,38 @@ class RulesDraftEditor:
             int(opened[1]["id"]), int(item_id), (body + addition).strip()
         )
 
-    async def apply_format(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def apply_format(self, ctx: Ctx) -> int:
         """Choose a rich style, then type the text to append to this section."""
-        query = update.callback_query
-        if query is None or query.data is None:
+        query = ctx.callback_query
+        if query is None or not _cb_text(ctx):
             return WAITING_EDITOR_MENU
         await query.answer()
-        style = query.data.split(":", 1)[-1]
-        scope = flow_scope(ctx, update)
+        style = _cb_text(ctx).split(":", 1)[-1]
+        scope = flow_scope(ctx)
         if style == "divider":
-            await self._append_body(ctx, update, "\n---\n")
-            return await self._render_section(update, ctx)
+            await self._append_body(ctx, "\n---\n")
+            return await self._render_section(ctx)
         scope["rules_format"] = style
         scope["rules_step"] = "section_format_text"
-        msg = update.effective_message
+        msg = ctx.effective_message
         if msg is not None:
             await reply_rich(
                 msg,
                 t(
                     "rules.editor.ask_format_text",
-                    await self._locale(update),
+                    await self._locale(ctx),
                     plain=True,
                 ),
                 parse_mode=None,
             )
         return WAITING_EDITOR_MENU
 
-    async def on_section_text(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def on_section_text(self, ctx: Ctx) -> int:
         """Append formatted text to the open section body."""
-        msg = update.effective_message
+        msg = ctx.effective_message
         if msg is None or not msg.text:
             return WAITING_EDITOR_MENU
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         style = str(scope.get("rules_format") or "plain")
         text = msg.text.strip()
         wrapped = {
@@ -291,73 +280,69 @@ class RulesDraftEditor:
             "code": f"`{text}`",
             "list": "\n".join(f"- {line}" for line in text.splitlines()),
         }.get(style, text)
-        await self._append_body(ctx, update, f"\n{wrapped}")
+        await self._append_body(ctx, f"\n{wrapped}")
         scope.pop("rules_step", None)
         scope.pop("rules_format", None)
-        return await self._render_section(update, ctx)
+        return await self._render_section(ctx)
 
-    async def ask_section_title(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def ask_section_title(self, ctx: Ctx) -> int:
         """Ask for a new section title."""
-        query = update.callback_query
+        query = ctx.callback_query
         if query is not None:
             await query.answer()
-        flow_scope(ctx, update)["rules_step"] = "section_title_text"
-        msg = update.effective_message
+        flow_scope(ctx)["rules_step"] = "section_title_text"
+        msg = ctx.effective_message
         if msg is not None:
             await reply_rich(
                 msg,
-                t("rules.editor.ask_title", await self._locale(update), plain=True),
+                t("rules.editor.ask_title", await self._locale(ctx), plain=True),
                 parse_mode=None,
             )
         return WAITING_EDITOR_MENU
 
-    async def on_section_title_text(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def on_section_title_text(self, ctx: Ctx) -> int:
         """Store a new title for the section being edited."""
-        msg = update.effective_message
+        msg = ctx.effective_message
         if msg is None or not msg.text:
             return WAITING_EDITOR_MENU
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         item_id = scope.get("rules_section_id")
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None or item_id is None:
             return ConversationHandler.END
         await db.rules_db.update_item_title(
             int(opened[1]["id"]), int(item_id), msg.text.strip()
         )
         scope.pop("rules_step", None)
-        return await self._render_section(update, ctx)
+        return await self._render_section(ctx)
 
-    async def ask_markdown(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def ask_markdown(self, ctx: Ctx) -> int:
         """Ask for a Markdown document to import into the open draft."""
-        query = update.callback_query
+        query = ctx.callback_query
         if query is not None:
             await query.answer()
-        if not await editor_allowed(update):
-            await refuse_editor(update)
+        if not await editor_allowed(ctx):
+            await refuse_editor(ctx)
             return WAITING_EDITOR_MENU
-        flow_scope(ctx, update)["rules_step"] = "markdown_upload"
-        locale = await self._locale(update)
+        flow_scope(ctx)["rules_step"] = "markdown_upload"
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             t("rules.editor.ask_markdown", locale, plain=True),
             rules_btn.prompt_btn("rules_panel", locale),
         )
         return WAITING_MARKDOWN
 
-    async def on_markdown(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def on_markdown(self, ctx: Ctx) -> int:
         """Parse an uploaded .md document and store each heading as an item."""
-        msg = update.effective_message
+        msg = ctx.effective_message
         document = msg.document if msg is not None else None
         if document is None or msg is None:
             return WAITING_MARKDOWN
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
-        locale = await self._locale(update)
+        locale = await self._locale(ctx)
         name = document.file_name or "rules.md"
         if not name.lower().endswith(".md"):
             await reply_rich(
@@ -365,7 +350,7 @@ class RulesDraftEditor:
             )
             return WAITING_MARKDOWN
         try:
-            payload = await (await document.get_file()).download_as_bytearray()
+            payload = await ctx.bot.download_media(document, in_memory=True)
             text = bytes(payload).decode("utf-8")
             items = parse_document(text, name)
             description = parse_description(text)
@@ -400,7 +385,7 @@ class RulesDraftEditor:
                 str(item["body"]),
                 None,
             )
-        flow_scope(ctx, update).pop("rules_step", None)
+        flow_scope(ctx).pop("rules_step", None)
         await reply_rich(
             msg,
             # * Rich mode: this travels through rich HTML, so the uploaded
@@ -413,59 +398,55 @@ class RulesDraftEditor:
             ),
             parse_mode=None,
         )
-        return await self._render_category(update, ctx, category_key)
+        return await self._render_category(ctx, category_key)
 
-    async def ask_category_title(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def ask_category_title(self, ctx: Ctx) -> int:
         """Ask for a new category title."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is not None:
             await q.answer()
-        flow_scope(ctx, update)["rules_step"] = "category_title"
-        locale = await self._locale(update)
+        flow_scope(ctx)["rules_step"] = "category_title"
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             t("rules.editor.ask_category", locale, plain=True),
             rules_btn.prompt_btn("rules_panel", locale),
         )
         return WAITING_EDITOR_MENU
 
-    async def ask_item_title(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def ask_item_title(self, ctx: Ctx) -> int:
         """Ask for a new item title in the selected category."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is not None:
             await q.answer()
-        flow_scope(ctx, update)["rules_step"] = "item_title"
-        locale = await self._locale(update)
+        flow_scope(ctx)["rules_step"] = "item_title"
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             t("rules.editor.ask_title", locale, plain=True),
             rules_btn.prompt_btn("rules_categories", locale),
         )
         return WAITING_EDITOR_MENU
 
-    async def on_text(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def on_text(self, ctx: Ctx) -> int:
         """Route a typed answer to the pending editor step."""
-        msg = update.effective_message
-        user = update.effective_user
+        msg = ctx.effective_message
+        user = ctx.effective_user
         if msg is None or user is None or not msg.text:
             return ConversationHandler.END
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
         set_doc, version = opened
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         step = scope.get("rules_step")
         text = msg.text.strip()
-        locale = await self._locale(update)
+        locale = await self._locale(ctx)
 
         if step == "section_format_text":
-            return await self.on_section_text(update, ctx)
+            return await self.on_section_text(ctx)
         if step == "section_title_text":
-            return await self.on_section_title_text(update, ctx)
+            return await self.on_section_title_text(ctx)
 
         if step == "category_title":
             if not text or len(text) > _TITLE_MAX:
@@ -480,7 +461,7 @@ class RulesDraftEditor:
             )
             scope["rules_category"] = category
             clear_item_step(scope)
-            return await self.categories(update, ctx)
+            return await self.categories(ctx)
 
         if step == "rename_category":
             if not text or len(text) > _TITLE_MAX:
@@ -496,7 +477,7 @@ class RulesDraftEditor:
                 text,
             )
             scope.pop("rules_step", None)
-            return await self.categories(update, ctx)
+            return await self.categories(ctx)
 
         if step == "item_title":
             if not text or len(text) > _TITLE_MAX:
@@ -567,7 +548,7 @@ class RulesDraftEditor:
                 )
                 return WAITING_EDITOR_MENU
             clear_item_step(scope)
-            return await self.items(update, ctx)
+            return await self.items(ctx)
 
         await reply_rich(
             msg,
@@ -577,18 +558,18 @@ class RulesDraftEditor:
         )
         return WAITING_EDITOR_MENU
 
-    async def preview(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def preview(self, ctx: Ctx) -> int:
         """Preview the public menu built from the current draft categories."""
-        query = update.callback_query
+        query = ctx.callback_query
         if query is not None:
             await query.answer()
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
         categories = await db.rules_db.list_categories(int(opened[0]["id"]))
-        locale = await self._locale(update)
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             t("rules.menu.preview", locale),
             rules_btn.draft_preview_btn(categories, locale),
         )
@@ -598,19 +579,17 @@ class RulesDraftEditor:
     def _section_title(title: str) -> str:
         return title.split(":", 1)[-1].strip() if ":" in title else title
 
-    async def preview_category(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def preview_category(self, ctx: Ctx) -> int:
         """Preview the sections of one draft category."""
-        query = update.callback_query
-        if query is None or query.data is None:
+        query = ctx.callback_query
+        if query is None or not _cb_text(ctx):
             return WAITING_EDITOR_MENU
         await query.answer()
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
-        key = query.data.split(":", 1)[-1]
-        scope = flow_scope(ctx, update)
+        key = _cb_text(ctx).split(":", 1)[-1]
+        scope = flow_scope(ctx)
         scope["rules_preview_category"] = key
         rows = await db.rules_db.list_items(int(opened[1]["id"]), key)
         sections = list(
@@ -621,9 +600,9 @@ class RulesDraftEditor:
             (cat for cat in categories if str(cat["category_key"]) == key), None
         )
         label = str(category.get("title") or key) if category else key
-        locale = await self._locale(update)
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             rules_msg.category_editor_panel(
                 {
                     "title": label,
@@ -635,21 +614,19 @@ class RulesDraftEditor:
         )
         return WAITING_EDITOR_MENU
 
-    async def preview_section(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    async def preview_section(self, ctx: Ctx) -> int:
         """Preview the items of one draft section."""
-        query = update.callback_query
-        if query is None or query.data is None:
+        query = ctx.callback_query
+        if query is None or not _cb_text(ctx):
             return WAITING_EDITOR_MENU
         await query.answer()
-        scope = flow_scope(ctx, update)
+        scope = flow_scope(ctx)
         key = str(scope.get("rules_preview_category") or "")
         try:
-            index = int(query.data.split(":", 1)[-1])
+            index = int(_cb_text(ctx).split(":", 1)[-1])
         except ValueError:
             return WAITING_EDITOR_MENU
-        opened = await set_and_draft(update, ctx)
+        opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
         rows = await db.rules_db.list_items(int(opened[1]["id"]), key)
@@ -662,24 +639,24 @@ class RulesDraftEditor:
         items = [
             row for row in rows if self._section_title(str(row["title"])) == section
         ]
-        locale = await self._locale(update)
+        locale = await self._locale(ctx)
         await edit_or_reply(
-            update,
+            ctx,
             rules_msg.rich_section_page(key, section, items, locale)["html"],
             rules_btn.draft_preview_sections_btn(sections, locale),
         )
         return WAITING_EDITOR_MENU
 
-    async def preview_page(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    async def preview_page(self, ctx: Ctx) -> int:
         """Handle a legacy preview-page tap by reopening the current preview."""
-        query = update.callback_query
+        query = ctx.callback_query
         if query is not None:
             await query.answer()
-        return await self.preview(update, ctx)
+        return await self.preview(ctx)
 
     @staticmethod
-    async def _locale(update: Update) -> str:
-        return await locale_for_update(update)
+    async def _locale(ctx: Ctx) -> str:
+        return await locale_for_update(ctx)
 
 
 rules_draft_editor = RulesDraftEditor()

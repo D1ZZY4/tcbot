@@ -12,10 +12,14 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from telegram.ext import CallbackQueryHandler, ConversationHandler, MessageHandler
+from pyrogram.handlers import CallbackQueryHandler as _CallbackQueryHandler
+from pyrogram.handlers import MessageHandler as _MessageHandler
 
 from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
+from tcbot.modules.helper.handlers import (
+    ConversationHandler,
+)
 from tcbot.modules.helper.pipelines import (
     rules_editor,
     rules_editor_draft,
@@ -33,12 +37,15 @@ _GLOBAL_EXITS = {"back_to_start", "close_msg"}
 
 
 def _patterns(conv: ConversationHandler, state: int) -> list[re.Pattern[str]]:
-    return [
-        handler.pattern
-        for handler in conv.states[state]
-        if isinstance(handler, CallbackQueryHandler)
-        and isinstance(handler.pattern, re.Pattern)
-    ]
+    patterns: list[re.Pattern[str]] = []
+    for handler in conv.states[state]:
+        if not isinstance(handler, _CallbackQueryHandler):
+            continue
+        flt = getattr(handler, "filters", None)
+        pattern = getattr(flt, "p", None)
+        if isinstance(pattern, re.Pattern):
+            patterns.append(pattern)
+    return patterns
 
 
 def _emitted() -> set[str]:
@@ -179,7 +186,7 @@ def test_rename_prompt_edits_the_invoking_message(
     async def _allowed(_update: Any) -> bool:
         return True
 
-    async def _draft(_update: Any, _ctx: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    async def _draft(_ctx: Any) -> tuple[dict[str, Any], dict[str, Any]]:
         return {"id": 1}, {"id": 2}
 
     async def _answer() -> None:
@@ -198,7 +205,7 @@ def test_rename_prompt_edits_the_invoking_message(
     monkeypatch.setattr(rules_editor_draft, "set_and_draft", _draft)
     monkeypatch.setattr(rules_editor_draft, "edit_or_reply", _edited)
     monkeypatch.setattr(rules_editor_draft, "reply_rich", _reply)
-    monkeypatch.setattr(rules_editor_draft, "flow_scope", lambda _ctx, _update: {})
+    monkeypatch.setattr(rules_editor_draft, "flow_scope", lambda _ctx: {})
 
     update = SimpleNamespace(
         callback_query=SimpleNamespace(
@@ -206,12 +213,9 @@ def test_rename_prompt_edits_the_invoking_message(
         ),
         effective_user=SimpleNamespace(id=7),
         effective_message=None,
+        user_data={},
     )
-    asyncio.run(
-        rules_editor_draft.rules_draft_editor.cat_action(
-            cast("Any", update), cast("Any", None)
-        )
-    )
+    asyncio.run(rules_editor_draft.rules_draft_editor.cat_action(cast("Any", update)))
 
     assert len(edits) == 1
     assert replies == []
@@ -229,9 +233,9 @@ def test_rename_prompt_edits_the_invoking_message(
 def test_the_editor_enters_through_the_tcrules_command() -> None:
     conv = build_rules_conv()
     entry_patterns = [
-        handler.pattern
+        getattr(getattr(handler, "filters", None), "p", None)
         for handler in conv.entry_points
-        if isinstance(handler, CallbackQueryHandler)
+        if isinstance(handler, _CallbackQueryHandler)
     ]
     assert entry_patterns == []
     assert conv.entry_points
@@ -239,16 +243,36 @@ def test_the_editor_enters_through_the_tcrules_command() -> None:
 
 def test_the_editor_accepts_the_short_alias() -> None:
     """`/tcrls` is the rules editor alias; `/tcr` remains repair's alias."""
-    rendered = repr(rules_editor_steps._TCRULES_CMDS)
-    assert "tcrls" in rendered
-    assert "PrefixedCommand(tcr)" not in rendered
+    names = {
+        type(rules_editor_steps._TCRULES_CMDS.base).__name__,
+        type(rules_editor_steps._TCRULES_CMDS.other).__name__,
+    }
+    assert "PrefixedCommand(tcrls)" in names
+    assert "PrefixedCommand(tcr)" not in names
 
 
 def test_the_open_in_pm_deep_link_starts_the_editor() -> None:
     """Following ?start=tcrules must start the conversation, not just reply."""
     conv = build_rules_conv()
+
+    def _filter_names(flt: Any) -> set[str]:
+        names: set[str] = set()
+        stack: list[Any] = [flt]
+        while stack:
+            current = stack.pop()
+            if current is None:
+                continue
+            names.add(type(current).__name__)
+            stack.extend(
+                getattr(current, part)
+                for part in ("base", "other")
+                if hasattr(current, part)
+            )
+        return names
+
     assert any(
-        isinstance(handler, MessageHandler) and "tcrules" in repr(handler.filters)
+        isinstance(handler, _MessageHandler)
+        and "PrefixedCommand(tcrules)" in _filter_names(handler.filters)
         for handler in conv.entry_points
     )
 
@@ -260,6 +284,7 @@ def _callback_update() -> Any:
         ),
         effective_user=SimpleNamespace(id=7),
         effective_message=None,
+        user_data={},
     )
 
 
@@ -272,7 +297,7 @@ def test_preview_stays_in_the_editor_with_back_and_close(
 ) -> None:
     edits: list[dict[str, Any]] = []
 
-    async def _draft(_update: Any, _ctx: Any) -> tuple[dict, dict]:
+    async def _draft(_ctx: Any) -> tuple[dict, dict]:
         return {"id": 1}, {"id": 2}
 
     async def _categories(set_id: int) -> list:
@@ -291,9 +316,7 @@ def test_preview_stays_in_the_editor_with_back_and_close(
 
     update = _callback_update()
     result = asyncio.run(
-        rules_editor_draft.rules_draft_editor.preview(
-            cast("Any", update), cast("Any", None)
-        )
+        rules_editor_draft.rules_draft_editor.preview(cast("Any", update))
     )
 
     assert result == WAITING_EDITOR_MENU
@@ -316,7 +339,7 @@ def test_empty_draft_publish_shows_guidance(monkeypatch: pytest.MonkeyPatch) -> 
     async def _allowed(_update: Any) -> bool:
         return True
 
-    async def _draft(_update: Any, _ctx: Any) -> tuple[dict, dict]:
+    async def _draft(_ctx: Any) -> tuple[dict, dict]:
         return {"id": 1}, {"id": 2, "items": []}
 
     async def _all_items(version_id: int) -> list:
@@ -342,9 +365,7 @@ def test_empty_draft_publish_shows_guidance(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(rules_editor.rules_editor, "_locale", _locale)
 
     update = _callback_update()
-    result = asyncio.run(
-        rules_editor.rules_editor.publish(cast("Any", update), cast("Any", None))
-    )
+    result = asyncio.run(rules_editor.rules_editor.publish(cast("Any", update)))
 
     assert result == WAITING_EDITOR_MENU
     assert called == []

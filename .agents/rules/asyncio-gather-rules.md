@@ -27,9 +27,9 @@ Handlers are small orchestration functions. Put persistence in
 logic in a domain-named module under `tcbot/modules/helper/pipelines/`.
 
 ```python
-async def cmd_example(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.effective_message
-    user = update.effective_user
+async def cmd_example(ctx: Ctx) -> None:
+    msg = ctx.effective_message
+    user = ctx.effective_user
     if msg is None or user is None:
         return
 
@@ -134,8 +134,8 @@ async def worker() -> None:
 ## Background Jobs
 
 Scheduled work runs on APScheduler 3.11.3 `AsyncIOScheduler` with
-`SQLAlchemyJobStore` via `tcbot/database/scheduler/`. This project does not
-use the PTB `[job-queue]` extra.
+`SQLAlchemyJobStore` via `tcbot/database/scheduler/`. Scheduled work is owned
+by the application, not by the Telegram framework.
 
 Rules:
 

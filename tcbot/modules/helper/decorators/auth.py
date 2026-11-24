@@ -10,8 +10,7 @@ import asyncio
 import functools
 from typing import TYPE_CHECKING, Any
 
-from telegram.ext import ContextTypes
-
+from tcbot.modules.helper.context import Ctx
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -24,8 +23,6 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich
 
 if TYPE_CHECKING:
-    from telegram import Update
-
     from tcbot.database.users_roles import RoleName
 
 log = get_logger(__name__)
@@ -56,19 +53,19 @@ def _auth_only(*, label: str, refusal: str, min_role: RoleName | None) -> Callab
 
     def _decorator(func: Callable) -> Callable:
         @functools.wraps(func)
-        async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        async def _wrapper(ctx: Ctx) -> None:
             """Allow the call only when the invoking user passes the tier check."""
-            locale = await locale_for_update(update)
-            if is_anon_admin(update.effective_user):
-                if update.effective_message:
+            locale = await locale_for_update(ctx)
+            if is_anon_admin(ctx.effective_user):
+                if ctx.effective_message:
                     await reply_rich(
-                        update.effective_message,
+                        ctx.effective_message,
                         replies.refuse_anon_admin(locale, plain=True),
                         log_label=f"{label} anon-admin",
                         parse_mode=None,
                     )
                 return None
-            uid = update.effective_user.id if update.effective_user else None
+            uid = ctx.effective_user.id if ctx.effective_user else None
             if uid:
                 # * Fail closed with a retry reply on DB outage instead of
                 # * letting the lookup failure propagate with no user feedback.
@@ -101,19 +98,19 @@ def _auth_only(*, label: str, refusal: str, min_role: RoleName | None) -> Callab
                     raise
                 except Exception as exc:
                     log.warning("%s role lookup failed for %s: %s", label, uid, exc)
-                    if update.effective_message:
+                    if ctx.effective_message:
                         await reply_rich(
-                            update.effective_message,
+                            ctx.effective_message,
                             replies.refuse_role_lookup(locale, plain=True),
                             log_label=f"{label} lookup-fail",
                             parse_mode=None,
                         )
                     return None
                 if authorized:
-                    return await func(update, ctx)
-            if update.effective_message:
+                    return await func(ctx)
+            if ctx.effective_message:
                 await reply_rich(
-                    update.effective_message,
+                    ctx.effective_message,
                     _REFUSAL_BY_LABEL[refusal](locale, plain=True),
                     log_label=f"{label} refusal",
                     parse_mode=None,
@@ -145,19 +142,19 @@ def permission_only(permission_key: str) -> Callable:
 
     def _decorator(func: Callable) -> Callable:
         @functools.wraps(func)
-        async def _wrapper(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        async def _wrapper(ctx: Ctx) -> None:
             """Allow the call only when the invoker holds the permission."""
-            locale = await locale_for_update(update)
-            if is_anon_admin(update.effective_user):
-                if update.effective_message:
+            locale = await locale_for_update(ctx)
+            if is_anon_admin(ctx.effective_user):
+                if ctx.effective_message:
                     await reply_rich(
-                        update.effective_message,
+                        ctx.effective_message,
                         replies.refuse_anon_admin(locale, plain=True),
                         log_label="permission anon-admin",
                         parse_mode=None,
                     )
                 return None
-            uid = update.effective_user.id if update.effective_user else None
+            uid = ctx.effective_user.id if ctx.effective_user else None
             if uid:
                 try:
                     authorized = await db.users_roles.has_permission(
@@ -172,19 +169,19 @@ def permission_only(permission_key: str) -> Callable:
                         permission_key,
                         exc,
                     )
-                    if update.effective_message:
+                    if ctx.effective_message:
                         await reply_rich(
-                            update.effective_message,
+                            ctx.effective_message,
                             replies.refuse_role_lookup(locale, plain=True),
                             log_label="permission lookup-fail",
                             parse_mode=None,
                         )
                     return None
                 if authorized:
-                    return await func(update, ctx)
-            if update.effective_message:
+                    return await func(ctx)
+            if ctx.effective_message:
                 await reply_rich(
-                    update.effective_message,
+                    ctx.effective_message,
                     replies.refuse_permission(locale, plain=True),
                     log_label="permission refusal",
                     parse_mode=None,

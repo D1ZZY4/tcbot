@@ -8,23 +8,28 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import TYPE_CHECKING
 
-from telegram import Chat
+from pyrogram import Client
+from pyrogram.types import Chat, Message
 
 from tcbot import database as db
+from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.identity import ANONYMOUS_BOT_ID, TELEGRAM_USER_ID
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
-
-if TYPE_CHECKING:
-    from telegram import Bot, ChatFullInfo, Message, Update
 
 log = get_logger(__name__)
 
 # * Telegram lookups are wrapped in wait_for so a stalled API call never blocks
 # * the user-facing reply. Per-call budget is the shared project-wide value.
 _GET_CHAT_TIMEOUT = TELEGRAM_LOOKUP_TIMEOUT
+
+
+def _is_private_chat(chat: object) -> bool:
+    """Compare a Kurigram chat-type enum by its string value."""
+    kind = getattr(chat, "type", None)
+    return getattr(kind, "value", kind) == "private"
+
 
 # * A Telegram user ID is a positive decimal integer. Groups and channels
 # * carry negative IDs (or resolve through a chat lookup), so a token that
@@ -49,7 +54,7 @@ def parse_user_id_token(token: str) -> int | None:
     return value if value > 0 else None
 
 
-async def _safe_get_chat(bot: Bot, ident: str | int) -> Chat | ChatFullInfo | None:
+async def _safe_get_chat(bot: Client, ident: str | int) -> Chat | None:
     """Call ``bot.get_chat`` with a bounded timeout; returns ``None`` on failure."""
     try:
         return await asyncio.wait_for(bot.get_chat(ident), timeout=_GET_CHAT_TIMEOUT)
@@ -141,9 +146,9 @@ async def _cached_username_target(username: str) -> tuple[int, str] | None:
 
 
 async def extract_target(
-    update: Update,
+    ctx: Ctx,
     args: list[str],
-    bot: Bot | None = None,
+    bot: Client | None = None,
     *,
     prefer_explicit: bool = False,
 ) -> tuple[int, str] | tuple[None, None]:
@@ -179,7 +184,7 @@ async def extract_target(
     numeric ID string (``str(uid)``) so callers using ``user_ref()`` can detect
     the numeric fallback and avoid displaying the ID twice.
     """
-    msg: Message | None = update.effective_message
+    msg: Message | None = ctx.effective_message
     if msg is None:
         return None, None
 
@@ -225,7 +230,7 @@ def reply_uid(msg: Message) -> int | None:
     Synchronous core of the reply-target decision, shared by
     :func:`_reply_target` and :func:`extract_mod_target` so both agree on
     who the quoted message names. Mirrors the skip rules exactly:
-    GroupAnonymousBot and the Telegram service account never count, a
+    GroupAnonymousClient and the Telegram service account never count, a
     channel sender is not an actionable target, and neither is a group
     sender (a group ID names no user).
     """
@@ -242,7 +247,7 @@ def reply_uid(msg: Message) -> int | None:
 
 async def _reply_target(msg: Message) -> tuple[int, str] | None:
     """Priority 1: reply sender, skipping placeholders and channel posts."""
-    # * Skip GroupAnonymousBot (id 1087968824): it is a Telegram pseudo-user
+    # * Skip GroupAnonymousClient (id 1087968824): it is a Telegram pseudo-user
     # * that appears as `from_user` when an anonymous admin sends a message.
     # * Targeting it would attempt to act on the placeholder, not a real user.
     # * Similarly skip the Telegram service account (777000) and channel posts.
@@ -260,7 +265,7 @@ async def _reply_target(msg: Message) -> tuple[int, str] | None:
 
 async def _args_target(
     args: list[str],
-    bot: Bot | None,
+    bot: Client | None,
     *,
     allow_partial: bool = False,
     verified: bool = False,
@@ -303,7 +308,7 @@ async def _args_target(
         chat_username: str | None = None
         if bot:
             chat = await _safe_get_chat(bot, uid)
-            if chat is not None and getattr(chat, "type", None) == Chat.PRIVATE:
+            if chat is not None and _is_private_chat(chat):
                 chat_first = chat.first_name
                 chat_username = chat.username
         if verified and not chat_first:
@@ -319,12 +324,12 @@ async def _args_target(
     if bot and arg:
         chat = await _safe_get_chat(bot, f"@{arg}")
         if chat is not None:
-            if getattr(chat, "type", None) != Chat.PRIVATE:
+            if not _is_private_chat(chat):
                 return None
             return chat.id, await _best_name(
                 chat.id, chat.first_name, chat.username, arg
             )
-        # * Bot API username lookups miss some existing accounts; one MTProto
+        # * Client API username lookups miss some existing accounts; one MTProto
         # * exact-username resolve before giving up (deterministic, no fuzzy).
         hit = await db.mtproto.resolve_username(arg)
         if hit is not None:
@@ -360,9 +365,9 @@ async def _args_target(
 
 
 async def extract_mod_target(
-    update: Update,
+    ctx: Ctx,
     args: list[str],
-    bot: Bot | None = None,
+    bot: Client | None = None,
 ) -> tuple[tuple[int, str] | tuple[None, None], bool]:
     """Resolve a moderation target plus whether ``args[0]`` was consumed.
 
@@ -377,9 +382,9 @@ async def extract_mod_target(
       or nothing resolved): not consumed; ``parse_inline_reason`` still
       strips a restated ID via ``reply_target_id``.
     """
-    msg = update.effective_message
+    msg = ctx.effective_message
     quoted_uid = reply_uid(msg) if msg is not None else None
-    hit = await extract_target(update, args, bot)
+    hit = await extract_target(ctx, args, bot)
     target_id, _ = hit
     consumed = (
         target_id is not None
@@ -390,10 +395,10 @@ async def extract_mod_target(
     return hit, consumed
 
 
-async def _entity_target(msg: Message, bot: Bot | None) -> tuple[int, str] | None:
+async def _entity_target(msg: Message, bot: Client | None) -> tuple[int, str] | None:
     """Priorities 4-5: text-mention entity, then @mention entity."""
     for ent in msg.entities or []:
-        if ent.type == "text_mention" and ent.user:
+        if getattr(ent.type, "value", ent.type) == "text_mention" and ent.user:
             u = ent.user
             if u.id in (ANONYMOUS_BOT_ID, TELEGRAM_USER_ID):
                 continue
@@ -407,7 +412,7 @@ async def _entity_target(msg: Message, bot: Bot | None) -> tuple[int, str] | Non
         # * fails to decode and the entity is skipped (fail closed).
         raw = (msg.text or "").encode("utf-16-le")
         for ent in msg.entities or []:
-            if ent.type == "mention":
+            if getattr(ent.type, "value", ent.type) == "mention":
                 try:
                     uname = raw[
                         (ent.offset + 1) * 2 : (ent.offset + ent.length) * 2
@@ -417,13 +422,13 @@ async def _entity_target(msg: Message, bot: Bot | None) -> tuple[int, str] | Non
                 except ValueError:
                     continue
                 if uname.lstrip("@") in (
-                    "GroupAnonymousBot",
+                    "GroupAnonymousClient",
                     "Telegram",
                 ):
                     continue
                 chat = await _safe_get_chat(bot, f"@{uname}")
                 if chat is not None:
-                    if getattr(chat, "type", None) != Chat.PRIVATE:
+                    if not _is_private_chat(chat):
                         continue
                     return chat.id, await _best_name(chat.id, chat.first_name, uname)
                 hit = await db.mtproto.resolve_username(uname)

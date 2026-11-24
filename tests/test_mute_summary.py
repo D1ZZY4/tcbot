@@ -20,8 +20,10 @@ class _Bot:
     def __init__(self) -> None:
         self.edits: list[str] = []
 
-    async def edit_message_text(self, text: str, **kwargs: Any) -> None:
-        self.edits.append(text)
+    async def edit_message_text(
+        self, chat_id: Any, message_id: Any, rich_message: Any = None, **kwargs: Any
+    ) -> None:
+        self.edits.append(str(getattr(rich_message, "html", "") or rich_message))
 
     async def restrict_chat_member(self, *args: Any, **kwargs: Any) -> None:
         return None

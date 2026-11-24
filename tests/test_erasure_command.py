@@ -43,8 +43,13 @@ def test_tcforget_queues_the_request(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(maintenance, "locale_for_update", _locale)
 
     message = _Message("/tcforget 123 spam account")
-    update = SimpleNamespace(effective_message=message)
-    asyncio.run(inspect.unwrap(maintenance.cmd_forget)(update, None))
+    update = SimpleNamespace(
+        effective_message=message,
+        effective_user=SimpleNamespace(id=1, first_name="Founder"),
+        effective_chat=None,
+        user_data={},
+    )
+    asyncio.run(inspect.unwrap(maintenance.cmd_forget)(update))
 
     assert seen == [(123, "spam account")]
     assert message.replies
@@ -68,8 +73,13 @@ def test_tcforget_rejects_a_missing_reason(
     monkeypatch.setattr(maintenance, "locale_for_update", _locale)
 
     message = _Message("/tcforget 123")
-    update = SimpleNamespace(effective_message=message)
-    asyncio.run(inspect.unwrap(maintenance.cmd_forget)(update, None))
+    update = SimpleNamespace(
+        effective_message=message,
+        effective_user=SimpleNamespace(id=1, first_name="Founder"),
+        effective_chat=None,
+        user_data={},
+    )
+    asyncio.run(inspect.unwrap(maintenance.cmd_forget)(update))
 
     assert message.replies
 
@@ -95,8 +105,13 @@ def test_tcforget_refuses_the_current_owner(
     monkeypatch.setattr(maintenance, "locale_for_update", _locale)
 
     message = _Message("/tcforget 123 spam account")
-    update = SimpleNamespace(effective_message=message)
-    asyncio.run(inspect.unwrap(maintenance.cmd_forget)(update, None))
+    update = SimpleNamespace(
+        effective_message=message,
+        effective_user=SimpleNamespace(id=1, first_name="Founder"),
+        effective_chat=None,
+        user_data={},
+    )
+    asyncio.run(inspect.unwrap(maintenance.cmd_forget)(update))
 
     assert queued == []
     assert message.replies

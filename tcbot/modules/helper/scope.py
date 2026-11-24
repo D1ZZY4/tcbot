@@ -4,122 +4,48 @@
 
 """Per-conversation payload scope for the moderation flows.
 
-python-telegram-bot stores ``ctx.user_data`` per user id, so one dict is
-shared by every chat a user is in. The moderation conversations are
-registered ``per_chat=True, per_user=True``, which means their payload
-belongs to one (chat, user) pair.
-
-Keeping the payload directly in ``ctx.user_data`` therefore mixes two
-conversations of the same moderator: a second action started in another
-group overwrites the target, the reason and the prompt of the first one, so
-the first action enforces against the wrong target. This module owns the
-scoping so every flow reads and writes its own payload only.
+The application context already keys its state by (chat, user), which is the
+same granularity the multi-step conversations use. This module keeps the
+single source of truth for reading and clearing that payload so flows cannot
+mix two conversations of one moderator in different groups.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-# * The conversation key has one owner: the update processor that serialises
-# * the updates of one (chat, user) pair. The flow scope uses the same key,
-# * so a payload can never belong to a different pair than the one the
-# * conversation runs under.
-from tcbot.utils.update_processor import conversation_key
+from tcbot.utils.update_processor import conversation_key  # noqa: F401 (public re-export)
 
 if TYPE_CHECKING:
     from collections.abc import Collection
 
-    from telegram import Update
-    from telegram.ext import ContextTypes
-
-# * Key holding the per-user map of conversation scopes inside
-# * ``ctx.user_data``.
-_SCOPES_KEY = "tc_flow_scopes"
+    from tcbot.modules.helper.context import Ctx
 
 
-def flow_scope(ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> dict[str, Any]:
-    """Return the payload dict owned by the conversation driving ``update``.
-
-    The dict is created on first use and lives under one key of
-    ``ctx.user_data``, so it disappears with the user data of that user.
-    An empty dict is returned when the context carries no user data or the
-    update belongs to no conversation; the flow handlers check for that
-    before they write, so no payload is silently dropped.
-
-    The scope map of one user holds one entry per chat that user moderated
-    in, so its size follows the federation and not the traffic.
-    """
-    user_data = getattr(ctx, "user_data", None)
-    if user_data is None:
-        return {}
-    key = conversation_key(update)
-    if key is None:
-        return {}
-    scopes = user_data.get(_SCOPES_KEY)
-    if not isinstance(scopes, dict):
-        scopes = {}
-        user_data[_SCOPES_KEY] = scopes
-    scope = scopes.get(key)
-    if not isinstance(scope, dict):
-        scope = {}
-        scopes[key] = scope
-    return scope
+def flow_scope(ctx: Ctx) -> dict[str, Any]:
+    """Return the payload dict owned by the conversation driving ``ctx``."""
+    return ctx.user_data
 
 
-def clear_flow_scope(
-    ctx: ContextTypes.DEFAULT_TYPE,
-    update: Update,
-    *,
-    keys: Collection[str] | None = None,
-) -> None:
-    """Drop the payload of the conversation driving ``update``.
-
-    ``keys`` limits the removal to the named payload keys; without it the
-    whole payload of the conversation goes. The scope entry itself is
-    dropped once it holds nothing, so ``ctx.user_data`` keeps one entry
-    per chat a user still has an open action in, instead of one per chat
-    the user ever moderated in.
-    """
-    user_data = ctx.user_data
-    if user_data is None:
+def clear_flow_scope(ctx: Ctx, *, keys: Collection[str] | None = None) -> None:
+    """Drop the flow payload of this conversation, optionally only named keys."""
+    scope = ctx.user_data
+    if keys is None:
+        scope.clear()
         return
-    key = conversation_key(update)
-    if key is None:
-        return
-    scopes = user_data.get(_SCOPES_KEY)
-    if not isinstance(scopes, dict):
-        return
-    scope = scopes.get(key)
-    if not isinstance(scope, dict):
-        scopes.pop(key, None)
-    else:
-        if keys is None:
-            scope.clear()
-        else:
-            for name in keys:
-                scope.pop(name, None)
-        if not scope:
-            scopes.pop(key, None)
-    if not scopes:
-        user_data.pop(_SCOPES_KEY, None)
+    for name in keys:
+        scope.pop(name, None)
 
 
 def callback_is_current(
-    update: Update,
+    ctx: Ctx,
     scope: dict[str, Any],
     *,
     chat_key: str,
     message_key: str,
 ) -> bool:
-    """Return True when a callback came from the flow's live prompt message.
-
-    Conversations are keyed per (chat, user), so a button left on an old
-    prompt can be delivered to a newer flow of the same moderator. Each
-    flow records its prompt identity at entry; a callback from any other
-    message is stale and must not mutate the newer flow. When no prompt
-    identity is recorded the check stays permissive.
-    """
-    query = update.callback_query
+    """Return True when a callback came from the flow's live prompt message."""
+    query = ctx.callback_query
     if query is None:
         return False
     live_chat = scope.get(chat_key)
@@ -131,5 +57,5 @@ def callback_is_current(
         return False
     return (
         getattr(getattr(message, "chat", None), "id", None) == live_chat
-        and getattr(message, "message_id", None) == live_msg
+        and getattr(message, "id", None) == live_msg
     )

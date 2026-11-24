@@ -14,7 +14,7 @@ import pytest
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import warn_actions
-from tcbot.modules.helper.pipelines.proof_steps import ProofUpload
+from tcbot.modules.helper.pipelines.proof_post import ProofUpload
 
 
 class _FakeMsg:
@@ -42,12 +42,18 @@ def test_threshold_ban_aborts_on_role_lookup_failure(
         raise RuntimeError("db blip")
 
     msg = _FakeMsg()
-    update = SimpleNamespace(
+    _update = SimpleNamespace(
         effective_message=msg,
         effective_chat=SimpleNamespace(id=22, title="Group", type="supergroup"),
         effective_user=SimpleNamespace(id=1, first_name="Admin"),
     )
-    ctx = SimpleNamespace(bot=SimpleNamespace(), user_data={})
+    ctx = SimpleNamespace(
+        bot=SimpleNamespace(),
+        user_data={},
+        effective_message=msg,
+        effective_chat=_update.effective_chat,
+        effective_user=_update.effective_user,
+    )
 
     async def _add_warn(*args: Any, **kwargs: Any) -> int:
         return 3
@@ -60,7 +66,6 @@ def test_threshold_ban_aborts_on_role_lookup_failure(
 
     asyncio.run(
         warn_actions.execute_warn(
-            update,  # type: ignore[arg-type]
             ctx,  # type: ignore[arg-type]
             42,
             "Target",
@@ -151,15 +156,20 @@ def test_threshold_ban_stores_warn_proof_on_ban_record(
     monkeypatch.setattr(db.warns_db, "clear_all_warns", _clear_all)
 
     msg = _FakeMsg()
-    update = SimpleNamespace(
+    _update = SimpleNamespace(
         effective_message=msg,
         effective_chat=SimpleNamespace(id=22, title="Group", type="supergroup"),
         effective_user=SimpleNamespace(id=1, first_name="Admin"),
     )
-    ctx = SimpleNamespace(bot=_FakeBot(), user_data={})
+    ctx = SimpleNamespace(
+        bot=_FakeBot(),
+        user_data={},
+        effective_message=msg,
+        effective_chat=_update.effective_chat,
+        effective_user=_update.effective_user,
+    )
     asyncio.run(
         warn_actions.execute_warn(
-            update,  # type: ignore[arg-type]
             ctx,  # type: ignore[arg-type]
             42,
             "Target",
@@ -239,15 +249,20 @@ def test_threshold_ban_demotes_at_enforcement_time(
     monkeypatch.setattr(warn_actions, "demote_before_enforcement", _demote)
 
     msg = _FakeMsg()
-    update = SimpleNamespace(
+    _update = SimpleNamespace(
         effective_message=msg,
         effective_chat=SimpleNamespace(id=22, title="Group", type="supergroup"),
         effective_user=SimpleNamespace(id=1, first_name="Admin"),
     )
-    ctx = SimpleNamespace(bot=_FakeBot(), user_data={})
+    ctx = SimpleNamespace(
+        bot=_FakeBot(),
+        user_data={},
+        effective_message=msg,
+        effective_chat=_update.effective_chat,
+        effective_user=_update.effective_user,
+    )
     asyncio.run(
         warn_actions.execute_warn(
-            update,  # type: ignore[arg-type]
             ctx,  # type: ignore[arg-type]
             42,
             "Target",

@@ -11,7 +11,7 @@ import inspect
 import logging
 
 import pytest
-from telegram.error import BadRequest, Forbidden, NetworkError, TimedOut
+from pyrogram.errors import BadRequest, Forbidden
 
 from tcbot.modules.helper.messages.replies import applied_summary
 from tcbot.utils import circuit_breaker as _cb
@@ -39,7 +39,7 @@ def test_missing_admin_rights_is_not_benign() -> None:
 def test_a_lost_membership_is_permanent() -> None:
     assert is_permanent_telegram_error(Forbidden("Bot was kicked from the group chat"))
     assert is_permanent_telegram_error(BadRequest("CHAT_WRITE_FORBIDDEN"))
-    assert is_permanent_telegram_error(TimedOut("slow")) is False
+    assert is_permanent_telegram_error(TimeoutError("slow")) is False
     assert is_permanent_telegram_error(BadRequest("USER_NOT_PARTICIPANT")) is False
 
 
@@ -64,7 +64,7 @@ def test_human_readable_refusal_recognized() -> None:
 
 def test_unknown_and_non_request_errors_not_benign() -> None:
     assert is_benign_telegram_error(BadRequest("something else entirely")) is False
-    assert is_benign_telegram_error(TimedOut("slow")) is False
+    assert is_benign_telegram_error(TimeoutError("slow")) is False
     assert is_benign_telegram_error(Forbidden("denied")) is False
     assert is_benign_telegram_error(ValueError("x")) is False
 
@@ -74,7 +74,7 @@ def test_count_transient_errors_excludes_benign_refusals() -> None:
         BadRequest("USER_NOT_PARTICIPANT"),
         1,
         BadRequest("other"),
-        TimedOut("t"),
+        TimeoutError("t"),
     ]
     assert count_transient_errors(results) == 2
 
@@ -90,7 +90,7 @@ def test_summarize_fanout_counts_a_benign_refusal_as_applied() -> None:
         {"chat_id": -2, "title": "Two"},
         {"chat_id": -3, "title": "Three"},
     ]
-    results = [True, BadRequest("USER_NOT_PARTICIPANT"), TimedOut("slow")]
+    results = [True, BadRequest("USER_NOT_PARTICIPANT"), TimeoutError("slow")]
 
     outcome = summarize_fanout(groups, results, action="Ban", target_id=42)
 
@@ -116,7 +116,7 @@ def test_summarize_fanout_logs_the_failing_group(
     groups = [{"chat_id": -2, "title": "Broken"}]
 
     with caplog.at_level(logging.WARNING, logger="tcbot.utils.dispatch"):
-        summarize_fanout(groups, [TimedOut("slow")], action="Ban", target_id=42)
+        summarize_fanout(groups, [TimeoutError("slow")], action="Ban", target_id=42)
 
     assert any(
         "Ban enforcement failed for user=42" in record.getMessage()
@@ -168,7 +168,7 @@ def test_fan_out_counts_a_network_error_but_not_a_service_refusal() -> None:
     """Only a transport failure counts against the breaker; a 403 does not."""
 
     async def _network() -> str:
-        raise NetworkError("connection reset")
+        raise OSError("connection reset")
 
     async def _forbidden() -> str:
         raise Forbidden("denied")
@@ -177,7 +177,7 @@ def test_fan_out_counts_a_network_error_but_not_a_service_refusal() -> None:
     before = _cb.telegram._failure_count
     try:
         results = asyncio.run(fan_out([_network(), _forbidden()]))
-        assert isinstance(results[0], NetworkError)
+        assert isinstance(results[0], OSError)
         assert isinstance(results[1], Forbidden)
         assert _cb.telegram._failure_count == before + 1
         assert _cb.telegram.state is _cb.CircuitState.CLOSED

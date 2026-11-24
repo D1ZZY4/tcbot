@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import KeyboardButtonStyle
+from pyrogram.enums import ButtonStyle as KeyboardButtonStyle
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot.modules.helper.buttons.common import back_button
 from tcbot.modules.helper.messages import appeal_deep_link
@@ -24,7 +24,7 @@ def ban_log_btn(
 ) -> InlineKeyboardMarkup:
     """Ban-log keyboard with proof and appeal URL buttons, one per row.
 
-    ``previous_proof_link`` adds the update-flow previous-proof row. One URL
+    ``previous_proof_link`` adds the ctx-flow previous-proof row. One URL
     button per row: proof labels embed the target ID, so two of them side
     by side truncate on narrow clients.
     """

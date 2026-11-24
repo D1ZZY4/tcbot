@@ -180,15 +180,17 @@ def test_promote_command_routes_an_admin_target_to_the_change_flow(
         text="/tcpromote @Zexshia moderator",
         chat=SimpleNamespace(id=-100999, type="supergroup"),
     )
-    update = SimpleNamespace(
+    ctx = SimpleNamespace(
         effective_user=SimpleNamespace(id=1, first_name="Owner"),
         effective_message=msg,
         effective_chat=msg.chat,
+        bot=object(),
+        user_data={},
     )
     body: Any = admins.cmd_promote
     while hasattr(body, "__wrapped__"):
         body = body.__wrapped__
-    asyncio.run(body(update, SimpleNamespace(bot=object())))
+    asyncio.run(body(ctx))
 
     assert changed == [(42, "moderator")]
     assert replies == ["changed"]

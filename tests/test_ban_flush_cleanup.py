@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from telegram import Chat, Message
+from pyrogram.types import Chat, Message
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import ban_actions
@@ -48,7 +48,7 @@ class _FakeUpdate:
         # * Real Message: on_done_proof narrows to Message before the
         # * rank re-check (inaccessible messages abort the tap).
         self.effective_message = Message(
-            message_id=5,
+            id=5,
             date=datetime.now(UTC),
             chat=Chat(id=_FakeChat.id, type=_FakeChat.type),
         )
@@ -69,8 +69,8 @@ def _ctx_for(update: Any, payload: dict[str, Any]) -> _FakeCtx:
     """Return a ctx whose conversation scope holds ``payload``.
 
     The flow payload lives in the (chat, user) scope, so a test that wants
-    a live conversation has to seed that scope instead of the per-user
-    data PTB shares across chats.
+    a live conversation has to seed that scope instead of a global
+    per-user dictionary.
     """
     ctx = _FakeCtx({})
     flow_scope(ctx, update).update(payload)  # type: ignore[arg-type]

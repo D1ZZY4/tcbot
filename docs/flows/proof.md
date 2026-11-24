@@ -156,8 +156,9 @@ Either the decision and its proof both commit, or neither does.
 | `PROOF_MEDIA_FILTER` | `proof_steps.py` | Accepted media shapes. |
 | `BuildProof` | `proof_steps.py` | Keyboard and prompts. |
 | `proof_step_btn` | `buttons/flows.py` | Skip, Done, Cancel callbacks. |
-| `upload_proof_media` | `proof_steps.py` | Upload owner and `ProofUpload`. |
-| `upload_proof_items` | `proof_steps.py` | Gallery chunking and singles. |
+| `upload_proof_media` | `proof_post.py` | Upload owner and `ProofUpload`. |
+| `upload_proof_items` | `proof_post.py` | Gallery chunking and singles. |
+| `ProofUpload.slideshow_html` | `proof_post.py` | Landed media links rendered with the shared rich slideshow helper. |
 | `ProofSession`, `proof_sessions` | `proof_session.py` | Ban session storage and drain. |
 | `_flush_session` | `ban_actions.py` | Debounce timer and claim. |
 | `demote_before_enforcement` | `demote_actions.py` | Runs after proof before enforcement. |

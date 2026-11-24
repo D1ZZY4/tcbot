@@ -305,7 +305,7 @@ def bind_request_context(
     user_id: int | None = None,
     chat_id: int | None = None,
 ) -> None:
-    """Bind per-update tracing context rendered on every log line until cleared."""
+    """Bind per-ctx tracing context rendered on every log line until cleared."""
     ctx: dict[str, object] = {}
     if update_id is not None:
         ctx["update_id"] = update_id

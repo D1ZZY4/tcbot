@@ -56,7 +56,7 @@ accepts `s`, `m`, `h`, `d`, `w`, `mo`, and `ye` suffixes with a 100-year cap.
 `TELEGRAM_LOOKUP_TIMEOUT = 3.0`, `TELEGRAM_ACTION_TIMEOUT = 20.0`, and
 `API_POOL_SIZE = 16`.
 
-`prefixes.py` builds PTB filters for every configured prefix, handles
+`prefixes.py` builds Kurigram filters for every configured prefix, handles
 longest-prefix-first matching and optional `@botname` suffixes.
 `ALL_PREFIXES_CMD_FILTER` is used in conversation escape filters.
 

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from tcbot.modules.helper.messages.rich_style import esc
+from tcbot.modules.helper.rich.style import esc
 
 
 def table(

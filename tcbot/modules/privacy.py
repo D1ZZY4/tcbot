@@ -6,26 +6,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from telegram.ext import CallbackQueryHandler, ContextTypes
-
 from tcbot import cfg
 from tcbot.modules.helper import buttons, decorators
+from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.handlers import CallbackQueryHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit
-from tcbot.modules.helper.messages.rich_format import (
+from tcbot.modules.helper.rich.edit import callback_text_of
+from tcbot.modules.helper.rich.formats import (
     divider,
     footer,
     heading,
     paragraph,
 )
-from tcbot.modules.helper.messages.rich_list import bullet_list
+from tcbot.modules.helper.rich.list import bullet_list
 from tcbot.utils.i18n import t
-
-if TYPE_CHECKING:
-    from telegram import Update
-
 
 __module_name__ = None
 
@@ -136,14 +131,16 @@ def _section_body(idx: int, botname: str, locale: str | None = None) -> tuple[st
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_privacy_menu(ctx: Ctx) -> None:
     """Render the data-collection privacy notice when the Privacy button is tapped."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
 
-    locale = await locale_for_update(update)
-    botname = ctx.bot.first_name or t("privacy.msg.bot_fallback", locale, plain=True)
+    locale = await locale_for_update(ctx)
+    botname = (await ctx.bot_identity()).first_name or t(
+        "privacy.msg.bot_fallback", locale, plain=True
+    )
     await answer_and_edit(
         q,
         _privacy_msg(botname, locale),
@@ -153,16 +150,16 @@ async def on_privacy_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_privacy_policy_menu(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def on_privacy_policy_menu(ctx: Ctx) -> None:
     """Render the privacy policy section index when Privacy Policy is tapped."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
 
-    locale = await locale_for_update(update)
-    botname = ctx.bot.first_name or t("privacy.msg.bot_fallback", locale, plain=True)
+    locale = await locale_for_update(ctx)
+    botname = (await ctx.bot_identity()).first_name or t(
+        "privacy.msg.bot_fallback", locale, plain=True
+    )
     await answer_and_edit(
         q,
         _privacy_policy_index_msg(botname, locale),
@@ -174,19 +171,20 @@ async def on_privacy_policy_menu(
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_privacy_section(ctx: Ctx) -> None:
     """Render a single privacy policy section."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    if not q.data:
+    data = callback_text_of(q)
+    if not data:
         await q.answer()
         return
 
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
 
     try:
-        idx = int(q.data[len("privacy_section_") :])
+        idx = int(data[len("privacy_section_") :])
     except ValueError:
         # * Slicing never raises IndexError; only non-numeric tails land here.
         await q.answer(
@@ -201,7 +199,9 @@ async def on_privacy_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         )
         return
 
-    botname = ctx.bot.first_name or t("privacy.msg.bot_fallback", locale, plain=True)
+    botname = (await ctx.bot_identity()).first_name or t(
+        "privacy.msg.bot_fallback", locale, plain=True
+    )
     label, content = _section_body(idx, botname, locale)
     body = f"{heading(label, 3)}\n{divider()}\n{content}"
     await answer_and_edit(

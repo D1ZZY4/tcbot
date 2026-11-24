@@ -11,12 +11,13 @@ import contextlib
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from telegram import Bot, CallbackQuery, InlineKeyboardMarkup, Update, User
-from telegram.ext import ContextTypes
+from pyrogram import Client
+from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, User
 
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.modules.helper import guards, messages
+from tcbot.modules.helper.context import Ctx, display_name
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
     answer_ack,
@@ -27,6 +28,7 @@ from tcbot.modules.helper.messages import (
     send_text,
 )
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_unban
+from tcbot.modules.helper.rich.edit import callback_text_of
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, t, user_ref
 from tcbot.utils.logger import get_logger
@@ -63,7 +65,9 @@ def reviewer_locked_out(
     return elapsed < _LOCK_WINDOW
 
 
-async def _update_or_send_log(bot: Bot, lc: int, msg_id: int | None, text: str) -> None:
+async def _update_or_send_log(
+    bot: Client, lc: int, msg_id: int | None, text: str
+) -> None:
     """Edit the existing appeal log message, or post a new one as fallback."""
     if msg_id:
         try:
@@ -138,14 +142,14 @@ class ApproveMixin:
 
     async def _approve_appeal(
         self,
-        bot: Bot,
+        ctx: Ctx,
+        bot: Client,
         q: CallbackQuery,
         ban: BanDoc,
         ban_id: str,
         target_id: int,
         admin: User,
         lc: int,
-        update: Update,
         approver_role: str | None,
     ) -> bool:
         """Approve the appeal; return True when the ban was actually lifted.
@@ -153,7 +157,7 @@ class ApproveMixin:
         Every early return means no decision was reached, so the caller
         hands the review slot back instead of leaving a dead card.
         """
-        locale = await locale_for_update(update)
+        locale = await locale_for_update(ctx)
         # * The target name is resolved alongside the role so the demote audit
         # * log records the real name instead of the raw ID.
         role_result, name_result = await asyncio.gather(
@@ -213,7 +217,7 @@ class ApproveMixin:
                 target_fname,
                 target_role,
                 admin.id,
-                admin.first_name,
+                display_name(admin),
                 trigger="appeal",
             )
             if not gate.may_proceed:
@@ -234,7 +238,7 @@ class ApproveMixin:
             accepted, run_id = await db.bans_db.approve_appeal_and_queue_unban(
                 ban_id,
                 admin.id,
-                admin.first_name,
+                display_name(admin),
                 admin.id,
                 chat_ids,
             )
@@ -296,7 +300,7 @@ class ApproveMixin:
                 t(
                     "appeals.decision.approve_card",
                     locale,
-                    admin=Safe(user_ref(admin.id, admin.first_name)),
+                    admin=Safe(user_ref(admin.id, display_name(admin))),
                 ),
                 # * An empty markup is sent explicitly: omitting it leaves the
                 # * old Approve/Reject buttons on a card that is already decided.
@@ -310,7 +314,7 @@ class ApproveMixin:
                     target_id,
                     target_fname,
                     admin.id,
-                    admin.first_name,
+                    display_name(admin),
                     ban_id,
                     str(appeal_link),
                     appeal_submitted_at,
@@ -322,7 +326,7 @@ class ApproveMixin:
                     target_id,
                     target_fname,
                     admin.id,
-                    admin.first_name,
+                    display_name(admin),
                     ban_id,
                 ),
             ),
@@ -345,7 +349,7 @@ class ApproveMixin:
                 )
         if isinstance(log_r, BaseException):
             log.warning(
-                "approve_appeal appeal-log update failed for ban %s: %s", ban_id, log_r
+                "approve_appeal appeal-log ctx failed for ban %s: %s", ban_id, log_r
             )
         if isinstance(unban_log_r, BaseException):
             log.error(
@@ -365,14 +369,14 @@ class RejectMixin:
 
     async def _reject_appeal(
         self,
-        bot: Bot,
+        ctx: Ctx,
+        bot: Client,
         q: CallbackQuery,
         ban: BanDoc,
         ban_id: str,
         target_id: int,
         admin: User,
         lc: int,
-        update: Update,
         approver_role: str | None,
     ) -> bool:
         """Reject the appeal; return True when the rejection was recorded.
@@ -389,7 +393,7 @@ class RejectMixin:
             return_exceptions=True,
         )
         throw_if_cancelled((role_r, name_r))
-        staff_locale = await locale_for_update(update)
+        staff_locale = await locale_for_update(ctx)
         if isinstance(role_r, BaseException):
             log.warning(
                 "reject_appeal role lookup failed for user=%d: %s",
@@ -416,7 +420,7 @@ class RejectMixin:
             return False
         try:
             rejected = await db.bans_db.reject_appeal(
-                ban_id, admin.id, admin.first_name
+                ban_id, admin.id, display_name(admin)
             )
         except asyncio.CancelledError:
             raise
@@ -446,7 +450,7 @@ class RejectMixin:
                 t(
                     "appeals.decision.reject_card",
                     staff_locale,
-                    admin=Safe(user_ref(admin.id, admin.first_name)),
+                    admin=Safe(user_ref(admin.id, display_name(admin))),
                 ),
                 reply_markup=InlineKeyboardMarkup([]),
             )
@@ -485,7 +489,7 @@ class RejectMixin:
                 target_id,
                 target_fname,
                 admin.id,
-                admin.first_name,
+                display_name(admin),
                 ban_id,
                 str(ban.get("appeal_link") or ""),
                 ban.get("appeal_submitted_at"),
@@ -506,20 +510,20 @@ class AppealReviewMixin(AppealVerdictsMixin):
 
     community_name: str
 
-    async def on_decision(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    async def on_decision(self, ctx: Ctx) -> None:
         """Approve / Reject callback for the staff review card."""
-        q = update.callback_query
+        q = ctx.callback_query
         if q is None:
             return
-        admin = update.effective_user
+        admin = ctx.effective_user
         if admin is None:
             try:
                 await q.answer()
             except Exception as exc:
                 log.debug("Appeal decision answer failed with no user: %s", exc)
             return
-        locale = await locale_for_update(update)
-        data = q.data
+        locale = await locale_for_update(ctx)
+        data = callback_text_of(q)
         if not data or not data.startswith(("appeal_approve_", "appeal_reject_")):
             try:
                 await q.answer()
@@ -690,7 +694,7 @@ class AppealReviewMixin(AppealVerdictsMixin):
                 log.debug("Appeal self-review answer failed: %s", exc)
             return
         # * Atomic decision claim: two concurrent taps both pass the read
-        # * checks above, but only one wins this update. The loser aborts
+        # * checks above, but only one wins this ctx. The loser aborts
         # * instead of double-unbanning or approve+reject racing.
         review_msg_id = int(ban.get("review_message_id") or 0)
         try:
@@ -728,6 +732,7 @@ class AppealReviewMixin(AppealVerdictsMixin):
         try:
             if action == "approve":
                 decided = await self._approve_appeal(
+                    ctx,
                     ctx.bot,
                     q,
                     ban,
@@ -735,11 +740,11 @@ class AppealReviewMixin(AppealVerdictsMixin):
                     target_id,
                     admin,
                     lc,
-                    update,
                     approver_role=role_result,
                 )
             else:
                 decided = await self._reject_appeal(
+                    ctx,
                     ctx.bot,
                     q,
                     ban,
@@ -747,7 +752,6 @@ class AppealReviewMixin(AppealVerdictsMixin):
                     target_id,
                     admin,
                     lc,
-                    update,
                     approver_role=role_result,
                 )
         except asyncio.CancelledError:

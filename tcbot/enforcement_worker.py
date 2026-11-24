@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
 
-from telegram import ChatPermissions
+from pyrogram import Client
+from pyrogram.types import ChatPermissions
 
 from tcbot import database as db
 from tcbot.database.types import as_int
@@ -34,12 +34,9 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import to_utc, utc_now
 from tcbot.utils.transport import TELEGRAM_ACTION_TIMEOUT
 
-if TYPE_CHECKING:
-    from telegram import Bot
-
 log = get_logger(__name__)
 
-_BOT: Bot | None = None
+_BOT: Client | None = None
 _MAX_RUNS_PER_TICK: int = 10
 _MAX_TARGETS_PER_RUN: int = 100
 # * Upper bound on one delivery chunk; the breaker headroom tightens it further.
@@ -48,7 +45,7 @@ _MAX_ATTEMPTS: int = db.enforcement_db.MAX_ATTEMPTS
 _RETRY_DELAY = timedelta(minutes=5)
 
 
-def configure(bot: Bot) -> None:
+def configure(bot: Client) -> None:
     """Attach the live bot the scheduled job must use."""
     global _BOT
     _BOT = bot
@@ -67,7 +64,7 @@ async def run() -> None:
         log.exception("Enforcement worker tick failed.")
 
 
-async def run_once(bot: Bot) -> None:
+async def run_once(bot: Client) -> None:
     """Claim and process the queued enforcement runs.
 
     A run that fails is logged and left for the stale-run requeue; the
@@ -127,7 +124,7 @@ async def run_once(bot: Bot) -> None:
             _cb.telegram.release_probe()
 
 
-async def deliver_queued_run(bot: Bot, run_id: int) -> bool:
+async def deliver_queued_run(bot: Client, run_id: int) -> bool:
     """Deliver one queued run now; return False when another worker owns it.
 
     The caller has already committed the decision and its run, so failing
@@ -174,7 +171,7 @@ async def deliver_queued_run(bot: Bot, run_id: int) -> bool:
 
 
 async def _process_run(
-    bot: Bot,
+    bot: Client,
     run: dict[str, object],
     *,
     max_targets: int = _MAX_TARGETS_PER_RUN,
@@ -323,7 +320,7 @@ async def _process_run(
         for result in settled:
             if isinstance(result, BaseException):
                 update_failed = True
-                log.error("Enforcement target update failed: %s", result)
+                log.error("Enforcement target ctx failed: %s", result)
         results.extend(chunk_results)
         processed += len(targets)
         # * A short claim means no more targets of this run are available
@@ -345,7 +342,7 @@ async def _process_run(
 
 
 async def _deliver(
-    bot: Bot,
+    bot: Client,
     action_type: str,
     chat_id: int,
     user_id: int,
@@ -368,10 +365,27 @@ async def _deliver(
                 )
             return
         if action_type in ("ban", "kick"):
-            await bot.unban_chat_member(chat_id, user_id, only_if_banned=True)
+            await bot.unban_chat_member(chat_id, user_id)
         else:
             await bot.restrict_chat_member(
-                chat_id, user_id, permissions=ChatPermissions.all_permissions()
+                chat_id,
+                user_id,
+                permissions=ChatPermissions(
+                    can_send_messages=True,
+                    can_send_audios=True,
+                    can_send_documents=True,
+                    can_send_photos=True,
+                    can_send_videos=True,
+                    can_send_video_notes=True,
+                    can_send_voice_notes=True,
+                    can_send_polls=True,
+                    can_send_other_messages=True,
+                    can_add_web_page_previews=True,
+                    can_change_info=True,
+                    can_invite_users=True,
+                    can_pin_messages=True,
+                    can_manage_topics=True,
+                ),
             )
 
 

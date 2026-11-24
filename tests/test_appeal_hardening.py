@@ -162,6 +162,7 @@ def _run_approve(query: _FakeQuery, approver_role: str = "owner") -> None:
     mixin.community_name = "Test"
     asyncio.run(
         mixin._approve_appeal(
+            _fake_update(query, 1),  # type: ignore[arg-type]
             _FakeBot(),  # type: ignore[arg-type]
             query,  # type: ignore[arg-type]
             ban,  # type: ignore[arg-type]
@@ -169,7 +170,6 @@ def _run_approve(query: _FakeQuery, approver_role: str = "owner") -> None:
             9,
             admin,  # type: ignore[arg-type]
             0,
-            _fake_update(query, 1),  # type: ignore[arg-type]
             approver_role=approver_role,
         )
     )
@@ -473,6 +473,7 @@ def test_reject_refuses_a_target_the_reviewer_does_not_outrank(
     mixin.community_name = "Test"
     asyncio.run(
         mixin._reject_appeal(
+            _fake_update(query, 1),  # type: ignore[arg-type]
             _FakeBot(),  # type: ignore[arg-type]
             query,  # type: ignore[arg-type]
             ban,  # type: ignore[arg-type]
@@ -480,7 +481,6 @@ def test_reject_refuses_a_target_the_reviewer_does_not_outrank(
             9,
             admin,  # type: ignore[arg-type]
             0,
-            _fake_update(query, 1),  # type: ignore[arg-type]
             approver_role="admin",
         )
     )

@@ -8,16 +8,18 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
-from telegram.error import BadRequest, Forbidden
-from telegram.ext import ContextTypes, MessageHandler
+from pyrogram import Client
+from pyrogram.errors import BadRequest, Forbidden
+from pyrogram.types import Message
 
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.database.types import as_int
 from tcbot.modules.helper import decorators, messages
+from tcbot.modules.helper.context import Ctx, bot_identity, display_name
+from tcbot.modules.helper.handlers import MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     replies,
@@ -26,15 +28,12 @@ from tcbot.modules.helper.messages import (
     safe_edit,
     send_log,
 )
-from tcbot.modules.helper.messages.rich_text import blocks
+from tcbot.modules.helper.rich.text import blocks
 from tcbot.utils.dispatch import fan_out, gather_bounded, throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
-
-if TYPE_CHECKING:
-    from telegram import Bot, Message, Update
 
 log = get_logger(__name__)
 
@@ -107,7 +106,7 @@ class _LeaveResult:
 
 
 async def _leave_one(
-    bot: Bot,
+    bot: Client,
     grp: GroupDoc,
     admin_id: int,
     admin_name: str,
@@ -167,7 +166,7 @@ async def _leave_one(
 @decorators.ratelimiter(decorators.THROTTLE_CRITICAL)
 @decorators.owner_only
 @decorators.log_execution
-async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_leaveall(ctx: Ctx) -> None:
     """Leave all active connected groups and deactivate their DB records.
 
     Fetches active groups (excluding the primary groups, which are required
@@ -178,15 +177,15 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     succeed; a partial success (one succeeded, the other failed) is
     counted as a failure so the operator can investigate the ghost.
     """
-    admin = update.effective_user
+    admin = ctx.effective_user
     if admin is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     try:
         all_groups = await db.groups_db.active_groups()
     except Exception:
         log.exception("active_groups failed during leaveall")
-        status_msg = update.effective_message
+        status_msg = ctx.effective_message
         if status_msg is not None:
             await reply_rich(
                 status_msg,
@@ -199,7 +198,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # * reachable; the explicit guard is defence in depth.
     groups = [g for g in all_groups if not cfg.is_primary_group(g.get("chat_id"))]
     if not groups:
-        status_msg = update.effective_message
+        status_msg = ctx.effective_message
         if status_msg is not None:
             await reply_rich(
                 status_msg,
@@ -208,7 +207,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
         return
 
-    status_msg = update.effective_message
+    status_msg = ctx.effective_message
     status = None
     if status_msg is not None:
         # * Send a fresh status message and keep it: the final counts edit
@@ -224,7 +223,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # * Semaphore-bounded to respect Telegram rate limits on large federations.
     all_results = await fan_out(
-        [_leave_one(ctx.bot, g, admin.id, admin.first_name) for g in groups]
+        [_leave_one(ctx.bot, g, admin.id, display_name(admin)) for g in groups]
     )
 
     # * ``fan_out`` returns ``T | BaseException`` so a transport error raised
@@ -267,7 +266,7 @@ async def cmd_leaveall(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 # ─────────────────── Command CleanUp </cleanup> ─────────────────── #
 
 
-async def _should_remove(bot: Bot, grp: GroupDoc) -> bool:
+async def _should_remove(bot: Client, grp: GroupDoc) -> bool:
     """Return True if the bot has left or been kicked from the group.
 
     Primary groups are never "removable" -- they are managed separately
@@ -282,10 +281,11 @@ async def _should_remove(bot: Bot, grp: GroupDoc) -> bool:
         return False
     try:
         member = await asyncio.wait_for(
-            bot.get_chat_member(chat_id, bot.id),
+            bot.get_chat_member(chat_id, (await bot_identity(bot)).id),
             timeout=_MEMBERSHIP_CHECK_TIMEOUT,
         )
-        return member.status in ("left", "kicked")
+        status = getattr(member.status, "value", member.status)
+        return status in ("left", "kicked")
     except (BadRequest, Forbidden) as exc:
         # * A service refusal means the bot reached Telegram; keep the group.
         log.warning(
@@ -303,17 +303,17 @@ async def _should_remove(bot: Bot, grp: GroupDoc) -> bool:
 @decorators.ratelimiter(decorators.THROTTLE_BULK)
 @decorators.staff_only
 @decorators.log_execution
-async def cmd_cleanup(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_cleanup(ctx: Ctx) -> None:
     """Prune inaccessible groups from the active federation list.
 
     Checks all groups concurrently via ``_should_remove`` (which excludes
     primary groups), deactivates the identified stale records in parallel,
     then replies with the count of removed groups.
     """
-    reply_msg = update.effective_message
+    reply_msg = ctx.effective_message
     if reply_msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     try:
         groups = await db.groups_db.active_groups()
     except Exception:
@@ -422,7 +422,7 @@ async def _reply_repair_list(msg: Message, locale: str) -> None:
 @decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.staff_only
 @decorators.log_execution
-async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_repair(ctx: Ctx) -> None:
     """List the unsettled enforcement runs, or re-drive one failed group.
 
     The enforcement ledger retries transient failures on its own, but a
@@ -431,10 +431,10 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     decision: ``/tcrepair retry <run_id> [chat_id]`` makes the failed
     group due again and hands the existing run to the worker.
     """
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     args = parse_cmd_args(msg.text)
     if not args:
         await _reply_repair_list(msg, locale)
@@ -517,12 +517,12 @@ async def cmd_repair(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 @decorators.ratelimiter(decorators.THROTTLE_FEDERATION)
 @decorators.owner_only
 @decorators.log_execution
-async def cmd_forget(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_forget(ctx: Ctx) -> None:
     """Queue one Telegram-account erasure for the next cleanup sweep."""
-    msg = update.effective_message
+    msg = ctx.effective_message
     if msg is None:
         return
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     args = parse_cmd_args(msg.text)
     if len(args) < 2:
         await reply_rich(

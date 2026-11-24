@@ -7,13 +7,15 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from telegram.ext import CallbackQueryHandler, ContextTypes, MessageHandler
+from pyrogram.types import CallbackQuery
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, decorators
+from tcbot.modules.helper.context import Ctx
+from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import (
     about_msg,
@@ -24,15 +26,12 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     safe_edit_cb,
 )
-from tcbot.modules.helper.messages.rich_format import heading, highlight, quote
-from tcbot.modules.helper.messages.rich_list import bullet_list
+from tcbot.modules.helper.rich.formats import heading, highlight, quote
+from tcbot.modules.helper.rich.list import bullet_list
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, divider, esc, italic, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
-
-if TYPE_CHECKING:
-    from telegram import CallbackQuery, Update
 
 log = get_logger(__name__)
 
@@ -98,27 +97,28 @@ def _group_start_text(botname: str, locale: str | None = None) -> str:
 
 @decorators.ratelimiter(decorators.THROTTLE_READ)
 @decorators.log_execution
-async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_start(ctx: Ctx) -> None:
     """Respond to /start in private chats and groups.
 
     In group context sends a minimal message with a PM deep-link. In private
     context dispatches to the relevant info handler when a deep-link argument is
     present (``ban_<id>``), otherwise shows the full welcome message.
     """
-    msg = update.effective_message
-    chat = update.effective_chat
+    msg = ctx.effective_message
+    chat = ctx.effective_chat
     if msg is None or chat is None:
         return
 
     text = (msg.text or "").strip()
     parts = text.split(None, 1)
     arg = parts[1].strip() if len(parts) > 1 else ""
-    botname = ctx.bot.first_name or ""
-    locale = await locale_for_update(update)
+    identity = await ctx.bot_identity()
+    botname = identity.first_name or ""
+    locale = await locale_for_update(ctx)
 
     # * A forum is a supergroup in Telegram; "forum" is not a chat type.
-    if chat.type in ("group", "supergroup"):
-        bot_username = ctx.bot.username or ""
+    if getattr(chat.type, "value", chat.type) in ("group", "supergroup"):
+        bot_username = identity.username or ""
         await reply_rich(
             msg,
             _group_start_text(botname, locale),
@@ -152,14 +152,15 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_back_to_start(ctx: Ctx) -> None:
     """Return to the main menu when the Back button is tapped in a sub-menu."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
 
-    botname = ctx.bot.first_name or ""
-    locale = await locale_for_update(update)
+    identity = await ctx.bot_identity()
+    botname = identity.first_name or ""
+    locale = await locale_for_update(ctx)
     await answer_and_edit(
         q,
         _private_start_text(botname, locale),
@@ -167,9 +168,9 @@ async def on_back_to_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> None:
+async def _show_groups(q: CallbackQuery, ctx: Ctx, *, detailed: bool) -> None:
     """Shared renderer for all group-menu callbacks."""
-    locale = await locale_for_update(update)
+    locale = await locale_for_update(ctx)
     # * q.answer() and active_groups() are independent; run in parallel.
     answer_r, groups_r = await asyncio.gather(
         q.answer(), db.groups_db.active_groups(), return_exceptions=True
@@ -223,36 +224,35 @@ async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> N
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_menu_groups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_menu_groups(ctx: Ctx) -> None:
     """Show the connected-groups list in simple view from the start menu."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    await _show_groups(q, update, detailed=False)
+    await _show_groups(q, ctx, detailed=False)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_menu_groups_details(
-    update: Update, ctx: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def on_menu_groups_details(ctx: Ctx) -> None:
     """Show the connected-groups list with full group IDs visible."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
-    await _show_groups(q, update, detailed=True)
+    await _show_groups(q, ctx, detailed=True)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
-async def on_close(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def on_close(ctx: Ctx) -> None:
     """Dismiss a read-only panel by deleting the message it lives on."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return
     await q.answer()
     try:
-        await q.delete_message()
+        if q.message is not None:
+            await ctx.bot.delete_messages(q.message.chat.id, q.message.id)
     except Exception as exc:
         log.debug("Close button could not delete the panel: %s", exc)
 

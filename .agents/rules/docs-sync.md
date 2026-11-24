@@ -67,8 +67,8 @@ Good documentation should:
 As of 2026-11-10, TCF Bot uses:
 
 - Python 3.14 project target
-- `python-telegram-bot` (with the `[rate-limiter]` extra, no `[job-queue]`
-  extra), tracking the latest compatible release
+- `kurigram[fast]>=2.2.27,<3`, the sole Telegram framework, including native
+  long polling
 - PostgreSQL with SQLAlchemy 2.1 async (every read and write runs through
   `engine.db_call`, which applies the circuit breaker and the call timeout)
 - Flask keep-alive server
@@ -98,7 +98,7 @@ Recent project additions to keep accurate when editing docs:
   on the fixed `auto-fix/ruff` branch),
   `.github/workflows/dependency-update.yml` (weekly auto-PR like dependabot),
   `.github/workflows/run-bot.yml` (self-chaining 24/7 runner with
-  webhook-first transport), `.github/workflows/codeql.yml` (security
+  Kurigram long-polling transport), `.github/workflows/codeql.yml` (security
   scanning). All workflows are documented in
   [`docs/operations/ci-cd.md`](../../docs/operations/ci-cd.md).
 - i18n system: user-facing strings in `i18n/<locale>/*.toml` (`en-US`

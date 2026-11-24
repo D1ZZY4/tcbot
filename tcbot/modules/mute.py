@@ -6,11 +6,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from telegram.ext import ContextTypes, ConversationHandler, MessageHandler
-
 from tcbot.modules.helper import decorators, extraction, targets
+from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
+from tcbot.modules.helper.handlers import (
+    ConversationHandler,
+    MessageHandler,
+)
 from tcbot.modules.helper.messages import replies, reply_rich, reply_rich_result
 from tcbot.modules.helper.pipelines.mod_action_steps import (
     WAITING_PROOF,
@@ -30,9 +31,6 @@ from tcbot.utils.i18n import code, esc, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
 from tcbot.utils.time_and_date import fmt_duration, parse_duration
-
-if TYPE_CHECKING:
-    from telegram import Update
 
 log = get_logger(__name__)
 
@@ -86,7 +84,7 @@ __help__: replies.HelpEntry = get_help()
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.basic_mod_only
 @decorators.log_execution
-async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def cmd_mute(ctx: Ctx) -> int:
     """Entry point for the mute flow.
 
     Resolves the target, parses an optional duration token from the inline
@@ -96,7 +94,6 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     Returns ``ConversationHandler.END`` on validation failure.
     """
     resolved = await targets.resolve_mod_target(
-        update,
         ctx,
         action="mute",
         min_role="moderator",
@@ -172,15 +169,15 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     dur_str = esc(fmt_duration(duration, locale))
     extra_info = f"{code(str(target_id))}: {dur_str}"
 
-    scope = flow_scope(ctx, update)
+    scope = flow_scope(ctx)
     scope.update(
         {
             "mute_target_id": target_id,
             "mute_target_fname": target_fname or str(target_id),
             "mute_duration": duration,
             "mute_admin_id": admin.id,
-            "mute_admin_fname": admin.first_name,
-            "mute_prompt_chat": msg.chat.id,
+            "mute_admin_fname": display_name(admin),
+            "mute_prompt_chat": chat_id_of(msg.chat),
             "mute_reason": "",
             "mute_extra_info": extra_info,
         }
@@ -200,7 +197,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                 ),
                 reply_markup=proof.keyboard(locale),
             )
-            scope["mute_prompt_id"] = prompt.message_id
+            scope["mute_prompt_id"] = prompt.id
         except Exception as exc:
             log.debug("cmd_mute proof-prompt send failed: %s", exc)
             for key in _MUTE_KEYS:
@@ -214,7 +211,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             reason.prompt(target_mention, "mute", extra_info=extra_info, locale=locale),
             reply_markup=reason.keyboard(locale),
         )
-        scope["mute_prompt_id"] = prompt.message_id
+        scope["mute_prompt_id"] = prompt.id
     except Exception as exc:
         log.debug("cmd_mute reason-prompt send failed: %s", exc)
         for key in _MUTE_KEYS:
@@ -229,7 +226,7 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
 @decorators.basic_mod_only
 @decorators.log_execution
-async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+async def cmd_unmute(ctx: Ctx) -> None:
     """Remove the chat restriction from the target and restore messaging rights.
 
     Resolves the target, runs identity and role checks in parallel (mirroring
@@ -237,7 +234,6 @@ async def cmd_unmute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     ``execute_unmute``.
     """
     await targets.run_staff_action(
-        update,
         ctx,
         action="unmute",
         min_role="moderator",

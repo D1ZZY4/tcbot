@@ -11,7 +11,7 @@ import inspect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from telegram.error import BadRequest, Forbidden, NetworkError, TimedOut
+from pyrogram.errors import BadRequest, Forbidden
 
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.logger import get_logger
@@ -133,21 +133,16 @@ async def fan_out[T](
                 result = await thunk()
                 _cb.telegram.record_success()
                 return result
-            except TimedOut as exc:
-                _cb.telegram.record_failure()
-                log.debug("fan_out: network error (counted against circuit): %s", exc)
-                return exc
             except TimeoutError as exc:
                 # * Callers bound individual deliveries with asyncio.timeout.
-                # * A builtin TimeoutError is a transport stall just like
-                # * PTB's TimedOut, so it has to count against the circuit
-                # * even though it never passed through the Telegram client.
+                # * A timeout is a transport stall, so it has to count against
+                # * the circuit even when the client did not raise it itself.
                 _cb.telegram.record_failure()
                 log.debug("fan_out: wrapper timeout (counted against circuit): %s", exc)
                 return exc
-            except NetworkError as exc:
-                # ! CRITICAL: BadRequest subclasses NetworkError in PTB, but a
-                # ! 400 is an API refusal (user not in chat, chat gone), never
+            except OSError as exc:
+                # ! CRITICAL: a 400 is an API refusal (user not in chat, chat
+                # ! gone), never
                 # ! congestion. Counting refusals tripped the breaker after 5
                 # ! consecutive fan-out refusals and skipped the remaining
                 # ! groups unenforced. Refusals must not touch the circuit.
@@ -274,7 +269,8 @@ def is_benign_telegram_error(exc: BaseException) -> bool:
 
     Matching uses a "normalized" form where non-alphanumeric characters are
     stripped (so the API code ``USER_NOT_PARTICIPANT`` matches the
-    human-readable ``User not participant`` produced by PTB). A missing
+    human-readable ``User not participant`` a Telegram client may return).
+    A missing
     permission is not benign; see :func:`is_permanent_telegram_error`.
     """
     if isinstance(exc, BadRequest):

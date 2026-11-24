@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tcbot import cfg
-from tcbot.modules.helper.messages.rich_format import footer, heading, paragraph
-from tcbot.modules.helper.messages.rich_table import table
+from tcbot.modules.helper.rich.formats import footer, heading, paragraph
+from tcbot.modules.helper.rich.table import table
 from tcbot.utils.i18n import bullet_list, code, divider, esc, t
 
 if TYPE_CHECKING:

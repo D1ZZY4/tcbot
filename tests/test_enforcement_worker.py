@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from telegram.error import BadRequest
+from pyrogram.errors import BadRequest
 
 from tcbot import database as db
 from tcbot import enforcement_worker
@@ -29,9 +29,7 @@ class _FakeBot:
     async def ban_chat_member(self, chat_id: int, user_id: int) -> None:
         self.banned.append((chat_id, user_id))
 
-    async def unban_chat_member(
-        self, chat_id: int, user_id: int, *, only_if_banned: bool = False
-    ) -> None:
+    async def unban_chat_member(self, chat_id: int, user_id: int) -> None:
         self.unbanned.append((chat_id, user_id))
 
     async def restrict_chat_member(

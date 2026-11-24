@@ -10,7 +10,7 @@ import asyncio
 from typing import Any
 
 import pytest
-from telegram.error import BadRequest
+from pyrogram.errors import BadRequest
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import connect_common, connect_replay
@@ -30,10 +30,12 @@ class _FakeBot:
         self.fail_ban: dict[int, BadRequest] = {}
         self.chat_member_payload: dict[str, Any] = {}
 
-    async def do_api_request(
-        self, endpoint: str, api_kwargs: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
-        return self.chat_member_payload
+    async def get_chat_member(self, chat_id: int, user_id: int) -> Any:
+        return type(
+            "Member",
+            (),
+            {"privileges": type("P", (), self.chat_member_payload)()},
+        )()
 
     async def get_chat(self, chat_id: int) -> Any:
         return type("C", (), {"username": None})()
@@ -294,7 +296,7 @@ def test_a_welcome_permission_probe_failure_has_no_note() -> None:
     async def _boom(*args: Any, **kwargs: Any) -> dict[str, Any]:
         raise RuntimeError("telegram down")
 
-    bot.do_api_request = _boom  # type: ignore[method-assign]
+    bot.get_chat_member = _boom  # type: ignore[method-assign]
     note = asyncio.run(
         connect_common.welcome_permission_note(bot, -100, "en-US")  # type: ignore[arg-type]
     )

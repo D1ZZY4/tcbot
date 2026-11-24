@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 
-import telegram.error as te
 from pyrogram.errors import AuthKeyDuplicated
 from pyrogram.session.session import AuthKeyNotFound
 from sqlalchemy.exc import OperationalError
@@ -65,7 +64,7 @@ def test_benign_suppresses_connectivity_and_circuit() -> None:
 
 
 def test_owner_only_and_benign_filters_unchanged() -> None:
-    assert classify._owner_only(te.Conflict("c")) is True
+    assert classify._owner_only(classify.PollingConflictError("c")) is True
     assert classify._owner_only(OperationalError("s", {}, Exception("x"))) is False
     assert classify._benign(None) is False
 

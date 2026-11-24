@@ -106,6 +106,8 @@ def test_fetch_user_flood_wait_warns_and_returns_none(
 def test_scrub_secrets_redacts_exact_configured_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # * The double mirrors the current Configs fields: no webhook attribute,
+    # * so exact redaction must still cover every configured secret.
     monkeypatch.setattr(
         error_reporter,
         "cfg",
@@ -113,7 +115,6 @@ def test_scrub_secrets_redacts_exact_configured_values(
             bot_token="SENTINEL-BOT-TOKEN-xyz",
             database_url="SENTINEL-DATABASE-xyz",
             api_hash="SENTINEL-APIHASH-xyz",
-            webhook_secret="SENTINEL-WEBHOOK-xyz",
             redis_url="SENTINEL-REDIS-xyz",
             sentry_dsn="SENTINEL-SENTRY-xyz",
         ),
@@ -122,7 +123,6 @@ def test_scrub_secrets_redacts_exact_configured_values(
         "SENTINEL-BOT-TOKEN-xyz",
         "SENTINEL-DATABASE-xyz",
         "SENTINEL-APIHASH-xyz",
-        "SENTINEL-WEBHOOK-xyz",
         "SENTINEL-REDIS-xyz",
         "SENTINEL-SENTRY-xyz",
     ):

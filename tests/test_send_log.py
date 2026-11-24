@@ -10,9 +10,11 @@ import dataclasses
 from typing import Any
 
 import pytest
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot import cfg
-from tcbot.modules.helper.messages import rich_edit, send_log
+from tcbot.modules.helper.messages import send_log
+from tcbot.modules.helper.rich import edit as rich_edit
 
 
 class _FakeBot:
@@ -54,14 +56,15 @@ async def test_send_log_forwards_extra_keyword_arguments(
     _logs_destination: tuple[int, int],
 ) -> None:
     """A keyboard on the log post must reach Telegram unchanged."""
+    markup = InlineKeyboardMarkup([[InlineKeyboardButton("Go", callback_data="go")]])
     bot = _FakeBot()
     await send_log(
         bot,  # type: ignore[arg-type]
         "audit text",
-        reply_markup="btn",
+        reply_markup=markup,
     )
 
-    assert bot.calls[0][2]["reply_markup"] == "btn"
+    assert '<tg-button type="callback_data"' in bot.calls[0][1]
 
 
 async def test_send_log_does_not_duplicate_the_parse_mode(

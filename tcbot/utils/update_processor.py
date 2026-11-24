@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Per-conversation update serialization for the PTB update processor."""
+"""Per-conversation update serialization helpers for the Kurigram runtime."""
 
 from __future__ import annotations
 
@@ -11,16 +11,12 @@ import inspect
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from telegram.ext import BaseUpdateProcessor
-
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-# * PTB's ConversationHandler is documented to require one-by-one update
-# * processing. The stock `concurrent_updates=True` runs up to 256 updates
-# * at once with no ordering guarantee at all, and `concurrent_updates=False`
-# * serialises the whole bot. A keyed processor keeps the federation
-# * concurrent while making the updates of a single conversation ordered.
+# * Multi-step flows keep their state per (chat, user). Kurigram dispatches
+# * with a worker pool and no ordering guarantee, so a keyed processor keeps
+# * one conversation ordered while the rest of the federation stays concurrent.
 _MAX_CONCURRENT_UPDATES: int = 64
 
 
@@ -39,10 +35,10 @@ def conversation_key(update: object) -> tuple[int, int] | None:
     project registers: one conversation per (chat, user) pair. An update
     without a chat or a user cannot belong to a conversation, so it is
     processed without a lock. The read is duck-typed so the flow scope can
-    reuse the same rule without constructing a ``telegram.Update``.
+    reuse the same rule without constructing a Kurigram update object.
     """
-    chat = getattr(update, "effective_chat", None)
-    user = getattr(update, "effective_user", None)
+    chat = getattr(update, "effective_chat", None) or getattr(update, "chat", None)
+    user = getattr(update, "effective_user", None) or getattr(update, "from_user", None)
     if chat is None or user is None:
         return None
     chat_id = getattr(chat, "id", None)
@@ -52,23 +48,20 @@ def conversation_key(update: object) -> tuple[int, int] | None:
     return (chat_id, user_id)
 
 
-class KeyedUpdateProcessor(BaseUpdateProcessor):
+class KeyedUpdateProcessor:
     """Process updates one by one per conversation key, concurrently across keys.
 
-    ``SimpleUpdateProcessor`` (what ``concurrent_updates=True`` builds) starts
-    every update immediately, so two taps on the same button can interleave
-    inside a ``ConversationHandler`` and lose a state transition. This
-    processor keeps a lock per (chat, user) key, which is exactly the
-    granularity the registered conversations use, so different moderators
-    still act in parallel while one conversation stays ordered.
+    An unkeyed dispatcher starts every update immediately, so two taps on the
+    same button can interleave and lose a flow state transition. This
+    processor keeps a lock per (chat, user) key, which is the granularity the
+    application conversations use, so different moderators still act in
+    parallel while one conversation stays ordered.
     """
 
     def __init__(self, max_concurrent_updates: int = _MAX_CONCURRENT_UPDATES) -> None:
         """Create the processor with its per-key lock map."""
-        super().__init__(max_concurrent_updates)
         self._locks: dict[tuple[int, int], _KeyLock] = {}
-        # * The global cap bounds the handlers that actually run. PTB's own
-        # * semaphore is left unused: see ``process_update`` below.
+        # * The global cap bounds the handlers that actually run.
         self._global = asyncio.Semaphore(max_concurrent_updates)
 
     async def initialize(self) -> None:
@@ -83,18 +76,10 @@ class KeyedUpdateProcessor(BaseUpdateProcessor):
     ) -> None:
         """Dispatch the update, taking the conversation lock before the cap.
 
-        PTB's ``BaseUpdateProcessor.process_update`` takes a global
-        concurrency slot *before* the per-key lock. An update queued behind
-        a long-running handler of the same conversation would therefore
-        hold a global slot while it waits, so a burst on one conversation
-        could occupy every slot and starve every other chat in the
-        federation. This override keeps the per-key lock first, so the
-        global cap bounds the handlers that run rather than the ones that
-        wait.
-
-        ``BaseUpdateProcessor.process_update`` is marked ``@final``, which
-        is a typing aid rather than a runtime guarantee. The override is
-        deliberate and covered by the processor's own tests.
+        A global slot taken before the per-key lock would let a burst on one
+        conversation fill every slot with waiting updates and starve other
+        chats. Taking the per-key lock first keeps the global cap as a bound
+        on handlers that run rather than handlers that wait.
         """
         await self.do_process_update(update, coroutine)
 

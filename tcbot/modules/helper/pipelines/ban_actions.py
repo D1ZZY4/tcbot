@@ -9,18 +9,19 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-import telegram.error
-from telegram import Message, Update
-from telegram.ext import (
-    CallbackQueryHandler,
-    ContextTypes,
-    ConversationHandler,
-    MessageHandler,
-)
+from pyrogram import Client
+from pyrogram.errors import ChatAdminRequired
+from pyrogram.types import InlineKeyboardMarkup, Message
 
 from tcbot import cfg, enforcement_worker
 from tcbot import database as db
 from tcbot.modules.helper import buttons, guards, messages
+from tcbot.modules.helper.context import Ctx, bot_identity, chat_id_of
+from tcbot.modules.helper.handlers import (
+    CallbackQueryHandler,
+    ConversationHandler,
+    MessageHandler,
+)
 from tcbot.modules.helper.locale import locale_for_update, locale_for_user
 from tcbot.modules.helper.messages import (
     appeal_deep_link,
@@ -38,15 +39,12 @@ from tcbot.modules.helper.pipelines.ban_confirmation import (
 from tcbot.modules.helper.pipelines.demote_actions import (
     demote_before_enforcement,
 )
+from tcbot.modules.helper.pipelines.proof_post import upload_proof_media
 from tcbot.modules.helper.pipelines.proof_session import (
     ProofSession,
     proof_sessions,
 )
-from tcbot.modules.helper.pipelines.proof_steps import (
-    PROOF_MEDIA_FILTER,
-    BuildProof,
-    upload_proof_media,
-)
+from tcbot.modules.helper.pipelines.proof_steps import PROOF_MEDIA_FILTER, BuildProof
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
     fan_out,
@@ -65,8 +63,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from datetime import datetime
 
-    from telegram import Bot, InlineKeyboardMarkup
-    from telegram.ext.filters import BaseFilter
+    from pyrogram.filters import Filter as BaseFilter
 
     from tcbot.database.documents import BanDoc, EvidenceItemDoc, GroupDoc
 
@@ -123,7 +120,7 @@ async def drain_proof_sessions() -> None:
 # ─────────────────────── Proof session flush ────────────────────── #
 
 
-async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
+async def _flush_session(key: tuple[int, int], bot: Client) -> None:
     """Flush one proof session after a silence window or the hard cap."""
     # * Own the session from the first await, so a cancellation during the
     # * silence window still releases the registry entry in the finally block.
@@ -183,7 +180,7 @@ async def _flush_session(key: tuple[int, int], bot: Bot) -> None:
 
 
 async def _execute_ban_record(
-    bot: Bot,
+    bot: Client,
     meta: dict[str, Any],
     *,
     existing: BanDoc | None,
@@ -217,7 +214,7 @@ async def _execute_ban_record(
     rule_note: str | None = meta.get("ban_rules_note")
     raw_origin = meta.get("ban_prompt_chat_id")  # negative = connected chat
     link_context = int(raw_origin) if raw_origin and int(raw_origin) < 0 else None
-    bot_username = bot.username or ""
+    bot_username = (await bot_identity(bot)).username or ""
     old_admin_id = (
         int(existing.get("actor_user_id", admin_id)) if existing else admin_id
     )
@@ -321,7 +318,7 @@ async def _execute_ban_record(
     except Exception:
         log.exception("Ban log send failed for ban_id=%s", canonical_ban_id)
         return 0, True, canonical_ban_id, enforcement_run_id
-    log_msg_id = log_msg.message_id
+    log_msg_id = log_msg.id
     log.info("Ban log posted: ban_id=%s msg_id=%s", canonical_ban_id, log_msg_id)
     return log_msg_id, True, canonical_ban_id, enforcement_run_id
 
@@ -341,7 +338,7 @@ def _enforcement_scope(
     return db.groups_db.with_primary_groups(groups, (cfg.main_group,), origin)
 
 
-async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> None:
+async def _execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) -> None:
     target_id: int = meta.get("ban_target_id") or 0
     target_fname: str = meta.get("ban_target_fname", str(target_id))
     locale: str | None = meta.get("ban_locale")
@@ -388,7 +385,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             db.bans_db.get_active_ban(target_id),
         )
         is_update = existing is not None
-        bot_username = bot.username or ""
+        bot_username = (await bot_identity(bot)).username or ""
         ban_id = (
             str(existing.get("ban_id", "")) if is_update else db.bans_db.make_ban_id()
         )
@@ -567,7 +564,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             )
         else:
             log.warning(
-                "Ban DB write failed for target=%d with no prompt to update",
+                "Ban DB write failed for target=%d with no prompt to ctx",
                 target_id,
             )
         try:
@@ -714,7 +711,7 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
                 target_id,
                 upsert_result,
             )
-    if isinstance(pm_result, telegram.error.Forbidden):
+    if isinstance(pm_result, ChatAdminRequired):
         log.info(
             "Cannot DM banned user %d: user has not started the bot or has blocked it",
             target_id,
@@ -738,19 +735,19 @@ def proof_prompt_content(
 # ──────────────────── Proof collection handlers ─────────────────── #
 
 
-async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def on_proof_received(ctx: Ctx) -> int:
     """Buffer proof media into the live session; flush on Done or silence."""
-    msg = update.effective_message
-    chat = update.effective_chat
-    user = update.effective_user
+    msg = ctx.effective_message
+    chat = ctx.effective_chat
+    user = ctx.effective_user
     if msg is None or chat is None or user is None:
         return WAITING_PROOF
     if ctx.user_data is None:
         return ConversationHandler.END
-    scope = flow_scope(ctx, update)
+    scope = flow_scope(ctx)
     if not scope.get("ban_target_id"):
         return ConversationHandler.END
-    key = (chat.id, user.id)
+    key = (chat_id_of(chat), user.id)
     session = proof_sessions.get(key)
     if session is not None and session.flushing:
         return ConversationHandler.END
@@ -774,19 +771,19 @@ async def on_proof_received(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> i
     return WAITING_PROOF
 
 
-async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int | None:
+async def on_done_proof(ctx: Ctx) -> int | None:
     """Flush collected proof immediately when the moderator taps Done."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None or ctx.user_data is None:
         return ConversationHandler.END
-    if await stale_ban_callback(update, ctx):
+    if await stale_ban_callback(ctx):
         return None
-    chat = update.effective_chat
-    user = update.effective_user
-    key = (chat.id, user.id) if chat is not None and user is not None else None
+    chat = ctx.effective_chat
+    user = ctx.effective_user
+    key = (chat_id_of(chat), user.id) if chat is not None and user is not None else None
     if key is None:
         return ConversationHandler.END
-    scope = flow_scope(ctx, update)
+    scope = flow_scope(ctx)
     session = proof_sessions.get(key)
     if session is None or session.flushing or not session.msgs:
         if not scope.get("ban_target_id"):
@@ -796,7 +793,7 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int |
                 log.debug("Ban done-proof zombie answer failed: %s", exc)
             return ConversationHandler.END
         try:
-            locale = await locale_for_update(update)
+            locale = await locale_for_update(ctx)
             await q.answer(
                 t(
                     "banning.state.empty",
@@ -825,7 +822,7 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int |
         proof_sessions.pop(key, None)
         _clear_ban_state(session.scope)
         return ConversationHandler.END
-    tap_msg = update.effective_message
+    tap_msg = ctx.effective_message
     if user is None or not isinstance(tap_msg, Message):
         try:
             await q.answer()
@@ -857,16 +854,16 @@ async def on_done_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int |
     return ConversationHandler.END
 
 
-async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def on_proof_unexpected(ctx: Ctx) -> int:
     """Reject unexpected message types during proof collection."""
-    if ctx.user_data is not None and not flow_scope(ctx, update).get("ban_target_id"):
+    if ctx.user_data is not None and not flow_scope(ctx).get("ban_target_id"):
         return ConversationHandler.END
-    if update.effective_message:
+    if ctx.effective_message:
         await reply_rich(
-            update.effective_message,
+            ctx.effective_message,
             t(
                 "banning.state.proof_expected",
-                await locale_for_update(update),
+                await locale_for_update(ctx),
                 plain=True,
             ),
             log_label="Ban proof-unexpected",
@@ -875,13 +872,13 @@ async def on_proof_unexpected(update: Update, ctx: ContextTypes.DEFAULT_TYPE) ->
     return WAITING_PROOF
 
 
-async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int | None:
+async def on_cancel_proof(ctx: Ctx) -> int | None:
     """Acknowledge the cancel button and end the proof-collection conversation."""
-    q = update.callback_query
+    q = ctx.callback_query
     if q is None:
         return ConversationHandler.END
-    scope = flow_scope(ctx, update)
-    if await stale_ban_callback(update, ctx):
+    scope = flow_scope(ctx)
+    if await stale_ban_callback(ctx):
         return None
     # * Once flushing has started the ban is executing; cancelling mid-
     # * _execute_ban would cancel the in-flight fan-out (partial ban, DB
@@ -893,15 +890,15 @@ async def on_cancel_proof(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int
     await q.answer()
     _cancel_proof_session(scope)
     await safe_edit_cb(
-        q, t("banning.state.cancelled", await locale_for_update(update), plain=False)
+        q, t("banning.state.cancelled", await locale_for_update(ctx), plain=False)
     )
     await clear_markup_cb(q)
     return ConversationHandler.END
 
 
-async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+async def on_proof_timeout(ctx: Ctx) -> int:
     """Notify the user that the proof window expired."""
-    scope = flow_scope(ctx, update)
+    scope = flow_scope(ctx)
     had_state = bool(scope.get("ban_target_id"))
     prompt_chat: int | None = None
     prompt_msg_id: int | None = None
@@ -931,12 +928,12 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
             log.debug("Ban proof-timeout markup clear failed: %s", exc)
     if not had_state:
         return ConversationHandler.END
-    if update.effective_message:
+    if ctx.effective_message:
         await reply_rich(
-            update.effective_message,
+            ctx.effective_message,
             t(
                 "banning.state.timeout",
-                await locale_for_update(update),
+                await locale_for_update(ctx),
                 plain=True,
             ),
             log_label="Ban proof-timeout",

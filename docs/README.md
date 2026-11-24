@@ -80,10 +80,10 @@ The root [CHANGELOG.md](../CHANGELOG.md) holds the unreleased section and the re
 ## Architecture at a glance
 
 `uv run python -m tcbot` loads configuration, starts the Flask keep-alive server,
-builds the PTB application with a keyed update processor, registers handlers,
+creates the single Kurigram client, registers handlers,
 connects PostgreSQL and applies Alembic migrations, seeds the initial Owner,
 registers infrastructure destinations, connects Redis and MTProto, starts the
-scheduler, and then serves webhook updates or falls back to polling. The exact
+scheduler, and then runs the Kurigram long-polling loop. The exact
 order is in [system.md](flows/system.md).
 
 Telegram updates pass through the global rate limiter, a command or callback
