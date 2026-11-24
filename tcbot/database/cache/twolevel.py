@@ -574,7 +574,11 @@ class TwoLevelCache[T]:
                 # * write still lands the value.
                 metrics.record_miss()
                 val = await fetch()
-                if state.generation != generation or self._epoch != epoch:
+                if (
+                    state.generation != generation
+                    or self._epoch != epoch
+                    or key in self._pending_invalidations
+                ):
                     # * The key was invalidated or overwritten while the
                     # * fetch was in flight (or a cache-wide sweep ran). The
                     # * fetched value predates the change, so caching it
@@ -582,6 +586,21 @@ class TwoLevelCache[T]:
                     # * L1/L2 TTL. The caller still receives the value it
                     # * asked for.
                     log.debug("Discarding stale fetch for invalidated key %s", key)
+                    return cast("T", val)
+                # ! CRITICAL: a revocation in another process writes a Redis
+                # * tombstone before its L2 delete. This DB snapshot predates
+                # * it, so publishing here would restore the old value for the
+                # * whole TTL. Local counters cannot observe that write.
+                if self._critical_delete:
+                    rc = await self._client()
+                    if rc is not None and await self._tombstoned(rc, key):
+                        log.debug("Discarding tombstoned fetch for %s", key)
+                        return cast("T", val)
+                if state.generation != generation or self._epoch != epoch:
+                    # * invalidate() needs no lock and can land during the
+                    # * tombstone await, so repeat the local check before the
+                    # * publish to keep the last word with the writer.
+                    log.debug("Discarding fetch invalidated mid-read for %s", key)
                     return cast("T", val)
                 self._publish(key, val)
                 return cast("T", val)

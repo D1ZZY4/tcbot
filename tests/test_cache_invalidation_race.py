@@ -179,6 +179,71 @@ def test_a_local_invalidation_hides_stale_l2_until_its_delete_lands() -> None:
         asyncio.run(_run())
 
 
+def test_a_tombstone_landing_during_a_db_fetch_is_not_overwritten() -> None:
+    """A revocation from another process during the DB read must win.
+
+    The DB snapshot predates the revocation. Without a post-fetch tombstone
+    check the stale role is published to both caches for their full TTL.
+    """
+
+    class _GradualTombstone:
+        def __init__(self) -> None:
+            self.present = 0
+
+        async def exists(self, key: str) -> int:
+            _ = key
+            return self.present
+
+        async def get(self, key: str) -> None:
+            _ = key
+            return
+
+    fake = _GradualTombstone()
+
+    async def _no_client() -> None:
+        return None
+
+    def _never_run(prefix: str, factory: Any, *, droppable: bool = True) -> None:
+        _ = (prefix, factory, droppable)
+        return
+
+    async def _run() -> None:
+        cache = TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix="role")
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def _fetch() -> str:
+            started.set()
+            await release.wait()
+            fake.present = 1
+            return "revoked-role"
+
+        async def _revoke() -> None:
+            await started.wait()
+            release.set()
+
+        result, _ = await asyncio.gather(cache.get_or_fetch("k", _fetch), _revoke())
+        assert result == "revoked-role"
+        calls = 0
+
+        async def _fresh() -> str:
+            nonlocal calls
+            calls += 1
+            return "fresh"
+
+        assert await cache.get_or_fetch("k", _fresh) == "fresh"
+        assert calls == 1
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            twolevel, "cfg", dataclasses.replace(cfg, redis_url="redis://test")
+        )
+        patch.setattr(redis_io, "usable_redis_client", lambda: fake)
+        patch.setattr(redis_io, "acquire_redis_client", _no_client)
+        patch.setattr(redis_io, "enqueue_redis_mutation", _never_run)
+        asyncio.run(_run())
+
+
 def test_a_locale_invalidation_enqueues_a_tombstone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
