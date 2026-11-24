@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import (
     chat_settings,
+    community_settings,
     connected_chats,
     join_requests,
     telegram_chats,
@@ -166,6 +167,17 @@ async def ensure_primary_group(chat_id: int, title: str | None = None) -> None:
             .values(chat_id=chat_id, is_active=False)
             .on_conflict_do_update(
                 index_elements=["chat_id"], set_={"is_active": False}
+            )
+        )
+        # * The moderation triggers fall back to this stored id when a
+        # * connection does not publish the session GUC. Without it an
+        # * inactive primary chat is rejected by every enforcement insert.
+        await sess.execute(
+            pg_insert(community_settings)
+            .values(singleton_key="global", primary_chat_id=chat_id)
+            .on_conflict_do_update(
+                index_elements=["singleton_key"],
+                set_={"primary_chat_id": chat_id, "updated_at": utc_now()},
             )
         )
 

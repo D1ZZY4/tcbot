@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     Column,
     DateTime,
@@ -26,6 +27,9 @@ community_settings = Table(
     Column("singleton_key", Text, nullable=False, server_default="global"),
     Column("community", Text, nullable=True),
     Column("description", Text, nullable=True),
+    # * The deployment main group, recorded when it is anchored. Triggers read
+    # * it because the group is deliberately an inactive connected chat.
+    Column("primary_chat_id", BigInteger, nullable=True),
     Column("default_locale", Text, nullable=True),
     Column("timezone", Text, nullable=True),
     Column("settings", JSONB, nullable=False, server_default=EMPTY_OBJECT),

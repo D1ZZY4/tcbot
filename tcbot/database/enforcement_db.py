@@ -262,17 +262,18 @@ _RUN_BY_KEY = text(
     """
 )
 
-# * ``chat_ids`` is the trusted enforcement scope computed by the caller:
-# * connected groups plus the primary group via with_primary_groups(). The
-# * primary group is deliberately registered as inactive so it stays out of
-# * the connected list, so filtering on is_active here would silently drop
-# * every ban, mute and revoke in the deployment's main group.
+# * ``chat_ids`` is the enforcement scope computed by the caller: connected
+# * groups plus the primary group and an originating chat. The primary group
+# * is deliberately inactive, so the predicate admits it explicitly; every
+# * other inactive chat (a disconnected group or a stale callback origin) is
+# * refused by the database trigger and must not be queued in the first place.
 _QUEUE_TARGETS = text(
     """
     INSERT INTO moderation_enforcement_targets (run_id, chat_id)
     SELECT :run_id, cc.chat_id
       FROM connected_chats AS cc
      WHERE cc.chat_id = ANY(:chat_ids)
+       AND (cc.is_active OR cc.chat_id = :primary_chat_id)
     ON CONFLICT (run_id, chat_id) DO NOTHING
     """
 )
@@ -425,7 +426,14 @@ async def queue_run(
         raise RuntimeError(f"the enforcement run {idempotency_key!r} was not written")
     targets = [chat_id for chat_id in dict.fromkeys(chat_ids) if chat_id]
     if targets:
-        await sess.execute(_QUEUE_TARGETS, {"run_id": int(run_id), "chat_ids": targets})
+        await sess.execute(
+            _QUEUE_TARGETS,
+            {
+                "run_id": int(run_id),
+                "chat_ids": targets,
+                "primary_chat_id": cfg.main_group,
+            },
+        )
     return int(run_id)
 
 

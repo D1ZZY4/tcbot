@@ -49,8 +49,9 @@ def test_primary_group_is_anchored_inactive(monkeypatch: pytest.MonkeyPatch) -> 
 
     asyncio.run(groups_db.ensure_primary_group(-1003872207988, "Main"))
 
-    # * The telegram_chats identity row and the connected_chats anchor row.
-    assert len(capture.statements) == 2
+    # * The telegram_chats identity row, the connected_chats anchor row, and
+    # * the stored primary id the trigger uses without a session setting.
+    assert len(capture.statements) == 3
     connected_stmt = capture.statements[1]
     compiled = str(connected_stmt.compile(compile_kwargs={"literal_binds": True}))
     assert "is_active" in compiled
@@ -59,6 +60,11 @@ def test_primary_group_is_anchored_inactive(monkeypatch: pytest.MonkeyPatch) -> 
     # * inactive, so conflict forces the same value instead of preserving it.
     assert "ON CONFLICT" in compiled
     assert "DO UPDATE SET is_active = false" in compiled
+    settings_stmt = capture.statements[2]
+    settings_sql = str(settings_stmt.compile(compile_kwargs={"literal_binds": True}))
+    assert "community_settings" in settings_sql
+    assert "primary_chat_id" in settings_sql
+    assert "-1003872207988" in settings_sql
 
 
 def test_primary_chat_id_is_published_to_the_database_session() -> None:
@@ -76,7 +82,8 @@ def test_enforcement_target_trigger_admits_the_primary_chat() -> None:
         / "tcbot"
         / "database"
         / "schema"
-        / "functions.sql"
+        / "functions"
+        / "moderation.sql"
     ).read_text(encoding="utf-8")
     start = sql.index("prepare_moderation_enforcement_target")
     body = sql[start : sql.index("$$;", start)]
