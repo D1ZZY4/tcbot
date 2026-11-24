@@ -10,7 +10,7 @@ gone. The views, the functions, the triggers, the access policies, and
 the reference data are applied from ``tcbot.database.schema``.
 
 Revision ID: 0003_community_schema
-Revises: 0002_member_cache_sort_indexes
+Revises: 0002
 Create Date: 2026-11-13
 """
 

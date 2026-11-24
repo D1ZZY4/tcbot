@@ -11,6 +11,7 @@ import pathlib
 
 import pytest
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 from scripts import generate_initial_migration as generator
 from tcbot.database import migrations
@@ -116,6 +117,28 @@ def test_the_schema_travels_to_the_migration_config(
     migrations.upgrade_head(_PERCENT_URL, "development")
 
     assert captured == ["development"]
+
+
+def test_every_revision_id_fits_the_version_column() -> None:
+    """An overlong revision id aborts the upgrade after its DDL already ran.
+
+    Alembic's ``alembic_version.version_num`` is ``VARCHAR(32)``. A longer id
+    makes the version update fail with a truncation error, so the bot cannot
+    boot even though the revision's schema changes were valid.
+    """
+    scripts = ScriptDirectory(
+        str(pathlib.Path(__file__).resolve().parents[1] / "alembic")
+    )
+    for revision in scripts.walk_revisions():
+        assert len(revision.revision) <= 32, revision.revision
+
+
+def test_the_revision_chain_has_a_single_head() -> None:
+    """A fork or a missing parent would silently skip part of the schema."""
+    scripts = ScriptDirectory(
+        str(pathlib.Path(__file__).resolve().parents[1] / "alembic")
+    )
+    assert len(scripts.get_heads()) == 1
 
 
 def test_the_bootstrap_generator_refuses_to_overwrite_the_first_revision(

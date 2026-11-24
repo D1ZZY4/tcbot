@@ -9,7 +9,7 @@ of leaving a settled appeal with a live-looking card. Revision 0003
 creates its tables from the current metadata, so this revision only adds
 the table when the database predates it.
 
-Revision ID: 0006_moderation_notification_tasks
+Revision ID: 0006_notification_tasks
 Revises: 0005_promotion_request_expiry
 Create Date: 2026-11-15
 """
