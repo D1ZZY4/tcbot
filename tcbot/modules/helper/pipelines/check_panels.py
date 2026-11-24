@@ -216,7 +216,7 @@ class CheckProfileMixin:
             return t(f"checking.profile.table.{key}", locale, plain=True)
 
         uname_value = (
-            t("checking.profile.table.username_value", locale, name=esc(uname))
+            t("checking.profile.table.username_value", locale, name=uname)
             if uname
             else t("checking.profile.username_none", locale, plain=True)
         )

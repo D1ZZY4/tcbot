@@ -28,6 +28,7 @@ from tcbot.modules.helper.pipelines.ban_actions import (
     BAN_USER_DATA_KEYS,
     WAITING_UPDATE_CONFIRM,
     ban_conversation,
+    replace_live_proof_session,
 )
 from tcbot.modules.helper.pipelines.ban_rules_step import (
     BAN_RULES_STATES,
@@ -137,6 +138,18 @@ async def cmd_ban_start(ctx: Ctx) -> int:
         return ConversationHandler.END
 
     scope = flow_scope(ctx)
+    # * Re-entry while proof is still being collected must retire the old
+    # * session first. Otherwise the second command only overwrites the
+    # * scope while the old snapshot still names the first target, and the
+    # * new moderator's evidence is archived against the wrong ban.
+    if not await replace_live_proof_session(scope, chat_id_of(msg.chat), admin.id):
+        await reply_rich(
+            msg,
+            t("banning.state.reentry", locale),
+            log_label="cmd_ban_start re-entry",
+            parse_mode=None,
+        )
+        return ConversationHandler.END
     scope["ban_target_id"] = target_id
     scope["ban_target_fname"] = target_fname or str(target_id)
     scope["ban_reason"] = ban_reason

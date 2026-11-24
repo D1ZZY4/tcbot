@@ -73,6 +73,25 @@ def test_profile_is_heading_divider_and_two_tables(
 
 
 @pytest.mark.parametrize("locale", ("en-US", "id-ID"))
+def test_profile_username_is_escaped_once(
+    monkeypatch: pytest.MonkeyPatch, _stub_profile_reads: None, locale: str
+) -> None:
+    """The catalog renderer escapes placeholders; callers must not pre-escape."""
+
+    async def _user_info(bot: Any, target_id: int) -> tuple[str, str | None]:
+        return "Alice", "a&b<c>"
+
+    monkeypatch.setattr(check_panels, "_resolve_user_info", _user_info)
+    text, _markup = asyncio.run(
+        check_panels.Check.profile(object(), 42, locale=locale)  # type: ignore[arg-type]
+    )
+
+    assert "@a&amp;b&lt;c&gt;" in text
+    assert "&amp;amp;" not in text
+    assert "&amp;lt;" not in text
+
+
+@pytest.mark.parametrize("locale", ("en-US", "id-ID"))
 def test_warning_summary_uses_a_table(
     monkeypatch: pytest.MonkeyPatch, locale: str
 ) -> None:

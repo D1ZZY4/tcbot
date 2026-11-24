@@ -39,7 +39,8 @@ Or reply to a message and run `/tcb reason here`."""
 cancelled = "Cancelled. No ban was issued."
 timeout = "Timed out waiting for proof. No ban was issued."
 proof_expected = "Please send a photo, video, GIF, or file as proof, or press Cancel."
-empty = "Send a photo, video, GIF, or file first, then tap Done."
+empty = "Send a photo, video, GIF, or file first, then tap {done}."
+reentry = "A ban is still being processed. Wait for it to finish before starting another."
 
 [db_fail]
 body = "{user} could not be banned: the federation ban record could not be written to the database, so no groups were touched. Check the logs and retry with /tcban once the database recovers."

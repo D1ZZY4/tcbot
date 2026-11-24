@@ -39,7 +39,8 @@ Atau balas sebuah pesan lalu jalankan `/tcb tulis alasan di sini`."""
 cancelled = "Dibatalkan. Tidak ada ban yang dijatuhkan."
 timeout = "Waktu tunggu bukti habis. Tidak ada ban yang dijatuhkan."
 proof_expected = "Kirim foto, video, GIF, atau file sebagai bukti, atau tekan Batal."
-empty = "Kirim foto, video, GIF, atau file dulu, lalu ketuk Selesai."
+empty = "Kirim foto, video, GIF, atau file dulu, lalu ketuk {done}."
+reentry = "Sebuah ban masih diproses. Tunggu sampai selesai sebelum memulai yang lain."
 
 [db_fail]
 body = "{user} tidak bisa di-ban: catatan ban federasi gagal ditulis ke database, jadi tidak ada grup yang disentuh. Cek log lalu coba lagi dengan /tcban setelah database pulih."
