@@ -84,6 +84,7 @@ class TwoLevelCache[T]:
         "_is_revocation",
         "_mem",
         "_pending_invalidations",
+        "_pending_writes",
         "_redis_prefix",
         "_redis_ttl",
         "_revision",
@@ -128,6 +129,11 @@ class TwoLevelCache[T]:
         # * current for a read that starts after the invalidation, so only
         # * this local marker can close that window.
         self._pending_invalidations: set[Any] = set()
+        # * Keys whose L2 write is queued but may not have landed yet. A
+        # * read that starts after a local put can still see the OLD L2 value;
+        # * promoting it into L1 would undo our own write. The marker is
+        # * dropped when the queued write completes.
+        self._pending_writes: set[Any] = set()
 
     # ── Sync operations (in-memory layer only) ── #
 
@@ -375,6 +381,7 @@ class TwoLevelCache[T]:
                 state.generation == generation
                 and self._epoch == epoch
                 and key not in self._pending_invalidations
+                and key not in self._pending_writes
             ):
                 self._mem.put(key, loaded)
             return loaded
@@ -455,6 +462,7 @@ class TwoLevelCache[T]:
                         states[key].generation == generations[key]
                         and self._epoch == epoch
                         and key not in self._pending_invalidations
+                        and key not in self._pending_writes
                     ):
                         self._mem.put(key, loaded)
                     found[key] = loaded
@@ -546,13 +554,12 @@ class TwoLevelCache[T]:
                                 if (
                                     state.generation != generation
                                     or self._epoch != epoch
+                                    or key in self._pending_writes
                                 ):
-                                    # * The key was invalidated (or the whole
-                                    # * cache was swept) while the Redis read
+                                    # * The key was invalidated, swept, or
+                                    # * written locally while the Redis read
                                     # * was in flight: the payload predates
-                                    # * the change and must not be cached, or
-                                    # * the revoked value comes back for a
-                                    # * whole TTL.
+                                    # * the change and must not be cached.
                                     log.debug(
                                         "Discarding stale Redis hit for "
                                         "invalidated key %s",
@@ -705,11 +712,18 @@ class TwoLevelCache[T]:
         except Exception as exc:
             log.debug("Redis payload encode failed for %s: %s", rkey, exc)
             return
-        redis_io.enqueue_redis_mutation(
+        self._pending_writes.add(key)
+        task = redis_io.enqueue_redis_mutation(
             self._redis_prefix,
-            lambda: self._redis_set(rkey, payload),
+            lambda: self._redis_set_guarded(rkey, payload, self._tombstone_key(key)),
             droppable=not self._is_revocation,
         )
+        if task is not None:
+            task.add_done_callback(lambda _: self._pending_writes.discard(key))
+        else:
+            # * A dropped write cannot make L2 newer than L1; release the
+            # * marker immediately so reads are not blocked for the TTL.
+            self._pending_writes.discard(key)
 
     async def _client(self) -> Any:
         """Return the Redis client, reconnecting after a failed startup.
@@ -781,6 +795,29 @@ class TwoLevelCache[T]:
             lambda: self._redis_delete(rkey),
             droppable=droppable,
         )
+
+    async def _redis_set_guarded(
+        self, rkey: str, payload: str, tombstone_key: str
+    ) -> None:
+        """Skip a queued write when another process revoked the key meanwhile.
+
+        The value in *payload* was fetched before the remote revocation. Writing
+        it after the remote delete would restore the revoked role or group flag
+        for the full TTL. The tombstone is written before that delete and lives
+        longer than the queue, so checking it at write time closes the window.
+        """
+        rc = await self._client()
+        if rc is None:
+            return
+        try:
+            if await rc.exists(tombstone_key):
+                log.debug("Skipping L2 write for tombstoned %s", rkey)
+                return
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug("Tombstone guard before L2 write failed for %s: %s", rkey, exc)
+        await self._redis_set(rkey, payload)
 
     async def _redis_set(self, rkey: str, payload: str) -> None:
         """Write one Redis value and keep failures observable but non-fatal.

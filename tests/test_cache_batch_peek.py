@@ -23,6 +23,7 @@ import tcbot.database.cache as cache_mod
 from tcbot.database import users_cache
 from tcbot.database.cache import redis_io
 from tcbot.database.cache.codec import _msgspec_enc_hook, _tag_scalars
+from tcbot.database.cache.memory import CACHE_MISS
 
 
 class _FakeRedis:
@@ -111,6 +112,40 @@ def test_a_batch_read_serves_the_in_memory_layer_without_redis(
 
     assert found == {7: ["Ann", "ann", None]}
     assert redis.mget_calls == 0
+
+
+def test_peek_does_not_promote_stale_l2_after_a_local_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A queued local write must not be undone by an older Redis value."""
+    redis = _FakeRedis()
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: redis)
+    cache = _cache()
+    redis.store["tcbot:test-batch-peek:v2:7"] = _encode(["Old", "old", None])
+    # * put() marks the key until the queued write lands; simulate that window.
+    cache._pending_writes.add(7)
+
+    found = asyncio.run(cache.peek(7))
+
+    assert found == ["Old", "old", None]
+    assert cache.get(7) is CACHE_MISS
+
+
+def test_a_queued_write_is_skipped_when_a_tombstone_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Another process's revocation must not be overwritten by a stale fill."""
+
+    class _RevokedRedis(_FakeRedis):
+        async def exists(self, key: str) -> int:
+            return 1
+
+    redis = _RevokedRedis()
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: redis)
+
+    asyncio.run(_cache()._redis_set_guarded("value-key", "payload", "tomb-key"))
+
+    assert "value-key" not in redis.store
 
 
 def test_a_batch_read_treats_a_redis_outage_as_a_miss(
