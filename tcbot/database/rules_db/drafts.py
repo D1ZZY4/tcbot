@@ -22,20 +22,25 @@ from tcbot.utils.time_and_date import utc_now
 
 
 async def open_draft(
-    set_id: int, user_id: int, *, clone_items: bool = True
+    set_id: int,
+    user_id: int,
+    *,
+    clone_items: bool = True,
+    locale: str | None = None,
 ) -> dict[str, Any]:
     """Return the open draft, cloning the published version when needed.
 
     A clone takes the current category catalogue as its snapshot, so a later
     rename or reorder cannot change the presentation of an older version.
     Callers that immediately replace the draft contents can skip the clone
-    with ``clone_items=False``.
+    with ``clone_items=False``. The content locale selects the draft to open.
     """
+    content_locale = locale or WORKING_LOCALE
     existing = await db_call(
         lambda: fetch_one(
             select(rule_set_versions).where(
                 rule_set_versions.c.rule_set_id == set_id,
-                rule_set_versions.c.locale == WORKING_LOCALE,
+                rule_set_versions.c.locale == content_locale,
                 rule_set_versions.c.status == "draft",
             )
         )
@@ -47,7 +52,7 @@ async def open_draft(
         lambda: fetch_one(
             select(rule_set_versions).where(
                 rule_set_versions.c.rule_set_id == set_id,
-                rule_set_versions.c.locale == WORKING_LOCALE,
+                rule_set_versions.c.locale == content_locale,
                 rule_set_versions.c.status == "published",
             )
         )
@@ -60,7 +65,7 @@ async def open_draft(
                 )
             ).where(
                 rule_set_versions.c.rule_set_id == set_id,
-                rule_set_versions.c.locale == WORKING_LOCALE,
+                rule_set_versions.c.locale == content_locale,
             )
         )
     )
@@ -72,7 +77,7 @@ async def open_draft(
             .values(
                 rule_set_id=set_id,
                 version_number=next_number,
-                locale=WORKING_LOCALE,
+                locale=content_locale,
                 status="draft",
                 created_by_user_id=user_id,
                 created_at=utc_now(),
@@ -146,7 +151,7 @@ async def open_draft(
         "id": version_id,
         "rule_set_id": set_id,
         "version_number": next_number,
-        "locale": WORKING_LOCALE,
+        "locale": content_locale,
         "status": "draft",
     }
 
@@ -161,25 +166,42 @@ async def clear_draft_items(version_id: int) -> int:
 
 
 async def discard_draft(version_id: int) -> bool:
-    """Delete a draft version; published versions cannot be removed."""
-    affected = await db_call(
-        lambda: run(
-            rule_set_versions.delete().where(
+    """Delete a draft version and its items in one atomic unit.
+
+    The version cannot be removed while its items reference it, so both
+    deletes must share a transaction. A published version is never touched.
+    """
+
+    async def _work(sess: AsyncSession) -> int:
+        row = await sess.execute(
+            select(rule_set_versions.c.id).where(
                 rule_set_versions.c.id == version_id,
                 rule_set_versions.c.status == "draft",
             )
         )
-    )
-    return affected > 0
+        if row.first() is None:
+            return 0
+        await sess.execute(
+            rule_items.delete().where(rule_items.c.rule_set_version_id == version_id)
+        )
+        await sess.execute(
+            rule_set_versions.delete().where(rule_set_versions.c.id == version_id)
+        )
+        return 1
+
+    return await run_transaction(_work) > 0
 
 
-async def published_version(set_id: int) -> dict[str, Any] | None:
+async def published_version(
+    set_id: int, locale: str | None = None
+) -> dict[str, Any] | None:
     """Return the current published version of a set, if any."""
+    content_locale = locale or WORKING_LOCALE
     row = await db_call(
         lambda: fetch_one(
             select(rule_set_versions).where(
                 rule_set_versions.c.rule_set_id == set_id,
-                rule_set_versions.c.locale == WORKING_LOCALE,
+                rule_set_versions.c.locale == content_locale,
                 rule_set_versions.c.status == "published",
             )
         )

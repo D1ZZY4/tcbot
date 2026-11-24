@@ -16,7 +16,7 @@ from tcbot.database.base import (
     rule_items,
     rule_set_versions,
 )
-from tcbot.database.engine import db_call, fetch_all, fetch_one, run_returning
+from tcbot.database.engine import db_call, fetch_all, fetch_one, run, run_returning
 from tcbot.utils.time_and_date import utc_now
 
 
@@ -133,3 +133,48 @@ async def add_item(
         )
     )
     return dict(created[0])
+
+
+async def update_item_body(version_id: int, item_id: int, body: str) -> bool:
+    """Replace the body of one item in a draft. Published versions are refused."""
+    await _set_id(version_id)
+    affected = await db_call(
+        lambda: run(
+            rule_items.update()
+            .where(
+                rule_items.c.id == item_id,
+                rule_items.c.rule_set_version_id == version_id,
+            )
+            .values(body=body)
+        )
+    )
+    return affected > 0
+
+
+async def delete_draft_category_items(version_id: int, category_key: str) -> int:
+    """Remove every item of one category from a draft before a reseed."""
+    await _set_id(version_id)
+    return await db_call(
+        lambda: run(
+            rule_items.delete().where(
+                rule_items.c.rule_set_version_id == version_id,
+                rule_items.c.category_key == category_key,
+            )
+        )
+    )
+
+
+async def update_item_title(version_id: int, item_id: int, title: str) -> bool:
+    """Replace the title of one item in a draft. Published versions are refused."""
+    await _set_id(version_id)
+    affected = await db_call(
+        lambda: run(
+            rule_items.update()
+            .where(
+                rule_items.c.id == item_id,
+                rule_items.c.rule_set_version_id == version_id,
+            )
+            .values(title=title)
+        )
+    )
+    return affected > 0

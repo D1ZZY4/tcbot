@@ -13,7 +13,7 @@ from typing import Any, cast
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import rules_editor
+from tcbot.modules.helper.pipelines import rules_editor, rules_editor_draft
 
 
 def test_editor_allowed_reads_the_capability_fresh(
@@ -49,8 +49,8 @@ def test_category_action_refuses_a_revoked_editor(
     async def _answer() -> None:
         return None
 
-    monkeypatch.setattr(rules_editor, "editor_allowed", _no_permission)
-    monkeypatch.setattr(rules_editor, "refuse_editor", _no_permission)
+    monkeypatch.setattr(rules_editor_draft, "editor_allowed", _no_permission)
+    monkeypatch.setattr(rules_editor_draft, "refuse_editor", _no_permission)
     monkeypatch.setattr(db.rules_db, "move_category", _move)
     update = SimpleNamespace(
         callback_query=SimpleNamespace(
@@ -61,7 +61,7 @@ def test_category_action_refuses_a_revoked_editor(
     )
 
     asyncio.run(
-        rules_editor.rules_editor.cat_action(
+        rules_editor_draft.rules_draft_editor.cat_action(
             cast("Any", update), cast("Any", SimpleNamespace())
         )
     )
@@ -92,17 +92,19 @@ def test_typed_item_writes_to_the_fresh_draft(monkeypatch: pytest.MonkeyPatch) -
     def _scope(update: Any, ctx: Any) -> dict[str, Any]:
         return scope
 
-    monkeypatch.setattr(rules_editor.rules_editor, "_set_and_draft", _draft)
-    monkeypatch.setattr(rules_editor, "flow_scope", _scope)
+    monkeypatch.setattr(rules_editor_draft, "set_and_draft", _draft)
+    monkeypatch.setattr(rules_editor_draft, "flow_scope", _scope)
     monkeypatch.setattr(db.rules_db, "add_item", _add_item)
-    monkeypatch.setattr(rules_editor.rules_editor, "items", _items)
+    monkeypatch.setattr(rules_editor_draft.rules_draft_editor, "items", _items)
 
     update = SimpleNamespace(
         effective_message=SimpleNamespace(text="https://example.com/rule"),
         effective_user=SimpleNamespace(id=7),
     )
     asyncio.run(
-        rules_editor.rules_editor.on_text(cast("Any", update), cast("Any", object()))
+        rules_editor_draft.rules_draft_editor.on_text(
+            cast("Any", update), cast("Any", object())
+        )
     )
 
     assert calls and calls[0][0] == 99

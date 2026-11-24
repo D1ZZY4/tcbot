@@ -13,6 +13,7 @@ from tcbot.database.rules_db.categories import (
     list_categories,
     move_category,
     rename_category,
+    set_category_description,
 )
 from tcbot.database.rules_db.drafts import (
     all_items,
@@ -21,7 +22,13 @@ from tcbot.database.rules_db.drafts import (
     open_draft,
     published_version,
 )
-from tcbot.database.rules_db.items import add_item, list_items
+from tcbot.database.rules_db.items import (
+    add_item,
+    delete_draft_category_items,
+    list_items,
+    update_item_body,
+    update_item_title,
+)
 from tcbot.database.rules_db.publications import status_counts
 from tcbot.database.rules_db.publish import promote_version
 from tcbot.database.rules_db.read import (
@@ -41,6 +48,7 @@ __all__ = [
     "all_items",
     "clear_draft_items",
     "delete_category",
+    "delete_draft_category_items",
     "discard_draft",
     "get_or_create_community_set",
     "has_acknowledged",
@@ -55,5 +63,8 @@ __all__ = [
     "record_acknowledgement",
     "rename_category",
     "runs",
+    "set_category_description",
     "status_counts",
+    "update_item_body",
+    "update_item_title",
 ]

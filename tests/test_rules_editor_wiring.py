@@ -16,8 +16,11 @@ from telegram.ext import CallbackQueryHandler, ConversationHandler, MessageHandl
 
 from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
-from tcbot.modules.helper.messages import rules as rules_msg
-from tcbot.modules.helper.pipelines import rules_editor, rules_editor_steps
+from tcbot.modules.helper.pipelines import (
+    rules_editor,
+    rules_editor_draft,
+    rules_editor_steps,
+)
 from tcbot.modules.helper.pipelines.rules_editor import (
     WAITING_CONFIRM_DISCARD,
     WAITING_EDITOR_MENU,
@@ -188,11 +191,14 @@ def test_rename_prompt_edits_the_invoking_message(
     async def _reply(*_args: Any, **_kwargs: Any) -> None:
         replies.append(_args)
 
-    monkeypatch.setattr(rules_editor, "editor_allowed", _allowed)
-    monkeypatch.setattr(rules_editor.rules_editor, "_set_and_draft", _draft)
-    monkeypatch.setattr(rules_editor, "safe_edit_cb", _edit)
-    monkeypatch.setattr(rules_editor, "reply_rich", _reply)
-    monkeypatch.setattr(rules_editor, "flow_scope", lambda _ctx, _update: {})
+    async def _edited(_update: Any, _text: str, markup: Any) -> None:
+        edits.append({"reply_markup": markup})
+
+    monkeypatch.setattr(rules_editor_draft, "editor_allowed", _allowed)
+    monkeypatch.setattr(rules_editor_draft, "set_and_draft", _draft)
+    monkeypatch.setattr(rules_editor_draft, "edit_or_reply", _edited)
+    monkeypatch.setattr(rules_editor_draft, "reply_rich", _reply)
+    monkeypatch.setattr(rules_editor_draft, "flow_scope", lambda _ctx, _update: {})
 
     update = SimpleNamespace(
         callback_query=SimpleNamespace(
@@ -202,7 +208,9 @@ def test_rename_prompt_edits_the_invoking_message(
         effective_message=None,
     )
     asyncio.run(
-        rules_editor.rules_editor.cat_action(cast("Any", update), cast("Any", None))
+        rules_editor_draft.rules_draft_editor.cat_action(
+            cast("Any", update), cast("Any", None)
+        )
     )
 
     assert len(edits) == 1
@@ -264,31 +272,28 @@ def test_preview_stays_in_the_editor_with_back_and_close(
 ) -> None:
     edits: list[dict[str, Any]] = []
 
-    async def _items(version_id: int, category_key: str | None = None) -> list:
-        return []
+    async def _draft(_update: Any, _ctx: Any) -> tuple[dict, dict]:
+        return {"id": 1}, {"id": 2}
 
-    async def _preview(items: list, locale: str | None) -> str:
-        return "preview body"
+    async def _categories(set_id: int) -> list:
+        return [{"category_key": "cheat", "title": "Cheat"}]
 
-    async def _edit(_q: Any, _text: str, **kwargs: Any) -> None:
-        edits.append(kwargs)
+    async def _edited(_update: Any, _text: str, markup: Any) -> None:
+        edits.append({"reply_markup": markup})
 
     async def _locale(_update: Any) -> str:
         return "en-US"
 
-    monkeypatch.setattr(db.rules_db, "list_items", _items)
-    monkeypatch.setattr(rules_msg, "preview", _preview)
-    monkeypatch.setattr(rules_editor, "safe_edit_cb", _edit)
-    monkeypatch.setattr(rules_editor.rules_editor, "_locale", _locale)
-    monkeypatch.setattr(
-        rules_editor,
-        "flow_scope",
-        lambda _ctx, _update: {"rules_version": {"id": 2}},
-    )
+    monkeypatch.setattr(rules_editor_draft, "set_and_draft", _draft)
+    monkeypatch.setattr(db.rules_db, "list_categories", _categories)
+    monkeypatch.setattr(rules_editor_draft, "edit_or_reply", _edited)
+    monkeypatch.setattr(rules_editor_draft.rules_draft_editor, "_locale", _locale)
 
     update = _callback_update()
     result = asyncio.run(
-        rules_editor.rules_editor.preview(cast("Any", update), cast("Any", None))
+        rules_editor_draft.rules_draft_editor.preview(
+            cast("Any", update), cast("Any", None)
+        )
     )
 
     assert result == WAITING_EDITOR_MENU
@@ -299,7 +304,8 @@ def test_preview_stays_in_the_editor_with_back_and_close(
         if isinstance(b.callback_data, str)
     }
     assert "close_msg" in callbacks
-    assert "rules_panel" not in callbacks
+    assert "rules_panel" in callbacks
+    assert "rules_preview_cat:cheat" in callbacks
 
 
 def test_empty_draft_publish_shows_guidance(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -325,11 +331,14 @@ def test_empty_draft_publish_shows_guidance(monkeypatch: pytest.MonkeyPatch) -> 
     async def _locale(_update: Any) -> str:
         return "en-US"
 
+    async def _edited(_update: Any, text: str, _markup: Any) -> None:
+        edits.append({"text": text})
+
     monkeypatch.setattr(rules_editor, "editor_allowed", _allowed)
-    monkeypatch.setattr(rules_editor.rules_editor, "_set_and_draft", _draft)
+    monkeypatch.setattr(rules_editor, "set_and_draft", _draft)
     monkeypatch.setattr(db.rules_db, "all_items", _all_items)
     monkeypatch.setattr(rules_editor, "publish_rules", _publish)
-    monkeypatch.setattr(rules_editor, "safe_edit_cb", _edit)
+    monkeypatch.setattr(rules_editor, "edit_or_reply", _edited)
     monkeypatch.setattr(rules_editor.rules_editor, "_locale", _locale)
 
     update = _callback_update()

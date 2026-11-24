@@ -11,13 +11,17 @@ import re
 from typing import TYPE_CHECKING, Any, cast
 
 from tcbot import database as db
+from tcbot.database.rules_db.sets import WORKING_LOCALE
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import replies, reply_rich
+from tcbot.modules.helper.messages import replies, reply_rich, safe_edit_cb
+from tcbot.modules.helper.scope import flow_scope
+from tcbot.utils.i18n import canonical_locale
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters
 
 if TYPE_CHECKING:
     from telegram import Update
+    from telegram.ext import ContextTypes
 
 log = get_logger(__name__)
 
@@ -25,6 +29,7 @@ _TCRULES_CMDS = build_prefixed_filters("tcrules") | build_prefixed_filters("tcrl
 
 WAITING_EDITOR_MENU = 0
 WAITING_CONFIRM_DISCARD = 5
+WAITING_MARKDOWN = 6
 
 _TITLE_MAX: int = 200
 _BODY_MAX: int = 3500
@@ -34,11 +39,13 @@ _SLUG_MAX: int = 40
 _EDITOR_SCOPE_KEYS = (
     "rules_set",
     "rules_version",
+    "rules_content_locale",
     "rules_step",
     "rules_item_title",
     "rules_item_body",
     "rules_category",
     "rules_category_key",
+    "rules_preview_category",
 )
 
 
@@ -93,3 +100,43 @@ def slug(title: str) -> str:
     """Derive a stable category slug from a display title."""
     base = re.sub(r"[^a-z0-9]+", "-", title.strip().lower()).strip("-")
     return base[:_SLUG_MAX] or "category"
+
+
+def content_locale(ctx: ContextTypes.DEFAULT_TYPE, update: Update) -> str:
+    """Return the rule-set language chosen in this editor session."""
+    value = flow_scope(ctx, update).get("rules_content_locale")
+    return canonical_locale(str(value) if value else None) or WORKING_LOCALE
+
+
+async def set_and_draft(
+    update: Update, ctx: ContextTypes.DEFAULT_TYPE
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """Ensure a community set and open the draft for the chosen language."""
+    if not await editor_allowed(update):
+        await refuse_editor(update)
+        return None
+    scope = flow_scope(ctx, update)
+    set_doc = scope.get("rules_set")
+    if set_doc is None:
+        set_doc = await db.rules_db.get_or_create_community_set()
+        scope["rules_set"] = set_doc
+    version = scope.get("rules_version")
+    if version is None or version.get("status") != "draft":
+        version = await db.rules_db.open_draft(
+            int(set_doc["id"]),
+            update.effective_user.id if update.effective_user else 0,
+            locale=content_locale(ctx, update),
+        )
+        scope["rules_version"] = version
+    return set_doc, version
+
+
+async def edit_or_reply(update: Update, text: str, markup: Any) -> None:
+    """Edit the invoking message, or reply when there is no callback query."""
+    query = update.callback_query
+    if query is not None:
+        await safe_edit_cb(query, text, parse_mode=None, reply_markup=markup)
+        return
+    msg = update.effective_message
+    if msg is not None:
+        await reply_rich(msg, text, reply_markup=markup)

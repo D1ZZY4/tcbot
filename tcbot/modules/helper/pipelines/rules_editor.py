@@ -2,11 +2,11 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Conversation editor for community rules drafts and publication."""
+"""Main menu of the rules editor and the conversation that owns it."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from telegram.ext import (
     CallbackQueryHandler,
@@ -19,26 +19,24 @@ from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.buttons.menus import open_pm_btn
 from tcbot.modules.helper.locale import locale_for_update
-from tcbot.modules.helper.messages import reply_rich, safe_edit_cb
-from tcbot.modules.helper.messages import rules as rules_msg
+from tcbot.modules.helper.messages import reply_rich
+from tcbot.modules.helper.pipelines.rules_editor_draft import rules_draft_editor
 from tcbot.modules.helper.pipelines.rules_editor_steps import (
-    _BODY_MAX,
     _TCRULES_CMDS,
-    _TITLE_MAX,
-    _URL_MAX,
     WAITING_CONFIRM_DISCARD,
     WAITING_EDITOR_MENU,
+    WAITING_MARKDOWN,
     clear_editor_scope,
-    clear_item_step,
+    content_locale,
+    edit_or_reply,
     editor_allowed,
     refuse_editor,
-    slug,
+    set_and_draft,
 )
 from tcbot.modules.helper.pipelines.rules_publish import publish_rules
 from tcbot.modules.helper.scope import flow_scope
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import canonical_locale, display_name, t
 from tcbot.utils.logger import get_logger
-from tcbot.utils.pagination import clamp_page
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER
 
 if TYPE_CHECKING:
@@ -49,31 +47,11 @@ log = get_logger(__name__)
 
 
 class RulesEditor:
-    """Owns the editor dialog for one staff member's rules draft."""
+    """Owns the main menu of one staff member's rules editor."""
 
-    async def _locale(self, update: Update) -> str:
+    @staticmethod
+    async def _locale(update: Update) -> str:
         return await locale_for_update(update)
-
-    async def _set_and_draft(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> tuple[dict[str, Any], dict[str, Any]] | None:
-        """Ensure a community set and open its working draft."""
-        if not await editor_allowed(update):
-            await refuse_editor(update)
-            return None
-        scope = flow_scope(ctx, update)
-        set_doc = scope.get("rules_set")
-        if set_doc is None:
-            set_doc = await db.rules_db.get_or_create_community_set()
-            scope["rules_set"] = set_doc
-        version = scope.get("rules_version")
-        if version is None or version.get("status") != "draft":
-            version = await db.rules_db.open_draft(
-                int(set_doc["id"]),
-                update.effective_user.id if update.effective_user else 0,
-            )
-            scope["rules_version"] = version
-        return set_doc, version
 
     async def panel(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Show the editor panel, opening a draft when none exists."""
@@ -83,18 +61,26 @@ class RulesEditor:
         q = update.callback_query
         if q is not None:
             await q.answer()
-        opened = await self._set_and_draft(update, ctx)
+        opened = await set_and_draft(update, ctx)
         if opened is None:
             return ConversationHandler.END
         set_doc, version = opened
+        chosen = content_locale(ctx, update)
         locale = await self._locale(update)
-        items = await db.rules_db.list_items(int(version["id"]))
-        has_content = bool(items)
-        text = await rules_msg.editor_panel(
-            set_doc, version, locale, has_content=has_content, item_count=len(items)
+        rows = await db.rules_db.list_items(int(version["id"]))
+        await edit_or_reply(
+            update,
+            t(
+                "rules.editor.panel",
+                locale,
+                name=str(set_doc.get("name") or "Community Rules"),
+                status=str(set_doc.get("status") or "draft"),
+                count=len(rows),
+            )
+            + "\n"
+            + t("rules.editor.language", locale, language=display_name(chosen, None)),
+            rules_btn.editor_sections_btn(rows, locale),
         )
-        markup = rules_btn.editor_panel_btn(locale, has_content=has_content)
-        await self._edit_or_reply(update, text, markup)
         return WAITING_EDITOR_MENU
 
     async def start(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
@@ -112,101 +98,47 @@ class RulesEditor:
                 reply_markup=open_pm_btn(ctx.bot.username or "", "tcrules", locale),
             )
             return ConversationHandler.END
-        return await self.panel(update, ctx)
+        return await self.choose_language(update, ctx)
 
-    async def cat_action(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """Handle rename, reorder, and delete actions on a category."""
-        q = update.callback_query
-        if q is None or q.data is None:
-            return WAITING_EDITOR_MENU
-        if not await editor_allowed(update):
-            await refuse_editor(update)
-            return WAITING_EDITOR_MENU
-        await q.answer()
-        action, key = q.data.split(":", 1)
-        opened = await self._set_and_draft(update, ctx)
-        if opened is None:
-            return ConversationHandler.END
-        set_doc, _version = opened
-        set_id = int(set_doc["id"])
-        scope = flow_scope(ctx, update)
-        if action == "rules_cat_rename":
-            scope["rules_category_key"] = key
-            scope["rules_step"] = "rename_category"
-            await self._edit_or_reply(
-                update,
-                t("rules.editor.ask_rename", await self._locale(update), plain=True),
-                rules_btn.prompt_btn("rules_categories", await self._locale(update)),
-            )
-            return WAITING_EDITOR_MENU
-        if action == "rules_cat_up":
-            await db.rules_db.move_category(set_id, key, -1)
-        elif action == "rules_cat_down":
-            await db.rules_db.move_category(set_id, key, 1)
-        elif action == "rules_cat_del":
-            await db.rules_db.delete_category(set_id, key)
-        return await self.categories(update, ctx)
-
-    async def category_items(
+    async def choose_language(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
     ) -> int:
-        """Select a category and list the items of the open draft in it."""
-        q = update.callback_query
-        if q is None or q.data is None:
-            return WAITING_EDITOR_MENU
-        if not await editor_allowed(update):
-            await refuse_editor(update)
-            return WAITING_EDITOR_MENU
-        await q.answer()
-        key = q.data.split(":", 1)[1]
-        opened = await self._set_and_draft(update, ctx)
-        if opened is None:
-            return ConversationHandler.END
-        set_doc, _version = opened
-        categories = await db.rules_db.list_categories(int(set_doc["id"]))
-        match = next(
-            (cat for cat in categories if str(cat["category_key"]) == key), None
-        )
-        if match is None:
-            return await self.categories(update, ctx)
-        flow_scope(ctx, update)["rules_category"] = match
-        return await self.items(update, ctx)
-
-    async def settings(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """Show publication and acknowledgement status of the rule set."""
+        """Open the content-language picker built from available catalogs."""
         q = update.callback_query
         if q is not None:
             await q.answer()
-        opened = await self._set_and_draft(update, ctx)
-        if opened is None:
-            return ConversationHandler.END
-        set_doc, version = opened
-        set_id = int(set_doc["id"])
-        items = await db.rules_db.all_items(int(version["id"]))
-        counts = await db.rules_db.status_counts(set_id)
-        published = await db.rules_db.published_version(set_id)
-        acks = (
-            await db.rules_db.acknowledgement_count(int(published["id"]))
-            if published
-            else 0
-        )
-        text = t(
-            "rules.editor.status",
-            await self._locale(update),
-            synced=counts.get("synced", 0),
-            failed=counts.get("failed", 0),
-            missing=counts.get("missing", 0),
-            retired=counts.get("retired", 0),
-            acks=acks,
-        )
-        await self._edit_or_reply(
+        if not await editor_allowed(update):
+            await refuse_editor(update)
+            return WAITING_EDITOR_MENU
+        return await self._render_language_picker(update, ctx)
+
+    async def _render_language_picker(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        locale = await self._locale(update)
+        await edit_or_reply(
             update,
-            text,
-            rules_btn.editor_panel_btn(
-                await self._locale(update), has_content=bool(items)
-            ),
+            t("rules.editor.choose_language", locale),
+            rules_btn.rules_language_btn(content_locale(ctx, update), locale),
         )
         return WAITING_EDITOR_MENU
+
+    async def set_language(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+        """Switch the rule-set language and reopen that locale's draft."""
+        q = update.callback_query
+        if q is None or q.data is None:
+            return WAITING_EDITOR_MENU
+        if not await editor_allowed(update):
+            await refuse_editor(update)
+            return WAITING_EDITOR_MENU
+        chosen = canonical_locale(q.data.split(":", 1)[-1])
+        if chosen is None:
+            await q.answer()
+            return await self._render_language_picker(update, ctx)
+        scope = flow_scope(ctx, update)
+        scope["rules_content_locale"] = chosen
+        scope.pop("rules_version", None)
+        return await self.panel(update, ctx)
 
     async def publish(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Publish the open draft and reconcile the channel immediately."""
@@ -218,13 +150,14 @@ class RulesEditor:
             return WAITING_EDITOR_MENU
         await q.answer()
         locale = await self._locale(update)
-        opened = await self._set_and_draft(update, ctx)
+        opened = await set_and_draft(update, ctx)
         if opened is None:
             return ConversationHandler.END
         set_doc, version = opened
+        chosen = content_locale(ctx, update)
         items = await db.rules_db.all_items(int(version["id"]))
         if not items:
-            await self._edit_or_reply(
+            await edit_or_reply(
                 update,
                 t("rules.publish.empty", locale),
                 rules_btn.editor_panel_btn(locale, has_content=False),
@@ -233,30 +166,30 @@ class RulesEditor:
         user_id = update.effective_user.id if update.effective_user else 0
         try:
             result = await publish_rules(
-                int(set_doc["id"]),
-                int(version["id"]),
-                user_id,
-                ctx.bot,
+                int(set_doc["id"]), int(version["id"]), user_id, ctx.bot, chosen
             )
         except Exception as exc:
             # * A channel failure can happen after promote_version committed.
-            # * Refresh the cached snapshot so the next step opens a fresh
-            # * draft instead of writing to a published version.
+            # * Refresh the snapshot so the next step opens a fresh draft.
             try:
-                published = await db.rules_db.published_version(int(set_doc["id"]))
+                published = await db.rules_db.published_version(
+                    int(set_doc["id"]), chosen
+                )
             except Exception:
                 log.warning("Published-version refresh failed after publish error")
                 published = None
             if published is not None:
                 flow_scope(ctx, update)["rules_version"] = published
-            await self._edit_or_reply(
+            await edit_or_reply(
                 update,
                 t("rules.publish.error", locale, error=str(exc)),
-                rules_btn.editor_panel_btn(locale, has_content=True),
+                rules_btn.editor_panel_btn(
+                    locale, has_content=True, content_locale=chosen
+                ),
             )
             return WAITING_EDITOR_MENU
         try:
-            published = await db.rules_db.published_version(int(set_doc["id"]))
+            published = await db.rules_db.published_version(int(set_doc["id"]), chosen)
         except Exception as exc:
             log.warning(
                 "Published-version refresh failed for set=%d: %s",
@@ -265,9 +198,8 @@ class RulesEditor:
             )
             published = None
         if published is not None:
-            scope = flow_scope(ctx, update)
-            scope["rules_version"] = published
-        await self._edit_or_reply(
+            flow_scope(ctx, update)["rules_version"] = published
+        await edit_or_reply(
             update,
             t(
                 "rules.publish.result",
@@ -275,246 +207,9 @@ class RulesEditor:
                 synced=result["synced"],
                 failed=len(result["failed"]),
             ),
-            rules_btn.editor_panel_btn(locale, has_content=True),
+            rules_btn.editor_panel_btn(locale, has_content=True, content_locale=chosen),
         )
         return WAITING_EDITOR_MENU
-
-    async def on_text(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """Route a typed answer to the pending editor step."""
-        msg = update.effective_message
-        user = update.effective_user
-        if msg is None or user is None or not msg.text:
-            return ConversationHandler.END
-        opened = await self._set_and_draft(update, ctx)
-        if opened is None:
-            return ConversationHandler.END
-        set_doc, version = opened
-        scope = flow_scope(ctx, update)
-        step = scope.get("rules_step")
-        text = msg.text.strip()
-        locale = await self._locale(update)
-
-        if step == "category_title":
-            if not text or len(text) > _TITLE_MAX:
-                await reply_rich(
-                    msg,
-                    t("rules.editor.bad_title", locale, limit=_TITLE_MAX, plain=True),
-                    parse_mode=None,
-                )
-                return WAITING_EDITOR_MENU
-            category = await db.rules_db.add_category(
-                int(set_doc["id"]), slug(text), text
-            )
-            scope["rules_category"] = category
-            clear_item_step(scope)
-            return await self.categories(update, ctx)
-
-        if step == "rename_category":
-            if not text or len(text) > _TITLE_MAX:
-                await reply_rich(
-                    msg,
-                    t("rules.editor.bad_title", locale, limit=_TITLE_MAX, plain=True),
-                    parse_mode=None,
-                )
-                return WAITING_EDITOR_MENU
-            await db.rules_db.rename_category(
-                int(set_doc["id"]),
-                str(scope.get("rules_category_key") or ""),
-                text,
-            )
-            scope.pop("rules_step", None)
-            return await self.categories(update, ctx)
-
-        if step == "item_title":
-            if not text or len(text) > _TITLE_MAX:
-                await reply_rich(
-                    msg,
-                    t("rules.editor.bad_title", locale, limit=_TITLE_MAX, plain=True),
-                    parse_mode=None,
-                )
-                return WAITING_EDITOR_MENU
-            scope["rules_item_title"] = text
-            scope["rules_step"] = "item_body"
-            await reply_rich(
-                msg, t("rules.editor.ask_body", locale, plain=True), parse_mode=None
-            )
-            return WAITING_EDITOR_MENU
-
-        if step == "item_body":
-            if not text or len(text) > _BODY_MAX:
-                await reply_rich(
-                    msg,
-                    t("rules.editor.bad_body", locale, limit=_BODY_MAX, plain=True),
-                    parse_mode=None,
-                )
-                return WAITING_EDITOR_MENU
-            scope["rules_item_body"] = text
-            scope["rules_step"] = "item_url"
-            await reply_rich(
-                msg, t("rules.editor.ask_url", locale, plain=True), parse_mode=None
-            )
-            return WAITING_EDITOR_MENU
-
-        if step == "item_url":
-            if text and (
-                len(text) > _URL_MAX or not text.startswith(("https://", "http://"))
-            ):
-                await reply_rich(
-                    msg, t("rules.editor.bad_url", locale, plain=True), parse_mode=None
-                )
-                return WAITING_EDITOR_MENU
-            category = scope.get("rules_category")
-            title = scope.get("rules_item_title")
-            body = scope.get("rules_item_body")
-            if not category or not title or not body:
-                clear_item_step(scope)
-                await reply_rich(
-                    msg,
-                    t("rules.editor.unexpected", locale, plain=True),
-                    log_label="rules editor incomplete item",
-                    parse_mode=None,
-                )
-                return WAITING_EDITOR_MENU
-            try:
-                await db.rules_db.add_item(
-                    int(version["id"]),
-                    str(category["category_key"]),
-                    str(title),
-                    str(body),
-                    text or None,
-                )
-            except ValueError as exc:
-                log.warning("Rules item write refused: %s", exc)
-                clear_item_step(scope)
-                await reply_rich(
-                    msg,
-                    t("rules.editor.unexpected", locale, plain=True),
-                    log_label="rules editor version changed",
-                    parse_mode=None,
-                )
-                return WAITING_EDITOR_MENU
-            clear_item_step(scope)
-            return await self.items(update, ctx)
-
-        await reply_rich(
-            msg,
-            t("rules.editor.unexpected", locale, plain=True),
-            log_label="rules editor unexpected text",
-            parse_mode=None,
-        )
-        return WAITING_EDITOR_MENU
-
-    async def categories(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """List the categories of the open draft, creating the draft if needed."""
-        q = update.callback_query
-        if q is not None:
-            await q.answer()
-        opened = await self._set_and_draft(update, ctx)
-        if opened is None:
-            return ConversationHandler.END
-        set_doc, _version = opened
-        set_id = int(set_doc["id"])
-        categories = await db.rules_db.list_categories(set_id)
-        text = rules_msg.category_list(categories, await self._locale(update))
-        markup = rules_btn.categories_btn(categories, await self._locale(update))
-        await self._edit_or_reply(update, text, markup)
-        return WAITING_EDITOR_MENU
-
-    async def items(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, page: int = 0
-    ) -> int:
-        """List at most five items of the selected draft category."""
-        q = update.callback_query
-        if q is not None:
-            await q.answer()
-        scope = flow_scope(ctx, update)
-        version_id = int(scope["rules_version"]["id"])
-        category = scope.get("rules_category")
-        category_key = str(category["category_key"]) if category else None
-        items = await db.rules_db.list_items(version_id, category_key)
-        total_pages, page = clamp_page(len(items), page, 5)
-        chunk = items[page * 5 : (page + 1) * 5]
-        locale = await self._locale(update)
-        await self._edit_or_reply(
-            update,
-            rules_msg.item_list(chunk, locale),
-            rules_btn.editor_items_page_btn(page, total_pages, locale),
-        )
-        return WAITING_EDITOR_MENU
-
-    async def items_page(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """Show another page of the editor item list."""
-        query = update.callback_query
-        page = 0
-        if query is not None and query.data:
-            try:
-                page = int(query.data.split(":", 1)[1])
-            except ValueError, IndexError:
-                page = 0
-        return await self.items(update, ctx, page)
-
-    async def ask_category_title(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
-        """Ask for a new category title."""
-        q = update.callback_query
-        if q is not None:
-            await q.answer()
-        flow_scope(ctx, update)["rules_step"] = "category_title"
-        await self._edit_or_reply(
-            update,
-            t("rules.editor.ask_category", await self._locale(update), plain=True),
-            rules_btn.prompt_btn("rules_panel", await self._locale(update)),
-        )
-        return WAITING_EDITOR_MENU
-
-    async def ask_item_title(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
-    ) -> int:
-        """Ask for a new item title in the selected category."""
-        q = update.callback_query
-        if q is not None:
-            await q.answer()
-        flow_scope(ctx, update)["rules_step"] = "item_title"
-        await self._edit_or_reply(
-            update,
-            t("rules.editor.ask_title", await self._locale(update), plain=True),
-            rules_btn.prompt_btn("rules_categories", await self._locale(update)),
-        )
-        return WAITING_EDITOR_MENU
-
-    async def preview(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, page: int = 0
-    ) -> int:
-        """Render at most five draft items exactly as the channel will see them."""
-        q = update.callback_query
-        if q is not None:
-            await q.answer()
-        scope = flow_scope(ctx, update)
-        version_id = int(scope["rules_version"]["id"])
-        items = await db.rules_db.list_items(version_id)
-        total_pages, page = clamp_page(len(items), page, 5)
-        chunk = items[page * 5 : (page + 1) * 5]
-        text = await rules_msg.preview(chunk, await self._locale(update))
-        await self._edit_or_reply(
-            update,
-            text,
-            rules_btn.editor_preview_page_btn(
-                page, total_pages, await self._locale(update)
-            ),
-        )
-        return WAITING_EDITOR_MENU
-
-    async def preview_page(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
-        """Show another page of the draft preview."""
-        query = update.callback_query
-        page = 0
-        if query is not None and query.data:
-            try:
-                page = int(query.data.split(":", 1)[1])
-            except ValueError, IndexError:
-                page = 0
-        return await self.preview(update, ctx, page)
 
     async def ask_discard(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         """Ask for confirmation before removing the draft."""
@@ -522,7 +217,7 @@ class RulesEditor:
         if q is not None:
             await q.answer()
         locale = await self._locale(update)
-        await self._edit_or_reply(
+        await edit_or_reply(
             update,
             t("rules.editor.confirm_discard", locale),
             rules_btn.confirm_btn("rules_discard_yes", "rules_discard_no", locale),
@@ -542,7 +237,7 @@ class RulesEditor:
         if version_id is not None:
             await db.rules_db.discard_draft(int(version_id))
         clear_editor_scope(scope)
-        await self._edit_or_reply(
+        await edit_or_reply(
             update, t("rules.editor.discarded", await self._locale(update)), None
         )
         return ConversationHandler.END
@@ -553,7 +248,7 @@ class RulesEditor:
         if q is not None:
             await q.answer()
         clear_editor_scope(flow_scope(ctx, update))
-        await self._edit_or_reply(
+        await edit_or_reply(
             update, t("rules.editor.cancelled", await self._locale(update)), None
         )
         return ConversationHandler.END
@@ -569,16 +264,6 @@ class RulesEditor:
             except Exception as exc:
                 log.debug("foreign picker cancel answer failed: %s", exc)
         return WAITING_EDITOR_MENU
-
-    async def _edit_or_reply(self, update: Update, text: str, markup: Any) -> None:
-        """Edit the invoking message, or reply when no callback is present."""
-        q = update.callback_query
-        if q is not None:
-            await safe_edit_cb(q, text, parse_mode=None, reply_markup=markup)
-            return
-        msg = update.effective_message
-        if msg is not None:
-            await reply_rich(msg, text, reply_markup=markup)
 
 
 rules_editor = RulesEditor()
@@ -596,40 +281,81 @@ def build_rules_conv() -> ConversationHandler:
             WAITING_EDITOR_MENU: [
                 CallbackQueryHandler(rules_editor.panel, pattern=r"^rules_panel$"),
                 CallbackQueryHandler(
-                    rules_editor.categories, pattern=r"^rules_edit_draft$"
-                ),
-                CallbackQueryHandler(rules_editor.preview, pattern=r"^rules_preview$"),
-                CallbackQueryHandler(
-                    rules_editor.preview_page, pattern=r"^rules_preview_page:\d+$"
+                    rules_draft_editor.categories, pattern=r"^rules_edit_draft$"
                 ),
                 CallbackQueryHandler(
-                    rules_editor.items_page, pattern=r"^rules_items_page:\d+$"
+                    rules_draft_editor.preview, pattern=r"^rules_preview$"
                 ),
                 CallbackQueryHandler(
-                    rules_editor.settings, pattern=r"^rules_settings$"
+                    rules_draft_editor.preview_page,
+                    pattern=r"^rules_preview_page:\d+$",
+                ),
+                CallbackQueryHandler(
+                    rules_draft_editor.preview_category,
+                    pattern=r"^rules_preview_cat:.+$",
+                ),
+                CallbackQueryHandler(
+                    rules_draft_editor.preview_section,
+                    pattern=r"^rules_preview_sec:\d+$",
+                ),
+                CallbackQueryHandler(
+                    rules_draft_editor.items_page, pattern=r"^rules_items_page:\d+$"
+                ),
+                CallbackQueryHandler(
+                    rules_editor.choose_language, pattern=r"^rules_lang$"
+                ),
+                CallbackQueryHandler(
+                    rules_editor.set_language, pattern=r"^rules_lang_set:.+$"
                 ),
                 CallbackQueryHandler(
                     rules_editor.ask_discard, pattern=r"^rules_discard$"
                 ),
                 CallbackQueryHandler(
-                    rules_editor.cat_action,
+                    rules_draft_editor.cat_action,
                     pattern=r"^rules_cat_(rename|up|down|del):.+",
                 ),
                 CallbackQueryHandler(
-                    rules_editor.category_items, pattern=r"^rules_cat:.+"
+                    rules_draft_editor.category_items, pattern=r"^rules_cat:.+"
                 ),
                 CallbackQueryHandler(
-                    rules_editor.categories, pattern=r"^rules_categories$"
+                    rules_draft_editor.categories, pattern=r"^rules_categories$"
                 ),
                 CallbackQueryHandler(
-                    rules_editor.ask_category_title, pattern=r"^rules_cat_add$"
+                    rules_draft_editor.ask_category_title, pattern=r"^rules_cat_add$"
                 ),
                 CallbackQueryHandler(
-                    rules_editor.ask_item_title, pattern=r"^rules_item_add$"
+                    rules_draft_editor.ask_item_title, pattern=r"^rules_item_add$"
+                ),
+                CallbackQueryHandler(
+                    rules_draft_editor.ask_markdown, pattern=r"^rules_upload$"
+                ),
+                CallbackQueryHandler(
+                    rules_draft_editor.sections, pattern=r"^rules_sections$"
+                ),
+                CallbackQueryHandler(
+                    rules_draft_editor.edit_section,
+                    pattern=r"^rules_section_edit:\d+$",
+                ),
+                CallbackQueryHandler(
+                    rules_draft_editor.apply_format, pattern=r"^rules_fmt:.+$"
+                ),
+                CallbackQueryHandler(
+                    rules_draft_editor.ask_section_title,
+                    pattern=r"^rules_section_title$",
                 ),
                 CallbackQueryHandler(rules_editor.publish, pattern=r"^rules_publish$"),
                 MessageHandler(
-                    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, rules_editor.on_text
+                    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, rules_draft_editor.on_text
+                ),
+            ],
+            WAITING_MARKDOWN: [
+                MessageHandler(filters.Document.ALL, rules_draft_editor.on_markdown),
+                MessageHandler(
+                    filters.TEXT & ~ALL_PREFIXES_CMD_FILTER, rules_draft_editor.on_text
+                ),
+                CallbackQueryHandler(rules_editor.panel, pattern=r"^rules_panel$"),
+                CallbackQueryHandler(
+                    rules_editor.choose_language, pattern=r"^rules_lang$"
                 ),
             ],
             WAITING_CONFIRM_DISCARD: [
