@@ -95,6 +95,37 @@ async def test_a_new_draft_publishes_and_supersedes_the_previous_version(
     assert len(await db.rules_db.all_items(int(first_draft["id"]))) == 1
 
 
+async def test_publishing_another_locale_keeps_the_working_locale_published(
+    rules_ready: str,
+) -> None:
+    """Publishing an id-ID draft must not supersede the en-US published set."""
+    await seed_users(7, 8)
+    rule_set = await db.rules_db.get_or_create_community_set()
+    set_id = int(rule_set["id"])
+
+    en_draft = await db.rules_db.open_draft(set_id, 7, locale="en-US")
+    await db.rules_db.add_item(en_draft["id"], "conduct", "No spam", "Do not spam")
+    await db.rules_db.promote_version(en_draft["id"], 7)
+
+    id_draft = await db.rules_db.open_draft(set_id, 8, locale="id-ID")
+    await db.rules_db.add_item(id_draft["id"], "conduct", "Tanpa spam", "Jangan spam")
+    await db.rules_db.promote_version(id_draft["id"], 8)
+
+    # * Both locales keep their own published version; neither was destroyed.
+    en_published = await db.rules_db.published_version(set_id, locale="en-US")
+    id_published = await db.rules_db.published_version(set_id, locale="id-ID")
+    assert en_published is not None
+    assert int(en_published["id"]) == int(en_draft["id"])
+    assert id_published is not None
+    assert int(id_published["id"]) == int(id_draft["id"])
+
+    en_row = await fetch_one(
+        select(rule_set_versions).where(rule_set_versions.c.id == int(en_draft["id"]))
+    )
+    assert en_row is not None
+    assert en_row["status"] == "published"
+
+
 async def test_only_one_publication_run_is_live_per_set_and_channel(
     rules_ready: str,
 ) -> None:

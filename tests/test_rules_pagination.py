@@ -57,6 +57,20 @@ def test_index_buttons_are_two_per_row_with_paging() -> None:
     assert "close_msg" in callbacks
 
 
+def test_live_editor_panel_offers_publish_and_discard() -> None:
+    """The reachable section panel must expose publish/discard on a filled draft."""
+    markup = rules_btn.editor_sections_btn(_ITEMS, "en-US")
+    callbacks = {b.callback_data for row in markup.inline_keyboard for b in row}
+    assert "rules_publish" in callbacks
+    assert "rules_discard" in callbacks
+    # * An empty draft guides the reader into editing instead of offering to
+    # * publish or discard nothing.
+    empty = rules_btn.editor_sections_btn([], "en-US")
+    empty_callbacks = {b.callback_data for row in empty.inline_keyboard for b in row}
+    assert "rules_publish" not in empty_callbacks
+    assert "rules_discard" not in empty_callbacks
+
+
 def test_section_buttons_are_two_per_row() -> None:
     markup = rules_btn.category_sections_btn(["Istilah", "Aturan", "Sanksi"], "en-US")
     rows = markup.inline_keyboard

@@ -112,8 +112,13 @@ async def _acknowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     locale = await locale_for_update(update)
     try:
-        current = await db.rules_db.published_rules(locale=locale)
-        if current is None or int(current["version"]["id"]) != version_id:
+        # * Validate against the same authority that built the greeting button.
+        # * The button carries the version from acknowledgement_requirement()
+        # * (the working-locale published version); comparing against the
+        # * reader-locale published version told non-default-locale members their
+        # * freshly generated button was outdated, so they could never accept.
+        requirement = await db.rules_db.acknowledgement_requirement()
+        if requirement is None or int(requirement[0]) != version_id:
             await query.answer(
                 t("rules.ack.outdated", locale, plain=True), show_alert=True
             )

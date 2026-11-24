@@ -18,6 +18,11 @@ from tcbot.utils.time_and_date import utc_now
 async def promote_version(version_id: int, user_id: int) -> None:
     """Supersede the old published version and publish this draft.
 
+    The superseded version is the published row for the draft's own locale.
+    Superseding ``WORKING_LOCALE`` unconditionally would destroy the active
+    published set whenever a draft in another locale was published, because
+    a set keeps one published version per content locale.
+
     The channel sync is deliberately outside this transaction: the database
     is the source of truth and a later publish reconciles a failed channel
     operation. Keeping the orchestration in the pipeline also keeps the
@@ -32,11 +37,12 @@ async def promote_version(version_id: int, user_id: int) -> None:
         if row is None or row["status"] != "draft":
             raise RuntimeError("The rules draft no longer exists")
         set_id = int(row["rule_set_id"])
+        content_locale = row["locale"] or WORKING_LOCALE
         await sess.execute(
             rule_set_versions.update()
             .where(
                 rule_set_versions.c.rule_set_id == set_id,
-                rule_set_versions.c.locale == WORKING_LOCALE,
+                rule_set_versions.c.locale == content_locale,
                 rule_set_versions.c.status == "published",
             )
             .values(status="superseded", updated_at=utc_now())

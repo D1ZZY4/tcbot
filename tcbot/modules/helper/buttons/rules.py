@@ -117,12 +117,7 @@ def editor_panel_btn(
             ]
         )
     rows.append([_button(t("button.upload_md", locale, plain=True), "rules_upload")])
-    rows.append(
-        [
-            _button(t("button.back", locale, plain=True), "rules_lang"),
-            _button(t("button.rules_language", locale, plain=True), "rules_lang"),
-        ]
-    )
+    rows.append([_button(t("button.rules_language", locale, plain=True), "rules_lang")])
     rows.append([close_btn(locale)])
     return InlineKeyboardMarkup(rows)
 
@@ -318,6 +313,24 @@ def editor_sections_btn(
         ]
     )
     rows.append([_button(t("button.preview", locale, plain=True), "rules_preview")])
+    # * The live editor reaches its sections through this builder, so the
+    # * publish/discard controls must live here too. Gating on content matches
+    # * the main editor panel: an empty draft cannot be published or discarded.
+    if items:
+        rows.append(
+            [
+                _button(
+                    t("button.publish", locale, plain=True),
+                    "rules_publish",
+                    style=KeyboardButtonStyle.SUCCESS,
+                ),
+                _button(
+                    t("button.discard", locale, plain=True),
+                    "rules_discard",
+                    style=KeyboardButtonStyle.DANGER,
+                ),
+            ]
+        )
     rows.append(
         [
             _button(t("button.back", locale, plain=True), "rules_lang"),
