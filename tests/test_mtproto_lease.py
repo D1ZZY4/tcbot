@@ -110,8 +110,16 @@ def _stub_lease(monkeypatch: pytest.MonkeyPatch, spy: _LeaseSpy) -> None:
     async def _release(self: Any, owner: str) -> None:
         await spy.release(self, owner)
 
+    async def _refresh(self: Any, owner: str, *, ttl_s: float) -> bool:
+        return True
+
+    async def _clear(self: Any) -> None:
+        return None
+
     monkeypatch.setattr(PostgresStorage, "claim_owner", _claim)
     monkeypatch.setattr(PostgresStorage, "release_owner", _release)
+    monkeypatch.setattr(PostgresStorage, "refresh_owner", _refresh)
+    monkeypatch.setattr(PostgresStorage, "clear_session_for_relogin", _clear)
 
 
 def _run(coro: Awaitable[Any]) -> Any:
@@ -232,6 +240,25 @@ def test_the_release_removes_only_its_own_row(
     assert "mtproto_state.owner = " in sql
 
 
+def test_clear_session_spares_the_lease_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Session recovery deletes stale keys and states, never the owner fence."""
+    rec = _Recorder()
+    monkeypatch.setattr(mtproto_store, "db_call", identity_db_call)
+    monkeypatch.setattr(mtproto_store, "run", rec.run)
+
+    _run(mtproto_store.clear_session_for_relogin(PostgresStorage("test-ns")))
+
+    sql = compile_sql(rec.statements[0])
+    assert "DELETE FROM mtproto_state" in sql
+    patterns = [str(value) for value in rec.statements[0].compile().params.values()]
+    assert any(pattern.endswith(":kv:%") for pattern in patterns)
+    assert any(pattern.endswith(":ustate:%") for pattern in patterns)
+    assert any(pattern.endswith(":peer:%") for pattern in patterns)
+    assert not any(":lock:" in pattern for pattern in patterns)
+
+
 def test_the_claim_refuses_on_a_database_outage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -302,10 +329,10 @@ def test_start_releases_the_lease_on_connect_failure(
     assert len(spy.releases) == 1
 
 
-def test_start_degrades_on_duplicate_key(
+def test_start_fails_closed_on_duplicate_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A duplicated auth key parks the session instead of crashing the bot."""
+    """A duplicate key means a live peer; recovery would kill both sessions."""
     _reset_mtproto_state(monkeypatch)
     spy = _LeaseSpy()
     _stub_lease(monkeypatch, spy)
@@ -317,33 +344,46 @@ def test_start_degrades_on_duplicate_key(
     client = _Dup()
     monkeypatch.setattr(mtproto, "_client", client)
 
-    assert asyncio.run(mtproto.start()) is False
+    with pytest.raises(RuntimeError, match="another live instance"):
+        asyncio.run(mtproto.start())
     assert mtproto.is_auth_dead() is True
     assert client.is_connected is False
     assert len(spy.releases) == 1
-    assert asyncio.run(mtproto.resolve_user(42)) is None
 
 
-def test_start_degrades_on_not_found_key(
+def test_start_recovers_from_not_found_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A vanished auth key parks the session instead of crashing the bot."""
+    """A vanished auth key is rebuilt once from the bot token."""
     _reset_mtproto_state(monkeypatch)
     spy = _LeaseSpy()
     _stub_lease(monkeypatch, spy)
+    cleared: list[int] = []
+
+    async def _clear(self: Any) -> None:
+        cleared.append(1)
+
+    monkeypatch.setattr(PostgresStorage, "clear_session_for_relogin", _clear)
 
     class _Gone(_FakeClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
         async def start(self) -> None:
-            raise AuthKeyNotFound("gone")
+            self.calls += 1
+            if self.calls == 1:
+                raise AuthKeyNotFound("gone")
+            self.is_connected = True
 
     client = _Gone()
     monkeypatch.setattr(mtproto, "_client", client)
 
-    assert asyncio.run(mtproto.start()) is False
-    assert mtproto.is_auth_dead() is True
-    assert client.is_connected is False
-    assert len(spy.releases) == 1
-    assert asyncio.run(mtproto.resolve_user(42)) is None
+    assert asyncio.run(mtproto.start()) is True
+    assert client.calls == 2
+    assert cleared == [1]
+    assert mtproto.is_auth_dead() is False
+    assert len(spy.releases) == 0
 
 
 def test_handle_auth_failure_parks_once(

@@ -42,6 +42,14 @@ async def _release_ok(self: object, owner: str) -> None:
     return None
 
 
+async def _refresh_ok(self: object, owner: str, *, ttl_s: float) -> bool:
+    return True
+
+
+async def _clear_ok(self: object) -> None:
+    return None
+
+
 def _stub_lease(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub the owner lease so start()/stop() never touch the database."""
     monkeypatch.setattr(
@@ -49,6 +57,13 @@ def _stub_lease(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(
         "tcbot.database.mtproto_store.PostgresStorage.release_owner", _release_ok
+    )
+    monkeypatch.setattr(
+        "tcbot.database.mtproto_store.PostgresStorage.refresh_owner", _refresh_ok
+    )
+    monkeypatch.setattr(
+        "tcbot.database.mtproto_store.PostgresStorage.clear_session_for_relogin",
+        _clear_ok,
     )
 
 
@@ -101,22 +116,43 @@ def test_start_fatal_when_bot_session_fails(
         asyncio.run(mtproto.start())
 
 
-def test_start_degrades_on_a_revoked_session(
+def test_start_recovers_from_a_revoked_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A revoked session must not boot-loop the whole bot.
-
-    Telegram invalidated the stored session, which needs operator action.
-    Killing the process over it would take moderation offline in a restart
-    loop, so the client parks and the bot serves Bot-API-only.
-    """
+    """A revoked session is rebuilt once from the bot token under the lease."""
     _with_creds(monkeypatch, 12345, "hash")
     _stub_lease(monkeypatch)
-    monkeypatch.setattr(
-        mtproto, "_client", _FakeClient(connected=False, error=SessionRevoked())
-    )
+    cleared: list[int] = []
 
-    assert asyncio.run(mtproto.start()) is False
+    async def _clear(self: object) -> None:
+        cleared.append(1)
+
+    monkeypatch.setattr(
+        "tcbot.database.mtproto_store.PostgresStorage.clear_session_for_relogin",
+        _clear,
+    )
+    fake = _FakeClient(connected=False, start_errors=[SessionRevoked()])
+    monkeypatch.setattr(mtproto, "_client", fake)
+
+    assert asyncio.run(mtproto.start()) is True
+    assert fake.is_connected is True
+    assert cleared == [1]
+    assert mtproto.is_auth_dead() is False
+
+
+def test_start_fails_closed_when_session_recovery_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bad credentials must still fail boot after one recovery attempt."""
+    _with_creds(monkeypatch, 12345, "hash")
+    _stub_lease(monkeypatch)
+    fake = _FakeClient(
+        connected=False, start_errors=[SessionRevoked(), RuntimeError("bad token")]
+    )
+    monkeypatch.setattr(mtproto, "_client", fake)
+
+    with pytest.raises(RuntimeError, match="recovery failed"):
+        asyncio.run(mtproto.start())
     assert mtproto.is_auth_dead() is True
 
 
@@ -155,9 +191,16 @@ class _FloodWait(Exception):
 class _FakeClient:
     """Kurigram client double: never touches the network."""
 
-    def __init__(self, *, connected: bool = True, error: Any = None) -> None:
+    def __init__(
+        self,
+        *,
+        connected: bool = True,
+        error: Any = None,
+        start_errors: list[BaseException] | None = None,
+    ) -> None:
         self.is_connected = connected
         self._error = error
+        self._start_errors = start_errors
         self._user: Any = _FakeMTUser()
         self._resolved: Any = None
         self.start_called = False
@@ -165,7 +208,10 @@ class _FakeClient:
 
     async def start(self) -> None:
         self.start_called = True
-        if self._error is not None:
+        if self._start_errors is not None:
+            if self._start_errors:
+                raise self._start_errors.pop(0)
+        elif self._error is not None:
             raise self._error
         self.is_connected = True
 

@@ -102,17 +102,15 @@ def client() -> Client:
 async def start() -> bool:
     """Claim the single-owner lease, then connect the shared client.
 
-    Returns True when the client connected, False when another live
-    instance holds the lease, the claim failed, or Telegram rejects the
-    stored key as duplicated/invalidated (Bot-API-only degraded mode:
-    every resolver returns None, and moderation is unaffected). A degraded
-    False is NOT an error: aborting
-    boot over MTProto would take federation enforcement offline for a
-    lookup enhancement, which is the worse trade.
+    Returns True when the client connected, and False only when another
+    live instance holds the lease. Kurigram is the sole transport, so a
+    missing session is fatal rather than a silent degrade.
 
-    Raises RuntimeError when unusable (unconfigured or a genuinely failed
-    login): those are always real and boot must fail loudly instead of
-    serving a silently downgraded bot.
+    A revoked session or a missing auth key is recoverable from the bot
+    token: the stale session rows are cleared under the lease and one fresh
+    login is attempted. A duplicated key is not recoverable because it
+    means another instance is live; it fails closed. Bad credentials and
+    a failed recovery also fail closed with RuntimeError.
     """
     global _lease_owner, _heartbeat_task, _auth_dead, _client
     if _auth_dead:
@@ -162,29 +160,46 @@ async def start() -> bool:
         _lease_owner = None
         raise
     except Exception as exc:
-        # * A rejected stored key (duplicate live instance, a
-        # * server-invalidated key, or a revoked session) must degrade,
-        # * never abort boot: killing the whole process over MTProto takes
-        # * federation enforcement offline for a lookup enhancement. Park it
-        # * sticky (no in-process re-login races) and serve Bot-API-only
-        # * until a restart.
-        if _is_auth_fatal(exc):
+        if is_session_revoked(exc) or is_auth_key_not_found(exc):
+            # * Telegram rejected the stored key but the bot token can mint
+            # * a new one. Clear only session rows under the held lease, then
+            # * retry once on the same Client object, which start() resets to
+            # * disconnected after a failed login.
+            try:
+                await store.clear_session_for_relogin()
+                if not await store.refresh_owner(owner, ttl_s=_LEASE_TTL_S):
+                    raise RuntimeError("MTProto lease was lost during session recovery")
+                async with asyncio.timeout(_START_TIMEOUT_S):
+                    await c.start()
+            except asyncio.CancelledError:
+                await _release_lease_quietly(store, owner)
+                _lease_owner = None
+                raise
+            except Exception as recover_exc:
+                _auth_dead = True
+                await _release_lease_quietly(store, owner)
+                _lease_owner = None
+                raise RuntimeError(
+                    f"MTProto session recovery failed: {recover_exc}"
+                ) from recover_exc
+            log.warning(
+                "MTProto stored session was rejected by Telegram; rebuilt a "
+                "fresh bot-token session."
+            )
+        elif _is_auth_fatal(exc):
+            # * AUTH_KEY_DUPLICATED means a peer is already live. Recovering
+            # * here would create two sessions and get both killed.
             _auth_dead = True
             await _release_lease_quietly(store, owner)
             _lease_owner = None
-            log.exception(
-                "MTProto connect rejected (406 AUTH_KEY_DUPLICATED, "
-                "transport 404 AUTH_KEY_NOT_FOUND, or 401 SESSION_REVOKED): "
-                "the stored session is dead. Serving Bot-API-only. Operator "
-                "action: stop every bot instance, delete the '%s:*' docs from "
-                "mtproto_state, then boot one; the bot-token login mints a "
-                "fresh session.",
-                cfg.mtproto_session,
-            )
-            return False
-        await _release_lease_quietly(store, owner)
-        _lease_owner = None
-        raise RuntimeError(f"MTProto bot session failed: {exc}") from exc
+            raise RuntimeError(
+                "MTProto session is held by another live instance "
+                "(AUTH_KEY_DUPLICATED); stop it before starting this one."
+            ) from exc
+        else:
+            await _release_lease_quietly(store, owner)
+            _lease_owner = None
+            raise RuntimeError(f"MTProto bot session failed: {exc}") from exc
     log.info("MTProto connected (bot session).")
     _heartbeat_task = asyncio.get_running_loop().create_task(
         _heartbeat_lease(c, store, owner)
@@ -327,8 +342,9 @@ def is_session_revoked(exc: BaseException) -> bool:
 
     A revoked session is not a transport failure: the auth key is still
     present locally but Telegram no longer accepts it, because the session
-    was terminated from another client. It needs the same operator-driven
-    recovery as a dead auth key, never an in-process reconnect loop.
+    was terminated from another client. Startup clears the stale session
+    and performs one fresh bot-token login; a late runtime failure parks
+    the client instead of reconnecting inside a live handler.
     """
     try:
         from pyrogram.errors import (  # noqa: PLC0415 (heavy extra; import only on use)
@@ -365,11 +381,10 @@ async def handle_auth_failure() -> None:
     """Park MTProto after Telegram invalidates the shared auth key.
 
     Idempotent and never raises: stops the client, releases the lease, and
-    marks the session dead so every resolver degrades to Bot-API-only
-    instead of hammering a dead key. Recovery is operator-driven by design
-    (an in-process re-login would race a still-live duplicate): stop ALL
-    instances, purge the `<session>:*` docs from `mtproto_state`, then boot
-    exactly one instance and the bot-token login mints a fresh key.
+    marks the session dead so every resolver stops hammering a dead key.
+    Startup handles session recovery once under the lease; a failure while
+    the process is live is reported to the operator and needs a restart
+    rather than an in-process re-login that could race a live duplicate.
     """
     global _auth_dead
     if _auth_dead:

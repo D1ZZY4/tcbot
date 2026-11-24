@@ -310,6 +310,29 @@ async def release_owner(store: PostgresStorage, owner: str) -> None:
         log.debug("MTProto lease release failed (expiry covers it): %s", exc)
 
 
+async def clear_session_for_relogin(store: PostgresStorage) -> None:
+    """Drop auth, update-state and peer rows, preserving the owner lease.
+
+    Telegram can revoke a stored session (401 SESSION_REVOKED) or invalidate
+    its auth key (404 AUTH_KEY_NOT_FOUND). A bot-token login then mints a
+    fresh session, but only when the stale key and update states are gone.
+    The lease row is deliberately excluded: dropping it here would let a
+    peer claim the namespace while this instance is still rebuilding it.
+    """
+    ns = store._ns_like
+    await _retry_write(
+        lambda: run(
+            mtproto_state.delete().where(
+                or_(
+                    mtproto_state.c.id.like(f"{ns}:kv:%"),
+                    mtproto_state.c.id.like(f"{ns}:ustate:%"),
+                    mtproto_state.c.id.like(f"{ns}:peer:%"),
+                )
+            )
+        )
+    )
+
+
 # ──────────────────────────── Batched writes ────────────────────── #
 # * Kurigram hands the store the whole peer list of a session in one
 # * call, and the same for the update states. Writing that list row by
@@ -861,3 +884,7 @@ class PostgresStorage(Storage):
     async def release_owner(self, owner: str) -> None:
         """Release the lease; delegates to the module-level helper."""
         return await release_owner(self, owner)
+
+    async def clear_session_for_relogin(self) -> None:
+        """Drop stale session rows; delegates to the module-level helper."""
+        return await clear_session_for_relogin(self)
