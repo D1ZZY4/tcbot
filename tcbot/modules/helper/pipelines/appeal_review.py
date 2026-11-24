@@ -333,7 +333,7 @@ class ApproveMixin:
             log.warning(
                 "approve_appeal DM to %d failed for ban %s: %s", target_id, ban_id, dm_r
             )
-        if isinstance(card_r, BaseException):
+        if isinstance(card_r, BaseException) or card_r is False:
             log.warning(
                 "approve_appeal review-card edit failed for ban %s: %s", ban_id, card_r
             )
@@ -439,8 +439,9 @@ class RejectMixin:
         ):
             log.debug("reject_appeal name fetch failed: %s", name_r)
         target_locale = await locale_for_user(target_id)
+        card_ok = True
         try:
-            await safe_edit_cb(
+            card_ok = await safe_edit_cb(
                 q,
                 t(
                     "appeals.decision.reject_card",
@@ -455,6 +456,7 @@ class RejectMixin:
             log.warning(
                 "reject_appeal review-card edit failed for ban %s: %s", ban_id, exc
             )
+        if not card_ok:
             action_id = int(ban.get("id") or 0)
             review_id = int(ban.get("review_message_id") or 0)
             if action_id and review_id and cfg.main_group:

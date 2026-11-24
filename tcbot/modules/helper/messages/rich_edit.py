@@ -182,21 +182,25 @@ async def safe_edit_cb(
     catch_all: bool = False,
     parse_mode: Any = None,
     **kwargs: Any,
-) -> None:
-    """Edit a callback-query message as a rich message."""
+) -> bool:
+    """Edit a callback-query message as a rich message.
+
+    Returns whether the edit actually landed. Callers that must not lose a
+    state change (for example a decided appeal card) use this to queue a
+    durable retry when Telegram refused the edit.
+    """
     _ = parse_mode
     target = getattr(q, "message", None)
     rich_bot = _bot_of(q)
     if target is None or not isinstance(rich_bot, Bot):
-        await _edit_via(
+        return await _edit_via(
             q.edit_message_text(text, **kwargs),
             log_level=log_level,
             log_label=log_label,
             catch_all=catch_all,
             default_msg="callback edit failed: %s",
         )
-        return
-    await _edit_via(
+    return await _edit_via(
         edit_rich(
             rich_bot,
             target.chat.id,
@@ -255,9 +259,14 @@ async def safe_edit_message(
 
 
 async def clear_markup_cb(q: CallbackQuery) -> None:
-    """Remove the inline keyboard from a callback-query message."""
+    """Remove the inline keyboard from a callback-query message.
+
+    PTB drops ``reply_markup=None`` from the request, which leaves the old
+    keyboard attached. An empty markup serialises to ``{"inline_keyboard": []}``
+    and is the only way to actually clear it through the Bot API.
+    """
     try:
-        await q.edit_message_reply_markup(reply_markup=None)
+        await q.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
     except BadRequest as e:
         if any(i in str(e).lower() for i in _IGNORED):
             return

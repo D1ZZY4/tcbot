@@ -684,7 +684,9 @@ async def _execute_ban(bot: Bot, msgs: list[Message], meta: dict[str, Any]) -> N
             db.users_cache.upsert_user(target_id, None, target_fname),
             messages.send_text(bot, target_id, _pm_text, reply_markup=_pm_btn),
             bot.edit_message_reply_markup(
-                chat_id=prompt_chat_id, message_id=prompt_msg_id
+                chat_id=prompt_chat_id,
+                message_id=prompt_msg_id,
+                reply_markup=InlineKeyboardMarkup([]),
             ),
             return_exceptions=True,
         )
@@ -921,7 +923,9 @@ async def on_proof_timeout(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> in
     if prompt_chat and prompt_msg_id:
         try:
             await ctx.bot.edit_message_reply_markup(
-                chat_id=prompt_chat, message_id=prompt_msg_id
+                chat_id=prompt_chat,
+                message_id=prompt_msg_id,
+                reply_markup=InlineKeyboardMarkup([]),
             )
         except Exception as exc:
             log.debug("Ban proof-timeout markup clear failed: %s", exc)
