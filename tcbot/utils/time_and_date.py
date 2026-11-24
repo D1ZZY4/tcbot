@@ -72,7 +72,12 @@ _SECS_PER_HOUR: int = 3_600
 _SECS_PER_DAY: int = 86_400
 _DAYS_PER_YEAR: int = 365
 _DAYS_PER_MONTH: int = 30
-_MAX_DURATION_DAYS: int = 36500
+# * Telegram treats any restriction longer than 366 days as indefinite. A
+# * finite stored expiry beyond that point would disagree with the actual
+# * Telegram state, so the parser rejects the token instead of accepting a
+# * mute the expiry sweep could never end. Omit the duration for a permanent
+# * mute.
+_MAX_DURATION_DAYS: int = 366
 # * Telegram treats a restriction shorter than 30 seconds as permanent. A
 # * 60-second floor keeps the stored expiry and the actual Telegram state in
 # * agreement even after API-call latency.

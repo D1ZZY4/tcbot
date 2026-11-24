@@ -243,12 +243,23 @@ async def _process_run(
     # * A timed decision that ran out while its run waited is no longer in
     # * force. Applying it would ban or mute a user after the deadline the
     # * moderator set; the revoke run cannot undo the time already served.
-    if operation == "apply" and expiry is not None and to_utc(expiry) <= utc_now():
-        await db.enforcement_db.cancel_run(
-            run_id,
-            error_detail="the decision expired before its delivery",
-        )
-        return
+    if operation == "apply" and expiry is not None:
+        remaining = to_utc(expiry) - utc_now()
+        if remaining <= timedelta(0):
+            await db.enforcement_db.cancel_run(
+                run_id,
+                error_detail="the decision expired before its delivery",
+            )
+            return
+        # * Telegram treats a restriction shorter than 30 seconds as forever.
+        # * Applying a nearly expired mute would leave the user restricted
+        # * indefinitely while the database says it already ended.
+        if action_type == "mute" and remaining < timedelta(seconds=30):
+            await db.enforcement_db.cancel_run(
+                run_id,
+                error_detail="the mute would reach Telegram with under 30s left",
+            )
+            return
     target_user_id = as_int(action.get("target_user_id"))
     if target_user_id <= 0:
         await db.enforcement_db.cancel_run(

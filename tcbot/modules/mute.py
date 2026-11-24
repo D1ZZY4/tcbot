@@ -133,10 +133,10 @@ async def cmd_mute(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
 
     duration = None
     if remaining_args:
-        # * Pop the token only when it parses: an unparsable token
-        # * (overflow past timedelta range or above the 100-year cap)
-        # * stays in the reason text instead of being silently dropped
-        # * from the moderator's message.
+        # * Pop the token only when it parses: an unparsable token (including
+        # * one beyond Telegram's 366-day finite-restriction cap) stays in the
+        # * reason text instead of being silently dropped from the moderator's
+        # * message. Omit the duration for a permanent mute.
         parsed = parse_duration(remaining_args[0])
         if parsed is not None:
             duration = parsed

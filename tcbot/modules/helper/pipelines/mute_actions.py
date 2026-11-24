@@ -72,7 +72,6 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     prompt_chat = meta.get("mute_prompt_chat")
     prompt_id = meta.get("mute_prompt_id")
     dur_str = fmt_duration(duration, locale)
-    until = utc_now() + duration if duration else None
     perms = ChatPermissions(can_send_messages=False)
     admin_fname = meta.get("mute_admin_fname", "Admin")
     chat_id = update.effective_chat.id if update.effective_chat else None
@@ -195,6 +194,12 @@ async def _execute_mute(bot: Bot, update: Update, meta: dict[str, Any]) -> None:
     record_r: BaseException | None = None
     run_id: int | None = None
     rule_ids, rule_note = rules_from_scope(meta, "mute")
+    # * Compute the absolute deadline after the proof upload and demote gate,
+    # * immediately before the write. Capturing it at executor entry let a
+    # * slow upload consume most of a short mute: the worker then applied a
+    # * restriction with under 30 seconds left, which Telegram treats as
+    # * permanent while the stored expiry said otherwise.
+    until = utc_now() + duration if duration else None
     try:
         _, run_id = await db.mutes_db.record_mute(
             target_id,

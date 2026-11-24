@@ -232,6 +232,50 @@ def test_an_apply_that_outlived_its_deadline_is_cancelled(
     assert bot.restricted == []
 
 
+def test_a_mute_with_under_30s_left_is_cancelled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telegram reads a sub-30s restriction as forever, so never apply one."""
+    cancelled: list[int] = []
+    claimed: list[int] = []
+    deadline = datetime.now(UTC) + timedelta(seconds=10)
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [{"id": 1, "action_id": 2, "operation": "apply"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "mute",
+            "action_status": "active",
+            "operation": "apply",
+            "expires_at": deadline,
+        }
+
+    async def _targets(run_id: int, limit: int = 100) -> list[dict[str, object]]:
+        claimed.append(run_id)
+        return [{"id": 3, "chat_id": -100, "attempt_count": 0}]
+
+    async def _cancel(run_id: int, **kwargs: Any) -> None:
+        cancelled.append(run_id)
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_db, "cancel_run", _cancel)
+    bot = _FakeBot()
+
+    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert cancelled == [1]
+    assert claimed == []
+    assert bot.restricted == []
+
+
 def test_an_expired_mute_is_restored(monkeypatch: pytest.MonkeyPatch) -> None:
     _wire(monkeypatch, action_type="mute")
     bot = _FakeBot()

@@ -80,15 +80,17 @@ def test_parse_duration_accepts_every_unit_inside_the_cap() -> None:
     """A long token stays valid when its own unit fits the documented cap.
 
     Building every unit eagerly made the year conversion overflow and
-    returned None for a second-based token that was still inside the
-    36,500-day limit, so a moderator saw a valid duration rejected.
+    returned None for a second-based token that was still inside the cap,
+    so a moderator saw a valid duration rejected.
     """
-    assert parse_duration("400000000s") == timedelta(seconds=400_000_000)
-    assert parse_duration("36500d") == timedelta(days=36_500)
+    assert parse_duration("1000000s") == timedelta(seconds=1_000_000)
+    assert parse_duration("366d") == timedelta(days=366)
 
 
 def test_parse_duration_rejects_tokens_past_the_cap() -> None:
-    assert parse_duration("36501d") is None
+    """Telegram turns restrictions beyond 366 days into permanent ones."""
+    assert parse_duration("367d") is None
+    assert parse_duration("2ye") is None
     assert parse_duration("999999999999999ye") is None
 
 
