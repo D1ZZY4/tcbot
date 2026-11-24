@@ -16,7 +16,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 
 
 def _guard_function() -> str:
-    sql = (_ROOT / "tcbot/database/schema/functions.sql").read_text()
+    sql = (_ROOT / "tcbot/database/schema/functions/rbac.sql").read_text()
     for statement in split_statements(sql):
         if (
             "CREATE OR REPLACE FUNCTION" in statement

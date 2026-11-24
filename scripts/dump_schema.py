@@ -20,7 +20,7 @@ an integration test owns.
 
 Usage::
 
-    uv run python scripts/dump_schema.py --database-url "$DATABASE_URL"
+    uv run python scripts/dump_schema.py
 """
 
 from __future__ import annotations
@@ -82,17 +82,12 @@ def _store_version(path: Path) -> tuple[int, ...]:
     return tuple(int(part) for part in match.group(1).split("."))
 
 
-def _database_url(argument: str) -> str:
-    """Return the database URL, loading the local config when absent."""
-    if argument:
-        return argument.strip()
+def _database_url() -> str:
+    """Return the database URL from the environment or the local config."""
     load_dotenv(find_dotenv("config.env") or find_dotenv(".env"))
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
-        raise SystemExit(
-            "DATABASE_URL is required; pass it as an argument or set it in "
-            "the environment."
-        )
+        raise SystemExit("DATABASE_URL is required in the environment or config.env")
     return url
 
 
@@ -189,6 +184,107 @@ def _portable(statement: str, schema: str) -> str:
         statement,
         flags=re.IGNORECASE,
     )
+
+
+_FUNCTION_NAME = re.compile(r"FUNCTION\s+%SCHEMA%\.([A-Za-z0-9_]+)")
+
+# * The schema function files, split by domain so no file exceeds the budget.
+_MODERATION_PREFIXES = (
+    "moderation_",
+    "assign_moderation",
+    "enforce_moderation",
+    "validate_moderation",
+    "guard_moderation",
+    "prepare_moderation",
+    "refresh_moderation",
+    "queue_revoke",
+    "reconcile_stuck",
+    "expire_due_moderation",
+    "enqueue_reconcile",
+)
+_AUTOMATION_PREFIXES = (
+    "automation_",
+    "guard_automation",
+    "validate_automation",
+    "refresh_automation",
+    "guard_broadcast",
+    "prepare_broadcast",
+    "queue_broadcast",
+    "refresh_broadcast",
+    "validate_broadcast",
+)
+_SCHEDULER_PREFIXES = (
+    "scheduled_",
+    "scheduler_",
+    "run_scheduled",
+    "guard_scheduled",
+    "audit_scheduler",
+    "safe_duration",
+)
+_MAINTENANCE_PREFIXES = (
+    "apply_retention",
+    "retention_window",
+    "sweep_retention",
+    "request_user_erasure",
+    "process_user_erasure",
+    "sweep_pending",
+    "rls_auto_enable",
+    "assert_least_privilege",
+)
+_RBAC_PREFIXES = (
+    "actor_has_permission",
+    "expire_due_role",
+    "guard_promotion",
+    "guard_role",
+    "guard_system_role",
+    "prepare_role",
+    "promotion_requests",
+)
+_IDENTITY_PREFIXES = (
+    "ensure_connected",
+    "guard_community",
+    "guard_join",
+    "repoint_chat",
+    "guard_telegram",
+    "validate_connected",
+    "prevent_historical",
+    "set_updated_at",
+)
+_RULES_PREFIXES = (
+    "ensure_published_rule",
+    "guard_rule_",
+    "validate_rule_publication",
+)
+_AUDIT_PREFIXES = ("guard_appeal_ban_target", "validate_audit_event_entity")
+_MTPROTO_PREFIXES = ("mtproto_state_", "prune_expired_mtproto_state")
+
+
+def _function_domain(name: str) -> str:
+    domains = (
+        (_MTPROTO_PREFIXES, "mtproto"),
+        (_AUDIT_PREFIXES, "moderation_audit"),
+        (_MODERATION_PREFIXES, "moderation"),
+        (_AUTOMATION_PREFIXES, "automation"),
+        (_SCHEDULER_PREFIXES, "scheduler"),
+        (_MAINTENANCE_PREFIXES, "maintenance"),
+        (_RBAC_PREFIXES, "rbac"),
+        (_IDENTITY_PREFIXES, "identity"),
+        (_RULES_PREFIXES, "rules"),
+    )
+    for prefixes, domain in domains:
+        if name.startswith(prefixes):
+            return domain
+    return "core"
+
+
+def _function_groups(statements: list[str]) -> dict[str, list[str]]:
+    """Route each function to its domain file."""
+    grouped: dict[str, list[str]] = {}
+    for statement in statements:
+        match = _FUNCTION_NAME.search(statement)
+        name = match.group(1) if match else ""
+        grouped.setdefault(_function_domain(name), []).append(statement)
+    return grouped
 
 
 def _write(name: str, statements: list[str], schema: str, header: str) -> None:
@@ -323,15 +419,10 @@ def _seed_statements(url: str, schema: str) -> list[str]:
 def main() -> int:
     """Write the schema files from the configured database."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--database-url",
-        default=None,
-        help="the database to read the catalog from",
-    )
     parser.add_argument("--schema", default="public", help="the schema to export")
     args = parser.parse_args()
 
-    url = _database_url(args.database_url or "")
+    url = _database_url()
     dump = _dump(url, args.schema)
     grouped = _split(dump)
 
@@ -341,12 +432,14 @@ def main() -> int:
         args.schema,
         "-- The read-only views of the community.",
     )
-    _write(
-        "functions.sql",
-        grouped["functions.sql"],
-        args.schema,
-        "-- The database functions that own the state transitions.",
-    )
+    function_files = _function_groups(grouped["functions.sql"])
+    for domain, statements in sorted(function_files.items()):
+        _write(
+            f"functions/{domain}.sql",
+            statements,
+            args.schema,
+            f"-- Database functions: {domain}.",
+        )
     _write(
         "triggers.sql",
         grouped["triggers.sql"],

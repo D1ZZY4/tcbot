@@ -149,7 +149,7 @@ def _drop_statements(name: str, schema: str, existing: set[str]) -> list[str]:
             f"DROP VIEW IF EXISTS {view.replace(SCHEMA_PLACEHOLDER, schema)} CASCADE"
             for view in views
         ]
-    if name == "functions.sql":
+    if name.startswith("functions/"):
         functions = [match.group(1) for match in _FUNCTION_PATTERN.finditer(raw)]
         return [
             f"DROP FUNCTION IF EXISTS "

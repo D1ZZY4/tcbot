@@ -15,7 +15,7 @@ from tcbot import cfg
 from tcbot.database import enforcement_db
 from tcbot.database.rules_db import sets as rules_sets
 from tcbot.database.rules_db.categories import _available_key
-from tcbot.database.schema import _schema_of
+from tcbot.database.schema import SCHEMA_FILES, _schema_of
 from tcbot.database.schema.loader import file_statements
 from tcbot.modules.helper.messages.rich_edit import _edit_via
 from tests.postgres_support import identity_db_call
@@ -44,7 +44,13 @@ def test_schema_placeholder_is_valid_inside_sql_literals() -> None:
 
     schema = _schema_of(_Connection())  # type: ignore[arg-type]
     assert schema == "public"
-    script = "\n".join(file_statements("functions.sql", schema))
+    statements = [
+        statement
+        for name in SCHEMA_FILES
+        if name.startswith("functions/")
+        for statement in file_statements(name, schema)
+    ]
+    script = "\n".join(statements)
     assert "SET search_path TO 'pg_catalog', 'public'" in script
     assert "'\"public\"'" not in script
 

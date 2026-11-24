@@ -26,7 +26,15 @@ SCHEMA_PLACEHOLDER: str = "%SCHEMA%"
 # * call the functions, and the policies and the grants come last.
 SCHEMA_FILES: tuple[str, ...] = (
     "views.sql",
-    "functions.sql",
+    "functions/identity.sql",
+    "functions/rbac.sql",
+    "functions/rules.sql",
+    "functions/moderation.sql",
+    "functions/moderation_audit.sql",
+    "functions/automation.sql",
+    "functions/scheduler.sql",
+    "functions/maintenance.sql",
+    "functions/mtproto.sql",
     "triggers.sql",
     "policies.sql",
     "seed.sql",
