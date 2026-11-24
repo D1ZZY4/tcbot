@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import rule_publications
-from tcbot.database.engine import db_call, fetch_all, run
+from tcbot.database.engine import db_call, fetch_all, fetch_one, run
 from tcbot.utils.time_and_date import utc_now
 
 
@@ -73,6 +73,39 @@ async def upsert_slot(
     return dict(rows[0])
 
 
+async def slot_hash(
+    *,
+    set_id: int,
+    locale: str,
+    chat_id: int,
+    category_key: str,
+    part_index: int,
+    message_thread_id: int | None = None,
+) -> str | None:
+    """Return the hash stored for one slot before it is upserted.
+
+    The publisher compares this value with the newly rendered content to
+    decide whether a channel edit is needed. The predicate matches the
+    uniqueness key of ``upsert_slot`` exactly, including the coalesced
+    thread id.
+    """
+    row = await db_call(
+        lambda: fetch_one(
+            select(rule_publications.c.content_hash).where(
+                rule_publications.c.rule_set_id == set_id,
+                rule_publications.c.locale == locale,
+                rule_publications.c.chat_id == chat_id,
+                func.coalesce(rule_publications.c.message_thread_id, 0)
+                == (message_thread_id or 0),
+                rule_publications.c.category_key == category_key,
+                rule_publications.c.part_index == part_index,
+            )
+        )
+    )
+    value = row.get("content_hash") if row else None
+    return str(value) if value is not None else None
+
+
 async def mark_synced(slot_id: int, message_id: int) -> None:
     """Record that a channel message now matches the slot content."""
     await db_call(
@@ -113,16 +146,18 @@ async def mark_failed(slot_id: int, error: str, *, missing: bool = False) -> Non
     )
 
 
-async def retire_unused(set_id: int, keep_ids: list[int]) -> int:
-    """Retire slots no longer part of the rendered channel representation.
+async def retire_unused(set_id: int, locale: str, keep_ids: list[int]) -> int:
+    """Retire one locale's slots dropped from the channel representation.
 
-    Slots are keyed by category and part, not by version: upserting a new
-    version rewrites ``rule_set_version_id`` on reused slots, so filtering by
-    the new version would match only the kept slots and retire nothing.
-    Scope by set instead so dropped categories and shortened parts retire.
+    Slots are keyed by category, part and locale, not by version: upserting a
+    new version rewrites ``rule_set_version_id`` on reused slots, so filtering
+    by the new version would match only the kept slots and retire nothing.
+    Scope by set and content locale so dropped categories and shortened parts
+    retire without touching the other locale's live channel messages.
     """
     stmt = rule_publications.update().where(
         rule_publications.c.rule_set_id == set_id,
+        rule_publications.c.locale == locale,
         rule_publications.c.status != "retired",
     )
     if keep_ids:

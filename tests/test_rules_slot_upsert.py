@@ -62,6 +62,32 @@ def test_slot_upsert_targets_the_expression_index(
     assert "coalesce(message_thread_id" in sql
 
 
+def test_retire_unused_is_scoped_to_the_published_locale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Publishing one locale must not retire the other locale's live slots."""
+
+    async def _db_call(op: Any, **kwargs: Any) -> Any:
+        return await op()
+
+    captured: list[Any] = []
+
+    async def _run(stmt: Any) -> int:
+        captured.append(stmt)
+        return 0
+
+    monkeypatch.setattr(publications, "db_call", _db_call)
+    monkeypatch.setattr(publications, "run", _run)
+
+    asyncio.run(publications.retire_unused(1, "id-ID", [7]))
+
+    sql = str(captured[0].compile(dialect=postgresql.dialect()))
+    assert "locale =" in sql
+    assert "id NOT IN" in sql
+    params = [str(value) for value in captured[0].compile().params.values()]
+    assert "id-ID" in params
+
+
 @pytest.mark.usefixtures("rules_ready")
 async def test_slot_upsert_updates_one_row_on_postgres() -> None:
     """A second upsert reuses the slot instead of targeting a missing constraint."""

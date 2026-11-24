@@ -52,6 +52,14 @@ async def publish_rules(
         keep_ids: list[int] = []
         for category, index, text in parts:
             digest = content_hash(text)
+            previous_hash = await rules_db.publications.slot_hash(
+                set_id=set_id,
+                locale=content_locale,
+                chat_id=cfg.main_channel,
+                message_thread_id=None,
+                category_key=category,
+                part_index=index,
+            )
             slot = await rules_db.publications.upsert_slot(
                 set_id=set_id,
                 version_id=version_id,
@@ -66,11 +74,12 @@ async def publish_rules(
             keep_ids.append(int(slot["id"]))
             try:
                 edited = False
-                if slot.get("message_id") and slot.get("content_hash") == digest:
+                unchanged = previous_hash == digest
+                if slot.get("message_id") and not unchanged:
                     edited = await safe_edit_message(
                         bot, cfg.main_channel, slot["message_id"], text
                     )
-                if edited:
+                if slot.get("message_id") and (unchanged or edited):
                     message_id = int(slot["message_id"])
                 else:
                     # * No message yet, or the stored post was deleted. The
@@ -85,7 +94,7 @@ async def publish_rules(
                 await rules_db.publications.mark_failed(
                     int(slot["id"]), str(exc), missing="not found" in str(exc).lower()
                 )
-        await rules_db.publications.retire_unused(set_id, keep_ids)
+        await rules_db.publications.retire_unused(set_id, content_locale, keep_ids)
         status = "completed" if not failed else "partial"
         await rules_db.runs.finish(run_id, status)
         return {"synced": synced, "failed": failed, "status": status}
