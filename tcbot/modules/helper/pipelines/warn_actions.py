@@ -429,10 +429,13 @@ async def execute_warn(
                 if not isinstance(result, BaseException)
                 or is_benign_telegram_error(result)
             ]
-        # * The decision is recorded once the ban row exists. A delivery
-        # * that is still pending is not a creation failure and must not
-        # * be reported as one.
-        any_ban_ok = bool(ban_id) or applied > 0 or pending > 0
+        # * ban_id only proves a decision row exists; it does not prove the
+        # * ban landed anywhere. When every target fails permanently there is
+        # * no enforcement even though the decision was recorded, so success
+        # * must be derived from delivery state. A queued delivery still
+        # * pending is not a failure, and an already-banned target needs no
+        # * new delivery at all.
+        any_ban_ok = already_banned or applied > 0 or pending > 0
         log.info(
             "Warn threshold ban enforced (%s): target=%d applied=%d/%d pending=%d",
             threshold_trigger,
