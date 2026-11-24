@@ -50,9 +50,10 @@ def _media(
 ) -> str:
     src = esc(url)
     caption_markup = _caption(caption)
-    if self_closing:
-        return f'<img src="{src}"/>{caption_markup}'
-    return f'<{tag} src="{src}"></{tag}>{caption_markup}'
+    media = f'<img src="{src}"/>' if self_closing else f'<{tag} src="{src}"></{tag}>'
+    # * The Bot API documents a standalone captioned image or video as a
+    # * figure; a bare figcaption is only valid inside a collage or slideshow.
+    return f"<figure>{media}{caption_markup}</figure>" if caption_markup else media
 
 
 __all__ = ["collage", "photo", "proof_slideshow", "slideshow", "video"]

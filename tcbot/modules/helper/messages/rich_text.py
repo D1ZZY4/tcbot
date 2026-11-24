@@ -77,9 +77,11 @@ def blocks(
 
     Command lines become a two-column table, ``- `` lines a rich bullet list,
     ``1. `` lines an ordered list, and every other line its own paragraph.
-    The second column uses the alias header when every command row carries an
-    alias marker; otherwise it uses the details header. Alias wrappers and
-    their parentheses are removed from the cell content.
+    The second column uses the alias header when any command row carries an
+    alias marker; otherwise it uses the details header. A command with no
+    second cell still renders as a table row with an empty detail, so a single
+    alias-less command does not split one section into two tables. Alias
+    wrappers and their parentheses are removed from the cell content.
     """
     if any(tag in text for tag in _BLOCK_TAGS):
         return text
@@ -96,7 +98,7 @@ def blocks(
     bullets: list[str] = []
     ordered: list[str] = []
     commands: list[tuple[str, str]] = []
-    all_aliases = True
+    any_alias = False
 
     def flush_bullets() -> None:
         if bullets:
@@ -109,17 +111,17 @@ def blocks(
             ordered.clear()
 
     def flush_commands() -> None:
-        nonlocal all_aliases
+        nonlocal any_alias
         if not commands:
             return
-        header = alias_header if all_aliases else detail_header
+        header = alias_header if any_alias else detail_header
         cap = f"<caption>{caption}</caption>" if caption else ""
         rows = "".join(f"<tr><td>{a}</td><td>{b}</td></tr>" for a, b in commands)
         parts.append(
             f"<table bordered>{cap}<tr><th>{command_header}</th><th>{header}</th></tr>{rows}</table>"
         )
         commands.clear()
-        all_aliases = True
+        any_alias = False
 
     for raw in text.splitlines():
         line = raw.strip()
@@ -129,13 +131,15 @@ def blocks(
             flush_commands()
             continue
         command = _COMMAND_LINE.match(line)
-        if command and command.group(2).strip():
+        if command:
             flush_bullets()
             flush_ordered()
             detail, has_alias = _alias_cell(command.group(2))
-            if detail:
-                commands.append((command.group(1), detail))
-                all_aliases = all_aliases and has_alias
+            # * Keep an alias-less command as a row with an empty second cell
+            # * instead of falling through to a paragraph, which would split
+            # * one help section into separate tables.
+            commands.append((command.group(1), detail))
+            any_alias = any_alias or has_alias
             continue
         bullet = _BULLET_LINE.match(line)
         if bullet:

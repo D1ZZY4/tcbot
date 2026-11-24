@@ -36,6 +36,23 @@ def test_help_examples_have_no_orphan_colon(module: str, locale: str) -> None:
 
 
 @pytest.mark.parametrize("locale", _EXAMPLE_LOCALES)
+@pytest.mark.parametrize("module", ("admins", "disconnecting"))
+def test_commands_without_an_alias_stay_in_the_table(module: str, locale: str) -> None:
+    """An alias-less command keeps one table instead of splitting it.
+
+    Some help sections mix commands that carry an alias with commands that do
+    not. Rendering the latter as a paragraph split the section into two
+    tables and left a bare command line between them.
+    """
+    rendered = rich_text.blocks(
+        t(f"{module}.help.commands.body", locale),
+        command_header=t("common.help.command", locale),
+        alias_header=t("common.help.alias", locale),
+    )
+    assert rendered.count("<table") == 1
+
+
+@pytest.mark.parametrize("locale", _EXAMPLE_LOCALES)
 def test_appeal_format_example_keeps_its_preformatted_block(locale: str) -> None:
     """blocks() must not split a <pre><code> example into paragraphs."""
     body = t("appeals.help.format.body", locale, plain=True)

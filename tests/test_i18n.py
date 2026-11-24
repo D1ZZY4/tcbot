@@ -118,6 +118,7 @@ _DYNAMIC_KEY_PREFIXES = (
     "checking.appeals_list.",
     "checking.bans.",
     "checking.events.",
+    "checking.profile.table.",
     "checking.warns.",
     "connecting.",
     "disconnecting.",
@@ -225,6 +226,16 @@ def test_locale_match_case_insensitive() -> None:
 def test_missing_catalog_root_raises() -> None:
     with pytest.raises(I18nError):
         load_catalog(Path("/nonexistent-i18n-root"))
+
+
+def test_a_template_error_is_not_a_missing_key() -> None:
+    """A bad catalog template must not be swallowed by ``except KeyError``."""
+    assert not issubclass(I18nError, KeyError)
+    assert issubclass(I18nError, ValueError)
+    with pytest.raises(I18nError) as caught:
+        t("m", "en-US", catalog={"en-US": {"m": "unbalanced *span"}})
+    assert "unbalanced" in str(caught.value)
+    assert not str(caught.value).startswith("'")
 
 
 # ─────────────────────────── Lookup (t) ─────────────────────────── #

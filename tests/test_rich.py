@@ -118,7 +118,7 @@ def test_quote_and_highlight_support_an_author() -> None:
     assert quote("q", expandable=True, author="Dizzy") == (
         "<blockquote expandable>q<cite>Dizzy</cite></blockquote>"
     )
-    assert highlight("x", author="Dizzy") == "<mark>x</mark><cite>Dizzy</cite>"
+    assert highlight("x", author="Dizzy") == "<mark>x</mark> (Dizzy)"
     assert pull_quote("q", author="Dizzy") == "<aside>q<cite>Dizzy</cite></aside>"
 
 

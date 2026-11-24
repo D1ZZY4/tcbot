@@ -166,8 +166,14 @@ class Safe(str):
     """
 
 
-class I18nError(KeyError):
-    """Programming error in translation usage: bad template or bad value."""
+class I18nError(ValueError):
+    """Programming error in translation usage: bad template or bad value.
+
+    This is not a missing dictionary key. Inheriting from KeyError let callers
+    with a legitimate ``except KeyError`` around a rendering step swallow a
+    broken catalog template and report it as a data-parse failure, hiding the
+    real defect. ValueError keeps those two failure modes distinct.
+    """
 
 
 _catalog: dict[str, dict[str, str]] = {}
@@ -350,7 +356,7 @@ def _render_template(
                 raise I18nError(f"i18n template {key!r} has an unbalanced asterisk")
             inner = template[i + 1 : j]
             check_span(inner, "bold")
-            if "`" in inner or "*" in inner:
+            if "`" in inner or "*" in inner or "~" in inner:
                 raise I18nError(
                     f"i18n template {key!r} forbids nesting inside bold spans"
                 )

@@ -11,8 +11,11 @@ from tcbot.modules.helper.messages.rich_style import esc
 
 def heading(text: object, level: int = 2) -> str:
     """Render a section heading. Rich style supports h1 through h6."""
+    content = esc(text)
+    if not content:
+        return ""
     tag = min(6, max(1, level))
-    return f"<h{tag}>{esc(text)}</h{tag}>"
+    return f"<h{tag}>{content}</h{tag}>"
 
 
 def paragraph(text: str) -> str:
@@ -52,13 +55,14 @@ def pre(text: object) -> str:
 def highlight(text: object, *, author: object | None = None) -> str:
     """Render marked text, optionally credited to an author.
 
-    ``<mark>`` has no author attribute in the Bot API, so a credit is rendered
-    as a following ``<cite>`` element.
+    ``<cite>`` is only valid inside blockquote, aside, and figcaption; a bare
+    one after an inline ``<mark>`` is outside the supported rich HTML set. The
+    credit is therefore escaped plain text following the mark.
     """
     content = esc(text)
     if not content:
         return ""
-    credit = f"<cite>{esc(author)}</cite>" if author else ""
+    credit = f" ({esc(author)})" if author else ""
     return f"<mark>{content}</mark>{credit}"
 
 
@@ -113,12 +117,14 @@ def math_block(expression: object) -> str:
 
 def time_tag(unix: int, fmt: str, label: object) -> str:
     """Render a formatted date-time entity."""
-    return f'<tg-time unix="{unix}" format="{esc(fmt)}">{esc(label)}</tg-time>'
+    # * Escape numeric attributes too: a value crossing a loose type boundary
+    # * must never break out of the double-quoted attribute.
+    return f'<tg-time unix="{esc(unix)}" format="{esc(fmt)}">{esc(label)}</tg-time>'
 
 
 def emoji(emoji_id: int, alt: str) -> str:
     """Render a custom emoji by its numeric identifier."""
-    return f'<tg-emoji emoji-id="{emoji_id}">{esc(alt)}</tg-emoji>'
+    return f'<tg-emoji emoji-id="{esc(emoji_id)}">{esc(alt)}</tg-emoji>'
 
 
 __all__ = [
