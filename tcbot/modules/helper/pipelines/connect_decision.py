@@ -233,6 +233,25 @@ class ConnectionDecisionMixin:
                     reply_markup=None,
                 )
         elif action == self.cancel_callback:
+            # * The callback data is a static literal, so a keyboard that
+            # survived a failed edit (or a duplicate tap) can arrive after the
+            # group was already connected. Leaving then would drop a live
+            # federation group while its database row stays active. Require a
+            # still-pending request and a disconnected group before acting.
+            try:
+                pending = await db.groups_db.get_pending(chat.id)
+                still_connected = await db.groups_db.is_connected(chat.id, fresh=True)
+            except Exception:
+                log.exception("cancel guard lookup failed for chat %d", chat.id)
+                return
+            if pending is None or still_connected:
+                log.info(
+                    "Ignoring stale connect cancel for chat=%d (pending=%s, connected=%s)",
+                    chat.id,
+                    pending is not None,
+                    still_connected,
+                )
+                return
             try:
                 await db.groups_db.remove_pending(chat.id)
             except Exception:

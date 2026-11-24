@@ -192,6 +192,10 @@ class ConnectionAddedMixin:
                 return
             if (
                 pending
+                # * A lingering pending row must not replay a join (and every
+                # * ban/mute) for a group that is already connected. The common
+                # * case is a failed pending cleanup followed by a re-promote.
+                and not is_already_connected
                 and new_status == ChatMemberStatus.ADMINISTRATOR
                 and pending.get("owner_id")
             ):

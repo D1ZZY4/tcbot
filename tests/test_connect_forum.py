@@ -282,6 +282,77 @@ async def test_join_decision_refuses_an_infrastructure_chat(
 
 
 @pytest.mark.asyncio
+async def test_stale_cancel_does_not_leave_a_connected_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A duplicate tc_cancel tap must not remove a live federation group."""
+
+    class _Query:
+        def __init__(self) -> None:
+            self.answers = 0
+
+        async def answer(self) -> None:
+            self.answers += 1
+
+        @property
+        def data(self) -> str:
+            return "tc_cancel"
+
+        @property
+        def message(self) -> object:
+            return None
+
+    q = _Query()
+    chat = _NS(id=-1001234567890, type="supergroup", title="Connected")
+    update = _NS(
+        callback_query=q,
+        effective_chat=chat,
+        effective_user=_NS(id=42, first_name="Owner"),
+    )
+
+    class _Bot(_FakeBot):
+        def __init__(self) -> None:
+            super().__init__()
+            self.left: list[int] = []
+
+        async def get_chat_member(self, chat_id: int, user_id: int) -> object:
+            return _NS(status=ChatMemberStatus.OWNER)
+
+        async def leave_chat(self, chat_id: int) -> None:
+            self.left.append(chat_id)
+
+    bot = _Bot()
+
+    async def _locale(_update: object) -> str:
+        return "en-US"
+
+    async def _no_pending(_chat_id: int) -> None:
+        return None
+
+    async def _connected(_chat_id: int, *, fresh: bool = False) -> bool:
+        return True
+
+    monkeypatch.setattr(
+        connect_added,
+        "cfg",
+        _NS(
+            is_primary_group=lambda _chat_id: False,
+            is_infrastructure_chat=lambda _chat_id: False,
+        ),
+    )
+    monkeypatch.setattr(connect_added, "locale_for_update", _locale)
+    monkeypatch.setattr(connect_added.db.groups_db, "get_pending", _no_pending)
+    monkeypatch.setattr(connect_added.db.groups_db, "is_connected", _connected)
+
+    await inspect.unwrap(connect_added.connection.on_join_decision)(
+        update,  # type: ignore[arg-type]
+        _NS(bot=bot),  # type: ignore[arg-type]
+    )
+
+    assert bot.left == [], "a stale cancel must not leave a connected group"
+
+
+@pytest.mark.asyncio
 async def test_channel_is_refused_before_any_telegram_or_db_work(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
