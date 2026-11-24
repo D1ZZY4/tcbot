@@ -70,7 +70,7 @@ Rules:
 `permission_only(permission_key)` gates a capability directly through the
 database instead of assuming a role rank implies that capability. It calls
 `users_roles.has_permission(uid, key)`, which runs the SQL function
-`actor_has_permission(user_id, permission_key)` in `database/schema/functions.sql`.
+`actor_has_permission(user_id, permission_key)` in `database/schema/functions/rbac.sql`.
 That function resolves the active assignment, walks its role permissions, and
 returns false for a missing, expired, or unknown permission.
 

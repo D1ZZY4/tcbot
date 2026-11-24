@@ -17,14 +17,17 @@ surface and fails closed when the lookup fails.
 
 `build_rules_conv()` in `rules_editor.py` drives the editor. Entry points are the
 `/tcrules` message and the `/start tcrules` deep link used by the group's Open in
-PM button, both in the moderator's private chat. One interactive state handles
-every panel callback and text step; the pending step is stored in the
-conversation scope. A second state holds the discard confirmation.
+PM button, both in the moderator's private chat. Entry first opens the language
+picker built from the available i18n catalogs; choosing a locale opens that
+locale's draft. One interactive state handles every panel callback and text
+step; the pending step is stored in the conversation scope. A second state holds
+the discard confirmation, and a third accepts an uploaded Markdown document.
 
 | State | Value | Input | Next step |
 |---|---|---|---|
-| `WAITING_EDITOR_MENU` | 0 | Callback or typed step | Add, rename, reorder, or delete categories; add items; preview; publish; show status. |
+| `WAITING_EDITOR_MENU` | 0 | Callback or typed step | Add, rename, reorder, or delete categories; add items; upload `.md`; preview draft as a public-style menu; publish; go Back to the language picker. |
 | `WAITING_CONFIRM_DISCARD` | 5 | Yes or no callback | Delete the draft or leave it untouched. |
+| `WAITING_MARKDOWN` | 6 | `.md` document | Parse headings into items, store them in the draft, and return to the category list. |
 
 A stale moderation picker `rules_step:cancel` is answered and ignored so it
 cannot close an unrelated editor session; the editor exits through Close or the
@@ -32,19 +35,22 @@ discard confirmation. Input limits are title 200, body 3500, and URL 500
 characters; a URL must start with `https://` or `http://`. Category slugs are derived by
 lowercasing the title and replacing runs of non-alphanumeric characters with a
 hyphen, then capped at 40 characters so the longest callback stays inside
-Telegram's 64-byte limit. The main panel is the editor root: it
-offers Close but no Back, and shows Publish and Discard only once the draft has
-items. Every sub-menu, including the preview, offers both Back and Close.
+Telegram's 64-byte limit. The main panel offers Back to the language picker and
+Close, and shows Publish and Discard only once the draft has items. Every
+sub-menu, including the preview, offers both Back and Close. Uploaded Markdown
+uses the bundled document shape: the H1 names the category, each H2 becomes an
+item titled `Category: Section`, and bold, italic, inline code, lists, and
+`---` dividers render as rich blocks.
 
 ```mermaid
 flowchart TD
-    CMD[/tcrules in private chat] --> SET[get_or_create_community_set]
+    CMD[/tcrules in private chat] --> LANG[Choose rules language]
+    LANG --> SET[get_or_create_community_set]
     SET --> DRAFT[open_draft cloning published items]
-    DRAFT --> PANEL[Editor panel with edit preview publish discard settings]
+    DRAFT --> PANEL[Editor panel with edit preview publish discard]
     PANEL -->|rules_edit_draft| CATS[Category list with CRUD callbacks]
-    PANEL -->|rules_preview| PREV[Preview with Back and Close, editor stays open]
+    PANEL -->|rules_preview| PREV[Preview: draft categories like /rules, Back to editor]
     PANEL -->|rules_publish| PUBLISH[publish_rules pipeline]
-    PANEL -->|rules_settings| STATUS[Publication and acknowledgement status]
     PANEL -->|rules_discard| CONF{WAITING_CONFIRM_DISCARD}
     CONF -->|rules_discard_yes| DEL[discard_draft]
     CONF -->|rules_discard_no| END[Leave draft unchanged]
@@ -178,9 +184,12 @@ permission the step is skipped.
 ## Database impact
 
 Drafts and published data live in `rule_sets`, `rule_set_versions`,
-`rule_categories`, `rule_items`, `rule_publication_runs`, `rule_publications`,
-and `rule_acknowledgements`. Published versions are immutable; every mutation
-touches a draft. Publication commits to the database before touching Telegram.
+`rule_categories`, `rule_category_content`, `rule_items`,
+`rule_publication_runs`, `rule_publications`, and `rule_acknowledgements`.
+Localized category labels and descriptions are seeded into
+`rule_category_content` and resolved for the reader's locale on every public
+rules read. Published versions are immutable; every mutation touches a draft.
+Publication commits to the database before touching Telegram.
 See [Persistence](persistence.md) for the shared write boundary.
 
 ## Logging and edge cases

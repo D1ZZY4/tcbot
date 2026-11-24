@@ -153,7 +153,7 @@ appeal; a legacy payload without the suffix falls back to the tapped message id.
 | Builder | Emits | Style |
 |---|---|---|
 | `picker_btn(items, selected)` | `rules_step:pick:<id>` (blue), `other` (none), `done` (green), `clear` (none), `cancel` (red) | mixed |
-| `editor_panel_btn(has_content)` | `rules_edit_draft` (blue), `rules_preview` (blue), `rules_settings` (blue), Close; adds `rules_publish` (green) and `rules_discard` (red) only when the draft has items | mixed |
+| `editor_panel_btn(has_content)` | `rules_edit_draft` (blue), `rules_preview` (blue), Upload .md (blue), Back to language (green), Close; adds `rules_publish` (green) and `rules_discard` (red) only when the draft has items | mixed |
 | `preview_btn` | Back to the editor panel + Close for the draft preview | mixed |
 | `categories_btn` | `rules_cat:<key>`, rename/up/down (blue), `rules_cat_del:<key>` (red), `rules_cat_add` (blue), Back + Close | mixed |
 | `items_btn` | `rules_item_add` (blue), Back + Close | mixed |

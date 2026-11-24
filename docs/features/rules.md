@@ -76,13 +76,16 @@ Run states are `running`, `completed`, `partial`, and `failed`. Slot states are
 
 A category groups one topic from the operator's rule documents. The seed script
 creates one category per document stem, such as `cheat` or
-`doxing-dan-privasi`, and the public pages show the localized label from
-`i18n/<locale>/rules.toml`; the stored title is a fallback for unknown keys.
+`doxing-dan-privasi`. Its localized label and one-line description are seeded
+into `rule_category_content`, one row per locale. The public menu resolves them
+for the reader's locale with a working-default fallback, using the stored
+category title when no row exists, so the rule set owns its own presentation and
+the translation catalog no longer carries per-category wording.
 A new community starts with the editable `mandatory` and `optional` defaults
 until a seed or a staff edit replaces them, and the seed retires those two
 buckets when it writes the topic categories. Staff can add, rename, reorder,
 and retire categories from the editor. The moderation picker prefixes a
-selection with its localized category title.
+selection with the stored category title.
 
 ## Seeding from Markdown
 
@@ -131,9 +134,10 @@ share the generic step. All four use the same callbacks: `rules_step:pick:<id>`,
 ## Database impact
 
 Drafts and published data live in `rule_sets`, `rule_set_versions`,
-`rule_categories`, `rule_items`, `rule_publication_runs`, `rule_publications`,
-and `rule_acknowledgements`. Published versions are immutable; every mutation
-touches a draft. Publication commits to the database before touching Telegram.
+`rule_categories`, `rule_category_content`, `rule_items`,
+`rule_publication_runs`, `rule_publications`, and `rule_acknowledgements`.
+Published versions are immutable; every mutation touches a draft. Publication
+commits to the database before touching Telegram.
 
 ## Validation
 
