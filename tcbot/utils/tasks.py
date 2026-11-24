@@ -81,12 +81,15 @@ class TaskTracker:
             return
         log.warning("%s task failed: %s", self._label, exc)
 
-    async def drain(self, *, timeout: float = DEFAULT_DRAIN_TIMEOUT_S) -> None:
-        """Await the tracked tasks, then cancel the leftovers; never raises.
+    async def drain(
+        self, *, timeout: float = DEFAULT_DRAIN_TIMEOUT_S, cancel: bool = True
+    ) -> None:
+        """Await the tracked tasks; cancel leftovers only when asked.
 
-        Waits up to *timeout* seconds for the in-flight work, cancels
-        anything still running, and awaits the cancellations so no task
-        outlives the loop teardown.
+        Waits up to *timeout* seconds for the in-flight work. Best-effort
+        trackers pass ``cancel=True`` so no task outlives loop teardown.
+        Deliveries that must not be dropped pass ``cancel=False`` and are
+        left running, matching the cross-thread shutdown path.
         """
         live = [task for task in list(self._tasks) if not task.done()]
         if not live:
@@ -96,6 +99,14 @@ class TaskTracker:
         # * which a task suppressing one CancelledError can stretch forever.
         _, pending = await asyncio.wait(live, timeout=timeout)
         if not pending:
+            return
+        if not cancel:
+            log.debug(
+                "%s: %d task(s) still running after %.1fs; leaving them.",
+                self._label,
+                len(pending),
+                timeout,
+            )
             return
         log.debug(
             "%s: %d task(s) still running after %.1fs; cancelling.",

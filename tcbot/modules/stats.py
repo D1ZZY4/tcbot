@@ -244,29 +244,19 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
         log.error(
             "Stats search failed for a %d-character query: %s", len(query), results
         )
-        chat_id = ctx.user_data.get(CHAT_KEY)
-        msg_id = ctx.user_data.get(MSG_KEY)
-        if chat_id is not None and msg_id is not None:
-            await safe_edit_message(
-                ctx.bot,
-                chat_id,
-                msg_id,
-                t("stats.error.db_fail", locale),
-                log_level="debug",
-                log_label="Stats search error",
-                catch_all=True,
-            )
-        else:
-            # * The search message was deleted before the lookup, so a
-            # * reply has no source message; send the notice directly.
-            try:
-                await send_text(
-                    ctx.bot,
-                    msg.chat_id,
-                    t("stats.error.db_fail", locale, plain=True),
-                )
-            except Exception as exc:
-                log.debug("Stats search error notice failed: %s", exc)
+        await _search_notice(ctx, msg, locale)
+        return
+
+    try:
+        text, btn = await Stats.search_results(query, results, locale)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        # * A DB failure while rendering the found rows is the same outage as
+        # * a failed lookup. Without this branch the open-search prompt stayed
+        # * on screen and further text was ignored because SEARCH_KEY was gone.
+        log.exception("Stats search render failed for a %d-character query", len(query))
+        await _search_notice(ctx, msg, locale)
         return
 
     ctx.user_data[RESULTS_KEY] = results
@@ -274,9 +264,9 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
 
     chat_id = ctx.user_data.get(CHAT_KEY)
     msg_id = ctx.user_data.get(MSG_KEY)
-    text, btn = await Stats.search_results(query, results, locale)
+    edited = False
     if chat_id is not None and msg_id is not None:
-        await safe_edit_message(
+        edited = await safe_edit_message(
             ctx.bot,
             chat_id,
             msg_id,
@@ -286,13 +276,41 @@ async def on_bans_search_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
             log_label="Stats search result",
             catch_all=True,
         )
-    else:
-        # * The search message was deleted above, so replying to it would
-        # * fail silently. Send the results directly to its chat instead.
+    if not edited:
+        # * A missing or stale panel message makes the edit return False. The
+        # * query message is already deleted, so send results to its chat
+        # * instead of dropping them with no response at all.
         try:
             await send_text(ctx.bot, msg.chat_id, text, reply_markup=btn)
         except Exception as exc:
             log.debug("Stats search result fallback failed: %s", exc)
+
+
+async def _search_notice(
+    ctx: ContextTypes.DEFAULT_TYPE, msg: Message, locale: str
+) -> None:
+    """Deliver the search failure notice to the open panel or its chat."""
+    user_data = ctx.user_data or {}
+    chat_id = user_data.get(CHAT_KEY)
+    msg_id = user_data.get(MSG_KEY)
+    if chat_id is not None and msg_id is not None:
+        updated = await safe_edit_message(
+            ctx.bot,
+            chat_id,
+            msg_id,
+            t("stats.error.db_fail", locale),
+            log_level="debug",
+            log_label="Stats search error",
+            catch_all=True,
+        )
+        if updated:
+            return
+    try:
+        await send_text(
+            ctx.bot, msg.chat_id, t("stats.error.db_fail", locale, plain=True)
+        )
+    except Exception as exc:
+        log.debug("Stats search error notice failed: %s", exc)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)

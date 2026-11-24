@@ -288,8 +288,13 @@ def _cross_thread_done(future: concurrent.futures.Future[None]) -> None:
 
 
 async def drain_pending() -> None:
-    """Await the in-flight error deliveries at shutdown (bounded)."""
-    await _report_tasks.drain()
+    """Await the in-flight error deliveries at shutdown (bounded).
+
+    A report already on thewire must not be cancelled: the cross-thread path
+    below deliberately leaves pending deliveries running, and the same policy
+    applies to the loop-thread tasks.
+    """
+    await _report_tasks.drain(cancel=False)
     live = [
         asyncio.wrap_future(future)
         for future in list(_cross_thread)
