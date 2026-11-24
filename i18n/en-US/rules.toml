@@ -5,8 +5,6 @@
 categories = "Categories"
 items = "Items"
 panel = "Rules editor\n*Set:* {name}\n*Status:* {status}\n*Items:* {count}"
-empty_hint = "This draft is empty. Start with *Edit Draft*, add a category, then add your first rule."
-ready_hint = "Looking good. *Preview* shows what members will see, and *Publish* shares this version in the channel."
 ask_category = "Send the category title."
 ask_title = "Send the item title."
 ask_body = "Send the item body (plain text)."
@@ -20,7 +18,13 @@ cancelled = "Rules editor closed."
 unexpected = "Use the buttons below to keep editing, or close the editor."
 open_pm = "Open a private chat with me to continue."
 ask_rename = "Send the new category title."
-status = "Channel: {synced} synced, {failed} failed, {missing} missing, {retired} retired. Acknowledgements: {acks}."
+language = "Rules language: {language}."
+choose_language = "Choose the language for this rule set. The list follows the available translations."
+ask_markdown = "Send a .md document. Headings become categories and items; you can edit every item here afterwards."
+markdown_ok = "Imported {count} items from {name}."
+markdown_bad = "That file is not a readable .md document. Send a Markdown file or use the buttons."
+sections = "Sections in this draft: {count}. Tap one to edit its text and formatting."
+ask_format_text = "Send the text to append with the chosen style."
 
 [help]
 overview = "Read the published community rules or edit and publish the rule set."
@@ -31,70 +35,8 @@ body = "`/tcrules` `/rules`"
 [help.what]
 body = "Read-only rules menu for everyone; the editor lets staff manage categories, items and channel publication."
 
-# Category labels mirror the operator-local rule documents. The category key is
-# the document stem; wording lives here so it stays translatable.
-[category.cheat]
-label = "Cheating"
-
-[category.doxing-dan-privasi]
-label = "Doxing and Privacy"
-
-[category.identitas]
-label = "Identity"
-
-[category.karya-dan-atribusi]
-label = "Work and Attribution"
-
-[category.konten-pornografi-nsfw]
-label = "Adult and NSFW Content"
-
-[category.materi-pengujian]
-label = "Test Material"
-
-[category.mod-apk-dan-bajakan]
-label = "Modified and Pirated Apps"
-
-[category.module-root]
-label = "Root Modules"
-
-[category.out-off-topic]
-label = "Off Topic"
-
-[category.pengelola]
-label = "Moderators"
-
-[category.penipuan]
-label = "Scams"
-
-[category.perundungan-dan-kebencian]
-label = "Bullying and Hate"
-
-[category.politik]
-label = "Politics"
-
-[category.promosi]
-label = "Promotion"
-
-[category.sanksi]
-label = "Sanctions"
-
-[category.spam]
-label = "Spam"
-
-[category.transaksi]
-label = "Transactions"
-
-[category.federasi]
-label = "The Federation"
-
-[category.keanggotaan]
-label = "Membership"
-
-[category.klarifikasi]
-label = "Brand Clarification"
-
-[category.persetujuan-pendiri]
-label = "Founders' Consent"
+# Category labels and descriptions are rule-set data in the database,
+# maintained through the bot. No wording is bundled in code or this catalog.
 
 [menu]
 body = "There are rules on {community}.\n\nPick a topic below. Federation-wide rules are the serious violations; the rest is group-level guidance and never becomes a federation ban on its own."
@@ -103,7 +45,7 @@ category = "Rules: {category}"
 index_title = "Community rules"
 section = "{category}: {section}"
 page = "Topic {page} of {total}"
-category_footer = "Use Prev and Next to move between topics. Serious violations are enforced across every connected group; the other topics are group-level guidance."
+category_footer = "Federation-wide rules apply in every connected group; the other topics stay group-level guidance."
 no_rules = "No rules in this category."
 preview = "Preview\nThis is how the rules will look in the channel. Nothing is published until you tap Publish."
 preview_empty = "Preview\nThere is nothing to show yet. Add a category and a rule in *Edit Draft* first."
@@ -131,29 +73,4 @@ other = "Other: {note}"
 recorded = "Thanks, you accepted the current rules."
 already = "You already accepted these rules."
 outdated = "These rules have changed since the greeting."
-disabled = "Acknowledgement is no longer required."
 wrong_member = "This button belongs to another member."
-
-# One-line topic descriptions shown above the section buttons of a category.
-[description]
-cheat = "Cheating, exploit tools, modified clients, and unfair technical advantage. Applies to every member and staff."
-doxing-dan-privasi = "Personal data, privacy, and unauthorized disclosure of private information."
-identitas = "Identity, impersonation, and account ownership."
-karya-dan-atribusi = "Authorship, attribution, and credit for community work."
-konten-pornografi-nsfw = "Adult and NSFW content boundaries in community spaces."
-materi-pengujian = "Unreleased test material, credentials, and confidential build information."
-mod-apk-dan-bajakan = "Modified APKs, pirated apps, patching tools, and media files. Applies to every member and staff."
-module-root = "Root modules, system access, and device-level modifications."
-out-off-topic = "Off-topic posting and thread discipline."
-pengelola = "Duties, limits, and conduct expected from moderators and administrators."
-penipuan = "Scams, fraud, and deceptive transactions."
-perundungan-dan-kebencian = "Bullying, harassment, and hateful conduct."
-politik = "Political discussion and its limits in community spaces."
-promosi = "Promotion, advertising, and spam boundaries."
-sanksi = "Sanction levels, procedure, appeals, and record expiry."
-spam = "Unsolicited, repetitive, or disruptive messages."
-transaksi = "Trades, transactions, and buyer or seller responsibilities."
-federasi = "What the federation is and how its rules change."
-keanggotaan = "How groups and members join, and their rights and duties."
-klarifikasi = "The federation's relationship with device brands and trademark owners."
-persetujuan-pendiri = "Founding groups' consent to the federation rules."

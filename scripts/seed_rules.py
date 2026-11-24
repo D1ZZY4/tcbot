@@ -44,9 +44,9 @@ from tcbot.utils.logger import get_logger  # noqa: E402
 
 log = get_logger("tcbot.seed_rules")
 
-# * One category per rule document, so "Cheat" holds the cheat rules and so on.
-# * The key is the document stem; localized labels come from i18n, never from
-# * prose stored in the database.
+# * One category per rule document, so "cheat" holds the cheat rules and so on.
+# * The key is the document stem. Category titles and localized presentation
+# * come from the database and are maintained through the bot, not from code.
 _RETIRED_KEYS: frozenset[str] = frozenset(
     {
         "conduct",

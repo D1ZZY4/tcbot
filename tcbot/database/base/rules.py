@@ -264,6 +264,10 @@ rule_categories = Table(
     Column("rule_set_id", BigInteger, nullable=False),
     Column("category_key", Text, nullable=False),
     Column("title", Text, nullable=False),
+    # * One-line presentation text shown above the category's sections. The
+    # * public menu reads it from here, so wording is owned by the rule set
+    # * rather than duplicated in the translation catalog.
+    Column("description", Text, nullable=True),
     Column("sort_order", Integer, nullable=False, server_default="100"),
     Column("is_active", Boolean, nullable=False, server_default=text("true")),
     Column(
@@ -285,6 +289,35 @@ rule_categories = Table(
 )
 
 Index("ix_rule_categories_rule_set", rule_categories.c.rule_set_id)
+
+# * Localized presentation of one category. The rule set owns its wording, and
+# * a reader sees the row for their own locale with a default-locale fallback.
+rule_category_content = Table(
+    "rule_category_content",
+    metadata,
+    Column("id", BigInteger, Identity(always=True), nullable=False),
+    Column("rule_set_id", BigInteger, nullable=False),
+    Column("category_key", Text, nullable=False),
+    Column("locale", Text, nullable=False),
+    Column("label", Text, nullable=False),
+    Column("description", Text, nullable=True),
+    Column(
+        "created_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
+    ),
+    Column(
+        "updated_at", DateTime(timezone=True), nullable=False, server_default=UTC_NOW
+    ),
+    PrimaryKeyConstraint("id"),
+    ForeignKeyConstraint(
+        ["rule_set_id"], ["rule_sets.id"], name="fk_rule_category_content_rule_set"
+    ),
+    UniqueConstraint(
+        "rule_set_id", "category_key", "locale", name="uq_rule_category_content"
+    ),
+    CheckConstraint("btrim(label) <> ''", name="ck_rule_category_content_label"),
+)
+
+Index("ix_rule_category_content_set", rule_category_content.c.rule_set_id)
 
 # * The lock of one publish plus sync operation. No background owner exists:
 # * a run lives only while a staff publish is in progress.

@@ -19,10 +19,12 @@ def test_seed_uses_document_stems_as_categories() -> None:
     assert "other" in seed_rules._RETIRED_KEYS
 
 
-def test_category_label_is_localized_from_the_catalog() -> None:
-    assert category_label("cheat", "en-US", "cheat") == "Cheating"
-    assert category_label("cheat", "id-ID", "cheat") == "Kecurangan"
+def test_category_label_uses_the_title_stored_with_the_rule_set() -> None:
+    """The public button label comes from the database, not the catalog."""
+    assert category_label("cheat", "en-US", "Cheating") == "Cheating"
+    assert category_label("cheat", "id-ID", "Cheating") == "Cheating"
     assert category_label("custom", "en-US", "Custom") == "Custom"
+    assert category_label("custom", "en-US", "") == "custom"
 
 
 def test_category_page_uses_the_privacy_style_blocks() -> None:
@@ -30,6 +32,7 @@ def test_category_page_uses_the_privacy_style_blocks() -> None:
         "cheat",
         [{"title": "Cheat: Aturan", "body": "No cheats."}],
         "en-US",
+        category_title="Cheating",
     )["html"]
     rendered = str(page)
     assert "<table" not in rendered
@@ -42,7 +45,7 @@ def test_picker_shows_the_localized_category_of_a_selection() -> None:
             "id": 7,
             "title": "Cheat: Aturan",
             "category_key": "cheat",
-            "category_title": "cheat",
+            "category_title": "Cheating",
         }
     ]
     text = picker_text(items, [7], "en-US")

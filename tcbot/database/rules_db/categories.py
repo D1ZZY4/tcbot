@@ -82,6 +82,22 @@ async def add_category(set_id: int, key: str, title: str) -> dict[str, Any]:
     return dict(created[0])
 
 
+async def set_category_description(
+    set_id: int, category_key: str, description: str
+) -> None:
+    """Store the introductory text of one category for its editor panel."""
+    await db_call(
+        lambda: run(
+            rule_categories.update()
+            .where(
+                rule_categories.c.rule_set_id == set_id,
+                rule_categories.c.category_key == category_key,
+            )
+            .values(description=description)
+        )
+    )
+
+
 async def rename_category(set_id: int, category_key: str, title: str) -> None:
     """Rename a category and refresh the snapshot of its draft items."""
 

@@ -13,7 +13,7 @@ from telegram.constants import KeyboardButtonStyle
 
 from tcbot.modules.helper.buttons.common import back_close_row, close_btn
 from tcbot.modules.helper.messages.rules import category_label
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import available_locales, display_name, t
 
 # * Callback payloads of the moderation rules picker, shared by the ban and
 # * reason flows. The picker keyboard owns them because it emits them.
@@ -83,7 +83,10 @@ def prompt_btn(back_callback: str, locale: str | None = None) -> InlineKeyboardM
 
 
 def editor_panel_btn(
-    locale: str | None = None, *, has_content: bool = False
+    locale: str | None = None,
+    *,
+    has_content: bool = False,
+    content_locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Build the main editor panel.
 
@@ -113,8 +116,25 @@ def editor_panel_btn(
                 ),
             ]
         )
-    rows.append([_button(t("button.settings", locale, plain=True), "rules_settings")])
+    rows.append([_button(t("button.upload_md", locale, plain=True), "rules_upload")])
+    rows.append(
+        [
+            _button(t("button.back", locale, plain=True), "rules_lang"),
+            _button(t("button.rules_language", locale, plain=True), "rules_lang"),
+        ]
+    )
     rows.append([close_btn(locale)])
+    return InlineKeyboardMarkup(rows)
+
+
+def rules_language_btn(current: str, locale: str | None = None) -> InlineKeyboardMarkup:
+    """Pick the content language from the locales that have a catalog."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for code in available_locales():
+        label = display_name(code, None) or code
+        mark = "✓ " if code == current else ""
+        rows.append([_button(f"{mark}{label}", f"rules_lang_set:{code}")])
+    rows.append([_button(t("button.next", locale, plain=True), "rules_panel")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -191,13 +211,13 @@ def confirm_btn(
 _RULES_PER_PAGE: int = 8
 
 
-def _nav_row(
+def _nav_rows(
     index: int, total: int, callback: str, locale: str | None
-) -> list[InlineKeyboardButton]:
-    """Prev, Next, and Close in one row, omitting unavailable directions."""
-    row: list[InlineKeyboardButton] = []
+) -> list[list[InlineKeyboardButton]]:
+    """Navigation and Close as separate rows, never sharing a line."""
+    navigation: list[InlineKeyboardButton] = []
     if index > 0:
-        row.append(
+        navigation.append(
             _button(
                 t("button.prev", locale, plain=True),
                 f"{callback}:{index - 1}",
@@ -205,52 +225,174 @@ def _nav_row(
             )
         )
     if index + 1 < total:
-        row.append(
+        navigation.append(
             _button(
                 t("button.next", locale, plain=True),
                 f"{callback}:{index + 1}",
                 style=KeyboardButtonStyle.SUCCESS,
             )
         )
-    row.append(close_btn(locale))
-    return row
+    return [navigation, [close_btn(locale)]]
 
 
 def rules_index_btn(
     categories: list[dict[str, Any]], locale: str | None = None, *, page: int = 0
 ) -> InlineKeyboardMarkup:
     """Topic buttons, two per row, with Prev/Next/Close for long rule sets."""
-    from tcbot.modules.helper.messages.rules import category_label  # noqa: PLC0415
-
     total_pages = max(1, (len(categories) + _RULES_PER_PAGE - 1) // _RULES_PER_PAGE)
     page = max(0, min(page, total_pages - 1))
     chunk = categories[page * _RULES_PER_PAGE : (page + 1) * _RULES_PER_PAGE]
     rows: list[list[InlineKeyboardButton]] = [
         [
             _button(
-                category_label(str(cat["category_key"]), locale, str(cat["title"])),
+                str(cat.get("label") or cat.get("title") or cat["category_key"]),
                 f"rules_show:{cat['category_key']}",
             )
             for cat in chunk[offset : offset + 2]
         ]
         for offset in range(0, len(chunk), 2)
     ]
-    rows.append(_nav_row(page, total_pages, "rules_index", locale))
+    rows.extend(_nav_rows(page, total_pages, "rules_index", locale))
     return InlineKeyboardMarkup(rows)
 
 
 def category_sections_btn(
     sections: list[str], locale: str | None = None
 ) -> InlineKeyboardMarkup:
-    """Section buttons for one category, two per row, with Close."""
-    rows = [
+    """Section buttons for one category, with Back to the index and Close.
+
+    A category page shows only its own sections. Topic paging belongs to the
+    index, so Prev and Next are deliberately absent here.
+    """
+    rows: list[list[InlineKeyboardButton]] = [
         [
-            _button(label, f"rules_section:{index}")
+            _button(label, f"rules_section:{section_index}")
+            for section_index, label in enumerate(
+                sections[start : start + 2], start=start
+            )
+        ]
+        for start in range(0, len(sections), 2)
+    ]
+    rows.append(
+        [
+            _button(
+                t("button.back", locale, plain=True),
+                "rules_index:0",
+                style=KeyboardButtonStyle.SUCCESS,
+            )
+        ]
+    )
+    rows.append([close_btn(locale)])
+    return InlineKeyboardMarkup(rows)
+
+
+def rules_section_btn(key: str, locale: str | None = None) -> InlineKeyboardMarkup:
+    """Leave one section with Back to its category and Close, and nothing else.
+
+    A section page is a reading view, not a second topic menu: keeping the
+    category's section buttons there invites a tap that never changes the
+    page.
+    """
+    return InlineKeyboardMarkup([back_close_row(f"rules_show:{key}", locale)])
+
+
+def editor_sections_btn(
+    items: list[dict[str, Any]], locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """List the draft sections directly; each tap opens one section editor."""
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            _button(
+                str(item.get("title") or f"Section {item['id']}")
+                .split(":", 1)[-1]
+                .strip(),
+                f"rules_section_edit:{item['id']}",
+            )
+        ]
+        for item in items
+    ]
+    rows.append(
+        [
+            _button(t("button.add_item", locale, plain=True), "rules_item_add"),
+            _button(t("button.upload_md", locale, plain=True), "rules_upload"),
+        ]
+    )
+    rows.append([_button(t("button.preview", locale, plain=True), "rules_preview")])
+    rows.append(
+        [
+            _button(t("button.back", locale, plain=True), "rules_lang"),
+            close_btn(locale),
+        ]
+    )
+    return InlineKeyboardMarkup(rows)
+
+
+def section_editor_btn(locale: str | None = None) -> InlineKeyboardMarkup:
+    """Build the formatting toolbar for one section body."""
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            _button("Bold", "rules_fmt:bold"),
+            _button("Italic", "rules_fmt:italic"),
+        ],
+        [
+            _button("List", "rules_fmt:list"),
+            _button("Divider", "rules_fmt:divider"),
+        ],
+        [
+            _button("Code", "rules_fmt:code"),
+            _button("Plain", "rules_fmt:plain"),
+        ],
+        [
+            _button(t("button.rename", locale, plain=True), "rules_section_title"),
+        ],
+        [
+            _button(t("button.back", locale, plain=True), "rules_sections"),
+            close_btn(locale),
+        ],
+    ]
+    return InlineKeyboardMarkup(rows)
+
+
+def draft_preview_btn(
+    categories: list[dict[str, Any]], locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """Preview index from draft categories, with Back to the editor."""
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            _button(
+                str(cat.get("title") or cat.get("category_key")),
+                f"rules_preview_cat:{cat['category_key']}",
+            )
+            for cat in categories[offset : offset + 2]
+        ]
+        for offset in range(0, len(categories), 2)
+    ]
+    rows.append(
+        [
+            _button(t("button.back", locale, plain=True), "rules_panel"),
+            close_btn(locale),
+        ]
+    )
+    return InlineKeyboardMarkup(rows)
+
+
+def draft_preview_sections_btn(
+    sections: list[str], locale: str | None = None
+) -> InlineKeyboardMarkup:
+    """Section buttons inside a previewed category, with Back to preview."""
+    rows: list[list[InlineKeyboardButton]] = [
+        [
+            _button(label, f"rules_preview_sec:{index}")
             for index, label in enumerate(sections[start : start + 2], start=start)
         ]
         for start in range(0, len(sections), 2)
     ]
-    rows.append([close_btn(locale)])
+    rows.append(
+        [
+            _button(t("button.back", locale, plain=True), "rules_preview"),
+            close_btn(locale),
+        ]
+    )
     return InlineKeyboardMarkup(rows)
 
 
@@ -258,23 +400,23 @@ def editor_items_page_btn(
     index: int, total: int, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Page controls for the editor item list."""
-    return InlineKeyboardMarkup([_nav_row(index, total, "rules_items_page", locale)])
+    return InlineKeyboardMarkup(_nav_rows(index, total, "rules_items_page", locale))
 
 
 def editor_preview_page_btn(
     index: int, total: int, locale: str | None = None
 ) -> InlineKeyboardMarkup:
     """Page controls for the draft preview."""
-    return InlineKeyboardMarkup([_nav_row(index, total, "rules_preview_page", locale)])
+    return InlineKeyboardMarkup(_nav_rows(index, total, "rules_preview_page", locale))
 
 
 def rules_page_btn(
     index: int, total: int, locale: str | None = None
 ) -> InlineKeyboardMarkup:
-    """Navigate one-topic-per-page keyboards with Prev/Next/Close."""
-    row: list[InlineKeyboardButton] = []
+    """Navigate topic pages with a Prev/Next row and a separate Close row."""
+    navigation: list[InlineKeyboardButton] = []
     if index > 0:
-        row.append(
+        navigation.append(
             _button(
                 t("button.prev", locale, plain=True),
                 f"rules_prev:{index - 1}",
@@ -282,15 +424,14 @@ def rules_page_btn(
             )
         )
     if index + 1 < total:
-        row.append(
+        navigation.append(
             _button(
                 t("button.next", locale, plain=True),
                 f"rules_next:{index + 1}",
                 style=KeyboardButtonStyle.SUCCESS,
             )
         )
-    row.append(close_btn(locale))
-    return InlineKeyboardMarkup([row])
+    return InlineKeyboardMarkup([navigation, [close_btn(locale)]])
 
 
 def ack_btn(

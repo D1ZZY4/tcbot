@@ -61,7 +61,7 @@ async def cmd_rules(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     locale = await locale_for_update(update)
     try:
-        published = await db.rules_db.published_rules()
+        published = await db.rules_db.published_rules(locale=locale)
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -112,15 +112,10 @@ async def _acknowledge(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     locale = await locale_for_update(update)
     try:
-        current = await db.rules_db.published_rules()
+        current = await db.rules_db.published_rules(locale=locale)
         if current is None or int(current["version"]["id"]) != version_id:
             await query.answer(
                 t("rules.ack.outdated", locale, plain=True), show_alert=True
-            )
-            return
-        if not current["set"].get("requires_acknowledgement"):
-            await query.answer(
-                t("rules.ack.disabled", locale, plain=True), show_alert=True
             )
             return
         if await db.rules_db.has_acknowledged(version_id, user.id):
@@ -206,7 +201,7 @@ async def _show_index(
         return
     locale = await locale_for_update(update)
     try:
-        published = await db.rules_db.published_rules()
+        published = await db.rules_db.published_rules(locale=locale)
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -268,7 +263,7 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await query.answer()
     locale = await locale_for_update(update)
     try:
-        published = await db.rules_db.published_rules()
+        published = await db.rules_db.published_rules(locale=locale)
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -288,11 +283,10 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     locale = await locale_for_update(update)
     items = [item for item in published["items"] if item["category_key"] == key]
-    label = rules_msg.category_label(key, locale, str(category["title"]))
-    description = t(f"rules.description.{key}", locale, plain=True)
-    payload = rules_msg.rich_category_index(
-        key, str(category["title"]), description, locale
-    )
+    label = str(category.get("label") or category.get("title") or key)
+    # * Both values are resolved from the database for the reader's locale.
+    description = str(category.get("description") or "")
+    payload = rules_msg.rich_category_index(key, label, description, locale)
     if ctx.user_data is not None:
         ctx.user_data["rules_current_category"] = key
     sections = _category_sections(items)
@@ -301,7 +295,7 @@ async def on_rules_show(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ctx,
         payload,
         rules_btn.category_sections_btn(sections, locale),
-        f"{label}\n{t(f'rules.description.{key}', locale, plain=True)}",
+        f"{label}\n{description}",
     )
 
 
@@ -313,7 +307,7 @@ async def on_rules_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
     await query.answer()
     locale = await locale_for_update(update)
     try:
-        published = await db.rules_db.published_rules()
+        published = await db.rules_db.published_rules(locale=locale)
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -335,13 +329,22 @@ async def on_rules_section(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> No
         return
     section = sections[index]
     section_items = [item for item in items if _section_label(item) == section]
-    payload = rules_msg.rich_section_page(key, section, section_items, locale)
+    category = next(
+        (cat for cat in published["categories"] if str(cat["category_key"]) == key),
+        None,
+    )
+    label = (
+        str(category.get("label") or category.get("title") or key) if category else key
+    )
+    payload = rules_msg.rich_section_page(
+        key, section, section_items, locale, category_title=label
+    )
     await _edit_payload(
         update,
         ctx,
         payload,
-        rules_btn.category_sections_btn(sections, locale),
-        f"{key}: {section}",
+        rules_btn.rules_section_btn(key, locale),
+        f"{label}: {section}",
     )
 
 

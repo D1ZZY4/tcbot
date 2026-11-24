@@ -131,8 +131,6 @@ _DYNAMIC_KEY_PREFIXES = (
     "privacy.section.",
     "proof.action.",
     "reason.",
-    "rules.category.",
-    "rules.description.",
     "stats.",
     "unbanning.",
     "warnings.",

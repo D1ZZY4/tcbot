@@ -66,8 +66,16 @@ def test_section_buttons_are_two_per_row() -> None:
         "rules_section:0",
         "rules_section:1",
         "rules_section:2",
+        "rules_index:0",
         "close_msg",
     }
+
+
+def test_section_page_offers_only_back_and_close() -> None:
+    """A section view is a reading page, not a second list of sections."""
+    markup = rules_btn.rules_section_btn("cheat", "en-US")
+    callbacks = {b.callback_data for row in markup.inline_keyboard for b in row}
+    assert callbacks == {"rules_show:cheat", "close_msg"}
 
 
 def test_page_index_parses_only_numeric_payloads() -> None:

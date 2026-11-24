@@ -175,7 +175,7 @@ async def _ack_markup(member_id: int, locale: str) -> object | None:
     """
     try:
         requirement = await db.rules_db.acknowledgement_requirement()
-        if requirement is None or not requirement[1]:
+        if requirement is None:
             return None
         version_id = requirement[0]
         if await db.rules_db.has_acknowledged(version_id, member_id):

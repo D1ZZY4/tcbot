@@ -7,67 +7,46 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any
 
-from tcbot import database as db
 from tcbot.modules.helper.messages import rich_msg
 from tcbot.modules.helper.messages.rich_format import footer, heading, paragraph
 from tcbot.modules.helper.messages.rich_style import bold as rich_bold
 from tcbot.modules.helper.messages.rich_style import esc as rich_esc
 from tcbot.modules.helper.messages.rich_text import blocks
-from tcbot.utils.i18n import (
-    Safe,
-    bold,
-    bullet_list,
-    code,
-    divider,
-    esc,
-    section,
-    t,
-)
+from tcbot.modules.helper.pipelines.rules_markdown import render_body
+from tcbot.utils.i18n import bold, bullet_list, divider, esc, section, t
 from tcbot.utils.logger import get_logger
 
 # * Telegram accepts 4096 UTF-16 units in a message; stay below it so the
 # * category title, part marker, and footer always fit.
 CHANNEL_LIMIT: int = 4000
 
-# * Category keys come from the operator-local document stems. The catalog owns
-# * the wording; these keys only gate the lookup so a staff-created category
-# * falls back to its stored title instead of logging a missing key.
-_CATEGORY_KEYS: frozenset[str] = frozenset(
-    {
-        "cheat",
-        "doxing-dan-privasi",
-        "identitas",
-        "karya-dan-atribusi",
-        "konten-pornografi-nsfw",
-        "materi-pengujian",
-        "mod-apk-dan-bajakan",
-        "module-root",
-        "out-off-topic",
-        "pengelola",
-        "penipuan",
-        "perundungan-dan-kebencian",
-        "politik",
-        "promosi",
-        "sanksi",
-        "spam",
-        "transaksi",
-        "federasi",
-        "keanggotaan",
-        "klarifikasi",
-        "persetujuan-pendiri",
-    }
-)
-
 log = get_logger(__name__)
 
 
+def _item_body(body: str) -> str:
+    """Render Markdown bodies as rich blocks; keep plain bodies verbatim."""
+    if (
+        "**" in body
+        or "`" in body
+        or "---" in body
+        or re.search(r"(?m)^\s*[-*+]\s", body)
+    ):
+        return render_body(body)
+    return rich_esc(body)
+
+
 def category_label(key: str, locale: str | None, fallback: str = "") -> str:
-    """Return the localized label of a published rule category."""
-    if key not in _CATEGORY_KEYS:
-        return fallback or key
-    return t(f"rules.category.{key}.label", locale, plain=True)
+    """Return the category title stored with the rule set.
+
+    Category presentation is rule-set data, not translation data. Callers pass
+    the stored title as *fallback*; the key is a last resort for an old row that
+    has no title. The locale argument is kept for the existing call surface.
+    """
+    _ = locale
+    return fallback or key
 
 
 def utf16_len(text: str) -> int:
@@ -120,6 +99,9 @@ def _grouped(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     return groups
 
 
+COMBINED_CATEGORY_KEY = "all"
+
+
 def render_channel(
     items: list[dict[str, Any]],
     *,
@@ -127,12 +109,11 @@ def render_channel(
     published_at: str,
     limit: int = CHANNEL_LIMIT,
 ) -> list[tuple[str, int, str]]:
-    """Render channel parts as ``(category, part_index, text)``.
+    """Render all categories into one channel message.
 
-    Every value is escaped here and never by the editor, so staff cannot
-    inject markup. ``published_at`` is a raw timestamp; ``fmt_dt_raw``
-    produces it and this renderer owns the escaping. Each part carries the
-    final text whose hash the publication slot records.
+    Every value is escaped here, never by the editor, so staff cannot inject
+    markup. The single slot key keeps publication reconciliation simple; the
+    message is split only when it exceeds the Telegram UTF-16 budget.
     """
     ordered = sorted(
         _grouped(items).items(),
@@ -140,92 +121,44 @@ def render_channel(
             int(item.get("category_sort_order") or 100) for item in group[1]
         ),
     )
-    result: list[tuple[str, int, str]] = []
-    footer = ""
-    if ordered:
-        footer = esc(f"\nv{version_number} - {published_at}")
+    blocks: list[str] = []
     for category, category_items in ordered:
-        lines = [
-            f"{esc(f'{number}.')} {bold(str(item['title']))}\n{esc(str(item['body']))}"
-            + (
-                f"\n{esc(str(item['reference_url']))}"
-                if item.get("reference_url")
-                else ""
-            )
-            for number, item in enumerate(
-                sorted(
-                    category_items,
-                    key=lambda item: (
-                        int(item.get("sort_order") or 100),
-                        item.get("id", 0),
-                    ),
+        blocks.append(bold(category))
+        for number, item in enumerate(
+            sorted(
+                category_items,
+                key=lambda item: (
+                    int(item.get("sort_order") or 100),
+                    item.get("id", 0),
                 ),
-                start=1,
+            ),
+            start=1,
+        ):
+            blocks.append(
+                f"{esc(f'{number}.')} {bold(str(item['title']))}\n"
+                f"{_item_body(str(item['body']))}"
+                + (
+                    f"\n{esc(str(item['reference_url']))}"
+                    if item.get("reference_url")
+                    else ""
+                )
             )
-        ]
-        body = "\n".join(lines)
-        budget = max(1, limit - utf16_len(footer) - 40)
-        chunks = split_utf16(body, budget)
-        for index, chunk in enumerate(chunks):
-            marker = f" ({index + 1}/{len(chunks)})" if len(chunks) > 1 else ""
-            text = f"{bold(category)}{esc(marker)}\n{chunk}"
-            if index == len(chunks) - 1:
-                text += footer
-            result.append((category, index, text))
+    footer = esc(f"\nv{version_number} - {published_at}") if ordered else ""
+    budget = max(1, limit - utf16_len(footer) - 40)
+    chunks = split_utf16("\n".join(blocks), budget)
+    result: list[tuple[str, int, str]] = []
+    for index, chunk in enumerate(chunks):
+        marker = f" ({index + 1}/{len(chunks)})" if len(chunks) > 1 else ""
+        text = f"{chunk}{marker}"
+        if index == len(chunks) - 1:
+            text += footer
+        result.append((COMBINED_CATEGORY_KEY, index, text))
     return result
 
 
 def content_hash(text: str) -> str:
     """Return a stable hash of the final rendered text."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-async def editor_panel(
-    set_doc: dict[str, Any],
-    version: dict[str, Any],
-    locale: str | None,
-    *,
-    has_content: bool = False,
-    item_count: int = 0,
-) -> str:
-    """Render the editor panel with a clear next step for the reader."""
-    header = t("button.manage_rules", locale, plain=True)
-    body = t(
-        "rules.editor.panel",
-        locale,
-        name=Safe(code(str(set_doc.get("name", "Rules")))),
-        status=Safe(code(str(version.get("status", "draft")))),
-        count=Safe(code(str(item_count))),
-    )
-    text = section(header, bullet_list(body.splitlines()))
-    hint = "rules.editor.ready_hint" if has_content else "rules.editor.empty_hint"
-    text += f"\n{divider()}\n" + t(hint, locale)
-    try:
-        counts = await db.rules_db.status_counts(int(set_doc["id"]))
-        published = await db.rules_db.published_version(int(set_doc["id"]))
-        # * An empty, never-published set has no meaningful channel status;
-        # * showing four zeroes there only obscures the next step.
-        if published is None and not any(
-            counts.get(key, 0) for key in ("synced", "failed", "missing", "retired")
-        ):
-            return text
-        acks = (
-            await db.rules_db.acknowledgement_count(int(published["id"]))
-            if published
-            else 0
-        )
-        text += f"\n{divider()}\n" + t(
-            "rules.editor.status",
-            locale,
-            synced=Safe(code(str(counts.get("synced", 0)))),
-            failed=Safe(code(str(counts.get("failed", 0)))),
-            missing=Safe(code(str(counts.get("missing", 0)))),
-            retired=Safe(code(str(counts.get("retired", 0)))),
-            acks=Safe(code(str(acks))),
-        )
-    except Exception:
-        log.debug("Rules channel status lookup failed")
-    return text
 
 
 def category_list(categories: list[dict[str, Any]], locale: str | None) -> str:
@@ -243,6 +176,18 @@ def item_list(items: list[dict[str, Any]], locale: str | None) -> str:
     return section(
         t("rules.editor.items", locale, plain=True), blocks("\n".join(lines))
     )
+
+
+def category_editor_panel(category: dict[str, Any], locale: str | None) -> str:
+    """Render H1, divider, category description, divider for the editor."""
+    title = str(category.get("title") or category.get("category_key") or "Rules")
+    description = str(category.get("description") or "")
+    return rich_msg.html_message(
+        heading(t("rules.menu.category", locale, category=title, plain=True)),
+        divider(),
+        paragraph(rich_esc(description)),
+        divider(),
+    )["html"]
 
 
 async def preview(items: list[dict[str, Any]], locale: str | None) -> str:
@@ -273,13 +218,18 @@ def rich_index_page(intro: str, locale: str | None = None) -> dict[str, Any]:
 
 
 def rich_section_page(
-    category: str, section: str, items: list[dict[str, Any]], locale: str | None
+    category: str,
+    section: str,
+    items: list[dict[str, Any]],
+    locale: str | None,
+    *,
+    category_title: str | None = None,
 ) -> dict[str, Any]:
     """Render one section of a category as a rich block with a footer."""
-    label = category_label(str(category), locale, str(category))
+    label = category_label(str(category), locale, category_title or str(category))
     title = t("rules.menu.section", locale, category=label, section=section, plain=True)
     lines = [
-        f"{rich_bold(str(item['title']))}\n{rich_esc(str(item['body']))}"
+        f"{rich_bold(str(item['title']))}\n{_item_body(str(item['body']))}"
         for item in items
     ]
     return rich_msg.html_message(
@@ -312,6 +262,7 @@ def rich_category_view(
     *,
     page: int | None = None,
     total: int | None = None,
+    category_title: str | None = None,
 ) -> dict[str, Any]:
     """Build one rich rules page holding a single topic and its rules.
 
@@ -319,7 +270,7 @@ def rich_category_view(
     render a position marker so a reader knows where they are in the set; the
     Prev and Next buttons live in the keyboard, not in this renderer.
     """
-    label = category_label(str(category), locale, str(category))
+    label = category_label(str(category), locale, category_title or str(category))
     heading_text = t("rules.menu.category", locale, category=label, plain=True)
     blocks = [heading(heading_text)]
     if page is not None and total is not None:
@@ -330,7 +281,7 @@ def rich_category_view(
         blocks.append(paragraph(t("rules.menu.no_rules", locale)))
         return rich_msg.html_message(*blocks)
     lines = [
-        f"{rich_bold(str(item['title']))}\n{rich_esc(str(item['body']))}"
+        f"{rich_bold(str(item['title']))}\n{_item_body(str(item['body']))}"
         for item in items
     ]
     blocks.extend(

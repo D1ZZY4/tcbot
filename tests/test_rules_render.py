@@ -9,6 +9,7 @@ from __future__ import annotations
 from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.messages import rules as rules_msg
 from tcbot.modules.helper.pipelines import mod_action_steps, rules_picker
+from tcbot.utils.i18n import t
 
 
 def _item(item_id: int, category: str = "Conduct", *, order: int = 1) -> dict:
@@ -33,8 +34,30 @@ def test_rich_category_view_uses_privacy_style_blocks() -> None:
     assert "<hr/>" in html
     assert "<ul>" in html
     assert "<b>Rule 1</b>" in html
-    assert "Use Prev and Next" in html
+    footer = t("rules.menu.category_footer", "en-US", plain=True)
+    assert f"<footer>{footer}</footer>" in html
     assert "<table" not in html
+
+
+def test_rich_category_index_shows_the_resolved_label_and_description() -> None:
+    """The live category page renders the values resolved from the database."""
+    payload = rules_msg.rich_category_index(
+        "cheat", "Cheating", "English description", "en-US"
+    )
+    html = payload["html"]
+    assert "<h2>Rules: Cheating</h2>" in html
+    assert "English description" in html
+    assert "<h2>Rules: cheat</h2>" not in html
+
+
+def test_rich_section_page_uses_the_stored_category_label() -> None:
+    """A section heading shows the rule-set label, not the internal slug."""
+    payload = rules_msg.rich_section_page(
+        "cheat", "Aturan", [_item(1)], "en-US", category_title="Cheating"
+    )
+    html = payload["html"]
+    assert "Cheating: Aturan" in html
+    assert "cheat:" not in html
 
 
 def test_rich_category_view_marks_the_page_position() -> None:
@@ -71,7 +94,7 @@ def test_render_channel_escapes_and_numbers_items() -> None:
         published_at="2026-11-21",
     )
     assert len(parts) == 1
-    assert parts[0][0] == "Conduct"
+    assert parts[0][0] == rules_msg.COMBINED_CATEGORY_KEY
     assert "1. " in parts[0][2]
     assert "2. " in parts[0][2]
     assert "v3" in parts[0][2]

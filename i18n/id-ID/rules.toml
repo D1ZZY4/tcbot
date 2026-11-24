@@ -5,8 +5,6 @@
 categories = "Kategori"
 items = "Item"
 panel = "Editor aturan\n*Set:* {name}\n*Status:* {status}\n*Item:* {count}"
-empty_hint = "Draf ini masih kosong. Mulai dari *Edit Draft*, tambahkan kategori, lalu tambahkan aturan pertama."
-ready_hint = "Sudah bagus. *Preview* menampilkan tampilan untuk anggota, dan *Publish* membagikan versi ini ke kanal."
 ask_category = "Kirim judul kategori."
 ask_title = "Kirim judul item."
 ask_body = "Kirim isi item (teks polos)."
@@ -20,7 +18,13 @@ cancelled = "Editor aturan ditutup."
 unexpected = "Gunakan tombol di bawah untuk menyunting, atau tutup editor."
 open_pm = "Buka chat pribadi dengan saya untuk melanjutkan."
 ask_rename = "Kirim judul kategori yang baru."
-status = "Kanal: {synced} tersinkron, {failed} gagal, {missing} hilang, {retired} pensiun. Acknowledgement: {acks}."
+language = "Bahasa aturan: {language}."
+choose_language = "Pilih bahasa untuk kumpulan aturan ini. Daftar mengikuti terjemahan yang tersedia."
+ask_markdown = "Kirim dokumen .md. Judul menjadi kategori dan item; setiap item bisa disunting di sini."
+markdown_ok = "Berhasil mengimpor {count} item dari {name}."
+markdown_bad = "Berkas itu bukan dokumen .md yang dapat dibaca. Kirim berkas Markdown atau gunakan tombol."
+sections = "Bagian dalam draf ini: {count}. Ketuk salah satu untuk menyunting teks dan formatnya."
+ask_format_text = "Kirim teks yang akan ditambahkan dengan gaya yang dipilih."
 
 [help]
 overview = "Baca aturan komunitas yang diterbitkan atau sunting dan terbitkan kumpulan aturan."
@@ -31,70 +35,8 @@ body = "`/tcrules` `/rules`"
 [help.what]
 body = "Menu aturan hanya-baca untuk semua orang; editor memungkinkan staf mengelola kategori, butir, dan publikasi ke kanal."
 
-# Label kategori mengikuti dokumen aturan lokal. Kunci kategori adalah nama
-# berkas; semua teks ada di sini agar tetap bisa diterjemahkan.
-[category.cheat]
-label = "Kecurangan"
-
-[category.doxing-dan-privasi]
-label = "Doxing dan Privasi"
-
-[category.identitas]
-label = "Identitas"
-
-[category.karya-dan-atribusi]
-label = "Karya dan Atribusi"
-
-[category.konten-pornografi-nsfw]
-label = "Konten Pornografi dan NSFW"
-
-[category.materi-pengujian]
-label = "Materi Pengujian"
-
-[category.mod-apk-dan-bajakan]
-label = "MOD APK dan Bajakan"
-
-[category.module-root]
-label = "Root Module"
-
-[category.out-off-topic]
-label = "Out Off Topic"
-
-[category.pengelola]
-label = "Pengelola"
-
-[category.penipuan]
-label = "Penipuan"
-
-[category.perundungan-dan-kebencian]
-label = "Perundungan dan Kebencian"
-
-[category.politik]
-label = "Politik"
-
-[category.promosi]
-label = "Promosi"
-
-[category.sanksi]
-label = "Sanksi"
-
-[category.spam]
-label = "Spam"
-
-[category.transaksi]
-label = "Transaksi"
-
-[category.federasi]
-label = "Federasi"
-
-[category.keanggotaan]
-label = "Keanggotaan"
-
-[category.klarifikasi]
-label = "Klarifikasi"
-
-[category.persetujuan-pendiri]
-label = "Persetujuan Pendiri"
+# Label dan deskripsi kategori adalah data rule set di database, dikelola
+# melalui bot. Tidak ada teks yang disimpan di kode atau katalog ini.
 
 [menu]
 body = "Ada aturan di {community}.\n\nPilih topik di bawah. Aturan federasi hanya untuk pelanggaran berat; sisanya panduan tiap grup dan tidak pernah menjadi ban federasi."
@@ -103,7 +45,7 @@ category = "Aturan: {category}"
 index_title = "Aturan komunitas"
 section = "{category}: {section}"
 page = "Topik {page} dari {total}"
-category_footer = "Gunakan Prev dan Next untuk berpindah topik. Pelanggaran berat ditegakkan di semua grup terhubung; topik lainnya panduan tiap grup."
+category_footer = "Aturan federasi berlaku di semua grup terhubung; topik lainnya tetap panduan tiap grup."
 no_rules = "Tidak ada aturan di kategori ini."
 preview = "Pratinjau\nBeginilah tampilan aturan di kanal. Belum ada yang diterbitkan sampai Anda menekan Publish."
 preview_empty = "Pratinjau\nBelum ada yang ditampilkan. Tambahkan kategori dan aturan di *Edit Draft* terlebih dahulu."
@@ -131,29 +73,4 @@ other = "Lainnya: {note}"
 recorded = "Terima kasih, kamu menerima aturan yang berlaku."
 already = "Kamu sudah menerima aturan ini."
 outdated = "Aturan ini sudah berubah sejak sapaan join."
-disabled = "Acknowledgement sudah tidak diperlukan."
 wrong_member = "Tombol ini untuk anggota lain."
-
-# Deskripsi singkat satu baris yang tampil di atas tombol bagian suatu topik.
-[description]
-cheat = "Kecurangan, alat eksploit, klien modifikasi, dan keuntungan teknis tidak adil. Berlaku untuk semua anggota dan pengelola."
-doxing-dan-privasi = "Data pribadi, privasi, dan pembocoran informasi pribadi tanpa izin."
-identitas = "Identitas, penyamarannya, dan kepemilikan akun."
-karya-dan-atribusi = "Kepenulisan, atribusi, dan penghargaan atas karya komunitas."
-konten-pornografi-nsfw = "Batas konten dewasa dan NSFW di ruang komunitas."
-materi-pengujian = "Materi uji belum rilis, kredensial, dan informasi build rahasia."
-mod-apk-dan-bajakan = "MOD APK, aplikasi bajakan, alat penambalan, dan berkas media. Berlaku untuk semua anggota dan pengelola."
-module-root = "Modul root, akses sistem, dan modifikasi tingkat perangkat."
-out-off-topic = "Posting di luar topik dan disiplin thread."
-pengelola = "Tugas, batas, dan perilaku yang diharapkan dari moderator serta administrator."
-penipuan = "Penipuan, scam, dan transaksi menyesatkan."
-perundungan-dan-kebencian = "Perundungan, pelecehan, dan perilaku kebencian."
-politik = "Diskusi politik dan batasnya di ruang komunitas."
-promosi = "Promosi, iklan, dan batas spam."
-sanksi = "Tingkat sanksi, prosedur, banding, dan kedaluwarsa catatan."
-spam = "Pesan tidak diminta, berulang, atau mengganggu."
-transaksi = "Jual beli, transaksi, dan tanggung jawab pembeli serta penjual."
-federasi = "Apa itu federasi dan bagaimana aturannya diubah."
-keanggotaan = "Cara grup dan anggota bergabung, serta hak dan kewajibannya."
-klarifikasi = "Hubungan federasi dengan merek perangkat dan pemegang merek."
-persetujuan-pendiri = "Persetujuan grup pendiri terhadap aturan federasi."

@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from tcbot.database.base import (
     rule_acknowledgements,
     rule_categories,
+    rule_category_content,
     rule_items,
     rule_set_versions,
     rule_sets,
@@ -24,8 +25,51 @@ from tcbot.database.rules_db.sets import WORKING_LOCALE
 from tcbot.utils.time_and_date import utc_now
 
 
-async def published_rules(set_id: int | None = None) -> dict[str, Any] | None:
-    """Return the active published version with its items and categories."""
+async def _category_presentation(
+    set_id: int, locale: str | None
+) -> dict[str, dict[str, str]]:
+    """Return the database-owned labels and descriptions for a reader locale.
+
+    Nothing is generated or defaulted from bundled text: a category without a
+    stored row simply has no presentation, and the caller falls back to its
+    stored title.
+    """
+    rows = await db_call(
+        lambda: fetch_all(
+            rule_category_content.select().where(
+                rule_category_content.c.rule_set_id == set_id
+            )
+        )
+    )
+    wanted = locale or WORKING_LOCALE
+    by_key: dict[str, dict[str, dict[str, str]]] = {}
+    for row in rows:
+        key = str(row["category_key"])
+        by_key.setdefault(key, {})[str(row["locale"])] = {
+            "label": str(row["label"]),
+            "description": str(row["description"] or ""),
+        }
+    result: dict[str, dict[str, str]] = {}
+    for key, localized in by_key.items():
+        default = localized.get(WORKING_LOCALE, {})
+        chosen = localized.get(wanted, default)
+        result[key] = {
+            "label": chosen.get("label") or default.get("label") or "",
+            "description": (
+                chosen.get("description") or default.get("description") or ""
+            ),
+        }
+    return result
+
+
+async def published_rules(
+    set_id: int | None = None, locale: str | None = None
+) -> dict[str, Any] | None:
+    """Return the active published version with its items and categories.
+
+    Category presentation is resolved for *locale* from the database, so the
+    public menu follows the reader's language without a translation catalog.
+    """
     if set_id is None:
         set_row = await db_call(
             lambda: fetch_one(
@@ -38,15 +82,26 @@ async def published_rules(set_id: int | None = None) -> dict[str, Any] | None:
         if set_row is None:
             return None
         set_id = int(set_row["id"])
+    content_locale = locale or WORKING_LOCALE
     version = await db_call(
         lambda: fetch_one(
             select(rule_set_versions).where(
                 rule_set_versions.c.rule_set_id == set_id,
-                rule_set_versions.c.locale == WORKING_LOCALE,
+                rule_set_versions.c.locale == content_locale,
                 rule_set_versions.c.status == "published",
             )
         )
     )
+    if version is None and content_locale != WORKING_LOCALE:
+        version = await db_call(
+            lambda: fetch_one(
+                select(rule_set_versions).where(
+                    rule_set_versions.c.rule_set_id == set_id,
+                    rule_set_versions.c.locale == WORKING_LOCALE,
+                    rule_set_versions.c.status == "published",
+                )
+            )
+        )
     if version is None:
         return None
     # * These reads depend only on set_id and the now-known version id. They
@@ -69,11 +124,28 @@ async def published_rules(set_id: int | None = None) -> dict[str, Any] | None:
         ),
         db_call(lambda: fetch_one(select(rule_sets).where(rule_sets.c.id == set_id))),
     )
+    content = await _category_presentation(set_id, locale)
+    titles = {str(row["category_key"]): str(row["title"]) for row in categories}
+    resolved_categories: list[dict[str, Any]] = []
+    for row in categories:
+        category = dict(row)
+        key = str(category["category_key"])
+        presentation = content.get(key)
+        category["label"] = (
+            presentation["label"] if presentation else ""
+        ) or titles.get(key, key)
+        # * The editor owns the category description; the localized content
+        # * table is the fallback when no description was written in bot.
+        stored = str(category.get("description") or "")
+        category["description"] = stored or (
+            presentation["description"] if presentation else ""
+        )
+        resolved_categories.append(category)
     return {
         "set": dict(set_doc) if set_doc else {},
         "version": dict(version),
         "items": [dict(row) for row in items],
-        "categories": [dict(row) for row in categories],
+        "categories": resolved_categories,
     }
 
 

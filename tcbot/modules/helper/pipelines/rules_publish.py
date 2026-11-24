@@ -10,6 +10,7 @@ from typing import Any
 
 from tcbot import cfg
 from tcbot.database import rules_db
+from tcbot.database.rules_db.sets import WORKING_LOCALE
 from tcbot.modules.helper.messages import safe_edit_message, send_text
 from tcbot.modules.helper.messages.rules import content_hash, render_channel
 from tcbot.utils.logger import get_logger
@@ -19,7 +20,7 @@ log = get_logger(__name__)
 
 
 async def publish_rules(
-    set_id: int, version_id: int, user_id: int, bot: Any
+    set_id: int, version_id: int, user_id: int, bot: Any, locale: str | None = None
 ) -> dict[str, Any]:
     """Publish a draft and immediately reconcile the channel.
 
@@ -35,7 +36,8 @@ async def publish_rules(
         items = await rules_db.all_items(version_id)
         if not items:
             raise RuntimeError("A rules draft needs at least one item before publish")
-        previous = await rules_db.published_version(set_id)
+        content_locale = locale or WORKING_LOCALE
+        previous = await rules_db.published_version(set_id, content_locale)
         version_number = int(previous["version_number"]) + 1 if previous else 1
         now = utc_now()
         parts = render_channel(
@@ -53,7 +55,7 @@ async def publish_rules(
             slot = await rules_db.publications.upsert_slot(
                 set_id=set_id,
                 version_id=version_id,
-                locale="en-US",
+                locale=content_locale,
                 chat_id=cfg.main_channel,
                 message_thread_id=None,
                 category_key=category,
