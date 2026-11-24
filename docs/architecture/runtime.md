@@ -77,7 +77,7 @@ through `SENTRY_DSN` and uses the same redaction hook.
 ## Supervised tasks and update processing
 
 `TaskTracker` owns the schedule, track, and release steps for fire-and-forget
-tasks. The startup, member-cache, identity-refresh, harvest, title-refresh, and
+tasks. The startup, member-cache, identity-refresh, admin-harvest, and
 asyncio-report sets are drained during shutdown.
 
 `KeyedUpdateProcessor` serializes updates per `(chat, user)` so a

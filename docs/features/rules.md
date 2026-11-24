@@ -76,11 +76,12 @@ Run states are `running`, `completed`, `partial`, and `failed`. Slot states are
 
 A category groups one topic from the operator's rule documents. The seed script
 creates one category per document stem, such as `cheat` or
-`doxing-dan-privasi`. Its localized label and one-line description are seeded
-into `rule_category_content`, one row per locale. The public menu resolves them
-for the reader's locale with a working-default fallback, using the stored
-category title when no row exists, so the rule set owns its own presentation and
-the translation catalog no longer carries per-category wording.
+`doxing-dan-privasi`. Localized labels and one-line descriptions are read from
+`rule_category_content` (one row per category and locale when present), with the
+stored category title as fallback; no automatic writer seeds those rows. The
+public menu resolves them for the reader's locale with a working-default
+fallback, so the rule set owns its own presentation and the translation catalog
+no longer carries per-category wording.
 A new community starts with the editable `mandatory` and `optional` defaults
 until a seed or a staff edit replaces them, and the seed retires those two
 buckets when it writes the topic categories. Staff can add, rename, reorder,
@@ -111,13 +112,14 @@ have one content locale, so the seed always publishes en-US.
 ## Acknowledgement
 
 Acknowledgement is a greeting-only surface. In the primary group the bot
-attaches an "I agree" button when the published set requires acknowledgement
-and the member has not accepted that exact version. A rules read failure never
-blocks the welcome: the greeting is sent without a button.
+attaches an "I agree" button when a published version exists and the member has
+not accepted that exact version. The `requires_acknowledgement` flag is no
+longer consulted. A rules read failure never blocks the welcome: the greeting
+is sent without a button.
 
 The callback is `rules_ack:<version>:<member>`. `_acknowledge()` verifies the
-tapping user is the named member, the version is still current, acknowledgement
-is enabled, and no prior record exists. The insert is `ON CONFLICT DO NOTHING`,
+tapping user is the named member, the version is still current, and no prior
+record exists. The insert is `ON CONFLICT DO NOTHING`,
 so duplicate taps are safe. Acknowledgement never appears on channel posts or
 in the `/rules` menu.
 

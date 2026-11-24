@@ -211,7 +211,7 @@ list that would claim zero groups.
 
 ## Primary group handling
 
-Primary groups (the main and exec destinations) are infrastructure, not managed
+The primary group (`MAIN_GROUP`) is infrastructure, not a managed
 groups. They are always enforcement destinations for ban, unban, mute, warn, and
 federation logs, because every fan-out appends them through
 `with_primary_groups()`. The connect command, the join-decision callback,

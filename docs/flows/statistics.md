@@ -115,8 +115,9 @@ live with a bounded lookup and a bounded fan-out.
 the viewer lacks the rank; the callbacks re-check rank fresh, so a crafted or
 stale tap cannot open a gated pane.
 
-The ban search accepts a plain message only in private chat
-(`filters.ChatType.PRIVATE & filters.TEXT & ~ALL_PREFIXES_CMD_FILTER`). A numeric
+The ban search accepts a plain message in any chat through a group-5 message
+handler (`filters.TEXT & ~ALL_PREFIXES_CMD_FILTER`), so a panel opened in a group
+can be answered there. Input from a different chat is ignored. A numeric
 query calls `get_active_ban(int(query))`; a name query calls
 `users_cache.search_by_name(q, limit=_SEARCH_LIMIT)` and then
 `bans_db.active_bans_for_users(uids)`. `_SEARCH_LIMIT` is `30`. Results render as

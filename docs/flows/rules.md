@@ -134,26 +134,26 @@ so a deleted channel post is not retried forever.
 
 Acknowledgment is a greeting-only surface. `_ack_markup()` in `greeting.py`
 attaches one "I agree" button to the welcome message in the primary group when
-the published rule set has `requires_acknowledgement` enabled and the member has
-not yet accepted that exact version. A rules read failure never blocks the
-welcome: the greeting is sent without a button.
+a published version exists and the member has not yet accepted that exact
+version. The `requires_acknowledgement` flag is no longer consulted. A rules
+read failure never blocks the welcome: the greeting is sent without a button.
 
 ```mermaid
 flowchart TD
     J[New member in primary group] --> V[Load acknowledgement requirement]
-    V --> Q{requires_acknowledgement and not yet acknowledged}
+    V --> Q{version exists and not yet acknowledged}
     Q -->|yes| BTN[Greeting with rules_ack version member button]
     Q -->|no| W[Plain greeting]
     BTN --> TAP[/callback rules_ack version member/]
-    TAP --> CHK{member id, current version, enabled, not already acknowledged}
-    CHK -->|fail| ALERT[Show outdated wrong member disabled or already alert]
+    TAP --> CHK{member id, current version, not already acknowledged}
+    CHK -->|fail| ALERT[Show outdated wrong member or already alert]
     CHK -->|pass| REC[record_acknowledgement with ON CONFLICT DO NOTHING]
     REC --> OK[Show recorded alert]
 ```
 
 The callback payload is `rules_ack:<version>:<member>`. `_acknowledge()` verifies
 the tapping user is the named member, the version is still the current published
-version, acknowledgment is enabled, and no prior acknowledgment exists.
+version, and no prior acknowledgment exists.
 Duplicate taps are safe because the insert is `ON CONFLICT DO NOTHING`.
 Acknowledgment never appears on channel posts or in the `/rules` menu.
 

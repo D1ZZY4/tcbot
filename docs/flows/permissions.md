@@ -225,7 +225,8 @@ flowchart TD
   scope once empty, and `callback_is_current()` rejects buttons from an older
   prompt message.
 - `guards.require_federation_origin()` allows private chats only when
-  `allow_private` is set, short-circuits on `cfg.is_primary_group(chat_id)`, and
+  `allow_private` is set, short-circuits on `cfg.is_primary_group(chat_id)` or
+  `cfg.is_infrastructure_chat(chat_id)`, and
   otherwise requires `groups_db.is_connected(chat_id, fresh=True)`. A disconnected
   group or a lookup outage blocks the action.
 - Callback prompts may carry the opener as a trailing `:{executor}` segment.

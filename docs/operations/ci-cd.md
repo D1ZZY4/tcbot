@@ -11,9 +11,9 @@ Related pages: [setup](../getting-started/setup.md) and
 
 | Workflow | File | Triggers | Purpose |
 |---|---|---|---|
-| Lint (Ruff) | `lint-ruff.yml` | Push and PR on main, feat/**, fix/** | Format check, lint, file-size budget, import check. |
-| Lint (Pyright) | `lint-pyright.yml` | Same | Static type check. |
-| Test (Pytest) | `test-pytest.yml` | Same | PostgreSQL tests first, then the rest in parallel with coverage. |
+| Lint (Ruff) | `lint-ruff.yml` | Push on main, feat/**, fix/**; PR on main | Format check, lint, file-size budget, import check. |
+| Lint (Pyright) | `lint-pyright.yml` | Push on main, feat/**, fix/**; PR on main | Static type check. |
+| Test (Pytest) | `test-pytest.yml` | Push on main, feat/**, fix/**; PR on main | PostgreSQL tests first, then the rest in parallel with coverage. |
 | CodeQL | `codeql.yml` | Push and PR on main, weekly schedule | Security analysis for Python and Actions. |
 | Auto-Fix Code Quality | `auto-fix.yml` | Push, PR, dispatch, weekly schedule, and completion of the lint workflows | Applies Ruff fixes and opens or updates an auto-PR. |
 | Dependency Updates | `dependency-update.yml` | Weekly schedule and dispatch | Upgrades `uv.lock` and opens a dependency PR. |

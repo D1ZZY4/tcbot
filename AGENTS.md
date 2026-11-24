@@ -105,8 +105,10 @@ through these helpers: a direct PTB `send_message`, `reply_text`, or
 - Shared markup helpers (`esc`, `bold`, `code`, `user_ref`, and the rest) and
   localized wording come from `tcbot/utils/i18n.py`.
 - Plain notices and callback alerts stay unparsed; they are not rich messages.
-- Kurigram is MTProto-only and has no rich-message API. PTB remains the
-  Telegram transport.
+- Kurigram speaks MTProto directly and does expose a native rich-message API,
+  but this project keeps PTB as the sole rich-message transport. All rich send
+  and edit helpers live in `messages/`; MTProto is used only for identity
+  lookups.
 
 ## Autonomous Engineering Loop
 

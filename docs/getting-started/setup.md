@@ -132,5 +132,5 @@ configured. See [CI/CD](../operations/ci-cd.md) for the workflows and
 2. Confirm `API_ID` and `API_HASH` are set so boot does not refuse to start.
 3. Confirm the configured `OWNER_ID` can be reached by the bot.
 4. Send `/start` in private chat and check the main menu.
-5. Connect the primary group through `/tcconnect`.
+5. Set `MAIN_GROUP` to the primary group's negative chat id. The bot anchors it automatically; `/tcconnect` deliberately refuses it and the other infrastructure destinations.
 6. Post a test log action and confirm delivery to `LOGS`.

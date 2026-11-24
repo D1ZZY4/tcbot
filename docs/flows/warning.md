@@ -75,7 +75,7 @@ flowchart TD
     FAIL -->|yes| RETRY[database retry reply]
     FAIL -->|no| STAFF{role is staff}
     STAFF -->|yes| DEM[Demote.execute trigger warn then exempt reply]
-    STAFF -->|no| ENF[demote_before_enforcement trigger warn]
+    STAFF -->|no| ENF[demote_before_enforcement trigger ban]
     ENF --> OWNER{returned owner}
     OWNER -->|yes| PROTECTED[exempt failed reply no ban]
     OWNER -->|no| BAN[automatic federation ban]
@@ -93,7 +93,7 @@ as well.
 
 Staff members are exempt from the threshold ban. `Demote.execute(trigger="warn")`
 removes the role instead, and the reply distinguishes a real demotion from a
-failed one based on the return value. `demote_before_enforcement(trigger="warn")`
+failed one based on the return value. `demote_before_enforcement(trigger="ban")`
 then runs again immediately before the ban so a promotion between the exemption
 read and the ban cannot leave rank after the ban lands. If that gate reports
 `owner`, the protected role stops the automatic ban. See
