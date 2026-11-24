@@ -216,6 +216,17 @@ def test_parse_helpers_keep_their_contract() -> None:
     assert parse_chat_id("") == (0, None)
 
 
+def test_parse_list_drops_blank_entries_in_both_forms() -> None:
+    """A literal list and CSV form of the same list produce equal output.
+
+    MODULES_LOAD treats an empty string as an invalid module name, so blank
+    entries must be discarded however the operator wrote the variable.
+    """
+    assert parse_list("['bans', '', '  ']") == ["bans"]
+    assert parse_list("bans,,") == ["bans"]
+    assert parse_list("[1, None, 'bans']") == ["1", "None", "bans"]
+
+
 def test_env_fallbacks_use_documented_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

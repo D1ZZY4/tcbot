@@ -10,6 +10,7 @@ import ast
 import os
 import re
 import secrets
+import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -98,7 +99,9 @@ def parse_list(raw: str) -> list[str]:
     try:
         parsed = ast.literal_eval(raw)
         if isinstance(parsed, list):
-            return [str(item).strip() for item in parsed]
+            # * Drop blank entries in both forms: the CSV branch already does,
+            # * and MODULES_LOAD treats an empty name as an invalid module.
+            return [value for item in parsed if (value := str(item).strip())]
     except (ValueError, SyntaxError) as exc:
         log.debug("parse_list falling back to CSV parsing: %s", exc)
     items = raw.strip("[]").split(",")
@@ -552,6 +555,11 @@ class Configs:
 # * running bot. The first read still fails fast when a required
 # * setting is missing, and the bot reads it while starting up.
 _cfg: Configs | None = None
+# * Two threads can first read ``tcbot.cfg`` before either publishes the
+# * module attribute. Without a lock both build a Configs; when no webhook
+# * secret is set they generate different random tokens, so a direct importer
+# * and the module can end up with different instances.
+_cfg_lock = threading.Lock()
 
 
 def __getattr__(name: str) -> Configs:
@@ -560,9 +568,13 @@ def __getattr__(name: str) -> Configs:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     global _cfg
     if _cfg is None:
-        _cfg = Configs.load()
-        # * Cache it as a real module attribute so later reads skip this hook.
-        globals()["cfg"] = _cfg
+        with _cfg_lock:
+            if _cfg is None:
+                loaded = Configs.load()
+                _cfg = loaded
+                # * Cache it as a real module attribute so later reads skip
+                # * this hook. Publish only after the full value is built.
+                globals()["cfg"] = loaded
     return _cfg
 
 
