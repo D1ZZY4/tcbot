@@ -78,12 +78,12 @@ describes itself, `get_help(locale)`.
 
 `register_handlers()` attaches, in order, the member-cache harvester, the
 collected module handlers, and the error handler.
-Most module handlers sit in Kurigram group `0`. A handler that consumes free text and
-must not shadow an active conversation declares a `handler_group`, which the
-caller honours when registering it; the stats ban-search input uses this to run
-in a later group. Commands are matched by `build_prefixed_filters()` against all
-configured prefixes. See [Commands](../reference/commands.md) for the ownership
-table.
+Most module handlers sit in Kurigram group `0`, where the dispatcher runs the
+first matching handler. A handler that does not own an update must hand it on
+with `ContinuePropagation` instead of returning normally; a later group does not
+suppress earlier groups. Commands are matched by `build_prefixed_filters()` against
+all configured prefixes. See [Commands](../reference/commands.md) for the
+ownership table.
 
 ## Handler anatomy
 
@@ -111,7 +111,8 @@ visible work. See [Security](security.md) for the tier and guard contracts.
 | `ban_info.py`, `replies` via `messages/replies.py` | Shared ban details and localized replies. |
 | `pipelines/` | Domain-named `*_actions.py`, `*_steps.py`, `*_panels.py`, or plain ConversationHandler factories and their steps. |
 | `buttons/` | Every inline keyboard builder. |
-| `messages/` | Rich transport, formatters, panels, links, and audit-log builders. |
+| `messages/` | Safe edits, channel delivery, panels, replies, and audit-log builders; re-exports rich transports for stable dotted paths. |
+| `rich/` | Rich HTML primitives, links and mentions, buttons, block conversion, media, and the send/edit transports. |
 
 ## Runtime utilities
 

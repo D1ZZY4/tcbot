@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from pyrogram.types import Message
 
@@ -144,6 +144,34 @@ class ProofSessionRegistry:
             *[task for task in to_cancel if not task.done()],
             return_exceptions=True,
         )
+
+
+async def replace_live_session(
+    registry: ProofSessionRegistry,
+    scope: dict[str, Any],
+    chat_id: int,
+    user_id: int,
+    clear_state: Callable[[dict[str, Any]], None],
+) -> bool:
+    """Cancel an unfinished proof session before a new command replaces its scope.
+
+    Returns False when the old session already entered execution: cancelling a
+    ban mid-fan-out would leave a record with no enforcement.
+    """
+    key = (chat_id, user_id)
+    session = registry.get(key)
+    if session is None:
+        return True
+    if session.flushing:
+        return False
+    registry.pop(key, session)
+    session.cancelled = True
+    if session.flush_task is not None:
+        session.flush_task.cancel()
+        await asyncio.gather(session.flush_task, return_exceptions=True)
+    clear_state(session.scope)
+    clear_state(scope)
+    return True
 
 
 proof_sessions = ProofSessionRegistry()

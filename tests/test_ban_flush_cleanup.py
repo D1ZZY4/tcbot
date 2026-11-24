@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from pyrogram import ContinuePropagation
 from pyrogram.types import Chat, Message
 
 from tcbot import database as db
@@ -28,6 +30,9 @@ class _DummyBot:
 
 
 class _FakeCallbackQuery:
+    def __init__(self) -> None:
+        self.message = SimpleNamespace(chat=SimpleNamespace(id=_FakeChat.id), id=5)
+
     async def answer(self, *args: Any, **kwargs: Any) -> None:
         return None
 
@@ -62,7 +67,10 @@ class _FakeCtx:
 
 
 def _prefilled_scope() -> dict[str, Any]:
-    return dict.fromkeys(ban_actions.BAN_USER_DATA_KEYS, "value")
+    scope = dict.fromkeys(ban_actions.BAN_USER_DATA_KEYS, "value")
+    scope["ban_prompt_chat_id"] = _FakeChat.id
+    scope["ban_prompt_msg_id"] = 5
+    return scope
 
 
 def _ctx_for(update: Any, payload: dict[str, Any]) -> _FakeCtx:
@@ -166,6 +174,44 @@ def test_flush_finally_clears_own_session(
     assert len(registry) == 0
 
 
+def test_reentry_cancels_an_idle_proof_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second /tcban must not archive evidence against the first target."""
+    key = (_FakeChat.id, _FakeUser.id)
+    registry = ProofSessionRegistry()
+    monkeypatch.setattr(ban_actions, "proof_sessions", registry)
+    old_scope = {"ban_target_id": 33, "ban_reason": "old"}
+    registry[key] = ProofSession(scope=old_scope)
+
+    accepted = asyncio.run(
+        ban_actions.replace_live_proof_session({}, _FakeChat.id, _FakeUser.id)
+    )
+
+    assert accepted is True
+    assert key not in registry
+    assert old_scope == {}
+
+
+def test_reentry_refuses_a_session_that_is_executing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cancelling mid-fan-out would leave a ban record with no enforcement."""
+    key = (_FakeChat.id, _FakeUser.id)
+    registry = ProofSessionRegistry()
+    monkeypatch.setattr(ban_actions, "proof_sessions", registry)
+    session = ProofSession(scope={"ban_target_id": 33}, flushing=True)
+    registry[key] = session
+
+    accepted = asyncio.run(
+        ban_actions.replace_live_proof_session({}, _FakeChat.id, _FakeUser.id)
+    )
+
+    assert accepted is False
+    assert registry[key] is session
+    assert session.cancelled is False
+
+
 def test_done_proof_finally_guard_regression(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -258,13 +304,13 @@ async def _fake_locale(update: Any) -> str:
     return "en-US"
 
 
-def test_zombie_text_ends_silently() -> None:
+def test_zombie_text_passes_to_other_flows() -> None:
     msg = _ZombieMessage()
     update = _ZombieUpdate(message=msg)
-    outcome = asyncio.run(
-        ban_actions.on_proof_unexpected(update, _ZombieCtx({}))  # type: ignore[arg-type]
-    )
-    assert outcome == ban_actions.ConversationHandler.END
+    with pytest.raises(ContinuePropagation):
+        asyncio.run(
+            ban_actions.on_proof_unexpected(update, _ZombieCtx({}))  # type: ignore[arg-type]
+        )
     assert msg.replies == []
 
 
@@ -290,7 +336,9 @@ def test_zombie_done_tap_ends_silently(
     outcome = asyncio.run(
         ban_actions.on_done_proof(update, _ZombieCtx({}))  # type: ignore[arg-type]
     )
-    assert outcome == ban_actions.ConversationHandler.END
+    # * No prompt identity is recorded, so fail-closed freshness treats the tap
+    # * as stale instead of executing an empty-scope ban.
+    assert outcome is None
     assert len(query.answers) == 1
 
 

@@ -70,14 +70,14 @@ def _make(
 
 
 def test_prompt_identity_decides_whether_a_callback_is_current() -> None:
-    """A tap from another message is stale; an absent identity stays permissive."""
+    """A tap from another message is stale; an absent identity is refused."""
     update, _ctx, details = _make(_LIVE_ID)
     scope = details["scope"]
     kwargs = {"chat_key": "kick_prompt_chat", "message_key": "kick_prompt_id"}
 
     assert callback_is_current(update, scope, **kwargs) is True
     assert callback_is_current(_make(_LIVE_ID + 1)[0], scope, **kwargs) is False
-    assert callback_is_current(update, {}, **kwargs) is True
+    assert callback_is_current(update, {}, **kwargs) is False
 
 
 def test_stale_cancel_does_not_end_a_new_kick_flow(

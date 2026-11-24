@@ -50,8 +50,11 @@ def callback_is_current(
         return False
     live_chat = scope.get(chat_key)
     live_msg = scope.get(message_key)
+    # * Fail closed: a callback with no recorded prompt is not from a live
+    # * flow. An empty scope used to be treated as current, which let a
+    # * fabricated moderation callback reach an executor with no target.
     if not isinstance(live_chat, int) or not isinstance(live_msg, int):
-        return True
+        return False
     message = getattr(query, "message", None)
     if message is None:
         return False

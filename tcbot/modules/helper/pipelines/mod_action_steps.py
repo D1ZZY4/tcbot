@@ -35,6 +35,7 @@ from tcbot.modules.helper.messages import (
 )
 from tcbot.modules.helper.pipelines import rules_picker
 from tcbot.modules.helper.pipelines.proof_steps import PROOF_MEDIA_FILTER, BuildProof
+from tcbot.modules.helper.rich.edit import callback_text_of
 from tcbot.modules.helper.scope import (
     callback_is_current,
     clear_flow_scope,
@@ -612,7 +613,7 @@ class _RulesStepMixin(_FlowBase):
         if not self._callback_is_live(ctx):
             await self._ignore_stale_callback(ctx)
             return None
-        item_id = rules_picker.item_id_from_callback(q.data)
+        item_id = rules_picker.item_id_from_callback(callback_text_of(q))
         scope = flow_scope(ctx)
         if item_id is not None:
             scope[self._rules_key] = rules_picker.toggle(

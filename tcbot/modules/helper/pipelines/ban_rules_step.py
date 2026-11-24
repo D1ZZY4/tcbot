@@ -34,10 +34,11 @@ from tcbot.modules.helper.pipelines.ban_actions import (
     BAN_USER_DATA_KEYS,
     WAITING_PROOF,
     on_cancel_proof,
-    proof_prompt_content,
 )
 from tcbot.modules.helper.pipelines.ban_confirmation import stale_ban_callback
 from tcbot.modules.helper.pipelines.mod_action_steps import MAX_RULES_NOTE_LEN
+from tcbot.modules.helper.pipelines.proof_steps import proof_prompt_content
+from tcbot.modules.helper.rich.edit import callback_text_of
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -144,7 +145,7 @@ async def on_ban_rules_toggle(ctx: Ctx) -> int | None:
         return WAITING_BAN_RULES
     if await stale_ban_callback(ctx):
         return None
-    item_id = rules_picker.item_id_from_callback(q.data)
+    item_id = rules_picker.item_id_from_callback(callback_text_of(q))
     scope = flow_scope(ctx)
     if item_id is not None:
         scope["ban_rules"] = rules_picker.toggle(scope.get("ban_rules", []), item_id)

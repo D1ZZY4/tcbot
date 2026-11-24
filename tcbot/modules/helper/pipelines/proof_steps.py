@@ -17,10 +17,22 @@ from pyrogram.filters import Filter as BaseFilter
 from pyrogram.types import InlineKeyboardMarkup
 
 from tcbot.modules.helper.buttons import proof_step_btn
-from tcbot.utils.i18n import Safe, bold, t
+from tcbot.utils.i18n import Safe, bold, t, user_ref
 from tcbot.utils.logger import get_logger
 
 log = get_logger(__name__)
+
+
+def proof_prompt_content(
+    target_id: int, target_fname: str, reason: str, locale: str | None = None
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Build the proof-collection prompt text and keyboard."""
+    return (
+        BuildProof("ban", skip_allowed=False).noted_prompt(
+            "ban", reason, user_ref(target_id, target_fname), locale=locale
+        ),
+        BuildProof("ban", skip_allowed=False).keyboard(locale),
+    )
 
 
 # ─────────────────────── Proof media filter ─────────────────────── #

@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from pyrogram import Client
+from pyrogram import Client, ContinuePropagation
 from pyrogram.errors import ChatAdminRequired
 from pyrogram.types import InlineKeyboardMarkup, Message
 
@@ -43,6 +43,7 @@ from tcbot.modules.helper.pipelines.proof_post import upload_proof_media
 from tcbot.modules.helper.pipelines.proof_session import (
     ProofSession,
     proof_sessions,
+    replace_live_session,
 )
 from tcbot.modules.helper.pipelines.proof_steps import PROOF_MEDIA_FILTER, BuildProof
 from tcbot.modules.helper.scope import flow_scope
@@ -110,6 +111,15 @@ def _cancel_proof_session(scope: dict[str, Any] | None) -> None:
         session.cancelled = True
         if session.flush_task is not None:
             session.flush_task.cancel()
+
+
+async def replace_live_proof_session(
+    scope: dict[str, Any], chat_id: int, user_id: int
+) -> bool:
+    """Retire an unfinished session before a re-entry replaces its scope."""
+    return await replace_live_session(
+        proof_sessions, scope, chat_id, user_id, _clear_ban_state
+    )
 
 
 async def drain_proof_sessions() -> None:
@@ -720,18 +730,6 @@ async def _execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) -
         log.warning("Failed to send ban PM to user %d: %s", target_id, pm_result)
 
 
-def proof_prompt_content(
-    target_id: int, target_fname: str, reason: str, locale: str | None = None
-) -> tuple[str, InlineKeyboardMarkup]:
-    """Build the proof-collection prompt text and keyboard."""
-    return (
-        proof.noted_prompt(
-            "ban", reason, user_ref(target_id, target_fname), locale=locale
-        ),
-        proof.keyboard(locale),
-    )
-
-
 # ──────────────────── Proof collection handlers ─────────────────── #
 
 
@@ -857,7 +855,9 @@ async def on_done_proof(ctx: Ctx) -> int | None:
 async def on_proof_unexpected(ctx: Ctx) -> int:
     """Reject unexpected message types during proof collection."""
     if ctx.user_data is not None and not flow_scope(ctx).get("ban_target_id"):
-        return ConversationHandler.END
+        # * This handler is flattened into the shared group-0 list. Without an
+        # * active ban it must not consume a message another module's flow owns.
+        raise ContinuePropagation()
     if ctx.effective_message:
         await reply_rich(
             ctx.effective_message,
