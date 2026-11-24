@@ -76,7 +76,7 @@ async def cmd_tcfgroups(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not groups:
         await reply_rich(
             msg,
-            t("groups.menu.empty", locale, community=cfg.community_name, plain=True),
+            t("groups.menu.empty", locale, community=cfg.community_name),
             log_label="tcgroups no-groups",
             parse_mode=None,
         )

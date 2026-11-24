@@ -29,7 +29,10 @@ _GET_CHAT_TIMEOUT = TELEGRAM_LOOKUP_TIMEOUT
 # * A Telegram user ID is a positive decimal integer. Groups and channels
 # * carry negative IDs (or resolve through a chat lookup), so a token that
 # * does not name a positive integer is not a user target.
-_USER_ID_RE = re.compile(r"-?\d+")
+# * Explicit ASCII digits: Python's ``\d`` also matches Unicode decimal
+# * digits (e.g. Arabic-Indic or full-width), which ``int()`` silently accepts
+# * and would let a malformed token resolve as a different numeric user id.
+_USER_ID_RE = re.compile(r"-?[0-9]+")
 
 
 def parse_user_id_token(token: str) -> int | None:

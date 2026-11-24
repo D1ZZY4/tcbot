@@ -250,9 +250,15 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
         return await _fetch_mention_triple(user_id)
 
     data = await user_mention_cache.get_or_fetch(user_id, _fetch)
-    # * data[0] is None when the sentinel is in cache (user not in the table).
-    # * Use caller's fallback in that case; otherwise return the real name.
-    return cast("str", data[0]) if data[0] is not None else fallback
+    # * A bare user row with no first_name is cached as the numeric id, and a
+    # * missing row as the all-None sentinel. Both are placeholders, so the
+    # * caller's fallback wins; only a real stored name is returned verbatim.
+    name = data[0]
+    return (
+        cast("str", name)
+        if name is not None and not is_placeholder_name(name)
+        else fallback
+    )
 
 
 async def total_users() -> int:

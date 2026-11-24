@@ -197,11 +197,12 @@ async def _show_groups(q: CallbackQuery, update: Update, *, detailed: bool) -> N
         # * so the empty state never rendered at all).
         await safe_edit_cb(
             q,
+            # * Rich mode: this edit carries rich HTML, so the configured
+            # * community name must be escaped rather than passed through raw.
             t(
                 "groups.menu.empty",
                 locale,
                 community=cfg.community_name,
-                plain=True,
             ),
             parse_mode=None,
             reply_markup=buttons.back_to_start_btn(locale),

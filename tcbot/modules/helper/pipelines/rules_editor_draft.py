@@ -403,12 +403,13 @@ class RulesDraftEditor:
         flow_scope(ctx, update).pop("rules_step", None)
         await reply_rich(
             msg,
+            # * Rich mode: this travels through rich HTML, so the uploaded
+            # * filename must be escaped rather than passed through verbatim.
             t(
                 "rules.editor.markdown_ok",
                 locale,
                 count=len(items),
                 name=name,
-                plain=True,
             ),
             parse_mode=None,
         )
