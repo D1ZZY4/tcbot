@@ -177,6 +177,39 @@ async def test_a_reban_opens_a_new_case_and_supersedes_the_old_decision(
     assert superseded["status"] == "superseded"
 
 
+async def test_a_reban_keeps_the_group_it_was_issued_in(
+    community_db: str,
+) -> None:
+    """A re-ban must carry its own origin, not inherit an empty one.
+
+    The superseded decision is immutable, so a new record without an
+    origin can never be repaired and its timeline entry loses the group.
+    """
+    first = await bans_db.create_ban(
+        42, "spam", 7, 501, 0, "firstban001", origin_chat_id=-1001
+    )
+    assert first.get("ban_id") == "firstban001"
+
+    second = await bans_db.update_ban(
+        "firstban001",
+        "spam again",
+        7,
+        502,
+        0,
+        501,
+        0,
+        origin_chat_id=-1001,
+    )
+
+    assert second is not None
+    row = await engine_module.fetch_one(
+        select(moderation_actions.c.origin_chat_id).where(
+            moderation_actions.c.id == int(second.get("id", 0))
+        )
+    )
+    assert row == {"origin_chat_id": -1001}
+
+
 async def test_a_reban_of_a_superseded_decision_supersedes_the_current_ban(
     community_db: str,
 ) -> None:

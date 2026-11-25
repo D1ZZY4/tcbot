@@ -416,6 +416,11 @@ async def update_ban(
                         action_type="ban",
                         scope_type="community",
                         chat_id=None,
+                        # * The new decision must carry its own origin. The
+                        # * superseded row stays immutable, so without this
+                        # * the re-ban loses the group it was issued in and
+                        # * cannot be repaired by a later update.
+                        origin_chat_id=origin_chat_id,
                         target_user_id=target_id,
                         actor_user_id=admin_id,
                         reason=reason,
