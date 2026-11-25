@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import logging
 
-from pyrogram.errors import AuthKeyDuplicated, RPCError
+import pytest
+from pyrogram.errors import AuthKeyDuplicated, Timedout, Timeout
 from pyrogram.session.session import AuthKeyNotFound
 from sqlalchemy.exc import OperationalError
 
@@ -55,10 +56,6 @@ def test_a_database_error_is_labelled_as_such() -> None:
     assert classify._classify(exc) == "[DB] Database Error"
 
 
-class TimedOut(RPCError):
-    """Stand-in for Kurigram's RPC timeout, matched by name and base type."""
-
-
 def test_builtin_timeout_is_not_labelled_as_a_telegram_failure() -> None:
     """A database or worker deadline must point at the deadline, not Telegram."""
     exc = TimeoutError("database call timed out")
@@ -68,10 +65,16 @@ def test_builtin_timeout_is_not_labelled_as_a_telegram_failure() -> None:
     assert "Telegram" not in label
 
 
-def test_rpc_timeout_keeps_the_telegram_label() -> None:
-    assert (
-        classify._classify(TimedOut("rpc call timed out")) == "[~] Telegram Timed Out"
-    )
+@pytest.mark.parametrize("exc_type", [Timedout, Timeout])
+def test_rpc_timeout_keeps_the_telegram_label(exc_type: type[Exception]) -> None:
+    """The client's real timeout classes must not fall through to API Error.
+
+    A locally defined stand-in used to match the old misspelled name and hid
+    this defect, so the check uses the installed client's classes directly.
+    """
+    exc = exc_type("rpc call timed out")
+    assert classify._classify(exc) == "[~] Telegram Timed Out"
+    assert "retry the action" in classify._action_hint(classify._classify(exc)).lower()
 
 
 def test_benign_suppresses_connectivity_and_circuit() -> None:

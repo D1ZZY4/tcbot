@@ -88,6 +88,63 @@ async def test_a_failed_report_neither_spends_budget_nor_vanishes_from_the_summa
     assert error_reporter._suppressed_in_window == 2
 
 
+class _FlakyOwnerBot:
+    """Reject the first owner DMs, then accept delivery."""
+
+    def __init__(self, fail_times: int) -> None:
+        self.fail_times = fail_times
+        self.attempts = 0
+        self.delivered: list[Any] = []
+
+    async def send_rich_message(
+        self, _chat_id: int, rich_message: Any, **_kwargs: Any
+    ) -> Any:
+        self.attempts += 1
+        if self.attempts <= self.fail_times:
+            raise RuntimeError("owner DM unavailable")
+        self.delivered.append(rich_message)
+        return object()
+
+
+@pytest.mark.asyncio
+async def test_failed_owner_dms_do_not_burn_the_hourly_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An infra alert must still reach the owner after a transient DM outage."""
+    bot = _FlakyOwnerBot(3)
+    clock = [1000.0]
+    monkeypatch.setattr(error_reporter, "_bot", bot)
+    monkeypatch.setattr(error_reporter, "_owner_id", 42)
+    monkeypatch.setattr(error_reporter, "monotonic", lambda: clock[0])
+    error_reporter._recent.clear()
+    error_reporter._owner_sent.clear()
+    exc = error_reporter.PollingConflictError("another process is polling")
+    fp = error_reporter._fingerprint_exc(exc)
+    try:
+        for _ in range(3):
+            clock[0] += 31
+            await error_reporter.report_exc(exc)
+        assert bot.attempts == 3
+        assert fp not in error_reporter._owner_sent
+
+        clock[0] += 31
+        await error_reporter.report_exc(exc)
+        assert bot.attempts == 4
+        assert len(bot.delivered) == 1
+        assert error_reporter._owner_sent[fp][1] == 1
+
+        for _ in range(2):
+            clock[0] += 31
+            await error_reporter.report_exc(exc)
+        clock[0] += 31
+        await error_reporter.report_exc(exc)
+        assert bot.attempts == 6
+        assert error_reporter._owner_sent[fp][1] == 3
+    finally:
+        error_reporter._recent.clear()
+        error_reporter._owner_sent.clear()
+
+
 class _GatedBot:
     """Hold the first send open so a second report reaches the budget gate."""
 

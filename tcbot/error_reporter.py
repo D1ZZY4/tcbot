@@ -17,7 +17,17 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from pyrogram import Client
-from pyrogram.errors import BadRequest, FloodWait, Forbidden, RPCError, Unauthorized
+from pyrogram.errors import (
+    BadRequest,
+    FloodWait,
+    Forbidden,
+    RPCError,
+    Timedout,
+    Unauthorized,
+)
+from pyrogram.errors import (
+    Timeout as RPCTimeout,
+)
 
 from tcbot import cfg
 from tcbot.database import engine as db_engine
@@ -158,9 +168,11 @@ def _is_telegram_timeout(exc: BaseException) -> bool:
     Python 3.11 made ``asyncio.TimeoutError`` an alias of the builtin, so an
     ``isinstance(exc, TimeoutError)`` branch would label database and worker
     deadlines as Telegram failures and make the generic timeout branches below
-    unreachable. The framework class is matched by name and RPC base instead.
+    unreachable. Match the client's RPC timeout classes directly: the old
+    name-based check looked for ``TimedOut``, which the client never defines,
+    so real RPC deadlines were reported as generic API errors.
     """
-    return type(exc).__name__ == "TimedOut" and isinstance(exc, RPCError)
+    return isinstance(exc, (Timedout, RPCTimeout))
 
 
 def _classify(exc: BaseException | None) -> str:
@@ -373,30 +385,45 @@ _dedupe_lock = threading.Lock()
 
 
 def _owner_suppressed(fp: tuple[object, ...]) -> bool:
-    """Check the hourly owner-DM budget for a fingerprint."""
+    """Check the hourly owner-DM budget without charging it.
+
+    The budget is charged only after a confirmed delivery. Charging at
+    decision time let three failed DMs burn the whole hourly window, so a
+    recovered Telegram still could not deliver a polling conflict or an
+    invalid-token alert.
+    """
     now = monotonic()
     with _dedupe_lock:
-        if len(_owner_sent) >= _OWNER_MAX:
-            for key in [
-                k for k, (at, _) in _owner_sent.items() if now - at >= _OWNER_WINDOW
-            ]:
-                del _owner_sent[key]
-            # * A burst of fresh fingerprints cannot be pruned by time. Drop
-            # * the oldest tenth so the budget map stays bounded.
-            if len(_owner_sent) >= _OWNER_MAX:
-                oldest = sorted(_owner_sent, key=lambda key: _owner_sent[key][0])[
-                    : max(1, _OWNER_MAX // 10)
-                ]
-                for key in oldest:
-                    del _owner_sent[key]
+        _prune_owner_sent(now)
+        start, count = _owner_sent.get(fp, (now, 0))
+        return now - start < _OWNER_WINDOW and count >= _OWNER_BUDGET
+
+
+def _prune_owner_sent(now: float) -> None:
+    """Keep the owner budget map bounded; caller holds ``_dedupe_lock``."""
+    if len(_owner_sent) < _OWNER_MAX:
+        return
+    for key in [k for k, (at, _) in _owner_sent.items() if now - at >= _OWNER_WINDOW]:
+        del _owner_sent[key]
+    # * A burst of fresh fingerprints cannot be pruned by time. Drop the
+    # * oldest tenth so the budget map stays bounded.
+    if len(_owner_sent) >= _OWNER_MAX:
+        oldest = sorted(_owner_sent, key=lambda key: _owner_sent[key][0])[
+            : max(1, _OWNER_MAX // 10)
+        ]
+        for key in oldest:
+            del _owner_sent[key]
+
+
+def _owner_record_sent(fp: tuple[object, ...]) -> None:
+    """Charge one delivered owner DM to the fingerprint's hourly budget."""
+    now = monotonic()
+    with _dedupe_lock:
+        _prune_owner_sent(now)
         start, count = _owner_sent.get(fp, (now, 0))
         if now - start >= _OWNER_WINDOW:
             start, count = now, 0
-        if count >= _OWNER_BUDGET:
-            _owner_sent[fp] = (start, count)
-            return True
         _owner_sent[fp] = (start, count + 1)
-        return False
 
 
 _MAX_CONTEXT_LEN: int = 120
@@ -715,8 +742,15 @@ async def send_to_log_errors(payload: dict[str, Any]) -> None:
     await _ship_throttled(payload)
 
 
-async def send_to_owner(payload: dict[str, Any]) -> None:
-    """Fire-and-forget rich DM to the owner for infra-only errors."""
+async def send_to_owner(
+    payload: dict[str, Any], fp: tuple[object, ...] | None = None
+) -> None:
+    """Fire-and-forget rich DM to the owner for infra-only errors.
+
+    A fingerprint is charged only after the send lands. A failed DM must not
+    spend the hourly budget, or a recovered Telegram still cannot deliver the
+    next polling-conflict or invalid-token alert.
+    """
     if not _bot or not _owner_id:
         return
     try:
@@ -725,13 +759,19 @@ async def send_to_owner(payload: dict[str, Any]) -> None:
         await send_rich(_bot, _owner_id, payload)
     except Exception as exc:
         log.warning("Failed to send owner DM: %s", exc)
+        return
+    if fp is not None:
+        _owner_record_sent(fp)
 
 
 async def _deliver(exc: BaseException | None, record: logging.LogRecord | None) -> None:
     """Render the report and send it to its destination."""
     payload = build_error_report_payload(exc=exc, record=record)
     if _owner_only(exc):
-        await send_to_owner(payload)
+        fp = (
+            _fingerprint_exc(exc) if exc is not None else _fingerprint_record(record)  # type: ignore[arg-type]
+        )
+        await send_to_owner(payload, fp)
     else:
         await send_to_log_errors(payload)
 
@@ -762,9 +802,10 @@ async def report_exc(exc: BaseException, context: str | None = None) -> None:
         return
     payload = build_error_report_payload(exc=exc, context=context)
     if _owner_only(exc):
-        if _owner_suppressed(_fingerprint_exc(exc)):
+        fp = _fingerprint_exc(exc)
+        if _owner_suppressed(fp):
             log.debug("Owner DM suppressed: budget spent.")
             return
-        await send_to_owner(payload)
+        await send_to_owner(payload, fp)
     else:
         await send_to_log_errors(payload)

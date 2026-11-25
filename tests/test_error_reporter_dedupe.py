@@ -58,7 +58,7 @@ def test_the_dedupe_map_stays_bounded() -> None:
 def test_owner_dedupe_map_stays_bounded_when_all_entries_are_fresh() -> None:
     """A flood of distinct fingerprints evicts the oldest tenth, not nothing."""
     for index in range(error_reporter._OWNER_MAX + 200):
-        error_reporter._owner_suppressed(("exc", f"conflict-{index}"))
+        error_reporter._owner_record_sent(("exc", f"conflict-{index}"))
 
     assert len(error_reporter._owner_sent) <= error_reporter._OWNER_MAX
 
