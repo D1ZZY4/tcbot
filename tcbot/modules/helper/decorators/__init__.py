@@ -27,7 +27,6 @@ from tcbot.modules.helper.decorators.ratelimit import (
     THROTTLE_READ,
     THROTTLE_STAFF,
     Throttle,
-    global_rate_limit_handler,
     ratelimiter,
 )
 from tcbot.modules.helper.decorators.tracing import log_execution
@@ -43,7 +42,6 @@ __all__ = [
     "THROTTLE_STAFF",
     "Throttle",
     "basic_mod_only",
-    "global_rate_limit_handler",
     "log_execution",
     "mod_only",
     "owner_only",

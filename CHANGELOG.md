@@ -6,6 +6,7 @@ All notable changes to this project are documented here. For workflow details, s
 
 ### Removed
 
+- **The unregistered global flood handler is gone** (`tcbot/modules/helper/decorators/ratelimit.py`, `tcbot/modules/helper/decorators/__init__.py`): the universal limiter and its three shared buckets were never attached to the Kurigram dispatcher, so only the decorated per-handler tiers ever throttled updates. The dead handler and its exports are removed. Behavior changes: none; command and callback quotas are unchanged.
 - **The separate messages link module is gone** (`tcbot/modules/helper/messages/links.py`, `tcbot/modules/helper/rich/link.py`): URL construction, deep links, and cached community chat links now live with the rich link and mention helpers in one owner. Every import path was updated; no compatibility shim remains. Behavior changes: none; public function names and outputs are unchanged.
 - **The webhook transport and its supporting infrastructure are gone** (`tcbot/alive.py`, `tcbot/__main__.py`, `tcbot/__init__.py`, `pyproject.toml`, `uv.lock`, `config.env.example`, `.github/workflows/run-bot.yml`): the Flask server now only serves `/`, `/health` and `/metrics`. The `/webhook` route, webhook registration and shutdown logic, `WEBHOOK_URL` and `WEBHOOK_SECRET` settings, their environment wiring, and webhook-only tests and documentation have been removed. Behavior changes: the bot no longer accepts Telegram updates over HTTP.
 

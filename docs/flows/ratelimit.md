@@ -1,48 +1,32 @@
 # Rate limiting and flood control
 
-Purpose: describe the per-handler throttle tiers, the global flood handler, the
-Redis-backed sliding window with its in-process fallback, and how rate limits
-cooperate with the Telegram circuit breaker. The concurrency contract is shared
-with [Persistence](persistence.md) and [Cache](cache.md).
+Purpose: describe the per-handler throttle tiers, the Redis-backed sliding
+window with its in-process fallback, and how rate limits cooperate with the
+Telegram circuit breaker. The concurrency contract is shared with
+[Persistence](persistence.md) and [Cache](cache.md).
 
-## Two layers of throttling
+## Where throttling is applied
 
-Every update first passes a global per-user flood handler, then the decorated
-command applies a per-handler quota. The global ceiling and the handler budget
-are independent: the first stops bursts across all commands, the second paces
-each destructive command individually.
-
-| Layer | Owner | Scope |
-|---|---|---|
-| Global | `global_rate_limit_handler` in `decorators/ratelimit.py` | One bucket per user for commands, one for button presses; registered at handler group `-1`. |
-| Per handler | `ratelimiter(throttle)` decorator | One bucket per `(user, wrapped function)`. |
+Throttling is applied only by the `ratelimiter(throttle)` decorator on command
+and callback handlers. There is no globally registered flood handler in the
+Kurigram runtime: ordinary chat messages never pass a rate-limit gate, and a
+handler without the decorator has no quota. One bucket is kept per `(user,
+wrapped function)`, so two handlers on the same tier stay independent.
 
 ```mermaid
 flowchart TD
-    U([Update]) --> G["per-handler ratelimiter decorator"]
-    G --> Q{"update type"}
-    Q -->|callback_query| CB{"Owner exempt?"}
-    CB -->|yes| PASS[Pass to module handlers]
-    CB -->|no| CBL{"_cbq_limiter.check: 20 / 10 s?"}
-    CBL -->|allowed| PASS
-    CBL -->|wait| CBSTOP[answer with alert, stop]
-    Q -->|command message| TXT{"Starts with a configured prefix?"}
-    TXT -->|no| PASS
-    TXT -->|yes| TIER["_throttle_tier(uid): exempt / staff / regular"]
-    TIER -->|exempt Owner| PASS
-    TIER -->|staff| SL["_cmd_staff_limiter: 16 / 30 s"]
-    TIER -->|regular| RL["_cmd_limiter: 8 / 30 s"]
-    SL --> CHK{"wait returned?"}
-    RL --> CHK
-    CHK -->|no| PASS
-    CHK -->|yes| STOP[Reply with wait seconds, stop]
-    PASS --> H[Module handlers, then per-handler ratelimiter]
+    U([Decorated update]) --> D[ratelimiter wrapper]
+    D --> UID{Update has a user id?}
+    UID -->|no| PASS[Run the handler]
+    UID -->|yes| OWN{_is_exempt: current Owner?}
+    OWN -->|yes| PASS
+    OWN -->|no| CHK[_limiter.check: Redis window or local fallback]
+    CHK -->|allowed| PASS
+    CHK -->|wait| KIND{update type}
+    KIND -->|callback_query| CBSTOP[answer with alert, stop]
+    KIND -->|message| STOP[Reply with wait seconds, stop]
+    KIND -->|no surface| BLOCK[Block without a reply]
 ```
-
-Rate limiting is applied by the per-handler `ratelimiter()` decorator. There is
-no globally registered flood handler in the Kurigram runtime. It returns
-immediately for plain chat messages that do not start with a configured prefix,
-so ordinary conversation is never rate limited.
 
 ## Shared throttle tiers
 
@@ -83,22 +67,15 @@ with `max_calls=throttle.limit`, `window=throttle.period`, and
 A throttle reply uses `replies.rate_limit_text(wait, locale, plain=True)`.
 Cancellation propagates through `_is_exempt()` and the limiter check.
 
-## Global buckets and Owner bypass
+## Owner bypass
 
-| Bucket | Limit | Prefix | Users |
-|---|---|---|---|
-| `_cmd_limiter` | 8 / 30 s | `cmd` | Regular users' command messages |
-| `_cmd_staff_limiter` | 16 / 30 s | `cmd_staff` | Moderator rank and above |
-| `_cbq_limiter` | 20 / 10 s | `cbq` | All non-owner callback presses |
-
-`_throttle_tier(uid)` uses one cached `get_effective_role(uid)` read to return
-`exempt` for the Owner, `staff` for rank `moderator` or above, and `regular`
-otherwise. `_is_exempt(uid)` uses the cached `get_owner_id()` (300 s L1 TTL,
-invalidated on transfer). Both fail closed: a lookup error yields `regular` for
-the tier and `False` for exemption, so an outage never loosens throttling. A
-synchronous compare against the configured initial owner is deliberately
-avoided, because after a transfer that account is no longer the Owner and would
-stay exempt forever.
+`_is_exempt(uid)` resolves the current Owner from the cached owner id (300 s L1
+TTL, invalidated on transfer) and skips every per-handler quota for that one
+user. It fails closed: a lookup error or a missing owner row means not exempt,
+so an outage never disables throttling. Cancellation propagates. A synchronous
+compare against the configured initial owner is deliberately avoided, because
+after a transfer that account is no longer the Owner and would stay exempt
+forever.
 
 ## Redis sorted-set window and in-process fallback
 
@@ -152,8 +129,8 @@ two-level cache in `database/cache/twolevel.py`.
   clears immediately.
 - The wait is derived from the oldest timestamp in the window, so a user sees
   a real countdown rather than a generic refusal.
-- The global handler short-circuits non-command messages and Owner traffic,
-  and applies the strictest bucket on any lookup failure.
+- The decorator bypasses quotas for the current Owner and fails closed when
+  the owner lookup is unavailable.
 - Telegram `RetryAfter` from the rate limiter is waited out with a bounded
   retry budget: the request is retried after the requested delay while the
   other requests are paused, which is the behaviour Telegram asks for.

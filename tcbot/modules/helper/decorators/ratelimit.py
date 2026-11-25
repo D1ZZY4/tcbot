@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Per-user sliding-window rate limiters and the global flood handler."""
+"""Per-user sliding-window rate limiters for decorated handlers."""
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from tcbot.utils.logger import get_logger
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
 
-from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich
@@ -195,19 +194,6 @@ class _AsyncRateLimiter:
             return self._local.check(uid)
 
 
-# * Commands : 8 calls per 30 s - comfortable for regular moderation
-_cmd_limiter = _AsyncRateLimiter(max_calls=8, window=30.0, prefix="cmd")
-
-# * Staff commands: 16 calls per 30 s - incident response mixes several
-# * different commands (check, warn, kick, ...) in one burst, so the global
-# * flood ceiling sits roomier for authenticated staff. Per-handler quotas
-# * below still pace each destructive command, so this never loosens those.
-_cmd_staff_limiter = _AsyncRateLimiter(max_calls=16, window=30.0, prefix="cmd_staff")
-
-# * Buttons  : 20 presses per 10 s - allows snappy navigation
-_cbq_limiter = _AsyncRateLimiter(max_calls=20, window=10.0, prefix="cbq")
-
-
 async def _is_exempt(uid: int) -> bool:
     """Return True when ``uid`` is the current Owner (exempt from rate limits).
 
@@ -228,84 +214,6 @@ async def _is_exempt(uid: int) -> bool:
         log.debug("Rate-limit exemption lookup failed for %d: %s", uid, exc)
         return False
     return owner_id is not None and owner_id == uid
-
-
-async def _throttle_tier(uid: int) -> str:
-    """Return the global command-bucket tier for ``uid`` in one cached read.
-
-    ``"exempt"`` for the Owner (no global throttle), ``"staff"`` for
-    Moderator rank and above (roomier flood ceiling), ``"regular"`` for
-    everyone else. One ``get_effective_role`` read covers all three tiers
-    with zero database round trips on cache hits. Fail-closed: any lookup
-    failure lands on ``"regular"`` (the strictest bucket), so an outage
-    never loosens throttling. Cancellation propagates.
-    """
-    try:
-        role = await db.users_roles.get_effective_role(uid)
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.debug("Throttle-tier lookup failed for %d: %s", uid, exc)
-        return "regular"
-    if role == "owner":
-        return "exempt"
-    # * role_rank is a pure mapping lookup (unknown roles rank 0), so no
-    # * failure path here; DB failures already returned "regular" above.
-    if db.users_roles.role_rank(role) >= db.users_roles.role_rank("moderator"):
-        return "staff"
-    return "regular"
-
-
-async def global_rate_limit_handler(ctx: Ctx) -> None:
-    """Universal per-user rate limiter - registered at group -1."""
-    uid = ctx.effective_user.id if ctx.effective_user else None
-    if not uid:
-        return
-
-    # * ── button press ─────────────────────────────────────────────────────────
-    if ctx.callback_query:
-        if await _is_exempt(uid):
-            return
-        wait = await _cbq_limiter.check(uid)
-        if wait:
-            try:
-                await ctx.callback_query.answer(
-                    replies.rate_limit_text(
-                        wait, await locale_for_update(ctx), plain=True
-                    ),
-                    show_alert=True,
-                )
-            except Exception as exc:
-                log.debug("CBQ rate-limit answer failed: %s", exc)
-            return
-        return
-
-    # * ── command message ──────────────────────────────────────────────────────
-    msg = ctx.effective_message
-    text = (msg.text or "") if msg else ""
-    if not text:
-        return
-
-    if not any(text.startswith(p) for p in cfg.prefixes if p):
-        return  # * plain chat message - never rate-limit
-
-    # * One cached read decides the flood ceiling: the Owner skips it, staff
-    # * get the roomier bucket, everyone else the strict one. Per-handler
-    # * quotas below still pace each command individually.
-    tier = await _throttle_tier(uid)
-    if tier == "exempt":
-        return
-    limiter = _cmd_staff_limiter if tier == "staff" else _cmd_limiter
-    wait = await limiter.check(uid)
-    if wait:
-        if msg:
-            await reply_rich(
-                msg,
-                replies.rate_limit_text(wait, await locale_for_update(ctx), plain=True),
-                log_label="Command rate-limit",
-                parse_mode=None,
-            )
-        return
 
 
 # ──────────────────── Per-handler rate limiter factory ──────────────────── #

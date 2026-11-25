@@ -151,35 +151,6 @@ def test_rate_limit_exemption_propagates_cancellation(
         asyncio.run(ratelimit._is_exempt(1))
 
 
-def test_throttle_tier_resolves_the_flood_ceiling(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Owner, staff, and everyone else get their own bucket."""
-    roles = {1: "owner", 2: "moderator", 3: None}
-
-    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
-        _ = fresh
-        return roles.get(user_id)
-
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    assert asyncio.run(ratelimit._throttle_tier(1)) == "exempt"
-    assert asyncio.run(ratelimit._throttle_tier(2)) == "staff"
-    assert asyncio.run(ratelimit._throttle_tier(3)) == "regular"
-
-
-def test_throttle_tier_fails_closed_to_the_strict_bucket(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A lookup outage must not loosen throttling."""
-
-    async def _boom(user_id: int, *, fresh: bool = False) -> str | None:
-        _ = (user_id, fresh)
-        raise RuntimeError("db down")
-
-    monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
-    assert asyncio.run(ratelimit._throttle_tier(1)) == "regular"
-
-
 # ─────────────────────────── Mute expiry rules ────────────────────────── #
 
 
