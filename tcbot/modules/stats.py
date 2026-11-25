@@ -206,7 +206,6 @@ async def on_stats_bans_search(ctx: Ctx) -> None:
     await answer_and_edit(q, text, reply_markup=btn)
 
 
-@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
 @decorators.log_execution
 async def on_bans_search_input(ctx: Ctx) -> None:
     """Free-text query message handler; only reacts when the search panel is active."""

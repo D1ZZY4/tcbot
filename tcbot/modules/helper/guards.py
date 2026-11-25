@@ -401,28 +401,9 @@ async def classify_and_check(
         executor_role=executor_role_r,
         target_role=known_target_role,
     )
-    if isinstance(role_result, BaseException):
-        log.error(
-            "resolve_and_check failed in %s: %s",
-            action,
-            role_result,
-            exc_info=role_result,
-        )
-        chat = msg.chat
-        locale = await effective_locale(
-            getattr(chat, "type", None), admin_id, getattr(chat, "id", 0)
-        )
-        await reply_rich(
-            msg,
-            replies.err_role_verify(locale, plain=True),
-            log_label=f"classify_and_check {action} failed",
-            parse_mode=None,
-        )
-        return None
-    # * isinstance + early return above already narrows role_result to the
-    # * success tuple (asserts vanish under python -O). Guard first: when
-    # * resolve_and_check already replied and rejected (e.g. target outranks
-    # * executor), return so the caller does not send a second reply.
+    # * Guard first: when resolve_and_check already replied and rejected
+    # * (e.g. target outranks executor), return so the caller does not
+    # * send a second reply.
     executor_role, target_role = role_result
     if executor_role is None:
         return None

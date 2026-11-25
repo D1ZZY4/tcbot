@@ -199,7 +199,7 @@ def category_editor_panel(category: dict[str, Any], locale: str | None) -> str:
     )["html"]
 
 
-async def preview(items: list[dict[str, Any]], locale: str | None) -> str:
+def preview(items: list[dict[str, Any]], locale: str | None) -> str:
     """Render the draft as it would appear on the channel, with a marker."""
     if not items:
         return t("rules.menu.preview_empty", locale)

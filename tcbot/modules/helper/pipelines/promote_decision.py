@@ -27,7 +27,7 @@ from tcbot.modules.helper.messages import (
 )
 from tcbot.modules.helper.rich.edit import callback_text_of
 from tcbot.utils.dispatch import throw_if_cancelled
-from tcbot.utils.i18n import t
+from tcbot.utils.i18n import esc, t
 from tcbot.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -209,11 +209,14 @@ async def execute_promo_decision(ctx: Ctx) -> None:
             display_name(admin),
             request_id,
         )
-        card_text = getattr(q.message, "text", "") if q.message is not None else ""
-        if not card_text:
-            card_text = promote_request_log(
+        raw_card_text = getattr(q.message, "text", "") if q.message is not None else ""
+        card_text = (
+            esc(raw_card_text)
+            if raw_card_text
+            else promote_request_log(
                 target_id, target_fname, req.get("username"), request_id
             )
+        )
         decision_text = card_text + t(
             "admins.decision.approved_suffix", locale, name=display_name(admin)
         )
@@ -262,11 +265,14 @@ async def execute_promo_decision(ctx: Ctx) -> None:
             display_name(admin),
             request_id,
         )
-        card_text = getattr(q.message, "text", "") if q.message is not None else ""
-        if not card_text:
-            card_text = promote_request_log(
+        raw_card_text = getattr(q.message, "text", "") if q.message is not None else ""
+        card_text = (
+            esc(raw_card_text)
+            if raw_card_text
+            else promote_request_log(
                 target_id, target_fname, req.get("username"), request_id
             )
+        )
         decision_text = card_text + t(
             "admins.decision.rejected_suffix", locale, name=display_name(admin)
         )

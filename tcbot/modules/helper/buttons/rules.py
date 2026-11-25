@@ -86,7 +86,6 @@ def editor_panel_btn(
     locale: str | None = None,
     *,
     has_content: bool = False,
-    content_locale: str | None = None,
 ) -> InlineKeyboardMarkup:
     """Build the main editor panel.
 

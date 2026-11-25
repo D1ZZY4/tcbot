@@ -67,12 +67,14 @@ _APPEAL_START_CMDS = filters.private & filters.regex(
 # * Neither entry is covered by the prefixed-command flood ceiling, so each
 # * gets its own per-user budget before the shared flow runs.
 @decorators.ratelimiter(decorators.THROTTLE_STAFF)
+@decorators.log_execution
 async def on_appeal_decision(ctx: Ctx) -> None:
     """Rate-limit an appeal review decision before delegating to the flow."""
     await appeal.on_decision(ctx)
 
 
 @decorators.ratelimiter(decorators.THROTTLE_MODERATION)
+@decorators.log_execution
 async def on_group_appeal(ctx: Ctx) -> None:
     """Rate-limit a member's #appeal entry before the submission gate runs."""
     await appeal.on_group_appeal(ctx)

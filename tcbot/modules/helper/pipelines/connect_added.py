@@ -11,7 +11,7 @@ import contextlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from pyrogram import Client
+from pyrogram import Client, ContinuePropagation
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import ChatMember, InlineKeyboardMarkup
 
@@ -97,7 +97,7 @@ class ConnectionAddedMixin:
             changed_user is not None
             and getattr(changed_user, "id", None) != (await ctx.bot_identity()).id
         ):
-            return
+            raise ContinuePropagation()
         chat = cmc.chat
         if getattr(chat.type, "value", chat.type) not in (
             "group",

@@ -63,7 +63,7 @@ def _benign(exc: BaseException | None) -> bool:
     return any(p in msg for p in _BENIGN_PATTERNS)
 
 
-def _is_benign(exc: BaseException | None) -> bool:
+def is_benign(exc: BaseException | None) -> bool:
     """Return True when the exception is a recoverable no-op.
 
     The reporter exists precisely for unexpected failures, so a predicate
@@ -77,6 +77,9 @@ def _is_benign(exc: BaseException | None) -> bool:
     except Exception as check_exc:
         log.warning("Benign check failed, treating as reportable: %s", check_exc)
         return False
+
+
+_is_benign = is_benign
 
 
 def _log_noise(record: logging.LogRecord | None) -> bool:
@@ -193,4 +196,5 @@ __all__ = [
     "_is_telegram_timeout",
     "_log_noise",
     "_owner_only",
+    "is_benign",
 ]

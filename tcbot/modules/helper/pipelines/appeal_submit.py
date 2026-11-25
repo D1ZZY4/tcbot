@@ -639,9 +639,8 @@ def build_handler(
             ],
         },
         fallbacks=[
-            MessageHandler(entry_filter, on_entry),
-            # * The deep-link entry stays here; other commands pass through so
-            # * the user is not trapped in an appeal they want to leave.
+            # * Other commands pass through so the user is not trapped in an
+            # * appeal they want to leave.
             MessageHandler(
                 ALL_PREFIXES_CMD_FILTER & ~build_conversation_escape_filter(),
                 on_end,

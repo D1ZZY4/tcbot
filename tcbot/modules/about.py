@@ -25,7 +25,7 @@ _SECTION_PREFIX = "about_section_"
 _SECTION_COUNT = len(about_section_labels("en-US"))
 
 
-# ──────────────────────── Callback Handler ────────────────────────
+# ──────────────────────── Callback Handler ──────────────────────── #
 
 
 @decorators.ratelimiter(decorators.THROTTLE_CALLBACK)

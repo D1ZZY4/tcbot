@@ -126,18 +126,10 @@ async def on_done_proof(ctx: Ctx) -> int | None:
         return ConversationHandler.END
     tap_msg = ctx.effective_message
     if user is None or not isinstance(tap_msg, Message):
-        try:
-            await q.answer()
-        except Exception as exc:
-            log.debug("Ban done-proof recheck answer failed: %s", exc)
         proof_sessions.pop(key, None)
         _clear_ban_state(session.scope)
         return ConversationHandler.END
     if not await recheck_executor_rank(tap_msg, user.id, min_role="developer"):
-        try:
-            await q.answer()
-        except Exception as exc:
-            log.debug("Ban done-proof recheck answer failed: %s", exc)
         proof_sessions.pop(key, None)
         _clear_ban_state(session.scope)
         return ConversationHandler.END

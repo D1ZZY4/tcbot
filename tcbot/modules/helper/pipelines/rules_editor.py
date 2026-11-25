@@ -179,9 +179,7 @@ class RulesEditor:
             await edit_or_reply(
                 ctx,
                 t("rules.publish.error", locale, error=str(exc)),
-                rules_btn.editor_panel_btn(
-                    locale, has_content=True, content_locale=chosen
-                ),
+                rules_btn.editor_panel_btn(locale, has_content=True),
             )
             return WAITING_EDITOR_MENU
         try:
@@ -203,7 +201,7 @@ class RulesEditor:
                 synced=result["synced"],
                 failed=len(result["failed"]),
             ),
-            rules_btn.editor_panel_btn(locale, has_content=True, content_locale=chosen),
+            rules_btn.editor_panel_btn(locale, has_content=True),
         )
         return WAITING_EDITOR_MENU
 

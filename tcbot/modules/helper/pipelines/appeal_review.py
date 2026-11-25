@@ -550,7 +550,13 @@ class AppealReviewMixin(AppealVerdictsMixin):
             ban_id = payload
             message = q.message
             tapped_review_id = (
-                int(getattr(message, "message_id", 0) or 0) if message else 0
+                int(
+                    getattr(message, "id", None)
+                    or getattr(message, "message_id", 0)
+                    or 0
+                )
+                if message
+                else 0
             )
         if not ban_id:
             log.warning("Appeal decision payload malformed: %r", data)

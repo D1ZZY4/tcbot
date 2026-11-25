@@ -430,12 +430,6 @@ async def execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) ->
                 "Ban DB write failed for target=%d with no prompt to ctx",
                 target_id,
             )
-        try:
-            await _groups_task
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            log.debug("Discarding pre-fetched groups after DB failure: %s", exc)
         return
     if log_msg_id:
         try:

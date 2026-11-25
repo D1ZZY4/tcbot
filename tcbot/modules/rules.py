@@ -88,6 +88,8 @@ async def cmd_rules(ctx: Ctx) -> None:
 # ─────────────────────────── Callbacks ─────────────────────────── #
 
 
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
+@decorators.log_execution
 async def _acknowledge(ctx: Ctx) -> None:
     """Record a member's acceptance of the greeting's rule version."""
     query = ctx.callback_query
@@ -230,6 +232,8 @@ async def _show_index(ctx: Ctx, page: int) -> None:
     )
 
 
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
+@decorators.log_execution
 async def on_rules_index(ctx: Ctx) -> None:
     """Show a page of the topic index."""
     query = ctx.callback_query
@@ -239,6 +243,8 @@ async def on_rules_index(ctx: Ctx) -> None:
     await _show_index(ctx, _page_from_data(rich_edit.callback_text_of(query)))
 
 
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
+@decorators.log_execution
 async def on_rules_prev(ctx: Ctx) -> None:
     """Show the previous topic page."""
     query = ctx.callback_query
@@ -248,6 +254,8 @@ async def on_rules_prev(ctx: Ctx) -> None:
     await _show_index(ctx, _page_from_data(rich_edit.callback_text_of(query)))
 
 
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
+@decorators.log_execution
 async def on_rules_next(ctx: Ctx) -> None:
     """Show the next topic page."""
     query = ctx.callback_query
@@ -257,6 +265,8 @@ async def on_rules_next(ctx: Ctx) -> None:
     await _show_index(ctx, _page_from_data(rich_edit.callback_text_of(query)))
 
 
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
+@decorators.log_execution
 async def on_rules_show(ctx: Ctx) -> None:
     """Render one category with its short description and section buttons."""
     query = ctx.callback_query
@@ -283,7 +293,6 @@ async def on_rules_show(ctx: Ctx) -> None:
     )
     if category is None:
         return
-    locale = await locale_for_update(ctx)
     items = [item for item in published["items"] if item["category_key"] == key]
     label = str(category.get("label") or category.get("title") or key)
     # * Both values are resolved from the database for the reader's locale.
@@ -300,6 +309,8 @@ async def on_rules_show(ctx: Ctx) -> None:
     )
 
 
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
+@decorators.log_execution
 async def on_rules_section(ctx: Ctx) -> None:
     """Render the items of one section inside the current category."""
     query = ctx.callback_query
@@ -349,6 +360,8 @@ async def on_rules_section(ctx: Ctx) -> None:
     )
 
 
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
+@decorators.log_execution
 async def on_rules_menu(ctx: Ctx) -> None:
     """Handle a stale Back tap from a keyboard emitted before pagination."""
     query = ctx.callback_query
@@ -358,6 +371,8 @@ async def on_rules_menu(ctx: Ctx) -> None:
     await _show_index(ctx, 0)
 
 
+@decorators.ratelimiter(decorators.THROTTLE_CALLBACK)
+@decorators.log_execution
 async def on_rules_page(ctx: Ctx) -> None:
     """Handle a stale More tap by opening the requested topic page."""
     query = ctx.callback_query

@@ -12,7 +12,7 @@ from pyrogram import Client
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import buttons, decorators, messages
+from tcbot.modules.helper import buttons, decorators, identity, messages
 from tcbot.modules.helper.context import Ctx, display_name
 from tcbot.modules.helper.guards import (
     action_owner_mismatch,
@@ -351,6 +351,19 @@ async def cmd_setrole(ctx: Ctx) -> None:
     if resolved is None:
         return
     executor_role, target_id, target_fname = resolved
+    ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    refusal = identity.refuse_message("demote", ident, locale)
+    if refusal is not None:
+        await reply_rich(msg, refusal, log_label="cmd_setrole refusal")
+        return
+    if await identity.is_proven_bot(ctx, target_id, ctx.bot):
+        await reply_rich(
+            msg,
+            t("admins.error.bot_target", locale, plain=True),
+            log_label="cmd_setrole bot-target",
+            parse_mode=None,
+        )
+        return
     await role_change_prompt(
         ctx,
         executor_role=executor_role,

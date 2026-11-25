@@ -358,6 +358,8 @@ def _pick_best(
     """
     _check_cancel(cancel)
     bases = [(server, _server_base(server)) for server in closest]
+    if not bases:
+        raise RuntimeError("speedtest no usable servers")
 
     def _probe(server: dict[str, str], base: str) -> tuple[float, dict[str, str], str]:
         return (_ping_server(base, cancel), server, base)

@@ -13,7 +13,6 @@ simultaneous moderators and separate groups never share a conversation.
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import time
 from collections import OrderedDict
@@ -88,7 +87,6 @@ _StateKey = tuple[int, int]
 # * over-capacity entries are popped from the head in O(expired) time instead
 # * of scanning up to _MAX_STATES entries on every update.
 _states: OrderedDict[_StateKey, _Slot] = OrderedDict()
-_states_lock = asyncio.Lock()
 
 
 def _evict_expired(now: float) -> None:

@@ -366,14 +366,11 @@ def _button_from_obj(cell: Any) -> str | None:
     if not isinstance(label, str):
         return None
     raw_style = getattr(cell, "style", None)
+    style_value: str | None = None
     if raw_style is not None:
-        style_val = getattr(raw_style, "value", raw_style)
-        style_s = str(style_val)
-        style_attr = (
-            f' style="{esc(style_s)}"' if style_s in _RICH_BUTTON_STYLES else ""
-        )
-    else:
-        style_attr = ""
+        style_s = str(getattr(raw_style, "value", raw_style))
+        if style_s in _RICH_BUTTON_STYLES:
+            style_value = style_s
 
     data = getattr(cell, "callback_data", None)
     if isinstance(data, str) and data:
@@ -381,68 +378,52 @@ def _button_from_obj(cell: Any) -> str | None:
             not data.isascii() and len(data.encode()) > _CALLBACK_MAX_BYTES
         ):
             return None
-        return (
-            f'<tg-button type="callback_data" data="{esc(data)}"{style_attr}>'
-            f"{esc(label)}</tg-button>"
-        )
+        return button(label, data=data, style=style_value)
     url = getattr(cell, "url", None)
     if isinstance(url, str) and url:
-        return (
-            f'<tg-button type="url" url="{esc(url)}"{style_attr}>'
-            f"{esc(label)}</tg-button>"
-        )
+        return button(label, url=url, style=style_value)
     web_app = getattr(cell, "web_app", None)
     if web_app is not None:
         web_url = getattr(web_app, "url", None)
         if isinstance(web_url, str):
-            return (
-                f'<tg-button type="web_app" url="{esc(web_url)}"{style_attr}>'
-                f"{esc(label)}</tg-button>"
-            )
+            return button(label, web_app=web_url, style=style_value)
     login = getattr(cell, "login_url", None)
     if login is not None:
         login_url = getattr(login, "url", None)
         if isinstance(login_url, str):
-            fwd = getattr(login, "forward_text", None)
-            rwa = bool(getattr(login, "request_write_access", False))
-            attrs = f' type="login_url" url="{esc(login_url)}"'
-            if fwd is not None:
-                attrs += f' forward-text="{esc(fwd)}"'
-            if rwa:
-                attrs += " request-write-access"
-            return f"<tg-button{attrs}{style_attr}>{esc(label)}</tg-button>"
+            return button(
+                label,
+                login_url=login_url,
+                forward_text=getattr(login, "forward_text", None),
+                request_write_access=bool(
+                    getattr(login, "request_write_access", False)
+                ),
+                style=style_value,
+            )
     copy = getattr(cell, "copy_text", None)
     if copy is not None:
         copy_txt = getattr(copy, "text", None)
         if isinstance(copy_txt, str):
-            return (
-                f'<tg-button type="copy_text" text="{esc(copy_txt)}"{style_attr}>'
-                f"{esc(label)}</tg-button>"
-            )
+            return button(label, copy=copy_txt, style=style_value)
     switch_query = getattr(cell, "switch_inline_query", None)
     if isinstance(switch_query, str):
-        return (
-            f'<tg-button type="switch_inline_query" query="{esc(switch_query)}"'
-            f"{style_attr}>{esc(label)}</tg-button>"
-        )
+        return button(label, switch_inline_query=switch_query, style=style_value)
     switch_current = getattr(cell, "switch_inline_query_current_chat", None)
     if isinstance(switch_current, str):
-        return (
-            f'<tg-button type="switch_inline_query_current_chat"'
-            f' query="{esc(switch_current)}"{style_attr}>{esc(label)}</tg-button>'
+        return button(
+            label, switch_inline_query_current_chat=switch_current, style=style_value
         )
     switch_chosen = getattr(cell, "switch_inline_query_chosen_chat", None)
     if isinstance(switch_chosen, str):
-        attrs = f' type="switch_inline_query_chosen_chat" query="{esc(switch_chosen)}"'
-        if getattr(cell, "allow_user_chats", False):
-            attrs += " allow-user-chats"
-        if getattr(cell, "allow_bot_chats", False):
-            attrs += " allow-bot-chats"
-        if getattr(cell, "allow_group_chats", False):
-            attrs += " allow-group-chats"
-        if getattr(cell, "allow_channel_chats", False):
-            attrs += " allow-channel-chats"
-        return f"<tg-button{attrs}{style_attr}>{esc(label)}</tg-button>"
+        return button(
+            label,
+            switch_inline_query_chosen_chat=switch_chosen,
+            allow_user_chats=bool(getattr(cell, "allow_user_chats", False)),
+            allow_bot_chats=bool(getattr(cell, "allow_bot_chats", False)),
+            allow_group_chats=bool(getattr(cell, "allow_group_chats", False)),
+            allow_channel_chats=bool(getattr(cell, "allow_channel_chats", False)),
+            style=style_value,
+        )
     if (
         data is None
         and url is None
@@ -450,7 +431,7 @@ def _button_from_obj(cell: Any) -> str | None:
         and login is None
         and copy is None
     ):
-        return f'<tg-button type="disabled"{style_attr}>{esc(label)}</tg-button>'
+        return button(label, disabled=True, style=style_value)
     return None
 
 
