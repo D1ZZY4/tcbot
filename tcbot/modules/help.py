@@ -28,6 +28,9 @@ log = get_logger(__name__)
 # ────────────────────── Help Content Builder ────────────────────── #
 
 
+_MOD_CACHE: dict[str, object] = {}
+
+
 def _builder_help(
     locale: str | None = None,
 ) -> dict[str, tuple[str, str, list[tuple[str, str]]]]:
@@ -40,7 +43,10 @@ def _builder_help(
     content: dict[str, tuple[str, str, list[tuple[str, str]]]] = {}
     for mod_name in ALL_MODULES:
         try:
-            mod = importlib.import_module(f"tcbot.modules.{mod_name}")
+            mod = _MOD_CACHE.get(mod_name)
+            if mod is None:
+                mod = importlib.import_module(f"tcbot.modules.{mod_name}")
+                _MOD_CACHE[mod_name] = mod
             get_help = getattr(mod, "get_help", None)
             if not callable(get_help):
                 continue

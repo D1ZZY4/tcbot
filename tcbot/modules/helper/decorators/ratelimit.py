@@ -99,7 +99,8 @@ class _RateLimiter:
             return 0.0
 
         # * drop timestamps outside the current window
-        while dq and now - dq[0] >= self.window:
+        cutoff = now - self.window
+        while dq and dq[0] <= cutoff:
             dq.popleft()
 
         if not dq:
@@ -150,11 +151,20 @@ class _AsyncRateLimiter:
     ``_RateLimiter``, so rate limiting is never silently disabled.
     """
 
-    __slots__ = ("_local", "_prefix", "max_calls", "window")
+    __slots__ = (
+        "_local",
+        "_max_calls_str",
+        "_prefix",
+        "_window_str",
+        "max_calls",
+        "window",
+    )
 
     def __init__(self, max_calls: int, window: float, prefix: str) -> None:
         self.max_calls = max_calls
         self.window = window
+        self._max_calls_str = str(max_calls)
+        self._window_str = str(window)
         self._prefix = prefix
         self._local = _RateLimiter(max_calls=max_calls, window=window)
 
@@ -179,8 +189,8 @@ class _AsyncRateLimiter:
                 1,
                 key,
                 str(now),
-                str(self.window),
-                str(self.max_calls),
+                self._window_str,
+                self._max_calls_str,
                 member,
             )
             if result == 0:

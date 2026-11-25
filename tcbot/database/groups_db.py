@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import func, select, text
+from sqlalchemy import bindparam, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import (
@@ -68,6 +68,44 @@ _PENDING_COLUMNS = (
     join_requests.c.id,
 )
 
+_SEL_IS_CONNECTED = select(connected_chats.c.chat_id).where(
+    connected_chats.c.chat_id == bindparam("chat_id"),
+    connected_chats.c.is_active.is_(True),
+)
+_SEL_ACTIVE_GROUPS = (
+    select(*_GROUP_COLUMNS)
+    .select_from(connected_chats)
+    .join(
+        telegram_chats,
+        telegram_chats.c.chat_id == connected_chats.c.chat_id,
+    )
+    .outerjoin(chat_settings, chat_settings.c.chat_id == connected_chats.c.chat_id)
+    .where(connected_chats.c.is_active.is_(True))
+)
+_SEL_ACTIVE_GROUP_COUNT = (
+    select(func.count())
+    .select_from(connected_chats)
+    .where(connected_chats.c.is_active.is_(True))
+)
+_SEL_GROUP_LOCALE = select(chat_settings.c.locale).where(
+    chat_settings.c.chat_id == bindparam("chat_id")
+)
+_SEL_GROUP_IS_ACTIVE = select(connected_chats.c.is_active).where(
+    connected_chats.c.chat_id == bindparam("chat_id")
+)
+_SEL_PENDING_WITH_TITLE = (
+    select(*_PENDING_COLUMNS, telegram_chats.c.title)
+    .select_from(
+        join_requests.outerjoin(
+            telegram_chats, telegram_chats.c.chat_id == join_requests.c.chat_id
+        )
+    )
+    .where(
+        join_requests.c.chat_id == bindparam("chat_id"),
+        join_requests.c.status == "pending",
+    )
+)
+
 
 def _group_row(docs: list[dict[str, Any]]) -> list[GroupDoc]:
     """Return the group documents with the column names the callers read."""
@@ -112,12 +150,7 @@ async def is_connected(chat_id: int, *, fresh: bool = False) -> bool:
 
     async def _fetch() -> bool:
         row = await db_call(
-            lambda: fetch_one(
-                select(connected_chats.c.chat_id).where(
-                    connected_chats.c.chat_id == chat_id,
-                    connected_chats.c.is_active.is_(True),
-                )
-            )
+            lambda: fetch_one(_SEL_IS_CONNECTED.params(chat_id=chat_id))
         )
         return row is not None
 
@@ -292,20 +325,7 @@ async def active_groups() -> list[GroupDoc]:
     """Get all currently active and connected groups (L1->L2->DB cached)."""
 
     async def _fetch() -> list[GroupDoc]:
-        rows = await db_call(
-            lambda: fetch_all(
-                select(*_GROUP_COLUMNS)
-                .select_from(connected_chats)
-                .join(
-                    telegram_chats,
-                    telegram_chats.c.chat_id == connected_chats.c.chat_id,
-                )
-                .outerjoin(
-                    chat_settings, chat_settings.c.chat_id == connected_chats.c.chat_id
-                )
-                .where(connected_chats.c.is_active.is_(True))
-            )
-        )
+        rows = await db_call(lambda: fetch_all(_SEL_ACTIVE_GROUPS))
         return _group_row(rows)
 
     return cast(
@@ -316,13 +336,7 @@ async def active_groups() -> list[GroupDoc]:
 
 async def active_group_count() -> int:
     """Count the number of currently active connected groups."""
-    total = await db_call(
-        lambda: fetch_value(
-            select(func.count())
-            .select_from(connected_chats)
-            .where(connected_chats.c.is_active.is_(True))
-        )
-    )
+    total = await db_call(lambda: fetch_value(_SEL_ACTIVE_GROUP_COUNT))
     return int(total or 0)
 
 
@@ -341,7 +355,7 @@ def with_primary_groups(
     such as the current one.
     """
     seen = {g.get("chat_id", 0) for g in groups}
-    merged: list[dict[str, Any]] = [dict(g) for g in groups]
+    merged: list[dict[str, Any]] = [{**g} for g in groups]
     for cid in (*primary_ids, *extra_ids):
         if not cid or cid in seen:
             continue
@@ -364,9 +378,7 @@ async def get_group_locale(chat_id: int) -> str | None:
 
     async def _fetch() -> str | None:
         row = await db_call(
-            lambda: fetch_one(
-                select(chat_settings.c.locale).where(chat_settings.c.chat_id == chat_id)
-            )
+            lambda: fetch_one(_SEL_GROUP_LOCALE.params(chat_id=chat_id))
         )
         locale = row.get("locale") if row is not None else None
         return locale if isinstance(locale, str) and locale else None
@@ -453,23 +465,13 @@ async def add_pending(chat_id: int, title: str, owner_id: int, message_id: int) 
 async def get_pending(chat_id: int) -> PendingGroupDoc | None:
     """Get the open join request of a chat."""
     row = await db_call(
-        lambda: fetch_one(
-            select(*_PENDING_COLUMNS).where(
-                join_requests.c.chat_id == chat_id,
-                join_requests.c.status == "pending",
-            )
-        )
+        lambda: fetch_one(_SEL_PENDING_WITH_TITLE.params(chat_id=chat_id))
     )
     if row is None:
         return None
-    title_row = await db_call(
-        lambda: fetch_one(
-            select(telegram_chats.c.title).where(telegram_chats.c.chat_id == chat_id)
-        )
-    )
     return PendingGroupDoc(
         chat_id=cast("ChatId", row["chat_id"]),
-        title=(title_row or {}).get("title") or "",
+        title=row.get("title") or "",
         owner_id=cast("UserId", row.get("owner_user_id") or 0),
         message_id=row.get("request_message_id") or 0,
         added_date=cast("datetime", row["requested_at"]),
@@ -497,13 +499,7 @@ async def remove_pending(chat_id: int) -> None:
 
 async def _group_is_active(chat_id: int) -> bool:
     """Return whether the connected-group row of *chat_id* is active."""
-    row = await db_call(
-        lambda: fetch_one(
-            select(connected_chats.c.is_active).where(
-                connected_chats.c.chat_id == chat_id
-            )
-        )
-    )
+    row = await db_call(lambda: fetch_one(_SEL_GROUP_IS_ACTIVE.params(chat_id=chat_id)))
     return bool(row and row.get("is_active"))
 
 

@@ -9,15 +9,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
-import msgspec
-
 import tcbot.database.cache.redis_io as redis_io
 import tcbot.database.redis_client as _redis_mod
 from tcbot import cfg
 from tcbot.database.cache.codec import (
     _decode_redis_value,
-    _msgspec_enc_hook,
-    _tag_scalars,
+    _encode_redis_value,
 )
 from tcbot.database.cache.memory import CACHE_MISS, TTLCache
 from tcbot.utils import metrics
@@ -388,14 +385,19 @@ class TwoLevelCache[T]:
         A Redis outage is a miss, not an error: the keys it could not
         answer are simply absent from the result.
         """
+        if not keys:
+            return {}
         found: dict[Any, T] = {}
         missing: list[Any] = []
+        mem_get = self._mem.get
+        miss = CACHE_MISS
+        record_hit = metrics.record_hit
         for key in keys:
-            val = self._mem.get(key)
-            if val is CACHE_MISS:
+            val = mem_get(key)
+            if val is miss:
                 missing.append(key)
             else:
-                metrics.record_hit("l1")
+                record_hit("l1")
                 found[key] = cast("T", val)
         if not missing:
             return found
@@ -495,71 +497,111 @@ class TwoLevelCache[T]:
 
                 # L2: Redis (bounded: a stalled Redis must not hold the hot path)
                 rc = await self._client()
-                if (
-                    rc is not None
-                    and key not in self._pending_invalidations
-                    and (
-                        not self._critical_delete or not await self._tombstoned(rc, key)
-                    )
-                ):
+                if rc is not None and key not in self._pending_invalidations:
                     rkey = self._rkey(key)
-                    try:
-                        raw = await rc.get(rkey)
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception as exc:
-                        _redis_mod.mark_op(ok=False)
-                        log.debug("Redis get failed for %s: %s", rkey, exc)
-                    else:
-                        # * Any response proves Redis is alive; only a
-                        # * transport failure marks it down.
-                        _redis_mod.mark_op(ok=True)
-                        if raw is not None:
-                            try:
-                                loaded: T = _decode_redis_value(raw)
-                            except Exception as exc:
-                                # * Corrupt payload is a miss, not an outage.
-                                log.debug(
-                                    "Redis payload decode failed for %s: %s",
-                                    rkey,
-                                    exc,
-                                )
-                            else:
-                                metrics.record_hit("l2")
-                                # * The tombstone was checked before the GET.
-                                # * Another process can revoke between that
-                                # * check and this promotion, so confirm the
-                                # * value is still live before writing L1.
-                                if self._critical_delete and await self._tombstoned(
-                                    rc, key
-                                ):
+                    tomb_key = self._tombstone_key(key) if self._critical_delete else ""
+                    if self._critical_delete and hasattr(rc, "mget"):
+                        # * Single atomic MGET reads both the value and the
+                        # * revocation tombstone in one round trip instead of
+                        # * three sequential EXISTS -> GET -> EXISTS calls.
+                        try:
+                            raw_pair = await rc.mget(rkey, tomb_key)
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as exc:
+                            _redis_mod.mark_op(ok=False)
+                            log.debug("Redis mget failed for %s: %s", rkey, exc)
+                        else:
+                            _redis_mod.mark_op(ok=True)
+                            raw = raw_pair[0] if len(raw_pair) > 0 else None
+                            tomb = raw_pair[1] if len(raw_pair) > 1 else None
+                            if raw is not None and not tomb:
+                                try:
+                                    loaded: T = _decode_redis_value(raw)
+                                except Exception as exc:
                                     log.debug(
-                                        "Discarding tombstoned Redis hit for %s", key
+                                        "Redis payload decode failed for %s: %s",
+                                        rkey,
+                                        exc,
                                     )
+                                else:
+                                    metrics.record_hit("l2")
+                                    if (
+                                        state.generation != generation
+                                        or self._epoch != epoch
+                                        or key in self._pending_writes
+                                    ):
+                                        log.debug(
+                                            "Discarding stale Redis hit for "
+                                            "invalidated key %s",
+                                            key,
+                                        )
+                                        return loaded
+                                    self._advance(key)
+                                    self._revision += 1
+                                    self._mem.put(key, loaded)
                                     return loaded
-                                if (
-                                    state.generation != generation
-                                    or self._epoch != epoch
-                                    or key in self._pending_writes
-                                ):
-                                    # * The key was invalidated, swept, or
-                                    # * written locally while the Redis read
-                                    # * was in flight: the payload predates
-                                    # * the change and must not be cached.
+                    elif not self._critical_delete or not await self._tombstoned(
+                        rc, key
+                    ):
+                        try:
+                            raw = await rc.get(rkey)
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as exc:
+                            _redis_mod.mark_op(ok=False)
+                            log.debug("Redis get failed for %s: %s", rkey, exc)
+                        else:
+                            # * Any response proves Redis is alive; only a
+                            # * transport failure marks it down.
+                            _redis_mod.mark_op(ok=True)
+                            if raw is not None:
+                                try:
+                                    loaded = _decode_redis_value(raw)
+                                except Exception as exc:
+                                    # * Corrupt payload is a miss, not an outage.
                                     log.debug(
-                                        "Discarding stale Redis hit for "
-                                        "invalidated key %s",
-                                        key,
+                                        "Redis payload decode failed for %s: %s",
+                                        rkey,
+                                        exc,
                                     )
+                                else:
+                                    metrics.record_hit("l2")
+                                    # * The tombstone was checked before the GET.
+                                    # * Another process can revoke between that
+                                    # * check and this promotion, so confirm the
+                                    # * value is still live before writing L1.
+                                    if self._critical_delete and await self._tombstoned(
+                                        rc, key
+                                    ):
+                                        log.debug(
+                                            "Discarding tombstoned Redis hit for %s",
+                                            key,
+                                        )
+                                        return loaded
+                                    if (
+                                        state.generation != generation
+                                        or self._epoch != epoch
+                                        or key in self._pending_writes
+                                    ):
+                                        # * The key was invalidated, swept, or
+                                        # * written locally while the Redis read
+                                        # * was in flight: the payload predates
+                                        # * the change and must not be cached.
+                                        log.debug(
+                                            "Discarding stale Redis hit for "
+                                            "invalidated key %s",
+                                            key,
+                                        )
+                                        return loaded
+                                    # * An L2 hit is a cache write in L1; advance
+                                    # * both counters so a concurrent peek or a
+                                    # * batch reader that captured the old values
+                                    # * cannot undo it.
+                                    self._advance(key)
+                                    self._revision += 1
+                                    self._mem.put(key, loaded)
                                     return loaded
-                                # * An L2 hit is a cache write in L1; advance
-                                # * both counters so a concurrent peek or a
-                                # * batch reader that captured the old values
-                                # * cannot undo it.
-                                self._advance(key)
-                                self._revision += 1
-                                self._mem.put(key, loaded)
-                                return loaded
 
                 # * L2 write is fire-and-forget and ordered FIFO against
                 # * later invalidates; L1 already serves this value.
@@ -732,9 +774,7 @@ class TwoLevelCache[T]:
         rkey = self._rkey(key)
         # * L1 already serves this value: skip the L2 write, never raise.
         try:
-            payload = msgspec.json.encode(
-                _tag_scalars(val), enc_hook=_msgspec_enc_hook
-            ).decode("utf-8")
+            payload = _encode_redis_value(val)
         except Exception as exc:
             log.debug("Redis payload encode failed for %s: %s", rkey, exc)
             return

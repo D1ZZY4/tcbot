@@ -77,23 +77,63 @@ def _bot_username(client: Client) -> str | None:
 
 def _matcher(command: str | None, prefixes: tuple[str, ...]) -> Filter:
     """Build a Kurigram filter matching one command or any prefixed command."""
+    if not prefixes:
+        return _never_match_filter()
+    first_chars = frozenset(p[0] for p in prefixes)
+    single_prefix = prefixes[0] if len(prefixes) == 1 else None
 
-    async def check(_: Filter, client: Client, update: object) -> bool:
+    if command is not None:
+        cmd_len = len(command)
+
+        async def check_one(_: Filter, client: Client, update: object) -> bool:
+            message = getattr(update, "text", None)
+            if message is None:
+                return False
+            text = message if isinstance(message, str) else str(message)
+            if not text or text[0] not in first_chars:
+                return False
+            if single_prefix is not None:
+                if not text.startswith(single_prefix):
+                    return False
+                remainder = text[len(single_prefix) :]
+            else:
+                for p in prefixes:
+                    if text.startswith(p):
+                        remainder = text[len(p) :]
+                        break
+                else:
+                    return False
+            if not remainder.startswith(command):
+                return False
+            if len(remainder) == cmd_len:
+                return True
+            ch = remainder[cmd_len]
+            if ch.isspace():
+                return True
+            if ch != "@":
+                return False
+            mention = remainder[cmd_len + 1 :].split(None, 1)[0]
+            if not mention or not _MENTION_RE.fullmatch(mention):
+                return False
+            username = _bot_username(client)
+            return username is not None and mention.casefold() == username.casefold()
+
+        return filters.create(check_one, name=f"PrefixedCommand({command})")
+
+    async def check_any(_: Filter, client: Client, update: object) -> bool:
         # * Kurigram offloads synchronous filters to its small executor. Every
         # * message is tested against hundreds of these leaves, so keeping the
         # * predicate async avoids a thread-pool round trip per leaf.
         message = getattr(update, "text", None)
         if message is None:
             return False
-        text = str(message)
-        username = _bot_username(client) if "@" in text else None
-        parsed = _parse_prefixed_command(text, prefixes, username)
-        if parsed is None:
+        text = message if isinstance(message, str) else str(message)
+        if not text or text[0] not in first_chars:
             return False
-        return command is None or parsed[0] == command
+        username = _bot_username(client) if "@" in text else None
+        return _parse_prefixed_command(text, prefixes, username) is not None
 
-    name = f"PrefixedCommand({command})" if command else "AnyPrefixedCommand"
-    return filters.create(check, name=name)
+    return filters.create(check_any, name="AnyPrefixedCommand")
 
 
 # ───────────────────────── Filter Builders ──────────────────────── #
@@ -198,14 +238,23 @@ _ALL_COMMANDS: tuple[str, ...] = (
 
 def build_conversation_escape_filter(*own_commands: str) -> Filter:
     """Return a filter for commands that bypass conversation fallbacks."""
-    excluded = set(own_commands)
-    combined: Filter | None = None
-    for command in _ALL_COMMANDS:
-        if command in excluded:
-            continue
-        one = build_prefixed_filters(command)
-        combined = one if combined is None else combined | one
-    return combined if combined is not None else _never_match_filter()
+    allowed = frozenset(_ALL_COMMANDS) - set(own_commands)
+    if not allowed or not _prefixes:
+        return _never_match_filter()
+    first_chars = frozenset(p[0] for p in _prefixes)
+
+    async def check(_: Filter, client: Client, update: object) -> bool:
+        message = getattr(update, "text", None)
+        if message is None:
+            return False
+        text = message if isinstance(message, str) else str(message)
+        if not text or text[0] not in first_chars:
+            return False
+        username = _bot_username(client) if "@" in text else None
+        parsed = _parse_prefixed_command(text, _prefixes, username)
+        return parsed is not None and parsed[0] in allowed
+
+    return filters.create(check, name="ConversationEscapeFilter")
 
 
 # ──────────────────────── Argument Parsing ──────────────────────── #

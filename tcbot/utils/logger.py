@@ -265,25 +265,36 @@ def setup(level: int = logging.INFO) -> None:
 # ─────────────────── Public Loguru API ────────────────────────── #
 
 
+_LEVEL_NO: dict[str, int] = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warning": logging.WARNING,
+    "error": logging.ERROR,
+    "critical": logging.CRITICAL,
+}
+
+
 class _LoguruShim:
     """Compat shim so existing %-style call sites log through Loguru."""
 
     def __init__(self, name: str) -> None:
         self._name = name
+        self._std_logger = logging.getLogger(name)
 
     def _emit(
         self, level: str, msg: str, args: tuple[Any, ...], exc_info: Any = None
     ) -> None:
+        if not self._std_logger.isEnabledFor(_LEVEL_NO.get(level, logging.INFO)):
+            return
         text = _format_percent(msg, args)
         if getattr(_in_sink, "active", False):
             # * The Loguru sink already holds a non-reentrant handler lock.
             # * Stdlib delivers this line to the same console without trying
             # * to acquire that lock again.
-            std_logger = logging.getLogger(self._name)
             if level == "exception":
-                std_logger.exception(text)
+                self._std_logger.exception(text)
             else:
-                getattr(std_logger, level)(text, exc_info=exc_info)
+                getattr(self._std_logger, level)(text, exc_info=exc_info)
             return
         bound = logger.bind(module=self._name)
         if exc_info:
