@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import func, literal, or_, select
+from sqlalchemy import bindparam, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -52,6 +52,21 @@ _USER_COLUMNS = [
 # * notices last_name-only updates. The not-found sentinel is all-None.
 _NOT_FOUND_SENTINEL: list[str | None] = [None, None, None]
 
+_SEL_USER_BY_ID = select(*_USER_COLUMNS).where(
+    telegram_users.c.user_id == bindparam("user_id")
+)
+_SEL_MENTION_TRIPLE = select(
+    telegram_users.c.first_name,
+    telegram_users.c.username,
+    telegram_users.c.last_name,
+).where(telegram_users.c.user_id == bindparam("user_id"))
+_SEL_TOTAL_USERS = select(func.count()).select_from(telegram_users)
+_SEL_BY_USERNAME = (
+    select(telegram_users.c.user_id, telegram_users.c.first_name)
+    .where(func.lower(telegram_users.c.username) == bindparam("needle"))
+    .limit(1)
+)
+
 
 def _cached_triple(data: list[str | None]) -> tuple[str | None, str | None, str | None]:
     """Split a cache entry into (first_name, username, last_name).
@@ -72,15 +87,7 @@ async def _fetch_mention_triple(user_id: int) -> list[str | None]:
     Single owner for the projection and the not-found sentinel so the
     cached mention readers cannot drift apart.
     """
-    doc = await db_call(
-        lambda: fetch_one(
-            select(
-                telegram_users.c.first_name,
-                telegram_users.c.username,
-                telegram_users.c.last_name,
-            ).where(telegram_users.c.user_id == user_id)
-        )
-    )
+    doc = await db_call(lambda: fetch_one(_SEL_MENTION_TRIPLE.params(user_id=user_id)))
     if doc:
         return [
             doc.get("first_name") or str(user_id),
@@ -113,11 +120,7 @@ def is_placeholder_name(name: str | None) -> bool:
 
 async def get_user(user_id: int) -> UserDoc | None:
     """Get the full stored profile for a specific user."""
-    row = await db_call(
-        lambda: fetch_one(
-            select(*_USER_COLUMNS).where(telegram_users.c.user_id == user_id)
-        )
-    )
+    row = await db_call(lambda: fetch_one(_SEL_USER_BY_ID.params(user_id=user_id)))
     return cast("UserDoc | None", row)
 
 
@@ -275,9 +278,7 @@ async def get_first_name(user_id: int, fallback: str = "") -> str:
 
 async def total_users() -> int:
     """Get the total number of known users."""
-    count = await db_call(
-        lambda: fetch_value(select(func.count()).select_from(telegram_users))
-    )
+    count = await db_call(lambda: fetch_value(_SEL_TOTAL_USERS))
     return int(count or 0)
 
 
@@ -391,13 +392,7 @@ async def get_by_username(username: str) -> tuple[int, str] | None:
     needle = username.lstrip("@").strip().lower()
     if not needle:
         return None
-    row = await db_call(
-        lambda: fetch_one(
-            select(telegram_users.c.user_id, telegram_users.c.first_name)
-            .where(func.lower(telegram_users.c.username) == needle)
-            .limit(1)
-        )
-    )
+    row = await db_call(lambda: fetch_one(_SEL_BY_USERNAME.params(needle=needle)))
     if row is None:
         return None
     uid = row["user_id"]
@@ -585,12 +580,16 @@ async def upsert_user_if_changed(
 
     Returns True when a DB write was performed, False when skipped.
     """
-    cached = await user_mention_cache.peek(user_id)
+    cached = user_mention_cache.get(user_id)
+    if cached is CACHE_MISS:
+        cached = await user_mention_cache.peek(user_id)
     # * Compare the full triple: last_name-only changes must also write.
-    if isinstance(cached, list) and _cached_triple(cached) == (
-        first_name,
-        username,
-        last_name,
+    if (
+        isinstance(cached, list)
+        and len(cached) == 3
+        and cached[0] == first_name
+        and cached[1] == username
+        and cached[2] == last_name
     ):
         return False
     return await upsert_user(user_id, username, first_name, last_name)
@@ -607,7 +606,9 @@ async def refresh_display_name(user_id: int, first_name: str) -> bool:
     Only the display name is refreshed. The username and the last name
     stay as they are: the caller resolved a name, not a full profile.
     """
-    cached = await user_mention_cache.peek(user_id)
+    cached = user_mention_cache.get(user_id)
+    if cached is CACHE_MISS:
+        cached = await user_mention_cache.peek(user_id)
     triple = _cached_triple(cached) if isinstance(cached, list) else (None, None, None)
     if isinstance(cached, list) and triple[0] == first_name:
         return False

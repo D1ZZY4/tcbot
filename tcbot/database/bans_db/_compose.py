@@ -116,7 +116,7 @@ async def _appeals_for(action_ids: list[int]) -> dict[int, dict[str, Any]]:
     )
     result: dict[int, dict[str, Any]] = {}
     for row in rows:
-        result.setdefault(int(row["action_id"]), dict(row))
+        result.setdefault(int(row["action_id"]), row)
     return result
 
 
@@ -189,6 +189,8 @@ def compose_row(
     appeal: dict[str, Any] | None,
     proof_message_id: int | None,
     rules: list[str] | None = None,
+    *,
+    now: datetime | None = None,
 ) -> BanDoc:
     """Return the ban document of one decision row."""
     metadata = row.get("metadata") or {}
@@ -196,7 +198,7 @@ def compose_row(
         metadata = {}
     action_id = int(row["id"])
     status = str(row["status"])
-    now = utc_now()
+    check_now = now if now is not None else utc_now()
     return BanDoc(
         id=action_id,
         ban_id=cast("BanId", str(row["external_ref"])),
@@ -212,7 +214,7 @@ def compose_row(
         until_date=row.get("expires_at"),
         duration_str=metadata.get(META_DURATION),
         duration_seconds=row.get("duration_seconds"),
-        is_active=_row_in_force(row, now),
+        is_active=_row_in_force(row, check_now),
         status=cast("ActionStatus", status),
         update_count=int(metadata.get(META_UPDATE_COUNT, 0) or 0),
         review_message_id=metadata.get(META_REVIEW_MESSAGE),
@@ -239,20 +241,27 @@ def compose_row(
     )
 
 
+async def _empty_proofs() -> dict[int, int]:
+    """Return an empty proof map when no row carries an upload id."""
+    return {}
+
+
 async def compose_rows(rows: list[dict[str, Any]]) -> list[BanDoc]:
     """Return the ban documents of every decision row."""
     if not rows:
         return []
     action_ids = [int(row["id"]) for row in rows]
+    has_proofs = any(row.get("evidence_upload_id") is not None for row in rows)
     # * The four side tables are independent reads of the same decision
     # * set, so they run concurrently and the composition waits for all
     # * of them.
     messages, appeals, proofs, rules = await asyncio.gather(
         _messages_for(action_ids),
         _appeals_for(action_ids),
-        _proof_ids_for(action_ids),
+        _proof_ids_for(action_ids) if has_proofs else _empty_proofs(),
         _rules_for(action_ids),
     )
+    now = utc_now()
     return [
         compose_row(
             row,
@@ -260,6 +269,7 @@ async def compose_rows(rows: list[dict[str, Any]]) -> list[BanDoc]:
             appeals.get(int(row["id"])),
             proofs.get(int(row["id"])),
             rules.get(int(row["id"]), []),
+            now=now,
         )
         for row in rows
     ]

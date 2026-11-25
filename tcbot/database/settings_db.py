@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import bindparam, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import community_settings, telegram_users, user_settings
@@ -26,6 +26,13 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
+_SEL_USER_LOCALE = select(user_settings.c.locale).where(
+    user_settings.c.user_id == bindparam("user_id")
+)
+_SEL_COMMUNITY_LOCALE = select(community_settings.c.default_locale).where(
+    community_settings.c.singleton_key == "global"
+)
+
 # * The two-level cache keeps a language change visible across processes:
 # * a write invalidates the Redis entry with a generation guard, so a read
 # * that started before the write cannot publish the old value into L1.
@@ -42,11 +49,7 @@ async def get_user_locale(user_id: int) -> str | None:
     """Return the stored locale code for a user, or None when unset."""
 
     async def _fetch() -> str | None:
-        row = await db_call(
-            lambda: fetch_one(
-                select(user_settings.c.locale).where(user_settings.c.user_id == user_id)
-            )
-        )
+        row = await db_call(lambda: fetch_one(_SEL_USER_LOCALE.params(user_id=user_id)))
         if row is None:
             return None
         locale = row.get("locale")
@@ -69,13 +72,7 @@ async def get_community_locale() -> str | None:
     """
 
     async def _fetch() -> str | None:
-        row = await db_call(
-            lambda: fetch_one(
-                select(community_settings.c.default_locale).where(
-                    community_settings.c.singleton_key == "global"
-                )
-            )
-        )
+        row = await db_call(lambda: fetch_one(_SEL_COMMUNITY_LOCALE))
         locale = row.get("default_locale") if row is not None else None
         return locale if isinstance(locale, str) and locale else None
 

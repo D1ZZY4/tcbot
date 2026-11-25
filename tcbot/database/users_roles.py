@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Literal, cast
 
-from sqlalchemy import func, select, text
+from sqlalchemy import bindparam, func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import (
@@ -105,9 +105,76 @@ _ADMIN_ROLE: str = "admin"
 
 # * An assignment is in force while it is active and its expiry is in the
 # * future. The expiry is part of the condition, so it is read here
-# * instead of in an index predicate. The predicate is built per call: a
-# * timestamp frozen at import time would keep an assignment alive for
-# * the whole process lifetime, long after its expiry passed.
+# * instead of in an index predicate.
+_NOW_PARAM = bindparam("now")
+_ACTIVE_CONDITION = (
+    role_assignments.c.status == "active",
+    (role_assignments.c.expires_at.is_(None))
+    | (role_assignments.c.expires_at > _NOW_PARAM),
+)
+
+_SEL_OWNER_COUNT = (
+    select(func.count())
+    .select_from(role_assignments)
+    .where(role_assignments.c.role_key == _OWNER_ROLE, *_ACTIVE_CONDITION)
+)
+_SEL_OWNER_ID = (
+    select(role_assignments.c.user_id)
+    .where(role_assignments.c.role_key == _OWNER_ROLE, *_ACTIVE_CONDITION)
+    .order_by(role_assignments.c.user_id)
+    .limit(1)
+)
+_SEL_IS_ADMIN = select(role_assignments.c.user_id).where(
+    role_assignments.c.user_id == bindparam("user_id"),
+    role_assignments.c.role_key == _ADMIN_ROLE,
+    *_ACTIVE_CONDITION,
+)
+_SEL_ALL_ADMINS = select(
+    role_assignments.c.user_id,
+    role_assignments.c.role_key,
+    role_assignments.c.assigned_by_user_id,
+    role_assignments.c.assigned_at,
+).where(role_assignments.c.role_key == _ADMIN_ROLE, *_ACTIVE_CONDITION)
+_SEL_ADMIN_COUNT = (
+    select(func.count())
+    .select_from(role_assignments)
+    .where(role_assignments.c.role_key == _ADMIN_ROLE, *_ACTIVE_CONDITION)
+)
+_SEL_ALL_BY_ROLE = select(role_assignments.c.user_id).where(
+    role_assignments.c.role_key == bindparam("role"),
+    *_ACTIVE_CONDITION,
+)
+_SEL_ROLE_COUNT = (
+    select(func.count())
+    .select_from(role_assignments)
+    .where(role_assignments.c.role_key == bindparam("role"), *_ACTIVE_CONDITION)
+)
+_SEL_EFFECTIVE_ROLE = select(role_assignments.c.role_key).where(
+    role_assignments.c.user_id == bindparam("user_id"),
+    *_ACTIVE_CONDITION,
+)
+_SEL_ROLE_META = select(
+    role_assignments.c.role_key,
+    role_assignments.c.assigned_by_user_id,
+    role_assignments.c.assigned_at,
+).where(
+    role_assignments.c.user_id == bindparam("user_id"),
+    *_ACTIVE_CONDITION,
+)
+_SEL_PERMISSIONS_FOR = (
+    select(role_permissions.c.permission_key)
+    .join(
+        role_assignments,
+        role_assignments.c.role_key == role_permissions.c.role_key,
+    )
+    .where(
+        role_assignments.c.user_id == bindparam("user_id"),
+        *_ACTIVE_CONDITION,
+    )
+    .order_by(role_permissions.c.permission_key)
+)
+
+
 def _active_assignment() -> tuple[ColumnElement[bool], ...]:
     """Return the condition that selects the assignments that are in force."""
     return (
@@ -152,11 +219,7 @@ async def _count(stmt: Executable) -> int:
 
 async def _owner_count() -> int:
     """Return how many active owner assignments the table currently holds."""
-    return await _count(
-        select(func.count())
-        .select_from(role_assignments)
-        .where(role_assignments.c.role_key == _OWNER_ROLE, *_active_assignment())
-    )
+    return await _count(_SEL_OWNER_COUNT.params(now=utc_now()))
 
 
 # ───────────────────────── Owner CRUD ────────────────────────── #
@@ -169,14 +232,7 @@ async def _fetch_owner_id() -> int | None:
     publish a value read from the source under the same generation guard.
     """
     # * The lowest owner row wins, exactly like the old sorted read.
-    row = await db_call(
-        lambda: fetch_one(
-            select(role_assignments.c.user_id)
-            .where(role_assignments.c.role_key == _OWNER_ROLE, *_active_assignment())
-            .order_by(role_assignments.c.user_id)
-            .limit(1)
-        )
-    )
+    row = await db_call(lambda: fetch_one(_SEL_OWNER_ID.params(now=utc_now())))
     return row["user_id"] if row else None
 
 
@@ -493,13 +549,7 @@ async def transfer_ownership(previous_owner_id: int, new_owner_id: int) -> None:
 async def is_admin(user_id: int) -> bool:
     """Return True if user_id is a registered admin."""
     row = await db_call(
-        lambda: fetch_one(
-            select(role_assignments.c.user_id).where(
-                role_assignments.c.user_id == user_id,
-                role_assignments.c.role_key == _ADMIN_ROLE,
-                *_active_assignment(),
-            )
-        )
+        lambda: fetch_one(_SEL_IS_ADMIN.params(user_id=user_id, now=utc_now()))
     )
     return row is not None
 
@@ -512,29 +562,13 @@ async def add_admin(user_id: int, promoted_by: int) -> None:
 
 async def all_admins() -> list[AdminDoc]:
     """Return all admin documents."""
-    rows = await db_call(
-        lambda: fetch_all(
-            select(
-                role_assignments.c.user_id,
-                role_assignments.c.role_key,
-                role_assignments.c.assigned_by_user_id,
-                role_assignments.c.assigned_at,
-            ).where(
-                role_assignments.c.role_key == _ADMIN_ROLE,
-                *_active_assignment(),
-            )
-        )
-    )
+    rows = await db_call(lambda: fetch_all(_SEL_ALL_ADMINS.params(now=utc_now())))
     return cast("list[AdminDoc]", rows)
 
 
 async def admin_count() -> int:
     """Return the total count of registered admins."""
-    return await _count(
-        select(func.count())
-        .select_from(role_assignments)
-        .where(role_assignments.c.role_key == _ADMIN_ROLE, *_active_assignment())
-    )
+    return await _count(_SEL_ADMIN_COUNT.params(now=utc_now()))
 
 
 # ────────────────────────── Role CRUD ─────────────────────────── #
@@ -581,26 +615,14 @@ async def remove_role(user_id: int) -> bool:
 async def all_by_role(role: str) -> list[RoleRefDoc]:
     """Get all users with a specific role."""
     rows = await db_call(
-        lambda: fetch_all(
-            select(role_assignments.c.user_id).where(
-                role_assignments.c.role_key == role,
-                *_active_assignment(),
-            )
-        )
+        lambda: fetch_all(_SEL_ALL_BY_ROLE.params(role=role, now=utc_now()))
     )
     return cast("list[RoleRefDoc]", rows)
 
 
 async def role_count(role: str) -> int:
     """Count role members (count-only views; avoids fetching documents)."""
-    return await _count(
-        select(func.count())
-        .select_from(role_assignments)
-        .where(
-            role_assignments.c.role_key == role,
-            *_active_assignment(),
-        )
-    )
+    return await _count(_SEL_ROLE_COUNT.params(role=role, now=utc_now()))
 
 
 async def _assign_role(user_id: int, role: str, assigned_by: int) -> None:
@@ -707,10 +729,7 @@ async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None
         # * expiry.
         row = await db_call(
             lambda: fetch_one(
-                select(role_assignments.c.role_key).where(
-                    role_assignments.c.user_id == user_id,
-                    *_active_assignment(),
-                )
+                _SEL_EFFECTIVE_ROLE.params(user_id=user_id, now=utc_now())
             )
         )
         role = row["role_key"] if row else None
@@ -738,16 +757,7 @@ async def get_effective_role(user_id: int, *, fresh: bool = False) -> str | None
 async def role_meta(user_id: int) -> tuple[str | None, int | None, datetime | None]:
     """Return ``(role, assigned_by, assigned_at)`` for the active assignment."""
     row = await db_call(
-        lambda: fetch_one(
-            select(
-                role_assignments.c.role_key,
-                role_assignments.c.assigned_by_user_id,
-                role_assignments.c.assigned_at,
-            ).where(
-                role_assignments.c.user_id == user_id,
-                *_active_assignment(),
-            )
-        )
+        lambda: fetch_one(_SEL_ROLE_META.params(user_id=user_id, now=utc_now()))
     )
     if not row:
         return None, None, None
@@ -775,18 +785,7 @@ async def has_permission(user_id: int, permission_key: str) -> bool:
 async def permissions_for(user_id: int) -> list[str]:
     """Return the permission keys the user currently holds."""
     rows = await db_call(
-        lambda: fetch_all(
-            select(role_permissions.c.permission_key)
-            .join(
-                role_assignments,
-                role_assignments.c.role_key == role_permissions.c.role_key,
-            )
-            .where(
-                role_assignments.c.user_id == user_id,
-                *_active_assignment(),
-            )
-            .order_by(role_permissions.c.permission_key)
-        )
+        lambda: fetch_all(_SEL_PERMISSIONS_FOR.params(user_id=user_id, now=utc_now()))
     )
     return [str(row["permission_key"]) for row in rows]
 

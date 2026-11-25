@@ -8,45 +8,106 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import bindparam, func, select
 
 from tcbot.database.base import moderation_actions, moderation_appeals
 from tcbot.database.documents import BanDoc
 from tcbot.database.engine import db_call, fetch_all, fetch_count, fetch_one
+from tcbot.utils.time_and_date import utc_now
 
 from ._compose import compose_rows
 from ._shared import ACTION_COLUMNS, _in_force
 
+_NOW_PARAM = bindparam("now")
+_IN_FORCE_PARAM = (moderation_actions.c.expires_at.is_(None)) | (
+    moderation_actions.c.expires_at > _NOW_PARAM
+)
+
+_SEL_ACTION_BY_REF = select(*ACTION_COLUMNS).where(
+    moderation_actions.c.external_ref == bindparam("ban_id"),
+    moderation_actions.c.action_type == "ban",
+)
+_SEL_ACTIVE_BAN = (
+    select(*ACTION_COLUMNS)
+    .where(
+        moderation_actions.c.target_user_id == bindparam("user_id"),
+        moderation_actions.c.action_type == "ban",
+        moderation_actions.c.status == "active",
+        _IN_FORCE_PARAM,
+    )
+    .order_by(
+        moderation_actions.c.created_at.desc(),
+        moderation_actions.c.id.desc(),
+    )
+    .limit(1)
+)
+_SEL_BAN_BY_REF = select(*ACTION_COLUMNS).where(
+    moderation_actions.c.external_ref == bindparam("ban_id"),
+    moderation_actions.c.action_type == "ban",
+)
+_SEL_ACTIVE_BAN_COUNT = (
+    select(func.count())
+    .select_from(moderation_actions)
+    .where(
+        moderation_actions.c.action_type == "ban",
+        moderation_actions.c.status == "active",
+        _IN_FORCE_PARAM,
+    )
+)
+_SEL_ACTIVE_BANS_PAGE = (
+    select(*ACTION_COLUMNS)
+    .where(
+        moderation_actions.c.action_type == "ban",
+        moderation_actions.c.status == "active",
+        _IN_FORCE_PARAM,
+    )
+    .order_by(
+        moderation_actions.c.created_at.desc(),
+        moderation_actions.c.id.desc(),
+    )
+    .offset(bindparam("skip"))
+    .limit(bindparam("limit"))
+)
+_SEL_ACTIVE_BAN_USER_IDS = (
+    select(moderation_actions.c.target_user_id)
+    .where(
+        moderation_actions.c.action_type == "ban",
+        moderation_actions.c.status == "active",
+        _IN_FORCE_PARAM,
+    )
+    .distinct()
+)
+_SEL_USER_BAN_COUNT = (
+    select(func.count())
+    .select_from(moderation_actions)
+    .where(
+        moderation_actions.c.target_user_id == bindparam("user_id"),
+        moderation_actions.c.action_type == "ban",
+    )
+)
+_APPEAL_ACTION_IDS = select(moderation_appeals.c.action_id).where(
+    moderation_appeals.c.status.isnot(None)
+)
+_SEL_USER_APPEAL_COUNT = (
+    select(func.count())
+    .select_from(moderation_actions)
+    .where(
+        moderation_actions.c.target_user_id == bindparam("user_id"),
+        moderation_actions.c.action_type == "ban",
+        moderation_actions.c.id.in_(_APPEAL_ACTION_IDS),
+    )
+)
+
 
 async def action_by_ref(ban_id: str) -> dict[str, Any] | None:
     """Return the decision row of one public reference."""
-    return await db_call(
-        lambda: fetch_one(
-            select(*ACTION_COLUMNS).where(
-                moderation_actions.c.external_ref == ban_id,
-                moderation_actions.c.action_type == "ban",
-            )
-        )
-    )
+    return await db_call(lambda: fetch_one(_SEL_ACTION_BY_REF.params(ban_id=ban_id)))
 
 
 async def get_active_ban(user_id: int) -> BanDoc | None:
     """Get the currently active ban for a specific user."""
     rows = await db_call(
-        lambda: fetch_all(
-            select(*ACTION_COLUMNS)
-            .where(
-                moderation_actions.c.target_user_id == user_id,
-                moderation_actions.c.action_type == "ban",
-                moderation_actions.c.status == "active",
-                _in_force(),
-            )
-            .order_by(
-                moderation_actions.c.created_at.desc(),
-                moderation_actions.c.id.desc(),
-            )
-            .limit(1)
-        )
+        lambda: fetch_all(_SEL_ACTIVE_BAN.params(user_id=user_id, now=utc_now()))
     )
     docs = await compose_rows(rows)
     return docs[0] if docs else None
@@ -54,14 +115,7 @@ async def get_active_ban(user_id: int) -> BanDoc | None:
 
 async def get_ban(ban_id: str) -> BanDoc | None:
     """Get any ban record by its public reference."""
-    rows = await db_call(
-        lambda: fetch_all(
-            select(*ACTION_COLUMNS).where(
-                moderation_actions.c.external_ref == ban_id,
-                moderation_actions.c.action_type == "ban",
-            )
-        )
-    )
+    rows = await db_call(lambda: fetch_all(_SEL_BAN_BY_REF.params(ban_id=ban_id)))
     docs = await compose_rows(rows)
     return docs[0] if docs else None
 
@@ -69,15 +123,7 @@ async def get_ban(ban_id: str) -> BanDoc | None:
 async def active_ban_count() -> int:
     """Count the total number of currently active bans."""
     return await db_call(
-        lambda: fetch_count(
-            select(func.count())
-            .select_from(moderation_actions)
-            .where(
-                moderation_actions.c.action_type == "ban",
-                moderation_actions.c.status == "active",
-                _in_force(),
-            )
-        )
+        lambda: fetch_count(_SEL_ACTIVE_BAN_COUNT.params(now=utc_now()))
     )
 
 
@@ -92,18 +138,9 @@ async def active_bans_page(skip: int, limit: int) -> list[BanDoc]:
     page_size = max(1, limit)
     rows = await db_call(
         lambda: fetch_all(
-            select(*ACTION_COLUMNS)
-            .where(
-                moderation_actions.c.action_type == "ban",
-                moderation_actions.c.status == "active",
-                _in_force(),
+            _SEL_ACTIVE_BANS_PAGE.params(
+                now=utc_now(), skip=max(0, skip), limit=page_size
             )
-            .order_by(
-                moderation_actions.c.created_at.desc(),
-                moderation_actions.c.id.desc(),
-            )
-            .offset(max(0, skip))
-            .limit(page_size)
         )
     )
     return await compose_rows(rows)
@@ -172,15 +209,7 @@ async def active_ban_user_ids() -> list[int]:
     active rows for one user collapse to a single ID for the fan-out.
     """
     rows = await db_call(
-        lambda: fetch_all(
-            select(moderation_actions.c.target_user_id)
-            .where(
-                moderation_actions.c.action_type == "ban",
-                moderation_actions.c.status == "active",
-                _in_force(),
-            )
-            .distinct()
-        )
+        lambda: fetch_all(_SEL_ACTIVE_BAN_USER_IDS.params(now=utc_now()))
     )
     return [int(row["target_user_id"]) for row in rows]
 
@@ -213,14 +242,7 @@ async def user_bans(
 async def user_ban_count(user_id: int) -> int:
     """Count every ban ever issued against the user."""
     return await db_call(
-        lambda: fetch_count(
-            select(func.count())
-            .select_from(moderation_actions)
-            .where(
-                moderation_actions.c.target_user_id == user_id,
-                moderation_actions.c.action_type == "ban",
-            )
-        )
+        lambda: fetch_count(_SEL_USER_BAN_COUNT.params(user_id=user_id))
     )
 
 
@@ -233,17 +255,5 @@ async def user_appeal_count(user_id: int) -> int:
     the pager with pages that had no ban to show.
     """
     return await db_call(
-        lambda: fetch_count(
-            select(func.count())
-            .select_from(moderation_actions)
-            .where(
-                moderation_actions.c.target_user_id == user_id,
-                moderation_actions.c.action_type == "ban",
-                moderation_actions.c.id.in_(
-                    select(moderation_appeals.c.action_id).where(
-                        moderation_appeals.c.status.isnot(None)
-                    )
-                ),
-            )
-        )
+        lambda: fetch_count(_SEL_USER_APPEAL_COUNT.params(user_id=user_id))
     )

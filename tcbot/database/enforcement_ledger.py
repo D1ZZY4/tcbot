@@ -283,6 +283,36 @@ _QUEUE_TARGETS = text(
     """
 )
 
+_QUEUE_REPLAY_RUNS = text(
+    """
+    INSERT INTO moderation_enforcement_runs (
+        action_id, operation, idempotency_key, requested_by_user_id, status
+    )
+    SELECT u.action_id,
+           'apply',
+           u.idempotency_key,
+           :requested_by_user_id,
+           'queued'
+      FROM unnest(
+          CAST(:action_ids AS bigint[]),
+          CAST(:idempotency_keys AS text[])
+      ) AS u(action_id, idempotency_key)
+    ON CONFLICT (idempotency_key) DO NOTHING
+    RETURNING id
+    """
+)
+
+_QUEUE_REPLAY_TARGETS = text(
+    """
+    INSERT INTO moderation_enforcement_targets (run_id, chat_id)
+    SELECT r_id, cc.chat_id
+      FROM unnest(CAST(:run_ids AS bigint[])) AS r_id
+      JOIN connected_chats AS cc ON cc.chat_id = :chat_id
+     WHERE cc.is_active OR cc.chat_id = :primary_chat_id
+    ON CONFLICT (run_id, chat_id) DO NOTHING
+    """
+)
+
 _RUN_REPORT = text(
     """
     SELECT r.id, r.action_id, r.operation, r.status, r.target_count,
@@ -496,24 +526,48 @@ async def queue_connect_replay(
             .mappings()
             .all()
         )
+        if not rows:
+            return 0
         event = utc_now().strftime("%Y%m%dT%H%M%S")
-        queued = 0
-        for row in rows:
-            action_id = int(row["id"])
-            action_type = str(row["action_type"])
-            await queue_run(
-                sess,
-                action_id=action_id,
-                operation="apply",
-                idempotency_key=(
-                    f"moderation:{action_id}:connect-replay:"
-                    f"{chat_id}:{event}:{action_type}:v1"
-                ),
-                requested_by_user_id=requested_by_user_id,
-                chat_ids=(chat_id,),
+        action_ids = [int(row["id"]) for row in rows]
+        keys = [
+            f"moderation:{int(row['id'])}:connect-replay:{chat_id}:{event}:{row['action_type']}:v1"
+            for row in rows
+        ]
+        run_ids = list(
+            (
+                await sess.scalars(
+                    _QUEUE_REPLAY_RUNS,
+                    {
+                        "action_ids": action_ids,
+                        "idempotency_keys": keys,
+                        "requested_by_user_id": requested_by_user_id,
+                    },
+                )
+            ).all()
+        )
+        if not run_ids:
+            run_ids = list(
+                (
+                    await sess.scalars(
+                        text(
+                            "SELECT id FROM moderation_enforcement_runs "
+                            "WHERE idempotency_key = ANY(:keys)"
+                        ),
+                        {"keys": keys},
+                    )
+                ).all()
             )
-            queued += 1
-        return queued
+        if run_ids:
+            await sess.execute(
+                _QUEUE_REPLAY_TARGETS,
+                {
+                    "run_ids": [int(rid) for rid in run_ids],
+                    "chat_id": chat_id,
+                    "primary_chat_id": cfg.main_group,
+                },
+            )
+        return len(rows)
 
     return await run_transaction(_work)
 

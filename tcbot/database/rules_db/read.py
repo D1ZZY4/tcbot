@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import bindparam, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot.database.base import (
@@ -24,6 +24,58 @@ from tcbot.database.engine import db_call, fetch_all, fetch_one
 from tcbot.database.rules_db.sets import WORKING_LOCALE
 from tcbot.utils.time_and_date import utc_now
 
+_SEL_CATEGORY_CONTENT = rule_category_content.select().where(
+    rule_category_content.c.rule_set_id == bindparam("set_id")
+)
+_SEL_COMMUNITY_SET_ID = select(rule_sets.c.id).where(
+    rule_sets.c.scope_type == "community",
+    rule_sets.c.is_active.is_(True),
+)
+_SEL_PUBLISHED_VERSION = select(rule_set_versions).where(
+    rule_set_versions.c.rule_set_id == bindparam("set_id"),
+    rule_set_versions.c.locale == bindparam("locale"),
+    rule_set_versions.c.status == "published",
+)
+_SEL_RULE_ITEMS = (
+    select(rule_items)
+    .where(rule_items.c.rule_set_version_id == bindparam("version_id"))
+    .order_by(rule_items.c.sort_order, rule_items.c.id)
+)
+_SEL_RULE_CATEGORIES = (
+    select(rule_categories)
+    .where(rule_categories.c.rule_set_id == bindparam("set_id"))
+    .order_by(rule_categories.c.sort_order, rule_categories.c.id)
+)
+_SEL_RULE_SET = select(rule_sets).where(rule_sets.c.id == bindparam("set_id"))
+_SEL_ACK_REQUIREMENT = (
+    select(
+        rule_set_versions.c.id.label("version_id"),
+        rule_sets.c.requires_acknowledgement,
+    )
+    .select_from(
+        rule_set_versions.join(
+            rule_sets, rule_set_versions.c.rule_set_id == rule_sets.c.id
+        )
+    )
+    .where(
+        rule_sets.c.scope_type == "community",
+        rule_sets.c.is_active.is_(True),
+        rule_set_versions.c.locale == WORKING_LOCALE,
+        rule_set_versions.c.status == "published",
+    )
+    .order_by(rule_set_versions.c.id.desc())
+    .limit(1)
+)
+_SEL_ACK_COUNT = (
+    select(func.count().label("count"))
+    .select_from(rule_acknowledgements)
+    .where(rule_acknowledgements.c.rule_set_version_id == bindparam("version_id"))
+)
+_SEL_HAS_ACK = select(rule_acknowledgements.c.id).where(
+    rule_acknowledgements.c.rule_set_version_id == bindparam("version_id"),
+    rule_acknowledgements.c.user_id == bindparam("user_id"),
+)
+
 
 async def _category_presentation(
     set_id: int, locale: str | None
@@ -34,13 +86,7 @@ async def _category_presentation(
     stored row simply has no presentation, and the caller falls back to its
     stored title.
     """
-    rows = await db_call(
-        lambda: fetch_all(
-            rule_category_content.select().where(
-                rule_category_content.c.rule_set_id == set_id
-            )
-        )
-    )
+    rows = await db_call(lambda: fetch_all(_SEL_CATEGORY_CONTENT.params(set_id=set_id)))
     wanted = locale or WORKING_LOCALE
     by_key: dict[str, dict[str, dict[str, str]]] = {}
     for row in rows:
@@ -71,60 +117,34 @@ async def published_rules(
     public menu follows the reader's language without a translation catalog.
     """
     if set_id is None:
-        set_row = await db_call(
-            lambda: fetch_one(
-                select(rule_sets.c.id).where(
-                    rule_sets.c.scope_type == "community",
-                    rule_sets.c.is_active.is_(True),
-                )
-            )
-        )
+        set_row = await db_call(lambda: fetch_one(_SEL_COMMUNITY_SET_ID))
         if set_row is None:
             return None
         set_id = int(set_row["id"])
     content_locale = locale or WORKING_LOCALE
     version = await db_call(
         lambda: fetch_one(
-            select(rule_set_versions).where(
-                rule_set_versions.c.rule_set_id == set_id,
-                rule_set_versions.c.locale == content_locale,
-                rule_set_versions.c.status == "published",
-            )
+            _SEL_PUBLISHED_VERSION.params(set_id=set_id, locale=content_locale)
         )
     )
     if version is None and content_locale != WORKING_LOCALE:
         version = await db_call(
             lambda: fetch_one(
-                select(rule_set_versions).where(
-                    rule_set_versions.c.rule_set_id == set_id,
-                    rule_set_versions.c.locale == WORKING_LOCALE,
-                    rule_set_versions.c.status == "published",
-                )
+                _SEL_PUBLISHED_VERSION.params(set_id=set_id, locale=WORKING_LOCALE)
             )
         )
     if version is None:
         return None
     # * These reads depend only on set_id and the now-known version id. They
-    # * are independent pure reads, so one gather avoids three serial pool
+    # * are independent pure reads, so one gather avoids four serial pool
     # * checkouts on every rules-menu tap.
-    items, categories, set_doc = await asyncio.gather(
-        db_call(
-            lambda: fetch_all(
-                select(rule_items)
-                .where(rule_items.c.rule_set_version_id == version["id"])
-                .order_by(rule_items.c.sort_order, rule_items.c.id)
-            )
-        ),
-        db_call(
-            lambda: fetch_all(
-                select(rule_categories)
-                .where(rule_categories.c.rule_set_id == set_id)
-                .order_by(rule_categories.c.sort_order, rule_categories.c.id)
-            )
-        ),
-        db_call(lambda: fetch_one(select(rule_sets).where(rule_sets.c.id == set_id))),
+    version_id = version["id"]
+    items, categories, set_doc, content = await asyncio.gather(
+        db_call(lambda: fetch_all(_SEL_RULE_ITEMS.params(version_id=version_id))),
+        db_call(lambda: fetch_all(_SEL_RULE_CATEGORIES.params(set_id=set_id))),
+        db_call(lambda: fetch_one(_SEL_RULE_SET.params(set_id=set_id))),
+        _category_presentation(set_id, locale),
     )
-    content = await _category_presentation(set_id, locale)
     titles = {str(row["category_key"]): str(row["title"]) for row in categories}
     resolved_categories: list[dict[str, Any]] = []
     for row in categories:
@@ -156,27 +176,7 @@ async def acknowledgement_requirement() -> tuple[int, bool] | None:
     statement avoids loading the whole item and category catalog on every
     join in the primary group.
     """
-    row = await db_call(
-        lambda: fetch_one(
-            select(
-                rule_set_versions.c.id.label("version_id"),
-                rule_sets.c.requires_acknowledgement,
-            )
-            .select_from(
-                rule_set_versions.join(
-                    rule_sets, rule_set_versions.c.rule_set_id == rule_sets.c.id
-                )
-            )
-            .where(
-                rule_sets.c.scope_type == "community",
-                rule_sets.c.is_active.is_(True),
-                rule_set_versions.c.locale == WORKING_LOCALE,
-                rule_set_versions.c.status == "published",
-            )
-            .order_by(rule_set_versions.c.id.desc())
-            .limit(1)
-        )
-    )
+    row = await db_call(lambda: fetch_one(_SEL_ACK_REQUIREMENT))
     if row is None:
         return None
     return int(row["version_id"]), bool(row["requires_acknowledgement"])
@@ -184,25 +184,14 @@ async def acknowledgement_requirement() -> tuple[int, bool] | None:
 
 async def acknowledgement_count(version_id: int) -> int:
     """Return how many users accepted one published version."""
-    row = await db_call(
-        lambda: fetch_one(
-            select(func.count().label("count"))
-            .select_from(rule_acknowledgements)
-            .where(rule_acknowledgements.c.rule_set_version_id == version_id)
-        )
-    )
+    row = await db_call(lambda: fetch_one(_SEL_ACK_COUNT.params(version_id=version_id)))
     return int(row["count"] if row else 0)
 
 
 async def has_acknowledged(version_id: int, user_id: int) -> bool:
     """Return whether one user already accepted this exact version."""
     row = await db_call(
-        lambda: fetch_one(
-            select(rule_acknowledgements.c.id).where(
-                rule_acknowledgements.c.rule_set_version_id == version_id,
-                rule_acknowledgements.c.user_id == user_id,
-            )
-        )
+        lambda: fetch_one(_SEL_HAS_ACK.params(version_id=version_id, user_id=user_id))
     )
     return row is not None
 
