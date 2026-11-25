@@ -11,7 +11,7 @@ import inspect
 import logging
 
 import pytest
-from pyrogram.errors import BadRequest, Forbidden
+from pyrogram.errors import BadRequest, Forbidden, Timedout
 
 from tcbot.modules.helper.messages.replies import applied_summary
 from tcbot.utils import circuit_breaker as _cb
@@ -160,6 +160,29 @@ def test_fan_out_counts_a_wrapper_timeout_against_the_circuit() -> None:
         results = asyncio.run(fan_out([_timeout()]))
         assert isinstance(results[0], TimeoutError)
         assert _cb.telegram._failure_count == before + 1
+    finally:
+        _cb.telegram.reset()
+
+
+def test_fan_out_counts_a_client_rpc_timeout_against_the_circuit() -> None:
+    """Kurigram deadlines are transport stalls, not service answers.
+
+    The client raises Timedout as an RPCError rather than a builtin
+    TimeoutError. Treating it as an answer would close a HALF_OPEN probe and
+    admit a fresh flood while Telegram is still stalling.
+    """
+
+    async def _timeout() -> str:
+        raise Timedout("telemetry.timeout")
+
+    _cb.telegram.reset()
+    _cb.telegram._state = _cb.CircuitState.HALF_OPEN
+    assert _cb.telegram.try_acquire() is True
+    try:
+        results = asyncio.run(fan_out([_timeout()], probe_reserved=True))
+        assert isinstance(results[0], Timedout)
+        assert _cb.telegram.state is _cb.CircuitState.OPEN
+        assert _cb.telegram._failure_count == 1
     finally:
         _cb.telegram.reset()
 

@@ -11,7 +11,8 @@ import inspect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from pyrogram.errors import BadRequest, Forbidden
+from pyrogram.errors import BadRequest, Forbidden, Timedout
+from pyrogram.errors import Timeout as RPCTimeout
 
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.logger import get_logger
@@ -23,6 +24,16 @@ log = get_logger(__name__)
 
 # * Telegram allows 30 msg/s globally; 10 concurrent is safe and fast.
 _MAX_CONCURRENT: int = 10
+
+# * Kurigram reports its own deadlines as RPCError subclasses, not as the
+# * builtin TimeoutError. Both forms are transport stalls and must count
+# * against the breaker; otherwise a HALF_OPEN probe that times out is
+# * mistaken for a healthy service and closes the circuit prematurely.
+_FANOUT_TIMEOUTS: tuple[type[BaseException], ...] = (
+    TimeoutError,
+    Timedout,
+    RPCTimeout,
+)
 
 # * Substrings inside Telegram refusals that indicate the action had nothing
 # * to do: the user was not in the target chat, the chat no longer exists, or
@@ -85,9 +96,9 @@ async def fan_out[T](
 
     Integrates the Telegram circuit breaker: slots that run while the circuit
     is OPEN are skipped immediately (returning a ``CircuitOpenError``) instead
-    of firing a Telegram request that will time out.  TimedOut and
-    NetworkError results trip the circuit; all other exceptions (403, 400,
-    etc.) are treated as expected API refusals and do not affect the circuit.
+    of firing a Telegram request that will time out. Builtin timeouts, network
+    errors, and the client's own RPC timeout errors trip the circuit; API
+    refusals (403, 400, etc.) are expected responses and do not affect it.
 
     Regular failures are returned as list elements instead of raising, but
     ``asyncio.CancelledError`` always propagates so task cancellation (for
@@ -133,25 +144,19 @@ async def fan_out[T](
                 result = await thunk()
                 _cb.telegram.record_success()
                 return result
-            except TimeoutError as exc:
-                # * Callers bound individual deliveries with asyncio.timeout.
-                # * A timeout is a transport stall, so it has to count against
-                # * the circuit even when the client did not raise it itself.
+            except _FANOUT_TIMEOUTS as exc:
+                # * Callers bound individual deliveries with asyncio.timeout,
+                # * and the client raises its own deadline errors. Both are
+                # * transport stalls and have to count against the circuit.
                 _cb.telegram.record_failure()
-                log.debug("fan_out: wrapper timeout (counted against circuit): %s", exc)
+                log.debug("fan_out: timeout (counted against circuit): %s", exc)
                 return exc
             except OSError as exc:
                 # ! CRITICAL: a 400 is an API refusal (user not in chat, chat
-                # ! gone), never
-                # ! congestion. Counting refusals tripped the breaker after 5
-                # ! consecutive fan-out refusals and skipped the remaining
-                # ! groups unenforced. Refusals must not touch the circuit.
-                if isinstance(exc, BadRequest):
-                    _cb.telegram.release_probe(reached_service=True)
-                    log.debug(
-                        "fan_out: API refusal (not counted against circuit): %s", exc
-                    )
-                    return exc
+                # ! gone), never congestion. Kurigram reports refusals as
+                # ! RPCError, not OSError, so none reach this branch. Counting
+                # ! refusals tripped the breaker after five consecutive ones
+                # ! and skipped the remaining groups unenforced.
                 _cb.telegram.record_failure()
                 log.debug("fan_out: network error (counted against circuit): %s", exc)
                 return exc
@@ -159,9 +164,9 @@ async def fan_out[T](
                 _cb.telegram.release_probe()
                 raise
             except Exception as exc:
-                # * The call reached Telegram and came back with an
-                # * application error, so the transport is healthy: a
-                # * HALF_OPEN probe closes instead of stranding the circuit.
+                # * A refusal proves the service answered, so the transport is
+                # * healthy and a HALF_OPEN probe closes instead of stranding
+                # * the circuit. RPC timeouts were settled above.
                 _cb.telegram.release_probe(reached_service=True)
                 log.debug(
                     "fan_out: coroutine failed (not counted against circuit): %s", exc
