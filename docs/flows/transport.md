@@ -258,8 +258,7 @@ hook.
 
 ## Transport tuning
 
-`utils/transport.py` owns the shared budgets: `HTTP_READ_TIMEOUT = 60`,
-`HTTP_WRITE_TIMEOUT = 30`, `HTTP_CONNECT_TIMEOUT = 30`,
-`HTTP_POOL_TIMEOUT = 15`, `TELEGRAM_LOOKUP_TIMEOUT = 3.0`,
-`TELEGRAM_ACTION_TIMEOUT = 20.0`, and `API_POOL_SIZE = 16`. The notification
+`utils/transport.py` owns the two application-level deadlines
+`TELEGRAM_LOOKUP_TIMEOUT = 3.0` and `TELEGRAM_ACTION_TIMEOUT = 20.0`. The
+Kurigram client owns its HTTP timeouts and connection pool. The notification
 worker wraps its card edit in `asyncio.timeout(TELEGRAM_ACTION_TIMEOUT)`.

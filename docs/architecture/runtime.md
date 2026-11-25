@@ -51,10 +51,10 @@ admit, which the enforcement worker uses to size its claims. See
 in UTC, and naive values are assumed UTC before arithmetic. `parse_duration()`
 accepts `s`, `m`, `h`, `d`, `w`, `mo`, and `ye` suffixes with a 100-year cap.
 
-`utils/transport.py` owns `HTTP_READ_TIMEOUT = 60`, `HTTP_WRITE_TIMEOUT = 30`,
-`HTTP_CONNECT_TIMEOUT = 30`, `HTTP_POOL_TIMEOUT = 15`,
-`TELEGRAM_LOOKUP_TIMEOUT = 3.0`, `TELEGRAM_ACTION_TIMEOUT = 20.0`, and
-`API_POOL_SIZE = 16`.
+`utils/transport.py` owns the two application-level deadlines
+`TELEGRAM_LOOKUP_TIMEOUT = 3.0` and `TELEGRAM_ACTION_TIMEOUT = 20.0`. The
+Kurigram client controls its own HTTP timeouts and connection pool, so those
+values are not tuned here.
 
 `prefixes.py` builds Kurigram filters for every configured prefix, handles
 longest-prefix-first matching and optional `@botname` suffixes.

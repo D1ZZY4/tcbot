@@ -2,16 +2,9 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Shared Telegram transport tuning for every runtime entry point."""
+"""Application-level Telegram deadlines used by callers of the client."""
 
 from __future__ import annotations
-
-# * HTTP timeout values for the Kurigram client (seconds).
-# * Raised for Replit: first getMe() response can take >15s on this network.
-HTTP_READ_TIMEOUT: int = 60
-HTTP_WRITE_TIMEOUT: int = 30
-HTTP_CONNECT_TIMEOUT: int = 30
-HTTP_POOL_TIMEOUT: int = 15
 
 # * Budget for a single Telegram lookup (get_chat, get_chat_member).
 # * It belongs with the other transport constants: a lookup is a
@@ -21,9 +14,3 @@ TELEGRAM_LOOKUP_TIMEOUT: float = 3.0
 # * Bound on one Telegram state-changing call (ban, mute, edit). It keeps a
 # * stalled call from holding a worker slot until the transport write timeout.
 TELEGRAM_ACTION_TIMEOUT: float = 20.0
-
-# * Connection pool size for the underlying httpx client (API calls).
-# * Shared by every Kurigram API call, including polling and send/edit paths.
-# * Sized above the fan_out cap (10): one full fan-out plus concurrent
-# * handler traffic must never queue on pool exhaustion.
-API_POOL_SIZE: int = 16
