@@ -28,6 +28,7 @@ fail at load time with an actionable message. The template is
 | `BIND_HOST` | `0.0.0.0` | Listener interface; `127.0.0.1` behind a reverse proxy. |
 | `LOG_LEVEL` | `INFO` | `NOTSET`, `DEBUG`, `INFO`, `WARNING`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`. |
 | `SENTRY_DSN` | empty | Opt-in error monitoring with the observability extra. |
+| `KURIGRAM_WORKERS` | `0` (automatic) | Dispatcher worker count. Automatic sizing uses CPU count and the database pool, capped at 64; it improves throughput under load, not single-update latency. |
 | `MODULES_LOAD` | empty | Comma-separated allowlist of module names. |
 | `MODULES_NO_LOAD` | empty | Comma-separated denylist of module names. |
 

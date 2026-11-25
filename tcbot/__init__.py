@@ -207,6 +207,28 @@ def _int_from_env(key: str, default: int, *, minimum: int | None = None) -> int:
     return value
 
 
+# * Explicit worker override is capped: the application already bounds handler
+# * concurrency, and thousands of dispatcher tasks would only contend for the
+# * same small database pool.
+_KURIGRAM_WORKERS_MAX: int = 64
+
+
+def _workers_from_env() -> int:
+    """Read the optional Kurigram worker override; 0 means automatic sizing."""
+    raw = os.getenv("KURIGRAM_WORKERS", "").strip()
+    if not raw:
+        return 0
+    try:
+        value = int(raw)
+    except ValueError:
+        log.warning("Invalid KURIGRAM_WORKERS, using automatic sizing.")
+        return 0
+    if value < 1:
+        log.warning("KURIGRAM_WORKERS must be positive, using automatic sizing.")
+        return 0
+    return min(value, _KURIGRAM_WORKERS_MAX)
+
+
 def _env_list(key: str) -> list[str]:
     """Read an env var into a stripped list; accepts CSV or a literal list."""
     return parse_list(os.getenv(key, "") or "")
@@ -368,6 +390,7 @@ class Configs:
     mtproto_session: str
     sentry_dsn: str = field(repr=False)
     extra_infra_chats: tuple[int, ...]
+    kurigram_workers: int
 
     def is_primary_group(self, chat_id: int | None) -> bool:
         """Check whether the chat is the main group.
@@ -456,6 +479,7 @@ class Configs:
             mtproto_session=_env_or("MTPROTO_SESSION", "tcbot_mtproto"),
             sentry_dsn=os.getenv("SENTRY_DSN", "").strip(),
             extra_infra_chats=_infra_chat_ids_from_env(),
+            kurigram_workers=_workers_from_env(),
         )
 
 

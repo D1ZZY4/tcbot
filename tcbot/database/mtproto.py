@@ -72,6 +72,21 @@ def _instance_id() -> str:
     return f"{socket.gethostname()}:{os.getpid()}:{secrets.token_hex(4)}"
 
 
+def _worker_count() -> int:
+    """Size the dispatcher without outgrowing the app or the database pool.
+
+    Kurigram's default is 8 workers on a small host. More workers help when
+    many independent chats are active, but every worker can hold a handler
+    and a database connection. The application caps handler concurrency at
+    64, so a larger count only adds idle tasks and threads.
+    """
+    if cfg.kurigram_workers:
+        return cfg.kurigram_workers
+    cpus = os.cpu_count() or 2
+    pool = cfg.db_pool_size + cfg.db_max_overflow
+    return max(8, min(64, cpus * 4, pool * 4))
+
+
 def client() -> Client:
     """Return the shared unstarted bot-token client.
 
@@ -100,6 +115,7 @@ def client() -> Client:
         api_hash=cfg.api_hash,
         bot_token=cfg.bot_token,
         storage_engine=PostgresStorage(cfg.mtproto_session),
+        workers=_worker_count(),
     )
     return _client
 

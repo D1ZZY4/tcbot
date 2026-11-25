@@ -47,6 +47,7 @@ def _load(monkeypatch: pytest.MonkeyPatch, **env: str) -> Configs:
         "API_ID",
         "API_HASH",
         "LOG_LEVEL",
+        "KURIGRAM_WORKERS",
     ):
         monkeypatch.delenv(key, raising=False)
     for key, value in base.items():
@@ -176,6 +177,16 @@ def test_prefixes_are_immutable_and_defaulted(monkeypatch: pytest.MonkeyPatch) -
     loaded = _load(monkeypatch)
     assert loaded.prefixes == ("/", "!", ".")
     assert _load(monkeypatch, PREFIXES="['!', '?']").prefixes == ("!", "?")
+
+
+def test_kurigram_worker_override_is_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit worker count cannot exceed the application's own cap."""
+    assert _load(monkeypatch, KURIGRAM_WORKERS="16").kurigram_workers == 16
+    assert _load(monkeypatch, KURIGRAM_WORKERS="999").kurigram_workers == 64
+    assert _load(monkeypatch, KURIGRAM_WORKERS="bad").kurigram_workers == 0
+    assert _load(monkeypatch).kurigram_workers == 0
 
 
 def test_config_is_frozen(monkeypatch: pytest.MonkeyPatch) -> None:
