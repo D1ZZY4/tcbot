@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from io import BytesIO
 
+from pyrogram import ContinuePropagation
+
 from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
 from tcbot.modules.helper.context import Ctx
@@ -342,6 +344,13 @@ class RulesDraftEditor:
         document = msg.document if msg is not None else None
         if document is None or msg is None:
             return WAITING_MARKDOWN
+        chat = getattr(ctx, "effective_chat", None)
+        chat_type = getattr(getattr(chat, "type", None), "value", None)
+        if (
+            chat_type != "private"
+            or flow_scope(ctx).get("rules_step") != "markdown_upload"
+        ):
+            raise ContinuePropagation()
         opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END
@@ -459,6 +468,15 @@ class RulesDraftEditor:
         user = ctx.effective_user
         if msg is None or user is None or not msg.text:
             return ConversationHandler.END
+        chat = getattr(ctx, "effective_chat", None)
+        chat_type = getattr(getattr(chat, "type", None), "value", None)
+        scope = flow_scope(ctx)
+        # * These text handlers are registered flat in group 0. Without a
+        # * private editor session and an open typed step, the update belongs
+        # * to another flow; checking permission here would post a refusal
+        # * into an ordinary group conversation.
+        if chat_type != "private" or not scope.get("rules_step"):
+            raise ContinuePropagation()
         opened = await set_and_draft(ctx)
         if opened is None:
             return ConversationHandler.END

@@ -96,6 +96,7 @@ def test_typed_item_writes_to_the_fresh_draft(monkeypatch: pytest.MonkeyPatch) -
     update = SimpleNamespace(
         effective_message=SimpleNamespace(text="https://example.com/rule"),
         effective_user=SimpleNamespace(id=7),
+        effective_chat=SimpleNamespace(id=7, type=SimpleNamespace(value="private")),
         user_data=scope,
     )
     asyncio.run(rules_editor_draft.rules_draft_editor.on_text(cast("Any", update)))
@@ -138,6 +139,7 @@ def test_typed_dash_skips_the_reference_url(monkeypatch: pytest.MonkeyPatch) -> 
     update = SimpleNamespace(
         effective_message=SimpleNamespace(text="-"),
         effective_user=SimpleNamespace(id=7),
+        effective_chat=SimpleNamespace(id=7, type=SimpleNamespace(value="private")),
         user_data=scope,
     )
     asyncio.run(rules_editor_draft.rules_draft_editor.on_text(cast("Any", update)))

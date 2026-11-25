@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from pyrogram import filters
+from pyrogram import ContinuePropagation, filters
 from pyrogram.types import CallbackQuery, Message
 
 from tcbot.modules.helper import decorators, guards
@@ -27,9 +27,11 @@ from tcbot.modules.helper.messages import (
     send_text,
 )
 from tcbot.modules.helper.pipelines.stats_panels import (
+    _SEARCH_QUERY_MAX,
     CHAT_KEY,
     MSG_KEY,
     RESULTS_KEY,
+    SEARCH_DEADLINE_KEY,
     SEARCH_KEY,
     Stats,
 )
@@ -37,6 +39,7 @@ from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import ALL_PREFIXES_CMD_FILTER, build_prefixed_filters
+from tcbot.utils.time_and_date import monotonic
 
 if TYPE_CHECKING:
     from tcbot.database.users_roles import RoleName
@@ -208,7 +211,12 @@ async def on_stats_bans_search(ctx: Ctx) -> None:
 async def on_bans_search_input(ctx: Ctx) -> None:
     """Free-text query message handler; only reacts when the search panel is active."""
     if ctx.user_data is None or not ctx.user_data.get(SEARCH_KEY):
-        return
+        raise ContinuePropagation()
+    deadline = ctx.user_data.get(SEARCH_DEADLINE_KEY)
+    if not isinstance(deadline, int | float) or monotonic() >= deadline:
+        # * A prompt from an earlier panel must not own a later group message.
+        Stats.clear_search(ctx)
+        raise ContinuePropagation()
     msg = ctx.effective_message
     if msg is None:
         return
@@ -225,6 +233,11 @@ async def on_bans_search_input(ctx: Ctx) -> None:
         ctx.user_data[SEARCH_KEY] = True
         return
     query = (msg.text or "").strip()
+    if not query or len(query) > _SEARCH_QUERY_MAX:
+        # * Keep the prompt live but do not turn ordinary text into a query
+        # * and do not delete the sender's message.
+        ctx.user_data[SEARCH_KEY] = True
+        return
 
     results, _deleted = await asyncio.gather(
         Stats.search_run(query),
@@ -356,6 +369,7 @@ async def on_stats_main(ctx: Ctx) -> None:
     if q is None:
         return
     tapper = ctx.effective_user
+    Stats.clear_search(ctx)
     await ack_and_render(
         q,
         Stats.main(
@@ -375,6 +389,7 @@ async def on_stats_admins(ctx: Ctx) -> None:
     locale = await _require_staff_pane(q, ctx)
     if locale is None:
         return
+    Stats.clear_search(ctx)
     await ack_and_render(q, Stats.staff_roster(locale, bot=ctx.bot))
 
 
@@ -396,6 +411,7 @@ async def on_stats_users(ctx: Ctx) -> None:
     )
     if locale is None:
         return
+    Stats.clear_search(ctx)
     await ack_and_render(q, Stats.users_list(page, locale))
 
 
@@ -414,6 +430,7 @@ async def on_stats_chats(ctx: Ctx) -> None:
         await q.answer()
         return
     page = numbers[0]
+    Stats.clear_search(ctx)
     await ack_and_render(q, Stats.chats_list(page, locale))
 
 
@@ -451,9 +468,10 @@ def _deferred_message_handler(filter_, callback):
     return handler
 
 
-# * The search prompt consumes free text in its own group. In group 0 it
-# * would be registered before the later-sorted warn conversation and swallow
-# * the reason the moderator types after /tcwarn.
+# * The search prompt uses a later group so group-0 flows get the first
+# * chance to claim free text. Kurigram still visits every group unless a
+# * handler stops propagation, so ownership is checked again inside the
+# * callback together with a short prompt deadline.
 _search_input_handler = _deferred_message_handler(
     filters.text & ~ALL_PREFIXES_CMD_FILTER,
     on_bans_search_input,

@@ -31,7 +31,7 @@ from tcbot.utils.dispatch import gather_bounded, throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, divider, esc, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page, paginate
-from tcbot.utils.time_and_date import date_or_unknown, time_or_unknown
+from tcbot.utils.time_and_date import date_or_unknown, monotonic, time_or_unknown
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 if TYPE_CHECKING:
@@ -43,7 +43,13 @@ log = get_logger(__name__)
 # * (32768 UTF-8 characters, 500 blocks) while staying easy to scan.
 _PAGE_SIZE = 5
 _SEARCH_LIMIT = 30
+# * A search prompt owns the next typed line only for a short window. The
+# * conversation store lives for an hour, so a bare boolean would capture
+# * unrelated group text long after the panel was replaced or abandoned.
+_SEARCH_INPUT_TTL_S: float = 120.0
+_SEARCH_QUERY_MAX = 100
 SEARCH_KEY = "stats_search_active"
+SEARCH_DEADLINE_KEY = "stats_search_deadline"
 RESULTS_KEY = "stats_search_results"
 MSG_KEY = "stats_search_msg_id"
 CHAT_KEY = "stats_search_chat_id"
@@ -501,6 +507,7 @@ class SearchViews:
             return blocks(text), cls._search_panel_btn(locale)
         ud = cast("dict[str, object]", ctx.user_data)
         ud[SEARCH_KEY] = True
+        ud[SEARCH_DEADLINE_KEY] = monotonic() + _SEARCH_INPUT_TTL_S
         ud[MSG_KEY] = msg.id
         ud[CHAT_KEY] = chat_id_of(msg.chat)
         return blocks(text), cls._search_panel_btn(locale)
@@ -509,7 +516,14 @@ class SearchViews:
     def clear_search(ctx: Ctx) -> None:
         """Forget any in-flight search context."""
         ud = cast("dict[str, object]", ctx.user_data)
-        for key in (SEARCH_KEY, RESULTS_KEY, MSG_KEY, CHAT_KEY, "stats_last_query"):
+        for key in (
+            SEARCH_KEY,
+            SEARCH_DEADLINE_KEY,
+            RESULTS_KEY,
+            MSG_KEY,
+            CHAT_KEY,
+            "stats_last_query",
+        ):
             ud.pop(key, None)
 
     @classmethod
