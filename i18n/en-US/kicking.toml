@@ -28,10 +28,9 @@ body = """
 `/tck 123456789` bot will ask for reason
 Or reply to a message and run `/tck`."""
 
-# Runtime strings for the kick executor (kicking_flow.py).
-# [warn]/[summary]/[error] render as rich HTML.
-# Placeholders: {user} pre-formatted user reference, {reason} raw reason
-# text, {rejoin}/{warning} prebuilt lines.
+# Runtime strings for the kick executor (kick_executor.py).
+# [rejoin], [warn], [summary], and [error] render as rich HTML.
+# Placeholders: {user} pre-formatted user reference.
 
 [rejoin]
 body = "They can rejoin via invite link."

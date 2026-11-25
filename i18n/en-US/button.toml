@@ -45,6 +45,7 @@ next = "Next ↦"
 
 # Community rules and the editor.
 edit_draft = "✎ Edit Draft"
+rules_section = "Section {n}"
 add_category = "+ Add Category"
 add_item = "+ Add Item"
 upload_md = "⇪ Upload .md"

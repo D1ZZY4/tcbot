@@ -52,6 +52,17 @@ def test_keyboard_builders_take_a_locale() -> None:
     assert not missing, f"keyboard builders without locale: {missing}"
 
 
+def test_rules_section_fallback_label_is_localized() -> None:
+    """An untitled section must not show an English label to every reader."""
+    for locale in ("en-US", "id-ID"):
+        markup = rules_buttons.editor_sections_btn([{"id": 5}], locale)
+        label = markup.inline_keyboard[0][0].text
+        assert label == t("button.rules_section", locale, n=5, plain=True)
+    assert t("button.rules_section", "en-US", n=5) != t(
+        "button.rules_section", "id-ID", n=5
+    )
+
+
 def test_rules_editor_toolbar_follows_the_reader_locale() -> None:
     """Formatting buttons come from the catalog, not hardcoded English."""
     en_labels: list[str] = []

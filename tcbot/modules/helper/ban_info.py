@@ -106,14 +106,15 @@ async def build_ban_detail(
         mention_button(aid, admin_fname or str(aid)),
         t("checking.ban_info.admin_id", locale, id=Safe(code(str(aid)))),
     ]
-    # * Reason is moderator free text: pass raw so the engine escapes it at
-    # * render time (Safe would inject markup or break parsing).
+    # * Moderator reason is free text: pass raw so the engine escapes it at
+    # * render time. The no-reason fallback is trusted catalog markup and is
+    # * wrapped in Safe by the caller.
     detail_items = [
         t(
             "checking.ban_info.reason",
             locale,
             reason=ban.get("reason", None)
-            or t("checking.events.no_reason", locale, plain=True),
+            or Safe(t("checking.events.no_reason", locale)),
         ),
         t("checking.ban_info.ban_id", locale, id=Safe(code(ban.get("ban_id", "")))),
         t("checking.ban_info.date", locale, date=Safe(date_str), time=Safe(time_str)),
@@ -190,8 +191,7 @@ async def build_ban_summary(
         community=cfg.community_name,
         user=Safe(user_ref(user_id, user_fname, user_uname)),
         id=Safe(code(str(user_id))),
-        reason=ban.get("reason", None)
-        or t("checking.events.no_reason", locale, plain=True),
+        reason=ban.get("reason", None) or Safe(t("checking.events.no_reason", locale)),
         admin=Safe(user_ref(aid, admin_fname, admin_uname)),
         date=Safe(date_str),
         time=Safe(time_str),
