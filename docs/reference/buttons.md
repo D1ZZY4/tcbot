@@ -48,11 +48,12 @@ Older clients ignore the style field, so color is purely additive.
 ### Inline keyboard fallback
 
 `buttons_from_markup(reply_markup)` is all-or-nothing: one cell that cannot map keeps
-the whole keyboard inline. A cell fails to map when its `callback_data` exceeds
-64 bytes, it uses an action with no rich equivalent, its text is not a string,
-or it has neither callback data nor a URL. Payloads using `blocks` instead of
-`html` are not embedded. This is a transport fallback only; there is no
-parse-mode send path.
+the whole keyboard inline. Every cell action above has a rich equivalent, so a
+cell fails to map only when its `callback_data` exceeds 64 bytes, its text is not
+a string, or it carries an action outside the mapped set. A cell with no action
+is rendered as a disabled rich button. Payloads using `blocks` instead of `html`
+are not embedded. This is a transport fallback only; there is no parse-mode send
+path.
 
 ### Symbol vocabulary
 
@@ -177,13 +178,16 @@ collision suffix stay within 64 bytes.
 | `stats_main_btn(show_staff, show_users)` | Roster, Bans, Chats (blue); Users (blue, Owner only) | blue |
 | `stats_search_row` | `stats_bans_search` | blue |
 | `stats_search_panel_btn` | `stats_search_cancel` | red |
-| `stats_search_results_btn` | Numbered hits, New Search (blue), Cancel (red) | mixed |
-| `paged_drill_btn`, `stats_list_btn` | Numbered grid (blue), `nav_row` (none), Back (green) | mixed |
+| `stats_search_results_btn` | Legacy numbered hits; no production caller | mixed |
+| `paged_drill_btn`, `stats_list_btn` | Legacy numbered grid; no production caller | mixed |
 | `stats_list_nav_btn` | `nav_row` (Prev/Next), optional Search row, Back (green); no numbered buttons | mixed |
 | `stats_search_results_nav_btn` | New Search (blue), Back (green) | mixed |
 
-Item callbacks may carry a stable entity id so a list mutation between render
-and tap cannot show a different record. Legacy three-part callbacks still work.
+`stats_list_nav_btn` and `stats_search_results_nav_btn` are the live table
+builders. The numbered builders remain only as exported legacy helpers and for
+their keyboard tests. Item callbacks may carry a stable entity id so a list
+mutation between render and tap cannot show a different record. Legacy
+three-part callbacks still work.
 
 ## Menus, help, and language (`menus.py`, `topics.py`, `language.py`)
 

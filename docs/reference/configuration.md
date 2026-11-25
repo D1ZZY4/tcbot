@@ -42,9 +42,12 @@ fail at load time with an actionable message. The template is
 | `APPEALS` | unset | Appeal destination. |
 | `INFRA_CHAT_IDS` | `[]` | Extra deployment-owned chat ids refused by the connect paths; list or CSV, negative ids only. |
 
-All four destinations accept `chat_id` or `chat_id/thread_id`. A thread id must
-be positive; a non-positive segment is dropped. Community menu links derive
-from these ids through `rich/link.py`; no static URL variables remain.
+`PROOFS`, `LOGS`, `LOGS_ERRORS`, and `APPEALS` accept `chat_id` or
+`chat_id/thread_id`. A thread id must be positive; a non-positive segment is
+dropped. `MAIN_GROUP` and `MAIN_CHANNEL` take a plain negative chat id only: a
+thread suffix is invalid there and resolves to the unset value. Community menu
+links derive from these ids through `rich/link.py`; no static URL variables
+remain.
 
 ## Database and cache
 

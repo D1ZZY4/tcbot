@@ -23,8 +23,19 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import os
 import statistics
 import time
+
+# * The benchmark opens no connection, but importing the config still requires
+# * the bot's mandatory settings. Supply the same inert placeholders the test
+# * suite uses so the documented command works on a fresh checkout.
+os.environ.setdefault("BOT_TOKEN", "000000:dummy-token-for-lint000000000000000")
+os.environ.setdefault(
+    "DATABASE_URL", "postgresql://tcbot:dummy@127.0.0.1:1/tcbot_placeholder"
+)
+os.environ.setdefault("OWNER_ID", "1")
+os.environ.setdefault("PROOFS", "-1000000000001")
 
 from tcbot import cfg
 from tcbot.database import engine as engine_mod

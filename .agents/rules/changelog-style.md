@@ -308,15 +308,14 @@ All notable changes to this project are documented here.
 
 ## Releases
 
-### v2.x
+### v7.x
 
-- [2.1.0](docs/releases/v2.1.0.md)
-- [2.0.0](docs/releases/v2.0.0.md)
+- [7.1.0](docs/releases/v7.1.0.md)
 
-### v1.x
+### v6.x
 
-- [1.5.0](docs/releases/v1.5.0.md)
-- [1.0.0](docs/releases/v1.0.0.md)
+- [6.9.0](docs/releases/v6.9.0.md)
+- [6.8.0](docs/releases/v6.8.0.md)
 ```
 
 The example categories are illustrative. Include only categories containing actual entries.
@@ -409,7 +408,7 @@ Briefly describe the purpose and most significant outcomes of this release.
 
 ---
 
-**Previous release:** [vX.Y.Z](vX.Y.Z.md)
+**Previous release:** [v6.9.0](v6.9.0.md)
 
 **Full changes:** [Compare previous...current](https://github.com/OWNER/REPOSITORY/compare/PREVIOUS...CURRENT)
 ```

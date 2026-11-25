@@ -37,8 +37,13 @@ The mute conversation is built by `mute_conversation()` with
 `rules_enabled=True`, and an escape filter so `/tcunmute` is not swallowed as a
 reason.
 
-Accepted duration suffixes are `s`, `m`, `h`, `d`, `w`, `mo`, and `ye`, with a
-100-year cap. Zero duration is rejected instead of becoming a permanent mute.
+Accepted duration suffixes are `s`, `m`, `h`, `d`, `w`, `mo`, and `ye`. Telegram
+treats a restriction longer than 366 days as indefinite, so the parser rejects
+anything above 366 days; for example `2ye` is refused and, because it stays in
+the reason text, produces a permanent mute rather than a two-year one. Timed
+mutes shorter than 60 seconds are raised to the 60-second floor that Telegram
+needs to apply a finite restriction. Zero duration is rejected instead of
+becoming a permanent mute.
 
 ## Conversation states and callbacks
 

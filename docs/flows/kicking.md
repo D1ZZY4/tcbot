@@ -8,8 +8,8 @@ durable reconcile run that repairs a failed rejoin. The shared spine is in
 ## Scope and entry
 
 A kick acts in the current chat only and is implemented as a Telegram ban
-immediately followed by an unban with `only_if_banned=True`, which lets the user
-rejoin. Because Telegram rejects ban attempts in private chats, `cmd_kick` in
+immediately followed by an unban, which lets the user rejoin. Because Telegram
+rejects ban attempts in private chats, `cmd_kick` in
 `modules/kick.py` resolves its target with `allow_private=False`. The decorators
 are `ratelimiter(THROTTLE_MODERATION)`, `basic_mod_only` (moderator tier), and
 `log_execution`.
@@ -80,7 +80,7 @@ sequenceDiagram
     Flow->>Bot: demote_before_enforcement trigger kick
     Flow->>Bot: ban_chat_member in the current chat
     par rejoin and audit
-        Flow->>Bot: unban_chat_member only_if_banned
+        Flow->>Bot: unban_chat_member for the kicked user
     and
         Flow->>Bot: send kick log with proof button
     end

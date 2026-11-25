@@ -126,8 +126,10 @@ those Kurigram cell types, so normal keyboards ship as rich buttons.
 | Condition | Result |
 |---|---|
 | `callback_data` longer than 64 bytes (`_CALLBACK_MAX_BYTES = 64`) | Whole keyboard stays inline. |
-| Cell with `web_app`, `login_url`, `switch_inline_query*`, `copy_text`, or `disabled` | `button_from_cell()` returns `None`; whole keyboard stays inline. |
-| Cell without string `text`, or with neither `callback_data` nor `url` | `button_from_cell()` returns `None`; whole keyboard stays inline. |
+| `web_app`, `login_url`, `switch_inline_query*`, `copy_text`, or `disabled` cell | Converted to the matching rich button type. |
+| Cell without string `text` | `button_from_cell()` returns `None`; whole keyboard stays inline. |
+| Cell with an action that is not one of the mapped types | `button_from_cell()` returns `None`; whole keyboard stays inline. |
+| Cell with no action at all | Rendered as a disabled rich button. |
 | Unsupported Kurigram style value | Style is dropped to `None`; the button still converts. |
 | Payload has `blocks` rather than `html` | `_message_with_buttons()` does not embed; `reply_markup` stays inline. |
 | No markup at all | No buttons in either representation. |
@@ -186,8 +188,9 @@ on `:` and return `None` on malformed payloads.
 No parse mode is selected anywhere in the application. `reply_rich`,
 `safe_edit`, `safe_edit_cb`, `safe_edit_message`, and `cb_error_edit` accept a
 `parse_mode` argument and discard it. Direct Kurigram fallback calls pass no parse
-mode; some appeal call sites pass `parse_mode=None` explicitly. There is no
-application-level default parse-mode setting in `__main__.py`.
+mode; the decided-appeal card closure is the one plain-text edit and passes
+`parse_mode=None` explicitly, as traced in [Appeals](appeals.md#durable-card-edits).
+There is no application-level default parse-mode setting in `__main__.py`.
 
 User-facing wording comes from `t()` in `utils/i18n.py`, which owns the `Safe`
 marker and the shared markup helpers `esc`, `bold`, `italic`, `underline`,

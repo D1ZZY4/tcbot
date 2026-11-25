@@ -29,7 +29,8 @@ Callback-only panels are listed at the end.
 
 | Module | Commands | Access |
 |---|---|---|
-| `admins.py` | `/tcpromote`, `/tcp`, `/tcsetrole`, `/tcdemote`, `/tcd`, `/tcpromoterequests`, `/tcreqs`, `/tcpromotelist`, `/tcplist` | Staff and Owner. |
+| `admins.py` | `/tcpromote`, `/tcp`, `/tcsetrole`, `/tcdemote`, `/tcd`, `/tcpromotelist`, `/tcplist` | Staff and Owner. |
+| `admins.py` | `/tcpromoterequests`, `/tcreqs` | Anyone; opens a self-request to the Owner and refuses callers who already hold a role. |
 | `admins.py` | `/transferowner`, `/tfowner` | Owner only. |
 | `admins.py` | `promo_approve:*`, `promo_reject:*`, `promo_role:*`, `demote_confirm:*` callbacks | Owner for approvals; staff for prompts. |
 

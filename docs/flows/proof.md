@@ -14,7 +14,7 @@ shapes count as evidence:
 
 ```python
 PROOF_MEDIA_FILTER = (
-    filters.PHOTO | filters.VIDEO | filters.ANIMATION | filters.Document.ALL
+    filters.photo | filters.video | filters.animation | filters.document
 )
 ```
 

@@ -10,8 +10,8 @@ edit, and the unban continuation. The authorization gate is in
 
 | Entry | Filter or handler | Gate |
 |---|---|---|
-| Private deep link | `_APPEAL_START_CMDS` in `modules/appeals.py` matches `^/start\s+appeal_{REF_PATTERN}$` with `filters.ChatType.PRIVATE` | `appeal.build_handler`, entry `_on_entry`. |
-| Main-group tag | `MessageHandler(filters.TEXT & ~ALL_PREFIXES_CMD_FILTER & filters.Regex(r"(?i)^\s*#appeal"), on_group_appeal)` | `cfg.is_primary_group(chat.id)`, then the sender's active ban. |
+| Private deep link | `_APPEAL_START_CMDS` in `modules/appeals.py` matches `^/start\s+appeal_{REF_PATTERN}$` with `filters.private` | `appeal.build_handler`, entry `_on_entry`. |
+| Main-group tag | `MessageHandler(filters.text & ~ALL_PREFIXES_CMD_FILTER & filters.regex(r"(?i)^\s*#appeal"), on_group_appeal)` | `cfg.is_primary_group(chat.id)`, then the sender's active ban. |
 | Staff decision | `CallbackQueryHandler(on_appeal_decision, pattern=r"^appeal_(approve|reject)_\S+$")` | `THROTTLE_STAFF`, then `AppealReviewMixin.on_decision`. |
 
 `REF_PATTERN` is `r"[a-z0-9]{10,32}"`, and `_ID_RE` wraps it as

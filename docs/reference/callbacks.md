@@ -19,6 +19,7 @@ were formerly in a separate button-styles reference.
 | Kick, mute, warn | `WAITING_RULES_NOTE` | 3 | `pipelines/mod_action_steps.py` |
 | Rules editor | `WAITING_EDITOR_MENU` | 0 | `pipelines/rules_editor.py` |
 | Rules editor | `WAITING_CONFIRM_DISCARD` | 5 | `pipelines/rules_editor.py` |
+| Rules editor | `WAITING_MARKDOWN` | 6 | `pipelines/rules_editor.py` |
 | Appeal | `WAITING_APPEAL` | 0 | `pipelines/appeal_submit.py` |
 
 `check_panels.py`, `stats_panels.py`, and other flows define no `WAITING_*` state.
@@ -81,8 +82,8 @@ two-part shapes remain valid.
 |---|---|---|
 | `rules_ack:<version>:<member>` | `buttons/rules.py::ack_btn` | `rules.py`. |
 | `rules_show:<key>` | `buttons/rules.py::rules_index_btn` | `rules.py`. |
-| `rules_index:<n>`, `rules_section:<n>`, `rules_prev:<n>`, `rules_next:<n>` | `buttons/rules.py::rules_index_btn`, `category_sections_btn`, `rules_page_btn` | `rules.py` paginated topic index. |
-| `rules_menu`, `rules_page:<n>` | Legacy keyboard builders | `rules.py` stale-tap handlers. |
+| `rules_index:<n>`, `rules_section:<n>` | `buttons/rules.py::rules_index_btn`, `category_sections_btn` | `rules.py` paginated topic index. |
+| `rules_prev:<n>`, `rules_next:<n>`, `rules_menu`, `rules_page:<n>` | Retired keyboard builders | `rules.py` stale-tap handlers; the live menu uses `rules_index:<n>`. |
 | `rules_edit_draft`, `rules_panel`, `rules_preview`, `rules_publish`, `rules_upload`, `rules_discard` | `editor_panel_btn`, `categories_btn` | `rules_editor.py` menu state. |
 | `rules_discard_yes`, `rules_discard_no` | `buttons/rules.py::confirm_btn` | `rules_editor.py` discard state. |
 | `rules_cat:<key>`, `rules_cat_add`, `rules_cat_rename:<key>`, `rules_cat_up:<key>`, `rules_cat_down:<key>`, `rules_cat_del:<key>` | `buttons/rules.py::categories_btn` | `rules_editor.py` menu state. |

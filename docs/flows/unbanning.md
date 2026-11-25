@@ -123,7 +123,7 @@ flowchart TD
     SUPPORTED -->|yes| NEWER{newer_active}
     NEWER -->|yes| CANCEL
     NEWER -->|no| TARGETS[claim_targets bounded by headroom]
-    TARGETS --> FAN[fan_out unban_chat_member only_if_banned]
+    TARGETS --> FAN[fan_out unban_chat_member per group]
     FAN --> RECORD[_record_target per group]
     RECORD --> REPORT[run_report and delivery_outcome]
 ```

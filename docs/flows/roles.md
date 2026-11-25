@@ -15,10 +15,10 @@ contract is in [Permissions](permissions.md); the tier table itself is owned by
 | `ROLE_ALIASES` | `admin`, `developer`, `dev`, `moderator`, `mod` |
 | `RoleName` | `Literal["owner", "admin", "developer", "moderator"]` |
 
-`set_role()` rejects anything outside `VALID_ROLES`, because `get_effective_role()`
-returns the stored value verbatim and a hand-edited `"admin"` or `"owner"` row
-would grant real privilege. `role_rank()` maps an unknown stored value to `0`,
-and `get_effective_role()` ignores any stored role outside `ROLE_RANK`.
+`set_role()` rejects anything outside `VALID_ROLES`. `get_effective_role()`
+does not return a stored value verbatim: a value outside `ROLE_RANK` is logged
+and treated as no role, so a hand-edited `"admin"` or `"owner"` row cannot grant
+privilege. `role_rank()` maps an unknown stored value to `0`.
 
 ## Direct promotion versus queued request
 

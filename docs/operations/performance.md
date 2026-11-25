@@ -15,9 +15,9 @@ pair while leaving other conversations concurrent. A ConversationHandler
 therefore sees one update at a time for one moderator, but a flood in one group
 does not block the rest of the federation.
 
-The global rate-limit handler runs at handler group `-1`: one bucket for
-commands and one for callback presses, with the Owner exempt. Per-handler
-`ratelimiter()` tiers add a second, independent budget. See
+Rate limits are applied by the per-handler `ratelimiter()` tiers, one bucket
+per user and wrapped handler, with the current Owner exempt. Ordinary chat
+messages are not throttled by a global handler. See
 [bounded dispatch and breakers](../architecture/runtime.md#bounded-dispatch-and-breakers).
 
 ## Bounded fan-out
@@ -30,8 +30,10 @@ integrates the Telegram circuit breaker, and always propagates cancellation.
 touching the breaker.
 
 `count_transient_errors()` and friends turn the result list into operator
-counts. Benign refusals such as `USER_NOT_PARTICIPANT` or `CHAT_NOT_FOUND` are
-not reported as failed groups, because there was nothing to enforce.
+counts for moderation. There, benign refusals such as `USER_NOT_PARTICIPANT`
+or `CHAT_NOT_FOUND` are not reported as failed groups, because there was
+nothing to enforce. `/tcbroadcast` deliberately differs: it promises delivery,
+so it counts every failed send, including benign refusals, in its Failed line.
 
 Circuit breakers open after five consecutive transient failures and admit one
 probe after 60 seconds. Workers pause entirely while the breaker is open so a

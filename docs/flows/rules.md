@@ -186,9 +186,11 @@ permission the step is skipped.
 Drafts and published data live in `rule_sets`, `rule_set_versions`,
 `rule_categories`, `rule_category_content`, `rule_items`,
 `rule_publication_runs`, `rule_publications`, and `rule_acknowledgements`.
-Localized category labels and descriptions are seeded into
-`rule_category_content` and resolved for the reader's locale on every public
-rules read. Published versions are immutable; every mutation touches a draft.
+Localized category labels and descriptions are read from
+`rule_category_content` (one row per category and locale when present), with the
+stored category title as fallback; no automatic writer seeds those rows. The
+public menu resolves them for the reader's locale on every public rules read.
+Published versions are immutable; every mutation touches a draft.
 Publication commits to the database before touching Telegram.
 See [Persistence](persistence.md) for the shared write boundary.
 
