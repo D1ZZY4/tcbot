@@ -631,45 +631,67 @@ _SEND_WINDOW: float = 60.0
 _send_window_start: float = 0.0
 _sent_in_window: int = 0
 _suppressed_in_window: int = 0
+# * Deliveries run as separate tasks on one loop, and the reporter also
+# * accepts cross-thread hand-off. The window counters are read and reserved
+# * under this lock so concurrent reports cannot claim the same budget slot.
+# * The lock is never held across an await.
+_send_lock = threading.Lock()
 
 
 async def _ship_throttled(payload: dict[str, Any]) -> None:
-    """Send a rich report to LOG_ERRORS within budget, else count for summary."""
+    """Send a rich report to LOG_ERRORS within budget, else count for summary.
+
+    The window decision and the slot reservation are atomic. A failed send
+    releases its slot and adds the incident to the next rollover summary so
+    neither the budget nor the incident count is lost.
+    """
     global _send_window_start, _sent_in_window, _suppressed_in_window
     if not _bot or not _chat_id:
         return
-    now = monotonic()
-    if now - _send_window_start >= _SEND_WINDOW:
-        _send_window_start = now
-        _sent_in_window = 0
-        if _suppressed_in_window:
-            suppressed = _suppressed_in_window
-            _suppressed_in_window = 0
-            try:
-                from tcbot.modules.helper.rich.msg import (  # noqa: PLC0415
-                    html_message,
-                    send_rich,
+    summary: str | None = None
+    suppressed_count: int = 0
+    reserved_window: float = 0.0
+    with _send_lock:
+        now = monotonic()
+        if now - _send_window_start >= _SEND_WINDOW:
+            _send_window_start = now
+            _sent_in_window = 0
+            if _suppressed_in_window:
+                suppressed_count = _suppressed_in_window
+                summary = (
+                    f"Error reporter: {suppressed_count} further error(s) "
+                    f"suppressed in the last {_SEND_WINDOW:.0f}s window."
                 )
+                _suppressed_in_window = 0
+        if _sent_in_window >= _SEND_BUDGET:
+            _suppressed_in_window += 1
+            return
+        # * Reserve before the await; a failed send releases the slot below
+        # * only if the window has not rolled over while it was in flight.
+        _sent_in_window += 1
+        reserved_window = _send_window_start
 
-                await send_rich(
-                    _bot,
-                    _chat_id,
-                    html_message(
-                        f"Error reporter: {suppressed} further error(s) "
-                        f"suppressed in the last {_SEND_WINDOW:.0f}s window."
-                    ),
-                    message_thread_id=_thread_id,
-                )
-            except Exception as exc:
-                # * The summary is best effort: a failed send must not drop
-                # * the current report that triggered this rollover.
-                log.warning("Failed to ship error summary to LOG_ERRORS: %s", exc)
-    if _sent_in_window >= _SEND_BUDGET:
-        _suppressed_in_window += 1
-        return
+    from tcbot.modules.helper.rich.msg import (  # noqa: PLC0415
+        html_message,
+        send_rich,
+    )
+
+    if summary is not None:
+        try:
+            await send_rich(
+                _bot,
+                _chat_id,
+                html_message(summary),
+                message_thread_id=_thread_id,
+            )
+        except Exception as exc:
+            # * The summary is best effort, but its count is not: a failed
+            # * rollover send must not erase the incidents it summarised.
+            log.warning("Failed to ship error summary to LOG_ERRORS: %s", exc)
+            with _send_lock:
+                _suppressed_in_window += suppressed_count
+
     try:
-        from tcbot.modules.helper.rich.msg import send_rich  # noqa: PLC0415
-
         await send_rich(
             _bot,
             _chat_id,
@@ -677,13 +699,13 @@ async def _ship_throttled(payload: dict[str, Any]) -> None:
             message_thread_id=_thread_id,
         )
     except Exception as exc:
-        # * A report that never reached Telegram is not a sent report: it must
-        # * not consume the window budget, and it belongs in the rollover count
-        # * so the summary does not understate the suppressed incidents.
-        _suppressed_in_window += 1
+        # * A report that never reached Telegram is not a sent report: it
+        # * releases its reserved slot and stays in the rollover count.
         log.warning("Failed to ship error to LOG_ERRORS: %s", exc)
-        return
-    _sent_in_window += 1
+        with _send_lock:
+            if _send_window_start == reserved_window:
+                _sent_in_window -= 1
+            _suppressed_in_window += 1
 
 
 async def send_to_log_errors(payload: dict[str, Any]) -> None:
