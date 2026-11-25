@@ -37,7 +37,7 @@ from tcbot.modules.helper.messages import (
     send_text,
 )
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
-from tcbot.utils.dispatch import throw_if_cancelled
+from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
@@ -201,6 +201,35 @@ async def _ban_state_with_retry(user_id: int) -> BanDoc | None:
         return await db.bans_db.get_active_ban(user_id)
 
 
+_REPAIR_REASON: str = "Fail-closed removal: rejoin could not be delivered"
+
+
+async def _repair_failed_removal(chat_id: int, user_id: int, source: str) -> None:
+    """Record and queue the rejoin that a fail-closed removal could not finish.
+
+    Both writes are best effort: they run while the ban store may still be
+    down, and an outage here must not hide the original removal failure. Once
+    the database is reachable, the queued reconcile run finishes the unban and
+    the failed kick stays visible in the moderation history.
+    """
+    try:
+        action_id = await db.kicks_db.log_repair_kick(
+            user_id, chat_id, cfg.initial_owner_id, _REPAIR_REASON
+        )
+        await db.enforcement_db.queue_kick_unban_repair(
+            action_id, chat_id, cfg.initial_owner_id
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "Fail-closed repair queue failed on %s for uid=%d in chat=%d",
+            source,
+            user_id,
+            chat_id,
+        )
+
+
 async def _fail_closed_join(
     bot: Client, chat_id: int, user_id: int, source: str
 ) -> None:
@@ -209,32 +238,72 @@ async def _fail_closed_join(
     A join request is declined on the same outage in ``on_join_request``. A
     member who already joined cannot be declined, so a bounded ban followed by
     an immediate unban is the equivalent: they must join again once the
-    database is reachable and enforcement can be decided. No ban record exists
-    in this path, so no "you are banned" notice is sent.
+    database is reachable and enforcement can be decided. No "you are banned"
+    notice is sent, but a failed unban leaves the member removed, so the rejoin
+    is retried once and then recorded for durable repair.
     """
     try:
         await asyncio.wait_for(
             bot.ban_chat_member(chat_id, user_id), timeout=TELEGRAM_LOOKUP_TIMEOUT
         )
-        await asyncio.wait_for(
-            bot.unban_chat_member(chat_id, user_id),
-            timeout=TELEGRAM_LOOKUP_TIMEOUT,
-        )
-        log.error(
-            "Fail-closed removal on %s for uid=%d in chat=%d: ban state unverifiable",
-            source,
-            user_id,
-            chat_id,
-        )
     except asyncio.CancelledError:
         raise
     except Exception:
+        # * The ban never landed, so there is nothing to undo or repair.
         log.exception(
             "Fail-closed removal failed on %s for uid=%d in chat=%d",
             source,
             user_id,
             chat_id,
         )
+        return
+
+    try:
+        await asyncio.wait_for(
+            bot.unban_chat_member(chat_id, user_id),
+            timeout=TELEGRAM_LOOKUP_TIMEOUT,
+        )
+    except asyncio.CancelledError:
+        await _repair_failed_removal(chat_id, user_id, source)
+        raise
+    except Exception as first_exc:
+        # * A transient refusal or deadline must not strand the member. One
+        # * bounded retry covers the common case; a benign refusal means they
+        # * are already absent and needs no repair.
+        try:
+            await asyncio.wait_for(
+                bot.unban_chat_member(chat_id, user_id),
+                timeout=TELEGRAM_LOOKUP_TIMEOUT,
+            )
+        except asyncio.CancelledError:
+            await _repair_failed_removal(chat_id, user_id, source)
+            raise
+        except Exception as second_exc:
+            if is_benign_telegram_error(first_exc) and is_benign_telegram_error(
+                second_exc
+            ):
+                log.debug(
+                    "Fail-closed unban on %s for uid=%d in chat=%d was benign: %s",
+                    source,
+                    user_id,
+                    chat_id,
+                    second_exc,
+                )
+            else:
+                log.exception(
+                    "Fail-closed unban failed twice on %s for uid=%d in chat=%d",
+                    source,
+                    user_id,
+                    chat_id,
+                )
+                await _repair_failed_removal(chat_id, user_id, source)
+            return
+    log.error(
+        "Fail-closed removal on %s for uid=%d in chat=%d: ban state unverifiable",
+        source,
+        user_id,
+        chat_id,
+    )
 
 
 async def _handle_member(

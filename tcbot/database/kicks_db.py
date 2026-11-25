@@ -137,6 +137,59 @@ async def log_kick(
     return await run_transaction(_work)
 
 
+async def log_repair_kick(
+    user_id: int, chat_id: int, actor_user_id: int, reason: str
+) -> int:
+    """Record a system-generated kick whose rejoin must be repaired.
+
+    A fail-closed join removes a member by banning and immediately unbanning
+    them. If the unban cannot land, the member stays removed without any
+    history. This helper writes that history as a failed kick so the durable
+    reconcile run can finish the rejoin and operators can see the attempt.
+    The row starts ``completed`` because the insert guard requires that status
+    for a kick, then moves to ``failed`` in the same transaction.
+    """
+    now = utc_now()
+
+    async def _work(sess: AsyncSession) -> int:
+        case_id = await _open_case(sess, user_id, actor_user_id, reason, chat_id)
+        row = (
+            (
+                await sess.execute(
+                    pg_insert(moderation_actions)
+                    .values(
+                        action_type="kick",
+                        scope_type="chat",
+                        chat_id=chat_id,
+                        origin_chat_id=chat_id,
+                        target_user_id=user_id,
+                        actor_user_id=actor_user_id,
+                        reason=reason,
+                        created_at=now,
+                        status="completed",
+                        case_id=case_id,
+                        action_origin="system",
+                    )
+                    .returning(moderation_actions.c.id)
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if row is None:
+            raise RuntimeError("the repair kick decision was not written")
+        action_id = int(row["id"])
+        await sess.execute(
+            moderation_actions.update()
+            .where(moderation_actions.c.id == action_id)
+            .values(status="failed")
+        )
+        await moderation_db.close_case(sess, case_id, actor_user_id)
+        return action_id
+
+    return await run_transaction(_work)
+
+
 async def mark_kick_failed(action_id: int) -> bool:
     """Record that a kick decision did not complete its ban or rejoin step.
 
