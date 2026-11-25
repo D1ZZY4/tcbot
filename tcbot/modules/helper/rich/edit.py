@@ -48,11 +48,15 @@ async def edit_rich(
     reply_markup: Any | None = None,
 ) -> Message:
     """Edit a message through Kurigram's native rich-message transport."""
-    payload, _embedded = _message_with_buttons(message, reply_markup)
+    payload, fallback = _message_with_buttons(message, reply_markup)
+    extra: dict[str, Any] = {}
+    if fallback is not None:
+        extra["reply_markup"] = fallback
     return await bot.edit_message_text(
         chat_id,
         message_id,
         rich_message=_input_rich(payload),
+        **extra,
     )
 
 
@@ -115,10 +119,14 @@ async def safe_edit(
     """Edit a message as a rich message; swallow harmless not-modified errors."""
     _ = parse_mode
     markup = kwargs.get("reply_markup")
-    payload, _embedded = _message_with_buttons(_rich_payload(text), markup)
+    payload, fallback = _message_with_buttons(_rich_payload(text), markup)
+    extra: dict[str, Any] = {}
+    if fallback is not None:
+        extra["reply_markup"] = fallback
     await _edit_via(
         msg.edit_text(
             rich_message=_input_rich(payload),
+            **extra,
         ),
         log_level=log_level,
         log_label=log_label,
@@ -140,10 +148,14 @@ async def safe_edit_cb(
     """Edit a callback-query message, returning whether the edit landed."""
     _ = parse_mode
     markup = kwargs.get("reply_markup")
-    payload, _embedded = _message_with_buttons(_rich_payload(text), markup)
+    payload, fallback = _message_with_buttons(_rich_payload(text), markup)
+    extra: dict[str, Any] = {}
+    if fallback is not None:
+        extra["reply_markup"] = fallback
     return await _edit_via(
         q.edit_message_text(
             rich_message=_input_rich(payload),
+            **extra,
         ),
         log_level=log_level,
         log_label=log_label,
@@ -169,12 +181,16 @@ async def safe_edit_message(
     if chat_id is None or message_id is None:
         return False
     markup = kwargs.get("reply_markup")
-    payload, _embedded = _message_with_buttons(_rich_payload(text), markup)
+    payload, fallback = _message_with_buttons(_rich_payload(text), markup)
+    extra: dict[str, Any] = {}
+    if fallback is not None:
+        extra["reply_markup"] = fallback
     return await _edit_via(
         bot.edit_message_text(
             chat_id,
             message_id,
             rich_message=_input_rich(payload),
+            **extra,
         ),
         log_level=log_level,
         log_label=log_label,

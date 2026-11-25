@@ -233,6 +233,18 @@ def test_rich_embeds_keyboard_as_rich_buttons() -> None:
     assert message == {"html": "<p>body</p>"}
 
 
+def test_an_unconvertible_keyboard_is_forwarded_as_native_markup() -> None:
+    """One overlong callback keeps the whole keyboard, not zero buttons."""
+    markup = {"inline_keyboard": [[{"text": "Long", "callback_data": "x" * 65}]]}
+    bot = _FakeBot()
+    asyncio.run(
+        rc.send_rich(cast("Any", bot), -100, rc.html_message("x"), reply_markup=markup)
+    )
+    kwargs = bot.calls[0][1]
+    assert kwargs["reply_markup"] is markup
+    assert "<tg-button-row>" not in kwargs["rich_message"].html
+
+
 def test_rich_buttons_render_a_disabled_cell_as_a_rich_button() -> None:
     markup = InlineKeyboardMarkup([[InlineKeyboardButton("App")]])
     bot = _FakeBot()
