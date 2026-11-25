@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from pyrogram.types import Message
 
 log = get_logger(__name__)
+_DIVIDER: str = divider()
 
 
 # ───────────────────────────── Message assembly ───────────────────────── #
@@ -73,23 +74,28 @@ def _message_with_buttons(
     if not rows or not isinstance(html_value, str):
         return message, reply_markup if _markup_has_buttons(reply_markup) else None
     payload = dict(message)
-    separator = [] if html_value.rstrip().endswith("<hr/>") else [divider()]
-    payload["html"] = "\n".join([html_value, *separator, *rows])
+    sep = "" if html_value.rstrip().endswith("<hr/>") else f"\n{_DIVIDER}"
+    payload["html"] = f"{html_value}{sep}\n{'\n'.join(rows)}"
     return payload, None
 
 
 def _input_rich(message: dict[str, Any]) -> InputRichMessage:
     """Convert an application rich payload into Kurigram's native payload."""
-    kwargs: dict[str, Any] = {}
+    is_rtl = bool(message.get("is_rtl"))
+    skip_entity = bool(message.get("skip_entity_detection"))
     if "html" in message:
-        kwargs["html"] = message["html"]
-    elif "blocks" in message:
-        kwargs["blocks"] = message["blocks"]
-    if message.get("is_rtl"):
-        kwargs["is_rtl"] = True
-    if message.get("skip_entity_detection"):
-        kwargs["skip_entity_detection"] = True
-    return InputRichMessage(**kwargs)
+        return InputRichMessage(
+            html=message["html"],
+            is_rtl=is_rtl,
+            skip_entity_detection=skip_entity,
+        )
+    if "blocks" in message:
+        return InputRichMessage(
+            blocks=message["blocks"],
+            is_rtl=is_rtl,
+            skip_entity_detection=skip_entity,
+        )
+    return InputRichMessage(is_rtl=is_rtl, skip_entity_detection=skip_entity)
 
 
 # ───────────────────────────── Transport ──────────────────────────────── #

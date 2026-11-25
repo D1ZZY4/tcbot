@@ -140,9 +140,47 @@ class Ctx:
     chat_join_request: ChatJoinRequest | None = None
     update_id: int = 0
     args: tuple[str, ...] = ()
-    user_data: dict[str, Any] = field(default_factory=dict)
-    chat_data: dict[str, Any] = field(default_factory=dict)
-    bot_data: dict[str, Any] = field(default_factory=dict)
+    _state_chat_id: int = 0
+    _state_user_id: int = 0
+    _conv_key: tuple[int, int] | None = None
+    _user_data: dict[str, Any] | None = None
+    _chat_data: dict[str, Any] | None = None
+    _bot_data: dict[str, Any] | None = None
+
+    @property
+    def user_data(self) -> dict[str, Any]:
+        """Return the per-conversation state dict, allocating lazily on first read."""
+        if self._user_data is None:
+            self._user_data = _state_for_sync(
+                self._state_chat_id, self._state_user_id, time.monotonic()
+            )
+        return self._user_data
+
+    @user_data.setter
+    def user_data(self, value: dict[str, Any]) -> None:
+        self._user_data = value
+
+    @property
+    def chat_data(self) -> dict[str, Any]:
+        """Return the per-chat state dict, allocating lazily on first read."""
+        if self._chat_data is None:
+            self._chat_data = _state_for_sync(self._state_chat_id, 0, time.monotonic())
+        return self._chat_data
+
+    @chat_data.setter
+    def chat_data(self, value: dict[str, Any]) -> None:
+        self._chat_data = value
+
+    @property
+    def bot_data(self) -> dict[str, Any]:
+        """Return the bot-wide scratch dict, allocating lazily on first read."""
+        if self._bot_data is None:
+            self._bot_data = {}
+        return self._bot_data
+
+    @bot_data.setter
+    def bot_data(self, value: dict[str, Any]) -> None:
+        self._bot_data = value
 
     @property
     def bot(self) -> Client:
@@ -215,7 +253,7 @@ class Ctx:
             log.debug("callback answer failed: %s", exc)
 
 
-async def build_ctx(
+def build_ctx_sync(
     client: Client,
     *,
     message: Message | None = None,
@@ -225,7 +263,7 @@ async def build_ctx(
     update_id: int = 0,
     args: tuple[str, ...] = (),
 ) -> Ctx:
-    """Build a context and attach the persistent state of this conversation."""
+    """Build a context synchronously; conversation state dicts allocate lazily."""
     chat = None
     user = None
     if chat_member is not None:
@@ -238,9 +276,13 @@ async def build_ctx(
             chat = callback_query.message.chat
     elif message is not None:
         chat, user = message.chat, message.from_user
-    chat_id = chat_id_of(chat)
-    user_id = int(getattr(user, "id", 0) or 0)
-    now = time.monotonic()
+    raw_chat_id = getattr(chat, "id", None) if chat is not None else None
+    raw_user_id = getattr(user, "id", None) if user is not None else None
+    conv_key = (
+        (raw_chat_id, raw_user_id)
+        if isinstance(raw_chat_id, int) and isinstance(raw_user_id, int)
+        else None
+    )
     return Ctx(
         client=client,
         message=message,
@@ -249,8 +291,31 @@ async def build_ctx(
         chat_join_request=chat_join_request,
         update_id=update_id,
         args=args,
-        user_data=_state_for_sync(chat_id, user_id, now),
-        chat_data=_state_for_sync(chat_id, 0, now),
+        _state_chat_id=int(raw_chat_id or 0),
+        _state_user_id=int(raw_user_id or 0),
+        _conv_key=conv_key,
+    )
+
+
+async def build_ctx(
+    client: Client,
+    *,
+    message: Message | None = None,
+    callback_query: CallbackQuery | None = None,
+    chat_member: ChatMemberUpdated | None = None,
+    chat_join_request: ChatJoinRequest | None = None,
+    update_id: int = 0,
+    args: tuple[str, ...] = (),
+) -> Ctx:
+    """Build a context and attach the persistent state of this conversation."""
+    return build_ctx_sync(
+        client,
+        message=message,
+        callback_query=callback_query,
+        chat_member=chat_member,
+        chat_join_request=chat_join_request,
+        update_id=update_id,
+        args=args,
     )
 
 
@@ -258,6 +323,7 @@ __all__ = [
     "Ctx",
     "bot_identity",
     "build_ctx",
+    "build_ctx_sync",
     "chat_id_of",
     "clear_state",
     "display_name",

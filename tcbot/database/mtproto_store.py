@@ -317,6 +317,8 @@ async def clear_session_for_relogin(store: PostgresStorage) -> None:
     """
     ns = store._ns_like
     store._peer_cache.clear()
+    store._peer_meta.clear()
+    store._pending_ustates.clear()
     await _retry_write(
         lambda: run(
             mtproto_state.delete().where(
@@ -348,7 +350,8 @@ _MAX_BATCH_ROWS: int = 500
 # * rich button tap paid a full database round trip. A bounded process-local
 # * cache keeps that hot lookup off PostgreSQL; Telegram's own `update_peers`
 # * calls refresh it whenever an access hash changes.
-_PEER_CACHE_MAX: int = 5000
+_PEER_CACHE_MAX: int = 20_000
+_USTATE_FLUSH_INTERVAL_S: float = 2.0
 
 # * A batched write owns one budget for all of its chunks, and the
 # * chunks run one after the other inside the same call. The engine
@@ -495,6 +498,17 @@ async def update_peers(
     store: PostgresStorage, peers: Iterable[tuple[int, int, str, str | None]]
 ) -> None:
     """Upsert peers, preserving stored usernames like the usernames table does."""
+    if store._coalesce_updates:
+        cache, meta = store._peer_cache, store._peer_meta
+        peers = [
+            p
+            for p in peers
+            if p[3] is not None
+            or p[0] not in cache
+            or meta.get(p[0]) != (p[1], p[2], None)
+        ]
+        if not peers:
+            return
     now = int(time.time())
     rows = _peer_rows(store, peers, now)
     if not rows:
@@ -509,6 +523,11 @@ async def update_peers(
         try:
             store._remember_peer(
                 peer_id, get_input_peer(peer_id, row["access_hash"], row["type"])
+            )
+            store._peer_meta[peer_id] = (
+                row["access_hash"],
+                row["type"],
+                row.get("phone_number"),
             )
         except Exception:
             # * A row Kurigram cannot turn into an InputPeer is still stored;
@@ -667,14 +686,18 @@ class PostgresStorage(Storage):
     only the backend differs.
     """
 
-    def __init__(self, namespace: str) -> None:
+    def __init__(self, namespace: str, *, coalesce_updates: bool = False) -> None:
         """Scope every key under *namespace* so sessions never collide."""
         self._ns = namespace
         # * Pre-escaped once: the namespace feeds several LIKE filters
         # * below, and an unescaped metacharacter there would widen
         # * every peer/username/state scan past this session's keys.
         self._ns_like = _like_escape(namespace)
+        self._coalesce_updates = coalesce_updates
         self._peer_cache: dict[int, Any] = {}
+        self._peer_meta: dict[int, tuple[int, str, str | None]] = {}
+        self._pending_ustates: dict[int, dict[str, int | None]] = {}
+        self._flush_task: asyncio.Task[None] | None = None
 
     def _remember_peer(self, peer_id: int, peer: Any) -> None:
         """Keep a bounded process-local InputPeer cache for hot edits."""
@@ -682,7 +705,9 @@ class PostgresStorage(Storage):
         cache.pop(peer_id, None)
         cache[peer_id] = peer
         while len(cache) > _PEER_CACHE_MAX:
-            cache.pop(next(iter(cache)))
+            evicted_id = next(iter(cache))
+            cache.pop(evicted_id, None)
+            self._peer_meta.pop(evicted_id, None)
 
     # ── key helpers ── #
     # * Table ``mtproto_state``, one row per key, scoped by
@@ -708,16 +733,23 @@ class PostgresStorage(Storage):
         return
 
     async def save(self) -> None:
-        """Bump the stored date, mirroring SQLiteStorage.save()."""
+        """Flush coalesced update states and bump the stored date."""
+        await self._flush_ustates()
         await self.date(int(time.time()))
 
     async def close(self) -> None:
-        """No-op: the connection pool is owned by the shared engine."""
-        return
+        """Flush pending coalesced update states; pool is owned by the engine."""
+        task, self._flush_task = self._flush_task, None
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        await self._flush_ustates()
 
     async def delete(self) -> None:
         """Drop every row in this namespace with transient-error retry."""
         self._peer_cache.clear()
+        self._peer_meta.clear()
+        self._pending_ustates.clear()
         await _retry_write(
             lambda: run(
                 mtproto_state.delete().where(
@@ -759,16 +791,12 @@ class PostgresStorage(Storage):
             )
         )
 
-    def _accessor(self, name: str, value: Any = object) -> Awaitable[Any]:
-        """Build a dual getter/setter coroutine for scalar *name*."""
-
-        async def _run() -> Any:
-            if value is object:
-                return await self._get_scalar(name)
-            await self._set_scalar(name, value)
-            return None
-
-        return _run()
+    async def _accessor(self, name: str, value: Any = object) -> Any:
+        """Read or write scalar *name* using the object-sentinel contract."""
+        if value is object:
+            return await self._get_scalar(name)
+        await self._set_scalar(name, value)
+        return None
 
     async def dc_id(self, value: int | type[object] = object) -> Any:  # type: ignore[override]
         """Get or set the data-center ID."""
@@ -786,10 +814,7 @@ class PostgresStorage(Storage):
         """Get or set the server port."""
         return await self._accessor("port", value)
 
-    async def test_mode(  # type: ignore[override]
-        self,
-        value: bool | type[object] = object,  # noqa: FBT001
-    ) -> Any:
+    async def test_mode(self, value: bool | type[object] = object) -> Any:  # type: ignore[override]  # noqa: FBT001
         """Get or set test-mode flag."""
         return await self._accessor("test_mode", value)
 
@@ -805,10 +830,7 @@ class PostgresStorage(Storage):
         """Get or set the authorized user ID (None = fresh session)."""
         return await self._accessor("user_id", value)
 
-    async def is_bot(  # type: ignore[override]
-        self,
-        value: bool | type[object] = object,  # noqa: FBT001
-    ) -> Any:
+    async def is_bot(self, value: bool | type[object] = object) -> Any:  # type: ignore[override]  # noqa: FBT001
         """Get or set the bot-session flag."""
         return await self._accessor("is_bot", value)
 
@@ -840,10 +862,35 @@ class PostgresStorage(Storage):
 
     # ── update states ── #
 
+    async def _flush_ustates(self) -> None:
+        if not self._pending_ustates:
+            return
+        pending, self._pending_ustates = self._pending_ustates, {}
+        rows = [{"id": self._ustate(sid), **fields} for sid, fields in pending.items()]
+        await _retry_write(
+            lambda: _write_rows(rows, _update_state_upsert), timeout=_BATCH_TIMEOUT_S
+        )
+
+    async def _delayed_flush_ustates(self) -> None:
+        try:
+            await asyncio.sleep(_USTATE_FLUSH_INTERVAL_S)
+            await self._flush_ustates()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug("Coalesced update-state flush failed: %s", exc)
+        finally:
+            self._flush_task = None
+            if self._pending_ustates:
+                self._flush_task = asyncio.get_running_loop().create_task(
+                    self._delayed_flush_ustates()
+                )
+
     async def get_update_states(
         self, ids: int | Iterable[int] | None = None
     ) -> list[UpdateState]:
         """Return stored update states oldest-first, optionally filtered by ID."""
+        await self._flush_ustates()
         stmt = select(
             mtproto_state.c.id,
             mtproto_state.c.pts,
@@ -883,6 +930,23 @@ class PostgresStorage(Storage):
         states = (
             [update_state] if isinstance(update_state, UpdateState) else update_state
         )
+        if self._coalesce_updates:
+            changed = False
+            for state in states:
+                buf = self._pending_ustates.get(state.id)
+                for field in _STATE_FIELDS:
+                    val = getattr(state, field)
+                    if val is not None:
+                        if buf is None:
+                            buf = dict.fromkeys(_STATE_FIELDS)
+                            self._pending_ustates[state.id] = buf
+                        buf[field] = val
+                        changed = True
+            if changed and (self._flush_task is None or self._flush_task.done()):
+                self._flush_task = asyncio.get_running_loop().create_task(
+                    self._delayed_flush_ustates()
+                )
+            return
         rows = _update_state_rows(self, states)
         if not rows:
             return
@@ -893,6 +957,8 @@ class PostgresStorage(Storage):
     async def delete_update_state(self, state_id: int | Iterable[int]) -> None:
         """Delete update states by ID with transient-error retry."""
         state_ids = (state_id,) if isinstance(state_id, int) else tuple(state_id)
+        for sid in state_ids:
+            self._pending_ustates.pop(sid, None)
         ustate_ids = [self._ustate(i) for i in state_ids]
 
         await _retry_write(
