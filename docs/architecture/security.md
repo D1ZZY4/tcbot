@@ -137,10 +137,10 @@ exactly one owner row, then clears all role cache keys.
 ## Cross-group isolation
 
 Conversations are registered `per_chat=True, per_user=True`. `modules/helper/scope.py`
-stores each flow's payload under `conversation_key(update)` inside
-`ctx.user_data["tc_flow_scopes"]`, so two actions of one moderator in different
-groups cannot overwrite each other. `callback_is_current()` rejects buttons
-from an older prompt message.
+returns the per-chat, per-user `ctx.user_data` payload directly, so two actions
+of one moderator in different groups cannot overwrite each other.
+`callback_is_current()` rejects buttons from an older prompt or a callback
+with no recorded prompt identity.
 
 `guards.require_federation_origin()` allows private chats only when
 `allow_private` is set, short-circuits on `cfg.is_primary_group(chat_id)` or

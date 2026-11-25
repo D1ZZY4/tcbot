@@ -132,7 +132,7 @@ This page stays focused on the payload grammar and the state registry.
 `rich/edit.py` owns `callback_args`, `callback_args_optional`, and
 `callback_numbers`; all validate segment counts before indexing. `callback_is_current()`
 compares `query.message.chat.id` and `query.message.message_id` with the values
-recorded at flow entry and is permissive when no integer identity was recorded.
+recorded at flow entry and fails closed when no integer identity was recorded.
 Stale taps are answered and discarded.
 
 | Call site | Freshness keys |

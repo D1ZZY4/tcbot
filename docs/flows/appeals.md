@@ -52,7 +52,7 @@ flowchart TD
 
 The instruction prompt is built by `instruction_text()` from
 `appeals.instruction.*` catalog keys. Its message id is kept as
-`appeal_instruction_msg_id` in `flow_scope(ctx, update)` and used for the
+`appeal_instruction_msg_id` in `flow_scope(ctx)` and used for the
 live-card guard in `_on_cancel` and for the submitted-state edit.
 
 The three scope keys owned by the submit flow are `appeal_ban_id`,
@@ -266,6 +266,9 @@ listed in [reference/callbacks.md](../reference/callbacks.md).
 
 - A legacy card without a review id falls back to the tapped message id, so a
   replaced card is still refused by the live-card check.
+- An unknown prefixed command such as `.appeal` is not an appeal entry. With no
+  live appeal, the fallback passes it to the next flow instead of ending a
+  session or clearing state.
 - A link for an inactive ban, a different account, or an undecidable timed ban
   is refused.
 - A failed card edit does not fail the decision; the outbox owns the retry.

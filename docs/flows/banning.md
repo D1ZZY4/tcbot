@@ -261,6 +261,10 @@ new ban and `proof_caption_update` for a re-ban.
 - A late command sent while a flush is already executing does not cancel the ban.
 - Other registered commands sent during proof collection pass through to their
   own handlers; re-entering the ban command still ends the pending flow.
+- A proof prompt is rendered only for a positive resolved target. Text handlers
+  that have no live ban pass the message through, so ordinary group text cannot
+  start a target-less "Banning 0" evidence session. Cancelling a proof session
+  awaits its flush task before clearing the scope.
 
 ## Exact names
 

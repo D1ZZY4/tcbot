@@ -203,7 +203,7 @@ rank after a ban lifts.
 ```mermaid
 flowchart TD
     U([Update in group B]) --> K["conversation_key(update) = (chat, user)"]
-    K --> S["scope.py flow_scope uses ctx.user_data['tc_flow_scopes'][key]"]
+    K --> S["scope.py flow_scope returns the per-chat, per-user ctx.user_data payload"]
     S --> C{"callback_is_current: same chat and message id?"}
     C -->|no| STALE[Ignore stale button from group A]
     C -->|yes| OK[Apply to this flow]
@@ -218,12 +218,11 @@ flowchart TD
     CN -->|disconnected or outage| FAIL
 ```
 
-- Conversations are registered `per_chat=True, per_user=True`. `flow_scope`
-  stores each flow's payload under `conversation_key(update)` inside
-  `ctx.user_data["tc_flow_scopes"]`, so a second action in another group cannot
-  overwrite the first one's target and reason. `clear_flow_scope()` drops a
-  scope once empty, and `callback_is_current()` rejects buttons from an older
-  prompt message.
+- Conversations are registered `per_chat=True, per_user=True`. `flow_scope(ctx)`
+  returns the per-chat, per-user `ctx.user_data` payload directly, so a second
+  action in another group cannot overwrite the first one's target and reason.
+  `clear_flow_scope()` drops the scope's keys, and `callback_is_current()`
+  rejects buttons from an older prompt or a callback with no recorded identity.
 - `guards.require_federation_origin()` allows private chats only when
   `allow_private` is set, short-circuits on `cfg.is_primary_group(chat_id)` or
   `cfg.is_infrastructure_chat(chat_id)`, and

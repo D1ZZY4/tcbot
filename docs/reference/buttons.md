@@ -204,8 +204,8 @@ sent. The selected locale gets a green style and a checkmark text prefix.
 ## Parsing and freshness
 
 `callback_is_current()` compares `query.message.chat.id` and
-`query.message.message_id` with the values recorded at flow entry and is
-permissive when no integer identity was recorded. Stale taps are answered and
+`query.message.message_id` with the values recorded at flow entry and fails
+closed when no integer identity was recorded. Stale taps are answered and
 discarded. The freshness keys per call site and the payload parsers are listed
 in [callbacks.md](callbacks.md#parsing-and-freshness).
 
