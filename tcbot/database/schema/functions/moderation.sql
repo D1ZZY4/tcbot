@@ -556,6 +556,10 @@ BEGIN
     RAISE EXCEPTION 'New moderation actions must start in their initial status, have a future expiry, and have no revocation metadata';
   END IF;
 
+  -- * The update guard compares expiry with the database transaction clock,
+  -- * so the decision to expire has to use that same clock. The application
+  -- * timestamp can lead the server; mixing the two aborts the new decision
+  -- * in the narrow window where a timed action has just run out.
   UPDATE %SCHEMA%.moderation_actions AS a
      SET status = 'expired'
    WHERE a.scope_type = NEW.scope_type
@@ -564,7 +568,7 @@ BEGIN
      AND a.action_type = NEW.action_type
      AND a.status = 'active'
      AND a.expires_at IS NOT NULL
-     AND a.expires_at <= NEW.created_at;
+     AND a.expires_at <= now();
 
   IF NEW.supersedes_action_id IS NOT NULL THEN
     IF NEW.action_type NOT IN ('ban', 'mute') OR NEW.status <> 'active' THEN

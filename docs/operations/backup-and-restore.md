@@ -75,9 +75,9 @@ pg_restore --dbname="$TARGET_DATABASE_URL" \
 
 For a plain SQL dump, apply it with `psql` against the target database. After
 the restore, query the `alembic_version` table and compare its value with the
-newest revision in `alembic/versions/` (currently `0020_erased_identity_guard`). The bot applies any
-pending revisions at startup, so a restored database behind the code head is
-upgraded automatically.
+newest revision in `alembic/versions/` (currently
+`0021_moderation_expiry_clock`). The bot applies any pending revisions at
+startup, so a restored database behind the code head is upgraded automatically.
 
 ## Post-restore checks
 
