@@ -23,6 +23,7 @@ from tcbot.modules.helper.pipelines.connect_common import (
 from tcbot.utils.dispatch import (
     count_transient_errors,
     fan_out,
+    gather_bounded,
     is_benign_telegram_error,
     throw_if_cancelled,
 )
@@ -60,6 +61,32 @@ _REPLAY_ROUND: int = 8
 # * missing federation decisions.
 _REPLAY_QUEUE_ATTEMPTS: int = 3
 _REPLAY_QUEUE_BACKOFF: float = 0.2
+
+
+async def _protected_user_ids(user_ids: list[int]) -> set[int]:
+    """Return the users who hold the protected Owner role at replay time.
+
+    A stored decision can outlive the role its target held when it was filed.
+    Replaying it into a new group must not ban or mute a now-protected Owner.
+    A failed role read refuses the connect, matching the decision-read guard.
+    """
+    ids = sorted({uid for uid in user_ids if uid > 0})
+    if not ids:
+        return set()
+    results = await gather_bounded(
+        [db.users_roles.is_owner(uid, fresh=True) for uid in ids],
+        max_concurrent=10,
+    )
+    throw_if_cancelled(results)
+    protected: set[int] = set()
+    for uid, result in zip(ids, results, strict=True):
+        if isinstance(result, BaseException):
+            raise RuntimeError(
+                f"cannot verify protected role for user {uid} during connect replay"
+            ) from result
+        if result:
+            protected.add(uid)
+    return protected
 
 
 class ConnectionReplayMixin:
@@ -151,6 +178,19 @@ class ConnectionReplayMixin:
             raise RuntimeError(
                 f"cannot read federation decisions for chat {chat_id}"
             ) from mute_docs
+        protected = await _protected_user_ids(
+            list(ban_uids) + [int(doc.get("user_id", 0)) for doc in mute_docs]
+        )
+        if protected:
+            log.warning(
+                "Connect replay skips %d protected Owner decision(s) for chat %d",
+                len(protected),
+                chat_id,
+            )
+            ban_uids = [uid for uid in ban_uids if uid not in protected]
+            mute_docs = [
+                doc for doc in mute_docs if int(doc.get("user_id", 0)) not in protected
+            ]
         add_group_r = await db.groups_db.add_group(chat_id, chat_title, owner_id)
         if isinstance(add_group_r, BaseException):
             raise RuntimeError(f"add_group failed for chat {chat_id}") from add_group_r

@@ -21,6 +21,17 @@ from tcbot.modules.helper.pipelines.connect_replay import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _replay_targets_are_not_owners(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make replayed decisions concern ordinary users in these tests."""
+
+    async def _is_owner(_user_id: int, *, fresh: bool = False) -> bool:
+        _ = fresh
+        return False
+
+    monkeypatch.setattr(db.users_roles, "is_owner", _is_owner)
+
+
 class _FakeBot:
     def __init__(self) -> None:
         self.id: int = 999
@@ -128,6 +139,48 @@ def test_complete_join_refuses_to_activate_when_the_decision_store_is_down(
     monkeypatch.setattr(db.groups_db, "add_group", _add_group)
 
     with pytest.raises(RuntimeError, match="cannot read federation decisions"):
+        asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", _FakeBot()))  # type: ignore[arg-type]
+
+    assert activated == []
+
+
+def test_a_protected_owner_is_not_replayed_into_the_new_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A decision filed before a promotion must not ban the Owner at connect."""
+    queued = _install_world(monkeypatch, ban_uids=[11, 22])
+
+    async def _owner(user_id: int, *, fresh: bool = False) -> bool:
+        assert fresh is True
+        return user_id == 22
+
+    monkeypatch.setattr(db.users_roles, "is_owner", _owner)
+    bot = _FakeBot()
+
+    blind = asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
+
+    assert blind is False
+    assert bot.banned == [11]
+    assert queued == []
+
+
+def test_an_unverifiable_role_refuses_connect_activation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An Owner lookup outage must not activate an unenforced group."""
+    _install_world(monkeypatch, ban_uids=[11])
+    activated: list[int] = []
+
+    async def _add_group(chat_id: int, *_args: Any) -> None:
+        activated.append(chat_id)
+
+    async def _broken_role(_user_id: int, *, fresh: bool = False) -> bool:
+        raise RuntimeError("role store unavailable")
+
+    monkeypatch.setattr(db.groups_db, "add_group", _add_group)
+    monkeypatch.setattr(db.users_roles, "is_owner", _broken_role)
+
+    with pytest.raises(RuntimeError, match="cannot verify protected role"):
         asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", _FakeBot()))  # type: ignore[arg-type]
 
     assert activated == []

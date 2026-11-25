@@ -19,6 +19,17 @@ from tcbot.database import enforcement_db
 from tcbot.utils import circuit_breaker as _cb
 
 
+@pytest.fixture(autouse=True)
+def _target_is_not_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make stored runs in these tests concern ordinary users, not the Owner."""
+
+    async def _is_owner(_user_id: int, *, fresh: bool = False) -> bool:
+        _ = fresh
+        return False
+
+    monkeypatch.setattr(db.users_roles, "is_owner", _is_owner)
+
+
 class _FakeBot:
     def __init__(self) -> None:
         self.unbanned: list[tuple[int, int]] = []
@@ -137,6 +148,96 @@ def test_an_active_ban_apply_is_delivered(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert bot.banned == [(-100, 9)]
     assert completed == [(3, {"status": "succeeded", "outcome": "succeeded"})]
+
+
+@pytest.mark.asyncio
+async def test_a_target_promoted_to_owner_is_not_enforced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stored apply run refuses a now-protected target before any claim."""
+    cancelled: list[tuple[int, str]] = []
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_run(run_id: int) -> dict[str, object] | None:
+        return {"id": 1, "action_id": 2, "operation": "apply"}
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "ban",
+            "action_status": "active",
+            "operation": "apply",
+            "expires_at": None,
+        }
+
+    async def _no_target(*args: Any, **kwargs: Any) -> list[dict[str, object]]:
+        raise AssertionError("no enforcement target may be claimed")
+
+    async def _cancel(run_id: int, *, error_detail: str) -> None:
+        cancelled.append((run_id, error_detail))
+
+    async def _owner(_user_id: int, *, fresh: bool = False) -> bool:
+        assert fresh is True
+        return True
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_run", _claim_run)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "claim_targets", _no_target)
+    monkeypatch.setattr(enforcement_db, "cancel_run", _cancel)
+    monkeypatch.setattr(db.users_roles, "is_owner", _owner)
+
+    bot = _FakeBot()
+    await enforcement_worker.deliver_queued_run(bot, 1)  # type: ignore[arg-type]
+
+    assert bot.banned == []
+    assert bot.restricted == []
+    assert len(cancelled) == 1
+    assert "Owner" in cancelled[0][1]
+
+
+@pytest.mark.asyncio
+async def test_an_unresolved_role_refuses_the_apply_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed role read must fail closed instead of banning blindly."""
+    cancelled: list[tuple[int, str]] = []
+
+    async def _claim_run(run_id: int) -> dict[str, object] | None:
+        return {"id": 1, "action_id": 2, "operation": "apply"}
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "ban",
+            "action_status": "active",
+            "operation": "apply",
+            "expires_at": None,
+        }
+
+    async def _no_target(*args: Any, **kwargs: Any) -> list[dict[str, object]]:
+        raise AssertionError("no enforcement target may be claimed")
+
+    async def _cancel(run_id: int, *, error_detail: str) -> None:
+        cancelled.append((run_id, error_detail))
+
+    async def _broken_role(_user_id: int, *, fresh: bool = False) -> bool:
+        raise RuntimeError("role store unavailable")
+
+    monkeypatch.setattr(enforcement_db, "claim_run", _claim_run)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "claim_targets", _no_target)
+    monkeypatch.setattr(enforcement_db, "cancel_run", _cancel)
+    monkeypatch.setattr(db.users_roles, "is_owner", _broken_role)
+
+    bot = _FakeBot()
+    await enforcement_worker.deliver_queued_run(bot, 1)  # type: ignore[arg-type]
+
+    assert bot.banned == []
+    assert len(cancelled) == 1
+    assert "lookup failed" in cancelled[0][1]
 
 
 def _wire_apply(

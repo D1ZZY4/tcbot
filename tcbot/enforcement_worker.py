@@ -263,6 +263,38 @@ async def _process_run(
             run_id, error_detail="the action carries no target"
         )
         return
+    if operation == "apply":
+        # * A stored run can be delivered long after the decision was filed:
+        # * by the scheduled tick, /tcrepair, or connect replay. The direct
+        # * paths check the protected role before writing; the worker has to
+        # * check it before claiming a target, or a target promoted to Owner
+        # * in the meantime is still banned or muted federation-wide.
+        # * Revoke and kick-reconcile lift restrictions, so they must proceed
+        # * even for a protected target.
+        try:
+            protected = await db.users_roles.is_owner(target_user_id, fresh=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception(
+                "Owner check failed for enforcement run=%d target=%d",
+                run_id,
+                target_user_id,
+            )
+            await db.enforcement_db.cancel_run(
+                run_id, error_detail="protected-role lookup failed before enforcement"
+            )
+            return
+        if protected:
+            log.warning(
+                "Enforcement run=%d cancelled: target=%d holds the protected Owner role",
+                run_id,
+                target_user_id,
+            )
+            await db.enforcement_db.cancel_run(
+                run_id, error_detail="the target holds the protected Owner role"
+            )
+            return
     # * A warn-threshold ban is deferred to this worker. The handler cannot
     # * clear warnings for chats that have not landed yet, so every chunk of
     # * this run clears its own landed chats. Manual bans never touch warns.
