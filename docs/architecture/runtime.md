@@ -19,7 +19,7 @@ such as `user_ref()`, `code()`, and `bold()` so they pass through verbatim.
 Placeholders must be bare names with no format specifications or conversions,
 and mini-markup spans must be balanced, unnested, and free of braces.
 
-`locale_for_update(update)` resolves once per handler: private chats use the
+`locale_for_update(ctx)` resolves once per handler: private chats use the
 sender, groups use the group locale, direct messages use `locale_for_user`, and
 updateless paths use `locale_for_chat`. These resolvers live in
 `modules/helper/locale.py`; `resolve_locale()` applies explicit precedence, then
@@ -114,7 +114,7 @@ by reading stored jobs once in memory, and UTC is explicit.
 |---|---|---|
 | `tcbot.expiry_daily` | 24 h | Expire decisions and queue revokes; removed when pg_cron owns this. |
 | `tcbot.promotion_expiry_hourly` | 1 h | Mark stale promotion requests `expired`. |
-| `tcbot.enforcement_worker` | 5 min | Drain the enforcement run queue once. Stable persisted ID; the callable is in `moderation_enforcement.py`. |
+| `tcbot.enforcement_worker` | 5 min | Drain the enforcement run queue once. Stable persisted ID; the callable is registered directly from `moderation_enforcement.py`. |
 | `tcbot.notification_worker` | 5 min | Retry due review-card edits once. |
 | `tcbot.erasure_every_10m` | 10 min | Drain up to 25 queued account erasures. |
 | `tcbot.retention_daily` | 24 h | Apply schema retention policies. |

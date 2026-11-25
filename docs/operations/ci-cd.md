@@ -106,7 +106,7 @@ only when the PR was created.
 | `PORT`, `BIND_HOST` | Runner | Health server listener. |
 | `WARN_LIMIT`, `WARN_EXPIRY_DAYS`, `FED_WARN_LIMIT`, `PROMOTION_REQUEST_TTL_DAYS` | Runner | Moderation policy. |
 | `PREFIXES`, `COMMUNITY_NAME`, `LOG_LEVEL`, `ALBUM_DEBOUNCE_SECONDS` | Runner | Behavior and display. |
-| `MODULES_LOAD`, `MODULES_NO_LOAD`, `SENTRY_DSN` | Runner | Optional features. |
+| `MODULES_LOAD`, `MODULES_NO_LOAD`, `SENTRY_DSN`, `KURIGRAM_WORKERS` | Runner | Optional features. Unset `KURIGRAM_WORKERS` keeps automatic sizing. |
 | `BOT_PAT` | Runner, dependency updates | Self-chain dispatch and PR fallback. |
 
 `GITHUB_TOKEN` and `secrets.GITHUB_TOKEN` are provided automatically.

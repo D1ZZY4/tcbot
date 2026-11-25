@@ -28,12 +28,14 @@ body = """
 `/tcban 123456789 scamming members`
 Or reply to a message and run `/tcb reason here`."""
 
-# Runtime strings for the ban flow (ban_flow.py, banning.py).
-# [state] entries send plain (alerts, parse_mode=None replies, plain edits).
-# [db_fail]/[applied]/[pm]/[summary] render as rich HTML.
+# Runtime strings for the ban flow (ban_executor.py, banning.py).
+# [state] entries render plain for alerts and callback notices.
+# [db_fail]/[applied]/[pm]/[confirm] render as rich HTML; [summary] is a
+# plain heading wrapped by the caller.
 # Placeholders: {user} pre-formatted user reference, {reason} raw reason
-# text, {applied} prebuilt applied line, {sample} raw group names,
-# {total}/{failed} ints, {community} raw community name.
+# text, {sample} raw group names, {more} literal suffix, {ban_id} code id,
+# {old_reason}/{new_reason} raw reasons, {total}/{failed}/{done}/{pending}
+# ints, {community} raw community name.
 
 [state]
 cancelled = "Cancelled. No ban was issued."
@@ -62,7 +64,6 @@ body = "You have been federation-banned from {community}.\nReason: {reason}\n\nY
 
 [summary]
 title = "Federation Ban"
-body = "{user} has been banned.\n*Reason:* {reason}\n{applied}"
 
 [confirm]
 body = "{user} already has an active federation ban (Ban ID {ban_id}).\nExisting reason: {old_reason}\nNew reason: {new_reason}\n\nUpdate the ban with the new reason and proof?"

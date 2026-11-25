@@ -28,12 +28,14 @@ body = """
 `/tcban 123456789 menipu anggota`
 Atau balas sebuah pesan lalu jalankan `/tcb tulis alasan di sini`."""
 
-# Runtime strings for the ban flow (ban_flow.py, banning.py).
-# [state] entries send plain (alerts, parse_mode=None replies, plain edits).
-# [db_fail]/[applied]/[pm]/[summary] render as rich HTML.
+# Runtime strings for the ban flow (ban_executor.py, banning.py).
+# [state] entries render plain for alerts and callback notices.
+# [db_fail]/[applied]/[pm]/[confirm] render as rich HTML; [summary] is a
+# plain heading wrapped by the caller.
 # Placeholders: {user} pre-formatted user reference, {reason} raw reason
-# text, {applied} prebuilt applied line, {sample} raw group names,
-# {total}/{failed} ints, {community} raw community name.
+# text, {sample} raw group names, {more} literal suffix, {ban_id} code id,
+# {old_reason}/{new_reason} raw reasons, {total}/{failed} ints,
+# {community} raw community name.
 
 [state]
 cancelled = "Dibatalkan. Tidak ada ban yang dijatuhkan."
@@ -62,7 +64,6 @@ body = "Kamu di-ban dari {community} se-federasi.\nAlasan: {reason}\n\nKamu bisa
 
 [summary]
 title = "Ban Federasi"
-body = "{user} telah di-ban.\n*Alasan:* {reason}\n{applied}"
 
 [confirm]
 body = "{user} sudah punya ban federasi aktif (ID Ban {ban_id}).\nAlasan lama: {old_reason}\nAlasan baru: {new_reason}\n\nPerbarui ban dengan alasan dan bukti baru?"

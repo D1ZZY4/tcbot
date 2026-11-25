@@ -23,7 +23,9 @@ Back up the whole schema, including reference data from `seed.sql` objects,
 role assignments, moderation history, enforcement ledger tables, rules
 publications, and `alembic_version`. The APScheduler job store
 (`apscheduler_jobs`) is also in the schema; restoring it is optional, because
-the bot reconciles schedules at startup.
+the bot reconciles schedules at startup. A restored row is reusable only while
+its stored callable reference still imports; an obsolete reference is dropped
+by APScheduler before reconciliation and the current schedule is registered.
 
 Redis is a cache with no authoritative data. Do not back it up. After a Redis
 loss the bot repopulates L1 and L2 from PostgreSQL.

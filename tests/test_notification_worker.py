@@ -39,6 +39,7 @@ def _task() -> dict[str, object]:
         "chat_id": -1001,
         "message_id": 900,
         "attempts": 1,
+        "next_retry_at": "claimed-deadline",
     }
 
 
@@ -218,6 +219,75 @@ def test_cancelling_a_card_edit_releases_the_half_open_probe(
         assert _cb.telegram._half_open_probe_in_flight is False
     finally:
         _cb.telegram.reset()
+
+
+def test_cancelling_an_edit_returns_the_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A shutdown before the edit settles must not spend the card's attempt."""
+    released: list[dict[str, Any]] = []
+    _wire(monkeypatch)
+
+    async def _release(task_id: int, **kwargs: Any) -> None:
+        released.append({"task_id": task_id, **kwargs})
+
+    monkeypatch.setattr(db.notifications_db, "release_claim", _release)
+    bot = _Bot(asyncio.CancelledError())
+
+    _cb.telegram.reset()
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+    finally:
+        _cb.telegram.reset()
+
+    assert released == [
+        {
+            "task_id": 1,
+            "expected_attempts": 1,
+            "expected_message_id": 900,
+            "expected_next_retry_at": "claimed-deadline",
+        }
+    ]
+
+
+def test_an_unadmitted_claim_gives_back_its_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A circuit refusal after the claim must not spend the card's budget."""
+    released: list[dict[str, Any]] = []
+    _wire(monkeypatch)
+    bot = _Bot()
+
+    async def _claim_then_open(
+        limit: int = 10, *, retry_after: Any
+    ) -> list[dict[str, object]]:
+        # * Other Telegram traffic can trip the circuit after the claim but
+        # * before this worker reaches its admission check.
+        _cb.telegram._state = _cb.CircuitState.OPEN
+        return [_task()]
+
+    async def _release(task_id: int, **kwargs: Any) -> None:
+        released.append({"task_id": task_id, **kwargs})
+
+    monkeypatch.setattr(db.notifications_db, "claim_due_tasks", _claim_then_open)
+    monkeypatch.setattr(db.notifications_db, "release_claim", _release)
+
+    _cb.telegram.reset()
+    try:
+        asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+    finally:
+        _cb.telegram.reset()
+
+    assert bot.edits == []
+    assert released == [
+        {
+            "task_id": 1,
+            "expected_attempts": 1,
+            "expected_message_id": 900,
+            "expected_next_retry_at": "claimed-deadline",
+        }
+    ]
 
 
 def test_a_worker_error_at_the_attempt_ceiling_is_terminal(

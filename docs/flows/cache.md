@@ -15,7 +15,9 @@ is a valid cached value. Redis is L2 and optional; when it is absent the cache
 behaves like a plain in-memory TTL cache and call sites need no configuration
 change.
 
-Redis keys use the `v2` namespace: `tcbot:<prefix>:v2:<key>`. The tagged JSON
+Redis keys use the `v2` namespace scoped to the database schema:
+`tcbot:<schema>:<prefix>:v2:<key>`. The schema is the tenant boundary on a
+shared Redis. The tagged JSON
 wire format must stay byte-compatible with entries already in Redis.
 
 ## `get_or_fetch`
@@ -71,7 +73,7 @@ read that started before a revocation cannot republish the old value into L1.
 The key stays in `_pending_invalidations` until the delete task actually
 finishes, so a local reader cannot republish the old L2 value while the delete
 is still queued. For revocation prefixes it first enqueues a short-lived
-tombstone (`SET ... EX 10`, key `tcbot:<prefix>:v2:tombstone:<key>`) that other
+tombstone (`SET ... EX 10`, key `tcbot:<schema>:<prefix>:v2:tombstone:<key>`) that other
 processes check before trusting an L2 hit. This narrows the cross-process window
 where a reader could fetch the old value before another process's queued delete
 lands.
@@ -113,7 +115,7 @@ Revocation prefixes (`role`, `conn`, `groups`, `owner`) and locale deletions
 Display-name hints (`umention`) remain droppable. A dropped revocation leaves
 the old value visible until the key TTL, which is recoverable.
 
-`clear_all()` sweeps `tcbot:<prefix>:v2:*` with `SCAN` and `UNLINK` in batches of
+`clear_all()` sweeps `tcbot:<schema>:<prefix>:v2:*` with `SCAN` and `UNLINK` in batches of
 100 instead of blocking `KEYS`. It clears L1, bumps the epoch on both sides of
 the sweep, enqueues non-droppably, and waits at most 10 s. A dropped sweep is
 logged as an explicit failure and still closes the local window; a timeout

@@ -23,10 +23,10 @@ body = """
 `/tcunb 123456789`
 Or reply to a message and run `/tcunb`."""
 
-# Runtime strings for the unban executor (unban_flow.py).
+# Runtime strings for the unban executor (unban_executor.py).
 # All render as rich HTML.
-# Placeholders: {user} pre-formatted user reference, {note} prebuilt
-# result line, {done}/{total} ints, {sample} raw group names.
+# Placeholders: {user} pre-formatted user reference, {done}/{total} ints,
+# {sample} raw group names, {more} literal suffix.
 
 [note]
 no_record = "{user} has no active federation ban."
@@ -39,4 +39,3 @@ full = "removed from {total}/{total} groups."
 
 [summary]
 title = "Ban Lifted"
-body = "{user} has been unbanned - {note}"

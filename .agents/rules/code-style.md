@@ -202,7 +202,7 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 
 ### Locale Resolution and Threading
 
-- Resolve the locale once per handler using `helper.locale.locale_for_update(update)`.
+- Resolve the locale once per handler using `helper.locale.locale_for_update(ctx)`.
 - Private chats use the sender's locale.
 - Groups use the group locale.
 - Direct messages to one user use `locale_for_user`.

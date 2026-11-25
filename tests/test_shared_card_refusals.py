@@ -160,6 +160,94 @@ def test_promo_approve_refuses_the_current_owner(
     )
 
 
+def test_promo_approve_refuses_a_demoted_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transfer between the entry check and the grant blocks approval."""
+    owner_reads = 0
+
+    async def _locale(update: Any) -> str:
+        return "en-US"
+
+    async def _owner(user_id: int, *, fresh: bool = False) -> bool:
+        nonlocal owner_reads
+        owner_reads += 1
+        return owner_reads == 1
+
+    async def _request_by_id(request_id: str) -> dict[str, Any]:
+        return _request(42)
+
+    async def _target_role(user_id: int, *, fresh: bool = False) -> None:
+        return None
+
+    async def _active_ban(user_id: int) -> None:
+        return None
+
+    async def _resolve(request_id: str, status: str, resolved_by: int) -> bool:
+        raise AssertionError("a demoted owner must not resolve the request")
+
+    monkeypatch.setattr(promote_decision, "locale_for_update", _locale)
+    monkeypatch.setattr(db.users_roles, "is_owner", _owner)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _target_role)
+    monkeypatch.setattr(db.bans_db, "get_active_ban", _active_ban)
+    monkeypatch.setattr(db.queues_db, "get_request_by_id", _request_by_id)
+    monkeypatch.setattr(db.queues_db, "resolve", _resolve)
+    query = _FakeQuery("promo_approve:req-1")
+
+    asyncio.run(
+        promote_decision.execute_promo_decision(
+            _promo_update(query, 1),  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+        )
+    )
+
+    assert owner_reads == 2
+    assert query.answers[-1] == (
+        replies.perm_owner_only("en-US", plain=True),
+        True,
+    )
+
+
+def test_promo_reject_refuses_a_demoted_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transfer between the entry check and the rejection blocks it."""
+    owner_reads = 0
+
+    async def _locale(update: Any) -> str:
+        return "en-US"
+
+    async def _owner(user_id: int, *, fresh: bool = False) -> bool:
+        nonlocal owner_reads
+        owner_reads += 1
+        return owner_reads == 1
+
+    async def _request_by_id(request_id: str) -> dict[str, Any]:
+        return _request(42)
+
+    async def _resolve(request_id: str, status: str, resolved_by: int) -> bool:
+        raise AssertionError("a demoted owner must not resolve the request")
+
+    monkeypatch.setattr(promote_decision, "locale_for_update", _locale)
+    monkeypatch.setattr(db.users_roles, "is_owner", _owner)
+    monkeypatch.setattr(db.queues_db, "get_request_by_id", _request_by_id)
+    monkeypatch.setattr(db.queues_db, "resolve", _resolve)
+    query = _FakeQuery("promo_reject:req-1")
+
+    asyncio.run(
+        promote_decision.execute_promo_decision(
+            _promo_update(query, 1),  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+        )
+    )
+
+    assert owner_reads == 2
+    assert query.answers[-1] == (
+        replies.perm_owner_only("en-US", plain=True),
+        True,
+    )
+
+
 class _JoinBot:
     """Bot double: one membership answer, optionally raising."""
 

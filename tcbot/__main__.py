@@ -381,32 +381,35 @@ def register_handlers(client: Client) -> None:
 
 async def _shutdown_subsystems() -> None:
     """Stop background work and close every external client."""
-    await shutdown_dispatcher()
-    await sched_mod.stop()
-    await _asyncio_report_tasks.drain()
-    await identity_refresh.identity_refresh_tasks.drain()
-    await connect_common.harvest_tasks.drain()
-    await drain_proof_sessions()
-    await report.drain_pending()
-    await _member_cache_tasks.drain()
-    await _startup_tasks.drain()
-    await drain_redis_mutations()
-    shutdown_results = await asyncio.gather(
-        redis_client.close(),
-        mtproto_mod.stop(),
-        return_exceptions=True,
-    )
-    for result in shutdown_results:
-        if isinstance(result, BaseException) and not isinstance(
-            result, asyncio.CancelledError
-        ):
-            log.warning("Shutdown step failed (non-fatal): %s", result)
-    # ! CRITICAL: The database is the last client to close. A cancellation
-    # ! returned by a step above must still reach it before propagating.
     try:
-        throw_if_cancelled(shutdown_results)
+        await shutdown_dispatcher()
+        await sched_mod.stop()
+        await _asyncio_report_tasks.drain()
+        await identity_refresh.identity_refresh_tasks.drain()
+        await connect_common.harvest_tasks.drain()
+        await drain_proof_sessions()
+        await report.drain_pending()
+        await _member_cache_tasks.drain()
+        await _startup_tasks.drain()
+        await drain_redis_mutations()
     finally:
-        await close_database()
+        # ! CRITICAL: A second cancellation during an early drain used to
+        # ! skip client disposal entirely. Run teardown on every exit path,
+        # ! and close the database last even when disposal itself is cancelled.
+        try:
+            shutdown_results = await asyncio.gather(
+                redis_client.close(),
+                mtproto_mod.stop(),
+                return_exceptions=True,
+            )
+            for result in shutdown_results:
+                if isinstance(result, BaseException) and not isinstance(
+                    result, asyncio.CancelledError
+                ):
+                    log.warning("Shutdown step failed (non-fatal): %s", result)
+            throw_if_cancelled(shutdown_results)
+        finally:
+            await close_database()
 
 
 async def _run_polling() -> None:

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 
+from pyrogram.types import CallbackQuery
+
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.context import Ctx, display_name
@@ -31,6 +33,25 @@ from tcbot.utils.i18n import esc, t
 from tcbot.utils.logger import get_logger
 
 log = get_logger(__name__)
+
+
+async def _still_owner(q: CallbackQuery, locale: str | None, admin_id: int) -> bool:
+    """Re-check Owner rank right before an irreversible promotion decision.
+
+    The entry check reads ownership alongside the request fetch. A transfer
+    across the later awaits must not let a demoted reviewer grant Admin.
+    """
+    try:
+        owner = await db.users_roles.is_owner(admin_id, fresh=True)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning("promo decision owner re-read failed for %d: %s", admin_id, exc)
+        await answer_alert(q, t("admins.error.role_lookup_failed", locale, plain=True))
+        return False
+    if not owner:
+        await answer_alert(q, replies.perm_owner_only(locale, plain=True))
+    return bool(owner)
 
 
 async def execute_promo_decision(ctx: Ctx) -> None:
@@ -149,6 +170,8 @@ async def execute_promo_decision(ctx: Ctx) -> None:
                 parse_mode=None,
             )
             return
+        if not await _still_owner(q, locale, admin.id):
+            return
         # * Resolve-first claim, then grant: the atomic resolve decides a
         # * concurrent approve/reject race before any privilege is written.
         try:
@@ -242,6 +265,8 @@ async def execute_promo_decision(ctx: Ctx) -> None:
                 log.debug("promo_approve notify[%d] failed: %s", i, r)
 
     elif action == "promo_reject":
+        if not await _still_owner(q, locale, admin.id):
+            return
         # * Resolve first and atomically: only the winner may mutate the UI.
         try:
             resolved = await db.queues_db.resolve(request_id, "rejected", admin.id)

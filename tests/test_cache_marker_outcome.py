@@ -175,6 +175,42 @@ def test_a_landed_delete_releases_the_marker(
     asyncio.run(_run())
 
 
+def test_a_revocation_landing_during_the_get_is_not_served(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A tombstone written between the check and the GET wins over the L2 value."""
+
+    class _LateTombstoneRedis(_StaleRedis):
+        def __init__(self) -> None:
+            super().__init__()
+            self.exists_calls = 0
+
+        async def exists(self, key: str) -> int:
+            _ = key
+            self.exists_calls += 1
+            return 1 if self.exists_calls == 2 else 0
+
+    async def _run() -> None:
+        cache: TwoLevelCache[str] = TwoLevelCache(
+            memory_ttl=60, redis_ttl=90, redis_prefix="role"
+        )
+        calls = 0
+
+        async def _fetch() -> str:
+            nonlocal calls
+            calls += 1
+            return "fresh"
+
+        assert await cache.get_or_fetch(7, _fetch) == "fresh"
+        assert calls == 1
+        assert cache.get(7) == "fresh"
+
+    redis = _LateTombstoneRedis()
+    _tasks, outage = _queue(monkeypatch, redis)
+    outage["active"] = False
+    asyncio.run(_run())
+
+
 def test_a_failed_tombstone_suppresses_the_delete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

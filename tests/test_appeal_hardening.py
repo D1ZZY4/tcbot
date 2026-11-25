@@ -327,9 +327,11 @@ def test_approve_proceeds_when_the_role_is_already_gone(
 
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
         reads.append(user_id)
-        # * The approve path reads the role first and demotes it; the gate's
-        # * live re-read after the no-op demote sees it already gone.
-        return "admin" if len(reads) == 1 else None
+        # * The reviewer keeps Owner; only the target's role disappears after
+        # * the no-op demote. A demoted reviewer is a different case.
+        if user_id == 1:
+            return "owner"
+        return "admin" if reads.count(9) == 1 else None
 
     async def _fake_demote(*a: Any, **k: Any) -> bool:
         record["demoted"].append((9, "admin"))

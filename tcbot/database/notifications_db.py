@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -41,7 +41,25 @@ _CLAIM_DUE = text(
            updated_at = now()
       FROM picked
      WHERE t.id = picked.id
-    RETURNING t.id, t.action_id, t.chat_id, t.message_id, t.attempts
+    RETURNING t.id, t.action_id, t.chat_id, t.message_id, t.attempts,
+              t.next_retry_at
+    """
+)
+
+# * A task refused by the circuit breaker reached no Telegram call. The
+# * claim already charged one attempt, so hand it back instead of letting a
+# * few outages terminalize a decided card that was never edited.
+_RELEASE_CLAIM = text(
+    """
+    UPDATE moderation_notification_tasks
+       SET attempts = GREATEST(attempts - 1, 0),
+           next_retry_at = now(),
+           updated_at = now()
+     WHERE id = :task_id
+       AND state = 'pending'
+       AND attempts = :expected_attempts
+       AND message_id = :expected_message_id
+        AND next_retry_at = :expected_next_retry_at
     """
 )
 
@@ -133,6 +151,38 @@ async def claim_due_tasks(
         return [dict(row) for row in result.mappings()]
 
     return await run_transaction(_work)
+
+
+async def release_claim(
+    task_id: int,
+    *,
+    expected_attempts: int,
+    expected_message_id: int,
+    expected_next_retry_at: Any,
+) -> None:
+    """Return an unexecuted claim to the due queue with its budget intact.
+
+    The worker claims a card before checking whether the Telegram circuit can
+    admit an edit. When admission is refused, no delivery happened, so the
+    attempt charged by the claim must be restored rather than accumulate
+    toward the terminal-failure ceiling. The expected values keep a newer
+    claimant from being rewound by this release: a re-queue clears the claim's
+    reserved deadline, so a delayed release from the previous claim no longer
+    matches the row.
+    """
+
+    async def _work(sess: AsyncSession) -> None:
+        await sess.execute(
+            _RELEASE_CLAIM,
+            {
+                "task_id": task_id,
+                "expected_attempts": expected_attempts,
+                "expected_message_id": expected_message_id,
+                "expected_next_retry_at": expected_next_retry_at,
+            },
+        )
+
+    await run_transaction(_work)
 
 
 async def load_task_action(task_id: int) -> dict[str, object] | None:

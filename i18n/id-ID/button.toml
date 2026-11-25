@@ -45,6 +45,7 @@ next = "Lanjut ↦"
 
 # Aturan komunitas dan editornya.
 edit_draft = "✎ Edit Draf"
+rules_section = "Bagian {n}"
 add_category = "+ Tambah Kategori"
 add_item = "+ Tambah Item"
 upload_md = "⇪ Unggah .md"

@@ -297,7 +297,10 @@ def editor_sections_btn(
     rows: list[list[InlineKeyboardButton]] = [
         [
             _button(
-                str(item.get("title") or f"Section {item['id']}")
+                str(
+                    item.get("title")
+                    or t("button.rules_section", locale, n=item["id"], plain=True)
+                )
                 .split(":", 1)[-1]
                 .strip(),
                 f"rules_section_edit:{item['id']}",

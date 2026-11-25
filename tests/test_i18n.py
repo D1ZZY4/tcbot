@@ -115,7 +115,7 @@ _DYNAMIC_KEY_PREFIXES = (
     "admins.list.",
     "admins.request.",
     "admins.error.",
-    "banning.",
+    "banning.applied.",
     "checking.appeals_list.",
     "checking.bans.",
     "checking.events.",
@@ -134,7 +134,6 @@ _DYNAMIC_KEY_PREFIXES = (
     "proof.action.",
     "reason.",
     "stats.",
-    "unbanning.",
     "warnings.",
 )
 

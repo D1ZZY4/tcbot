@@ -14,6 +14,7 @@ from pyrogram import Client
 from tcbot import database as db
 from tcbot.database.types import as_int
 from tcbot.modules.helper.pipelines.errors.exceptions import (
+    TRANSPORT_TIMEOUT_ERRORS,
     is_bad_request,
     is_forbidden,
 )
@@ -164,6 +165,21 @@ async def _process_task(
     chat_id = as_int(task.get("chat_id"))
     message_id = as_int(task.get("message_id"))
     attempts = as_int(task.get("attempts"))
+    next_retry_at = task.get("next_retry_at")
+
+    async def _release_claim() -> None:
+        """Return the claim when no Telegram edit has been confirmed."""
+        try:
+            await db.notifications_db.release_claim(
+                task_id,
+                expected_attempts=attempts,
+                expected_message_id=message_id,
+                expected_next_retry_at=next_retry_at,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Review-card claim release failed for task=%s", task_id)
 
     async def _complete(
         *,
@@ -210,6 +226,10 @@ async def _process_task(
             "admitting calls.",
             action_id,
         )
+        # * The claim already charged an attempt. Without releasing it, a
+        # * card skipped during an outage reaches the attempt ceiling and is
+        # * recorded as failed even though Telegram never saw an edit.
+        await _release_claim()
         return
     try:
         async with asyncio.timeout(TELEGRAM_ACTION_TIMEOUT):
@@ -223,6 +243,10 @@ async def _process_task(
                 clear_markup=True,
             )
     except asyncio.CancelledError:
+        # * A cancellation before the edit returns means no Telegram call was
+        # * confirmed. Return the claim so repeated shutdowns cannot spend the
+        # * card's whole retry budget without an edit.
+        await _release_claim()
         _cb.telegram.release_probe()
         raise
     except Exception as exc:
@@ -230,7 +254,7 @@ async def _process_task(
         # * Match fan_out: only a transport failure trips the breaker. A
         # * service answer, including RetryAfter and BadRequest, does not;
         # * otherwise five rate-limit replies would stall every fan-out.
-        if isinstance(exc, TimeoutError) or (
+        if isinstance(exc, TRANSPORT_TIMEOUT_ERRORS) or (
             isinstance(exc, OSError) and not is_bad_request(exc)
         ):
             _cb.telegram.record_failure()

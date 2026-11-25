@@ -731,6 +731,8 @@ async def stop() -> None:
     _sched_ready = None
     _sched_stop = None
     _sched_error = None
+    # * The dedicated worker owns a thread and the blocking job-store engine.
+    # * Leaving it alive across a stop/start cycle leaks both into the next run.
     executor, _scheduler_executor = _scheduler_executor, None
     if executor is not None:
         executor.shutdown(wait=False)

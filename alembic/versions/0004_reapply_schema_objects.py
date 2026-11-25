@@ -39,6 +39,15 @@ def upgrade() -> None:
     # * SECURITY while a trigger event is still queued for the table, so the
     # * events are materialised before the policies are reapplied.
     bind.exec_driver_sql("SET CONSTRAINTS ALL IMMEDIATE")
+    # ! CRITICAL: the SQL files are current, not the schema of this revision.
+    # ! The registry seed already names job_owner, which revision 0007 adds,
+    # ! so a database stamped at 0003 would fail here before reaching 0007.
+    # ! Add the column when it is missing; 0006 carries the same guard for a
+    # ! database that stops at 0005, and 0007 still owns the check constraint.
+    op.execute(
+        "ALTER TABLE scheduled_jobs "
+        "ADD COLUMN IF NOT EXISTS job_owner TEXT NOT NULL DEFAULT 'application'"
+    )
     apply_schema(bind)
 
 

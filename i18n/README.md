@@ -76,7 +76,7 @@ locale. Module display names stay English identifiers.
 
 Command replies, prompts, and result lines migrate the same way: prose
 in TOML, structure in Python. Handlers resolve the render locale once
-via `helper.locale.locale_for_update(update)`: private chats use the
+via `helper.locale.locale_for_update(ctx)`: private chats use the
 sender's personal locale, groups use the group locale, so a shared
 audience always reads one language. Direct messages to one user resolve
 via `locale_for_user`; event handlers without an update use
@@ -93,10 +93,11 @@ markup, never pre-escaped. There is no parse-mode fallback path.
 
 1. Copy `en-US/` to `<locale>/` (BCP 47 shape, e.g. `pt-BR`, `fr-CA`).
 2. Set `button.language_name` to the locale display name.
-3. Translate values. Partial files are legal: missing keys fall back
-   to `en-US` per key at runtime. Button labels render as plain text;
-   message templates are escaped by the engine, so translators never
-   write backslashes in either file.
+3. Translate every value. A locale may omit a key and fall back to `en-US`
+   per key, but every key it defines must use the same placeholder names as
+   `en-US`; the parity check rejects extra keys and placeholder mismatches.
+   Button labels render as plain text; message templates are escaped by the
+   engine, so translators never write backslashes in either file.
 4. Run `uv run pytest tests/test_i18n.py -q`: placeholder
    mismatches, unbalanced mini-markup or parentheses, and retired drawn
    separators fail the suite.

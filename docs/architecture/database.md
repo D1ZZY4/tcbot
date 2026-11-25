@@ -119,7 +119,8 @@ return to `pending`.
 ## Cache
 
 `database/cache/` implements the two-level cache. L1 is an in-process TTL cache;
-L2 is optional Redis under the `v2` namespace. A generation counter and a
+L2 is optional Redis under the `v2` namespace, scoped to the configured
+database schema. A generation counter and a
 cache-wide epoch discard results fetched across an invalidation, and a FIFO
 mutation queue keeps writes, deletes, and clears ordered. `put_many()` batches
 non-revocation L2 writes in one pipeline, non-revocation writes skip the

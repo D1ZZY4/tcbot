@@ -86,6 +86,7 @@ jobs:
       MODULES_LOAD:            ${{ secrets.MODULES_LOAD }}
       MODULES_NO_LOAD:         ${{ secrets.MODULES_NO_LOAD }}
       INFRA_CHAT_IDS:          ${{ secrets.INFRA_CHAT_IDS }}
+      KURIGRAM_WORKERS:        ${{ secrets.KURIGRAM_WORKERS }}
       SENTRY_DSN:              ${{ secrets.SENTRY_DSN }}
 
     steps:

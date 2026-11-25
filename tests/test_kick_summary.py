@@ -242,6 +242,38 @@ def test_a_benign_retry_after_a_real_refusal_still_queues_repair(
     assert failed == [55]
 
 
+def test_an_ambiguous_ban_timeout_queues_a_defensive_unban_repair(
+    _kick_no_io: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A local deadline cannot take back a ban Telegram may have applied."""
+    queued: list[int] = []
+    failed: list[int] = []
+
+    async def _repair(action_id: int, chat_id: int, requested_by: int | None) -> int:
+        queued.append(action_id)
+        return 99
+
+    async def _mark_failed(action_id: int) -> bool:
+        failed.append(action_id)
+        return True
+
+    class _TimeoutBanBot(_FakeBot):
+        async def ban_chat_member(self, *args: Any, **kwargs: Any) -> bool:
+            raise TimeoutError()
+
+    async def _logged(*args: Any, **kwargs: Any) -> int:
+        return 55
+
+    monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
+    monkeypatch.setattr(db.kicks_db, "mark_kick_failed", _mark_failed)
+    monkeypatch.setattr(db.enforcement_ledger, "queue_kick_unban_repair", _repair)
+
+    _run(_TimeoutBanBot())
+
+    assert failed == [55]
+    assert queued == [55]
+
+
 def test_a_failed_ban_marks_the_kick_failed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

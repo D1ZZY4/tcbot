@@ -42,6 +42,7 @@ from tcbot.database import engine as engine_mod
 from tcbot.database import redis_client as redis_client_mod
 from tcbot.database.cache import twolevel as cache_twolevel
 from tcbot.database.cache.twolevel import TwoLevelCache
+from tcbot.utils import dispatch as dispatch_mod
 from tcbot.utils.dispatch import fan_out
 
 # * Iterations per scenario. Small enough to run in a second, large enough
@@ -130,7 +131,14 @@ async def _bench_fan_out_bound() -> None:
         live -= 1
 
     await fan_out([_tracked() for _ in range(_FANOUT_GROUPS)])
-    print(f"{'fan_out peak concurrency':<34} {peak:>8} (cap 10)")
+    print(
+        f"{'fan_out peak concurrency':<34} {peak:>8} (cap {dispatch_mod._MAX_CONCURRENT})"
+    )
+    # * A cap regression must fail the benchmark, not merely print a number.
+    assert peak <= dispatch_mod._MAX_CONCURRENT, (
+        f"fan_out ran {peak} operations concurrently, above the "
+        f"{dispatch_mod._MAX_CONCURRENT}-slot cap"
+    )
 
 
 async def _never_called() -> str:

@@ -34,7 +34,7 @@ to `id-ID` for stored preferences and in-flight callbacks; new saves use
 
 ## Locale resolution
 
-`locale_for_update(update)` resolves once per handler:
+`locale_for_update(ctx)` resolves once per handler:
 
 | Context | Source |
 |---|---|
