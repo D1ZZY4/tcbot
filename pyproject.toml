@@ -84,8 +84,6 @@ target-version = "py314"
 exclude = [
     ".local/",
     ".agents/",
-    ".kilo/",
-    ".claude/",
     "attached_assets/",
 ]
 

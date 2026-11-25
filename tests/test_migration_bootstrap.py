@@ -85,10 +85,7 @@ def test_the_legacy_index_migration_skips_a_bootstrapped_schema(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A metadata-built schema has no member_cache, so 0002 must be a no-op."""
-    path = (
-        Path(__file__).resolve().parent.parent
-        / "alembic/versions/0002_member_cache_sort_indexes.py"
-    )
+    path = Path(__file__).resolve().parent.parent / "alembic/versions/0002.py"
     spec = importlib.util.spec_from_file_location("legacy_0002", path)
     assert spec is not None and spec.loader is not None
     legacy = importlib.util.module_from_spec(spec)

@@ -5,9 +5,7 @@
 
 # Agent and IDE configuration
 .agents/
-.kilo/
 .trae/
-.claude/
 .roo/
 .github/
 
@@ -48,14 +46,6 @@ attached_assets/
 README.md
 AGENTS.md
 CHANGELOG.md
-replit.md
-
-# Replit-specific
-.replit
-.upm/
-.cache/
-.config/
-replit.nix
 
 # Temporary files
 *.tmp

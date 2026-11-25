@@ -105,7 +105,7 @@ def downgrade() -> None:
     """Remove the expiry state and restore the four-state status check."""
     bind = op.get_bind()
     if _EXPIRY_INDEX in _index_names(bind):
-        op.drop_index(_EXPIRY_INDEX, table_name=_TABLE)
+        op.drop_index(_EXPIRY_INDEX, table_name=_TABLE, if_exists=True)
     status_sql = _check_sql(bind, _STATUS_CHECK)
     if status_sql is not None and "expired" in status_sql:
         # * The narrow check validates existing rows when it is created, so

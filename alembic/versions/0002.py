@@ -62,5 +62,13 @@ def downgrade() -> None:
     """Drop the two default-opclass sort indexes when the legacy table exists."""
     if not sa.inspect(op.get_bind()).has_table("member_cache"):
         return
-    op.drop_index("ix_member_cache_username_lower_sort", table_name="member_cache")
-    op.drop_index("ix_member_cache_first_name_lower_sort", table_name="member_cache")
+    op.drop_index(
+        "ix_member_cache_username_lower_sort",
+        table_name="member_cache",
+        if_exists=True,
+    )
+    op.drop_index(
+        "ix_member_cache_first_name_lower_sort",
+        table_name="member_cache",
+        if_exists=True,
+    )

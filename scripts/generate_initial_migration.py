@@ -6,8 +6,8 @@
 """Generate the initial Alembic migration from the SQLAlchemy metadata.
 
 The migration is generated from the same table definitions the runtime
-uses, so the two can never drift. It is a bootstrap tool for the first
-revision of a new project:
+uses, including foreign keys, checks, identity columns, and computed
+columns. It is a bootstrap tool for the first revision of a new project:
 
     uv run python scripts/generate_initial_migration.py
 
@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import datetime
 import pathlib
+import re
 
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -37,16 +38,56 @@ from tcbot.database.base import metadata
 DIALECT = postgresql.dialect()
 
 
+_TYPE_REF_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]*)\(")
+# * repr() of a type omits its module. Only names exported by sqlalchemy can
+# * use the sa. prefix; dialect types belong to sqlalchemy.dialects.
+_SA_TYPE_NAMES = frozenset(
+    name
+    for name in dir(sa)
+    if isinstance(getattr(sa, name), type)
+    and issubclass(getattr(sa, name), sa.types.TypeEngine)
+)
+
+
 def _type_literal(column_type: sa.types.TypeEngine) -> str:
-    """Render a column type with the sqlalchemy prefix, nested types included."""
+    """Render a column type with module prefixes on every constructor."""
     if isinstance(column_type, sa.ARRAY):
         return f"sa.ARRAY({_type_literal(column_type.item_type)})"
-    return f"sa.{column_type!r}"
+    rendered = _TYPE_REF_RE.sub(
+        lambda match: (
+            f"sa.{match.group(1)}("
+            if match.group(1) in _SA_TYPE_NAMES
+            else match.group(0)
+        ),
+        repr(column_type),
+    )
+    if rendered.startswith(("sa.", "postgresql.")):
+        return rendered
+    module = type(column_type).__module__
+    prefix = "postgresql." if module.startswith("sqlalchemy.dialects.") else "sa."
+    return f"{prefix}{rendered}"
 
 
 def _column_literal(column: sa.Column) -> str:
     """Render one column the way Alembic's autogenerate would."""
     parts = [f"sa.Column({column.name!r}, {_type_literal(column.type)}"]
+    # * Column takes identity and computed as positional arguments. They must
+    # * precede every keyword or the generated file is a SyntaxError.
+    if column.identity is not None:
+        identity = column.identity
+        options = []
+        if identity.always:
+            options.append("always=True")
+        if identity.start is not None:
+            options.append(f"start={identity.start!r}")
+        if identity.increment is not None:
+            options.append(f"increment={identity.increment!r}")
+        parts.append(f"sa.Identity({', '.join(options)})")
+    if column.computed is not None:
+        computed = column.computed
+        parts.append(
+            f"sa.Computed({str(computed.sqltext)!r}, persisted={computed.persisted!r})"
+        )
     if column.server_default is not None:
         arg = getattr(column.server_default, "arg", None)
         if isinstance(arg, str):
@@ -85,6 +126,26 @@ def _constraint_literal(constraint: sa.Constraint) -> str | None:
         cols = ", ".join(repr(c.name) for c in constraint.columns)
         name = constraint.name or ""
         return f"sa.UniqueConstraint({cols}, name={name!r})"
+    if isinstance(constraint, sa.CheckConstraint):
+        sqltext = str(constraint.sqltext)
+        name = constraint.name or ""
+        return f"sa.CheckConstraint({sqltext!r}, name={name!r})"
+    if isinstance(constraint, sa.ForeignKeyConstraint):
+        args = [
+            ", ".join(repr(c.name) for c in constraint.columns),
+            ", ".join(repr(element.target_fullname) for element in constraint.elements),
+        ]
+        if constraint.name:
+            args.append(f"name={constraint.name!r}")
+        if constraint.ondelete:
+            args.append(f"ondelete={constraint.ondelete!r}")
+        if constraint.onupdate:
+            args.append(f"onupdate={constraint.onupdate!r}")
+        if constraint.deferrable:
+            args.append("deferrable=True")
+        if constraint.initially:
+            args.append(f"initially={constraint.initially!r}")
+        return f"sa.ForeignKeyConstraint({', '.join(args)})"
     return None
 
 
@@ -154,8 +215,8 @@ def render() -> str:
         "Revises:",
         "Create Date: 2026-11-11",
         "",
-        "The tables are generated from ``tcbot.database.base`` so the migration",
-        "and the runtime schema cannot drift.",
+        "The tables are generated from ``tcbot.database.base``, including its",
+        "foreign keys, checks, identity columns, and computed columns.",
         '"""',
         "",
         "from __future__ import annotations",
@@ -163,6 +224,7 @@ def render() -> str:
         "from typing import TYPE_CHECKING",
         "",
         "import sqlalchemy as sa",
+        "from sqlalchemy.dialects import postgresql",
         "",
         "from alembic import op",
         "",
@@ -182,7 +244,18 @@ def render() -> str:
         lines.append("    op.create_table(")
         lines.append(f"        {table.name!r},")
         lines.extend(f"        {_column_literal(column)}," for column in table.columns)
-        for constraint in table.constraints:
+        # * A set has no stable order, and a table can declare a foreign key
+        # * both inline and at table level. Render the table-level collection
+        # * once and sort both groups so the generated file is reproducible.
+        constraints = [
+            constraint
+            for constraint in table.constraints
+            if not isinstance(constraint, sa.ForeignKeyConstraint)
+        ]
+        constraints.extend(table.foreign_key_constraints)
+        for constraint in sorted(
+            constraints, key=lambda item: (type(item).__name__, item.name or "")
+        ):
             literal = _constraint_literal(constraint)
             if literal:
                 lines.append(f"        {literal},")
