@@ -263,6 +263,17 @@ async def _process_run(
             run_id, error_detail="the action carries no target"
         )
         return
+    # * A warn-threshold ban is deferred to this worker. The handler cannot
+    # * clear warnings for chats that have not landed yet, so every chunk of
+    # * this run clears its own landed chats. Manual bans never touch warns.
+    warn_clear_user = 0
+    if (
+        operation == "apply"
+        and action_status == "active"
+        and action_type == "ban"
+        and str(action.get("action_origin") or "") == "automated"
+    ):
+        warn_clear_user = target_user_id
 
     # * Claim in small chunks capped by the breaker's remaining failure
     # * headroom. A claim consumes one of the target's three attempts before
@@ -321,6 +332,13 @@ async def _process_run(
             if isinstance(result, BaseException):
                 update_failed = True
                 log.error("Enforcement target ctx failed: %s", result)
+        if warn_clear_user:
+            landed = [
+                as_int(target.get("chat_id"))
+                for target, result in zip(targets, chunk_results, strict=True)
+                if result is None or is_benign_telegram_error(result)
+            ]
+            await _clear_landed_warns(warn_clear_user, landed)
         results.extend(chunk_results)
         processed += len(targets)
         # * A short claim means no more targets of this run are available
@@ -387,6 +405,18 @@ async def _deliver(
                     can_manage_topics=True,
                 ),
             )
+
+
+async def _clear_landed_warns(user_id: int, chat_ids: list[int]) -> None:
+    """Clear the warnings of chats where an automated ban actually landed."""
+    if user_id <= 0 or not chat_ids:
+        return
+    try:
+        await db.warns_db.clear_warns_for_chats(user_id, chat_ids)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("Warn cleanup failed for user=%d after enforcement", user_id)
 
 
 async def _close_repaired_kick(action_id: int) -> None:

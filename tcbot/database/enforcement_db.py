@@ -128,7 +128,8 @@ _RUN_ACTION = text(
            a.target_user_id,
            a.action_type,
            a.status AS action_status,
-           a.expires_at,
+           a.action_origin,
+            a.expires_at,
            r.operation,
            EXISTS (
                SELECT 1

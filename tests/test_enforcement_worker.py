@@ -139,6 +139,84 @@ def test_an_active_ban_apply_is_delivered(monkeypatch: pytest.MonkeyPatch) -> No
     assert completed == [(3, {"status": "succeeded", "outcome": "succeeded"})]
 
 
+def _wire_apply(
+    monkeypatch: pytest.MonkeyPatch, *, origin: str, results: list[object]
+) -> tuple[list[tuple[int, list[int]]], list[Any]]:
+    """Stub an apply run and capture warn cleanup for its landed chats."""
+    cleared: list[tuple[int, list[int]]] = []
+    completed: list[Any] = []
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [{"id": 1, "action_id": 2, "operation": "apply"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "ban",
+            "action_status": "active",
+            "action_origin": origin,
+            "operation": "apply",
+            "expires_at": None,
+        }
+
+    async def _targets(run_id: int, limit: int = 100) -> list[dict[str, object]]:
+        return [
+            {"id": 3, "chat_id": -100, "attempt_count": 0},
+            {"id": 4, "chat_id": -200, "attempt_count": 0},
+        ]
+
+    async def _complete(target_id: int, **kwargs: Any) -> None:
+        completed.append((target_id, kwargs))
+
+    async def _clear(user_id: int, chat_ids: Any) -> int:
+        cleared.append((user_id, list(chat_ids)))
+        return len(chat_ids)
+
+    async def _fan_out(coros: Any) -> list[object]:
+        for coro, result in zip(coros, results, strict=True):
+            if result is None:
+                await coro
+            else:
+                coro.close()
+        return list(results)
+
+    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
+    monkeypatch.setattr(db.warns_db, "clear_warns_for_chats", _clear)
+    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    return cleared, completed
+
+
+def test_automated_ban_apply_clears_warns_for_landed_chats(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deferred threshold ban clears each chat as Telegram accepts it."""
+    cleared, _ = _wire_apply(
+        monkeypatch, origin="automated", results=[None, RuntimeError("network down")]
+    )
+
+    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+
+    assert cleared == [(9, [-100])]
+
+
+def test_a_manual_ban_apply_does_not_clear_warns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a warn-threshold ban owns the corresponding warning cleanup."""
+    cleared, _ = _wire_apply(monkeypatch, origin="manual", results=[None, None])
+
+    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+
+    assert cleared == []
+
+
 def test_an_active_mute_apply_keeps_its_deadline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
