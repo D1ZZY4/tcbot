@@ -157,6 +157,10 @@ class TwoLevelCache[T]:
         """Store multiple entries in memory and enqueue one pipelined Redis write."""
         if not items:
             return
+        if self._critical_delete:
+            for key, val in items.items():
+                self.put(key, val)
+            return
         for key, val in items.items():
             self._mem.put(key, val)
             self._pending_invalidations.discard(key)
@@ -164,7 +168,8 @@ class TwoLevelCache[T]:
         self._revision += 1
         if not cfg.redis_url:
             return
-        entries: list[tuple[Any, str, str]] = []
+        keys: list[Any] = []
+        batch: list[tuple[str, str]] = []
         for key, val in items.items():
             rkey = self._rkey(key)
             try:
@@ -172,31 +177,17 @@ class TwoLevelCache[T]:
             except Exception as exc:
                 log.debug("Redis payload encode failed for %s: %s", rkey, exc)
                 continue
-            entries.append((key, rkey, payload))
-        if not entries:
-            return
-        if self._critical_delete:
-            for key, rkey, payload in entries:
-                self._pending_writes.add(key)
-                tomb_key = self._tombstone_key(key)
-                task = redis_io.enqueue_redis_mutation(
-                    self._redis_prefix,
-                    lambda rk=rkey, pl=payload, tk=tomb_key: self._redis_set_guarded(
-                        rk, pl, tk
-                    ),
-                    droppable=not self._is_revocation,
-                )
-                self._watch_mutation(self._pending_writes, key, task)
-            return
-        for key, _rkey, _payload in entries:
+            keys.append(key)
+            batch.append((rkey, payload))
             self._pending_writes.add(key)
-        batch = [(rkey, payload) for _key, rkey, payload in entries]
+        if not batch:
+            return
         task = redis_io.enqueue_redis_mutation(
             self._redis_prefix,
             lambda: self._redis_set_many(batch),
             droppable=not self._is_revocation,
         )
-        for key, _rkey, _payload in entries:
+        for key in keys:
             self._watch_mutation(self._pending_writes, key, task)
 
     def put_local(self, key: Any, val: T) -> None:
