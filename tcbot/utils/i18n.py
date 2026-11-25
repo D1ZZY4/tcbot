@@ -536,22 +536,6 @@ def _render_compiled(
     return "".join(out)
 
 
-def _render_template(
-    template: str, prepared: dict[str, str], *, key: str, escape: bool
-) -> str:
-    """Substitute placeholders and resolve the strict mini-markup."""
-    plan = _compile_template(template, key=key, escape=escape)
-    if plan.field_count == 0:
-        return plan.static[0]
-    out: list[str] = [plan.static[0]]
-    for idx, fname in enumerate(plan.fields):
-        if fname not in prepared:
-            raise I18nError(f"i18n template {key!r} missing value for {{{fname}}}")
-        out.append(prepared[fname])
-        out.append(plan.static[idx + 1])
-    return "".join(out)
-
-
 def t(
     key: str,
     locale: str | None = None,

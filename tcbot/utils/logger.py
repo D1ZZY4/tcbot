@@ -291,14 +291,11 @@ class _LoguruShim:
             # * The Loguru sink already holds a non-reentrant handler lock.
             # * Stdlib delivers this line to the same console without trying
             # * to acquire that lock again.
-            if level == "exception":
-                self._std_logger.exception(text)
-            else:
-                getattr(self._std_logger, level)(text, exc_info=exc_info)
+            getattr(self._std_logger, level)(text, exc_info=exc_info)
             return
         bound = logger.bind(module=self._name)
         if exc_info:
-            bound.opt(depth=2, exception=exc_info).error(text)
+            getattr(bound.opt(depth=2, exception=exc_info), level)(text)
         else:
             getattr(bound.opt(depth=2), level)(text)
 

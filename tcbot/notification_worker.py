@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import timedelta
-from typing import Any
 
 from pyrogram import Client
 
@@ -166,12 +165,21 @@ async def _process_task(
     message_id = as_int(task.get("message_id"))
     attempts = as_int(task.get("attempts"))
 
-    async def _complete(**kwargs: Any) -> None:
+    async def _complete(
+        *,
+        state: str,
+        error: str | None = None,
+        retry_after: timedelta | None = None,
+        expected_attempts: int | None = None,
+    ) -> None:
         """Settle only the claim that started this edit."""
         await db.notifications_db.complete_task(
             task_id,
+            state=state,
+            error=error,
+            retry_after=retry_after,
+            expected_attempts=expected_attempts,
             expected_message_id=message_id,
-            **kwargs,
         )
 
     if task_id <= 0:

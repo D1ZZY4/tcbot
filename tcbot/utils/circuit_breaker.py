@@ -175,7 +175,7 @@ class CircuitBreaker:
                 self._record_reached_service()
             else:
                 self._record_failure(exc)
-            raise exc from None
+            raise
         except BaseException:
             # * Cancellation must not leave a HALF_OPEN probe permanently reserved.
             self._release_probe()

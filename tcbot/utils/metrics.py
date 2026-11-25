@@ -9,10 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from tcbot.utils.logger import get_logger
-
-log = get_logger(__name__)
-
 
 @dataclass
 class _CacheStats:
@@ -66,7 +62,7 @@ try:
         "tcbot_redis_available",
         "Whether the Redis client is usable (1) or not (0).",
     )
-except Exception:  # pragma: no cover - exercised only without the extra
+except ImportError:  # pragma: no cover - exercised only without the extra
     _HITS = _MISSES = _INVALIDATIONS = _DROPS = _EVICTIONS = None
     _QUEUE_DEPTH = _REDIS_AVAILABLE = None
 

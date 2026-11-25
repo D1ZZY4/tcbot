@@ -176,7 +176,7 @@ async def _error_handler(
         )
         await report.report_exc(exc)
         return
-    if classify._is_benign(exc):
+    if classify.is_benign(exc):
         return
     context_parts: list[str] = []
     ctx = current_ctx()
@@ -199,7 +199,7 @@ async def _error_handler(
         )
     if msg is not None and getattr(msg, "text", None) and not is_private:
         context_parts.append(f"Text: {msg.text[:_ERROR_CONTEXT_TEXT_LEN]}")
-    if query is not None and query.data:
+    if query is not None and query.data and not is_private:
         context_parts.append(f"CBQ data: {query.data}")
     context_str = (
         report.scrub_text(" | ".join(context_parts)) if context_parts else None
@@ -250,14 +250,14 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
         if exc is not None and db_engine.is_pool_timeout(exc):
             log.debug("[asyncio] pool saturated (not reported): %s", exc)
             return
-        if classify._is_benign(exc):
+        if classify.is_benign(exc):
             log.debug("[asyncio] benign (not reported): %s", exc)
             return
         # * Console output is scrubbed like the shipped reports (see the
         # * main error handler); the loop handler has no other scrub site.
         log.error(
             "[asyncio] %s%s",
-            detail,
+            report.scrub_text(detail),
             f" - {report.scrub_text(str(exc))}" if exc else "",
             exc_info=exc,
         )
@@ -477,7 +477,7 @@ def main() -> None:
         asyncio.run(_run_polling(), loop_factory=loop_factory())
     except KeyboardInterrupt:
         log.info("Shutdown requested (KeyboardInterrupt).")
-    except BaseException as exc:
+    except Exception as exc:
         _print_fatal(stage, exc)
         raise SystemExit(1) from exc
 

@@ -169,17 +169,15 @@ def start_keepalive() -> None:
     only surface as a thread traceback while the bot runs on headless
     (no health checks). Fail fast at startup instead.
     """
-    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        # * Werkzeug binds with SO_REUSEADDR. Without it the probe fails on a
-        # * port left in TIME_WAIT by a restart even though the real bind
-        # * would have succeeded, aborting bot startup for no real conflict.
-        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        probe.bind((cfg.bind_host, cfg.port))
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            # * Werkzeug binds with SO_REUSEADDR. Without it the probe fails on a
+            # * port left in TIME_WAIT by a restart even though the real bind
+            # * would have succeeded, aborting bot startup for no real conflict.
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            probe.bind((cfg.bind_host, cfg.port))
     except OSError as exc:
         raise RuntimeError(f"Keep-alive port {cfg.port} is unavailable: {exc}") from exc
-    finally:
-        probe.close()
     t = threading.Thread(
         target=_run,
         name="keepalive",
