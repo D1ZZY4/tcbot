@@ -286,7 +286,8 @@ def test_error_handler_reports_when_benign_check_raises(
         )
     assert len(reported) == 1 and isinstance(reported[0], ValueError)
     assert "Unhandled exception for update" in caplog.text
-    assert "benign check failed" in caplog.text
+    # * The defensive predicate owns the fallback log, not the handler.
+    assert "Benign check failed" in caplog.text
 
 
 def test_error_handler_suppresses_circuit_open(monkeypatch: Any, caplog: Any) -> None:

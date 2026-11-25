@@ -49,3 +49,38 @@ async def test_a_failed_summary_still_ships_the_current_error(
     assert len(bot.calls) == 2
     assert "suppressed" in bot.calls[0]
     assert bot.calls[1] == "current incident"
+
+
+class _AlwaysFailingBot:
+    """Telegram rejects every send, so no report actually ships."""
+
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    async def send_rich_message(
+        self, _chat_id: int, _rich_message: Any, **_kwargs: Any
+    ) -> None:
+        self.attempts += 1
+        raise RuntimeError("LOG_ERRORS unavailable")
+
+
+@pytest.mark.asyncio
+async def test_a_failed_report_neither_spends_budget_nor_vanishes_from_the_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A dropped report must stay visible in the rollover count."""
+    bot = _AlwaysFailingBot()
+    monkeypatch.setattr(error_reporter, "_bot", bot)
+    monkeypatch.setattr(error_reporter, "_chat_id", -100)
+    monkeypatch.setattr(error_reporter, "_thread_id", None)
+    monkeypatch.setattr(error_reporter, "_send_window_start", 10_000.0)
+    monkeypatch.setattr(error_reporter, "_sent_in_window", 0)
+    monkeypatch.setattr(error_reporter, "_suppressed_in_window", 0)
+    monkeypatch.setattr(error_reporter, "monotonic", lambda: 10_001.0)
+
+    await error_reporter._ship_throttled({"html": "first incident"})
+    await error_reporter._ship_throttled({"html": "second incident"})
+
+    assert bot.attempts == 2
+    assert error_reporter._sent_in_window == 0
+    assert error_reporter._suppressed_in_window == 2

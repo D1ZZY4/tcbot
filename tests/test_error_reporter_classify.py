@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from pyrogram.errors import AuthKeyDuplicated
+from pyrogram.errors import AuthKeyDuplicated, RPCError
 from pyrogram.session.session import AuthKeyNotFound
 from sqlalchemy.exc import OperationalError
 
@@ -53,6 +53,25 @@ def test_a_database_error_is_labelled_as_such() -> None:
     """A database failure carries the database label, not the code-bug label."""
     exc = OperationalError("SELECT 1", {}, Exception("connection refused"))
     assert classify._classify(exc) == "[DB] Database Error"
+
+
+class TimedOut(RPCError):
+    """Stand-in for Kurigram's RPC timeout, matched by name and base type."""
+
+
+def test_builtin_timeout_is_not_labelled_as_a_telegram_failure() -> None:
+    """A database or worker deadline must point at the deadline, not Telegram."""
+    exc = TimeoutError("database call timed out")
+    label = classify._classify(exc)
+    assert label == "[~] Async Timeout"
+    assert "deadline" in classify._action_hint(label).lower()
+    assert "Telegram" not in label
+
+
+def test_rpc_timeout_keeps_the_telegram_label() -> None:
+    assert (
+        classify._classify(TimedOut("rpc call timed out")) == "[~] Telegram Timed Out"
+    )
 
 
 def test_benign_suppresses_connectivity_and_circuit() -> None:

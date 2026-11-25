@@ -158,11 +158,8 @@ async def _error_handler(
         )
         await error_reporter.report_exc(exc)
         return
-    try:
-        if error_reporter._benign(exc):
-            return
-    except Exception as check_exc:
-        log.debug("benign check failed, treating as reportable: %s", check_exc)
+    if error_reporter._is_benign(exc):
+        return
     context_parts: list[str] = []
     ctx = current_ctx()
     user = ctx.effective_user if ctx is not None else None

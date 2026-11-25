@@ -43,7 +43,6 @@ class PollingConflictError(RuntimeError):
 # * with the categories it needs.
 _te = SimpleNamespace(
     RetryAfter=FloodWait,
-    TimedOut=TimeoutError,
     Conflict=PollingConflictError,
     BadRequest=BadRequest,
     Forbidden=Forbidden,
@@ -153,6 +152,17 @@ def _action_hint(label: str) -> str:
     return "Check the message and location above."
 
 
+def _is_telegram_timeout(exc: BaseException) -> bool:
+    """Match Kurigram's RPC timeout without claiming builtin timeouts.
+
+    Python 3.11 made ``asyncio.TimeoutError`` an alias of the builtin, so an
+    ``isinstance(exc, TimeoutError)`` branch would label database and worker
+    deadlines as Telegram failures and make the generic timeout branches below
+    unreachable. The framework class is matched by name and RPC base instead.
+    """
+    return type(exc).__name__ == "TimedOut" and isinstance(exc, RPCError)
+
+
 def _classify(exc: BaseException | None) -> str:
     """Return a human-readable label tag for the exception."""
     if exc is None:
@@ -163,7 +173,7 @@ def _classify(exc: BaseException | None) -> str:
         return "[~] MTProto Auth Key Invalidated"
     if isinstance(exc, _te.RetryAfter):
         return "[~] Rate Limit: Flood Wait"
-    if isinstance(exc, _te.TimedOut):
+    if _is_telegram_timeout(exc):
         return "[~] Telegram Timed Out"
     if isinstance(exc, _te.Conflict):
         return "[~] Polling Conflict"
@@ -173,6 +183,10 @@ def _classify(exc: BaseException | None) -> str:
         return "[!] Telegram Forbidden"
     if isinstance(exc, _te.InvalidToken):
         return "[!] Telegram Invalid Token"
+    # * TimeoutError derives from OSError, so the generic timeout check must
+    # * precede the network branch or every deadline becomes a Telegram error.
+    if isinstance(exc, asyncio.TimeoutError):
+        return "[~] Async Timeout"
     if isinstance(exc, _te.NetworkError):
         return "[~] Telegram Network Error"
     if isinstance(exc, _te.TelegramError):
@@ -188,8 +202,6 @@ def _classify(exc: BaseException | None) -> str:
         )
     if "circuit_breaker" in mod:
         return "[~] Circuit Open"
-    if isinstance(exc, asyncio.TimeoutError):
-        return "[~] Async Timeout"
     if isinstance(exc, asyncio.CancelledError):
         return "[-] Task Cancelled"
     if isinstance(exc, (ConnectionError, TimeoutError, OSError)) or any(
@@ -655,7 +667,6 @@ async def _ship_throttled(payload: dict[str, Any]) -> None:
     if _sent_in_window >= _SEND_BUDGET:
         _suppressed_in_window += 1
         return
-    _sent_in_window += 1
     try:
         from tcbot.modules.helper.rich.msg import send_rich  # noqa: PLC0415
 
@@ -666,7 +677,13 @@ async def _ship_throttled(payload: dict[str, Any]) -> None:
             message_thread_id=_thread_id,
         )
     except Exception as exc:
+        # * A report that never reached Telegram is not a sent report: it must
+        # * not consume the window budget, and it belongs in the rollover count
+        # * so the summary does not understate the suppressed incidents.
+        _suppressed_in_window += 1
         log.warning("Failed to ship error to LOG_ERRORS: %s", exc)
+        return
+    _sent_in_window += 1
 
 
 async def send_to_log_errors(payload: dict[str, Any]) -> None:
