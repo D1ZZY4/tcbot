@@ -358,8 +358,12 @@ async def _shutdown_subsystems() -> None:
             result, asyncio.CancelledError
         ):
             log.warning("Shutdown step failed (non-fatal): %s", result)
-    throw_if_cancelled(shutdown_results)
-    await close_database()
+    # ! CRITICAL: The database is the last client to close. A cancellation
+    # ! returned by a step above must still reach it before propagating.
+    try:
+        throw_if_cancelled(shutdown_results)
+    finally:
+        await close_database()
 
 
 async def _run_polling() -> None:
