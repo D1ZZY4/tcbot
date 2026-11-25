@@ -206,7 +206,7 @@ jobs:
                     stop_reason="Branch moved but the diff stayed unreadable"
                     break
                   fi
-                elif printf '%s\n' "$changed" | grep -qE '^(tcbot/|i18n/|pyproject\.toml|uv\.lock|\.python-version|\.github/workflows/run-bot\.yml)'; then
+                elif printf '%s\n' "$changed" | grep -qE '^(tcbot/|i18n/|alembic/|alembic\.ini|pyproject\.toml|uv\.lock|\.python-version|Dockerfile|docker-compose\.yml|\.github/workflows/run-bot\.yml)'; then
                   stop_reason="Runtime changes detected upstream (${live_sha:0:7}..${remote_sha:0:7})"
                   break
                 else

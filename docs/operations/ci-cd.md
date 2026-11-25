@@ -22,8 +22,9 @@ Related pages: [setup](../getting-started/setup.md) and
 ## Lint and type workflows
 
 All three validation workflows install Python 3.14, install `uv`, run
-`uv sync --frozen`, and use dummy values for `BOT_TOKEN`, `DATABASE_URL`, and
-`OWNER_ID` so importing the package does not require real secrets.
+`uv sync --locked` with `UV_LOCKED=1` so a stale lockfile fails the build, and
+use dummy values for `BOT_TOKEN`, `DATABASE_URL`, and `OWNER_ID` so importing
+the package does not require real secrets.
 
 - Ruff runs `ruff format --check .` and `ruff check .`. It also enforces the
   1,000-line file budget across `tcbot/` and checks that `import tcbot` works.
@@ -79,9 +80,11 @@ only when the PR was created.
   minutes. Five deaths within ten minutes abort the run and rely on the
   15-minute cron for recovery.
 - Self-preempt polls the branch about every two minutes. A runtime push
-  (under `tcbot/`, `i18n/`, `pyproject.toml`, `uv.lock`, `.python-version`, or
-  this workflow) stops the live run gracefully so the queued successor serves
-  the new commit. Docs-only pushes do not restart the bot.
+  (under `tcbot/`, `i18n/`, `alembic/`, `alembic.ini`, `pyproject.toml`,
+  `uv.lock`, `.python-version`, `Dockerfile`, `docker-compose.yml`, or this
+  workflow) stops the live run gracefully so the queued successor serves the
+  new commit. The set matches the workflow's push trigger. Docs-only pushes do
+  not restart the bot.
 - With `BOT_PAT`, the run dispatches its successor shortly before handover,
   retrying three times. Without it, the 15-minute cron provides restarts.
 - Runtime secrets are passed as workflow environment variables. Logs are
