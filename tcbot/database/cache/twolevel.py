@@ -287,14 +287,14 @@ class TwoLevelCache[T]:
         try:
             await asyncio.wait_for(
                 asyncio.shield(task),
-                timeout=redis_io._CLEAR_ALL_TIMEOUT_S,
+                timeout=redis_io.CLEAR_ALL_TIMEOUT_S,
             )
         except TimeoutError:
             log.warning(
                 "Redis clear_all for prefix %s still running after %ds; "
                 "continuing with L1 cleared.",
                 self._redis_prefix,
-                redis_io._CLEAR_ALL_TIMEOUT_S,
+                redis_io.CLEAR_ALL_TIMEOUT_S,
             )
 
     # ── Async hot-path ── #

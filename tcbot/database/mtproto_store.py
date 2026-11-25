@@ -119,7 +119,6 @@ async def _retry_write(
             return await db_call(op)
         return await db_call(op, timeout=timeout)
 
-    last_exc: BaseException | None = None
     for attempt in range(_MAX_WRITE_RETRIES):
         try:
             return await _attempt()
@@ -168,7 +167,6 @@ async def _retry_write(
                     _sqlstate(exc),
                 )
                 return None
-            last_exc = exc
             delay = _RETRY_BASE_DELAY * (2**attempt)
             log.debug(
                 "MTProto write attempt %d/%d failed (transient): %s sqlstate=%s; "
@@ -180,8 +178,7 @@ async def _retry_write(
                 delay,
             )
             await asyncio.sleep(delay)
-    # * pragma: no cover - the loop always returns or raises before reaching here.
-    raise last_exc  # type: ignore[misc]
+    return None
 
 
 # ────────────────────────────── Keys ───────────────────────────── #

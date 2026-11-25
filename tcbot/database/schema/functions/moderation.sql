@@ -126,6 +126,11 @@ BEGIN
         SELECT v_run_id, cc.chat_id
         FROM %SCHEMA%.connected_chats AS cc
         WHERE cc.is_active
+           OR cc.chat_id = coalesce(
+               nullif(current_setting('tcbot.primary_chat_id', true), '')::bigint,
+               (SELECT cs.primary_chat_id FROM %SCHEMA%.community_settings AS cs
+                 WHERE cs.singleton_key = 'global')
+           )
         ON CONFLICT (run_id, chat_id) DO NOTHING;
     END IF;
 
@@ -144,6 +149,7 @@ CREATE OR REPLACE FUNCTION %SCHEMA%.expire_due_moderation_actions() RETURNS bigi
     AS $$
 DECLARE
   v_expired_count bigint;
+  v_withdrawn_count bigint;
 BEGIN
   -- * An expired ban closes its pending appeal in the same statement. A
   -- * pending appeal left behind can never be decided, because a decision
@@ -172,7 +178,7 @@ BEGIN
   -- * The final projection references both CTEs, so the two updates are
   -- * one atomic statement.
   SELECT count(*), (SELECT count(*) FROM withdrawn)
-    INTO v_expired_count
+    INTO v_expired_count, v_withdrawn_count
     FROM expired;
 
   RETURN v_expired_count;

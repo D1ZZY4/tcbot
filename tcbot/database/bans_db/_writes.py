@@ -100,7 +100,7 @@ async def _reuse_existing(
     existing = await get_active_ban(target_id)
     if existing is None:
         raise error
-    if not auto_id and str(existing.get("ban_id", "")) == str(ban_id):
+    if not auto_id and str(existing.get("ban_id", "")) == ban_id:
         # * The explicit id itself is taken, so the caller must not be
         # * handed a record it cannot reference.
         raise error
@@ -236,7 +236,7 @@ async def create_ban(
             await sess.execute(
                 pg_insert(moderation_messages).values(
                     action_id=row["id"],
-                    chat_id=archive_chat,
+                    chat_id=cfg.logs[0],
                     message_id=log_msg_id,
                     message_kind="log",
                     recorded_by_user_id=admin_id,
@@ -261,7 +261,6 @@ async def create_ban(
             # * the moderation action: the caller never supplied the id,
             # * so it can be swapped for a fresh one and the insert retried.
             ban_id = make_ban_id()
-            metadata[META_DURATION] = duration_str
             try:
                 row = await run_transaction(_work)
             except Exception as retry_error:
@@ -474,7 +473,7 @@ async def update_ban(
             await sess.execute(
                 pg_insert(moderation_messages).values(
                     action_id=row["id"],
-                    chat_id=archive_chat,
+                    chat_id=cfg.logs[0],
                     message_id=new_log_id,
                     message_kind="log",
                     recorded_by_user_id=admin_id,

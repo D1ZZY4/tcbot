@@ -58,7 +58,7 @@ def _tag_scalars(value: Any) -> Any:
         # * already a str and no value changed during tagging.
         new_dict: dict[str, Any] | None = None
         for k, v in value.items():
-            sk = k if type(k) is str else (k if isinstance(k, str) else str(k))
+            sk = k if isinstance(k, str) else str(k)
             tv = _tag_scalars(v)
             if new_dict is not None:
                 new_dict[sk] = tv
@@ -83,37 +83,6 @@ def _tag_scalars(value: Any) -> Any:
         return new_list if new_list is not None else value
     if isinstance(value, tuple):
         return [_tag_scalars(v) for v in value]
-    return value
-
-
-def _restore_tagged(value: Any) -> Any:
-    """Restore tagged datetimes while tolerating legacy cache data.
-
-    Bottom-up replay of the retired stdlib ``object_hook``: children restore
-    first, then the exact-shape check runs on the parent, so payloads written
-    by either codec decode identically. Only exact-shape mappings (exactly
-    the tag key plus the value key) restore: a user-controlled dict that
-    merely contains the tag key must never deserialize into a datetime.
-    """
-    if type(value) in _PRIMITIVE_TYPES:
-        return value
-    if isinstance(value, dict):
-        restored = {k: _restore_tagged(v) for k, v in value.items()}
-        if len(restored) == 2 and _TYPE_KEY in restored and "value" in restored:
-            value_type = restored[_TYPE_KEY]
-            raw_value = restored["value"]
-            if value_type == _DATETIME_TYPE and isinstance(raw_value, str):
-                try:
-                    return datetime.fromisoformat(raw_value)
-                except ValueError:
-                    return restored
-        # * Any other tag is unknown to this codec and stays a plain
-        # * mapping. The MongoDB-era ``objectid`` tag written before the
-        # * PostgreSQL migration lands here: the value survives as a
-        # * mapping and no consumer needs it any more.
-        return restored
-    if isinstance(value, list):
-        return [_restore_tagged(v) for v in value]
     return value
 
 

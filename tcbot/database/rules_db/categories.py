@@ -158,16 +158,28 @@ async def delete_category(set_id: int, category_key: str) -> bool:
 
 async def move_category(set_id: int, category_key: str, delta: int) -> None:
     """Move a category one position up or down in the display order."""
-    rows = await list_categories(set_id)
-    index = next(
-        (i for i, row in enumerate(rows) if row["category_key"] == category_key), -1
-    )
-    other = index + (-1 if delta < 0 else 1)
-    if index < 0 or other < 0 or other >= len(rows):
-        return
-    current, neighbour = rows[index], rows[other]
 
     async def _work(sess: AsyncSession) -> None:
+        rows = (
+            (
+                await sess.execute(
+                    select(rule_categories)
+                    .where(rule_categories.c.rule_set_id == set_id)
+                    .order_by(rule_categories.c.sort_order, rule_categories.c.id)
+                    .with_for_update()
+                )
+            )
+            .mappings()
+            .all()
+        )
+        index = next(
+            (i for i, row in enumerate(rows) if row["category_key"] == category_key),
+            -1,
+        )
+        other = index + (-1 if delta < 0 else 1)
+        if index < 0 or other < 0 or other >= len(rows):
+            return
+        current, neighbour = rows[index], rows[other]
         await sess.execute(
             rule_categories.update()
             .where(rule_categories.c.id == current["id"])

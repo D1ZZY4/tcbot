@@ -580,9 +580,7 @@ async def upsert_user_if_changed(
 
     Returns True when a DB write was performed, False when skipped.
     """
-    cached = user_mention_cache.get(user_id)
-    if cached is CACHE_MISS:
-        cached = await user_mention_cache.peek(user_id)
+    cached = await user_mention_cache.peek(user_id)
     # * Compare the full triple: last_name-only changes must also write.
     if (
         isinstance(cached, list)
@@ -606,9 +604,7 @@ async def refresh_display_name(user_id: int, first_name: str) -> bool:
     Only the display name is refreshed. The username and the last name
     stay as they are: the caller resolved a name, not a full profile.
     """
-    cached = user_mention_cache.get(user_id)
-    if cached is CACHE_MISS:
-        cached = await user_mention_cache.peek(user_id)
+    cached = await user_mention_cache.peek(user_id)
     triple = _cached_triple(cached) if isinstance(cached, list) else (None, None, None)
     if isinstance(cached, list) and triple[0] == first_name:
         return False

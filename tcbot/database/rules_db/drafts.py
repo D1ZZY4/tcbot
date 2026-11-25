@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tcbot.database.base import (
@@ -36,58 +36,78 @@ async def open_draft(
     with ``clone_items=False``. The content locale selects the draft to open.
     """
     content_locale = locale or WORKING_LOCALE
-    existing = await db_call(
-        lambda: fetch_one(
-            select(rule_set_versions).where(
-                rule_set_versions.c.rule_set_id == set_id,
-                rule_set_versions.c.locale == content_locale,
-                rule_set_versions.c.status == "draft",
-            )
-        )
-    )
-    if existing is not None:
-        return dict(existing)
 
-    published = await db_call(
-        lambda: fetch_one(
-            select(rule_set_versions).where(
-                rule_set_versions.c.rule_set_id == set_id,
-                rule_set_versions.c.locale == content_locale,
-                rule_set_versions.c.status == "published",
-            )
+    async def _work(sess: AsyncSession) -> dict[str, Any]:
+        # * Serialise draft creation per (set_id, locale) so concurrent
+        # * callers reuse the same draft instead of racing on the unique index.
+        await sess.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:scope, 0))"),
+            {"scope": f"rules_draft:{set_id}:{content_locale}"},
         )
-    )
-    number_row = await db_call(
-        lambda: fetch_one(
-            select(
-                func.coalesce(func.max(rule_set_versions.c.version_number), 0).label(
-                    "max_version"
+        existing = (
+            (
+                await sess.execute(
+                    select(rule_set_versions).where(
+                        rule_set_versions.c.rule_set_id == set_id,
+                        rule_set_versions.c.locale == content_locale,
+                        rule_set_versions.c.status == "draft",
+                    )
                 )
+            )
+            .mappings()
+            .first()
+        )
+        if existing is not None:
+            return dict(existing)
+
+        published = (
+            (
+                await sess.execute(
+                    select(rule_set_versions).where(
+                        rule_set_versions.c.rule_set_id == set_id,
+                        rule_set_versions.c.locale == content_locale,
+                        rule_set_versions.c.status == "published",
+                    )
+                )
+            )
+            .mappings()
+            .first()
+        )
+        max_version = await sess.scalar(
+            select(
+                func.coalesce(func.max(rule_set_versions.c.version_number), 0)
             ).where(
                 rule_set_versions.c.rule_set_id == set_id,
                 rule_set_versions.c.locale == content_locale,
             )
         )
-    )
-    next_number = int(number_row["max_version"] if number_row else 0) + 1
-
-    async def _work(sess: AsyncSession) -> int:
-        created = await sess.execute(
-            rule_set_versions.insert()
-            .values(
-                rule_set_id=set_id,
-                version_number=next_number,
-                locale=content_locale,
-                status="draft",
-                created_by_user_id=user_id,
-                created_at=utc_now(),
-                updated_at=utc_now(),
+        next_number = int(max_version or 0) + 1
+        now = utc_now()
+        created = (
+            (
+                await sess.execute(
+                    rule_set_versions.insert()
+                    .values(
+                        rule_set_id=set_id,
+                        version_number=next_number,
+                        locale=content_locale,
+                        status="draft",
+                        created_by_user_id=user_id,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    .returning(rule_set_versions)
+                )
             )
-            .returning(rule_set_versions.c.id)
+            .mappings()
+            .first()
         )
-        version_id = int(created.scalar_one())
+        if created is None:
+            raise RuntimeError("The rules draft was not written")
+        draft_doc = dict(created)
+        version_id = int(draft_doc["id"])
         if published is None or not clone_items:
-            return version_id
+            return draft_doc
         categories = (
             (
                 await sess.execute(
@@ -144,16 +164,9 @@ async def open_draft(
         # * database call budget on a published version with hundreds of items.
         if rows:
             await sess.execute(rule_items.insert(), rows)
-        return version_id
+        return draft_doc
 
-    version_id = await run_transaction(_work)
-    return {
-        "id": version_id,
-        "rule_set_id": set_id,
-        "version_number": next_number,
-        "locale": content_locale,
-        "status": "draft",
-    }
+    return await run_transaction(_work)
 
 
 async def clear_draft_items(version_id: int) -> int:

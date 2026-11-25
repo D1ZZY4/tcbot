@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     from sqlalchemy.engine import CursorResult
     from sqlalchemy.ext.asyncio import AsyncConnection
-    from sqlalchemy.sql import Executable
+    from sqlalchemy.sql import Executable, Select
 log = get_logger(__name__)
 
 # * Caller-side budget for one database operation. The driver has its own
@@ -253,15 +253,14 @@ async def fetch_count(stmt: Executable) -> int:
     return int(value or 0)
 
 
-async def count_rows(stmt: Executable) -> int:
+async def count_rows(stmt: Select[Any]) -> int:
     """Return the number of rows one SELECT returns.
 
     The statement is wrapped in a counting query, so the result is the
     row count and never the first column of the first row.
     """
-    return await fetch_value(
-        select(func.count()).select_from(stmt.subquery())  # type: ignore[attr-defined]
-    )
+    value = await fetch_value(select(func.count()).select_from(stmt.subquery()))
+    return int(value or 0)
 
 
 async def run(stmt: Executable) -> int:
@@ -291,11 +290,8 @@ async def run_script(sql: str) -> None:
         driver_connection = raw.driver_connection
         if driver_connection is None:
             raise RuntimeError("the database did not open a driver connection")
-        cursor = driver_connection.cursor()
-        try:
+        async with driver_connection.cursor() as cursor:
             await cursor.execute(sql)
-        finally:
-            await cursor.close()
 
 
 async def run_returning(stmt: Executable) -> list[dict[str, Any]]:

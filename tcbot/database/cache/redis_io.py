@@ -53,7 +53,7 @@ _redis_running: set[asyncio.Task[object]] = set()
 _DRAIN_TIMEOUT_S: float = 5.0
 # * Ceiling for one clear_all wait; the sweep keeps running past it so a
 # * dead-Redis backlog delays the caller briefly instead of stalling it.
-_CLEAR_ALL_TIMEOUT_S: float = 10.0
+CLEAR_ALL_TIMEOUT_S: float = 10.0
 # * Per-operation deadlines belong to the client's socket timeout, not to a
 # * ``wait_for`` wrapper: cancelling a Redis command leaves its reply unread
 # * on the pooled connection, and the next command would read that stale

@@ -19,6 +19,7 @@ from sqlalchemy import text
 
 from tcbot import cfg
 from tcbot.database.engine import db_call, fetch_value, run
+from tcbot.database.migrations import _SCHEMA_PATTERN
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -43,7 +44,12 @@ _SCHEDULER_DRIFT_SCHEDULE: str = "*/15 * * * *"
 
 def _qualified(function_name: str) -> str:
     """Return the schema-qualified name of one SQL function."""
-    return f'"{cfg.db_schema}".{function_name}'
+    schema = cfg.db_schema
+    if not _SCHEMA_PATTERN.fullmatch(schema):
+        raise ValueError(
+            f"Refusing to build pg_cron command for invalid schema {schema!r}"
+        )
+    return f'"{schema}".{function_name}'
 
 
 def _jobs() -> tuple[tuple[str, str, str], ...]:
