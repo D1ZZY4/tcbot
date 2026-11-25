@@ -213,12 +213,20 @@ async def extract_target(
             return verified
         return reply_hit
     if args:
-        hit = await _args_target(args, bot, allow_partial=prefer_explicit)
+        hit = await _args_target(
+            args,
+            bot,
+            allow_partial=prefer_explicit,
+            # * Read-only views may use an observed username as a last resort;
+            # * a state-changing command must not act on a possible previous
+            # * holder when both live resolvers are unavailable.
+            allow_cached_username=prefer_explicit,
+        )
         if hit is not None:
             return hit
     elif reply_hit is not None:
         return reply_hit
-    hit = await _entity_target(msg, bot)
+    hit = await _entity_target(msg, bot, allow_cached_username=prefer_explicit)
     if hit is not None:
         return hit
     return None, None
@@ -269,6 +277,7 @@ async def _args_target(
     *,
     allow_partial: bool = False,
     verified: bool = False,
+    allow_cached_username: bool = True,
 ) -> tuple[int, str] | None:
     """Priorities 2-3: numeric ID, @username, then partial name search.
 
@@ -281,6 +290,10 @@ async def _args_target(
     ``@usernames`` that resolve to a private chat, and the partial-name
     search never runs. The private-chat check applies in every mode, so a
     group or channel never becomes a moderation target.
+
+    ``allow_cached_username`` is disabled for state-changing callers: a
+    cached username can name a previous holder and must never decide who a
+    moderation action targets when the live resolvers are down.
     """
     arg = args[0].lstrip("@")
 
@@ -340,7 +353,7 @@ async def _args_target(
         # ! CRITICAL: a verified override must rest on a live resolution. A
         # ! cached username can be reassigned, so during an MTProto outage it
         # ! must not displace the reply target and moderate the wrong user.
-        if not verified:
+        if not verified and allow_cached_username:
             cached = await _cached_username_target(arg)
             if cached is not None:
                 return cached
@@ -396,7 +409,9 @@ async def extract_mod_target(
     return hit, consumed
 
 
-async def _entity_target(msg: Message, bot: Client | None) -> tuple[int, str] | None:
+async def _entity_target(
+    msg: Message, bot: Client | None, *, allow_cached_username: bool = True
+) -> tuple[int, str] | None:
     """Priorities 4-5: text-mention entity, then @mention entity."""
     for ent in msg.entities or []:
         if getattr(ent.type, "value", ent.type) == "text_mention" and ent.user:
@@ -440,8 +455,9 @@ async def _entity_target(msg: Message, bot: Client | None) -> tuple[int, str] | 
                     uid, fname, _ = hit
                     if uid > 0:
                         return uid, await _best_name(uid, fname, uname)
-                cached = await _cached_username_target(uname)
-                if cached is not None:
-                    return cached
+                if allow_cached_username:
+                    cached = await _cached_username_target(uname)
+                    if cached is not None:
+                        return cached
 
     return None

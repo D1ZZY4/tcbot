@@ -343,10 +343,10 @@ def test_username_falls_back_to_mtproto(monkeypatch) -> None:  # type: ignore[no
     )
 
 
-def test_username_uses_cached_lookup_when_mtproto_is_down(
+def test_moderation_never_uses_a_cached_username_when_mtproto_is_down(
     monkeypatch,
 ) -> None:  # type: ignore[no-untyped-def]
-    """An observed username still resolves during an MTProto outage."""
+    """A stale holder must never be actioned just because both resolvers miss."""
     _stub_cache(monkeypatch)
     bot = _FakeBot()
 
@@ -354,16 +354,38 @@ def test_username_uses_cached_lookup_when_mtproto_is_down(
         return None
 
     async def _cached(username: str):
-        assert username == "ghost"
-        return (42, "Ghost")
+        raise AssertionError("moderation must not consult a cached username")
 
     monkeypatch.setattr(db.mtproto, "resolve_username", _no_hit)
     monkeypatch.setattr(db.mtproto, "is_available", lambda: False)
     monkeypatch.setattr(db.users_cache, "get_by_username", _cached)
     assert _run(ex.extract_target(_update(_msg()), ["@ghost"], cast("Any", bot))) == (
-        42,
-        "Ghost",
+        None,
+        None,
     )
+
+
+def test_read_only_view_still_uses_a_cached_username_during_an_outage(
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    """/check may show an observed username even when MTProto is unavailable."""
+    _stub_cache(monkeypatch)
+    bot = _FakeBot()
+
+    async def _no_hit(username: str):
+        return None
+
+    async def _cached(username: str):
+        return (42, "Ghost")
+
+    monkeypatch.setattr(db.mtproto, "resolve_username", _no_hit)
+    monkeypatch.setattr(db.mtproto, "is_available", lambda: False)
+    monkeypatch.setattr(db.users_cache, "get_by_username", _cached)
+    assert _run(
+        ex.extract_target(
+            _update(_msg()), ["@ghost"], cast("Any", bot), prefer_explicit=True
+        )
+    ) == (42, "Ghost")
 
 
 def test_cached_username_is_ignored_while_mtproto_is_live(
