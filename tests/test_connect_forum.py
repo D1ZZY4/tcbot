@@ -235,6 +235,155 @@ async def test_forum_prompt_records_the_adder_when_known(
     assert recorded == [(-1001234567890, "Community Forum", 4242, 77)]
 
 
+def _promote_update(actor: object) -> SimpleNamespace:
+    """Build the MY_CHAT_MEMBER update for an admin re-promoting the bot."""
+    chat = SimpleNamespace(
+        id=-1001234567890, type="supergroup", title="Community Forum"
+    )
+    cmc = SimpleNamespace(
+        chat=chat,
+        # * The actor identity is in from_user; the bot's own identity is not
+        # * needed for the owner gate under test.
+        new_chat_member=SimpleNamespace(status=ChatMemberStatus.ADMINISTRATOR),
+        old_chat_member=SimpleNamespace(status=ChatMemberStatus.MEMBER),
+        from_user=actor,
+    )
+    return SimpleNamespace(my_chat_member=cmc)
+
+
+class _PromoteBot(_FakeBot):
+    """Bot double whose member lookup reports one actor status."""
+
+    def __init__(self, *, actor_status: ChatMemberStatus) -> None:
+        super().__init__()
+        self.me = SimpleNamespace(id=999, first_name="Bot", username="bot")
+        self.actor_status = actor_status
+
+    async def get_chat_member(self, chat_id: int, user_id: int) -> object:
+        return SimpleNamespace(status=self.actor_status)
+
+
+@pytest.mark.asyncio
+async def test_repromote_by_an_admin_does_not_connect_the_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the group owner's promotion may replay federation decisions."""
+    joins: list[object] = []
+    bot = _PromoteBot(actor_status=ChatMemberStatus.ADMINISTRATOR)
+
+    async def _pending(_chat_id: int) -> dict[str, object]:
+        return {"owner_id": 4242, "message_id": 77}
+
+    async def _connected(_chat_id: int, *, fresh: bool = False) -> bool:
+        return False
+
+    async def _join(*args: object, **kwargs: object) -> bool:
+        _ = (args, kwargs)
+        joins.append(True)
+        return False
+
+    async def _locale(_update: object) -> str:
+        return "en-US"
+
+    async def _name(_uid: int, _fallback: str) -> str:
+        return "Requester"
+
+    async def _edit(*args: object, **kwargs: object) -> object:
+        _ = (args, kwargs)
+        return None
+
+    async def _note(*args: object, **kwargs: object) -> str:
+        _ = (args, kwargs)
+        return ""
+
+    monkeypatch.setattr(
+        connect_added,
+        "cfg",
+        _NS(
+            is_primary_group=lambda _chat_id: False,
+            is_infrastructure_chat=lambda _chat_id: False,
+        ),
+    )
+    monkeypatch.setattr(connect_added, "locale_for_update", _locale)
+    monkeypatch.setattr(connect_added.db.groups_db, "get_pending", _pending)
+    monkeypatch.setattr(connect_added.db.groups_db, "is_connected", _connected)
+    monkeypatch.setattr(connect_added.db.users_cache, "get_first_name", _name)
+    monkeypatch.setattr(connect_added, "safe_edit_message", _edit)
+    monkeypatch.setattr(connect_added, "welcome_permission_note", _note)
+    monkeypatch.setattr(
+        connect_added.BuildConnection, "check_perms", lambda _self, _m: True
+    )
+    monkeypatch.setattr(connect_added.BuildConnection, "complete_join", _join)
+
+    await connect_added.connection.on_bot_added(
+        _promote_update(SimpleNamespace(id=4242)),
+        _NS(bot=bot),  # type: ignore[arg-type]
+    )
+
+    assert joins == []
+
+
+@pytest.mark.asyncio
+async def test_repromote_by_the_owner_still_connects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The owner's re-promotion keeps the documented fast path."""
+    joins: list[int] = []
+    bot = _PromoteBot(actor_status=ChatMemberStatus.OWNER)
+
+    async def _pending(_chat_id: int) -> dict[str, object]:
+        return {"owner_id": 4242, "message_id": 77}
+
+    async def _connected(_chat_id: int, *, fresh: bool = False) -> bool:
+        return False
+
+    async def _join(
+        _self: object, chat_id: int, *_args: object, **_kwargs: object
+    ) -> bool:
+        joins.append(chat_id)
+        return False
+
+    async def _locale(_update: object) -> str:
+        return "en-US"
+
+    async def _name(_uid: int, _fallback: str) -> str:
+        return "Owner"
+
+    async def _edit(*args: object, **kwargs: object) -> object:
+        _ = (args, kwargs)
+        return None
+
+    async def _note(*args: object, **kwargs: object) -> str:
+        _ = (args, kwargs)
+        return ""
+
+    monkeypatch.setattr(
+        connect_added,
+        "cfg",
+        _NS(
+            is_primary_group=lambda _chat_id: False,
+            is_infrastructure_chat=lambda _chat_id: False,
+        ),
+    )
+    monkeypatch.setattr(connect_added, "locale_for_update", _locale)
+    monkeypatch.setattr(connect_added.db.groups_db, "get_pending", _pending)
+    monkeypatch.setattr(connect_added.db.groups_db, "is_connected", _connected)
+    monkeypatch.setattr(connect_added.db.users_cache, "get_first_name", _name)
+    monkeypatch.setattr(connect_added, "safe_edit_message", _edit)
+    monkeypatch.setattr(connect_added, "welcome_permission_note", _note)
+    monkeypatch.setattr(
+        connect_added.BuildConnection, "check_perms", lambda _self, _m: True
+    )
+    monkeypatch.setattr(connect_added.BuildConnection, "complete_join", _join)
+
+    await connect_added.connection.on_bot_added(
+        _promote_update(SimpleNamespace(id=4242)),
+        _NS(bot=bot),  # type: ignore[arg-type]
+    )
+
+    assert joins == [-1001234567890]
+
+
 @pytest.mark.asyncio
 async def test_join_decision_refuses_an_infrastructure_chat(
     monkeypatch: pytest.MonkeyPatch,

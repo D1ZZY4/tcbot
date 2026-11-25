@@ -30,6 +30,7 @@ from tcbot.modules.helper.rich.list import details
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import bold, bullet_list, code, t
 from tcbot.utils.logger import get_logger
+from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
 log = get_logger(__name__)
 
@@ -209,6 +210,29 @@ class ConnectionAddedMixin:
                 and new_status == ChatMemberStatus.ADMINISTRATOR
                 and pending.get("owner_id")
             ):
+                # * Re-promotion is a fast path back into the wizard, not an
+                # * implicit Connect. The actor must still be the group owner;
+                # * pending.owner_id only names the original bot-adder and an
+                # * administrator can be a different person.
+                actor_id = by_user.id if by_user is not None else 0
+                if not actor_id:
+                    return
+                try:
+                    actor_member = await asyncio.wait_for(
+                        ctx.bot.get_chat_member(chat_id_of(chat), actor_id),
+                        timeout=TELEGRAM_LOOKUP_TIMEOUT,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    log.warning(
+                        "Re-promote owner lookup failed for chat=%d: %s",
+                        chat_id_of(chat),
+                        exc,
+                    )
+                    return
+                if actor_member.status != ChatMemberStatus.OWNER:
+                    return
                 if new_member is not None and self.check_perms(new_member):
                     owner_fname = await db.users_cache.get_first_name(
                         pending.get("owner_id", 0), "Owner"
