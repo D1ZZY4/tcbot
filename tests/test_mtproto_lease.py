@@ -503,3 +503,41 @@ def test_the_heartbeat_retries_after_a_database_failure(
     assert calls >= 2
     assert "MTProto lease heartbeat failed" in caplog.text
     assert client.stopped is False
+
+
+def test_the_heartbeat_parks_the_client_when_refresh_keeps_failing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A database partition past the lease TTL must not leave a live auth key."""
+    calls = 0
+
+    class _Store:
+        async def refresh_owner(self, owner: str, *, ttl_s: float) -> bool:
+            nonlocal calls
+            _ = (owner, ttl_s)
+            calls += 1
+            raise CircuitOpenError("Circuit [postgres] is OPEN; call rejected.")
+
+    monkeypatch.setattr(mtproto, "_HEARTBEAT_S", 0.0)
+    client = _FakeClient(connected=True)
+    monkeypatch.setattr(mtproto, "_client", client)
+    monkeypatch.setattr(mtproto, "_lease_owner", "owner")
+
+    async def _do() -> None:
+        task = asyncio.create_task(
+            mtproto._heartbeat_lease(client, _Store(), "owner")  # type: ignore[arg-type]
+        )
+        for _ in range(20):
+            if task.done():
+                break
+            await asyncio.sleep(0)
+        assert task.done()
+        await task
+
+    asyncio.run(_do())
+
+    assert calls >= mtproto._LEASE_MAX_MISSED_BEATS
+    assert client.stopped is True
+    assert mtproto._client is None
+    assert mtproto._lease_owner is None
+    assert mtproto.is_available() is False

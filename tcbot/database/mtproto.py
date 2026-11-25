@@ -53,6 +53,11 @@ _START_TIMEOUT_S: float = 60.0
 # * over to the next claimant after at most one TTL.
 _LEASE_TTL_S: float = 90.0
 _HEARTBEAT_S: float = 30.0
+# * A single missed beat is an ordinary transient outage and must not drop
+# * a healthy session. Two consecutive misses span one full TTL from the
+# * last successful refresh, so a peer could claim the lease at any moment;
+# * park our client while there is still a heartbeat of margin left.
+_LEASE_MAX_MISSED_BEATS: int = 2
 
 # * Wall-clock cap for one harvest_group_members scan: the loop is up to
 # * ``limit`` sequential DB writes on the event loop, so an unbounded scan
@@ -217,14 +222,38 @@ async def _release_lease_quietly(store: PostgresStorage, owner: str) -> None:
         log.debug("MTProto lease release failed (expiry covers it): %s", exc)
 
 
+async def _fence_leased_client(c: Client) -> None:
+    """Stop a client whose lease can no longer be proven and clear its owner.
+
+    A peer may claim an expired lease and connect with the same auth key,
+    which Telegram rejects with AUTH_KEY_DUPLICATED. Clearing the module
+    client makes is_available() false before that can happen.
+    """
+    global _client, _lease_owner
+    try:
+        await c.stop()
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.debug("MTProto fenced-stop failed (non-fatal): %s", exc)
+    if _client is c:
+        _client = None
+    _lease_owner = None
+
+
 async def _heartbeat_lease(c: Client, store: PostgresStorage, owner: str) -> None:
     """Renew the owner lease until cancelled; park the client when fenced out.
 
     Owned by start()/stop(): stop() cancels this task on shutdown. A lost
     lease means another instance took over after our heartbeat stalled past
     expiry, so the client stops instead of sharing one auth key twice.
+
+    A failed refresh is not proof of a takeover, but a database partition
+    that outlasts the lease is indistinguishable from one from this process.
+    After the configured number of consecutive failed beats the client is
+    parked while the lease still has a heartbeat of margin left.
     """
-    global _client
+    missed = 0
     try:
         while True:
             await asyncio.sleep(_HEARTBEAT_S)
@@ -236,25 +265,29 @@ async def _heartbeat_lease(c: Client, store: PostgresStorage, owner: str) -> Non
                 # * Expected outage shape: keep the error-level shipper
                 # * quiet by logging at warning without a traceback.
                 log.warning("MTProto lease heartbeat deferred: %s", exc)
-                continue
+                held = None
             except Exception:
                 log.exception("MTProto lease heartbeat failed; retrying next beat")
+                held = None
+            if held is True:
+                missed = 0
                 continue
-            if held:
-                continue
-            log.error(
-                "MTProto owner lease lost; stopping the client to avoid "
-                "duplicate session use. Identity lookups degrade to Bot-API-only."
-            )
-            try:
-                await c.stop()
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                log.debug("MTProto fenced-stop failed (non-fatal): %s", exc)
-            if _client is c:
-                _client = None
-            return
+            if held is False:
+                log.error(
+                    "MTProto owner lease lost; stopping the client to avoid "
+                    "duplicate session use. Identity lookups degrade to Bot-API-only."
+                )
+                await _fence_leased_client(c)
+                return
+            missed += 1
+            if missed >= _LEASE_MAX_MISSED_BEATS:
+                log.error(
+                    "MTProto lease refresh failed for %d consecutive beats; "
+                    "parking the client before a peer can claim the lease.",
+                    missed,
+                )
+                await _fence_leased_client(c)
+                return
     except asyncio.CancelledError:
         raise
 
