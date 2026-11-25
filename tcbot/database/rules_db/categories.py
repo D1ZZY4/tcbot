@@ -92,7 +92,7 @@ async def set_category_description(
                 rule_categories.c.rule_set_id == set_id,
                 rule_categories.c.category_key == category_key,
             )
-            .values(description=description)
+            .values(description=description, updated_at=utc_now())
         )
     )
 
