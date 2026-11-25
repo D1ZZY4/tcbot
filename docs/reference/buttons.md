@@ -153,7 +153,10 @@ appeal; a legacy payload without the suffix falls back to the tapped message id.
 | Builder | Emits | Style |
 |---|---|---|
 | `picker_btn(items, selected)` | `rules_step:pick:<id>` (blue), `other` (none), `done` (green), `clear` (none), `cancel` (red) | mixed |
-| `editor_panel_btn(has_content)` | `rules_edit_draft` (blue), `rules_preview` (blue), Upload .md (blue), Back to language (green), Close; adds `rules_publish` (green) and `rules_discard` (red) only when the draft has items | mixed |
+| `editor_sections_btn(has_content)` | The live main editor panel: `rules_edit_draft` (blue), `rules_preview` (blue), Upload .md (blue), `rules_lang` (blue), Close; adds `rules_publish` (green) and `rules_discard` (red) only when the draft has items | mixed |
+| `rules_language_btn`, `rules_section_btn`, `section_editor_btn` | `rules_lang_set:<code>`, `rules_sections`, `rules_section_title`, `rules_section_edit:<id>` | mixed |
+| `draft_preview_btn`, `draft_preview_sections_btn`, `editor_preview_page_btn` | `rules_preview_cat:<key>`, `rules_preview_sec:<n>`, `rules_preview_page:<n>`, Back to the editor panel + Close | mixed |
+| `editor_items_page_btn` | `rules_items_page:<n>` for the paginated item list | mixed |
 | `preview_btn` | Back to the editor panel + Close for the draft preview | mixed |
 | `categories_btn` | `rules_cat:<key>`, rename/up/down (blue), `rules_cat_del:<key>` (red), `rules_cat_add` (blue), Back + Close | mixed |
 | `items_btn` | `rules_item_add` (blue), Back + Close | mixed |

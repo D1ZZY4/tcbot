@@ -77,9 +77,10 @@ uv run python -m tcbot
 
 The bot runs a single Kurigram client in native long-polling mode. No public
 URL, webhook secret, or TLS certificate is required. Startup loads the
-configuration, starts the Flask health server, connects PostgreSQL, applies
-migrations, seeds the Owner, registers destinations, connects Redis and the
-Kurigram session, registers handlers, and starts the scheduler. Health endpoints:
+configuration, starts the Flask health server, registers handlers, connects
+PostgreSQL, applies migrations, seeds the Owner, registers destinations,
+connects Redis and the Kurigram session, and starts the scheduler. Health
+endpoints:
 
 - `GET /` returns `OK`.
 - `GET /health` returns JSON with HTTP 200 when core subsystems are ready and

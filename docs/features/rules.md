@@ -28,8 +28,8 @@ closed when the lookup fails. The read-only menu has no chat-type restriction.
 ## Public menu
 
 `/rules` opens a topic index with two categories per row across pages of eight.
-`rules_index:<page>`, `rules_prev:<page>`, `rules_next:<page>`, and `close_msg`
-navigate the index, and a stale page index is clamped to the published set.
+`rules_index:<page>` and `close_msg` navigate the index, and a stale page index
+is clamped to the published set.
 Tapping a category with `rules_show:<key>` renders its localized one-line
 description and one button per section, where sections are derived from the
 stored item titles. Tapping `rules_section:<index>` renders that section's rules.
@@ -39,7 +39,8 @@ emitted before the index redesign still open the current menu.
 ## Editor conversation
 
 `build_rules_conv()` owns one interactive state for every panel callback and
-text step, plus a second state for the discard confirmation.
+text step, a second state for the discard confirmation, and a third for the
+uploaded Markdown document step.
 
 | State | Value | Input |
 |---|---|---|
@@ -47,9 +48,9 @@ text step, plus a second state for the discard confirmation.
 | `WAITING_CONFIRM_DISCARD` | 5 | Discard yes or no. |
 
 Limits are title 200, body 3500, and URL 500 characters; URLs must start with
-`https://` or `http://`. Category slugs match `^[a-z0-9][a-z0-9._-]*$` and are
-capped at 40 characters so the longest callback stays inside Telegram's 64-byte
-limit. Typed answers are routed by the pending step stored in the conversation
+`https://` or `http://`. Generated category slugs use lowercase alphanumerics
+and hyphens and are capped at 40 characters so the longest callback stays
+inside Telegram's 64-byte limit. Typed answers are routed by the pending step stored in the conversation
 scope, so every button and text prompt has a reachable handler.
 
 ## Publication

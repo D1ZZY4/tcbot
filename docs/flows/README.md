@@ -12,7 +12,7 @@ instead of repeating another domain's detail.
 |---|---|
 | [System spine](system.md) | Startup, update dispatch, authorization chain, persistence and transport boundary. The anchor for every other page. |
 | [Permissions](permissions.md) | Tier gates, decorators, permission catalog, executor-versus-target checks, protected targets, demote gates. |
-| [Rate limiting](ratelimit.md) | Global and per-handler throttles, Redis sliding window, circuit breakers, flood-wait handling. |
+| [Rate limiting](ratelimit.md) | Per-handler throttles, Redis sliding window, circuit breakers, flood-wait handling. |
 | [Persistence](persistence.md) | Transaction boundary, enforcement ledger, retry lifecycle, notification outbox, scheduler and pg_cron. |
 | [Cache](cache.md) | L1/L2 layers, single-flight, generation and epoch guards, tombstones, FIFO mutation queue, Redis outage behavior. |
 | [Transport](transport.md) | Rich payload assembly, send and edit helpers, keyboard conversion, callback answers, error reports, deep links. |

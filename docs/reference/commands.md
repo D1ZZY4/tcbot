@@ -53,7 +53,8 @@ Callback-only panels are listed at the end.
 | Module | Commands | Access |
 |---|---|---|
 | `broadcast.py` | `/tcbroadcast`, `/bc` | Staff. |
-| `maintenance.py` | `/leaveall`, `/exitall`, `/tcleave`, `/cleanup`, `/tcclean`, `/tcc`, `/tcforget`, `/tcf`, `/tcrepair`, `/tcr` | Staff and Owner. |
+| `maintenance.py` | `/leaveall`, `/exitall`, `/tcleave`, `/tcforget`, `/tcf` | Owner only. |
+| `maintenance.py` | `/cleanup`, `/tcclean`, `/tcc`, `/tcrepair`, `/tcr` | Staff and Owner. |
 | `netspeed.py` | `/ping`, `/p`, `/speedtest`, `/st` | Owner. |
 
 ## Handler conventions
