@@ -46,6 +46,7 @@ uploaded Markdown document step.
 |---|---|---|
 | `WAITING_EDITOR_MENU` | 0 | Panel callback, category or item text step. |
 | `WAITING_CONFIRM_DISCARD` | 5 | Discard yes or no. |
+| `WAITING_MARKDOWN` | 6 | Uploaded `.md` document step. |
 
 Limits are title 200, body 3500, and URL 500 characters; URLs must start with
 `https://` or `http://`. Generated category slugs use lowercase alphanumerics

@@ -19,7 +19,10 @@ the [root README](../../README.md); for Replit notes use
 uv sync --frozen
 ```
 
-Always use `uv`, never `pip`, `uv pip`, or manual paths into `.venv`.
+Always use `uv`, never `pip`, `uv pip`, or manual paths into `.venv`. Install
+from a checkout or use the container image. A built wheel is not runnable: the
+locale catalogs, Alembic scripts, `alembic.ini`, and schema SQL are resolved
+relative to the project root and are not included in the wheel.
 
 ## Configuration
 

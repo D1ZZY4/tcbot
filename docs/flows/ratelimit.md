@@ -155,7 +155,7 @@ flowchart TD
     SEM -->|OPEN| SKIP[Return CircuitOpenError, close unused coroutine]
     SEM -->|CLOSED or HALF_OPEN| CALL[Await Telegram call]
     CALL -->|success| REC[record_success, return result]
-    CALL -->|TimedOut / TimeoutError / NetworkError| FAIL[record_failure, may trip to OPEN]
+    CALL -->|Timedout / Timeout / TimeoutError / OSError| FAIL[record_failure, may trip to OPEN]
     CALL -->|BadRequest refusal| BENIGN["release_probe reached_service=True, no failure counted"]
     CALL -->|CancelledError| CANCEL[Release probe and re-raise]
     REC --> R[count_transient_errors excludes benign refusals]
@@ -167,8 +167,9 @@ flowchart TD
 `fan_out` admits slots lazily through a semaphore. While the circuit is `OPEN`,
 a slot is skipped immediately with `CircuitOpenError` instead of firing a call
 that would time out, and the unused coroutine is closed. Successes call
-`record_success()`. `TimedOut`, builtin `TimeoutError`, and `NetworkError` call
-`record_failure()`. A `BadRequest` is an API refusal, not congestion, so it
+`record_success()`. Kurigram's `Timedout` and `Timeout`, builtin `TimeoutError`,
+and `OSError` call `record_failure()`. A `BadRequest` is an API refusal,
+not congestion, so it
 calls `release_probe(reached_service=True)` and does not count against the
 breaker. `CancelledError` always propagates so shutdown is never coerced into
 per-group failure data. The breaker's `admission_headroom` property reports how

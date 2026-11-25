@@ -74,7 +74,7 @@ sequenceDiagram
     Appeals-->>Flow: appeal_msg_id
     Flow->>DB: get_ban ban_id for linked rules
     DB-->>Flow: rules
-    Flow->>Group: send_text(appeal_received_log, parse_mode=None)
+    Flow->>Group: send_text(appeal_received_log)
     Group-->>Flow: review_msg_id
     Flow->>Appeals: send_text(card, reply_markup=appeal_review_btn)
     Flow->>Logs: send_log(appeal_submitted_log)

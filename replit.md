@@ -26,10 +26,10 @@ Optional secrets:
 
 - `REDIS_URL`: Redis connection URL for L2 cache.
 - `PORT`: Flask keep-alive port. Use a local port that the `[[ports]]`
-  mapping in `.replit` publishes. The repository maps both `5000` and
-  `8080`; a polling client only reaches the value you configure, so keep the
-  mapping and `PORT` in sync. An unset or invalid value falls back to
-  `5000`, which the same file publishes.
+  mapping in `.replit` publishes. The repository maps the default `5000`;
+  a polling client only reaches the value you configure, so add a mapping for
+  a different `PORT`. An unset or invalid value falls back to `5000`, which
+  the same file publishes.
 
 Replit Secrets are injected as environment variables at runtime. They are
 never committed to the repository and do not require a `.env` file.

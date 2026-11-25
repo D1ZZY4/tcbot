@@ -17,8 +17,18 @@ does not block the rest of the federation.
 
 Rate limits are applied by the per-handler `ratelimiter()` tiers, one bucket
 per user and wrapped handler, with the current Owner exempt. Ordinary chat
-messages are not throttled by a global handler. See
+messages are not throttled by a global handler. Prefix filters are async so
+they stay on the event loop instead of being offloaded to the client's thread
+pool for every update. See
 [bounded dispatch and breakers](../architecture/runtime.md#bounded-dispatch-and-breakers).
+
+Kurigram's dispatcher workers are sized from CPU count and the database pool,
+capped at the application's 64-slot handler limit. `KURIGRAM_WORKERS` can
+override the count, also capped at 64. More workers improve throughput across
+independent chats; they do not reduce the round trip of a single command or
+edit, and an unbounded count only creates contention on the 10-connection pool.
+The MTProto store keeps a bounded in-process peer cache so each rich edit does
+not resolve its peer through PostgreSQL again.
 
 ## Bounded fan-out
 
@@ -109,7 +119,11 @@ with `asyncio.to_thread()`. Background refresh tasks are supervised by
 ## Measurement
 
 The project ships `py-spy` as a development dependency for profiling, and an
-optional `prometheus-client` endpoint at `/metrics`. The `/health` response
+optional `prometheus-client` endpoint at `/metrics`. Run
+`uv run python scripts/benchmark_hotpath.py` for an in-process baseline of the
+database-call boundary, the cache on hit and miss, and the bounded fan-out. It
+needs no external service; use the numbers as a relative baseline, not a latency
+promise. The `/health` response
 reports database, Redis, scheduler, and Telegram circuit state. Relevant
 counts in logs include enforcement attempt outcomes, member-cache drops, and
 rate-limit waits. Use these signals to decide whether to tune a pool size, a TTL, or a

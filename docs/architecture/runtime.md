@@ -33,8 +33,9 @@ groups), then the community default, then `en-US`. Resolution never raises. See
 semaphore and integrates the Telegram breaker. While the circuit is `OPEN`, a
 slot is skipped with `CircuitOpenError` instead of firing a call that would time
 out; the unused coroutine is closed. `BadRequest` is an API refusal and does not
-count as a failure, while `TimedOut`, `NetworkError`, and builtin `TimeoutError`
-do. Cancellation always propagates. `gather_bounded()` provides the same
+count as a failure, while Kurigram's `Timedout` and `Timeout`, `OSError`, and
+builtin `TimeoutError` do. Cancellation always propagates.
+`gather_bounded()` provides the same
 concurrency bound for pure database bursts without breaker interaction.
 
 Both breakers use `failure_threshold = 5` and `recovery_timeout = 60` seconds.

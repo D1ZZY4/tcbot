@@ -19,6 +19,8 @@ uv run python -m tcbot
 
 Fill in at least `BOT_TOKEN`, `OWNER_ID`, `DATABASE_URL`, `PROOFS`, `API_ID`, and `API_HASH` in `config.env` before running. A ban needs a destination for its evidence, so boot refuses without `PROOFS`. Never commit that file. The full variable list is in [`config.env.example`](config.env.example) and [`docs/getting-started/setup.md`](docs/getting-started/setup.md).
 
+Run from a checkout with `uv sync --frozen`, or use the container image. Non-editable wheels are not a supported install path: the locale catalogs, Alembic scripts, and schema SQL are resolved relative to the project root and are not packaged into a wheel.
+
 ## What It Does
 
 - **Federation bans with proof.** `/tcban` collects proof media or text first, then enforces across every connected group and stores the proof reference for review.
@@ -92,6 +94,7 @@ Only six values are required. Everything else has a working default.
 |---|---|---|
 | `MAIN_GROUP` | Usually | Main community group or forum (negative chat ID). |
 | `MAIN_CHANNEL` | For rules | Main community channel (negative chat ID); the publication target for rules. |
+| `INFRA_CHAT_IDS` | No | Extra deployment-owned chat IDs refused by the connect paths; list or CSV, negative IDs only. |
 
 ### Logs, proofs, and appeals
 

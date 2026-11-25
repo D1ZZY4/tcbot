@@ -86,9 +86,10 @@ registers infrastructure destinations, connects Redis and MTProto, starts the
 scheduler, and then runs the Kurigram long-polling loop. The exact
 order is in [system.md](flows/system.md).
 
-Telegram updates pass through the global rate limiter, a command or callback
-filter, tier decorators, a handler that delegates persistence to `tcbot/database/`
-helpers and multi-step work to a domain-named pipeline module, and a rich-message reply.
+Telegram updates pass through a command or callback filter and tier decorators,
+then a handler that delegates persistence to `tcbot/database/` helpers and
+multi-step work to a domain-named pipeline module, and a rich-message reply.
+Only decorated handlers are throttled; there is no global rate limiter.
 Decisions commit to PostgreSQL before any Telegram call. Federation-wide Telegram
 work goes through the bounded `fan_out()` dispatcher and the Telegram circuit
 breaker; unfinished per-group deliveries are retried by the enforcement worker.
