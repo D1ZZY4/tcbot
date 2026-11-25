@@ -16,6 +16,7 @@ from pyrogram.types import InlineKeyboardMarkup
 from tcbot import database as db
 from tcbot import notification_worker
 from tcbot.utils import circuit_breaker as _cb
+from tcbot.utils.time_and_date import monotonic
 
 
 class _Bot:
@@ -104,6 +105,28 @@ def test_a_rate_limit_reply_does_not_trip_the_shared_circuit(
 
     assert len(bot.edits) == 1
     assert completed[0]["state"] == "pending"
+
+
+def test_an_open_circuit_claims_no_card(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An OPEN circuit must not spend an attempt on an undelivered edit."""
+
+    async def _no_claim(*_args: Any, **_kwargs: Any) -> list[dict[str, object]]:
+        raise AssertionError("no card may be claimed while the circuit is open")
+
+    monkeypatch.setattr(db.notifications_db, "claim_due_tasks", _no_claim)
+    bot = _Bot()
+    _cb.telegram.reset()
+    _cb.telegram._state = _cb.CircuitState.OPEN
+    # * A freshly opened circuit must not age into HALF_OPEN during the tick.
+    _cb.telegram._opened_at = monotonic()
+    try:
+        asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+    finally:
+        _cb.telegram.reset()
+
+    assert bot.edits == []
 
 
 def test_a_half_open_circuit_claims_one_probe(

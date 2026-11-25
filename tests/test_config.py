@@ -62,6 +62,14 @@ def test_owned_schemas_are_accepted(
     assert _db_schema_from_env() == schema
 
 
+def test_an_unknown_schema_falls_back_to_public(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A misspelled schema must never create a fourth schema at startup."""
+    monkeypatch.setenv("DB_SCHEMA", "publik")
+    assert _db_schema_from_env() == "public"
+
+
 def test_is_primary_group_matches_negative_group_ids(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
