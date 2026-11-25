@@ -54,6 +54,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Drop the localized presentation table and its index."""
+    """Drop the localized presentation table, its index, and its policy."""
+    # * The seed registers a retention policy for this table. Leaving it
+    # * behind makes the daily sweep delete from a relation that no longer
+    # * exists and abort the whole run. Revision 0006 handles its outbox the
+    # * same way.
+    op.execute(
+        "DELETE FROM retention_policies WHERE target_table = 'rule_category_content'"
+    )
     op.execute("DROP INDEX IF EXISTS ix_rule_category_content_set")
     op.execute("DROP TABLE IF EXISTS rule_category_content")

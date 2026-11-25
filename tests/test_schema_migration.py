@@ -65,15 +65,16 @@ def migration_schema() -> Iterator[str]:
         )
     create_empty_schema(url, _MIGRATION_SCHEMA)
 
-    # * The Alembic environment builds its own engine from the URL, so the
-    # * schema scope has to travel through the libpq connection options.
-    # * PGOPTIONS is the libpq environment variable for that.
+    # * Alembic reads the target schema from its own config before falling
+    # * back to DB_SCHEMA or public. PGOPTIONS alone is overridden by that
+    # * search path, so the dedicated schema must be set on the config.
     previous_options = os.environ.get("PGOPTIONS")
     os.environ["PGOPTIONS"] = f"-c search_path={_MIGRATION_SCHEMA}"
     try:
         config = Config(str(_ROOT / "alembic.ini"))
         config.set_main_option("script_location", str(_ROOT / "alembic"))
         config.set_main_option("sqlalchemy.url", url)
+        config.set_main_option("db_schema", _MIGRATION_SCHEMA)
         command.upgrade(config, "head")
     finally:
         if previous_options is None:
@@ -137,6 +138,7 @@ def test_a_database_stopped_before_the_owner_column_upgrades() -> None:
         config = Config(str(_ROOT / "alembic.ini"))
         config.set_main_option("script_location", str(_ROOT / "alembic"))
         config.set_main_option("sqlalchemy.url", url)
+        config.set_main_option("db_schema", schema)
         command.upgrade(config, "0005_promotion_request_expiry")
         engine = create_engine(
             sync_database_url(url),
