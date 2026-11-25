@@ -68,7 +68,7 @@ caplog and the Telegram error handler see records. Use a module logger rather
 than `print()`. `log_execution` binds `update_id`, `user_id`, and `chat_id` to
 each line until the handler returns.
 
-`error_reporter.py` classifies exceptions, suppresses benign and transient ones,
+`errors/classify.py` classifies exceptions, suppresses benign and transient ones, while `errors/report.py` owns dedupe, throttling, and delivery
 scrubs credential-shaped text and exact configured secrets, fingerprints and
 deduplicates incidents, and ships reports as rich payloads to the configured
 error destination or the Owner DM. Shipping is capped at 20 reports per 60
@@ -111,7 +111,7 @@ by reading stored jobs once in memory, and UTC is explicit.
 |---|---|---|
 | `tcbot.expiry_daily` | 24 h | Expire decisions and queue revokes; removed when pg_cron owns this. |
 | `tcbot.promotion_expiry_hourly` | 1 h | Mark stale promotion requests `expired`. |
-| `tcbot.enforcement_worker` | 5 min | Drain the enforcement run queue once. |
+| `tcbot.enforcement_worker` | 5 min | Drain the enforcement run queue once. Stable persisted ID; the callable is in `moderation_enforcement.py`. |
 | `tcbot.notification_worker` | 5 min | Retry due review-card edits once. |
 | `tcbot.erasure_every_10m` | 10 min | Drain up to 25 queued account erasures. |
 | `tcbot.retention_daily` | 24 h | Apply schema retention policies. |

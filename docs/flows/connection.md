@@ -142,7 +142,7 @@ whose result is not a benign no-op is also pending.
 
 Whatever the budget, cap, or a stopped replay leaves unapplied is still an active
 decision, and a failed decision-store read stops the connect before activation.
-`enforcement_db.queue_connect_replay()` writes one bounded, idempotent
+`enforcement_ledger.queue_connect_replay()` writes one bounded, idempotent
 `apply` run per decision against the one new chat. The queue write is the
 durability boundary and is retried 3 times with 0.2 s backoff; exhausting it
 raises, because the group is already active and a lost queue write would leave
@@ -237,7 +237,7 @@ rich transport so its Connect/Cancel buttons render as rich buttons.
 | `cmd_tcconnect` | `connect.py` | Manual group entry. |
 | `on_bot_added` | `connect_added.py` | `MY_CHAT_MEMBER` event owner; registered in `connect.py`. |
 | `complete_join` | `connect_added.py` | Shared connector and replay. |
-| `queue_connect_replay` | `enforcement_db.py` | Durable remainder queue. |
+| `queue_connect_replay` | `enforcement_ledger.py` | Durable remainder queue. |
 | `on_new_member`, `on_join_request`, `on_join_request_approved` | `greeting.py` | Join-time enforcement. |
 
 ```bash

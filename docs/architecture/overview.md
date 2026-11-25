@@ -35,8 +35,8 @@ owns, and how the process comes up. The flows drawn as diagrams are in
 | `tcbot/__init__.py` | Environment parsing and the immutable `Configs` model. `cfg` is built on first access. |
 | `tcbot/__main__.py` | Application lifecycle, builder, handler registration, Kurigram polling transport, and shutdown drains. |
 | `tcbot/alive.py` | Flask keep-alive server with `/health` and `/metrics`. |
-| `tcbot/error_reporter.py` | Error classification, scrubbing, deduplication, throttling, and shipping to the error destination or Owner DM. |
-| `tcbot/enforcement_worker.py` | Deliver queued `apply`, `revoke`, and `reconcile` runs to Telegram. |
+| `tcbot/modules/helper/pipelines/errors/` | Error classification (`classify.py`), exceptions (`exceptions.py`), redaction (`redaction.py`), and report delivery (`report.py`). |
+| `tcbot/moderation_enforcement.py` | Deliver queued `apply`, `revoke`, and `reconcile` runs to Telegram. |
 | `tcbot/notification_worker.py` | Retry review-card edits from the durable notification outbox. |
 | `tcbot/database/` | PostgreSQL schemas, tables, helpers, migrations, cache, scheduler, and MTProto store. |
 | `tcbot/modules/` | Telegram command, callback, and event modules plus the `helper/` subpackage. |
@@ -109,7 +109,7 @@ visible work. See [Security](security.md) for the tier and guard contracts.
 | `guards.py`, `identity.py`, `targets.py`, `extraction/` | Who may act, on whom, and how a target is resolved. |
 | `locale.py`, `scope.py` | Per-update locale and per-conversation payload scope. |
 | `ban_info.py`, `replies` via `messages/replies.py` | Shared ban details and localized replies. |
-| `pipelines/` | Domain-named `*_actions.py`, `*_steps.py`, `*_panels.py`, or plain ConversationHandler factories and their steps. |
+| `pipelines/` | Domain-named `*_executor.py`, `*_conversation.py`, `*_steps.py`, `*_panels.py`, or plain ConversationHandler factories and their steps. |
 | `buttons/` | Every inline keyboard builder. |
 | `messages/` | Safe edits, channel delivery, panels, replies, and audit-log builders; re-exports rich transports for stable dotted paths. |
 | `rich/` | Rich HTML primitives, links and mentions, buttons, block conversion, media, and the send/edit transports. |
@@ -120,7 +120,7 @@ visible work. See [Security](security.md) for the tier and guard contracts.
 modules are `i18n.py`, `dispatch.py`, `circuit_breaker.py`, `transport.py`,
 `time_and_date.py`, `prefixes.py`, `logger.py`, `metrics.py`, `tasks.py`,
 `update_processor.py`, `pagination.py`, and `secrets.py`. Error reporting lives
-at the package root as `tcbot/error_reporter.py`. See [Runtime](runtime.md).
+in `tcbot/modules/helper/pipelines/errors/`. See [Runtime](runtime.md).
 
 ## Service boundaries
 

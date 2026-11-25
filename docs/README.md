@@ -2,8 +2,7 @@
 
 This is the maintained documentation set for TCF Bot, the Python Telegram bot
 for the Transsion Core Federation. Every page describes the behaviour in this
-checkout. For the user-facing overview use the [root README](../README.md), and
-for hosted deployment notes use [replit.md](../replit.md).
+checkout. For the user-facing overview use the [root README](../README.md).
 
 ## Start here
 
@@ -98,7 +97,7 @@ breaker; unfinished per-group deliveries are retried by the enforcement worker.
 
 - Commands and callbacks live in `tcbot/modules/`; shared helpers in `tcbot/modules/helper/`.
 - Conversation factories live in `tcbot/modules/helper/pipelines/` as domain-named
-  `*_actions.py`, `*_steps.py`, `*_panels.py`, or plain modules.
+  `*_executor.py`, `*_conversation.py`, `*_actions.py`, `*_steps.py`, `*_panels.py`, or plain modules.
 - Database reads and writes live in `tcbot/database/*_db.py` helpers.
 - Runtime utilities live in `tcbot/utils/`; configuration in `tcbot/__init__.py`.
 - User-facing wording lives in `i18n/<locale>/*.toml`, never hardcoded in Python

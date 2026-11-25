@@ -92,7 +92,7 @@ upgrade. See [Backup and restore](../operations/backup-and-restore.md).
 | `warns_db.py`, `kicks_db.py`, `mutes_db.py` | Domain-specific decision helpers. |
 | `groups_db.py` | Connected groups, pending groups, and infrastructure destinations. |
 | `queues_db.py` | Promotion requests and their expiry. |
-| `enforcement_db.py` | Durable runs, targets, attempts, and connect replay. |
+| `enforcement_ledger.py` | Durable runs, targets, attempts, and connect replay. |
 | `notifications_db.py` | Durable review-card edit outbox. |
 | `rules_db/` | Drafts, categories, items, versions, publications, and runs. |
 | `erasure_db.py` | Queued account erasures. |

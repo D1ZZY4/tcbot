@@ -40,7 +40,7 @@ there. Kick, mute, and warn use the default `skip_allowed=True`.
 ```mermaid
 flowchart TD
     START[Proof prompt shown] --> KIND{which flow family}
-    KIND -->|ban| SESS[ban_actions ProofSession registry]
+    KIND -->|ban| SESS[ban_session ProofSession registry]
     KIND -->|kick mute warn| SCOPE[mod_action_steps scope buffer]
     SESS --> KEY[key is chat_id and user_id]
     SCOPE --> BUF[key is action_proof_msgs in flow scope]
@@ -61,7 +61,7 @@ which buffers media into scope and waits for an explicit Done or Skip.
 ```mermaid
 sequenceDiagram
     participant Mod as Moderator
-    participant Flow as ban_actions
+    participant Flow as ban proof handlers
     participant Reg as ProofSessionRegistry
     participant Timer as flush task
     Mod->>Flow: media message arrives
@@ -73,7 +73,7 @@ sequenceDiagram
     Flow->>Reg: set flushing flag synchronously
     Flow->>Timer: cancel the timer and await its finally block
     Timer-->>Flow: registry entry removed for that session
-    Flow->>Flow: recheck rank then _execute_ban
+    Flow->>Flow: recheck rank then execute_ban
 ```
 
 `_flush_session()` loops in slices bounded by the smaller of `cfg.album_debounce`
@@ -160,7 +160,7 @@ Either the decision and its proof both commit, or neither does.
 | `upload_proof_items` | `proof_post.py` | Gallery chunking and singles. |
 | `ProofUpload.slideshow_html` | `proof_post.py` | Landed media links rendered with the shared rich slideshow helper. |
 | `ProofSession`, `proof_sessions` | `proof_session.py` | Ban session storage and drain. |
-| `_flush_session` | `ban_actions.py` | Debounce timer and claim. |
+| `_flush_session` | `ban_session.py` | Debounce timer and claim. |
 | `demote_before_enforcement` | `demote_actions.py` | Runs after proof before enforcement. |
 | `archive_proof` | `moderation_db.py` | Durable evidence rows. |
 
@@ -188,4 +188,4 @@ uv run pytest tests/ -q -k proof
 ```
 
 Relevant tests include `tests/test_proof_items.py`, `tests/test_ban_flush_cleanup.py`,
-and `tests/test_enforcement_worker.py`.
+and `tests/test_moderation_enforcement.py`.

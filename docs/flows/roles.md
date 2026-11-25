@@ -190,7 +190,7 @@ sequenceDiagram
         DB-->>Flow: COMMIT atomic swap
         Flow->>Cache: owner_id refresh with generation guard
         Flow->>Cache: effective_role_cache.clear_all()
-        Flow->>Flow: set error_reporter owner, cancel pending request for new owner
+        Flow->>Flow: set error-report owner, cancel pending request for new owner
         Flow-->>Owner: log and confirmation reply
     end
 ```

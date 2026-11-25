@@ -2,8 +2,7 @@
 
 This page covers local, Docker, and hosted setup. The project targets Python
 3.14 and uses `uv` for dependency management. For the repository overview use
-the [root README](../../README.md); for Replit notes use
-[replit.md](../../replit.md).
+the [root README](../../README.md).
 
 ## Prerequisites
 

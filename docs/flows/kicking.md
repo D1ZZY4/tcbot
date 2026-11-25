@@ -59,7 +59,7 @@ execution. See [Proof](proof.md) for the shared collection model.
 
 ## Kick executor
 
-`execute_kick()` in `kick_actions.py` runs the same two-position enforcement gate as
+`execute_kick()` in `kick_executor.py` runs the same two-position enforcement gate as
 ban and mute, but at the moderator tier. The gate runs once before proof upload
 and audit, and again immediately before the audit record, so a target promoted
 across the proof window cannot be kicked by a moderator who no longer outranks
@@ -71,7 +71,7 @@ sequenceDiagram
     participant Guard as guards
     participant DB as kicks_db
     participant Bot as Telegram
-    participant Work as enforcement_worker
+    participant Work as moderation_enforcement
     Flow->>Guard: enforcement_refusal min_role moderator
     Guard-->>Flow: allowed or refusal reply
     Flow->>Bot: upload_proof_for_action optional
@@ -128,8 +128,8 @@ moves the kick row from `failed` back to `completed`.
 | `log_kick` | `kicks_db.py` | Insert audit row and archive optional proof. |
 | `mark_kick_failed` | `kicks_db.py` | Move `completed` to `failed`. |
 | `mark_kick_completed` | `kicks_db.py` | Close a repaired kick. |
-| `queue_kick_unban_repair` | `enforcement_db.py` | Queue the one-chat reconcile run. |
-| `_close_repaired_kick` | `enforcement_worker.py` | Restore completed status. |
+| `queue_kick_unban_repair` | `enforcement_ledger.py` | Queue the one-chat reconcile run. |
+| `_close_repaired_kick` | `moderation_enforcement.py` | Restore completed status. |
 
 A kick that fails at the ban step cancels any in-flight proof upload, marks the
 audit row failed, and replies with the kick error. Because a kick records no
@@ -157,9 +157,9 @@ the target and action identifiers.
 | Name | Owner | Role |
 |---|---|---|
 | `cmd_kick` | `kick.py` | Validated entry point. |
-| `kick_conversation` | `kick_actions.py` | ConversationHandler factory. |
-| `execute_kick` | `kick_actions.py` | Full enforcement orchestration. |
-| `_exec_kick` | `kick_actions.py` | Adapter from flow scope to executor. |
+| `kick_conversation` | `kick_conversation.py` | ConversationHandler factory. |
+| `execute_kick` | `kick_executor.py` | Full enforcement orchestration. |
+| `_exec_kick` | `kick_executor.py` | Adapter from flow scope to executor. |
 
 ```bash
 uv run pytest tests/ -q -k kick

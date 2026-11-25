@@ -59,7 +59,7 @@ closed. The `may_proceed` property is the single check the caller uses. See
 
 ## Revoke and queue transaction
 
-`execute_unban()` in `unban_actions.py` accepts an optional `pre_ban` to skip the
+`execute_unban()` in `unban_executor.py` accepts an optional `pre_ban` to skip the
 speculative read. It fetches the active groups before revoking, because
 deactivating first and then discovering the list cannot be loaded would leave
 chats banning a user with no record to retry from. It then re-runs
@@ -87,7 +87,7 @@ sequenceDiagram
     participant Cmd as cmd_unban
     participant Flow as execute_unban
     participant DB as bans_db transaction
-    participant Work as enforcement_worker
+    participant Work as moderation_enforcement
     participant Bot as Telegram
     Cmd->>Flow: execute_unban with pre_ban
     Flow->>DB: active_groups and with_primary_groups
@@ -189,12 +189,12 @@ unban being lost. See [Connection](connection.md).
 | `_cleanup_role` | `unban.py` | Reconcile two fresh role reads. |
 | `demote_before_unban` | `demote_actions.py` | Fail-closed role cleanup gate. |
 | `UnbanGate` | `demote_actions.py` | `PROCEED`, `DEMOTE_FAILED`, `ROLE_SURVIVED`. |
-| `execute_unban` | `unban_actions.py` | Durable unban executor. |
+| `execute_unban` | `unban_executor.py` | Durable unban executor. |
 | `revoke_ban_and_queue_unban` | `bans_db._lifecycle` | Atomic revoke, appeal cleanup, queue. |
 | `approve_appeal_and_queue_unban` | `bans_db._lifecycle` | Appeal approval transaction. |
-| `deliver_queued_run` | `enforcement_worker.py` | Immediate run delivery. |
-| `delivery_outcome` | `enforcement_db.py` | Total, applied, failed, pending. |
-| `redrive_run` | `enforcement_db.py` | Operator repair. |
+| `deliver_queued_run` | `moderation_enforcement.py` | Immediate run delivery. |
+| `delivery_outcome` | `enforcement_ledger.py` | Total, applied, failed, pending. |
+| `redrive_run` | `enforcement_ledger.py` | Operator repair. |
 
 ## Validation
 
@@ -203,4 +203,4 @@ uv run pytest tests/ -q -k unban
 ```
 
 Relevant tests include `tests/test_unban_flow.py`, `tests/test_demote_*.py`, and
-`tests/test_enforcement_worker.py`.
+`tests/test_moderation_enforcement.py`.

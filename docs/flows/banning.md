@@ -15,11 +15,13 @@ federation log with an appeal deep link, and queues durable enforcement. Proof
 and log message ids, the appeal link, and the review slot are part of the
 decision document.
 
-Ownership: the command entry lives in `bans.py`; the conversation and executor
-live in `ban_actions.py`, `ban_confirmation.py`, and `ban_rules_step.py`; proof
-collection lives in `proof_steps.py` and `proof_session.py`; durable delivery
-lives in `enforcement_worker.py`; persistence lives in `bans_db/` and
-`moderation_db.py`.
+Ownership: the command entry lives in `bans.py`; the flat modules
+`ban_executor.py`, `ban_conversation.py`, `ban_proof_handlers.py`, and
+`ban_session.py` own execution, the conversation factory, proof handlers, and
+the proof-session registry. `ban_confirmation.py` and `ban_rules_step.py` own
+the freshness guard and rules picker; `proof_steps.py` owns the shared proof
+prompt. Durable delivery lives in `moderation_enforcement.py`; persistence lives in
+`bans_db/` and `moderation_db.py`.
 
 ## Commands and access
 
@@ -119,7 +121,7 @@ then delegates to `show_ban_rules()`. The picker stores selections in
 ```mermaid
 sequenceDiagram
     participant Mod as Moderator
-    participant Flow as ban_actions
+    participant Flow as ban proof handlers
     participant Reg as proof_session registry
     participant Bot as Telegram
     Mod->>Flow: photo video animation or document
@@ -150,7 +152,7 @@ refusal edits the prompt and leaves no record, proof, or fan-out behind.
 
 ```mermaid
 flowchart TD
-    EX[_execute_ban] --> G1[enforcement_refusal min_role developer]
+    EX[execute_ban] --> G1[enforcement_refusal min_role developer]
     G1 -->|refused| EDIT1[edit prompt with refusal]
     G1 -->|allowed| PRE[prefetch active_groups and gather target locale plus active ban]
     PRE --> UP[upload_proof_media to PROOFS]
@@ -176,9 +178,9 @@ action. See [Permissions](permissions.md#demote-gates-best-effort-versus-fail-cl
 
 ```mermaid
 sequenceDiagram
-    participant Flow as _execute_ban
-    participant DB as bans_db and enforcement_db
-    participant Work as enforcement_worker
+    participant Flow as execute_ban
+    participant DB as bans_db and enforcement_ledger
+    participant Work as moderation_enforcement
     participant Bot as Telegram
     participant Mod as Moderator
     participant Target as Banned user
@@ -237,7 +239,7 @@ forward without creating a new decision. Full detail is in
 
 `messages.ban_log()` and `messages.ban_update_log()` build the federation log
 posted to `cfg.logs` through `send_log`. The keyboard carries a proof link and an
-appeal deep link built by `links.appeal_deep_link()`. The moderator's prompt is
+appeal deep link built by `rich.link.appeal_deep_link()`. The moderator's prompt is
 edited in place with the applied, failed, and pending counts from
 `delivery_outcome()`. The target receives a DM with the same deep link; a
 `Forbidden` there is expected. The proof caption uses `proof_caption_new` for a
@@ -272,17 +274,17 @@ new ban and `proof_caption_update` for a re-ban.
 |---|---|---|
 | `cmd_ban_start` | `bans.py` | Validated entry point. |
 | `_ask_update_confirm` | `bans.py` | Re-ban prompt and prompt identity. |
-| `ban_conversation` | `ban_actions.py` | ConversationHandler factory. |
-| `on_proof_received` | `ban_actions.py` | Buffer proof into a session. |
-| `on_done_proof` | `ban_actions.py` | Claim and run the flush from Done. |
-| `_flush_session` | `ban_actions.py` | Debounce timer flush owner. |
-| `_execute_ban` | `ban_actions.py` | Full enforcement orchestration. |
-| `_execute_ban_record` | `ban_actions.py` | Decision write and federation log. |
+| `ban_conversation` | `ban_conversation.py` | ConversationHandler factory. |
+| `on_proof_received` | `ban_proof_handlers.py` | Buffer proof into a session. |
+| `on_done_proof` | `ban_proof_handlers.py` | Claim and run the flush from Done. |
+| `_flush_session` | `ban_session.py` | Debounce timer flush owner. |
+| `execute_ban` | `ban_executor.py` | Full enforcement orchestration. |
+| `_execute_ban_record` | `ban_executor.py` | Decision write and federation log. |
 | `on_ban_update_continue` | `ban_confirmation.py` | Re-ban confirmation handler. |
 | `stale_ban_callback` | `ban_confirmation.py` | Prompt freshness guard. |
 | `show_ban_rules` | `ban_rules_step.py` | Rules picker entry. |
 | `demote_before_enforcement` | `demote_actions.py` | Best-effort pre-fanout demote. |
-| `run_once`, `deliver_queued_run` | `enforcement_worker.py` | Durable delivery. |
+| `run_once`, `deliver_queued_run` | `moderation_enforcement.py` | Durable delivery. |
 
 ## Persistence touchpoints
 
@@ -292,7 +294,7 @@ new ban and `proof_caption_update` for a re-ban.
 | `moderation_cases` | `moderation_db` | One investigation per incident. |
 | `moderation_evidence_uploads`, `moderation_evidence_items` | `moderation_db` | Landed proof batch. |
 | `moderation_messages` | `bans_db._writes` | Federation log references. |
-| `moderation_enforcement_runs`, `_targets`, `_attempts` | `enforcement_db` | Durable apply queue and ledger. |
+| `moderation_enforcement_runs`, `_targets`, `_attempts` | `enforcement_ledger` | Durable apply queue and ledger. |
 | `moderation_appeals` | `bans_db._writes` | Appeal record and review slot. |
 | `moderation_notification_tasks` | `notifications_db` | Durable review-card edits. |
 
@@ -303,4 +305,4 @@ uv run pytest tests/ -q -k ban
 ```
 
 Relevant tests include `tests/test_ban_*.py`, `tests/test_proof_items.py`, and
-`tests/test_enforcement_worker.py`.
+`tests/test_moderation_enforcement.py`.

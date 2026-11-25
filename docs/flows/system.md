@@ -26,7 +26,7 @@ flowchart TD
     FLOW --> CACHE[("Redis L1 memory and optional L2 cache")]
     FLOW --> RICH["rich/msg and rich/edit with InputRichMessage"]
     RICH --> U
-    DB --> WK["enforcement_worker, notification_worker, scheduler"]
+    DB --> WK["moderation_enforcement, notification_worker, scheduler"]
     WK --> U
 ```
 

@@ -5,9 +5,8 @@ This file is the top-level guide for agents and contributors working in this rep
 If you are a developer using AI assistants here, point them at this file first; the human contribution workflow lives in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 For user-facing setup, see [`README.md`](README.md). For contribution workflow,
-see [`CONTRIBUTING.md`](CONTRIBUTING.md). For Replit deployment, see
-[`replit.md`](replit.md). For detailed developer documentation, see
-[`docs/README.md`](docs/README.md).
+see [`CONTRIBUTING.md`](CONTRIBUTING.md). For detailed developer documentation,
+see [`docs/README.md`](docs/README.md).
 
 ---
 
@@ -27,13 +26,13 @@ Every new conversation in this repository must start by reading the canonical ru
   authorization boundaries, role safety, secrets, and compatibility
 - [`.agents/rules/asyncio-gather-rules.md`](.agents/rules/asyncio-gather-rules.md):
   async handlers, `gather()` use, bounded fan-out, timeouts, and cancellation
-- [`CLAUDE.md`](CLAUDE.md), [`CHANGELOG.md`](CHANGELOG.md)
+- [`CHANGELOG.md`](CHANGELOG.md)
 - The relevant [`docs/`](docs/) and project-root docs for the task
 
 **Update in the same turn after every change:**
 
 - [`CHANGELOG.md`](CHANGELOG.md): entry under `[Unreleased]` (Added / Changed / Fixed / Removed / Documentation)
-- Every related `docs/**/*.md`, `.agents/**/*.md`, [`README.md`](README.md), [`replit.md`](replit.md) whose content is now stale
+- Every related `docs/**/*.md`, `.agents/**/*.md`, and [`README.md`](README.md) whose content is now stale
 
 See [`docs-sync.md`](.agents/rules/docs-sync.md#read-before-work-and-update-after-work)
 for the complete read/update rules. Skipping either step is a serious defect.
@@ -194,9 +193,7 @@ Current stack:
 ├── tcbot/                    Main bot package
 │   ├── __init__.py           Config loader, env parsing, immutable Configs model
 │   ├── __main__.py           App lifecycle, builder, errors, and main startup
-│   ├── error_reporter.py     Error classification, dedup, and shipping to LOGS_ERRORS
 │   ├── alive.py              Flask keep-alive and health/metrics endpoints
-│   ├── enforcement_worker.py Expiry revoke queue consumer and Telegram delivery
 │   ├── notification_worker.py Retry the review-card edits through the durable outbox
 │   ├── database/             PostgreSQL helpers, one package per table/domain
 │   │   ├── users_cache.py    Member profile cache operations
@@ -218,7 +215,7 @@ Current stack:
 │   │   ├── base/             Table, column, constraint, and index definitions
 │   │   ├── schema/           SQL views, functions, triggers, and seed data
 │   │   ├── migrations.py     Alembic wiring: applies the pending revisions at startup
-│   │   ├── enforcement_db.py Claim and record the queued expiry revokes
+│   │   ├── enforcement_ledger.py Claim and record the queued expiry revokes
 │   │   ├── notifications_db.py Durable review-card edit outbox
 │   │   ├── erasure_db.py     Queue a Telegram-account erasure
 │   │   ├── documents.py      Typed document shapes
@@ -228,7 +225,8 @@ Current stack:
 │   │   └── mtproto_store.py  PostgreSQL-backed Kurigram storage
 │   ├── modules/              Telegram command modules and handlers
 │   │   ├── helper/           Shared helper code and conversation flows
-│   │   │   ├── pipelines/    Conversation steps and executors (domain-named modules)
+│   │   │   ├── pipelines/    Conversation steps, executors, and the shared moderation_enforcement.py
+│   │   │   │   └── errors/   Error pipeline: classify, exceptions, redaction, report
 │   │   │   ├── buttons/      Inline button builders (rendered as rich buttons)
 │   │   │   │   └── nav.py     Previous/next row for paged views
 │   │   │   ├── decorators/    Rate limiter, tier guards, execution logging
@@ -307,21 +305,20 @@ Current stack:
 ├── CHANGELOG.md              Version history
 ├── SECURITY.md               Security policy
 ├── README.md                 User-facing setup and architecture overview
-├── AGENTS.md                 Top-level project guide (this file)
-└── replit.md                 Replit deployment notes
+└── AGENTS.md                 Top-level project guide (this file)
 ```
 
 Core ownership rules:
 
 - Command handlers live in `tcbot/modules/`. See [`docs/architecture/overview.md`](docs/architecture/overview.md) for module boundaries.
 - Shared handler helpers live in `tcbot/modules/helper/`. See [`docs/architecture/overview.md`](docs/architecture/overview.md#helper-package) for helper docs.
-- Conversation logic lives in `tcbot/modules/helper/pipelines/` as domain-named modules (`*_steps.py`, `*_actions.py`, `*_panels.py`), split into a same-named package only when a module outgrows the file budget. See [`docs/flows/README.md`](docs/flows/README.md) for the flow index, [`docs/flows/system.md`](docs/flows/system.md) for the system spine, and the per-domain pages such as [`docs/flows/banning.md`](docs/flows/banning.md) for each full flow.
+- Conversation logic lives in `tcbot/modules/helper/pipelines/` as domain-named modules (`*_executor.py`, `*_conversation.py`, `*_steps.py`, `*_actions.py`, `*_panels.py`), split into a same-named package only when a module outgrows the file budget. See [`docs/flows/README.md`](docs/flows/README.md) for the flow index, [`docs/flows/system.md`](docs/flows/system.md) for the system spine, and the per-domain pages such as [`docs/flows/banning.md`](docs/flows/banning.md) for each full flow.
 - Database access lives in `tcbot/database/`; keep new database helpers in `*_db.py` files, or `*_db/` packages once split under the file budget. See [`docs/architecture/database.md`](docs/architecture/database.md) for database layer notes.
 - Runtime utilities live in `tcbot/utils/`. See [`docs/architecture/runtime.md`](docs/architecture/runtime.md) for utility docs.
 
 ## Development Commands
 
-Install dependencies from the lockfile (Replit only):
+Install dependencies from the lockfile:
 
 ```bash
 uv sync --frozen
@@ -352,7 +349,7 @@ docker compose up --build
 
 ## Configuration and Secrets
 
-Configuration is loaded from environment variables. For local development, `python-dotenv` loads `config.env` (falling back to `.env`) when present. For Replit or hosted deployment, store secrets in the platform secret manager instead of committing them. See [`docs/getting-started/setup.md`](docs/getting-started/setup.md) for detailed setup instructions and [`replit.md`](replit.md) for Replit-specific notes.
+Configuration is loaded from environment variables. For local development, `python-dotenv` loads `config.env` (falling back to `.env`) when present. For hosted deployment, store secrets in the platform secret manager instead of committing them. See [`docs/getting-started/setup.md`](docs/getting-started/setup.md) for detailed setup instructions.
 
 Never commit real credentials. Required secret values include:
 

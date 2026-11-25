@@ -11,12 +11,12 @@ validation, and pull requests.
 >
 > - If you work with AI coding assistants on this repository, **you** are
 >   responsible for pointing them at the agent contract first:
->   [`AGENTS.md`](AGENTS.md) (or [`CLAUDE.md`](CLAUDE.md))
+>   [`AGENTS.md`](AGENTS.md)
 >   and the rules under [`.agents/rules/`](.agents/rules/). Do not let an
 >   assistant touch code until it has completed that reading checkpoint.
 > - If you **are** an AI agent reading this file, treat it as orientation
->   only. Your working contract is [`AGENTS.md`](AGENTS.md) (or
->   [`CLAUDE.md`](CLAUDE.md)) plus the canonical rules under
+>   only. Your working contract is [`AGENTS.md`](AGENTS.md) plus the
+>   canonical rules under
 >   [`.agents/rules/`](.agents/rules/): complete that
 >   reading checkpoint, learn what this project is, and only then change
 >   any code.
@@ -125,7 +125,7 @@ uv run python -m tcbot
    | Concern | Location |
    |---|---|
    | Command handlers | `tcbot/modules/` |
-   | Conversation pipelines (`*_actions.py`, `*_steps.py`, `*_panels.py`, or domain names) | `tcbot/modules/helper/pipelines/` |
+   | Conversation pipelines (`*_executor.py`, `*_conversation.py`, `*_steps.py`, `*_panels.py`, or domain names) | `tcbot/modules/helper/pipelines/` |
    | Shared handler helpers | `tcbot/modules/helper/` |
    | Database access (always via helpers, never raw SQL) | `tcbot/database/` |
    | Runtime utilities | `tcbot/utils/` |

@@ -246,7 +246,7 @@ A URL button is dropped when its link is empty: `additional_menu_btn()`,
 
 ## Error reports
 
-`error_reporter.py` builds a rich payload with `build_error_report_payload()`
+`errors/report.py` builds a rich payload with `build_error_report_payload()`
 using `rich.formats.heading`, `rich.list.details`, `rich.list.bullet_list`,
 `rich.formats.code`, and `rich.formats.pre`. Every dynamic value passes through
 `_scrub_secrets()` before placement in the HTML. `_ship_throttled()` sends to

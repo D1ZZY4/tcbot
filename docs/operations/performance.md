@@ -133,7 +133,7 @@ fan-out bound; do not change them speculatively.
 
 - `tests/test_dispatch.py` and `tests/test_circuit_breaker.py` cover concurrency.
 - `tests/test_cache_*.py` covers invalidation and outage behavior.
-- `tests/test_scheduler_budgets.py` and `tests/test_enforcement_worker.py`
+- `tests/test_scheduler_budgets.py` and `tests/test_moderation_enforcement.py`
   cover worker limits.
 
 Run a focused check with:

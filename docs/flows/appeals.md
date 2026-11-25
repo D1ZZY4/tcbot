@@ -178,7 +178,7 @@ the decision is committed.
 5. `approve_appeal_and_queue_unban(ban_id, admin.id, admin.first_name, admin.id, chat_ids)`
    commits the acceptance, revokes the ban, drops the review keys, and queues a
    `revoke:appeal:v1` run in one transaction.
-6. `enforcement_worker.deliver_queued_run(bot, run_id)` runs the unban now;
+6. `moderation_enforcement.deliver_queued_run(bot, run_id)` runs the unban now;
    `run_report` and `report_count(report, "failed_count")` log any groups left to retry.
 7. Four independent notifications are gathered: the target DM
    `appeals.decision.approve_dm`, the card edit `appeals.decision.approve_card`,

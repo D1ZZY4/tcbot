@@ -267,13 +267,13 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 ### Conversation Flows
 
 - Conversation handlers live in `tcbot/modules/helper/pipelines/`.
-- Conversation files use domain names without `flow` in the filename (`*_steps.py`, `*_actions.py`, `*_panels.py`, or a plain domain name).
+- Conversation files use domain names without `flow` in the filename (`*_executor.py`, `*_conversation.py`, `*_steps.py`, `*_actions.py`, `*_panels.py`, or a plain domain name). Moderation flows use the flat `<mod>_executor.py` and `<mod>_conversation.py` pair.
 - Keep flow files within the file budget.
 - Split an oversized conversation module into a same-named package with focused submodules.
 - Preserve existing public import paths through the package's `__init__.py`.
 - Never create `*_conv.py` files.
 - Kick, mute, and warn use `mod_action_steps.build_modaction_conv()`.
-- Ban uses `ban_actions.ban_conversation()`.
+- Ban uses `ban_conversation.ban_conversation()` from the flat `ban_*` pipeline modules.
 - Appeals use the `appeal` singleton from `appeal_submit.py` and its `BuildAppeal` builder.
 - Every flow must have a cancellation fallback.
 - Use `WAITING_*` state constants.

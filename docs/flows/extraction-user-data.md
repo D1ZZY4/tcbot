@@ -169,12 +169,14 @@ itself stays instant.
 
 ## Mention formatting
 
-All clickable user mentions are ID-based. `utils.i18n.user_ref(user_id, name,
-username=None)` delegates to `modules/helper/rich/link.py`, which
-ignores `username` and renders `<a href="tg://user?id={user_id}">{name}</a>` for
-a positive id. A non-positive id renders as bold text, so an anonymous admin or
-service account is never linked. The numeric id is the single source of truth;
-a reusable username can change and is never used in the link.
+All clickable user mentions are ID-based native rich buttons.
+`utils.i18n.user_ref(user_id, name, username=None)` delegates to
+`modules/helper/rich/button.py::mention_button`, which ignores `username` and
+renders `<tg-button type="url" url="tg://user?id={user_id}">{name}</tg-button>`
+for a positive id. Telegram has no separate mention button type, so the URL
+carries the numeric id. A non-positive id renders as bold text, so an anonymous
+admin or service account is never linked. The numeric id is the single source
+of truth; a reusable username can change and is never used in the button.
 
 `code()` renders ids inside literal code spans, and `bold()` wraps static
 labels. Do not combine `user_ref(x)` and `code(x)` for the same value. The test

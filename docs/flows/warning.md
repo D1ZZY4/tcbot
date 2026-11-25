@@ -179,11 +179,12 @@ keys. Failures log with the target and chat identifiers.
 | Name | Owner | Role |
 |---|---|---|
 | `cmd_warn` | `warns.py` | Command entry point. |
-| `execute_warn` | `warn_actions.py` | Filing and threshold orchestration. |
-| `_clear_warns_after_threshold_ban` | `warn_actions.py` | Complete versus partial clearing. |
-| `execute_unwarn` | `warn_actions.py` | Single warn removal. |
-| `execute_warnlist` | `warn_actions.py` | Paginated history view. |
-| `execute_resetwarns` | `warn_actions.py` | Group-wide clear. |
+| `warn_conversation` | `warn_conversation.py` | ConversationHandler factory. |
+| `execute_warn` | `warn_executor.py` | Filing and threshold orchestration. |
+| `_clear_warns_after_threshold_ban` | `warn_executor.py` | Complete versus partial clearing. |
+| `execute_unwarn` | `warn_executor.py` | Single warn removal. |
+| `execute_warnlist` | `warn_executor.py` | Paginated history view. |
+| `execute_resetwarns` | `warn_executor.py` | Group-wide clear. |
 | `add_warn` | `warns_db.py` | Locked filing transaction. |
 | `federation_warn_count` | `warns_db.py` | Federation-wide live sum. |
 | `clear_all_warns`, `clear_warns_for_chats` | `warns_db.py` | Threshold clearing paths. |

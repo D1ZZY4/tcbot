@@ -65,22 +65,22 @@ becoming a permanent mute.
 | `rules_step:clear` | Clear selection. |
 
 The executor adapter `_exec_mute()` copies the `mute_` keys out of the flow scope
-and calls `_execute_mute()`. Done and Skip claim the execution slot before their
+and calls `execute_mute()`. Done and Skip claim the execution slot before their
 first await and re-check the tapper's rank.
 
 ## Apply decision and delivery
 
-`_execute_mute()` computes `until = utc_now() + duration` for a timed mute or
+`execute_mute()` computes `until = utc_now() + duration` for a timed mute or
 `None` for a permanent mute, builds `ChatPermissions(can_send_messages=False)`,
 and runs the enforcement rank gate twice at `min_role="moderator"`, before and
 after the optional proof upload.
 
 ```mermaid
 sequenceDiagram
-    participant Flow as _execute_mute
+    participant Flow as execute_mute
     participant Guard as guards
-    participant DB as mutes_db and enforcement_db
-    participant Work as enforcement_worker
+    participant DB as mutes_db and enforcement_ledger
+    participant Work as moderation_enforcement
     participant Bot as Telegram
     Flow->>Guard: enforcement_refusal min_role moderator
     Flow->>DB: active_groups and with_primary_groups
@@ -154,7 +154,7 @@ flowchart TD
 ```
 
 Join handling replays active mutes through `active_mute_docs()`. When a group
-connects, `enforcement_db.queue_connect_replay(chat_id, user_ids)` reads every
+connects, `enforcement_ledger.queue_connect_replay(chat_id, user_ids)` reads every
 active ban or mute for those users and queues one bounded apply run per decision
 with idempotency key
 `moderation:{action_id}:connect-replay:{chat_id}:{event}:{type}:v1`. A revoke run
@@ -194,12 +194,13 @@ transport with no parse mode.
 |---|---|---|
 | `cmd_mute`, `cmd_unmute` | `mute.py` | Command entry points. |
 | `parse_duration`, `fmt_duration` | `time_and_date.py` | Duration parsing and display. |
-| `_execute_mute` | `mute_actions.py` | Apply orchestration. |
-| `execute_unmute` | `mute_actions.py` | Revoke orchestration. |
+| `mute_conversation` | `mute_conversation.py` | ConversationHandler factory. |
+| `execute_mute` | `mute_executor.py` | Apply orchestration. |
+| `execute_unmute` | `mute_executor.py` | Revoke orchestration. |
 | `record_mute` | `mutes_db.py` | Decision, case, proof, apply run. |
 | `revoke_mute_and_queue_unmute` | `mutes_db.py` | Atomic revoke and revoke run. |
 | `get_active_mute`, `active_mute_docs` | `mutes_db.py` | In-force views. |
-| `queue_connect_replay` | `enforcement_db.py` | Durable replay for a new chat. |
+| `queue_connect_replay` | `enforcement_ledger.py` | Durable replay for a new chat. |
 
 ```bash
 uv run pytest tests/ -q -k mute

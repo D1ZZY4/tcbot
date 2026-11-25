@@ -9,8 +9,8 @@ were formerly in a separate button-styles reference.
 
 | Domain | Constant | Value | Owner |
 |---|---|---|---|
-| Ban | `WAITING_PROOF` | 0 | `pipelines/ban_actions.py` |
-| Ban | `WAITING_UPDATE_CONFIRM` | 1 | `pipelines/ban_actions.py` |
+| Ban | `WAITING_PROOF` | 0 | `pipelines/ban_session.py` |
+| Ban | `WAITING_UPDATE_CONFIRM` | 1 | `pipelines/ban_session.py` |
 | Ban rules | `WAITING_BAN_RULES` | 2 | `pipelines/ban_rules_step.py` |
 | Ban rules | `WAITING_BAN_RULES_NOTE` | 3 | `pipelines/ban_rules_step.py` |
 | Kick, mute, warn | `WAITING_REASON` | 0 | `pipelines/mod_action_steps.py` |
@@ -34,9 +34,9 @@ whose `CallbackQueryHandler` pattern matches it.
 
 | Callback pattern | Built by | Handled by |
 |---|---|---|
-| `ban_cancel` | `buttons/ban.py`, `buttons/flows.py` | `ban_actions.py` with `^ban_cancel$`; `rules_step:cancel` also stops the rules step. |
+| `ban_cancel` | `buttons/ban.py`, `buttons/flows.py` | `ban_proof_handlers.py` with `^ban_cancel$`; `rules_step:cancel` also stops the rules step. |
 | `ban_continue` | `buttons/ban.py::ban_update_confirm_btn` | `ban_confirmation.py` with `^ban_continue$`. |
-| `ban_done_proof` | `buttons/flows.py::proof_step_btn` | `ban_actions.py` with `^ban_done_proof$`. |
+| `ban_done_proof` | `buttons/flows.py::proof_step_btn` | `ban_proof_handlers.py` with `^ban_done_proof$`. |
 | `rules_step:pick:<id>` | `buttons/rules.py::picker_btn` | `ban_rules_step.py` and `mod_action_steps.py`; a flow whose prompt identity does not match releases the tap silently with `ContinuePropagation` so its owner sees it and answers once. |
 | `rules_step:done`, `other`, `clear`, `cancel` | `buttons/rules.py::picker_btn` | `ban_rules_step.py` and `mod_action_steps.py` with the same ownership release. The rules editor fallback handles `rules_step:cancel` only. |
 
