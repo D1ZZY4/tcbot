@@ -106,19 +106,31 @@ def test_complete_join_happy_path_is_not_blind(
     assert queued == []
 
 
-def test_complete_join_ban_outage_is_blind(
+def test_complete_join_refuses_to_activate_when_the_decision_store_is_down(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Unknown bans are not an empty list, so the connect must fail closed."""
+
     async def _ban_boom() -> list[int]:
         raise RuntimeError("ban store down")
 
-    queued = _install_world(monkeypatch, ban_uids=[11])
+    async def _mute_boom() -> list[Any]:
+        raise RuntimeError("mute store down")
+
+    _install_world(monkeypatch)
     monkeypatch.setattr(db.bans_db, "active_ban_user_ids", _ban_boom)
-    bot = _FakeBot()
-    blind = asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
-    assert blind is True
-    assert bot.banned == []
-    assert queued == []
+    monkeypatch.setattr(db.mutes_db, "active_mute_docs", _mute_boom)
+    activated: list[int] = []
+
+    async def _add_group(chat_id: int, *_args: Any) -> None:
+        activated.append(chat_id)
+
+    monkeypatch.setattr(db.groups_db, "add_group", _add_group)
+
+    with pytest.raises(RuntimeError, match="cannot read federation decisions"):
+        asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", _FakeBot()))  # type: ignore[arg-type]
+
+    assert activated == []
 
 
 def test_complete_join_truncates_replay_and_is_blind(

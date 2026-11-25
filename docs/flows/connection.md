@@ -111,15 +111,19 @@ owner's only Connect button.
 ## Replay of active decisions
 
 `complete_join()` is the shared connector for the manual command and the
-bot-added prompt. `add_group()` must succeed or the whole connect fails. Active
-ban user ids and active mute documents are fetched before the replay starts.
+bot-added prompt. Active ban user ids and active mute documents are fetched
+before activation; a failed decision-store read fails the whole connect instead
+of activating a group with unknown restrictions. Only then does `add_group()`
+run, and it must succeed or the connect fails.
 
 ```mermaid
 flowchart TD
-    J[complete_join] --> G["gather get_chat, active bans, active mutes, admins, add_group"]
-    G --> A{add_group succeeded}
-    A -->|no| ERR[Raise; caller shows retry]
-    A -->|yes| C[remove_pending and harvest admin identities]
+    J[complete_join] --> G["gather get_chat, active bans, active mutes, admins"]
+    G --> D{Decision reads healthy}
+    D -->|no| ERR[Raise; caller shows retry]
+    D -->|yes| A[add_group]
+    A -->|failed| ERR
+    A -->|ok| C[remove_pending and harvest admin identities]
     C --> B[Replay bans in rounds of 8 via fan_out]
     B --> M[Replay mutes in rounds of 8 via fan_out]
     M --> Q{"Unapplied or failed users"}
@@ -137,7 +141,8 @@ over the cap is truncated and the remainder is treated as pending. A request
 whose result is not a benign no-op is also pending.
 
 Whatever the budget, cap, or a stopped replay leaves unapplied is still an active
-decision. `enforcement_db.queue_connect_replay()` writes one bounded, idempotent
+decision, and a failed decision-store read stops the connect before activation.
+`enforcement_db.queue_connect_replay()` writes one bounded, idempotent
 `apply` run per decision against the one new chat. The queue write is the
 durability boundary and is retried 3 times with 0.2 s backoff; exhausting it
 raises, because the group is already active and a lost queue write would leave
@@ -211,8 +216,8 @@ list that would claim zero groups.
 
 ## Primary group handling
 
-The primary group (`MAIN_GROUP`) is infrastructure, not a managed
-groups. They are always enforcement destinations for ban, unban, mute, warn, and
+The primary group (`MAIN_GROUP`) is infrastructure, not a managed group. It is
+always an enforcement destination for ban, unban, mute, warn, and
 federation logs, because every fan-out appends them through
 `with_primary_groups()`. The connect command, the join-decision callback,
 `/tcdisconnect`, and `/rmtc` all refuse them. `ensure_primary_group()` anchors

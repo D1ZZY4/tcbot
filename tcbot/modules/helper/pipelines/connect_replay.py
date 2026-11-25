@@ -129,28 +129,29 @@ class ConnectionReplayMixin:
         bot: Client,
     ) -> bool:
         """Connect the group and replay active bans and mutes. Returns blind flag."""
-        (
-            chat_result,
-            ban_uids,
-            mute_docs,
-            admins_result,
-            add_group_r,
-        ) = await asyncio.gather(
+        chat_result, ban_uids, mute_docs, admins_result = await asyncio.gather(
             asyncio.wait_for(bot.get_chat(chat_id), timeout=TELEGRAM_LOOKUP_TIMEOUT),
             db.bans_db.active_ban_user_ids(),
             db.mutes_db.active_mute_docs(),
             asyncio.wait_for(
                 _chat_admins(bot, chat_id), timeout=TELEGRAM_LOOKUP_TIMEOUT
             ),
-            db.groups_db.add_group(chat_id, chat_title, owner_id),
             return_exceptions=True,
         )
-        throw_if_cancelled(
-            (chat_result, ban_uids, mute_docs, admins_result, add_group_r)
-        )
-        admins_list = (
-            list(admins_result) if not isinstance(admins_result, BaseException) else []
-        )
+        throw_if_cancelled((chat_result, ban_uids, mute_docs, admins_result))
+        # ! CRITICAL: never activate a group while the decision store is
+        # ! unreadable. An empty list here means "unknown", not "no bans", and
+        # ! activating would leave already-present members unrestricted with no
+        # ! durable run to repair them. All callers surface this failure.
+        if isinstance(ban_uids, BaseException):
+            raise RuntimeError(
+                f"cannot read federation decisions for chat {chat_id}"
+            ) from ban_uids
+        if isinstance(mute_docs, BaseException):
+            raise RuntimeError(
+                f"cannot read federation decisions for chat {chat_id}"
+            ) from mute_docs
+        add_group_r = await db.groups_db.add_group(chat_id, chat_title, owner_id)
         if isinstance(add_group_r, BaseException):
             raise RuntimeError(f"add_group failed for chat {chat_id}") from add_group_r
         try:
@@ -162,19 +163,11 @@ class ConnectionReplayMixin:
             if not isinstance(chat_result, BaseException)
             else None
         )
-        if isinstance(ban_uids, BaseException):
-            log.error(
-                "active_ban_user_ids failed for new chat %d: %s", chat_id, ban_uids
-            )
-            ban_uids = []
-            replay_blind = True
-        else:
-            replay_blind = False
+        admins_list = (
+            list(admins_result) if not isinstance(admins_result, BaseException) else []
+        )
+        replay_blind = False
         deadline = monotonic() + _REPLAY_BUDGET_S
-        if isinstance(mute_docs, BaseException):
-            log.error("active_mute_docs failed for new chat %d: %s", chat_id, mute_docs)
-            mute_docs = []
-            replay_blind = True
         pending_ban_uids: list[int] = []
         pending_mute_docs: list[ActiveMuteDoc] = []
         if len(ban_uids) > _REPLAY_CAP:
