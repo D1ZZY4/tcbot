@@ -6,7 +6,7 @@ Cara menangani pelanggaran: lapor, periksa, putuskan, sanksi, keberatan, dan pem
 
 - **Pelanggaran**: perbuatan yang memenuhi unsur larangan dan dibuktikan menurut cara penegakan. Kritik atau beda pendapat bukan pelanggaran, kecuali caranya melanggar.
 - **Tindakan Moderasi Segera**: pengamanan sementara berupa hapus konten, bisu maksimal 24 jam, atau batasi tautan. Bukan sanksi dan tidak menghapus kewajiban pemeriksaan.
-- **Sanksi**: tindakan setelah pemeriksaan berupa teguran, bisu, pembatasan hak, pengeluaran, blokir bersama, atau pencabutan kewenangan.
+- **Sanksi**: tindakan setelah pemeriksaan berupa teguran, bisu federasi, pengeluaran dari grup, blokir federasi, atau pencabutan kewenangan.
 - **Keputusan Moderasi**: keputusan tertulis berisi identitas, aturan yang dilanggar, uraian dan bukti, pertimbangan tingkat, sanksi, dan cara keberatan.
 - **Keberatan**: permintaan pemeriksaan ulang oleh pihak kena sanksi kepada organ yang berbeda dari yang menjatuhkan.
 - **Konflik Kepentingan**: Pengelola yang memeriksa adalah pelapor, pihak dirugikan, pihak diperiksa, atau punya hubungan pribadi yang meragukan.
@@ -25,10 +25,10 @@ Daftar ini satu-satunya dasar. Pemeriksa tidak boleh menentukan tingkat sendiri.
 ## Jenis sanksi
 
 1. teguran tertulis;
-2. bisu, yaitu menonaktifkan sementara kirim pesan di satu grup;
-3. pembatasan hak, yaitu menonaktifkan sementara kirim tautan, media, atau promosi di satu grup;
-4. pengeluaran, yaitu mengakhiri keanggotaan di grup tempat pelanggaran;
-5. blokir bersama, yaitu memasukkan akun ke daftar blokir bersama yang dibagikan ke semua grup anggota, untuk jangka waktu tertentu atau tanpa batas, hanya untuk pelanggaran sangat berat; dan
+2. bisu, yaitu menonaktifkan sementara kirim pesan di semua grup terhubung dan grup utama;
+3. pembatasan hak, yaitu menonaktifkan sementara kirim tautan, media, atau promosi di grup tempat pelanggaran;
+4. pengeluaran, yaitu mengakhiri keanggotaan di grup tempat perintah dijalankan;
+5. blokir federasi, yaitu memasukkan akun ke daftar blokir yang diterapkan ke semua grup terhubung dan grup utama, untuk jangka waktu tertentu atau tanpa batas, hanya untuk pelanggaran sangat berat; dan
 6. pencabutan kewenangan Pengelola.
 
 Keputusan juga bisa memuat perbaikan: hapus konten, pulihkan atribusi, koreksi terbuka, atau hentikan pembagian Materi Pengujian. Ini bukan sanksi tambahan dan tidak boleh berupa uang, barang, atau pekerjaan untuk kepentingan pribadi Pengelola.
@@ -38,14 +38,14 @@ Keputusan juga bisa memuat perbaikan: hapus konten, pulihkan atribusi, koreksi t
 - Ringan: teguran tertulis.
 - Sedang: teguran tertulis, bisu maksimal 3 hari, atau pembatasan hak maksimal 7 hari.
 - Berat: bisu maksimal 30 hari, pembatasan hak maksimal 30 hari, atau keluar dari grup.
-- Sangat berat: keluar dari grup atau blokir bersama.
+- Sangat berat: keluar dari grup atau blokir federasi.
 
 Aturan tambahan:
 
 - Pelanggaran sama atau sejenis dalam 90 hari sejak keputusan sebelumnya tetap bisa naik 1 tingkat, asal keputusan lama sudah diberitahukan.
 - Memilih sanksi harus mempertimbangkan: sengaja atau lalai, dampak nyata, ada tidaknya keuntungan ekonomi, kerja sama dan penghentian sukarela, serta perbaikan sukarela. Pertimbangan ini tidak boleh melewati batas sanksi.
 - Pengelola yang melanggar bisa kena pencabutan kewenangan, sendiri atau bersama sanksi lain.
-- Blokir bersama hanya setelah keputusan sangat berat berkekuatan tetap, termasuk setelah tenggat keberatan lewat atau keberatan diputus. Admin Federasi mencantumkan nomor keputusan dan tanggal tetapnya, tanpa mengumumkan alasan rinci atau bukti.
+- Blokir federasi hanya setelah keputusan sangat berat berkekuatan tetap, termasuk setelah tenggat keberatan lewat atau keberatan diputus. Admin Federasi mencantumkan nomor keputusan dan tanggal tetapnya, tanpa mengumumkan alasan rinci atau bukti.
 
 ## Tindakan Moderasi Segera
 
@@ -101,7 +101,7 @@ Aturan tambahan:
 - Catatan ringan dan sedang tidak bisa jadi pemberatan setelah 90 hari; catatan berat setelah 180 hari.
 - Jangka waktu pemberatan di atas adalah aturan penegakan, bukan jangka waktu penyimpanan data di bot. Penyimpanan data mengikuti kebijakan privasi: catatan ban disimpan tanpa batas, data identitas yang di-cache dipangkas setelah 90 hari tanpa aktivitas, mute berjangka kedaluwarsa dihapus otomatis, dan catatan banding serta permintaan promosi disimpan setelah diputuskan.
 - Keputusan dan catatan sanksi tidak diumumkan. Pengelola hanya boleh mengumumkan statistik tanpa identitas.
-- Blokir bersama tanpa batas bisa dimohonkan tinjau ulang paling cepat setelah 180 hari, dengan menunjukkan perbaikan dan komitmen tertulis. Diputus organ yang berbeda. Pengajuan berikutnya paling cepat 180 hari setelah penolakan.
+- Blokir federasi tanpa batas bisa dimohonkan tinjau ulang paling cepat setelah 180 hari, dengan menunjukkan perbaikan dan komitmen tertulis. Diputus organ yang berbeda. Pengajuan berikutnya paling cepat 180 hari setelah penolakan.
 
 ## Masa peralihan
 
@@ -113,6 +113,6 @@ Aturan tambahan:
 
 - Kenaikan tingkat hanya karena pengulangan menurut aturan ini, dan daftar pertimbangan sanksi tertutup.
 - Tindakan segera adalah pengamanan, bukan vonis. Tidak boleh diperpanjang dan tidak boleh dipakai menggantikan pemeriksaan.
-- Warn, mute, kick, dan ban grup bukan blokir bersama dan tidak otomatis berlaku lintas grup.
+- Warn dan kick diterapkan di grup tempat perintah dijalankan, tidak otomatis berlaku lintas grup. Ban dan mute federasi berlaku di semua grup terhubung dan grup utama. Tidak ada "ban grup" terpisah dari ban federasi.
 - Keberatan menangguhkan sanksi dengan pengecualian terbatas, dan putusannya tidak boleh memperberat.
 - Keputusan yang tidak memuat unsur pokok batal, jadi penulisan bukan formalitas.

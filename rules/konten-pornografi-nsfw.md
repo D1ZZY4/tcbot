@@ -33,7 +33,7 @@ Aturan konten dewasa di grup dan urutan penilaiannya. Berlaku untuk semua anggot
 ## Sanksi
 
 - Konten Pornografi atau NSFW: **pelanggaran sedang**. Sanksi: teguran tertulis, bisu maksimal 3 hari, atau pembatasan hak maksimal 7 hari.
-- Konten seksual yang melibatkan Anak: **pelanggaran sangat berat**. Sanksi: keluar dari grup atau blokir bersama.
+- Konten seksual yang melibatkan Anak: **pelanggaran sangat berat**. Sanksi: keluar dari grup atau blokir federasi.
 
 Tindakan Moderasi Segera bisa dilakukan. Laporan kasus Anak bisa diajukan kapan saja. Keberatan tidak menangguhkan penghapusan konten Anak.
 

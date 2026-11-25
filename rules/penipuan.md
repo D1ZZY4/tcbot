@@ -21,7 +21,7 @@ Aturan penipuan dan tautan, berkas, atau instruksi penipuan di grup. Berlaku unt
 ## Sanksi
 
 - Menyebar tautan, berkas, atau instruksi penipuan: **pelanggaran berat**. Sanksi: bisu maksimal 30 hari, pembatasan hak maksimal 30 hari, atau keluar dari grup.
-- Melakukan penipuan: **pelanggaran sangat berat**. Sanksi: keluar dari grup atau blokir bersama.
+- Melakukan penipuan: **pelanggaran sangat berat**. Sanksi: keluar dari grup atau blokir federasi.
 
 Tindakan Moderasi Segera bisa dilakukan. Laporan penipuan bisa diajukan kapan saja. Sanksi sangat berat dan penghapusan konten tidak ditangguhkan oleh keberatan.
 

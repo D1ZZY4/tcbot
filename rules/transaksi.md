@@ -10,7 +10,7 @@ Aturan jual beli, sewa, tukar tambah, atau jasa di grup. Berlaku untuk semua ang
 
 1. Dilarang Transaksi di dalam grup.
 2. Kecuali di grup anggota atau kanal yang ditetapkan tertulis oleh Admin Federasi sebagai ruang transaksi resmi. Penetapannya dicatat dalam daftar grup anggota dengan keterangan itu dan mulai berlaku setelah diumumkan di kanal resmi TCF.
-3. Admin Federasi memelihara daftar grup anggota, daftar pengelola, dan daftar blokir bersama di kanal resmi dan grup koordinasi. Daftar grup anggota juga memuat keterangan ruang transaksi resmi. Setiap perubahan dicatat dengan tanggal dan nama grup.
+3. Admin Federasi memelihara daftar grup anggota, daftar pengelola, dan daftar blokir federasi di kanal resmi dan grup koordinasi. Daftar grup anggota juga memuat keterangan ruang transaksi resmi. Setiap perubahan dicatat dengan tanggal dan nama grup.
 4. TCF tidak bertanggung jawab atas Transaksi di luar ruang resmi. Sengketanya bukan pelanggaran, kecuali ada penipuan.
 
 ## Sanksi

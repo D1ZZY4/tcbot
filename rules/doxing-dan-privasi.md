@@ -24,7 +24,7 @@ Lindungi Informasi Pribadi dan isi chat pribadi anggota. Berlaku untuk semua ang
 ## Sanksi
 
 - Doxing dan pembagian chat pribadi tanpa izin: **pelanggaran berat**. Sanksi: bisu maksimal 30 hari, pembatasan hak maksimal 30 hari, atau keluar dari grup.
-- Ancaman, pemerasan, atau intimidasi dengan data pribadi: **pelanggaran sangat berat**. Sanksi: keluar dari grup atau blokir bersama.
+- Ancaman, pemerasan, atau intimidasi dengan data pribadi: **pelanggaran sangat berat**. Sanksi: keluar dari grup atau blokir federasi.
 
 Tindakan Moderasi Segera bisa dilakukan. Keberatan tidak menangguhkan penghapusan konten Doxing atau chat pribadi.
 

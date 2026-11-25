@@ -8,7 +8,7 @@ Siapa yang berwenang mengelola grup dan batas tindakannya. Berlaku untuk Adminis
 - **Administrator**: anggota yang ditunjuk admin grup untuk mengelola keanggotaan dan teknis grup, termasuk menambah dan mengeluarkan peserta.
 - **Moderator**: anggota yang ditunjuk admin grup untuk mengawasi percakapan dan menghapus konten. Tidak bisa menjatuhkan sanksi, kecuali ditentukan lain secara tertulis.
 - **Pengelola**: Administrator dan Moderator.
-- **Admin Federasi**: admin grup anggota yang mengurus koordinasi antargrup, daftar anggota, dan daftar blokir bersama. Tidak mengurus internal grup lain.
+- **Admin Federasi**: admin grup anggota yang mengurus koordinasi antargrup, daftar anggota, dan daftar blokir federasi. Tidak mengurus internal grup lain.
 - **Konflik Kepentingan**: Pengelola yang memeriksa perkara adalah pelapor, pihak dirugikan, pihak diperiksa, atau punya hubungan pribadi yang meragukan.
 - **Tindakan Moderasi Segera**: pengamanan sementara berupa hapus konten, bisu maksimal 24 jam, atau batasi tautan. Bukan sanksi.
 
