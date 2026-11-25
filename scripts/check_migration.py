@@ -176,6 +176,11 @@ def _alembic_config(url: str) -> Config:
     config = Config(str(_ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(_ROOT / "alembic"))
     config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+    # ! CRITICAL: env.py pins the last search_path option and falls back to
+    # ! public. Without this, the scoped URL's development path is overridden
+    # ! and the revisions migrate the deployment schema instead of the scratch
+    # ! one this check owns.
+    config.set_main_option("db_schema", CHECK_SCHEMA)
     return config
 
 
