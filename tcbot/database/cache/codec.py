@@ -63,11 +63,6 @@ def _tag_scalars(value: Any) -> Any:
             if new_dict is not None:
                 new_dict[sk] = tv
             elif sk is not k or tv is not v:
-                new_dict = {
-                    (ek if isinstance(ek, str) else str(ek)): ev
-                    for ek, ev in value.items()
-                    if ek != k
-                }
                 # * Preserve original insertion order by rebuilding up to k.
                 new_dict = {}
                 for ek, ev in value.items():
