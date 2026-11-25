@@ -112,9 +112,18 @@ async def cmd_start(ctx: Ctx) -> None:
     text = (msg.text or "").strip()
     parts = text.split(None, 1)
     arg = parts[1].strip() if len(parts) > 1 else ""
-    identity = await ctx.bot_identity()
+    # * The cached own identity and the reader's locale are independent; one
+    # * cold locale lookup used to sit entirely in front of the first reply.
+    identity_r, locale_r = await asyncio.gather(
+        ctx.bot_identity(), locale_for_update(ctx), return_exceptions=True
+    )
+    throw_if_cancelled((identity_r, locale_r))
+    if isinstance(locale_r, BaseException):
+        raise locale_r
+    if isinstance(identity_r, BaseException):
+        raise identity_r
+    identity, locale = identity_r, locale_r
     botname = identity.first_name or ""
-    locale = await locale_for_update(ctx)
 
     # * A forum is a supergroup in Telegram; "forum" is not a chat type.
     if getattr(chat.type, "value", chat.type) in ("group", "supergroup"):
@@ -158,9 +167,18 @@ async def on_back_to_start(ctx: Ctx) -> None:
     if q is None:
         return
 
-    identity = await ctx.bot_identity()
+    # * The cached own identity and the reader's locale are independent; one
+    # * cold locale lookup used to sit entirely in front of the first reply.
+    identity_r, locale_r = await asyncio.gather(
+        ctx.bot_identity(), locale_for_update(ctx), return_exceptions=True
+    )
+    throw_if_cancelled((identity_r, locale_r))
+    if isinstance(locale_r, BaseException):
+        raise locale_r
+    if isinstance(identity_r, BaseException):
+        raise identity_r
+    identity, locale = identity_r, locale_r
     botname = identity.first_name or ""
-    locale = await locale_for_update(ctx)
     await answer_and_edit(
         q,
         _private_start_text(botname, locale),

@@ -272,18 +272,33 @@ def loop_factory() -> Callable[[], asyncio.AbstractEventLoop] | None:
 
 
 async def _warm_hot_caches() -> None:
-    """Pre-warm owner ID, active groups, and owner role caches."""
+    """Pre-warm the caches the first command and callback taps always read.
+
+    A cold locale cache makes the first `/start` pay the Redis and database
+    miss chain inside the handler. Warming it at boot moves that latency out
+    of the user-visible path.
+    """
     try:
-        owner_id_r, groups_r = await asyncio.gather(
+        owner_id_r, groups_r, community_r = await asyncio.gather(
             db.users_roles.get_owner_id(),
             db.groups_db.active_groups(),
+            db.settings_db.get_community_locale(),
             return_exceptions=True,
         )
-        throw_if_cancelled((owner_id_r, groups_r))
+        throw_if_cancelled((owner_id_r, groups_r, community_r))
         if isinstance(groups_r, BaseException):
             log.debug("Cache warm-up: active_groups failed (non-fatal): %s", groups_r)
+        if isinstance(community_r, BaseException):
+            log.debug(
+                "Cache warm-up: community locale failed (non-fatal): %s", community_r
+            )
         if isinstance(owner_id_r, int):
-            await db.users_roles.get_effective_role(owner_id_r)
+            role_r, locale_r = await asyncio.gather(
+                db.users_roles.get_effective_role(owner_id_r),
+                db.settings_db.get_user_locale(owner_id_r),
+                return_exceptions=True,
+            )
+            throw_if_cancelled((role_r, locale_r))
     except asyncio.CancelledError:
         raise
     except Exception as exc:
