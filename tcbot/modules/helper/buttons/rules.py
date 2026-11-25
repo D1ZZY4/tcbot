@@ -344,16 +344,16 @@ def section_editor_btn(locale: str | None = None) -> InlineKeyboardMarkup:
     """Build the formatting toolbar for one section body."""
     rows: list[list[InlineKeyboardButton]] = [
         [
-            _button("Bold", "rules_fmt:bold"),
-            _button("Italic", "rules_fmt:italic"),
+            _button(t("button.fmt_bold", locale, plain=True), "rules_fmt:bold"),
+            _button(t("button.fmt_italic", locale, plain=True), "rules_fmt:italic"),
         ],
         [
-            _button("List", "rules_fmt:list"),
-            _button("Divider", "rules_fmt:divider"),
+            _button(t("button.fmt_list", locale, plain=True), "rules_fmt:list"),
+            _button(t("button.fmt_divider", locale, plain=True), "rules_fmt:divider"),
         ],
         [
-            _button("Code", "rules_fmt:code"),
-            _button("Plain", "rules_fmt:plain"),
+            _button(t("button.fmt_code", locale, plain=True), "rules_fmt:code"),
+            _button(t("button.fmt_plain", locale, plain=True), "rules_fmt:plain"),
         ],
         [
             _button(t("button.rename", locale, plain=True), "rules_section_title"),

@@ -53,11 +53,11 @@ locale freshly.
 ## Templates and rendering
 
 Templates are stored raw. In rich mode literal text is HTML-escaped and the
-backtick code and asterisk bold mini-markup spans become `<code>` and `<b>`.
-Placeholders must be bare names such as `{user}` and `{count}`, with no format
-specifications or conversions. Mini-markup spans must be balanced, unnested,
-and free of braces. `Safe` marks preformatted fragments from `user_ref()`,
-`code()`, and `bold()` so `t()` inserts them verbatim.
+backtick code, asterisk bold, and tilde italic mini-markup spans become `<code>`,
+`<b>`, and `<i>`. Placeholders must be bare names such as `{user}` and
+`{count}`, with no format specifications or conversions. Mini-markup spans must
+be balanced, unnested, and free of braces. `Safe` marks preformatted fragments
+from `user_ref()`, `code()`, and `bold()` so `t()` inserts them verbatim.
 
 `plain=True` keeps raw text for callback alerts, which Telegram never parses.
 A rendering-mode mismatch shows raw escape characters or breaks parsing, so
