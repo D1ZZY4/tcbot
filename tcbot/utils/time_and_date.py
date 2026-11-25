@@ -29,12 +29,14 @@ def to_utc(dt: datetime) -> datetime:
 
 def fmt_date(dt: datetime) -> str:
     """Format the calendar date of dt as DD-MM-YYYY in UTC."""
-    return to_utc(dt).strftime("%d-%m-%Y")
+    u = to_utc(dt)
+    return f"{u.day:02d}-{u.month:02d}-{u.year:04d}"
 
 
 def fmt_time(dt: datetime) -> str:
     """Format the clock time of dt as HH:MM in UTC."""
-    return to_utc(dt).strftime("%H:%M")
+    u = to_utc(dt)
+    return f"{u.hour:02d}:{u.minute:02d}"
 
 
 def fmt_dt_raw(dt: datetime) -> str:
@@ -44,7 +46,8 @@ def fmt_dt_raw(dt: datetime) -> str:
     as one string in a version footer. Display surfaces use fmt_date and
     fmt_time separately.
     """
-    return f"{fmt_date(dt)} | {fmt_time(dt)}"
+    u = to_utc(dt)
+    return f"{u.day:02d}-{u.month:02d}-{u.year:04d} | {u.hour:02d}:{u.minute:02d}"
 
 
 def fmt_dt(dt: datetime) -> str:
@@ -98,6 +101,10 @@ _DURATION_UNIT_SECONDS: dict[str, int] = {
 }
 
 
+_MIN_RESTRICTION_TD = timedelta(seconds=_MIN_TELEGRAM_RESTRICTION_SECONDS)
+_MAX_DURATION_SECONDS_EXCL = (_MAX_DURATION_DAYS + 1) * _SECS_PER_DAY
+
+
 def parse_duration(raw: str) -> timedelta | None:
     """Parse a duration token like '3d', '1mo', '2ye'. None if invalid."""
     m = _DURATION_RE.match(raw.strip())
@@ -116,15 +123,15 @@ def parse_duration(raw: str) -> timedelta | None:
     unit_seconds = _DURATION_UNIT_SECONDS.get(m.group(2).lower())
     if unit_seconds is None:
         return None
+    total_seconds = value * unit_seconds
+    if total_seconds >= _MAX_DURATION_SECONDS_EXCL:
+        return None
+    if total_seconds < _MIN_TELEGRAM_RESTRICTION_SECONDS:
+        return _MIN_RESTRICTION_TD
     try:
-        result = timedelta(seconds=value * unit_seconds)
+        return timedelta(seconds=total_seconds)
     except OverflowError:
         return None
-    if result.days > _MAX_DURATION_DAYS:
-        return None
-    if result < timedelta(seconds=_MIN_TELEGRAM_RESTRICTION_SECONDS):
-        return timedelta(seconds=_MIN_TELEGRAM_RESTRICTION_SECONDS)
-    return result
 
 
 def fmt_duration(td: timedelta | None, locale: str | None = None) -> str:

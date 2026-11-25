@@ -55,9 +55,9 @@ def _auth_only(*, label: str, refusal: str, min_role: RoleName | None) -> Callab
         @functools.wraps(func)
         async def _wrapper(ctx: Ctx) -> None:
             """Allow the call only when the invoking user passes the tier check."""
-            locale = await locale_for_update(ctx)
             if is_anon_admin(ctx.effective_user):
                 if ctx.effective_message:
+                    locale = await locale_for_update(ctx)
                     await reply_rich(
                         ctx.effective_message,
                         replies.refuse_anon_admin(locale, plain=True),
@@ -99,6 +99,7 @@ def _auth_only(*, label: str, refusal: str, min_role: RoleName | None) -> Callab
                 except Exception as exc:
                     log.warning("%s role lookup failed for %s: %s", label, uid, exc)
                     if ctx.effective_message:
+                        locale = await locale_for_update(ctx)
                         await reply_rich(
                             ctx.effective_message,
                             replies.refuse_role_lookup(locale, plain=True),
@@ -109,6 +110,7 @@ def _auth_only(*, label: str, refusal: str, min_role: RoleName | None) -> Callab
                 if authorized:
                     return await func(ctx)
             if ctx.effective_message:
+                locale = await locale_for_update(ctx)
                 await reply_rich(
                     ctx.effective_message,
                     _REFUSAL_BY_LABEL[refusal](locale, plain=True),
@@ -144,9 +146,9 @@ def permission_only(permission_key: str) -> Callable:
         @functools.wraps(func)
         async def _wrapper(ctx: Ctx) -> None:
             """Allow the call only when the invoker holds the permission."""
-            locale = await locale_for_update(ctx)
             if is_anon_admin(ctx.effective_user):
                 if ctx.effective_message:
+                    locale = await locale_for_update(ctx)
                     await reply_rich(
                         ctx.effective_message,
                         replies.refuse_anon_admin(locale, plain=True),
@@ -170,6 +172,7 @@ def permission_only(permission_key: str) -> Callable:
                         exc,
                     )
                     if ctx.effective_message:
+                        locale = await locale_for_update(ctx)
                         await reply_rich(
                             ctx.effective_message,
                             replies.refuse_role_lookup(locale, plain=True),
@@ -180,6 +183,7 @@ def permission_only(permission_key: str) -> Callable:
                 if authorized:
                     return await func(ctx)
             if ctx.effective_message:
+                locale = await locale_for_update(ctx)
                 await reply_rich(
                     ctx.effective_message,
                     replies.refuse_permission(locale, plain=True),

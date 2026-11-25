@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -60,7 +61,7 @@ _STATE_TTL_S: float = 3600.0
 _MAX_STATES: int = 10_000
 
 
-@dataclass
+@dataclass(slots=True)
 class _Slot:
     state: dict[str, Any] = field(default_factory=dict)
     touched: float = field(default_factory=time.monotonic)
@@ -83,42 +84,48 @@ def display_name(user: object) -> str:
 
 
 _StateKey = tuple[int, int]
-_states: dict[_StateKey, _Slot] = {}
+# * OrderedDict keeps slots in ascending order of last access so expired and
+# * over-capacity entries are popped from the head in O(expired) time instead
+# * of scanning up to _MAX_STATES entries on every update.
+_states: OrderedDict[_StateKey, _Slot] = OrderedDict()
 _states_lock = asyncio.Lock()
 
 
 def _evict_expired(now: float) -> None:
     """Drop slots that outlived the TTL or exceed the bounded store."""
-    expired = [
-        key for key, slot in _states.items() if now - slot.touched > _STATE_TTL_S
-    ]
-    for key in expired:
-        _states.pop(key, None)
-    if len(_states) > _MAX_STATES:
-        oldest = sorted(_states, key=lambda k: _states[k].touched)[
-            : len(_states) - _MAX_STATES
-        ]
-        for key in oldest:
-            _states.pop(key, None)
+    cutoff = now - _STATE_TTL_S
+    while _states:
+        _, oldest_slot = next(iter(_states.items()))
+        if oldest_slot.touched >= cutoff and len(_states) <= _MAX_STATES:
+            break
+        _states.popitem(last=False)
+
+
+def _state_for_sync(chat_id: int, user_id: int, now: float) -> dict[str, Any]:
+    """Return the mutable state dict for one (chat, user) conversation."""
+    key = (chat_id, user_id)
+    _evict_expired(now)
+    slot = _states.get(key)
+    if slot is None:
+        slot = _Slot(touched=now)
+        _states[key] = slot
+    else:
+        slot.touched = now
+        _states.move_to_end(key)
+    return slot.state
 
 
 async def state_for(chat_id: int, user_id: int) -> dict[str, Any]:
     """Return the mutable state dict for one (chat, user) conversation."""
-    async with _states_lock:
-        key = chat_id, user_id
-        _evict_expired(time.monotonic())
-        slot = _states.setdefault(key, _Slot())
-        slot.touched = time.monotonic()
-        return slot.state
+    return _state_for_sync(chat_id, user_id, time.monotonic())
 
 
 async def clear_state(chat_id: int, user_id: int) -> None:
     """Drop the state of one conversation, e.g. after cancel or completion."""
-    async with _states_lock:
-        _states.pop((chat_id, user_id), None)
+    _states.pop((chat_id, user_id), None)
 
 
-@dataclass
+@dataclass(slots=True)
 class Ctx:
     """One Kurigram update plus its application-level state.
 
@@ -235,6 +242,7 @@ async def build_ctx(
         chat, user = message.chat, message.from_user
     chat_id = chat_id_of(chat)
     user_id = int(getattr(user, "id", 0) or 0)
+    now = time.monotonic()
     return Ctx(
         client=client,
         message=message,
@@ -243,8 +251,8 @@ async def build_ctx(
         chat_join_request=chat_join_request,
         update_id=update_id,
         args=args,
-        user_data=await state_for(chat_id, user_id),
-        chat_data=await state_for(chat_id, 0),
+        user_data=_state_for_sync(chat_id, user_id, now),
+        chat_data=_state_for_sync(chat_id, 0, now),
     )
 
 

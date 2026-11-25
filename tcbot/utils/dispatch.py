@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -20,7 +21,7 @@ from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterable, Sequence
+    from collections.abc import Awaitable, Iterable, Sequence
 
 log = get_logger(__name__)
 
@@ -66,9 +67,12 @@ _PERMANENT_BAD_REQUEST_SUBSTRINGS: tuple[str, ...] = (
 )
 
 
+_NON_ALNUM_RE = re.compile(r"[\W_]+")
+
+
 def _normalize(s: str) -> str:
     """Strip every non-alphanumeric character for benign-match comparison."""
-    return "".join(c for c in s if c.isalnum())
+    return _NON_ALNUM_RE.sub("", s)
 
 
 # * Precomputed once: the matchers below run per failure, and rebuilding
@@ -112,7 +116,8 @@ async def fan_out[T](
     still settles the breaker. Every other caller remains blocked while that
     probe is in flight.
     """
-    if not coros:
+    n = len(coros)
+    if n == 0:
         if probe_reserved:
             # * No slot will settle a probe reserved for an empty fan-out.
             _cb.telegram.release_probe()
@@ -121,75 +126,77 @@ async def fan_out[T](
     if max_concurrent < 1:
         max_concurrent = 1
 
-    sem = asyncio.Semaphore(max_concurrent)
-    # * Coroutine identities whose slot actually started the call. A slot
-    # * still waiting on the semaphore never awaited its coroutine, so a
-    # * cancellation of the whole fan-out must close those to avoid
-    # * "coroutine was never awaited" leaks during shutdown.
-    started: set[int] = set()
-
-    async def _slot(
-        thunk: Callable[[], Awaitable[T]], coro: Awaitable[T]
-    ) -> T | BaseException:
-        async with sem:
-            if not probe_reserved and not _cb.telegram.try_acquire():
-                skipped = thunk()
-                if inspect.iscoroutine(skipped):
-                    skipped.close()
-                return _cb.CircuitOpenError("Telegram circuit is OPEN; call skipped.")
-            started.add(id(coro))
-            try:
-                result = await thunk()
-                _cb.telegram.record_success()
-                return result
-            except _FANOUT_TIMEOUTS as exc:
-                # * Callers bound individual deliveries with asyncio.timeout,
-                # * and the client raises its own deadline errors. Both are
-                # * transport stalls and have to count against the circuit.
-                _cb.telegram.record_failure()
-                log.debug("fan_out: timeout (counted against circuit): %s", exc)
-                return exc
-            except OSError as exc:
-                # ! CRITICAL: a 400 is an API refusal (user not in chat, chat
-                # ! gone), never congestion. Kurigram reports refusals as
-                # ! RPCError, not OSError, so none reach this branch. Counting
-                # ! refusals tripped the breaker after five consecutive ones
-                # ! and skipped the remaining groups unenforced.
-                _cb.telegram.record_failure()
-                log.debug("fan_out: network error (counted against circuit): %s", exc)
-                return exc
-            except asyncio.CancelledError:
-                _cb.telegram.release_probe()
-                raise
-            except Exception as exc:
-                # * A refusal proves the service answered, so the transport is
-                # * healthy and a HALF_OPEN probe closes instead of stranding
-                # * the circuit. RPC timeouts were settled above.
-                _cb.telegram.release_probe(reached_service=True)
-                log.debug(
-                    "fan_out: coroutine failed (not counted against circuit): %s", exc
-                )
-                return exc
-
-    try:
-        results = list(
-            await asyncio.gather(
-                *(_slot(lambda c=c: c, c) for c in coros),
-                return_exceptions=True,
+    async def _run_one(coro: Awaitable[T]) -> tuple[T | BaseException, bool]:
+        if not probe_reserved and not _cb.telegram.try_acquire():
+            if inspect.iscoroutine(coro):
+                coro.close()
+            return _cb.CircuitOpenError("Telegram circuit is OPEN; call skipped."), True
+        try:
+            result = await coro
+            _cb.telegram.record_success()
+            return result, False
+        except _FANOUT_TIMEOUTS as exc:
+            # * Callers bound individual deliveries with asyncio.timeout,
+            # * and the client raises its own deadline errors. Both are
+            # * transport stalls and have to count against the circuit.
+            _cb.telegram.record_failure()
+            log.debug("fan_out: timeout (counted against circuit): %s", exc)
+            return exc, False
+        except OSError as exc:
+            # ! CRITICAL: a 400 is an API refusal (user not in chat, chat
+            # ! gone), never congestion. Kurigram reports refusals as
+            # ! RPCError, not OSError, so none reach this branch. Counting
+            # ! refusals tripped the breaker after five consecutive ones
+            # ! and skipped the remaining groups unenforced.
+            _cb.telegram.record_failure()
+            log.debug("fan_out: network error (counted against circuit): %s", exc)
+            return exc, False
+        except asyncio.CancelledError:
+            _cb.telegram.release_probe()
+            raise
+        except Exception as exc:
+            # * A refusal proves the service answered, so the transport is
+            # * healthy and a HALF_OPEN probe closes instead of stranding
+            # * the circuit. RPC timeouts were settled above.
+            _cb.telegram.release_probe(reached_service=True)
+            log.debug(
+                "fan_out: coroutine failed (not counted against circuit): %s", exc
             )
-        )
+            return exc, False
+
+    if n == 1:
+        single_res, was_skipped = await _run_one(coros[0])
+        if was_skipped:
+            log.warning(
+                "fan_out: Telegram circuit OPEN; skipped 1 slot(s) to avoid timeouts."
+            )
+        return [single_res]
+
+    results: list[T | BaseException] = [None] * n  # type: ignore[list-item]
+    next_idx = 0
+    skipped = 0
+
+    async def _worker() -> None:
+        nonlocal next_idx, skipped
+        while next_idx < n:
+            idx = next_idx
+            next_idx += 1
+            res, was_skipped = await _run_one(coros[idx])
+            results[idx] = res
+            if was_skipped:
+                skipped += 1
+
+    worker_count = min(max_concurrent, n)
+    try:
+        await asyncio.gather(*(_worker() for _ in range(worker_count)))
     except asyncio.CancelledError:
-        for coro in coros:
-            if id(coro) not in started and inspect.iscoroutine(coro):
+        for i in range(next_idx, n):
+            coro = coros[i]
+            if inspect.iscoroutine(coro):
                 coro.close()
         raise
-    # ! CRITICAL: gather(return_exceptions=True) captures per-slot
-    # ! cancellation as data. A cancelled slot must propagate so shutdown
-    # ! is never misreported as per-group failures by the counters below.
-    throw_if_cancelled(results)
     # * One summary line per call instead of one warning per skipped slot:
     # * an open-circuit fan-out over N groups used to emit N identical lines.
-    skipped = sum(isinstance(r, _cb.CircuitOpenError) for r in results)
     if skipped:
         log.warning(
             "fan_out: Telegram circuit OPEN; skipped %d slot(s) to avoid timeouts.",
@@ -211,41 +218,45 @@ async def gather_bounded[T](
     bursts where tripping or reading the Telegram breaker would be wrong,
     such as bulk deactivations during cleanup.
     """
-    if not coros:
+    n = len(coros)
+    if n == 0:
         return []
 
     if max_concurrent < 1:
         max_concurrent = 1
 
-    sem = asyncio.Semaphore(max_concurrent)
-    # * Coroutine identities whose slot actually started the call. A slot
-    # * still waiting on the semaphore never awaited its coroutine, so a
-    # * cancellation of the whole burst must close those to avoid
-    # * "coroutine was never awaited" leaks.
-    started: set[int] = set()
+    if n == 1:
+        try:
+            return [await coros[0]]
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            return [exc]
 
-    async def _slot(coro: Awaitable[T]) -> T | BaseException:
-        async with sem:
-            started.add(id(coro))
+    results: list[T | BaseException] = [None] * n  # type: ignore[list-item]
+    next_idx = 0
+
+    async def _worker() -> None:
+        nonlocal next_idx
+        while next_idx < n:
+            idx = next_idx
+            next_idx += 1
             try:
-                return await coro
+                results[idx] = await coros[idx]
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                return exc
+                results[idx] = exc
 
+    worker_count = min(max_concurrent, n)
     try:
-        results = list(
-            await asyncio.gather(*(_slot(c) for c in coros), return_exceptions=True)
-        )
+        await asyncio.gather(*(_worker() for _ in range(worker_count)))
     except asyncio.CancelledError:
-        for coro in coros:
-            if id(coro) not in started and inspect.iscoroutine(coro):
+        for i in range(next_idx, n):
+            coro = coros[i]
+            if inspect.iscoroutine(coro):
                 coro.close()
         raise
-    # ! CRITICAL: same cancellation contract as fan_out: a cancelled slot
-    # ! must propagate so shutdown is never misreported as per-item failures.
-    throw_if_cancelled(results)
     return results
 
 
@@ -433,19 +444,29 @@ def summarize_fanout(
     summary is built from. The wording of the user-facing summary stays
     with each action, because every action renders it differently.
     """
-    for grp, exc in failed_groups(groups, results):
-        log.warning(
-            "%s enforcement failed for user=%d in group=%s (%d): %s",
+    transient: list[tuple[dict[str, Any], BaseException]] = []
+    for grp, exc in zip(groups, results, strict=True):
+        if isinstance(exc, BaseException):
+            log.warning(
+                "%s enforcement failed for user=%d in group=%s (%d): %s",
+                action,
+                target_id,
+                grp.get("title", ""),
+                grp["chat_id"],
+                exc,
+            )
+            if not is_benign_telegram_error(exc):
+                transient.append((grp, exc))
+    failed = len(transient)
+    if failed:
+        log.error(
+            "%s fan-out had %d/%d transient failures for target=%d",
             action,
+            failed,
+            len(groups),
             target_id,
-            grp.get("title", ""),
-            grp["chat_id"],
-            exc,
+            exc_info=transient[0][1],
         )
-    transient = transient_groups(groups, results)
-    failed = log_fanout_error(
-        results, action=action, total=len(groups), target_id=target_id
-    )
     return FanoutOutcome(
         total=len(groups),
         applied=len(groups) - failed,

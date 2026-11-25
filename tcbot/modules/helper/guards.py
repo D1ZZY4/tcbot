@@ -202,6 +202,9 @@ async def enforcement_refusal(
     return enforcement_refusal_text(verdict, target_label, locale)
 
 
+_UNSET = object()
+
+
 async def resolve_and_check(
     msg: Message,
     executor_id: int,
@@ -209,6 +212,7 @@ async def resolve_and_check(
     *,
     min_role: RoleName,
     executor_role: str | None = None,
+    target_role: str | object | None = _UNSET,
 ) -> tuple[str | None, str | None]:
     """Validate executor permission and target eligibility for moderation actions.
 
@@ -217,19 +221,21 @@ async def resolve_and_check(
 
     Current roles are read fresh. A demotion or a transfer in another process
     must never be hidden behind the cache TTL, and the check must not
-    depend on a decorator having run first. ``executor_role`` supplies a role
-    the caller already read fresh (see ``classify_and_check``); ``None``
-    reads the executor role here as before.
+    depend on a decorator having run first. ``executor_role`` and
+    ``target_role`` supply roles the caller already read fresh (see
+    ``classify_and_check``); omitted values are read here.
 
     On success, returns ``(executor_role, target_role)``.
     """
-    # * Moderation replies render in the group locale like every other
-    # * command reply; resolution never raises (falls back to default).
-    chat = msg.chat
-    locale = await effective_locale(
-        getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
-    )
-    if executor_role is None:
+
+    async def _locale() -> str:
+        chat = msg.chat
+        return await effective_locale(
+            getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
+        )
+
+    resolved_target_role: str | None
+    if executor_role is None and target_role is _UNSET:
         executor_role_r, target_role_r = await asyncio.gather(
             db.users_roles.get_effective_role(executor_id, fresh=True),
             db.users_roles.get_effective_role(target_id, fresh=True),
@@ -253,16 +259,41 @@ async def resolve_and_check(
         ):
             await reply_rich(
                 msg,
-                replies.refuse_role_lookup(locale, plain=True),
+                replies.refuse_role_lookup(await _locale(), plain=True),
                 log_label="resolve_and_check role-lookup",
                 parse_mode=None,
             )
             return None, None
         executor_role = executor_role_r
-        target_role = target_role_r
-    else:
+        resolved_target_role = target_role_r
+    elif executor_role is None:
         try:
-            target_role = await db.users_roles.get_effective_role(target_id, fresh=True)
+            executor_role = await db.users_roles.get_effective_role(
+                executor_id, fresh=True
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning(
+                "resolve_and_check executor role lookup failed for %d: %s",
+                executor_id,
+                exc,
+            )
+            await reply_rich(
+                msg,
+                replies.refuse_role_lookup(await _locale(), plain=True),
+                log_label="resolve_and_check role-lookup",
+                parse_mode=None,
+            )
+            return None, None
+        resolved_target_role = (
+            target_role if isinstance(target_role, str) or target_role is None else None
+        )
+    elif target_role is _UNSET:
+        try:
+            resolved_target_role = await db.users_roles.get_effective_role(
+                target_id, fresh=True
+            )
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -273,31 +304,35 @@ async def resolve_and_check(
             )
             await reply_rich(
                 msg,
-                replies.refuse_role_lookup(locale, plain=True),
+                replies.refuse_role_lookup(await _locale(), plain=True),
                 log_label="resolve_and_check role-lookup",
                 parse_mode=None,
             )
             return None, None
+    else:
+        resolved_target_role = (
+            target_role if isinstance(target_role, str) or target_role is None else None
+        )
     if required_rank(min_role) > db.users_roles.role_rank(executor_role):
         await reply_rich(
             msg,
-            replies.refuse_rank_insufficient(locale, plain=True),
+            replies.refuse_rank_insufficient(await _locale(), plain=True),
             log_label="resolve_and_check rank-insufficient",
             parse_mode=None,
         )
         return None, None
 
-    if not outranks(executor_role, target_role):
-        label = db.users_roles.role_label(target_role)
+    if not outranks(executor_role, resolved_target_role):
+        label = db.users_roles.role_label(resolved_target_role)
         await reply_rich(
             msg,
-            replies.refuse_outranked(label, locale, plain=True),
+            replies.refuse_outranked(label, await _locale(), plain=True),
             log_label="resolve_and_check outrank",
             parse_mode=None,
         )
         return None, None
 
-    return executor_role, target_role
+    return executor_role, resolved_target_role
 
 
 async def classify_and_check(
@@ -353,12 +388,18 @@ async def classify_and_check(
             parse_mode=None,
         )
         return None
+    known_target_role: str | object | None = (
+        ident.kind
+        if ident.kind in ("owner", "admin", "developer", "moderator")
+        else (None if ident.kind == "user" else _UNSET)
+    )
     role_result = await resolve_and_check(
         msg,
         admin_id,
         target_id,
         min_role=min_role,
         executor_role=executor_role_r,
+        target_role=known_target_role,
     )
     if isinstance(role_result, BaseException):
         log.error(
@@ -402,16 +443,16 @@ async def recheck_executor_rank(
     on ``msg`` when the rank lapsed or the lookup failed (fail closed).
     Cancellation always propagates.
     """
-    chat = msg.chat
-    locale = await effective_locale(
-        getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
-    )
     try:
         role = await db.users_roles.get_effective_role(executor_id, fresh=True)
     except asyncio.CancelledError:
         raise
     except Exception as exc:
         log.warning("recheck executor role lookup failed for %d: %s", executor_id, exc)
+        chat = msg.chat
+        locale = await effective_locale(
+            getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
+        )
         await reply_rich(
             msg,
             replies.refuse_role_lookup(locale, plain=True),
@@ -420,6 +461,10 @@ async def recheck_executor_rank(
         )
         return False
     if required_rank(min_role) > db.users_roles.role_rank(role):
+        chat = msg.chat
+        locale = await effective_locale(
+            getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
+        )
         await reply_rich(
             msg,
             replies.refuse_rank_insufficient(locale, plain=True),
