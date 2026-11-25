@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from pyrogram import ContinuePropagation
 from pyrogram.types import Message
 
 from tcbot.modules.helper import guards
@@ -18,11 +19,17 @@ log = get_logger(__name__)
 
 
 async def stale_ban_callback(ctx: Ctx) -> bool:
-    """Answer and report a tap that did not come from the live ban prompt.
+    """Release a tap that did not come from the live ban prompt.
 
     A ConversationHandler keys a dialogue by (chat, user), so a button left
     on an older ban prompt can be delivered to a newer ban. The prompt
     identity recorded at entry decides which taps are current.
+
+    Shared `rules_step:*` payloads are also emitted by kick, mute, and warn.
+    A stale ban tap therefore raises ``ContinuePropagation`` without answering:
+    the owning flow answers once, and Telegram rejects a second answer to the
+    same query id. The dispatcher's final fallback acknowledges a tap nobody
+    owns.
     """
     if callback_is_current(
         ctx,
@@ -31,13 +38,7 @@ async def stale_ban_callback(ctx: Ctx) -> bool:
         message_key="ban_prompt_msg_id",
     ):
         return False
-    query = ctx.callback_query
-    if query is not None:
-        try:
-            await query.answer()
-        except Exception as exc:
-            log.debug("Ban stale callback answer failed: %s", exc)
-    return True
+    raise ContinuePropagation()
 
 
 async def on_ban_update_continue(ctx: Ctx) -> int | None:

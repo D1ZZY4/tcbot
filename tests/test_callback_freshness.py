@@ -11,7 +11,9 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from pyrogram import ContinuePropagation
 
+from tcbot import __main__ as main_mod
 from tcbot.modules.helper.pipelines import ban_actions
 from tcbot.modules.helper.pipelines.mod_action_steps import (
     BuildReason,
@@ -97,11 +99,12 @@ def test_stale_cancel_does_not_end_a_new_kick_flow(
     )
     update, ctx, details = _make(_LIVE_ID + 1)
 
-    result = asyncio.run(flow._on_cancel(update, ctx))
+    with pytest.raises(ContinuePropagation):
+        asyncio.run(flow._on_cancel(update, ctx))
 
-    assert result is None
     assert details["scope"]["kick_target_id"] == 99
-    assert details["answered"] == [True]
+    # * The stale guard releases silently so the owning flow answers once.
+    assert details["answered"] == []
 
 
 def test_fresh_cancel_still_ends_the_flow(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -140,14 +143,27 @@ def test_stale_ban_cancel_keeps_the_live_session(
     )
     update, ctx, details = _make(_LIVE_ID + 1)
 
-    result = asyncio.run(ban_actions.on_cancel_proof(update, ctx))
+    with pytest.raises(ContinuePropagation):
+        asyncio.run(ban_actions.on_cancel_proof(update, ctx))
 
-    assert result is None
     assert cancelled == []
     assert details["scope"]["ban_target_id"] == 99
-    assert details["answered"] == [True]
+    assert details["answered"] == []
 
 
 async def _noop_locale(_update: Any) -> str:
     """Return a fixed locale for the handler under test."""
     return "en-US"
+
+
+@pytest.mark.asyncio
+async def test_unowned_callback_gets_one_answer() -> None:
+    """The final dispatcher group acknowledges a tap no flow claimed."""
+    answered: list[bool] = []
+
+    async def _answer() -> None:
+        answered.append(True)
+
+    query = SimpleNamespace(answer=_answer)
+    await main_mod._answer_unowned_callback(None, query)  # type: ignore[arg-type]
+    assert answered == [True]

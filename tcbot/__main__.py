@@ -72,6 +72,10 @@ log = get_logger(__name__)
 
 _HANDLER_GROUP_RATE_LIMITER: int = -1
 _HANDLER_GROUP_CACHE: int = 10
+# * Last responder: flows release callbacks they do not own with
+# * ContinuePropagation. This group acknowledges a tap nobody claimed so no
+# * client spinner is left hanging, and it never answers twice.
+_HANDLER_GROUP_UNOWNED: int = 20
 _FATAL_BORDER_WIDTH: int = 70
 _FATAL_RED: str = "\033[38;5;203m"
 _FATAL_RESET: str = "\033[0m"
@@ -125,6 +129,14 @@ async def _on_any_update(client: Client, update: object) -> None:
         user = update.from_user
         if user is not None:
             await _cache_identity(client, user)
+
+
+async def _answer_unowned_callback(_client: Client, query: CallbackQuery) -> None:
+    """Acknowledge a callback that no flow claimed, without touching state."""
+    try:
+        await query.answer()
+    except Exception as exc:
+        log.debug("Unowned callback answer failed: %s", exc)
 
 
 # ─────────────────────────────── Error layers ───────────────────────────── #
@@ -333,6 +345,9 @@ def register_handlers(client: Client) -> None:
         client.add_handler(factory(_on_any_update), _HANDLER_GROUP_CACHE)
     for handler in get_handlers():
         client.add_handler(handler, handler_group(handler))
+    client.add_handler(
+        CallbackQueryHandler(_answer_unowned_callback), _HANDLER_GROUP_UNOWNED
+    )
     client.add_handler(ErrorHandler(_error_handler))
 
 
@@ -457,6 +472,7 @@ def _init_sentry() -> None:
 
 
 __all__ = [
+    "_answer_unowned_callback",
     "_error_handler",
     "_init_sentry",
     "_make_asyncio_exc_handler",

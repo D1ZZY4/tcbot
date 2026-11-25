@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from pyrogram import filters
+from pyrogram import ContinuePropagation, filters
 
 from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
@@ -250,14 +250,13 @@ class RulesEditor:
         return ConversationHandler.END
 
     async def ignore_foreign_cancel(self, ctx: Ctx) -> int:
-        """Answer a moderation picker Cancel without closing the editor."""
-        q = ctx.callback_query
-        if q is not None:
-            try:
-                await q.answer()
-            except Exception as exc:
-                log.debug("foreign picker cancel answer failed: %s", exc)
-        return WAITING_EDITOR_MENU
+        """Release a moderation picker Cancel instead of closing the editor.
+
+        Warn registers after the rules module, so answering here would swallow
+        the live picker's own Cancel tap. The flow that owns the prompt answers
+        the query once.
+        """
+        raise ContinuePropagation()
 
 
 rules_editor = RulesEditor()

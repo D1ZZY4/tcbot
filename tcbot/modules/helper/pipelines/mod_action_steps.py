@@ -249,14 +249,15 @@ class _FlowBase:
         )
 
     async def _ignore_stale_callback(self, ctx: Ctx) -> None:
-        """Acknowledge a stale tap without touching the current conversation."""
-        query = ctx.callback_query
-        if query is None:
-            return
-        try:
-            await query.answer()
-        except Exception as exc:
-            log.debug("%s stale callback answer failed: %s", self.action, exc)
+        """Acknowledge a stale tap and release it to the flow that owns it.
+
+        The four moderation flows share the ``rules_step:*`` callback names.
+        Consuming a tap whose prompt identity does not match this action would
+        keep kick, mute, or warn from ever seeing their own button presses.
+        The owner answers once; a second answer to the same query id is
+        rejected by Telegram.
+        """
+        raise ContinuePropagation()
 
     def _clear_scope(self, ctx: Ctx) -> None:
         """Remove all action keys from the conversation scope.

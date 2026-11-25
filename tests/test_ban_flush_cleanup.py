@@ -327,19 +327,19 @@ def test_zombie_media_creates_no_session(
     assert len(registry) == 0
 
 
-def test_zombie_done_tap_ends_silently(
+def test_zombie_done_tap_releases_other_flows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(ban_actions, "proof_sessions", ProofSessionRegistry())
     query = _ZombieQuery()
     update = _ZombieUpdate(query=query)
-    outcome = asyncio.run(
-        ban_actions.on_done_proof(update, _ZombieCtx({}))  # type: ignore[arg-type]
-    )
-    # * No prompt identity is recorded, so fail-closed freshness treats the tap
-    # * as stale instead of executing an empty-scope ban.
-    assert outcome is None
-    assert len(query.answers) == 1
+    # * No prompt identity is recorded, so fail-closed freshness refuses the
+    # * empty-scope ban and passes the shared callback to its real owner.
+    with pytest.raises(ContinuePropagation):
+        asyncio.run(
+            ban_actions.on_done_proof(update, _ZombieCtx({}))  # type: ignore[arg-type]
+        )
+    assert query.answers == []
 
 
 def test_zombie_timeout_silent(
