@@ -6,7 +6,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
+
+import pytest
+
+from tcbot.database import erasure_db
 
 _ROOT = Path(__file__).resolve().parents[1]
 _SCHEMA = _ROOT / "tcbot/database/schema"
@@ -48,6 +53,46 @@ def test_a_repeat_erasure_is_allowed() -> None:
     assert "A repeat request is allowed" in maintenance
 
 
+def test_an_erasure_request_runs_on_the_write_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Queueing an erasure inserts rows, so it must not use a read connection."""
+    seen: list[str] = []
+
+    async def _db_call(op: object, **kwargs: object) -> object:
+        return await op()  # type: ignore[operator]
+
+    async def _write(stmt: object) -> list[dict[str, int]]:
+        seen.append(str(stmt))
+        return [{"request_id": 7}]
+
+    monkeypatch.setattr(erasure_db, "db_call", _db_call)
+    monkeypatch.setattr(erasure_db, "run_returning", _write)
+
+    assert asyncio.run(erasure_db.request_erasure(3, "account deletion")) == 7
+    assert len(seen) == 1
+    assert "request_user_erasure" in seen[0]
+    assert "AS request_id" in seen[0]
+
+
+def test_an_erasure_request_without_an_id_keeps_the_zero_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A NULL return from the guard must not turn into a TypeError."""
+
+    async def _db_call(op: object, **kwargs: object) -> object:
+        return await op()  # type: ignore[operator]
+
+    async def _write(stmt: object) -> list[dict[str, object]]:
+        _ = stmt
+        return [{"request_id": None}]
+
+    monkeypatch.setattr(erasure_db, "db_call", _db_call)
+    monkeypatch.setattr(erasure_db, "run_returning", _write)
+
+    assert asyncio.run(erasure_db.request_erasure(3, "account deletion")) == 0
+
+
 def test_the_migration_chain_has_one_head() -> None:
     versions = _ROOT / "alembic/versions"
     revisions: dict[str, str | None] = {}
@@ -68,4 +113,4 @@ def test_the_migration_chain_has_one_head() -> None:
         revisions[revision] = down
     parents = {down for down in revisions.values() if down}
     heads = set(revisions) - parents
-    assert heads == {"0020_erased_identity_guard"}
+    assert heads == {"0021_moderation_expiry_clock"}

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from tcbot.database.engine import db_call, fetch_value
+from tcbot.database.engine import db_call, run_returning
 
 
 async def request_erasure(user_id: int, reason: str) -> int:
@@ -17,11 +17,16 @@ async def request_erasure(user_id: int, reason: str) -> int:
     The database function refuses an unknown user, an already erased user,
     and an empty reason, so the caller never has to duplicate those rules.
     """
-    value = await db_call(
-        lambda: fetch_value(
+    # * The function inserts the request and its audit event. Run it through
+    # * the write boundary, not the autocommit read connection: a write must
+    # * not depend on read_connection staying permissive.
+    rows = await db_call(
+        lambda: run_returning(
             text(
-                "SELECT request_user_erasure(:user_id, :reason, 'operator')"
+                "SELECT request_user_erasure(:user_id, :reason, 'operator') "
+                "AS request_id"
             ).bindparams(user_id=user_id, reason=reason)
         )
     )
-    return int(value or 0)
+    value = rows[0]["request_id"] if rows else None
+    return int(value) if value is not None else 0
