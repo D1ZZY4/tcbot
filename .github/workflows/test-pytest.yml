@@ -83,3 +83,47 @@ jobs:
           name: coverage-report
           path: htmlcov/
         if-no-files-found: ignore
+
+  observability:
+    name: Production observability extra
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      BOT_TOKEN: "000000:dummy-token-for-lint000000000000000"
+      DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
+      OWNER_ID: "1"
+      PROOFS: "-1000000000001"
+      SENTRY_DSN: "https://public@example.invalid/1"
+      UV_LOCKED: "1"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      # * The extra is installed only on production paths. A broken SDK pin
+      # * or integration keyword would otherwise surface at deploy time.
+      - name: Install the observability extra
+        run: uv sync --locked --extra observability
+
+      - name: Smoke-test the real monitoring dependencies
+        run: |
+          uv run --locked --extra observability python -c "
+          import sentry_sdk
+          from sentry_sdk.integrations.loguru import LoguruIntegration
+          LoguruIntegration(event_level=40)
+          import tcbot.alive as alive
+          import tcbot.__main__ as app
+          app._init_sentry()
+          assert sentry_sdk.get_client().dsn is not None
+          assert alive._METRICS_RESPONSE is not None
+          print('observability extra ready')
+          "

@@ -13,7 +13,7 @@ Related pages: [setup](../getting-started/setup.md) and
 |---|---|---|---|
 | Lint (Ruff) | `lint-ruff.yml` | Push on main, feat/**, fix/**; PR on main | Format check, lint, file-size budget, import check. |
 | Lint (Pyright) | `lint-pyright.yml` | Push on main, feat/**, fix/**; PR on main | Static type check. |
-| Test (Pytest) | `test-pytest.yml` | Push on main, feat/**, fix/**; PR on main | PostgreSQL tests first, then the rest in parallel with coverage. |
+| Test (Pytest) | `test-pytest.yml` | Push on main, feat/**, fix/**; PR on main | PostgreSQL tests first, then the rest in parallel with coverage; a separate job smoke-tests the production observability extra. |
 | CodeQL | `codeql.yml` | Push and PR on main, weekly schedule | Security analysis for Python and Actions. |
 | Auto-Fix Code Quality | `auto-fix.yml` | Push, PR, dispatch, weekly schedule, and completion of the lint workflows | Applies Ruff fixes and opens or updates an auto-PR. |
 | Dependency Updates | `dependency-update.yml` | Weekly schedule and dispatch | Upgrades `uv.lock` and opens a dependency PR. |
@@ -33,6 +33,10 @@ the package does not require real secrets.
   service, then the remaining tests with `-n auto` and coverage. A Redis 7
   service supports the cache tests. Database and Redis tests skip when their
   service is unavailable.
+- The observability job installs `--extra observability` with the committed
+  lockfile, constructs the real Sentry Loguru integration, runs the production
+  Sentry initialisation with a dummy DSN, and asserts the Prometheus registry
+  is available. It uses no secrets.
 
 The test suite sets dummy environment values in `tests/conftest.py` at
 collection time and uses the `test` schema only. A collection hook marks any

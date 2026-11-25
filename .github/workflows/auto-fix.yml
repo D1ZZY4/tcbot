@@ -51,12 +51,16 @@ jobs:
 
       - name: Run Ruff format
         id: format
+        env:
+          UV_LOCKED: 1
         run: |
           uv run ruff format . 2>&1 | tee format.log
           echo "formatted=$(git diff --name-only | wc -l)" >> "$GITHUB_OUTPUT"
 
       - name: Run Ruff check --fix
         id: check
+        env:
+          UV_LOCKED: 1
         run: |
           # * Capture the tool status before the pipeline ends. Appending
           # * "|| true" makes PIPESTATUS[0] the status of true, so every run
@@ -71,6 +75,7 @@ jobs:
       - name: Run Pyright (capture)
         id: pyright
         env:
+          UV_LOCKED: 1
           BOT_TOKEN: "000000:dummy-token-for-ci00000000000000000"
           DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
           OWNER_ID: "1"
@@ -87,6 +92,7 @@ jobs:
       - name: Run Pytest (capture)
         id: pytest
         env:
+          UV_LOCKED: 1
           BOT_TOKEN: "000000:dummy-token-for-ci00000000000000000"
           DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
           OWNER_ID: "1"
