@@ -22,9 +22,13 @@ on:
       # * start a run, so the live bot is left untouched.
       - "tcbot/**"
       - "i18n/**"
+      - "alembic/**"
+      - "alembic.ini"
       - "pyproject.toml"
       - "uv.lock"
       - ".python-version"
+      - "Dockerfile"
+      - "docker-compose.yml"
       - ".github/workflows/run-bot.yml"
 
 concurrency:

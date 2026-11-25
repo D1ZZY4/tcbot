@@ -23,6 +23,9 @@ jobs:
       DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
       OWNER_ID: "1"
       PROOFS: "-1000000000001"
+      # * Every uv run must validate the committed lock, not silently
+      # * re-resolve a manifest change into a different dependency graph.
+      UV_LOCKED: "1"
 
     steps:
       - uses: actions/checkout@v7
@@ -37,7 +40,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --locked
 
       - name: Check formatting
         run: uv run ruff format --check .

@@ -27,6 +27,9 @@ jobs:
       # * names the deployment cache, and a suite that reaches it would
       # * write, read, and delete live cache entries.
       TCBOT_TEST_REDIS_URL: "redis://127.0.0.1:6379/0"
+      # * Validate the committed lock everywhere, so the tested dependency
+      # * graph is the same one the frozen production image installs.
+      UV_LOCKED: "1"
 
     services:
       postgres:
@@ -66,7 +69,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --locked
 
       - name: Run PostgreSQL integration tests
         run: uv run pytest tests/ -q -m postgres --cov=tcbot --cov-branch --cov-report=
