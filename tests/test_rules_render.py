@@ -50,6 +50,16 @@ def test_rich_category_index_shows_the_resolved_label_and_description() -> None:
     assert "<h2>Rules: cheat</h2>" not in html
 
 
+def test_rich_category_index_escapes_the_stored_description() -> None:
+    """A staff-authored description is plain text, never rich markup."""
+    payload = rules_msg.rich_category_index(
+        "cheat", "Cheating", "<b>Free</b> & tap", "en-US"
+    )
+    html = payload["html"]
+    assert "&lt;b&gt;Free&lt;/b&gt; &amp; tap" in html
+    assert "<b>Free</b>" not in html
+
+
 def test_rich_section_page_uses_the_stored_category_label() -> None:
     """A section heading shows the rule-set label, not the internal slug."""
     payload = rules_msg.rich_section_page(

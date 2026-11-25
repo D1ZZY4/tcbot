@@ -249,7 +249,9 @@ def rich_category_index(
     return rich_msg.html_message(
         heading(t("rules.menu.category", locale, category=label, plain=True)),
         divider(),
-        paragraph(description),
+        # * paragraph() takes preformatted rich HTML; the stored description
+        # * is plain staff-authored text and must be escaped exactly once.
+        paragraph(rich_esc(description)),
         divider(),
         footer(t("rules.menu.category_footer", locale, plain=True)),
     )

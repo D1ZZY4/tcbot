@@ -12,6 +12,7 @@ panel is rendered, so staff can upload a document and keep editing it in bot.
 
 from __future__ import annotations
 
+import html
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -37,11 +38,18 @@ _LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 
 def _inline(text: str) -> str:
     """Convert inline Markdown to rich HTML, escaping everything else."""
+    # * Escape literal text once, then restore the raw span contents before
+    # * wrapping them: the style helpers escape their argument again and would
+    # * otherwise double-encode ampersands in a staff-authored document.
     value = esc(text)
-    value = _LINK.sub(lambda m: esc(m.group(1)), value)
-    value = _INLINE_CODE.sub(lambda m: code(esc(m.group(1))), value)
-    value = _BOLD.sub(lambda m: bold(esc(m.group(1))), value)
-    return _ITALIC.sub(lambda m: italic(esc(m.group(1) or m.group(2) or "")), value)
+    value = _LINK.sub(lambda m: m.group(1), value)
+    # * The style helpers escape their argument again, so restore the raw
+    # * span text before wrapping it instead of passing the escaped capture.
+    value = _INLINE_CODE.sub(lambda m: code(html.unescape(m.group(1))), value)
+    value = _BOLD.sub(lambda m: bold(html.unescape(m.group(1))), value)
+    return _ITALIC.sub(
+        lambda m: italic(html.unescape(m.group(1) or m.group(2) or "")), value
+    )
 
 
 def parse_document(text: str, filename: str = "rules.md") -> list[dict[str, Any]]:

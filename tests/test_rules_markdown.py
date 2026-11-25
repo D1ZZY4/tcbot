@@ -61,3 +61,12 @@ def test_render_items_uses_headings() -> None:
     html = render_items(parse_document(_DOC, "spam.md"))
     assert "<h3>Spam Rules: Definitions</h3>" in html
     assert "<h3>Spam Rules: Sanctions</h3>" in html
+
+
+def test_inline_markdown_escapes_special_characters_once() -> None:
+    """A staff-authored ampersand must not survive as a literal entity."""
+    html = render_body("`a&b` and **x<y** and *c&d*")
+    assert "<code>a&amp;b</code>" in html
+    assert "&amp;amp;" not in html
+    assert "<b>x&lt;y</b>" in html
+    assert "<i>c&amp;d</i>" in html
