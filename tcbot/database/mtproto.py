@@ -109,13 +109,19 @@ def client() -> Client:
         PostgresStorage,
     )
 
+    workers = _worker_count()
     _client = Client(
         cfg.mtproto_session,
         api_id=cfg.api_id,
         api_hash=cfg.api_hash,
         bot_token=cfg.bot_token,
-        storage_engine=PostgresStorage(cfg.mtproto_session),
-        workers=_worker_count(),
+        storage_engine=PostgresStorage(cfg.mtproto_session, coalesce_updates=True),
+        workers=workers,
+        # * Raise FloodWait immediately instead of sleeping inside Session.invoke(),
+        # * which would stall a dispatcher worker and blow past latency budgets.
+        sleep_threshold=0,
+        # * Allow concurrent file/media transfers instead of Kurigram's default 1.
+        max_concurrent_transmissions=min(16, max(4, workers // 2)),
     )
     return _client
 

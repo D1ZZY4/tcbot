@@ -21,7 +21,7 @@ from tcbot.utils import metrics
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Sequence
+    from collections.abc import Awaitable, Callable, Mapping, Sequence
 
 log = get_logger(__name__)
 
@@ -152,6 +152,52 @@ class TwoLevelCache[T]:
         # * this write cannot overwrite the newer value with an older one.
         self._advance(key)
         self._redis_put_background(key, val)
+
+    def put_many(self, items: Mapping[Any, T]) -> None:
+        """Store multiple entries in memory and enqueue one pipelined Redis write."""
+        if not items:
+            return
+        for key, val in items.items():
+            self._mem.put(key, val)
+            self._pending_invalidations.discard(key)
+            self._advance(key)
+        self._revision += 1
+        if not cfg.redis_url:
+            return
+        entries: list[tuple[Any, str, str]] = []
+        for key, val in items.items():
+            rkey = self._rkey(key)
+            try:
+                payload = _encode_redis_value(val)
+            except Exception as exc:
+                log.debug("Redis payload encode failed for %s: %s", rkey, exc)
+                continue
+            entries.append((key, rkey, payload))
+        if not entries:
+            return
+        if self._critical_delete:
+            for key, rkey, payload in entries:
+                self._pending_writes.add(key)
+                tomb_key = self._tombstone_key(key)
+                task = redis_io.enqueue_redis_mutation(
+                    self._redis_prefix,
+                    lambda rk=rkey, pl=payload, tk=tomb_key: self._redis_set_guarded(
+                        rk, pl, tk
+                    ),
+                    droppable=not self._is_revocation,
+                )
+                self._watch_mutation(self._pending_writes, key, task)
+            return
+        for key, _rkey, _payload in entries:
+            self._pending_writes.add(key)
+        batch = [(rkey, payload) for _key, rkey, payload in entries]
+        task = redis_io.enqueue_redis_mutation(
+            self._redis_prefix,
+            lambda: self._redis_set_many(batch),
+            droppable=not self._is_revocation,
+        )
+        for key, _rkey, _payload in entries:
+            self._watch_mutation(self._pending_writes, key, task)
 
     def put_local(self, key: Any, val: T) -> None:
         """Store in memory without publishing to Redis.
@@ -779,11 +825,21 @@ class TwoLevelCache[T]:
             log.debug("Redis payload encode failed for %s: %s", rkey, exc)
             return
         self._pending_writes.add(key)
-        task = redis_io.enqueue_redis_mutation(
-            self._redis_prefix,
-            lambda: self._redis_set_guarded(rkey, payload, self._tombstone_key(key)),
-            droppable=not self._is_revocation,
-        )
+        if self._critical_delete:
+            tomb_key = self._tombstone_key(key)
+            task = redis_io.enqueue_redis_mutation(
+                self._redis_prefix,
+                lambda: self._redis_set_guarded(rkey, payload, tomb_key),
+                droppable=not self._is_revocation,
+            )
+        else:
+            # * Non-revocation prefixes never write tombstones, so skip the
+            # * extra EXISTS round trip on every L2 write.
+            task = redis_io.enqueue_redis_mutation(
+                self._redis_prefix,
+                lambda: self._redis_set(rkey, payload),
+                droppable=not self._is_revocation,
+            )
         self._watch_mutation(self._pending_writes, key, task)
 
     async def _client(self) -> Any:
@@ -821,6 +877,24 @@ class TwoLevelCache[T]:
 
     async def _redis_revoke(self, rkey: str, tomb_key: str) -> bool:
         """Write the cross-process marker before deleting the L2 value."""
+        rc = await self._client()
+        if rc is None:
+            return False
+        if hasattr(rc, "pipeline"):
+            tomb_ttl = max(_TOMBSTONE_TTL_S, self._redis_ttl)
+            try:
+                async with rc.pipeline(transaction=True) as pipe:
+                    pipe.set(tomb_key, "1", ex=tomb_ttl)
+                    pipe.delete(rkey)
+                    await pipe.execute()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                _redis_mod.mark_op(ok=False)
+                log.debug("Redis revoke pipeline failed for %s: %s", rkey, exc)
+                return False
+            _redis_mod.mark_op(ok=True)
+            return True
         if not await self._redis_tombstone(tomb_key):
             return False
         return await self._redis_delete(rkey)
@@ -870,6 +944,31 @@ class TwoLevelCache[T]:
         except Exception as exc:
             log.debug("Tombstone guard before L2 write failed for %s: %s", rkey, exc)
         return await self._redis_set(rkey, payload)
+
+    async def _redis_set_many(self, entries: list[tuple[str, str]]) -> bool:
+        """Write multiple Redis values in one pipelined batch."""
+        rc = await self._client()
+        if rc is None:
+            return False
+        try:
+            if hasattr(rc, "pipeline"):
+                async with rc.pipeline(transaction=False) as pipe:
+                    for rkey, payload in entries:
+                        pipe.set(rkey, payload, ex=self._redis_ttl)
+                    await pipe.execute()
+            else:
+                for rkey, payload in entries:
+                    await rc.set(rkey, payload, ex=self._redis_ttl)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            _redis_mod.mark_op(ok=False)
+            log.debug(
+                "Redis batch set failed for prefix %s: %s", self._redis_prefix, exc
+            )
+            return False
+        _redis_mod.mark_op(ok=True)
+        return True
 
     async def _redis_set(self, rkey: str, payload: str) -> bool:
         """Write one Redis value and keep failures observable but non-fatal.

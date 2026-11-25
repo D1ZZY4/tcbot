@@ -53,6 +53,7 @@ _POOL_RECYCLE_S: float = 1800.0
 _CONNECT_TIMEOUT_S: float = 10.0
 
 _engine: AsyncEngine | None = None
+_read_engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
@@ -204,20 +205,18 @@ async def read_connection() -> AsyncIterator[AsyncConnection]:
 
     A read needs no transaction, so the connection runs in autocommit and
     the statement does not pay the ``COMMIT`` that would close a
-    transaction. The pool validates a connection before handing it out,
-    so the checkout costs one round trip of its own.
-
-    The isolation level is reverted when the connection returns to the
-    pool, so a write that follows still runs in a normal transaction.
+    transaction. Uses the shared autocommit engine proxy so each checkout
+    skips per-call ``execution_options()`` overhead while sharing the same
+    underlying connection pool.
     """
-    if _engine is None:
+    if _read_engine is not None:
+        read_eng = _read_engine
+    elif _engine is not None:
+        read_eng = _engine.execution_options(isolation_level="AUTOCOMMIT")
+    else:
         raise RuntimeError("Database not initialised; call connect() first.")
-    connection = await _engine.connect()
-    try:
-        connection = await connection.execution_options(isolation_level="AUTOCOMMIT")
+    async with read_eng.connect() as connection:
         yield connection
-    finally:
-        await connection.close()
 
 
 async def fetch_all(stmt: Executable) -> list[dict[str, Any]]:
@@ -313,10 +312,10 @@ async def db_call[T](
     its own timeout. The circuit opens after repeated transient failures
     and rejects further calls without touching the server.
     """
+    if timeout is None:
+        return await _cb.postgres.call(op(), count_failure=_counts_toward_circuit)
 
     async def _run() -> T:
-        if timeout is None:
-            return await op()
         async with asyncio.timeout(timeout):
             return await op()
 
@@ -351,7 +350,7 @@ async def run_transaction[T](
 
 async def connect() -> None:
     """Apply the schema migrations, create the engine, and verify the link."""
-    global _engine, _session_factory
+    global _engine, _read_engine, _session_factory
     url = _database_url()
     # * The migrations run before the engine is published, so the schema is
     # * current before the first handler query reaches the database. A
@@ -369,10 +368,18 @@ async def connect() -> None:
         pool_timeout=_POOL_TIMEOUT_S,
         pool_recycle=_POOL_RECYCLE_S,
         pool_pre_ping=True,
+        # * LIFO reuse keeps the hottest connections warm for psycopg 3
+        # * prepared statements and lets idle overflow connections age out.
+        pool_use_lifo=True,
         connect_args={
             "connect_timeout": _CONNECT_TIMEOUT_S,
             "options": schema_options(cfg.db_schema, primary_chat_id=cfg.main_group),
         },
+    )
+    _read_engine = (
+        _engine.execution_options(isolation_level="AUTOCOMMIT")
+        if hasattr(_engine, "execution_options")
+        else _engine
     )
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
     try:
@@ -413,14 +420,16 @@ async def _dispose() -> None:
     would otherwise orphan the pool with no way for a later close() to
     retry it.
     """
-    global _engine, _session_factory
+    global _engine, _read_engine, _session_factory
     engine_obj = _engine
     if engine_obj is None:
+        _read_engine = None
         _session_factory = None
         return
     await engine_obj.dispose()
     if _engine is engine_obj:
         _engine = None
+        _read_engine = None
         _session_factory = None
 
 

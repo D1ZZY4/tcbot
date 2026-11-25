@@ -18,7 +18,7 @@ _TYPE_KEY: str = "__tcbot_type__"
 _DATETIME_TYPE: str = "datetime"
 
 # * Exact types that require no recursive walk or key stringification.
-_PRIMITIVE_TYPES: tuple[type, ...] = (str, int, float, bool, type(None))
+_PRIMITIVE_TYPES: frozenset[type] = frozenset({str, int, float, bool, type(None)})
 
 
 def _msgspec_enc_hook(obj: Any) -> Any:

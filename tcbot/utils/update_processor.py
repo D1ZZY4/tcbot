@@ -18,7 +18,8 @@ if TYPE_CHECKING:
 # * Multi-step flows keep their state per (chat, user). Kurigram dispatches
 # * with a worker pool and no ordering guarantee, so a keyed processor keeps
 # * one conversation ordered while the rest of the federation stays concurrent.
-_MAX_CONCURRENT_UPDATES: int = 64
+_MAX_CONCURRENT_UPDATES: int = 512
+_MISSING: object = object()
 
 
 def conversation_key(update: object) -> tuple[int, int] | None:
@@ -30,6 +31,9 @@ def conversation_key(update: object) -> tuple[int, int] | None:
     processed without a lock. The read is duck-typed so the flow scope can
     reuse the same rule without constructing a Kurigram update object.
     """
+    conv_key = getattr(update, "_conv_key", _MISSING)
+    if conv_key is not _MISSING:
+        return conv_key  # type: ignore[return-value]
     chat = getattr(update, "effective_chat", None)
     if chat is None:
         chat = getattr(update, "chat", None)
@@ -99,7 +103,8 @@ class KeyedUpdateProcessor:
         if key is None:
             await self._guarded(coroutine)
             return
-        if key not in self._queues:
+        entry = self._queues.get(key, _MISSING)
+        if entry is _MISSING:
             # * Fast path: uncontended key allocates neither a lock nor a deque.
             self._queues[key] = None
             try:
@@ -108,7 +113,7 @@ class KeyedUpdateProcessor:
                 self._release_key(key)
             return
 
-        q = self._queues[key]
+        q = entry if isinstance(entry, deque) else None
         if q is None:
             q = self._queues[key] = deque()
         fut = asyncio.get_running_loop().create_future()

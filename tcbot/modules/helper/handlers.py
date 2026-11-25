@@ -33,7 +33,7 @@ from pyrogram.handlers import (
 )
 from pyrogram.types import CallbackQuery, ChatJoinRequest, ChatMemberUpdated, Message
 
-from tcbot.modules.helper.context import build_ctx
+from tcbot.modules.helper.context import build_ctx_sync
 from tcbot.utils.logger import get_logger
 from tcbot.utils.update_processor import KeyedUpdateProcessor
 
@@ -69,11 +69,7 @@ def _wrap(
         callback_query = update if isinstance(update, CallbackQuery) else None
         chat_member = update if isinstance(update, ChatMemberUpdated) else None
         join_request = update if isinstance(update, ChatJoinRequest) else None
-        message = (
-            update
-            if isinstance(update, Message)
-            else (callback_query.message if callback_query is not None else None)
-        )
+        message = update if isinstance(update, Message) else None
         args: tuple[str, ...] = ()
         if message is not None:
             command = getattr(message, "command", None)
@@ -82,9 +78,9 @@ def _wrap(
             elif isinstance(message.text, str):
                 parts = message.text.split(None, 1)
                 args = tuple(parts[1].split()) if len(parts) > 1 else ()
-        ctx = await build_ctx(
+        ctx = build_ctx_sync(
             client,
-            message=message if isinstance(update, Message) else None,
+            message=message,
             callback_query=callback_query,
             chat_member=chat_member,
             chat_join_request=join_request,

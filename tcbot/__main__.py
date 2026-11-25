@@ -105,6 +105,17 @@ async def _cache_identity(client: Client, user: object) -> None:
     if not uid or getattr(user, "is_bot", False) or not getattr(user, "first_name", ""):
         return
 
+    if _member_cache_tasks.pending >= _MEMBER_CACHE_MAX_CONCURRENT:
+        _member_cache_drops += 1
+        if _member_cache_drops % _MEMBER_CACHE_DROP_REPORT_EVERY == 0:
+            log.warning(
+                "Member cache harvest saturated (%d in flight): %d identity "
+                "updates dropped since startup.",
+                _MEMBER_CACHE_MAX_CONCURRENT,
+                _member_cache_drops,
+            )
+        return
+
     async def _do_cache() -> None:
         try:
             await db.users_cache.harvest_user_identity(
@@ -116,16 +127,6 @@ async def _cache_identity(client: Client, user: object) -> None:
         except Exception as exc:
             log.debug("Member cache update failed for %d: %s", uid, exc)
 
-    if _member_cache_tasks.pending >= _MEMBER_CACHE_MAX_CONCURRENT:
-        _member_cache_drops += 1
-        if _member_cache_drops % _MEMBER_CACHE_DROP_REPORT_EVERY == 0:
-            log.warning(
-                "Member cache harvest saturated (%d in flight): %d identity "
-                "updates dropped since startup.",
-                _MEMBER_CACHE_MAX_CONCURRENT,
-                _member_cache_drops,
-            )
-        return
     _member_cache_tasks.spawn(_do_cache())
 
 
