@@ -63,15 +63,21 @@ def _builder_help(
 # ─────────────────────── Module-Level State ─────────────────────── #
 
 
-def _topics_for_locale(locale: str | None, *, menu: bool) -> list[tuple[str, str]]:
+def _topics_for_locale(
+    locale: str | None,
+    *,
+    menu: bool,
+    content: dict[str, tuple[str, str, list[tuple[str, str]]]] | None = None,
+) -> list[tuple[str, str]]:
     """Build the help-index topic list in ``locale`` (names + callbacks).
 
-    Topic names are stable module identifiers; only the keyboard controls
-    (Back and Close) follow the requested locale.
+    Callers that already built the help catalog pass it in so one request
+    does not rebuild every module's help. Topic names are stable module
+    identifiers; only the keyboard controls follow the requested locale.
     """
-    content = _builder_help(locale)
+    data = content if content is not None else _builder_help(locale)
     ordered = sorted(
-        ((entry[0], key) for key, entry in content.items()),
+        ((entry[0], key) for key, entry in data.items()),
         key=lambda item: item[0].lower(),
     )
     if menu:
@@ -79,10 +85,14 @@ def _topics_for_locale(locale: str | None, *, menu: bool) -> list[tuple[str, str
     return [(name, "helpc_" + key[5:]) for name, key in ordered]
 
 
-def _module_map_for_locale(locale: str | None) -> dict[str, str]:
+def _module_map_for_locale(
+    locale: str | None,
+    content: dict[str, tuple[str, str, list[tuple[str, str]]]] | None = None,
+) -> dict[str, str]:
     """Build the module-name → help-key map in ``locale`` for /help <name>."""
     mapping: dict[str, str] = {}
-    for key, entry in _builder_help(locale).items():
+    data = content if content is not None else _builder_help(locale)
+    for key, entry in data.items():
         slug = key[5:]
         mapping[slug.lower()] = key
         mapping[entry[0].lower()] = key
@@ -145,7 +155,8 @@ async def cmd_help(ctx: Ctx) -> None:
     args = parse_cmd_args(msg.text)
     locale = await locale_for_update(ctx)
     content = _builder_help(locale)
-    name_map = _module_map_for_locale(locale)
+    name_map = _module_map_for_locale(locale, content)
+    topics = _topics_for_locale(locale, menu=False, content=content)
 
     if args:
         query = " ".join(args).strip().lower()
@@ -194,9 +205,7 @@ async def cmd_help(ctx: Ctx) -> None:
                 hint=hint,
             ),
             log_label="cmd_help not-found",
-            reply_markup=buttons.help_topics_btn(
-                _topics_for_locale(locale, menu=False), locale
-            ),
+            reply_markup=buttons.help_topics_btn(topics, locale),
         )
         return
 
@@ -204,9 +213,7 @@ async def cmd_help(ctx: Ctx) -> None:
         msg,
         _help_index_text(botname, locale),
         log_label="cmd_help index",
-        reply_markup=buttons.help_topics_btn(
-            _topics_for_locale(locale, menu=False), locale
-        ),
+        reply_markup=buttons.help_topics_btn(topics, locale),
     )
 
 
