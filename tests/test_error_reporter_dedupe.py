@@ -63,6 +63,30 @@ def test_owner_dedupe_map_stays_bounded_when_all_entries_are_fresh() -> None:
     assert len(error_reporter._owner_sent) <= error_reporter._OWNER_MAX
 
 
+def test_suppressed_sightings_do_not_extend_the_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A frequent failure must re-report after the window, not be silenced."""
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(error_reporter, "monotonic", lambda: clock["now"])
+    fingerprint = ("exc", "recurring")
+
+    assert error_reporter._seen_recently(fingerprint) is False
+    first_report_at = error_reporter._recent[fingerprint]
+
+    clock["now"] += 10
+    assert error_reporter._seen_recently(fingerprint) is True
+    assert error_reporter._recent[fingerprint] == first_report_at
+
+    clock["now"] += 20
+    assert error_reporter._seen_recently(fingerprint) is True
+    assert error_reporter._recent[fingerprint] == first_report_at
+
+    clock["now"] += 1
+    assert error_reporter._seen_recently(fingerprint) is False
+    assert error_reporter._recent[fingerprint] == first_report_at + 31
+
+
 def test_an_expired_fingerprint_is_reported_again() -> None:
     """A failure outside the window ships again."""
     fingerprint = ("exc", "recurring")

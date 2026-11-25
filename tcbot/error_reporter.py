@@ -429,13 +429,13 @@ def _fingerprint_record(record: logging.LogRecord) -> tuple[object, ...]:
 
 
 def _seen_recently(fp: tuple[object, ...]) -> bool:
-    """Mark fp seen; True if already seen within the dedupe window.
+    """Report fp at most once per dedupe window; True when suppressed.
 
-    The entries live in a plain dict, so they keep their insertion order.
-    Every sighting moves its entry to the end, which keeps the order
-    equal to the sighting order and lets the expired entries be pruned
-    from the front. Pruning that walks the whole map on every error line
-    would cost the event loop exactly when an incident floods it.
+    The stored timestamp is the last *report*, not the last sighting.
+    Refreshing it on every suppressed sighting would silence a frequent
+    failure forever, because the entry could never age past the window.
+    Keeping insertion order by report time preserves the front-pruning
+    invariant without walking the whole map on every error line.
     """
     now = monotonic()
     with _dedupe_lock:
@@ -449,12 +449,12 @@ def _seen_recently(fp: tuple[object, ...]) -> bool:
             # * the newest ones keep their slot.
             for key in list(islice(_recent, _RECENT_MAX // 10)):
                 del _recent[key]
-        seen = fp in _recent
-        if seen:
-            # * Move the entry to the end so the front stays the oldest.
-            del _recent[fp]
+        if fp in _recent:
+            # * Keep the last report time. Refreshing here would make a
+            # * frequent failure never age out of the window.
+            return True
         _recent[fp] = now
-    return seen
+        return False
 
 
 def _dedup(exc: BaseException | None, record: logging.LogRecord | None) -> bool:
