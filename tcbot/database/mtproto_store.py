@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import msgspec
 from pyrogram.storage import Storage, UpdateState
@@ -26,7 +26,6 @@ from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Iterator
-    from typing import Any
 
 log = get_logger(__name__)
 
@@ -320,6 +319,7 @@ async def clear_session_for_relogin(store: PostgresStorage) -> None:
     peer claim the namespace while this instance is still rebuilding it.
     """
     ns = store._ns_like
+    store._peer_cache.clear()
     await _retry_write(
         lambda: run(
             mtproto_state.delete().where(
@@ -345,6 +345,13 @@ async def clear_session_for_relogin(store: PostgresStorage) -> None:
 # * stays well under the PostgreSQL bind-parameter ceiling and keeps the
 # * number of chunks of a realistic session in the low single digits.
 _MAX_BATCH_ROWS: int = 500
+
+# * Telegram resolves a peer through Kurigram's `resolve_peer()` on every
+# * message edit. The remote storage has no in-memory peer table, so each
+# * rich button tap paid a full database round trip. A bounded process-local
+# * cache keeps that hot lookup off PostgreSQL; Telegram's own `update_peers`
+# * calls refresh it whenever an access hash changes.
+_PEER_CACHE_MAX: int = 5000
 
 # * A batched write owns one budget for all of its chunks, and the
 # * chunks run one after the other inside the same call. The engine
@@ -495,6 +502,21 @@ async def update_peers(
     rows = _peer_rows(store, peers, now)
     if not rows:
         return
+    for row in rows:
+        if row.get("access_hash") is None or row.get("type") is None:
+            continue
+        try:
+            peer_id = int(str(row["id"]).rsplit(":", 1)[1])
+        except IndexError, ValueError:
+            continue
+        try:
+            store._remember_peer(
+                peer_id, get_input_peer(peer_id, row["access_hash"], row["type"])
+            )
+        except Exception:
+            # * A row Kurigram cannot turn into an InputPeer is still stored;
+            # * the cache simply does not promise a usable value for it.
+            continue
     await _retry_write(
         lambda: _write_rows(rows, _peer_upsert), timeout=_BATCH_TIMEOUT_S
     )
@@ -564,7 +586,15 @@ def _peer_input(doc: dict[str, Any], peer_id: int, message: str) -> Any:
 
 
 async def get_peer_by_id(store: PostgresStorage, peer_id: int) -> Any:
-    """Return the InputPeer for *peer_id*, or raise KeyError like SQLiteStorage."""
+    """Return the InputPeer for *peer_id*, or raise KeyError like SQLiteStorage.
+
+    The in-process cache is checked first: Kurigram resolves a peer on every
+    message edit, and a remote storage lookup there added a full database
+    round trip to each button tap. Telegram's peer updates refresh the cache.
+    """
+    cached = store._peer_cache.get(peer_id)
+    if cached is not None:
+        return cached
     doc = await db_call(
         lambda: fetch_one(
             select(
@@ -575,7 +605,9 @@ async def get_peer_by_id(store: PostgresStorage, peer_id: int) -> Any:
     )
     if doc is None:
         raise KeyError(f"ID not found: {peer_id}")
-    return _peer_input(doc, peer_id, f"ID not found: {peer_id}")
+    peer = _peer_input(doc, peer_id, f"ID not found: {peer_id}")
+    store._remember_peer(peer_id, peer)
+    return peer
 
 
 async def get_peer_by_username(store: PostgresStorage, username: str) -> Any:
@@ -645,6 +677,15 @@ class PostgresStorage(Storage):
         # * below, and an unescaped metacharacter there would widen
         # * every peer/username/state scan past this session's keys.
         self._ns_like = _like_escape(namespace)
+        self._peer_cache: dict[int, Any] = {}
+
+    def _remember_peer(self, peer_id: int, peer: Any) -> None:
+        """Keep a bounded process-local InputPeer cache for hot edits."""
+        cache = self._peer_cache
+        cache.pop(peer_id, None)
+        cache[peer_id] = peer
+        while len(cache) > _PEER_CACHE_MAX:
+            cache.pop(next(iter(cache)))
 
     # ── key helpers ── #
     # * Table ``mtproto_state``, one row per key, scoped by
@@ -679,6 +720,7 @@ class PostgresStorage(Storage):
 
     async def delete(self) -> None:
         """Drop every row in this namespace with transient-error retry."""
+        self._peer_cache.clear()
         await _retry_write(
             lambda: run(
                 mtproto_state.delete().where(
