@@ -31,7 +31,7 @@ from tcbot.modules.helper.extraction import (
     identity_needs_refresh,
     launch_identity_refresh,
 )
-from tcbot.modules.helper.identity import Identity, classify, profile_note
+from tcbot.modules.helper.identity import recognition_note
 from tcbot.modules.helper.rich.formats import divider, footer, heading
 from tcbot.modules.helper.rich.table import table
 from tcbot.modules.helper.rich.text import blocks
@@ -137,7 +137,7 @@ class CheckProfileMixin:
             db.mutes_db.user_mute_count(target_id),
         ]
         if executor_id is not None:
-            _reads.append(classify(bot, executor_id, target_id))
+            _reads.append(recognition_note(bot, executor_id, target_id, locale))
         _results = await asyncio.gather(*_reads, return_exceptions=True)
         throw_if_cancelled(_results)
         r_user_info = _results[0]
@@ -174,9 +174,9 @@ class CheckProfileMixin:
             )
         identity_note: str | None = None
         if len(_results) > 10:
-            r_ident = _results[10]
-            if not isinstance(r_ident, BaseException):
-                identity_note = profile_note(cast("Identity", r_ident), locale)
+            r_note = _results[10]
+            if isinstance(r_note, str):
+                identity_note = r_note
         role_label = (
             db.users_roles.role_label(role)
             if role

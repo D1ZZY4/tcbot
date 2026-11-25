@@ -407,6 +407,13 @@ _PROFILE_NOTE_KINDS: frozenset[IdentityKind] = frozenset(
 )
 
 
+def profile_note_for_kind(kind: IdentityKind, locale: str | None = None) -> str | None:
+    """Return a recognition note for a special identity kind, or ``None``."""
+    if kind not in _PROFILE_NOTE_KINDS:
+        return None
+    return t(f"identity.note.{kind}", locale)
+
+
 def profile_note(ident: Identity, locale: str | None = None) -> str | None:
     """Return a recognition note for special identities, or ``None``.
 
@@ -414,9 +421,30 @@ def profile_note(ident: Identity, locale: str | None = None) -> str | None:
     Owner: staff and Owner are already labeled by the profile Role
     line, so a note would only restate it).
     """
-    if ident.kind not in _PROFILE_NOTE_KINDS:
+    return profile_note_for_kind(ident.kind, locale)
+
+
+async def recognition_note(
+    bot: Client, executor_id: int, target_id: int, locale: str | None = None
+) -> str | None:
+    """Return the read-only view's recognition note without a role read.
+
+    Only the four special kinds produce a note. Role-dependent kinds are
+    already labelled by the profile's Role line, so resolving them here
+    would pay for a fresh database read whose result is never displayed.
+    """
+    kind: IdentityKind | None
+    if target_id == executor_id:
+        kind = "self"
+    elif target_id == (await bot_identity(bot)).id:
+        kind = "this_bot"
+    elif target_id == TELEGRAM_USER_ID:
+        kind = "telegram"
+    elif target_id == ANONYMOUS_BOT_ID:
+        kind = "anon_admin"
+    else:
         return None
-    return t(f"identity.note.{ident.kind}", locale)
+    return profile_note_for_kind(kind, locale)
 
 
 # ─────────────── Staff heads-up (action proceeds) ───────────────── #

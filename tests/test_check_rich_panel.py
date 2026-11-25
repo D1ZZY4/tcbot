@@ -121,3 +121,31 @@ def test_warning_summary_uses_a_table(
     assert "B Group" in text
     assert "<p>" not in text
     assert "<li>" not in text
+
+
+def test_recognition_note_needs_no_fresh_role_read(
+    monkeypatch: pytest.MonkeyPatch, _stub_profile_reads: None
+) -> None:
+    """The profile note only names special identities, not federation roles."""
+    reads: list[int] = []
+
+    async def _unexpected_role(*args: Any, **kwargs: Any) -> str:
+        _ = (args, kwargs)
+        reads.append(1)
+        raise AssertionError("the profile note must not resolve a role")
+
+    monkeypatch.setattr(
+        check_panels.db.users_roles, "get_effective_role", _unexpected_role
+    )
+
+    text, _markup = asyncio.run(
+        check_panels.Check.profile(
+            object(),
+            42,
+            executor_id=42,
+            locale="en-US",  # type: ignore[arg-type]
+        )
+    )
+
+    assert reads == []
+    assert t("identity.note.self", "en-US") in text
