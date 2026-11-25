@@ -309,8 +309,6 @@ _LEVEL_NO: dict[str, int] = {
 class _LoguruShim:
     """Compat shim so existing %-style call sites log through Loguru."""
 
-    __slots__ = ("_name", "_std_logger")
-
     def __init__(self, name: str) -> None:
         self._name = name
         self._std_logger = logging.getLogger(name)
