@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import threading
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -147,6 +148,12 @@ _SUPPRESS_PREFIXES: tuple[str, ...] = (
 # * dependency one-way.
 _record_sink: Callable[[logging.LogRecord], None] | None = None
 
+# * Loguru handlers hold a non-reentrant thread-local lock while a sink runs.
+# * The bridge calls stdlib handlers inside that sink, so any project log call
+# * on this thread must go to stdlib: re-entering Loguru becomes a swallowed
+# * "Logging error in Loguru Handler" dump instead of an operator-visible line.
+_in_sink = threading.local()
+
 
 def set_record_sink(sink: Callable[[logging.LogRecord], None] | None) -> None:
     """Register the callable that ships a log record to the error channel.
@@ -182,10 +189,10 @@ class TelegramErrorHandler(logging.Handler):
             # * traceback before the delivery reads it.
             sink(copy.copy(record))
         except Exception as exc:
-            # * WARNING stays below this ERROR-level handler, so it cannot
-            # * recurse, while a sink outage remains visible at production
-            # * log levels instead of silently losing every report.
-            logger.bind(module=__name__).warning("Error log sink failed: %s", exc)
+            # * This runs inside Loguru's non-reentrant sink. Stdlib keeps the
+            # * outage visible on the console without re-entering Loguru, and
+            # * the WARNING stays below this ERROR-level handler.
+            logging.getLogger(__name__).warning("Error log sink failed: %s", exc)
 
 
 # ─────────────────────── Logging Setup ──────────────────────────── #
@@ -217,8 +224,12 @@ def _bridge_to_stdlib(message: Any) -> None:
     )
     if std_record.exc_info:
         std_record.exc_text = None
-    std_logger.callHandlers(std_record)
-    std_record.exc_info = None
+    _in_sink.active = True
+    try:
+        std_logger.callHandlers(std_record)
+    finally:
+        _in_sink.active = False
+        std_record.exc_info = None
 
 
 def setup(level: int = logging.INFO) -> None:
@@ -263,6 +274,16 @@ class _LoguruShim:
         self, level: str, msg: str, args: tuple[Any, ...], exc_info: Any = None
     ) -> None:
         text = _format_percent(msg, args)
+        if getattr(_in_sink, "active", False):
+            # * The Loguru sink already holds a non-reentrant handler lock.
+            # * Stdlib delivers this line to the same console without trying
+            # * to acquire that lock again.
+            std_logger = logging.getLogger(self._name)
+            if level == "exception":
+                std_logger.exception(text)
+            else:
+                getattr(std_logger, level)(text, exc_info=exc_info)
+            return
         bound = logger.bind(module=self._name)
         if exc_info:
             bound.opt(depth=2, exception=exc_info).error(text)

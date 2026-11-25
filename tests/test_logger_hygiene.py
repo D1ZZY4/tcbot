@@ -8,13 +8,16 @@ from __future__ import annotations
 
 import logging
 
+import pytest
 from loguru import logger as loguru_logger
 
+from tcbot import utils
 from tcbot.utils.logger import (
     BotLogFormatter,
     _format_percent,
     _safe_time_parts,
     get_logger,
+    set_record_sink,
     setup,
 )
 
@@ -65,6 +68,27 @@ def test_formatter_handles_bad_timestamp() -> None:
     record.created = float("inf")
     out = BotLogFormatter().format(record)
     assert "hello" in out
+
+
+def test_a_failing_sink_warning_reaches_stdlib_without_loguru_reentry(
+    caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A sink outage must not vanish into Loguru's internal error dump."""
+    setup()
+
+    def _boom(_record: logging.LogRecord) -> None:
+        raise RuntimeError("sink down")
+
+    previous = utils.logger._record_sink
+    set_record_sink(_boom)
+    try:
+        with caplog.at_level(logging.WARNING, logger="tcbot.utils.logger"):
+            loguru_logger.error("trigger")
+    finally:
+        set_record_sink(previous)
+
+    assert "Error log sink failed: sink down" in caplog.text
+    assert "Logging error in Loguru" not in capsys.readouterr().err
 
 
 def test_formatter_handles_bad_percent_args() -> None:
