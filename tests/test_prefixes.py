@@ -86,6 +86,12 @@ def test_short_mention_rejected() -> None:
     assert _parse_prefixed_command("/tcb@ab", ("/",), "ab") is None
 
 
+def test_prefix_filter_stays_on_the_event_loop() -> None:
+    """Kurigram offloads sync filters; hundreds of leaves would cost a thread hop each."""
+    filt = _PrefixedCommandFilter("tcban", ["/"])
+    assert inspect.iscoroutinefunction(filt.__call__)
+
+
 def test_filter_matches_configured_command() -> None:
     filt = _PrefixedCommandFilter("tcban", ["/", "!", "."])
     assert _matches(filt, _message("/tcban 5")) is True

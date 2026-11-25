@@ -33,7 +33,12 @@ def _get_prefixes() -> list[str]:
 
 def _never_match_filter() -> Filter:
     """Return a valid filter that intentionally never matches a message."""
-    return filters.create(lambda _, __, ___: False, name="NeverMatch")
+    return filters.create(_never_matches, name="NeverMatch")
+
+
+async def _never_matches(_filter: Filter, _client: Client, _update: object) -> bool:
+    """Never-match predicate that stays on the event loop."""
+    return False
 
 
 def _parse_prefixed_command(
@@ -73,7 +78,10 @@ def _bot_username(client: Client) -> str | None:
 def _matcher(command: str | None, prefixes: tuple[str, ...]) -> Filter:
     """Build a Kurigram filter matching one command or any prefixed command."""
 
-    def check(_: Filter, client: Client, update: object) -> bool:
+    async def check(_: Filter, client: Client, update: object) -> bool:
+        # * Kurigram offloads synchronous filters to its small executor. Every
+        # * message is tested against hundreds of these leaves, so keeping the
+        # * predicate async avoids a thread-pool round trip per leaf.
         message = getattr(update, "text", None)
         if message is None:
             return False
