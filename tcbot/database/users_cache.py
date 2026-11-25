@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, literal, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -42,6 +42,9 @@ _USER_COLUMNS = [
     telegram_users.c.last_seen_at,
     telegram_users.c.created_at,
     telegram_users.c.updated_at,
+    # * Readers need the erasure marker to avoid re-verifying a cleared
+    # * profile against live Telegram and caching the recovered identity.
+    telegram_users.c.erased_at,
 ]
 
 # * L1 mention-cache entries are [first_name, username, last_name] triples.
@@ -430,8 +433,13 @@ async def upsert_user(
     username: str | None,
     first_name: str,
     last_name: str | None = None,
-) -> None:
+) -> bool:
     """Update or insert a user's profile information.
+
+    Returns True when the database accepted the write, False when the erased-
+    identity guard refused it. Callers must not publish the incoming identity
+    to the mention cache on a refusal: the database stayed erased and a cached
+    triple would hide that fact from every later write check.
 
     ``username`` and ``last_name`` are treated as "unknown, preserve existing":
     when a caller passes ``None`` for either field, the previous stored value
@@ -483,7 +491,7 @@ async def upsert_user(
         # * stale mention entry too, so no process keeps serving the name it
         # * just tried to write back.
         user_mention_cache.invalidate(user_id)
-        return
+        return False
     # * Populate the mention cache when the write carried every field, so
     # * the next change check hits L1 and an unchanged profile is not
     # * rewritten on every message. A partial write (username or last name
@@ -493,6 +501,7 @@ async def upsert_user(
         user_mention_cache.put(user_id, [first_name, username, last_name])
     else:
         user_mention_cache.invalidate(user_id)
+    return True
 
 
 async def touch_chat_member(chat_id: int, user_id: int) -> None:
@@ -501,18 +510,42 @@ async def touch_chat_member(chat_id: int, user_id: int) -> None:
     The membership cache feeds the community directory and the retention
     sweep. It is written from the MTProto harvest, which already holds the
     group and the member list, and a failure is non-fatal for the harvest.
+
+    Erasure deletes membership rows, so the guard is part of this statement:
+    an `INSERT ... SELECT ... WHERE NOT EXISTS` skips erased accounts in the
+    same round trip a plain insert would take. Without it the next harvest
+    would recreate the row the erasure removed.
     """
     now = utc_now()
+    erased = (
+        select(literal(1))
+        .where(
+            telegram_users.c.user_id == user_id,
+            telegram_users.c.erased_at.is_not(None),
+        )
+        .exists()
+    )
+    values = select(
+        literal(chat_id),
+        literal(user_id),
+        literal("member"),
+        literal(now),
+        literal(now),
+        literal(now),
+    ).where(~erased)
     await db_call(
         lambda: run(
             pg_insert(chat_members)
-            .values(
-                chat_id=chat_id,
-                user_id=user_id,
-                status="member",
-                joined_at=now,
-                last_seen_at=now,
-                updated_at=now,
+            .from_select(
+                [
+                    "chat_id",
+                    "user_id",
+                    "status",
+                    "joined_at",
+                    "last_seen_at",
+                    "updated_at",
+                ],
+                values,
             )
             .on_conflict_do_update(
                 index_elements=["chat_id", "user_id"],
@@ -560,8 +593,7 @@ async def upsert_user_if_changed(
         last_name,
     ):
         return False
-    await upsert_user(user_id, username, first_name, last_name)
-    return True
+    return await upsert_user(user_id, username, first_name, last_name)
 
 
 async def refresh_display_name(user_id: int, first_name: str) -> bool:
@@ -579,7 +611,12 @@ async def refresh_display_name(user_id: int, first_name: str) -> bool:
     triple = _cached_triple(cached) if isinstance(cached, list) else (None, None, None)
     if isinstance(cached, list) and triple[0] == first_name:
         return False
-    await upsert_user(user_id, None, first_name)
+    written = await upsert_user(user_id, None, first_name)
+    if not written:
+        # * The erased-identity guard refused the write. Re-warming here would
+        # * put the harvested name back into L1 and Redis, defeating erasure.
+        user_mention_cache.invalidate(user_id)
+        return False
     # * A display-name-only write cannot reconstruct the full triple, so
     # * upsert_user invalidates the mention cache. Without re-warming the
     # * preserved fields, the next view peeks a miss and writes again, making

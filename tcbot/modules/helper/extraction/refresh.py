@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from pyrogram import Client
 
 from tcbot import database as db
+from tcbot.database.cache import user_mention_cache
 from tcbot.modules.helper.extraction.resolve import _GET_CHAT_TIMEOUT
 from tcbot.utils.logger import get_logger
 from tcbot.utils.tasks import TaskTracker
@@ -172,6 +173,12 @@ async def sync_user_identity(
     ``None`` (unknown, preserve).
     """
     cached = await db.users_cache.get_user(target_id)
+    if cached and cached.get("erased_at") is not None:
+        # * Erasure is permanent. A detail view must not fetch the account's
+        # * live name and mirror it back into the mention cache: the database
+        # * guard would refuse the write, but the cache would still show it.
+        user_mention_cache.invalidate(target_id)
+        return "", None, None
     if cached:
         have: tuple[str, str | None, str | None] = (
             cached.get("first_name") or "",
@@ -192,16 +199,22 @@ async def sync_user_identity(
         if age is not None and age <= max_age_seconds:
             return have
 
+    # * An erasure or profile write during the live lookup invalidates the
+    # * cache revision. Publishing after that would restore a value the
+    # * invalidation deliberately removed.
+    revision = user_mention_cache.revision()
     live = await _fetch_live_identity(bot, target_id)
     if live is None:
         if have[0]:
             return have
-        db.users_cache.remember_identity(target_id, None, None, None)
+        if user_mention_cache.revision() == revision:
+            db.users_cache.remember_identity(target_id, None, None, None)
         return str(target_id), None, None
 
     fname, uname, lname = live
+    refused = False
     try:
-        await db.users_cache.upsert_user(
+        refused = not await db.users_cache.upsert_user(
             target_id,
             uname if uname is not None else "",
             fname,
@@ -209,7 +222,11 @@ async def sync_user_identity(
         )
     except Exception as exc:
         log.debug("users_cache upsert after sync failed for %d: %s", target_id, exc)
-    db.users_cache.remember_identity(target_id, fname, uname, lname)
+    if not refused and user_mention_cache.revision() == revision:
+        db.users_cache.remember_identity(target_id, fname, uname, lname)
+    if refused:
+        # * The database stayed erased; never display or cache the live name.
+        return have
     return fname, uname, lname
 
 
