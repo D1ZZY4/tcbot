@@ -64,42 +64,62 @@ async def run_once(bot: Client) -> None:
     # * HALF_OPEN admits one probe. When CLOSED, claim no more edits than the
     # * breaker can still admit: a mid-batch opening would skip the remaining
     # * tasks after their attempt counters were already consumed at claim time.
+    probe_reserved = False
     if state is CircuitState.HALF_OPEN:
+        # * Claiming increments the retry counter. Reserve the single probe
+        # * before that write: a later rejection would otherwise spend an
+        # * attempt without any Telegram call and can terminalize a decided
+        # * card after a few ticks of probe contention.
+        if not _cb.telegram.try_acquire():
+            log.warning(
+                "Notification worker paused: Telegram recovery probe is in flight; "
+                "queued card edits keep their retry budget."
+            )
+            return
+        probe_reserved = True
         limit = 1
     else:
         limit = min(_MAX_TASKS_PER_TICK, max(1, _cb.telegram.admission_headroom))
-    tasks = await db.notifications_db.claim_due_tasks(limit, retry_after=_RETRY_DELAY)
-    for task in tasks:
-        try:
-            await _process_task(bot, task)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            log.exception(
-                "Notification task %s failed; leaving it for the next tick.",
-                task.get("id"),
-            )
-            # * A failure before the retry decision (the task/action read)
-            # * used to leave the row pending forever while the claim kept
-            # * advancing its attempt count. Enforce the same ceiling here so
-            # * the row reaches a terminal state and stops consuming a slot.
-            task_id = as_int(task.get("id"))
-            if task_id > 0 and as_int(task.get("attempts")) >= _MAX_ATTEMPTS:
-                try:
-                    await db.notifications_db.complete_task(
-                        task_id,
-                        state="failed",
-                        error=f"worker error: {exc}",
-                        expected_attempts=as_int(task.get("attempts")),
-                        expected_message_id=as_int(task.get("message_id")),
-                    )
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    log.exception(
-                        "Notification task %s could not be marked failed.",
-                        task_id,
-                    )
+    try:
+        tasks = await db.notifications_db.claim_due_tasks(
+            limit, retry_after=_RETRY_DELAY
+        )
+        for task in tasks:
+            try:
+                await _process_task(bot, task, probe_reserved=probe_reserved)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.exception(
+                    "Notification task %s failed; leaving it for the next tick.",
+                    task.get("id"),
+                )
+                # * A failure before the retry decision (the task/action read)
+                # * used to leave the row pending forever while the claim kept
+                # * advancing its attempt count. Enforce the same ceiling here so
+                # * the row reaches a terminal state and stops consuming a slot.
+                task_id = as_int(task.get("id"))
+                if task_id > 0 and as_int(task.get("attempts")) >= _MAX_ATTEMPTS:
+                    try:
+                        await db.notifications_db.complete_task(
+                            task_id,
+                            state="failed",
+                            error=f"worker error: {exc}",
+                            expected_attempts=as_int(task.get("attempts")),
+                            expected_message_id=as_int(task.get("message_id")),
+                        )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        log.exception(
+                            "Notification task %s could not be marked failed.",
+                            task_id,
+                        )
+    finally:
+        # * An empty claim, a skipped card, or a worker error must not strand
+        # * the reserved probe for every other circuit participant.
+        if probe_reserved:
+            _cb.telegram.release_probe()
 
 
 def _card_is_still_decidable(action: dict[str, object], message_id: int) -> bool:
@@ -132,7 +152,9 @@ async def _group_locale(chat_id: int) -> str:
     )
 
 
-async def _process_task(bot: Client, task: dict[str, object]) -> None:
+async def _process_task(
+    bot: Client, task: dict[str, object], *, probe_reserved: bool = False
+) -> None:
     """Edit one card, or record why the retry cannot succeed."""
     task_id = as_int(task.get("id"))
     action_id = as_int(task.get("action_id"))
@@ -166,25 +188,16 @@ async def _process_task(bot: Client, task: dict[str, object]) -> None:
         return
     locale = await _group_locale(chat_id)
     text = t("appeals.review.card_closed", locale, plain=True)
-    # * Reserve the breaker slot at the call site. run_once only limits how
-    # * many tasks are claimed; without this guard a second worker can issue a
-    # * concurrent HALF_OPEN call and close the circuit while the other probe
-    # * is still in flight. A rejected call leaves the task for a later tick.
-    if not _cb.telegram.try_acquire():
+    # * In HALF_OPEN run_once reserves the sole probe before claiming, because
+    # * the claim itself already consumes a retry attempt. A reserved slot must
+    # * not reject itself here. In CLOSED a second worker could otherwise issue
+    # * a concurrent probe, so the call site still admits each edit.
+    if not probe_reserved and not _cb.telegram.try_acquire():
         log.warning(
             "Review-card edit for action=%d skipped: Telegram circuit is not "
             "admitting calls.",
             action_id,
         )
-        # * A rejected slot consumes the claim's attempt without any Telegram
-        # * call. Under a flapping breaker the row would otherwise stay pending
-        # * forever while each claim advanced its counter past the ceiling.
-        if attempts >= _MAX_ATTEMPTS:
-            await _complete(
-                state="failed",
-                error="Telegram circuit never admitted the card edit",
-                expected_attempts=attempts,
-            )
         return
     try:
         async with asyncio.timeout(TELEGRAM_ACTION_TIMEOUT):

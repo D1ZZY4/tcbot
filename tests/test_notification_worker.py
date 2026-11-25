@@ -169,15 +169,17 @@ def test_a_reserved_half_open_probe_is_not_bypassed(
     assert bot.edits == []
 
 
-def test_a_never_admitted_task_becomes_terminal_at_the_ceiling(
+def test_a_held_probe_claims_no_card_and_spends_no_attempt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A flapping breaker must not leave a maxed-out row pending forever."""
+    """Probe contention must not consume the retry budget of a decided card."""
+    claimed: list[int] = []
     completed: list[dict[str, Any]] = []
     task = {**_task(), "attempts": notification_worker._MAX_ATTEMPTS}
     _wire(monkeypatch)
 
     async def _claim(limit: int = 10, *, retry_after: Any) -> list[dict[str, object]]:
+        claimed.append(limit)
         return [task]
 
     async def _complete(task_id: int, **kwargs: Any) -> None:
@@ -192,12 +194,13 @@ def test_a_never_admitted_task_becomes_terminal_at_the_ceiling(
     try:
         assert _cb.telegram.try_acquire() is True
         asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+        assert _cb.telegram._half_open_probe_in_flight is True
     finally:
         _cb.telegram.reset()
 
+    assert claimed == []
+    assert completed == []
     assert bot.edits == []
-    assert completed[0]["state"] == "failed"
-    assert "circuit" in completed[0]["error"].lower()
 
 
 def test_cancelling_a_card_edit_releases_the_half_open_probe(
