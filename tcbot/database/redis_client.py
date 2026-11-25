@@ -200,11 +200,11 @@ async def ensure_connected() -> aioredis.Redis | None:
     if _client is not None:
         if client_is_usable():
             return _client
-        # * The client belongs to a loop that is gone. Its sockets are
-        # * dead, so it is closed and replaced instead of being handed
-        # * out: every operation on it would wait for an answer that
-        # * cannot arrive.
-        log.info("Redis client belongs to a closed event loop; reconnecting.")
+        # * A stale loop or a last-known failed operation both make the
+        # * handle unusable. Handing it out would cost one socket timeout
+        # * on every cache read and every rate-limit check, so close and
+        # * replace it instead.
+        log.info("Redis client is unusable; reconnecting.")
         await close()
     url = cfg.redis_url
     if not url:
@@ -268,11 +268,12 @@ def client_is_usable() -> bool:
     """Return True when the cached client can serve the running loop.
 
     The client holds sockets bound to the loop that created it. A closed
-    loop, or a different running loop, means every operation on it would
-    wait for an answer that can never arrive, so the cache treats the
-    client as absent and reconnects.
+    loop, a different running loop, or a last-known failed operation means
+    every operation on it would either wait forever for an answer or pay a
+    full socket timeout. All three make the client unusable so callers fall
+    back to L1 and the cache can reconnect on its backoff schedule.
     """
-    if _client is None:
+    if _client is None or _liveness is False:
         return False
     return _loop_is_usable(_client_loop)
 

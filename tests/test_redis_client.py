@@ -34,6 +34,20 @@ def test_mark_op_tracks_liveness_through_failures_and_recovery() -> None:
     assert redis_client_mod.liveness() is True
 
 
+def test_unhealthy_client_is_not_usable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A last-known failed Redis op must not keep a dead handle in service.
+
+    Otherwise every handler pays one socket timeout before falling back,
+    and the cache never reaches its reconnect path.
+    """
+    monkeypatch.setattr(redis_client_mod, "_client", object())
+    monkeypatch.setattr(redis_client_mod, "_loop_is_usable", lambda loop: True)
+    redis_client_mod.mark_op(ok=False)
+    assert redis_client_mod.client_is_usable() is False
+    redis_client_mod.mark_op(ok=True)
+    assert redis_client_mod.client_is_usable() is True
+
+
 def test_mark_op_logs_transition_once(monkeypatch: pytest.MonkeyPatch) -> None:
     warnings: list[str] = []
     monkeypatch.setattr(
