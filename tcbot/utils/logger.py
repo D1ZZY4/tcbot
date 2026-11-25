@@ -24,18 +24,26 @@ ERROR_LEVEL: int = logger.level("ERROR").no
 
 # ────────────────────── Request context ─────────────────────────────── #
 
-_ctx: ContextVar[dict[str, object] | None] = ContextVar("tcbot_log_ctx", default=None)
+_ctx: ContextVar[tuple[int | str | None, int | None, int | None] | None] = ContextVar(
+    "tcbot_log_ctx", default=None
+)
+
+_last_minute_bucket: int | None = None
+_last_time_parts: tuple[str, str] = ("--:--", "--/--/--")
 
 
 def _context_segment() -> str:
-    ctx = _ctx.get() or {}
+    ctx = _ctx.get()
+    if ctx is None:
+        return ""
+    update_id, user_id, chat_id = ctx
     parts: list[str] = []
-    if ctx.get("user_id") is not None:
-        parts.append(f"u={ctx['user_id']}")
-    if ctx.get("chat_id") is not None:
-        parts.append(f"c={ctx['chat_id']}")
-    if ctx.get("update_id") is not None:
-        parts.append(f"#{ctx['update_id']}")
+    if user_id is not None:
+        parts.append(f"u={user_id}")
+    if chat_id is not None:
+        parts.append(f"c={chat_id}")
+    if update_id is not None:
+        parts.append(f"#{update_id}")
     return f" [{' '.join(parts)}]" if parts else ""
 
 
@@ -46,11 +54,21 @@ def _safe_time_parts(created: float) -> tuple[str, str]:
     shutdown when modules are torn down: a conversion failure must never
     turn a log line into a "Logging error" traceback.
     """
+    global _last_minute_bucket, _last_time_parts
     try:
+        bucket = int(created) // 60
+        if bucket == _last_minute_bucket:
+            return _last_time_parts
         now = datetime.fromtimestamp(created, tz=UTC)
     except ImportError, OSError, OverflowError, ValueError:
         return "--:--", "--/--/--"
-    return now.strftime("%H:%M"), now.strftime("%d/%m/%y")
+    parts = (
+        f"{now.hour:02d}:{now.minute:02d}",
+        f"{now.day:02d}/{now.month:02d}/{now.year % 100:02d}",
+    )
+    _last_minute_bucket = bucket
+    _last_time_parts = parts
+    return parts
 
 
 def _format_percent(msg: str, args: tuple[Any, ...]) -> str:
@@ -100,6 +118,9 @@ class BotLogFormatter(logging.Formatter):
         logging.ERROR,
         logging.CRITICAL,
     }
+    _ARROW_PART: ClassVar[str] = f"{_AW} → {_R}"
+    _LEVEL_PARTS: ClassVar[dict[int, str]] = {}
+    _DEFAULT_LEVEL_PART: ClassVar[str] = f"{_BR}[{_R}{_R}???{_R}{_BR}]{_R}"
 
     def _bracket(self, color: str, text: str) -> str:
         return f"{self._BR}[{self._R}{color}{text}{self._R}{self._BR}]{self._R}"
@@ -107,22 +128,20 @@ class BotLogFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format a record with ANSI time, date, level, module, and message."""
         hhmm, ddmmyy = _safe_time_parts(record.created)
-        level_color, level_label = self._LEVELS.get(record.levelno, ("\033[0m", "???"))
-        module = record.name.split(".")[-1]
+        level_color, _ = self._LEVELS.get(record.levelno, ("\033[0m", "???"))
+        module = record.name.rsplit(".", 1)[-1]
         msg_color = level_color if record.levelno in self._COLORED_MSG else self._MS
         time_part = self._bracket(self._TM, hhmm)
         date_part = self._bracket(self._DT, ddmmyy)
-        level_part = self._bracket(level_color, level_label)
+        level_part = self._LEVEL_PARTS.get(record.levelno, self._DEFAULT_LEVEL_PART)
         module_part = self._bracket(self._MD, f"{module}:{record.lineno}")
-        arrow_part = f"{self._AW} → {self._R}"
         try:
             message_text = record.getMessage()
         except TypeError, ValueError:
             message_text = str(record.msg) if record.msg is not None else ""
-        msg_part = f"{msg_color}{message_text}{self._R}"
         output = (
             f"{time_part} {date_part} {level_part} {module_part}"
-            f"{_context_segment()}{arrow_part}{msg_part}"
+            f"{_context_segment()}{self._ARROW_PART}{msg_color}{message_text}{self._R}"
         )
         if record.exc_info:
             if not record.exc_text:
@@ -132,6 +151,12 @@ class BotLogFormatter(logging.Formatter):
         if record.stack_info:
             output += f"\n{level_color}{self.formatStack(record.stack_info)}{self._R}"
         return output
+
+
+BotLogFormatter._LEVEL_PARTS = {
+    lvl: f"{BotLogFormatter._BR}[{BotLogFormatter._R}{color}{label}{BotLogFormatter._R}{BotLogFormatter._BR}]{BotLogFormatter._R}"
+    for lvl, (color, label) in BotLogFormatter._LEVELS.items()
+}
 
 
 # ─────────────────── Telegram Error Log Handler ─────────────────── #
@@ -198,12 +223,19 @@ class TelegramErrorHandler(logging.Handler):
 # ─────────────────────── Logging Setup ──────────────────────────── #
 
 
+_LOGURU_LEVEL_MAP: dict[str, int] = {
+    "DEBUG": 10,
+    "INFO": 20,
+    "WARNING": 30,
+    "ERROR": 40,
+    "CRITICAL": 50,
+}
+
+
 def _bridge_to_stdlib(message: Any) -> None:
     """Forward a Loguru message to stdlib so caplog and shipping keep working."""
     record = message.record
-    level = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}.get(
-        record["level"].name, 20
-    )
+    level = _LOGURU_LEVEL_MAP.get(record["level"].name, 20)
     exc = record["exception"]
     log_name: str = record["name"] or record["extra"].get("module") or "tcbot"
     std_logger = logging.getLogger(log_name)
@@ -277,15 +309,19 @@ _LEVEL_NO: dict[str, int] = {
 class _LoguruShim:
     """Compat shim so existing %-style call sites log through Loguru."""
 
+    __slots__ = ("_name", "_std_logger")
+
     def __init__(self, name: str) -> None:
         self._name = name
         self._std_logger = logging.getLogger(name)
 
-    def _emit(
+    def is_debug_enabled(self) -> bool:
+        """Return True when DEBUG level is enabled for this logger."""
+        return self._std_logger.isEnabledFor(logging.DEBUG)
+
+    def _emit_checked(
         self, level: str, msg: str, args: tuple[Any, ...], exc_info: Any = None
     ) -> None:
-        if not self._std_logger.isEnabledFor(_LEVEL_NO.get(level, logging.INFO)):
-            return
         text = _format_percent(msg, args)
         if getattr(_in_sink, "active", False):
             # * The Loguru sink already holds a non-reentrant handler lock.
@@ -299,20 +335,32 @@ class _LoguruShim:
         else:
             getattr(bound.opt(depth=2), level)(text)
 
+    def _emit(
+        self, level: str, msg: str, args: tuple[Any, ...], exc_info: Any = None
+    ) -> None:
+        if not self._std_logger.isEnabledFor(_LEVEL_NO.get(level, logging.INFO)):
+            return
+        self._emit_checked(level, msg, args, exc_info=exc_info)
+
     def debug(self, msg: str, *args: Any, exc_info: Any = None) -> None:
-        self._emit("debug", msg, args, exc_info=exc_info)
+        if self._std_logger.isEnabledFor(logging.DEBUG):
+            self._emit_checked("debug", msg, args, exc_info=exc_info)
 
     def info(self, msg: str, *args: Any, exc_info: Any = None) -> None:
-        self._emit("info", msg, args, exc_info=exc_info)
+        if self._std_logger.isEnabledFor(logging.INFO):
+            self._emit_checked("info", msg, args, exc_info=exc_info)
 
     def warning(self, msg: str, *args: Any, exc_info: Any = None) -> None:
-        self._emit("warning", msg, args, exc_info=exc_info)
+        if self._std_logger.isEnabledFor(logging.WARNING):
+            self._emit_checked("warning", msg, args, exc_info=exc_info)
 
     def error(self, msg: str, *args: Any, exc_info: Any = None) -> None:
-        self._emit("error", msg, args, exc_info=exc_info)
+        if self._std_logger.isEnabledFor(logging.ERROR):
+            self._emit_checked("error", msg, args, exc_info=exc_info)
 
     def critical(self, msg: str, *args: Any, exc_info: Any = None) -> None:
-        self._emit("critical", msg, args, exc_info=exc_info)
+        if self._std_logger.isEnabledFor(logging.CRITICAL):
+            self._emit_checked("critical", msg, args, exc_info=exc_info)
 
     def exception(self, msg: str, *args: Any, exc_info: Any = None) -> None:
         """Log at error level with the handled exception attached.
@@ -321,7 +369,10 @@ class _LoguruShim:
         (attach the exception currently being handled) and ``False``
         suppresses the traceback.
         """
-        self._emit("error", msg, args, exc_info=True if exc_info is None else exc_info)
+        if self._std_logger.isEnabledFor(logging.ERROR):
+            self._emit_checked(
+                "error", msg, args, exc_info=True if exc_info is None else exc_info
+            )
 
 
 def get_logger(name: str) -> _LoguruShim:
@@ -336,15 +387,8 @@ def bind_request_context(
     chat_id: int | None = None,
 ) -> None:
     """Bind per-ctx tracing context rendered on every log line until cleared."""
-    ctx: dict[str, object] = {}
-    if update_id is not None:
-        ctx["update_id"] = update_id
-    if user_id is not None:
-        ctx["user_id"] = user_id
-    if chat_id is not None:
-        ctx["chat_id"] = chat_id
-    if ctx:
-        _ctx.set(ctx)
+    if update_id is not None or user_id is not None or chat_id is not None:
+        _ctx.set((update_id, user_id, chat_id))
 
 
 def clear_request_context() -> None:

@@ -35,6 +35,8 @@ try:
         "Cache reads served by a cache layer.",
         ["layer"],
     )
+    _HITS_L1 = _HITS.labels("l1")
+    _HITS_L2 = _HITS.labels("l2")
     _MISSES = Counter(
         "tcbot_cache_misses_total",
         "Cache reads that had to reach the source.",
@@ -63,7 +65,7 @@ try:
         "Whether the Redis client is usable (1) or not (0).",
     )
 except ImportError:  # pragma: no cover - exercised only without the extra
-    _HITS = _MISSES = _INVALIDATIONS = _DROPS = _EVICTIONS = None
+    _HITS = _HITS_L1 = _HITS_L2 = _MISSES = _INVALIDATIONS = _DROPS = _EVICTIONS = None
     _QUEUE_DEPTH = _REDIS_AVAILABLE = None
 
 
@@ -71,7 +73,12 @@ def record_hit(layer: str) -> None:
     """Count one cache hit from ``l1`` or ``l2``."""
     _STATS.hits[layer] = _STATS.hits.get(layer, 0) + 1
     if _HITS is not None:
-        _HITS.labels(layer).inc()
+        if layer == "l1" and _HITS_L1 is not None:
+            _HITS_L1.inc()
+        elif layer == "l2" and _HITS_L2 is not None:
+            _HITS_L2.inc()
+        else:
+            _HITS.labels(layer).inc()
 
 
 def record_miss() -> None:

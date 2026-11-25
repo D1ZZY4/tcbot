@@ -31,31 +31,50 @@ def log_execution[R](
     @functools.wraps(func)
     async def _wrapper(ctx: Ctx) -> R:
         """Emit entry, exit, and exception traces at DEBUG level around ``func``."""
-        uid = ctx.effective_user.id if ctx.effective_user else "?"
-        name = func.__name__
+        user = getattr(ctx, "effective_user", None)
+        chat = getattr(ctx, "effective_chat", None)
+        uid = getattr(user, "id", None)
         t0 = monotonic()
         # * Bind first so even the entry line carries request context; the
         # * finally below clears it so pooled tasks never leak one ctx's
         # * IDs into the next (contextvars are task-local per ctx).
-        chat = getattr(ctx, "effective_chat", None)
-        user = getattr(ctx, "effective_user", None)
         bind_request_context(
             update_id=getattr(ctx, "update_id", None),
-            user_id=getattr(user, "id", None),
+            user_id=uid,
             chat_id=getattr(chat, "id", None),
         )
-        log.debug("[%s] uid=%s enter", name, uid)
+        debug_on = log.is_debug_enabled()
+        name = func.__name__
+        if debug_on:
+            log.debug("[%s] uid=%s enter", name, "?" if uid is None else uid)
         try:
             result = await func(ctx)
-            log.debug("[%s] uid=%s ok (%.1fms)", name, uid, elapsed_ms(t0))
+            if debug_on:
+                log.debug(
+                    "[%s] uid=%s ok (%.1fms)",
+                    name,
+                    "?" if uid is None else uid,
+                    elapsed_ms(t0),
+                )
             return result
         except ContinuePropagation:
             # * Dispatcher hand-off, not a failure: the next handler owns the
             # * update. Keep the trace at DEBUG like every other exit line.
-            log.debug("[%s] uid=%s passed on after %.1fms", name, uid, elapsed_ms(t0))
+            if debug_on:
+                log.debug(
+                    "[%s] uid=%s passed on after %.1fms",
+                    name,
+                    "?" if uid is None else uid,
+                    elapsed_ms(t0),
+                )
             raise
         except Exception:
-            log.exception("[%s] uid=%s raised after %.1fms", name, uid, elapsed_ms(t0))
+            log.exception(
+                "[%s] uid=%s raised after %.1fms",
+                name,
+                "?" if uid is None else uid,
+                elapsed_ms(t0),
+            )
             raise
         finally:
             clear_request_context()

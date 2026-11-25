@@ -75,38 +75,48 @@ THROTTLE_CRITICAL = Throttle(limit=1, period=300.0)
 class _RateLimiter:
     """Synchronous in-process sliding-window per-user rate limiter (fallback)."""
 
-    __slots__ = ("_buckets", "max_calls", "window")
+    _MAX_BUCKETS = 10_000
+    __slots__ = ("_buckets", "_next_cleanup", "max_calls", "window")
 
     def __init__(self, max_calls: int, window: float) -> None:
         self.max_calls = max_calls
         self.window = window
         self._buckets: dict[int, deque[float]] = {}
+        self._next_cleanup: float = 0.0
 
     def check(self, uid: int) -> float:
         """Return 0.0 if allowed (call recorded), or seconds to wait if denied."""
         now = monotonic()
-        dq = self._buckets.get(uid)
+        buckets = self._buckets
+        dq = buckets.get(uid)
 
         if dq is None:
-            self._buckets[uid] = deque([now])
+            buckets[uid] = deque([now])
             # * Periodic cleanup to bound memory; mirrors Redis PEXPIRE behavior.
-            # * Only runs when bucket count grows past threshold to avoid O(n) on every call.
-            if len(self._buckets) > 10_000:
+            # * Throttled by window so high-cardinality traffic never triggers O(n)
+            # * scans on every new user.
+            if len(buckets) > self._MAX_BUCKETS and now >= self._next_cleanup:
+                self._next_cleanup = now + self.window
                 cutoff = now - self.window * 2
-                self._buckets = {
-                    k: v for k, v in self._buckets.items() if v and v[0] > cutoff
-                }
+                pruned = {k: v for k, v in buckets.items() if v and v[-1] > cutoff}
+                if len(pruned) > self._MAX_BUCKETS:
+                    # * Drop oldest inserted entries if active users exceed cap.
+                    excess = len(pruned) - self._MAX_BUCKETS
+                    for k in list(pruned)[:excess]:
+                        del pruned[k]
+                self._buckets = pruned
             return 0.0
 
-        # * drop timestamps outside the current window
+        # * O(1) fast path when the user's newest timestamp is already expired.
         cutoff = now - self.window
+        if not dq or dq[-1] <= cutoff:
+            dq.clear()
+            dq.append(now)
+            return 0.0
+
+        # * Drop timestamps outside the current window.
         while dq and dq[0] <= cutoff:
             dq.popleft()
-
-        if not dq:
-            # * bucket fully cleared - recycle slot and allow
-            self._buckets[uid] = deque([now])
-            return 0.0
 
         if len(dq) >= self.max_calls:
             # * blocked - tell caller how long until the oldest slot expires
@@ -155,6 +165,8 @@ class _AsyncRateLimiter:
         "_local",
         "_max_calls_str",
         "_prefix",
+        "_script",
+        "_script_client_id",
         "_window_str",
         "max_calls",
         "window",
@@ -167,6 +179,8 @@ class _AsyncRateLimiter:
         self._window_str = str(window)
         self._prefix = prefix
         self._local = _RateLimiter(max_calls=max_calls, window=window)
+        self._script: Any = None
+        self._script_client_id: int = 0
 
     async def check(self, uid: int) -> float:
         """Return 0.0 if allowed, or seconds to wait if denied."""
@@ -175,24 +189,40 @@ class _AsyncRateLimiter:
             return self._local.check(uid)
 
         key = f"rl:{self._prefix}:{uid}"
-        now = time.time()
-        # * nanosecond timestamp string as unique member - avoids ZADD collision
-        member = str(time.time_ns())
+        now_ns = time.time_ns()
+        now_str = f"{now_ns / 1_000_000_000:.6f}"
+        member = str(now_ns)
 
         try:
             # * The client's socket timeout bounds the call. Wrapping it in
             # * asyncio.wait_for would cancel an in-flight Redis command and
             # * leave its reply unread on the pooled connection, desyncing the
             # * next cache operation that reuses it.
-            result = await r.eval(
-                _RL_LUA,
-                1,
-                key,
-                str(now),
-                self._window_str,
-                self._max_calls_str,
-                member,
-            )
+            r_id = id(r)
+            script = self._script
+            if script is None or self._script_client_id != r_id:
+                reg = getattr(r, "register_script", None)
+                if reg is not None:
+                    script = reg(_RL_LUA)
+                    self._script = script
+                    self._script_client_id = r_id
+                else:
+                    script = None
+            if script is not None:
+                result = await script(
+                    keys=[key],
+                    args=[now_str, self._window_str, self._max_calls_str, member],
+                )
+            else:
+                result = await r.eval(
+                    _RL_LUA,
+                    1,
+                    key,
+                    now_str,
+                    self._window_str,
+                    self._max_calls_str,
+                    member,
+                )
             if result == 0:
                 return 0.0
             # * result = ceil(wait * 10) - convert back to seconds
@@ -258,7 +288,8 @@ def ratelimiter[R](
         @functools.wraps(func)
         async def _wrapper(ctx: Ctx) -> R | None:
             """Block the call and notify the user if the rate limit is exceeded."""
-            uid = ctx.effective_user.id if ctx.effective_user else None
+            user = ctx.effective_user
+            uid = user.id if user is not None else None
             if uid:
                 # * The Owner bypasses per-handler quotas (incident response
                 # * must never stall on a throttle); everyone else shares the

@@ -205,6 +205,13 @@ async def enforcement_refusal(
 _UNSET = object()
 
 
+async def _msg_locale(msg: Message, executor_id: int) -> str:
+    chat = msg.chat
+    return await effective_locale(
+        getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
+    )
+
+
 async def resolve_and_check(
     msg: Message,
     executor_id: int,
@@ -227,13 +234,6 @@ async def resolve_and_check(
 
     On success, returns ``(executor_role, target_role)``.
     """
-
-    async def _locale() -> str:
-        chat = msg.chat
-        return await effective_locale(
-            getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
-        )
-
     resolved_target_role: str | None
     if executor_role is None and target_role is _UNSET:
         executor_role_r, target_role_r = await asyncio.gather(
@@ -259,7 +259,9 @@ async def resolve_and_check(
         ):
             await reply_rich(
                 msg,
-                replies.refuse_role_lookup(await _locale(), plain=True),
+                replies.refuse_role_lookup(
+                    await _msg_locale(msg, executor_id), plain=True
+                ),
                 log_label="resolve_and_check role-lookup",
                 parse_mode=None,
             )
@@ -281,7 +283,9 @@ async def resolve_and_check(
             )
             await reply_rich(
                 msg,
-                replies.refuse_role_lookup(await _locale(), plain=True),
+                replies.refuse_role_lookup(
+                    await _msg_locale(msg, executor_id), plain=True
+                ),
                 log_label="resolve_and_check role-lookup",
                 parse_mode=None,
             )
@@ -304,7 +308,9 @@ async def resolve_and_check(
             )
             await reply_rich(
                 msg,
-                replies.refuse_role_lookup(await _locale(), plain=True),
+                replies.refuse_role_lookup(
+                    await _msg_locale(msg, executor_id), plain=True
+                ),
                 log_label="resolve_and_check role-lookup",
                 parse_mode=None,
             )
@@ -316,7 +322,9 @@ async def resolve_and_check(
     if required_rank(min_role) > db.users_roles.role_rank(executor_role):
         await reply_rich(
             msg,
-            replies.refuse_rank_insufficient(await _locale(), plain=True),
+            replies.refuse_rank_insufficient(
+                await _msg_locale(msg, executor_id), plain=True
+            ),
             log_label="resolve_and_check rank-insufficient",
             parse_mode=None,
         )
@@ -326,7 +334,9 @@ async def resolve_and_check(
         label = db.users_roles.role_label(resolved_target_role)
         await reply_rich(
             msg,
-            replies.refuse_outranked(label, await _locale(), plain=True),
+            replies.refuse_outranked(
+                label, await _msg_locale(msg, executor_id), plain=True
+            ),
             log_label="resolve_and_check outrank",
             parse_mode=None,
         )
@@ -607,11 +617,12 @@ async def prompt_owner_mismatch(q: Any, ctx: Ctx, *, min_parts: int, key: str) -
     handler runs. The legacy branch must never be the last gate.
     """
     data = getattr(q, "data", "") or ""
-    parts = str(data).split(":")
-    if len(parts) <= min_parts:
+    data_str = data if type(data) is str else str(data)
+    if data_str.count(":") < min_parts:
         return False
+    _, _, last = data_str.rpartition(":")
     try:
-        owner_id = int(parts[-1])
+        owner_id = int(last)
     except ValueError:
         # * Fail closed: a payload whose owner segment is not a user id
         # * cannot prove who opened the prompt, so the tapper is not

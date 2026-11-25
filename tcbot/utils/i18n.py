@@ -369,7 +369,7 @@ def _prepare_value(name: str, value: object, *, escape: bool) -> str:
     if val_type is str:
         return _HTML_ESCAPE(value, quote=True) if escape else value  # type: ignore[arg-type]
     if val_type is Safe or isinstance(value, Safe):
-        return str(value)
+        return value  # type: ignore[return-value]
     if value is None:
         raise I18nError(f"i18n placeholder {name!r} got None; pass a real value")
     if val_type is int or val_type is bool or val_type is float:
@@ -560,7 +560,7 @@ def t(
         data = _catalog or _ensure_loaded()
         canonical = (
             DEFAULT_LOCALE
-            if locale is None
+            if locale is None or locale == DEFAULT_LOCALE
             else (_canonical_locale(locale, data) or DEFAULT_LOCALE)
         )
         plan = _global_plans.get((canonical, key, escape))

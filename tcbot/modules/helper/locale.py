@@ -10,7 +10,7 @@ import asyncio
 
 from tcbot import database as db
 from tcbot.modules.helper.context import Ctx
-from tcbot.utils.i18n import DEFAULT_LOCALE, canonical_locale, resolve_locale
+from tcbot.utils.i18n import DEFAULT_LOCALE, canonical_locale
 from tcbot.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -41,15 +41,16 @@ async def _resolve_preference(
     ordinary path pays no extra cache read.
     """
     specific = user_locale if chat_type == "private" else group_locale
-    canonical = canonical_locale(specific)
-    if canonical is not None:
-        return canonical
-    return resolve_locale(
-        chat_type=chat_type,
-        user_locale=user_locale,
-        group_locale=group_locale,
-        community_locale=await _community_locale(),
-    )
+    if specific:
+        canonical = canonical_locale(specific)
+        if canonical is not None:
+            return canonical
+    community = await _community_locale()
+    if community:
+        canonical = canonical_locale(community)
+        if canonical is not None:
+            return canonical
+    return DEFAULT_LOCALE
 
 
 async def effective_locale(chat_type: object, user_id: int, chat_id: int) -> str:

@@ -49,7 +49,11 @@ def _parse_prefixed_command(
     """Parse a lowercase prefixed command and validate any bot mention suffix."""
     if not prefixes:
         return None
-    prefix = next((p for p in prefixes if text.startswith(p)), None)
+    prefix: str | None = None
+    for p in prefixes:
+        if text.startswith(p):
+            prefix = p
+            break
     if prefix is None:
         return None
     remainder = text[len(prefix) :]
@@ -80,7 +84,7 @@ def _matcher(command: str | None, prefixes: tuple[str, ...]) -> Filter:
     if not prefixes:
         return _never_match_filter()
     first_chars = frozenset(p[0] for p in prefixes)
-    single_prefix = prefixes[0] if len(prefixes) == 1 else None
+    all_single_char = all(len(p) == 1 for p in prefixes)
 
     if command is not None:
         cmd_len = len(command)
@@ -89,30 +93,30 @@ def _matcher(command: str | None, prefixes: tuple[str, ...]) -> Filter:
             message = getattr(update, "text", None)
             if message is None:
                 return False
-            text = message if isinstance(message, str) else str(message)
+            text = message if type(message) is str else str(message)
             if not text or text[0] not in first_chars:
                 return False
-            if single_prefix is not None:
-                if not text.startswith(single_prefix):
-                    return False
-                remainder = text[len(single_prefix) :]
+            if all_single_char:
+                p_len = 1
             else:
                 for p in prefixes:
                     if text.startswith(p):
-                        remainder = text[len(p) :]
+                        p_len = len(p)
                         break
                 else:
                     return False
-            if not remainder.startswith(command):
+            if not text.startswith(command, p_len):
                 return False
-            if len(remainder) == cmd_len:
+            cmd_end = p_len + cmd_len
+            text_len = len(text)
+            if text_len == cmd_end:
                 return True
-            ch = remainder[cmd_len]
+            ch = text[cmd_end]
             if ch.isspace():
                 return True
             if ch != "@":
                 return False
-            mention = remainder[cmd_len + 1 :].split(None, 1)[0]
+            mention = text[cmd_end + 1 :].split(None, 1)[0]
             if not mention or not _MENTION_RE.fullmatch(mention):
                 return False
             username = _bot_username(client)
@@ -127,7 +131,7 @@ def _matcher(command: str | None, prefixes: tuple[str, ...]) -> Filter:
         message = getattr(update, "text", None)
         if message is None:
             return False
-        text = message if isinstance(message, str) else str(message)
+        text = message if type(message) is str else str(message)
         if not text or text[0] not in first_chars:
             return False
         username = _bot_username(client) if "@" in text else None

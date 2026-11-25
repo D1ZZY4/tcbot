@@ -80,7 +80,7 @@ class _HealthPayload(msgspec.Struct):
 
 
 @_app.route("/health")
-def health() -> tuple[str, int, dict[str, str]]:
+def health() -> tuple[bytes, int, dict[str, str]]:
     """Detailed health status as JSON: database, redis, scheduler, timestamp.
 
     Returns HTTP 200 when all core subsystems are ready, 503 when degraded.
@@ -142,7 +142,7 @@ def health() -> tuple[str, int, dict[str, str]]:
     )
     code = 200 if overall == "ok" else 503
     return (
-        msgspec.json.encode(payload).decode("utf-8"),
+        msgspec.json.encode(payload),
         code,
         {"Content-Type": "application/json"},
     )

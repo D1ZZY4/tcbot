@@ -55,17 +55,19 @@ def _auth_only(*, label: str, refusal: str, min_role: RoleName | None) -> Callab
         @functools.wraps(func)
         async def _wrapper(ctx: Ctx) -> None:
             """Allow the call only when the invoking user passes the tier check."""
-            if is_anon_admin(ctx.effective_user):
-                if ctx.effective_message:
+            user = ctx.effective_user
+            if is_anon_admin(user):
+                msg = ctx.effective_message
+                if msg is not None:
                     locale = await locale_for_update(ctx)
                     await reply_rich(
-                        ctx.effective_message,
+                        msg,
                         replies.refuse_anon_admin(locale, plain=True),
                         log_label=f"{label} anon-admin",
                         parse_mode=None,
                     )
                 return None
-            uid = ctx.effective_user.id if ctx.effective_user else None
+            uid = user.id if user is not None else None
             if uid:
                 # * Fail closed with a retry reply on DB outage instead of
                 # * letting the lookup failure propagate with no user feedback.
@@ -146,17 +148,19 @@ def permission_only(permission_key: str) -> Callable:
         @functools.wraps(func)
         async def _wrapper(ctx: Ctx) -> None:
             """Allow the call only when the invoker holds the permission."""
-            if is_anon_admin(ctx.effective_user):
-                if ctx.effective_message:
+            user = ctx.effective_user
+            if is_anon_admin(user):
+                msg = ctx.effective_message
+                if msg is not None:
                     locale = await locale_for_update(ctx)
                     await reply_rich(
-                        ctx.effective_message,
+                        msg,
                         replies.refuse_anon_admin(locale, plain=True),
                         log_label="permission anon-admin",
                         parse_mode=None,
                     )
                 return None
-            uid = ctx.effective_user.id if ctx.effective_user else None
+            uid = user.id if user is not None else None
             if uid:
                 try:
                     authorized = await db.users_roles.has_permission(
