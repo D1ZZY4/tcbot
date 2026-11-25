@@ -30,6 +30,7 @@ from pathlib import Path
 
 from dotenv import find_dotenv, load_dotenv
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import DatabaseError
 
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
@@ -177,7 +178,7 @@ def main() -> int:
             try:
                 conn.execute(text(statement))
                 print(f"{label}: NO ERROR")
-            except Exception as exc:
+            except DatabaseError as exc:
                 first = str(exc).splitlines()[0]
                 print(f"{label}: {first}")
             savepoint.rollback()

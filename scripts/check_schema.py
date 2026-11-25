@@ -38,6 +38,8 @@ from sqlalchemy.exc import DatabaseError
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from sqlalchemy.engine import Connection, Engine
+
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
@@ -80,7 +82,9 @@ def _scoped_url(url: str, schema: str) -> str:
     return scoped_url(url, schema)
 
 
-def _expect_failure(conn, failures: list[str], label: str, action: Callable) -> None:
+def _expect_failure(
+    conn: Connection, failures: list[str], label: str, action: Callable[[], object]
+) -> None:
     """Run *action* and record a failure when it did not raise."""
     try:
         with conn.begin_nested():
@@ -90,10 +94,10 @@ def _expect_failure(conn, failures: list[str], label: str, action: Callable) -> 
     failures.append(f"{label} was accepted")
 
 
-def _check(engine: object) -> list[str]:
+def _check(engine: Engine) -> list[str]:
     """Build the schema and return the invariants that did not hold."""
     failures: list[str] = []
-    with engine.begin() as conn:  # type: ignore[attr-defined]
+    with engine.begin() as conn:
         drop_schema(conn)
         metadata.drop_all(conn, checkfirst=True)
         metadata.create_all(conn, checkfirst=True)

@@ -37,7 +37,7 @@ from dotenv import find_dotenv, load_dotenv
 from sqlalchemy import create_engine, text
 
 if TYPE_CHECKING:
-    from sqlalchemy.engine import Connection
+    from sqlalchemy.engine import Connection, Engine
 
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
@@ -196,16 +196,16 @@ def _sync_url(url: str) -> str:
     return url
 
 
-def _reset_schema(engine: object, schema: str) -> None:
+def _reset_schema(engine: Engine, schema: str) -> None:
     """Drop and recreate the schema of the check."""
-    with engine.begin() as conn:  # type: ignore[attr-defined]
+    with engine.begin() as conn:
         conn.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
         conn.execute(text(f'CREATE SCHEMA "{schema}"'))
 
 
-def _seed_legacy(engine: object) -> None:
+def _seed_legacy(engine: Engine) -> None:
     """Insert the legacy rows the check needs."""
-    with engine.begin() as conn:  # type: ignore[attr-defined]
+    with engine.begin() as conn:
         for statement in LEGACY_ROWS:
             conn.execute(text(statement))
 
@@ -220,10 +220,10 @@ def _scalar(conn: Connection, statement: str) -> int:
     return int(conn.execute(text(statement)).scalar() or 0)
 
 
-def _verify(engine: object, schema: str) -> list[str]:
+def _verify(engine: Engine, schema: str) -> list[str]:
     """Return the failures of the migrated database."""
     failures: list[str] = []
-    with engine.connect() as conn:  # type: ignore[attr-defined]
+    with engine.connect() as conn:
         surviving = _scalar(
             conn,
             "SELECT count(*) FROM information_schema.tables "

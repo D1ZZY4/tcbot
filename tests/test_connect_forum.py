@@ -14,7 +14,7 @@ import pytest
 from pyrogram.enums import ChatMemberStatus
 
 from tcbot.modules import connect as connect_module
-from tcbot.modules.helper.pipelines import connect_added
+from tcbot.modules.helper.pipelines import connect_added, connect_decision
 
 
 class _FakeBot:
@@ -122,7 +122,7 @@ async def test_bot_added_to_infrastructure_group_sends_no_connect_prompt(
         return "en-US"
 
     monkeypatch.setattr(
-        connect_added,
+        connect_decision,
         "cfg",
         _NS(
             is_primary_group=lambda _chat_id: False,
@@ -415,7 +415,7 @@ async def test_join_decision_refuses_an_infrastructure_chat(
         user_data={},
     )
     monkeypatch.setattr(
-        connect_added,
+        connect_decision,
         "cfg",
         _NS(
             is_primary_group=lambda _chat_id: False,

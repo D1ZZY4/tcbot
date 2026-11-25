@@ -113,4 +113,4 @@ def test_the_migration_chain_has_one_head() -> None:
         revisions[revision] = down
     parents = {down for down in revisions.values() if down}
     heads = set(revisions) - parents
-    assert heads == {"0021_moderation_expiry_clock"}
+    assert heads == {"0022_reconcile_primary_chat"}

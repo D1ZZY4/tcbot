@@ -205,6 +205,12 @@ def test_start_keepalive_reuses_address(monkeypatch: pytest.MonkeyPatch) -> None
         def close(self) -> None:
             calls.append("close")
 
+        def __enter__(self) -> _FakeSocket:
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            self.close()
+
     class _FakeThread:
         def __init__(self, **_kwargs: object) -> None:
             pass
