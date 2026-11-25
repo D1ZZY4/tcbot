@@ -71,11 +71,11 @@ flowchart TD
 
 | Helper | Signature summary | Notes |
 |---|---|---|
-| `edit_rich` | `edit_rich(bot, chat_id, message_id, message, *, reply_markup=None)` | Calls `bot.edit_message_text(..., rich_message=InputRichMessage(...))` and returns the edited `Message`. |
+| `edit_rich` | `edit_rich(bot, chat_id, message_id, message, *, reply_markup=None, clear_markup=False)` | Calls `bot.edit_message_text(..., rich_message=InputRichMessage(...))` and returns the edited `Message`. `clear_markup` forwards an empty keyboard so decided buttons are stripped. |
 | `safe_edit` | `safe_edit(msg, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits via `msg.edit_text(rich_message=...)`. |
 | `safe_edit_cb` | `safe_edit_cb(q, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits via `q.edit_message_text(rich_message=...)`. |
 | `safe_edit_message` | `safe_edit_message(bot, chat_id, message_id, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits by id via `bot.edit_message_text(rich_message=...)`. |
-| `cb_error_edit` | `cb_error_edit(q, text, *, log_label, parse_mode=None, log_level="warning")` | `safe_edit_cb` with an explicitly empty inline keyboard and `catch_all=True`. |
+| `cb_error_edit` | `cb_error_edit(q, text, *, log_label, parse_mode=None, log_level="warning")` | `safe_edit_cb` with `catch_all=True`; the replacement message carries no keyboard. |
 | `clear_markup_cb` | `clear_markup_cb(q)` | Removes the inline keyboard only; keeps `_IGNORED` BadRequests silent. |
 
 `_IGNORED` contains `"message is not modified"`, `"message to edit not found"`,
@@ -188,8 +188,8 @@ on `:` and return `None` on malformed payloads.
 No parse mode is selected anywhere in the application. `reply_rich`,
 `safe_edit`, `safe_edit_cb`, `safe_edit_message`, and `cb_error_edit` accept a
 `parse_mode` argument and discard it. Direct Kurigram fallback calls pass no parse
-mode; the decided-appeal card closure is the one plain-text edit and passes
-`parse_mode=None` explicitly, as traced in [Appeals](appeals.md#durable-card-edits).
+mode; the decided-appeal card closure uses `edit_rich` with an explicitly
+empty keyboard, as traced in [Appeals](appeals.md#durable-card-edits).
 There is no application-level default parse-mode setting in `__main__.py`.
 
 User-facing wording comes from `t()` in `utils/i18n.py`, which owns the `Safe`

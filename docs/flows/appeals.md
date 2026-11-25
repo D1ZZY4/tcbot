@@ -214,7 +214,7 @@ flowchart TD
     CLAIM --> LOAD[load_task_action]
     LOAD --> LIVE{_card_is_still_decidable?}
     LIVE -->|yes| SKIP[complete_task skipped]
-    LIVE -->|no| EDIT[bot.edit_message_text appeals.review.card_closed parse_mode None]
+    LIVE -->|no| EDIT[edit_rich appeals.review.card_closed clear_markup]
     EDIT -->|success| SENT[complete_task sent]
     EDIT -->|Forbidden or not found or message_id_invalid| SKIPPED[complete_task skipped]
     EDIT -->|not modified| OK[complete_task sent]
@@ -230,8 +230,10 @@ timedelta(minutes=5)`, and `_MAX_TASKS_PER_TICK = 10`. `claim_due_tasks()` uses
 update only while the same claim is still the current pending row, so a delayed
 retry cannot settle a re-queued task. A `BadRequest` or `Forbidden` calls
 `release_probe(reached_service=True)`; a transport failure calls
-`record_failure()`. The edit uses the plain `appeals.review.card_closed` template
-with `parse_mode=None`, not a rich payload.
+`record_failure()`. The edit goes through `edit_rich` with `clear_markup=True`,
+so the decided card loses its Approve and Reject buttons. A claim the circuit
+cannot admit is released with its attempt count intact instead of consuming the
+retry budget.
 
 ## Audit and notification builders
 
