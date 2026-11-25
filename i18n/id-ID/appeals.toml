@@ -38,7 +38,7 @@ Persetujuan: Saya akan mematuhi semua panduan komunitas ke depannya."""
 [help.next]
 title = "Selanjutnya"
 body = """
-Bandingmu diteruskan ke Staf TC untuk ditinjau. Admin yang menjatuhkan ban awal punya {window} untuk merespons; setelah itu admin mana pun bisa bertindak.
+Bandingmu diteruskan ke Staf federasi untuk ditinjau. Admin yang menjatuhkan ban awal punya {window} untuk merespons; setelah itu admin mana pun bisa bertindak.
 
 Jika disetujui: ban dicabut segera di semua grup terhubung.
 Jika ditolak: ban tetap berlaku.

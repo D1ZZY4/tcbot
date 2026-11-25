@@ -23,5 +23,5 @@ Pelanggaran sedang. Sanksinya: teguran tertulis, pembisuan paling lama 3 hari, a
 
 ## Catatan
 
-- Hubungan perusahaan di dalam nama TCF hanya penamaan, bukan hubungan dengan TCF.
+- Nama TCF menyertakan nama perusahaan hanya sebagai penanda minat bersama, bukan hubungan resmi.
 - Klaim hubungan resmi hanya boleh oleh pihak yang punya izin tertulis.

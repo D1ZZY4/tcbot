@@ -11,8 +11,6 @@ Siapa yang menjadi anggota, kapan keanggotaan mulai dan berakhir, serta hak dan 
   2. grup tercantum dalam daftar anggota di kanal resmi TCF; dan
   3. persetujuan belum ditarik kembali.
 
-  Grup yang hanya memakai nama atau logo TCF bukan Grup Anggota.
-
 - **Platform Komunitas**: grup anggota, kanal resmi TCF, dan grup koordinasi admin.
 - **Pengelola**: Administrator dan Moderator grup anggota.
 - **Sanksi**: tindakan setelah pemeriksaan, berupa teguran, peringatan, pembisuan, pengeluaran, blokir federasi, atau pencabutan kewenangan.

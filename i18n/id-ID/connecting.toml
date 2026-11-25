@@ -20,7 +20,7 @@ body = """
 Menghubungkan grupmu ke federasi {community}. Setelah terhubung:
 - Ban federasi ditegakkan otomatis: pengguna yang sedang di-ban dikeluarkan, dan pengguna yang baru di-ban di-kick saat ban dijatuhkan.
 - Mute federasi diterapkan saat dikeluarkan.
-- Pesan broadcast dari Staf TC diteruskan ke grupmu."""
+- Pesan broadcast dari Staf federasi diteruskan ke grupmu."""
 
 [help.permissions]
 title = "Izin yang Dibutuhkan"
@@ -29,7 +29,7 @@ body = "Sebelum menjalankan perintah, jadikan bot admin grup dengan tiga izin in
 [help.notes]
 title = "Catatan"
 body = """
-Jika permintaan connect untuk grupmu sudah tertunda, permintaan kedua akan ditolak; tunggu Staf TC memproses yang sudah ada.
+Jika permintaan connect untuk grupmu sudah tertunda, permintaan kedua akan ditolak; tunggu Staf federasi memproses yang sudah ada.
 
 Saat bot pertama kali ditambahkan ke grup, ia otomatis meminta pemilik grup untuk connect, jadi kamu juga bisa tinggal menambahkan bot lalu mengikuti perintah itu."""
 
@@ -76,7 +76,7 @@ welcome_hint = "Hanya pemilik grup yang bisa melanjutkan. Belum ada yang terhubu
 why = "Mengapa ini penting"
 page_1_title = "Persetujuan tercatat"
 page_1_body = "Sebuah grup menjadi bagian federasi hanya bila administratornya menyetujui dan keputusan itu ditulis. Catatannya disimpan di grup koordinasi admin atau di kanal resmi."
-page_1_detail = "Nama atau logo yang sama saja bukan bukti afiliasi. Catatan persetujuan inilah yang membuat grup lain tahu bahwa grup ini diterima."
+page_1_detail = "Catatan persetujuan inilah yang membuat grup lain tahu bahwa grup ini diterima."
 page_1_note = "Jika persetujuan belum pernah dicatat, minta admin mencatatnya sebelum menghubungkan."
 page_2_title = "Tercantum di federasi"
 page_2_body = "Grup yang disetujui juga tercantum dalam daftar anggota resmi. Daftar itu cara anggota dan staf membedakan grup anggota dari grup lain yang namanya mirip."

@@ -1,6 +1,6 @@
 # Federasi
 
-Aturan dasar TCF: apa itu TCF, asas, tujuan, ruang lingkup, dan cara mengubah aturan.
+Apa itu TCF, asas, tujuan, ruang lingkup, riwayat TCF, dan cara mengubah aturan.
 
 ## Tentang TCF
 
@@ -18,8 +18,6 @@ Aturan ini menggantikan tata tertib lama yang tidak punya definisi, pembagian tu
   1. admin menyatakan persetujuan dan dicatat di grup koordinasi admin atau kanal resmi TCF;
   2. grup tercantum dalam daftar anggota di kanal resmi TCF; dan
   3. persetujuan belum ditarik kembali.
-
-  Grup yang hanya memakai nama atau logo TCF tanpa memenuhi syarat bukan Grup Anggota.
 
 - **Admin Federasi**: admin grup anggota yang mengurus koordinasi antargrup, daftar anggota, dan daftar blokir federasi. Tidak mengurus internal grup lain.
 - **Administrator**: anggota yang ditunjuk admin grup untuk mengelola keanggotaan dan teknis grup.

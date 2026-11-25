@@ -12,8 +12,8 @@ body = """
 
 [help.who]
 body = """
-*/tcdisconnect*: pemilik grup atau Staf TC (Admin ke atas).
-*/rmtc*: hanya Staf TC."""
+*/tcdisconnect*: pemilik grup atau Staf federasi (Admin ke atas).
+*/rmtc*: hanya Staf federasi."""
 
 [help.where]
 body = """
@@ -41,7 +41,7 @@ primary_refused = "Ini grup utama federasi. Ia tidak bisa diputus: grup utama me
 infrastructure_refused = "Chat ini adalah tujuan deployment seperti kanal log, bukti, atau banding. Chat ini harus tetap terhubung agar pengiriman federasi terus berjalan."
 status_failed = "Tidak bisa memverifikasi status grup. Coba lagi."
 not_connected = "Grup ini tidak terhubung ke {community}."
-anon_admin = "Mode admin anonim aktif. Kirim perintah ini dari akun pribadimu, atau minta Staf TC menjalankan /rmtc."
+anon_admin = "Mode admin anonim aktif. Kirim perintah ini dari akun pribadimu, atau minta Staf federasi menjalankan /rmtc."
 not_authorized = "Hanya pemilik grup atau admin TC yang bisa memutus grup ini."
 deactivate_failed = "Gagal memutus grup. Bot masih di sini; coba lagi."
 disconnected = "Grup ini telah diputus dari {community}."

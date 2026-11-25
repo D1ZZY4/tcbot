@@ -16,7 +16,7 @@ Cara menangani pelanggaran: lapor, periksa, putuskan, sanksi, keberatan, dan pem
 ## Tingkat pelanggaran
 
 - **Ringan**: promosi; Spam atau Out Off Topic; Pengelola menyatakan pelanggaran tanpa menyebut aturan.
-- **Sedang**: MOD APK atau Aplikasi Bajakan; Alat Penambalan atau patch yang tidak memenuhi syarat; Berkas Media yang tidak diizinkan; klaim Karya orang lain dan atribusi; penyamarannya dan klarifikasi resmi; Konten Pornografi atau NSFW; Root Module tanpa tautan Kode Sumber di rilis yang sama atau versi tidak cocok; kampanye politik; Transaksi; Pengelola membedakan perlakuan tanpa dasar atau lalai mencatat.
+- **Sedang**: MOD APK atau Aplikasi Bajakan; Alat Penambalan atau patch yang tidak memenuhi syarat; Berkas Media yang tidak diizinkan; klaim Karya orang lain dan atribusi; penyamaruan identitas dan klaim resmi palsu; Konten Pornografi atau NSFW; Root Module tanpa tautan Kode Sumber di rilis yang sama atau versi tidak cocok; kampanye politik; Transaksi; Pengelola membedakan perlakuan tanpa dasar atau lalai mencatat.
 - **Berat**: perangkat lunak berbahaya; Alat Kecurangan; Doxing dan pembagian chat pribadi; penghinaan, perundungan, pelecehan, ujaran kebencian, ancaman kekerasan; pengungkapan Materi Pengujian; Root Module Berbayar atau Kode Sumber tidak terbuka; tautan penipuan; Pengelola menyalahgunakan wewenang, membocorkan data, memeriksa dengan konflik, menghapus catatan, atau tidak menangani laporan Anak.
 - **Sangat berat**: ancaman, pemerasan, atau intimidasi dengan Informasi Pribadi, Materi Pengujian, atau chat pribadi; konten seksual yang melibatkan Anak; penipuan.
 
@@ -86,7 +86,7 @@ Aturan tambahan:
 - Menangguhkan sanksi, kecuali pelanggaran sangat berat dan penghapusan konten seksual Anak, Doxing atau chat pribadi, atau perangkat lunak berbahaya.
 - Diputus maksimal 7 hari: tolak, ringankan, atau batalkan.
 - Putusan tidak boleh memperberat.
-- Putusan final di TCF. Jika dikabulkan, hak dipulihkan dan catatan sanksi dihapus dari dasar pemberatan.
+- Putusan bersifat final dalam federasi. Jika dikabulkan, hak dipulihkan dan catatan sanksi dihapus dari dasar pemberatan.
 - Tinjauan banding yang dibiarkan tanpa tindakan selama 72 jam dianggap usang, sehingga pengguna bisa mengajukan lagi.
 
 ## Jika Pengelola yang melanggar

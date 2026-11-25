@@ -21,7 +21,7 @@ db_retry = "Tidak bisa menjangkau database sekarang. Coba lagi sebentar."
 
 [perm]
 owner_only = "Hanya Owner."
-staff_only = "Staf TC (Admin ke atas)."
+staff_only = "Staf federasi (Admin ke atas)."
 dev_above = "Developer ke atas (Owner / Admin / Developer)."
 moderator_above = "Moderator ke atas (Owner / Admin / Developer / Moderator)."
 

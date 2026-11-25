@@ -12,7 +12,7 @@ not_found = "Bagian tidak ditemukan."
 
 [section.federasi]
 label = "Federasi"
-lead = "Apa itu {community}, dan apa bukan {community}."
+lead = "Apa itu {community} dan apa yang tidak termasuk."
 item_1 = "Federasi sukarela dari grup Telegram mandiri di sekitar perangkat Transsion. Bukan perusahaan dan bukan badan hukum."
 item_2 = "Tiap grup memegang aturannya sendiri. Aturan ini hanya standar minimum, jadi aturan grup boleh lebih ketat tetapi tidak boleh bertentangan."
 item_3 = "Ban dan mute federasi berlaku di semua grup terhubung. Kick hanya mengeluarkan target dari grup tempat perintah dijalankan."
