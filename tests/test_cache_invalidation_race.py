@@ -263,7 +263,8 @@ def test_a_locale_invalidation_enqueues_a_tombstone(
 
     TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix="ulocale").invalidate(7)
 
-    assert calls == [("ulocale", False), ("ulocale", False)]
+    # * Tombstone and delete are one watched non-droppable operation.
+    assert calls == [("ulocale", False)]
 
 
 def test_normal_fetch_still_populates_the_cache() -> None:

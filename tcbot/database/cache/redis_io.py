@@ -19,9 +19,9 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 # * Strong refs to in-flight tasks; prevents GC before completion.
-_redis_bg_tasks: set[asyncio.Task[None]] = set()
+_redis_bg_tasks: set[asyncio.Task[object]] = set()
 # * FIFO order per (prefix, loop); asyncio tasks cannot await across loops.
-_redis_tails: dict[tuple[str, asyncio.AbstractEventLoop], asyncio.Task[None]] = {}
+_redis_tails: dict[tuple[str, asyncio.AbstractEventLoop], asyncio.Task[object]] = {}
 # * Past this queued depth per (prefix, loop) droppable ops drop with a
 # * warning. L2 is a TTL hint layer, so a drop only extends staleness to
 # * the key TTL while an unbounded queue would stall revocation paths.
@@ -44,11 +44,11 @@ _redis_drop_warned: set[tuple[str, asyncio.AbstractEventLoop]] = set()
 # * op evicts one of these (a display hint can wait for its next refresh)
 # * instead of being dropped itself.
 _redis_cancellable: dict[
-    tuple[str, asyncio.AbstractEventLoop], list[asyncio.Task[None]]
+    tuple[str, asyncio.AbstractEventLoop], list[asyncio.Task[object]]
 ] = {}
 # * Tasks currently inside their Redis call. Cancelling one would leave its
 # * reply unread on a pooled connection, so they are never evicted.
-_redis_running: set[asyncio.Task[None]] = set()
+_redis_running: set[asyncio.Task[object]] = set()
 # * Grace window for draining background mutations before the pool closes.
 _DRAIN_TIMEOUT_S: float = 5.0
 # * Ceiling for one clear_all wait; the sweep keeps running past it so a
@@ -109,21 +109,21 @@ def _release_redis_slot(tail_key: tuple[str, asyncio.AbstractEventLoop]) -> None
 
 def _clear_redis_tail(
     tail_key: tuple[str, asyncio.AbstractEventLoop],
-    task: asyncio.Task[None],
+    task: asyncio.Task[object],
 ) -> None:
     """Release a namespace tail when no newer mutation follows it."""
     if _redis_tails.get(tail_key) is task:
         _redis_tails.pop(tail_key, None)
 
 
-def _log_redis_task_error(task: asyncio.Task[None]) -> None:
+def _log_redis_task_error(task: asyncio.Task[object]) -> None:
     """Done-callback: log Redis background task errors without raising."""
     if not task.cancelled() and task.exception() is not None:
         log.debug("Redis background task failed: %s", task.exception())
 
 
 def _forget_cancellable(
-    tail_key: tuple[str, asyncio.AbstractEventLoop], task: asyncio.Task[None]
+    tail_key: tuple[str, asyncio.AbstractEventLoop], task: asyncio.Task[object]
 ) -> None:
     """Done-callback: drop a finished task from the evictable list."""
     queued = _redis_cancellable.get(tail_key)
@@ -159,10 +159,10 @@ def _evict_droppable(tail_key: tuple[str, asyncio.AbstractEventLoop]) -> bool:
 
 def enqueue_redis_mutation(
     prefix: str,
-    operation: Callable[[], Awaitable[None]],
+    operation: Callable[[], Awaitable[object]],
     *,
     droppable: bool = True,
-) -> asyncio.Task[None] | None:
+) -> asyncio.Task[object] | None:
     """Run Redis mutations FIFO for this Redis prefix and event loop.
 
     ``put()``, ``invalidate()``, and ``clear_all()`` are called from
@@ -238,7 +238,7 @@ def enqueue_redis_mutation(
     metrics.set_queue_depth(prefix, depth + 1)
     previous = _redis_tails.get(tail_key)
 
-    async def _run() -> None:
+    async def _run() -> object:
         if previous is not None:
             # * Each mutation has its own fault domain: a cancelled
             # * predecessor must not drop the rest of the tail. Shielding
@@ -265,7 +265,7 @@ def enqueue_redis_mutation(
         if task is not None:
             _redis_running.add(task)
         try:
-            await operation()
+            return await operation()
         finally:
             if task is not None:
                 _redis_running.discard(task)

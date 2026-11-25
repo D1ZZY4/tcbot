@@ -187,33 +187,19 @@ class TwoLevelCache[T]:
         # * Advance the key's generation so an in-flight fetch discards its
         # * stale result instead of resurrecting the revoked value.
         self._advance(key)
-        if self._critical_delete:
-            self._redis_tombstone_background(key)
         if cfg.redis_url:
             self._pending_invalidations.add(key)
-            task = self._redis_del_background(key, droppable=not self._critical_delete)
-            if task is not None:
-                # * The delete has landed when this task finishes; until
-                # * then L2 can still hold the revoked value locally.
-                task.add_done_callback(
-                    lambda _: self._pending_invalidations.discard(key)
-                )
-            else:
-                # * The queue ceiling dropped the delete. Keep blocking L2
-                # * reads while the stale value can still live there, then
-                # * release the marker so a long outage cannot grow the set
-                # * without bound. Dropping the marker early would let the
-                # * revoked value come back from L2 for a full TTL.
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    self._pending_invalidations.discard(key)
-                else:
-                    loop.call_later(
-                        self._redis_ttl, self._pending_invalidations.discard, key
-                    )
-        else:
-            self._redis_del_background(key, droppable=not self._critical_delete)
+            rkey = self._rkey(key)
+            # * Tombstone and delete are one watched operation. A tombstone
+            # * that fails must not be followed by a delete: without the
+            # * cross-process marker, another process can still promote the
+            # * revoked L2 value into its memory layer.
+            task = redis_io.enqueue_redis_mutation(
+                self._redis_prefix,
+                lambda: self._redis_revoke(rkey, self._tombstone_key(key)),
+                droppable=not self._critical_delete,
+            )
+            self._watch_mutation(self._pending_invalidations, key, task)
 
     def clear(self) -> None:
         """Clear the in-memory layer (does not flush Redis keys)."""
@@ -663,6 +649,46 @@ class TwoLevelCache[T]:
 
     # ── Internal helpers ── #
 
+    def _release_marker_after_ttl(self, marker: set[Any], key: Any) -> None:
+        """Hold a pending marker for as long as a stale L2 value can live."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            marker.discard(key)
+        else:
+            loop.call_later(self._redis_ttl, marker.discard, key)
+
+    def _watch_mutation(
+        self,
+        marker: set[Any],
+        key: Any,
+        task: asyncio.Task[object] | None,
+    ) -> None:
+        """Keep *key* marked until its queued L2 mutation actually succeeds.
+
+        A task finishing is not proof that it reached Redis: every mutation
+        helper returns early when no usable client exists, and a cancelled
+        task never runs its command. Releasing the marker in either case
+        would let a reader promote the old L2 value into L1 for the full TTL.
+        """
+        if task is None:
+            self._release_marker_after_ttl(marker, key)
+            return
+
+        def _done(done: asyncio.Task[object]) -> None:
+            landed = False
+            if not done.cancelled():
+                try:
+                    landed = bool(done.result())
+                except Exception as exc:
+                    log.debug("Redis mutation for %s failed: %s", key, exc)
+            if landed:
+                marker.discard(key)
+            else:
+                self._release_marker_after_ttl(marker, key)
+
+        task.add_done_callback(_done)
+
     def _state(self, key: Any) -> _KeyState:
         """Return the single-flight state of *key*, creating it on first use."""
         state = self._states.get(key)
@@ -718,12 +744,7 @@ class TwoLevelCache[T]:
             lambda: self._redis_set_guarded(rkey, payload, self._tombstone_key(key)),
             droppable=not self._is_revocation,
         )
-        if task is not None:
-            task.add_done_callback(lambda _: self._pending_writes.discard(key))
-        else:
-            # * A dropped write cannot make L2 newer than L1; release the
-            # * marker immediately so reads are not blocked for the TTL.
-            self._pending_writes.discard(key)
+        self._watch_mutation(self._pending_writes, key, task)
 
     async def _client(self) -> Any:
         """Return the Redis client, reconnecting after a failed startup.
@@ -734,6 +755,10 @@ class TwoLevelCache[T]:
         """
         rc = redis_io.usable_redis_client()
         if rc is None:
+            # * A configured Redis that cannot serve this loop is an outage,
+            # * even when no command reaches the driver to report one.
+            if cfg.redis_url:
+                _redis_mod.mark_op(ok=False)
             rc = await redis_io.acquire_redis_client()
         return rc
 
@@ -754,51 +779,36 @@ class TwoLevelCache[T]:
             return False
         return bool(exists)
 
-    def _redis_tombstone_background(self, key: Any) -> None:
-        """Mark a key as revoked before its L2 delete is queued."""
-        if not cfg.redis_url:
-            return
-        rkey = self._tombstone_key(key)
-        redis_io.enqueue_redis_mutation(
-            self._redis_prefix,
-            lambda: self._redis_tombstone(rkey),
-            droppable=False,
-        )
+    async def _redis_revoke(self, rkey: str, tomb_key: str) -> bool:
+        """Write the cross-process marker before deleting the L2 value."""
+        if not await self._redis_tombstone(tomb_key):
+            return False
+        return await self._redis_delete(rkey)
 
-    async def _redis_tombstone(self, rkey: str) -> None:
+    async def _redis_tombstone(self, rkey: str) -> bool:
         """Write the short-lived tombstone with the shared failure policy."""
         rc = await self._client()
         if rc is None:
-            return
+            return False
         try:
-            await rc.set(rkey, "1", ex=_TOMBSTONE_TTL_S)
+            # * The marker must outlive any stale L2 value when the delete
+            # * fails, otherwise another process can promote it after the
+            # * short marker expires while the key still lives in Redis.
+            await rc.set(rkey, "1", ex=max(_TOMBSTONE_TTL_S, self._redis_ttl))
         except Exception as exc:
+            # * A failed revocation marker is an outage, not a cache miss.
+            _redis_mod.mark_op(ok=False)
             log.debug("Redis tombstone write failed for %s: %s", rkey, exc)
+            return False
+        return True
 
     def _redis_put_background(self, key: Any, val: T) -> None:
         """Fire-and-forget Redis write without blocking the caller."""
         self._enqueue_write(key, val)
 
-    def _redis_del_background(
-        self, key: Any, *, droppable: bool = True
-    ) -> asyncio.Task[None] | None:
-        """Queue a Redis key deletion without blocking the caller.
-
-        The task is returned so ``invalidate`` can clear the local pending
-        marker once the delete has actually landed.
-        """
-        if not cfg.redis_url:
-            return None
-        rkey = self._rkey(key)
-        return redis_io.enqueue_redis_mutation(
-            self._redis_prefix,
-            lambda: self._redis_delete(rkey),
-            droppable=droppable,
-        )
-
     async def _redis_set_guarded(
         self, rkey: str, payload: str, tombstone_key: str
-    ) -> None:
+    ) -> bool:
         """Skip a queued write when another process revoked the key meanwhile.
 
         The value in *payload* was fetched before the remote revocation. Writing
@@ -808,18 +818,20 @@ class TwoLevelCache[T]:
         """
         rc = await self._client()
         if rc is None:
-            return
+            return False
         try:
             if await rc.exists(tombstone_key):
                 log.debug("Skipping L2 write for tombstoned %s", rkey)
-                return
+                # * The remote delete will clear the old value, so there is
+                # * no stale write left to guard against locally.
+                return True
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             log.debug("Tombstone guard before L2 write failed for %s: %s", rkey, exc)
-        await self._redis_set(rkey, payload)
+        return await self._redis_set(rkey, payload)
 
-    async def _redis_set(self, rkey: str, payload: str) -> None:
+    async def _redis_set(self, rkey: str, payload: str) -> bool:
         """Write one Redis value and keep failures observable but non-fatal.
 
         The client resolves at run time, not enqueue time: a reconnect
@@ -830,24 +842,26 @@ class TwoLevelCache[T]:
         """
         rc = await self._client()
         if rc is None:
-            return
+            return False
         try:
             await rc.set(rkey, payload, ex=self._redis_ttl)
         except Exception as exc:
             _redis_mod.mark_op(ok=False)
             log.debug("Redis set failed for %s: %s", rkey, exc)
-        else:
-            _redis_mod.mark_op(ok=True)
+            return False
+        _redis_mod.mark_op(ok=True)
+        return True
 
-    async def _redis_delete(self, rkey: str) -> None:
+    async def _redis_delete(self, rkey: str) -> bool:
         """Delete one Redis value and keep failures observable but non-fatal."""
         rc = await self._client()
         if rc is None:
-            return
+            return False
         try:
             await rc.delete(rkey)
         except Exception as exc:
             _redis_mod.mark_op(ok=False)
             log.debug("Redis delete failed for %s: %s", rkey, exc)
-        else:
-            _redis_mod.mark_op(ok=True)
+            return False
+        _redis_mod.mark_op(ok=True)
+        return True

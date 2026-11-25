@@ -64,12 +64,12 @@ def test_role_delete_survives_sat_queue_but_mention_drops() -> None:
         role_cache.invalidate(123)
         mention_cache.invalidate(123)
 
-        # * Role invalidate enqueues the tombstone and then the delete; both
-        # * are non-droppable. The mention delete is droppable and dropped.
-        assert redis_io._redis_pending[("role", loop)] == before_role + 2
+        # * One non-droppable revocation writes the marker before the delete.
+        # * The mention delete is droppable and dropped under saturation.
+        assert redis_io._redis_pending[("role", loop)] == before_role + 1
         assert redis_io._redis_pending[("umention", loop)] == before_mention
         new_tasks = set(redis_io._redis_bg_tasks) - tasks_before
-        assert len(new_tasks) == 2
+        assert len(new_tasks) == 1
         for task in new_tasks:
             task.cancel()
         await asyncio.gather(*new_tasks, return_exceptions=True)
@@ -91,10 +91,9 @@ def test_a_locale_delete_survives_sat_queue() -> None:
 
             cache.invalidate(123)
 
-            # * A locale read now consults the cross-process tombstone, so
-            # * the invalidation enqueues the marker and the delete; both
-            # * survive a saturated queue.
-            assert redis_io._redis_pending[(prefix, loop)] == before + 2
+            # * A locale read consults the cross-process tombstone, so the
+            # * combined marker-and-delete operation is non-droppable.
+            assert redis_io._redis_pending[(prefix, loop)] == before + 1
             new_tasks |= set(redis_io._redis_bg_tasks) - tasks_before
         for task in new_tasks:
             task.cancel()
