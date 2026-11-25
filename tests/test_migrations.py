@@ -141,6 +141,19 @@ def test_the_revision_chain_has_a_single_head() -> None:
     assert len(scripts.get_heads()) == 1
 
 
+def test_the_outbox_downgrade_removes_its_retention_policy() -> None:
+    """A rollback must not leave a policy for a table it just dropped."""
+    path = (
+        pathlib.Path(__file__).resolve().parents[1]
+        / "alembic/versions/0006_notification_tasks.py"
+    )
+    source = path.read_text(encoding="utf-8")
+    assert "DELETE FROM retention_policies" in source
+    assert source.index("DELETE FROM retention_policies") < source.index(
+        "moderation_notification_tasks.drop"
+    )
+
+
 def test_the_bootstrap_generator_refuses_to_overwrite_the_first_revision(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:

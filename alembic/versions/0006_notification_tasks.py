@@ -56,5 +56,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Drop the outbox table."""
+    """Drop the outbox table and its retention policy."""
+    # * The upgrade seeds a retention policy for this table. Leaving it behind
+    # * makes the daily sweep delete from a table that no longer exists and
+    # * aborts the whole retention run.
+    op.execute(
+        "DELETE FROM retention_policies "
+        "WHERE target_table = 'moderation_notification_tasks'"
+    )
     moderation_notification_tasks.drop(op.get_bind(), checkfirst=True)
