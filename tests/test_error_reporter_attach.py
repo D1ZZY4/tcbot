@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from tcbot import error_reporter
+from tcbot.modules.helper.pipelines.errors import report as error_reporter
 
 
 def _attach(chat_id: int, caplog: Any) -> None:

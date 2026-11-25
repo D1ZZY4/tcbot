@@ -71,7 +71,7 @@ def _privacy_msg(botname: str, locale: str | None = None) -> str:
     """
     return "\n".join(
         (
-            heading(t("privacy.msg.title", locale)),
+            heading(t("privacy.msg.title", locale, plain=True)),
             divider(),
             paragraph(t("privacy.msg.lead", locale, bot=botname)),
             paragraph(t("privacy.msg.list_title", locale)),
@@ -87,7 +87,7 @@ def _privacy_policy_index_msg(botname: str, locale: str | None = None) -> str:
     """Build the privacy policy section index page."""
     return "\n".join(
         (
-            heading(t("privacy.index.title", locale)),
+            heading(t("privacy.index.title", locale, plain=True)),
             paragraph(t("privacy.index.lead", locale, bot=botname)),
             divider(),
             paragraph(t("privacy.index.hint", locale)),

@@ -73,7 +73,7 @@ async def upsert_slot(
     return dict(rows[0])
 
 
-async def slot_hash(
+async def slot_state(
     *,
     set_id: int,
     locale: str,
@@ -81,17 +81,21 @@ async def slot_hash(
     category_key: str,
     part_index: int,
     message_thread_id: int | None = None,
-) -> str | None:
-    """Return the hash stored for one slot before it is upserted.
+) -> tuple[str | None, str | None]:
+    """Return (content_hash, status) stored for one slot before it is upserted.
 
-    The publisher compares this value with the newly rendered content to
-    decide whether a channel edit is needed. The predicate matches the
-    uniqueness key of ``upsert_slot`` exactly, including the coalesced
-    thread id.
+    The hash alone cannot tell a landed message from one whose last edit
+    failed: both keep the same digest. The publisher needs the status so a
+    failed slot retries the channel edit even when the content is unchanged.
+    The predicate matches the uniqueness key of ``upsert_slot`` exactly,
+    including the coalesced thread id.
     """
     row = await db_call(
         lambda: fetch_one(
-            select(rule_publications.c.content_hash).where(
+            select(
+                rule_publications.c.content_hash,
+                rule_publications.c.status,
+            ).where(
                 rule_publications.c.rule_set_id == set_id,
                 rule_publications.c.locale == locale,
                 rule_publications.c.chat_id == chat_id,
@@ -102,8 +106,14 @@ async def slot_hash(
             )
         )
     )
-    value = row.get("content_hash") if row else None
-    return str(value) if value is not None else None
+    if not row:
+        return None, None
+    value = row.get("content_hash")
+    status = row.get("status")
+    return (
+        str(value) if value is not None else None,
+        str(status) if status is not None else None,
+    )
 
 
 async def mark_synced(slot_id: int, message_id: int) -> None:

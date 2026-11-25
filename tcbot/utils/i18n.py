@@ -75,10 +75,18 @@ def link(text: object, url: str) -> str:
 
 
 def user_ref(user_id: int, name: str, username: str | None = None) -> str:
-    """Render a rich, ID-based mention of a user."""
-    from tcbot.modules.helper.rich.link import user_ref as _user_ref  # noqa: PLC0415
+    """Render a native rich mention button for a user ID.
 
-    return _user_ref(user_id, name)
+    Telegram has no dedicated mention button: the documented mechanism is a
+    URL button carrying ``tg://user?id=``. Keeping the public signature here
+    lets every existing catalog placeholder migrate in one place.
+    """
+    from tcbot.modules.helper.rich.button import mention_button  # noqa: PLC0415
+    from tcbot.modules.helper.rich.style import bold  # noqa: PLC0415
+
+    if user_id <= 0:
+        return bold(name or str(user_id))
+    return mention_button(user_id, name)
 
 
 def safe_username(username: str | None) -> str | None:

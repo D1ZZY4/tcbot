@@ -10,7 +10,6 @@ import asyncio
 from typing import Any
 
 import pytest
-from pyrogram.errors import BadRequest
 
 from tcbot import database as db
 from tcbot.modules.helper.pipelines import connect_common, connect_replay
@@ -19,6 +18,7 @@ from tcbot.modules.helper.pipelines.connect_replay import (
     _REPLAY_CAP,
     _REPLAY_QUEUE_ATTEMPTS,
 )
+from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest
 
 
 @pytest.fixture(autouse=True)
@@ -97,7 +97,7 @@ def _install_world(
     monkeypatch.setattr(db.mutes_db, "active_mute_docs", _mute_docs)
     monkeypatch.setattr(db.groups_db, "add_group", _add_group)
     monkeypatch.setattr(db.groups_db, "remove_pending", _remove_pending)
-    monkeypatch.setattr(db.enforcement_db, "queue_connect_replay", _queue_replay)
+    monkeypatch.setattr(db.enforcement_ledger, "queue_connect_replay", _queue_replay)
     return queued
 
 
@@ -262,7 +262,7 @@ def test_a_transient_replay_queue_failure_is_retried(
 
     queued = _install_world(monkeypatch, ban_uids=[11, 22, 33])
     monkeypatch.setattr(connect_replay, "_REPLAY_BUDGET_S", 0.0)
-    monkeypatch.setattr(db.enforcement_db, "queue_connect_replay", _flaky_queue)
+    monkeypatch.setattr(db.enforcement_ledger, "queue_connect_replay", _flaky_queue)
     bot = _FakeBot()
 
     blind = asyncio.run(_join().complete_join(-100, "Group", 1, "Owner", bot))  # type: ignore[arg-type]
@@ -286,7 +286,7 @@ def test_an_exhausted_replay_queue_failure_is_surfaced(
 
     _install_world(monkeypatch, ban_uids=[11, 22, 33])
     monkeypatch.setattr(connect_replay, "_REPLAY_BUDGET_S", 0.0)
-    monkeypatch.setattr(db.enforcement_db, "queue_connect_replay", _broken_queue)
+    monkeypatch.setattr(db.enforcement_ledger, "queue_connect_replay", _broken_queue)
     bot = _FakeBot()
 
     with pytest.raises(RuntimeError, match="connect replay queue failed"):
@@ -312,7 +312,7 @@ def test_a_failed_replay_undoes_the_activation(
 
     _install_world(monkeypatch, ban_uids=[11, 22, 33])
     monkeypatch.setattr(connect_replay, "_REPLAY_BUDGET_S", 0.0)
-    monkeypatch.setattr(db.enforcement_db, "queue_connect_replay", _broken_queue)
+    monkeypatch.setattr(db.enforcement_ledger, "queue_connect_replay", _broken_queue)
     monkeypatch.setattr(db.groups_db, "deactivate_group", _deactivate)
 
     with pytest.raises(RuntimeError, match="connect replay queue failed"):

@@ -60,9 +60,11 @@ def test_table_module_owns_tables() -> None:
     assert "<td>&lt;x&gt;</td>" in html
 
 
-def test_link_module_owns_links_and_mentions() -> None:
+def test_link_module_owns_links_and_buttons_own_mentions() -> None:
     assert rich_link.link("t.me", "https://t.me") == ('<a href="https://t.me">t.me</a>')
-    assert rich_link.mention(0, "Anon") == "<b>Anon</b>"
+    assert rich_buttons.mention_button(0, "Anon") == (
+        '<tg-button type="disabled">Anon</tg-button>'
+    )
     assert rich_buttons.button("Go", data="go", style="green") == (
         '<tg-button type="callback_data" data="go" style="success">Go</tg-button>'
     )

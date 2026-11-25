@@ -8,10 +8,32 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, TypedDict
 
+from tcbot.modules.helper.rich.formats import divider, heading
+from tcbot.modules.helper.rich.table import table
 from tcbot.utils.i18n import t
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+
+def outcome_card(
+    title: str,
+    rows: Sequence[tuple[str, object]],
+    locale: str | None = None,
+) -> str:
+    """Render a moderation outcome as a real rich card.
+
+    Cells are inserted verbatim, so dynamic values must already be escaped
+    by ``t()`` or wrapped in ``Safe`` by a rich helper before they arrive.
+    """
+    field = t("common.outcome.field", locale, plain=True)
+    value = t("common.outcome.value", locale, plain=True)
+    rows_text: list[list[str]] = [[str(label), str(cell)] for label, cell in rows]
+    return (
+        f"{heading(title, 3)}\n"
+        f"{divider()}\n"
+        f"{table([field, value], rows_text, raw_cells=True, compact=True, striped=True)}"
+    )
 
 
 class HelpEntry(TypedDict):

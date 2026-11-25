@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Mute/unmute executor + conversation factory."""
+"""Mute and unmute executors with the conversation-scope adapter."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from pyrogram import Client
 from pyrogram.types import ChatPermissions
 
-from tcbot import cfg, enforcement_worker
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, guards, messages
 from tcbot.modules.helper.context import Ctx, display_name
@@ -23,17 +23,13 @@ from tcbot.modules.helper.messages import (
     safe_edit_message,
     send_log,
 )
+from tcbot.modules.helper.pipelines import moderation_enforcement
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
-from tcbot.modules.helper.pipelines.mod_action_steps import (
-    BuildReason,
-    build_modaction_conv,
-    rules_from_scope,
-)
+from tcbot.modules.helper.pipelines.mod_action_steps import rules_from_scope
 from tcbot.modules.helper.pipelines.proof_post import (
     ProofUpload,
     upload_proof_for_action,
 )
-from tcbot.modules.helper.pipelines.proof_steps import BuildProof
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
     fan_out,
@@ -45,25 +41,19 @@ from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_duration, utc_now
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from datetime import timedelta
 
-    from pyrogram.filters import Filter as BaseFilter
-
 log = get_logger(__name__)
-
-reason = BuildReason("mute", skip_allowed=False)
-proof = BuildProof("mute")
 
 # ────────────────────────── Mute executor ───────────────────────── #
 
 
-async def _execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
+async def execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
     """Apply a federation-wide mute across all connected groups."""
     target_id = meta.get("mute_target_id")
     admin_id = meta.get("mute_admin_id")
     if not target_id or not admin_id:
-        log.warning("_execute_mute called with incomplete mute state; aborting")
+        log.warning("execute_mute called with incomplete mute state; aborting")
         return
     target_fname = meta.get("mute_target_fname") or str(target_id)
     locale = await locale_for_update(ctx)
@@ -77,7 +67,7 @@ async def _execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
     admin_fname = meta.get("mute_admin_fname", "Admin")
     chat_id = ctx.effective_chat.id if ctx.effective_chat else None
     if chat_id is None:
-        log.warning("_execute_mute called without effective_chat")
+        log.warning("execute_mute called without effective_chat")
         return
     # * Re-check the executor against the target before anything is
     # * recorded. The entry command compared the two roles, but the proof
@@ -100,14 +90,14 @@ async def _execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
             refusal,
             parse_mode=None,
             log_level="debug",
-            log_label="_execute_mute rank-refusal",
+            log_label="execute_mute rank-refusal",
             catch_all=True,
         )
         return
     try:
         groups = await db.groups_db.active_groups()
     except Exception:
-        log.exception("_execute_mute: active_groups failed for target=%d", target_id)
+        log.exception("execute_mute: active_groups failed for target=%d", target_id)
         await safe_edit_message(
             bot,
             prompt_chat,
@@ -118,7 +108,7 @@ async def _execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
                 user=Safe(user_ref(target_id, target_fname)),
             ),
             log_level="debug",
-            log_label="_execute_mute groups-fail",
+            log_label="execute_mute groups-fail",
             catch_all=True,
         )
         return
@@ -155,7 +145,7 @@ async def _execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
             parse_mode=None,
             reply_markup=None,
             log_level="debug",
-            log_label="_execute_mute rank-refusal after proof",
+            log_label="execute_mute rank-refusal after proof",
             catch_all=True,
         )
         return
@@ -227,7 +217,7 @@ async def _execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
         record_r = exc
     if record_r is not None:
         log.error(
-            "_execute_mute: mute DB write failed for target=%d (%s)",
+            "execute_mute: mute DB write failed for target=%d (%s)",
             target_id,
             record_r,
         )
@@ -241,7 +231,7 @@ async def _execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
                 user=Safe(user_ref(target_id, target_fname)),
             ),
             log_level="debug",
-            log_label="_execute_mute DB-fail",
+            log_label="execute_mute DB-fail",
             catch_all=True,
         )
         return
@@ -256,20 +246,20 @@ async def _execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
     failed_targets: list[dict[str, Any]] = []
     if run_id is not None:
         try:
-            await enforcement_worker.deliver_queued_run(bot, run_id)
+            await moderation_enforcement.deliver_queued_run(bot, run_id)
         except asyncio.CancelledError:
             raise
         except Exception:
             log.exception("Mute delivery failed for run %s; it stays queued", run_id)
         try:
-            report = await db.enforcement_db.run_report(run_id)
+            report = await db.enforcement_ledger.run_report(run_id)
         except asyncio.CancelledError:
             raise
         except Exception:
             log.exception("Mute run report failed for run %s", run_id)
             report = None
-        failed_targets = db.enforcement_db.failed_report_targets(report)
-        delivery = db.enforcement_db.delivery_outcome(report, len(groups))
+        failed_targets = db.enforcement_ledger.failed_report_targets(report)
+        delivery = db.enforcement_ledger.delivery_outcome(report, len(groups))
         total = delivery.total
         failed = delivery.failed
         pending = delivery.pending
@@ -362,6 +352,24 @@ async def execute_unmute(
     if msg is None or admin is None:
         return
     locale = await locale_for_update(ctx)
+    # * Re-check the executor against the target at execution time: the
+    # * entry command compared the two roles, but a demotion could land
+    # * before this single-tap Unmute runs.
+    refusal = await guards.enforcement_refusal(
+        admin.id,
+        target_id,
+        min_role="moderator",
+        action="Unmute",
+        locale=locale,
+    )
+    if refusal is not None:
+        await reply_rich(
+            msg,
+            refusal,
+            log_label="execute_unmute rank-refusal",
+            parse_mode=None,
+        )
+        return
     try:
         active_mute = await db.mutes_db.get_active_mute(target_id)
     except Exception:
@@ -440,21 +448,21 @@ async def execute_unmute(
     # * The decision is committed; deliver now when this process can claim
     # * the run. A claim failure only means the scheduled worker owns it.
     try:
-        await enforcement_worker.deliver_queued_run(ctx.bot, run_id)
+        await moderation_enforcement.deliver_queued_run(ctx.bot, run_id)
     except asyncio.CancelledError:
         raise
     except Exception:
         log.exception("Unmute delivery failed for run %s; it stays queued", run_id)
     try:
-        report = await db.enforcement_db.run_report(run_id)
+        report = await db.enforcement_ledger.run_report(run_id)
     except asyncio.CancelledError:
         raise
     except Exception:
         log.exception("Unmute run report failed for run %s", run_id)
         report = None
-    settled = db.enforcement_db.report_settled(report)
-    failed_targets = db.enforcement_db.failed_report_targets(report)
-    delivery = db.enforcement_db.delivery_outcome(report, len(groups))
+    settled = db.enforcement_ledger.report_settled(report)
+    failed_targets = db.enforcement_ledger.failed_report_targets(report)
+    delivery = db.enforcement_ledger.delivery_outcome(report, len(groups))
     total = delivery.total
     failed = delivery.failed
     pending = delivery.pending
@@ -538,33 +546,14 @@ async def execute_unmute(
 
 
 async def _exec_mute(ctx: Ctx) -> None:
-    """Copy mute data from the conversation scope, clean up, then call _execute_mute."""
+    """Copy mute data from the conversation scope, clean up, then call execute_mute."""
     meta: dict[str, Any] = {}
     if ctx.user_data is not None:
         scope = flow_scope(ctx)
         meta = {k: v for k, v in scope.items() if k.startswith("mute_")}
         for k in list(meta):
             scope.pop(k, None)
-    await _execute_mute(ctx.bot, ctx, meta)
+    await execute_mute(ctx.bot, ctx, meta)
 
 
-# ─────────────────── ConversationHandler factory ────────────────── #
-
-
-def mute_conversation(
-    entry_fn: Callable[..., Any],
-    entry_filter: BaseFilter,
-    *,
-    escape_filter: BaseFilter | None = None,
-) -> object:
-    """Return the mute ConversationHandler via the central mod_action_steps factory."""
-    return build_modaction_conv(
-        reason,
-        proof,
-        entry_fn,
-        _exec_mute,
-        entry_filter,
-        escape_filter=escape_filter,
-        min_role="moderator",
-        rules_enabled=True,
-    )
+__all__ = ["execute_mute", "execute_unmute"]

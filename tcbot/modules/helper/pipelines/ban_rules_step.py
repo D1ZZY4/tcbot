@@ -5,8 +5,8 @@
 """Rules picker step for the ban conversation.
 
 Ban collects its reason inline, so the picker sits between the command and
-the proof prompt. The handlers live outside ``ban_actions`` to keep that module
-within the project's file budget.
+the proof prompt. The handlers live in their own module to keep the ban
+executor within the project's file budget.
 """
 
 from __future__ import annotations
@@ -30,12 +30,12 @@ from tcbot.modules.helper.messages import (
     safe_edit_cb,
 )
 from tcbot.modules.helper.pipelines import rules_picker
-from tcbot.modules.helper.pipelines.ban_actions import (
+from tcbot.modules.helper.pipelines.ban_confirmation import stale_ban_callback
+from tcbot.modules.helper.pipelines.ban_proof_handlers import on_cancel_proof
+from tcbot.modules.helper.pipelines.ban_session import (
     BAN_USER_DATA_KEYS,
     WAITING_PROOF,
-    on_cancel_proof,
 )
-from tcbot.modules.helper.pipelines.ban_confirmation import stale_ban_callback
 from tcbot.modules.helper.pipelines.mod_action_steps import MAX_RULES_NOTE_LEN
 from tcbot.modules.helper.pipelines.proof_steps import proof_prompt_content
 from tcbot.modules.helper.rich.edit import callback_text_of

@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tcbot.modules.helper.pipelines import transfer_owner, warn_actions
+from tcbot.modules.helper.pipelines import transfer_owner, warn_executor
 from tests.test_role_assignment_rules import _bot, _install_transfer, _transfer_update
 
 
@@ -53,11 +53,17 @@ def test_warn_manage_delivery_cancellation_propagates(
     async def _cancelled_log(*args: object, **kwargs: object) -> None:
         raise asyncio.CancelledError
 
-    monkeypatch.setattr(warn_actions, "locale_for_update", _locale)
-    monkeypatch.setattr(warn_actions.db.warns_db, "warn_count", _count)
-    monkeypatch.setattr(warn_actions.db.warns_db, "remove_last_warn", _removed)
-    monkeypatch.setattr(warn_actions, "reply_rich", _reply)
-    monkeypatch.setattr(warn_actions, "send_log", _cancelled_log)
+    async def _role(uid: int, *, fresh: bool = False) -> str | None:
+        return "moderator" if uid == 1 else None
+
+    # * The executor re-checks the pair before removing the warning; supply
+    # * a current role so this test reaches the delivery gather it names.
+    monkeypatch.setattr(warn_executor.db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(warn_executor, "locale_for_update", _locale)
+    monkeypatch.setattr(warn_executor.db.warns_db, "warn_count", _count)
+    monkeypatch.setattr(warn_executor.db.warns_db, "remove_last_warn", _removed)
+    monkeypatch.setattr(warn_executor, "reply_rich", _reply)
+    monkeypatch.setattr(warn_executor, "send_log", _cancelled_log)
 
     ctx = SimpleNamespace(
         bot=_bot(),
@@ -67,4 +73,4 @@ def test_warn_manage_delivery_cancellation_propagates(
     )
 
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(warn_actions.execute_unwarn(ctx, 42, "Target"))  # type: ignore[arg-type]
+        asyncio.run(warn_executor.execute_unwarn(ctx, 42, "Target"))  # type: ignore[arg-type]

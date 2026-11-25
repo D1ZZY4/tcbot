@@ -11,9 +11,9 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from pyrogram.errors import BadRequest, Forbidden
 
 from tcbot.modules.helper.pipelines.demote_actions import Demote
+from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest, Forbidden
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

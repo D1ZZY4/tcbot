@@ -12,12 +12,12 @@ import dataclasses
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from pyrogram.errors import AuthKeyDuplicated
 from pyrogram.session.session import AuthKeyNotFound
 from sqlalchemy.exc import OperationalError
 
 from tcbot.database import mtproto, mtproto_store
 from tcbot.database.mtproto_store import PostgresStorage
+from tcbot.modules.helper.pipelines.errors.exceptions import AuthKeyDuplicated
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tests.postgres_support import compile_sql, identity_db_call
 

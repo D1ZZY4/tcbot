@@ -14,7 +14,8 @@ from pyrogram.session.session import AuthKeyNotFound
 from sqlalchemy.exc import OperationalError
 
 from tcbot import __main__ as runtime_errors
-from tcbot import error_reporter
+from tcbot.modules.helper.pipelines.errors import classify
+from tcbot.modules.helper.pipelines.errors import report as error_reporter
 from tcbot.utils.circuit_breaker import CircuitOpenError
 
 
@@ -275,7 +276,7 @@ def test_error_handler_reports_when_benign_check_raises(
         raise RuntimeError("benign predicate offline")
 
     monkeypatch.setattr(error_reporter, "report_exc", _fake_report)
-    monkeypatch.setattr(error_reporter, "_benign", _boom)
+    monkeypatch.setattr(classify, "_benign", _boom)
 
     exc = ValueError("boom")
     with caplog.at_level(logging.DEBUG, logger="tcbot.__main__"):

@@ -11,9 +11,11 @@ import inspect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from pyrogram.errors import BadRequest, Forbidden, Timedout
-from pyrogram.errors import Timeout as RPCTimeout
-
+from tcbot.modules.helper.pipelines.errors.exceptions import (
+    TRANSPORT_TIMEOUT_ERRORS,
+    is_api_refusal,
+    is_bad_request,
+)
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.logger import get_logger
 
@@ -29,11 +31,7 @@ _MAX_CONCURRENT: int = 10
 # * builtin TimeoutError. Both forms are transport stalls and must count
 # * against the breaker; otherwise a HALF_OPEN probe that times out is
 # * mistaken for a healthy service and closes the circuit prematurely.
-_FANOUT_TIMEOUTS: tuple[type[BaseException], ...] = (
-    TimeoutError,
-    Timedout,
-    RPCTimeout,
-)
+_FANOUT_TIMEOUTS: tuple[type[BaseException], ...] = TRANSPORT_TIMEOUT_ERRORS
 
 # * Substrings inside Telegram refusals that indicate the action had nothing
 # * to do: the user was not in the target chat, the chat no longer exists, or
@@ -278,7 +276,7 @@ def is_benign_telegram_error(exc: BaseException) -> bool:
     A missing
     permission is not benign; see :func:`is_permanent_telegram_error`.
     """
-    if isinstance(exc, BadRequest):
+    if is_bad_request(exc):
         normalized = _normalize(str(exc).upper())
         for target in _BENIGN_NORMALIZED:
             if target in normalized:
@@ -294,7 +292,7 @@ def is_permanent_telegram_error(exc: BaseException) -> bool:
     records a terminal failure instead of scheduling another attempt. An
     operator has to restore the bot's access before the delivery can work.
     """
-    if isinstance(exc, (BadRequest, Forbidden)):
+    if is_api_refusal(exc):
         normalized = _normalize(str(exc).upper())
         for target in _PERMANENT_NORMALIZED:
             if target in normalized:

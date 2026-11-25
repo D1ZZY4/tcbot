@@ -26,16 +26,20 @@ from typing import Any
 
 import pytest
 
-from tcbot import error_reporter
 from tcbot import modules as modules_mod
 from tcbot.modules import stats as stats_mod
+from tcbot.modules.helper.pipelines.errors import report as error_reporter
 from tcbot.utils import logger as logger_mod
 
 _TCBOT_ROOT = Path(__file__).resolve().parent.parent / "tcbot"
 
 # * The utils package is the shared foundation. The database layer and the
 # * helper layer both build on it, so it must not depend on either.
-_FORBIDDEN_IN_UTILS = ("tcbot.modules", "tcbot.database", "tcbot.error_reporter")
+_FORBIDDEN_IN_UTILS = (
+    "tcbot.modules",
+    "tcbot.database",
+    "tcbot.modules.helper.pipelines.errors",
+)
 
 # * The storage layer is below the runtime workers and the transport shell.
 # * The scheduler receives the worker entry points from startup instead of
@@ -43,10 +47,10 @@ _FORBIDDEN_IN_UTILS = ("tcbot.modules", "tcbot.database", "tcbot.error_reporter"
 # * Telegram delivery stack through the database package.
 _FORBIDDEN_IN_DATABASE = (
     "tcbot.modules",
-    "tcbot.enforcement_worker",
+    "tcbot.moderation_enforcement",
     "tcbot.notification_worker",
     "tcbot.alive",
-    "tcbot.error_reporter",
+    "tcbot.modules.helper.pipelines.errors",
 )
 
 # * Hard per-module line budget from the project rules. A module that
@@ -116,6 +120,7 @@ def _imported_names(path: Path, root: Path = _TCBOT_ROOT) -> set[str]:
 # * modules are the single source of truth for the HTML shapes, including the
 # * divider and the bulleted-list tags.
 _I18N_RICH_LEAVES = (
+    "tcbot.modules.helper.rich.button",
     "tcbot.modules.helper.rich.style",
     "tcbot.modules.helper.rich.formats",
     "tcbot.modules.helper.rich.link",
@@ -123,11 +128,18 @@ _I18N_RICH_LEAVES = (
 )
 
 
+# * The error-type registry is a dependency leaf: it imports only Kurigram
+# * error classes and defines no runtime behavior. Lower layers may import it
+# * without loading the Telegram delivery stack the layer rule guards against.
+_ERROR_TYPES_LEAF = ("tcbot.modules.helper.pipelines.errors.exceptions",)
+
+
 def _offenders(root: Path, forbidden: tuple[str, ...]) -> list[str]:
     """Return one report line per import that breaks the layer boundary."""
     found: list[str] = []
     for path in sorted(root.rglob("*.py")):
         allowed = _I18N_RICH_LEAVES if path.name == "i18n.py" else ()
+        allowed = (*allowed, *_ERROR_TYPES_LEAF)
         found.extend(
             f"{path.relative_to(_TCBOT_ROOT)} imports {name}"
             for name in _imported_names(path)

@@ -99,7 +99,11 @@ class ConnectionAddedMixin:
         ):
             return
         chat = cmc.chat
-        if getattr(chat.type, "value", chat.type) not in ("group", "supergroup"):
+        if getattr(chat.type, "value", chat.type) not in (
+            "group",
+            "supergroup",
+            "forum",
+        ):
             return
         locale = await locale_for_update(ctx)
         new_member = cmc.new_chat_member
@@ -442,8 +446,14 @@ class BuildConnection(
         return connect_join_btn(self.join_callback, self.cancel_callback, locale=locale)
 
     def check_perms(self, member: ChatMember) -> bool:
-        """Return True when member holds every permission in required_perms."""
-        return all(getattr(member, p, False) for p in self.required_perms)
+        """Return True when the member's admin rights cover every required permission."""
+        # * Kurigram keeps admin rights under ChatMember.privileges; a flat
+        # * getattr on the member returns False for every right, which used to
+        # * block every connect path. A missing privileges object means no rights.
+        privileges = getattr(member, "privileges", None)
+        if privileges is None:
+            return False
+        return all(getattr(privileges, name, False) for name in self.required_perms)
 
 
 connection = BuildConnection(cfg.community_name)

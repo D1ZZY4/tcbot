@@ -208,6 +208,7 @@ async def resolve_and_check(
     target_id: int,
     *,
     min_role: RoleName,
+    executor_role: str | None = None,
 ) -> tuple[str | None, str | None]:
     """Validate executor permission and target eligibility for moderation actions.
 
@@ -216,46 +217,67 @@ async def resolve_and_check(
 
     Current roles are read fresh. A demotion or a transfer in another process
     must never be hidden behind the cache TTL, and the check must not
-    depend on a decorator having run first.
+    depend on a decorator having run first. ``executor_role`` supplies a role
+    the caller already read fresh (see ``classify_and_check``); ``None``
+    reads the executor role here as before.
 
     On success, returns ``(executor_role, target_role)``.
     """
-    executor_role, target_role = await asyncio.gather(
-        db.users_roles.get_effective_role(executor_id, fresh=True),
-        db.users_roles.get_effective_role(target_id, fresh=True),
-        return_exceptions=True,
-    )
-    throw_if_cancelled((executor_role, target_role))
     # * Moderation replies render in the group locale like every other
     # * command reply; resolution never raises (falls back to default).
     chat = msg.chat
     locale = await effective_locale(
         getattr(chat, "type", None), executor_id, getattr(chat, "id", 0)
     )
-    executor_lookup_failed = isinstance(executor_role, BaseException)
-    target_lookup_failed = isinstance(target_role, BaseException)
-    if executor_lookup_failed:
-        log.warning(
-            "resolve_and_check executor role lookup failed for %d: %s",
-            executor_id,
-            executor_role,
+    if executor_role is None:
+        executor_role_r, target_role_r = await asyncio.gather(
+            db.users_roles.get_effective_role(executor_id, fresh=True),
+            db.users_roles.get_effective_role(target_id, fresh=True),
+            return_exceptions=True,
         )
-        executor_role = None
-    if target_lookup_failed:
-        log.warning(
-            "resolve_and_check target role lookup failed for %d: %s",
-            target_id,
-            target_role,
-        )
-        target_role = None
-    if executor_lookup_failed or target_lookup_failed:
-        await reply_rich(
-            msg,
-            replies.refuse_role_lookup(locale, plain=True),
-            log_label="resolve_and_check role-lookup",
-            parse_mode=None,
-        )
-        return None, None
+        throw_if_cancelled((executor_role_r, target_role_r))
+        if isinstance(executor_role_r, BaseException):
+            log.warning(
+                "resolve_and_check executor role lookup failed for %d: %s",
+                executor_id,
+                executor_role_r,
+            )
+        if isinstance(target_role_r, BaseException):
+            log.warning(
+                "resolve_and_check target role lookup failed for %d: %s",
+                target_id,
+                target_role_r,
+            )
+        if isinstance(executor_role_r, BaseException) or isinstance(
+            target_role_r, BaseException
+        ):
+            await reply_rich(
+                msg,
+                replies.refuse_role_lookup(locale, plain=True),
+                log_label="resolve_and_check role-lookup",
+                parse_mode=None,
+            )
+            return None, None
+        executor_role = executor_role_r
+        target_role = target_role_r
+    else:
+        try:
+            target_role = await db.users_roles.get_effective_role(target_id, fresh=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning(
+                "resolve_and_check target role lookup failed for %d: %s",
+                target_id,
+                exc,
+            )
+            await reply_rich(
+                msg,
+                replies.refuse_role_lookup(locale, plain=True),
+                log_label="resolve_and_check role-lookup",
+                parse_mode=None,
+            )
+            return None, None
     if required_rank(min_role) > db.users_roles.role_rank(executor_role):
         await reply_rich(
             msg,
@@ -289,21 +311,22 @@ async def classify_and_check(
     min_role: RoleName,
     target_is_bot: bool | None = None,
 ) -> tuple[identity.Identity, str | None] | None:
-    """Classify the target and validate executor rank in parallel, fail closed.
+    """Classify the target and validate executor rank, fail closed.
 
     Returns ``(ident, target_role)`` on success, or ``None`` after replying on
     the message when a lookup failed or the executor is not allowed to act.
-    Cancellation always propagates.
+    Cancellation always propagates. The executor role is read once and
+    shared with the resolve step, so one command costs one executor read.
     """
-    ident, role_result = await asyncio.gather(
+    ident, executor_role_r = await asyncio.gather(
         identity.classify(
             bot, admin_id, target_id, target_name, target_is_bot=target_is_bot
         ),
-        resolve_and_check(msg, admin_id, target_id, min_role=min_role),
+        db.users_roles.get_effective_role(admin_id, fresh=True),
         return_exceptions=True,
     )
-    throw_if_cancelled((ident, role_result))
-    if isinstance(ident, BaseException) or isinstance(role_result, BaseException):
+    throw_if_cancelled((ident, executor_role_r))
+    if isinstance(ident, BaseException) or isinstance(executor_role_r, BaseException):
         # * Fail closed with a retry reply (was silent): a classify
         # * failure must not leave the moderator staring at a dead command.
         if isinstance(ident, BaseException):
@@ -312,13 +335,38 @@ async def classify_and_check(
             log.error(
                 "identity.classify failed in %s: %s", action, ident, exc_info=ident
             )
-        if isinstance(role_result, BaseException):
+        if isinstance(executor_role_r, BaseException):
             log.error(
-                "resolve_and_check failed in %s: %s",
+                "executor role lookup failed in %s: %s",
                 action,
-                role_result,
-                exc_info=role_result,
+                executor_role_r,
+                exc_info=executor_role_r,
             )
+        chat = msg.chat
+        locale = await effective_locale(
+            getattr(chat, "type", None), admin_id, getattr(chat, "id", 0)
+        )
+        await reply_rich(
+            msg,
+            replies.err_role_verify(locale, plain=True),
+            log_label=f"classify_and_check {action} failed",
+            parse_mode=None,
+        )
+        return None
+    role_result = await resolve_and_check(
+        msg,
+        admin_id,
+        target_id,
+        min_role=min_role,
+        executor_role=executor_role_r,
+    )
+    if isinstance(role_result, BaseException):
+        log.error(
+            "resolve_and_check failed in %s: %s",
+            action,
+            role_result,
+            exc_info=role_result,
+        )
         chat = msg.chat
         locale = await effective_locale(
             getattr(chat, "type", None), admin_id, getattr(chat, "id", 0)
@@ -423,7 +471,9 @@ async def require_federation_origin(
     # * A configured destination may itself be a group. It belongs to the
     # * deployment, not to the federation, but staff there still need every
     # * command to work without a connection row.
-    if chat_type in ("group", "supergroup") and cfg.is_infrastructure_chat(chat_id):
+    if chat_type in ("group", "supergroup", "forum") and cfg.is_infrastructure_chat(
+        chat_id
+    ):
         return True
     try:
         connected = await db.groups_db.is_connected(chat_id, fresh=True)

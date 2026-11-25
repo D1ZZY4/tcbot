@@ -128,6 +128,21 @@ def copy_button(label: str, text: str, *, style: str | None = None) -> str:
     return button(label, copy=text, style=style)
 
 
+def mention_button(user_id: int, name: str, *, style: str | None = None) -> str:
+    """Render a native rich button that mentions a user by numeric ID.
+
+    Telegram has no separate mention button type: a mention is a URL button
+    carrying ``tg://user?id=``. Keeping the construction here means callers do
+    not build that URL themselves, and the button can be placed inline in a
+    table cell as well as in a keyboard row. A non-positive ID has no target,
+    so it renders as a disabled button rather than a dead link.
+    """
+    label = name or str(user_id)
+    if user_id <= 0:
+        return button(label, disabled=True, style=style)
+    return url_button(label, f"tg://user?id={user_id}", style=style)
+
+
 def web_app_button(label: str, url: str, *, style: str | None = None) -> str:
     """Render a Web App button (private chats only)."""
     return button(label, web_app=url, style=style)
@@ -370,6 +385,7 @@ __all__ = [
     "copy_button",
     "disabled_button",
     "login_button",
+    "mention_button",
     "switch_button",
     "switch_chosen_button",
     "switch_current_button",

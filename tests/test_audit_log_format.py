@@ -75,10 +75,10 @@ def test_promoted_log_keeps_inline_markup_inside_the_list() -> None:
     """Mentions, code IDs, and the date stay usable inside list items."""
     text = audit_logs.promoted(42, "tompearlgaming123", "moderator", 7, "Dizzy")
 
-    assert '<li><b>User</b>: <a href="tg://user?id=42">' in text
+    assert '<li><b>User</b>: <tg-button type="url" url="tg://user?id=42">' in text
     assert "<li><b>User ID</b>: <code>42</code>" in text
     assert "<li><b>Role</b>: Moderator" in text
-    assert "<li><b>Promoted by</b>: <a href=" in text
+    assert '<li><b>Promoted by</b>: <tg-button type="url" url="tg://user?id=' in text
     assert "<li><b>ID</b>: <code>7</code>" in text
     assert "<li><b>Date</b>: " in text
     assert "<hr/>" in text

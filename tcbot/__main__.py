@@ -22,7 +22,7 @@ from pyrogram.handlers import (
 )
 from pyrogram.types import CallbackQuery, ChatJoinRequest, ChatMemberUpdated, Message
 
-from tcbot import cfg, error_reporter
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.alive import start_keepalive
 from tcbot.database import engine as db_engine
@@ -32,14 +32,20 @@ from tcbot.database import scheduler as sched_mod
 from tcbot.database.cache import drain_redis_mutations
 from tcbot.database.engine import close as close_database
 from tcbot.database.engine import connect
-from tcbot.enforcement_worker import configure as configure_enforcement_worker
-from tcbot.enforcement_worker import run as run_enforcement_worker
 from tcbot.modules import get_handlers, handler_group
 from tcbot.modules.helper.context import bot_identity
 from tcbot.modules.helper.extraction import refresh as identity_refresh
 from tcbot.modules.helper.handlers import current_ctx, shutdown_dispatcher
 from tcbot.modules.helper.pipelines import connect_common
-from tcbot.modules.helper.pipelines.ban_actions import drain_proof_sessions
+from tcbot.modules.helper.pipelines.ban_session import drain_proof_sessions
+from tcbot.modules.helper.pipelines.errors import classify, report
+from tcbot.modules.helper.pipelines.errors.exceptions import PollingConflictError
+from tcbot.modules.helper.pipelines.moderation_enforcement import (
+    configure as configure_moderation_enforcement,
+)
+from tcbot.modules.helper.pipelines.moderation_enforcement import (
+    run as run_moderation_enforcement,
+)
 from tcbot.notification_worker import configure as configure_notification_worker
 from tcbot.notification_worker import run as run_notification_worker
 from tcbot.utils.circuit_breaker import CircuitOpenError
@@ -160,7 +166,7 @@ async def _error_handler(
     if isinstance(exc, (TimeoutError, ConnectionError, OSError)):
         log.warning("Transient network error (not reported): %s", exc)
         return
-    if isinstance(exc, error_reporter.PollingConflictError):
+    if isinstance(exc, PollingConflictError):
         # * Another instance is polling this bot. It is an operator situation,
         # * not a defect: keep the traceback out of the log and route one
         # * actionable report to the owner.
@@ -168,9 +174,9 @@ async def _error_handler(
             "Telegram refused the poll: another instance is polling this "
             "bot. Stop the other instance or give each one its own token."
         )
-        await error_reporter.report_exc(exc)
+        await report.report_exc(exc)
         return
-    if error_reporter._is_benign(exc):
+    if classify._is_benign(exc):
         return
     context_parts: list[str] = []
     ctx = current_ctx()
@@ -196,13 +202,17 @@ async def _error_handler(
     if query is not None and query.data:
         context_parts.append(f"CBQ data: {query.data}")
     context_str = (
-        error_reporter.scrub_text(" | ".join(context_parts)) if context_parts else None
+        report.scrub_text(" | ".join(context_parts)) if context_parts else None
     )
-    await error_reporter.report_exc(exc, context=context_str)
+    await report.report_exc(exc, context=context_str)
+    # * The console path scrubs the exception text the same way the
+    # * shipped report is scrubbed, so a token-shaped string in an
+    # * exception message cannot reach the operator's terminal.
     log.error(
-        "Unhandled exception for update %s%s",
+        "Unhandled exception for update %s%s%s",
         getattr(update, "id", "?"),
         f" | {context_str}" if context_str else "",
+        f" | {report.scrub_text(repr(exc))}",
         exc_info=exc,
     )
 
@@ -240,13 +250,15 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
         if exc is not None and db_engine.is_pool_timeout(exc):
             log.debug("[asyncio] pool saturated (not reported): %s", exc)
             return
-        if error_reporter._is_benign(exc):
+        if classify._is_benign(exc):
             log.debug("[asyncio] benign (not reported): %s", exc)
             return
+        # * Console output is scrubbed like the shipped reports (see the
+        # * main error handler); the loop handler has no other scrub site.
         log.error(
             "[asyncio] %s%s",
             detail,
-            f" - {exc}" if exc else "",
+            f" - {report.scrub_text(str(exc))}" if exc else "",
             exc_info=exc,
         )
         if exc is not None and (
@@ -258,7 +270,7 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
                 return
             _asyncio_report_tasks.spawn(mtproto_mod.handle_auth_failure())
         if exc is not None:
-            _asyncio_report_tasks.spawn(error_reporter.report_exc(exc, context=detail))
+            _asyncio_report_tasks.spawn(report.report_exc(exc, context=detail))
 
     return handler
 
@@ -343,7 +355,7 @@ async def init_shared_subsystems(client: Client) -> None:
             "Stop the other instance or repair the session before starting again."
         )
     lec, let = cfg.logs_errors
-    error_reporter.attach(client, lec, let, owner_id=cfg.initial_owner_id)
+    report.attach(client, lec, let, owner_id=cfg.initial_owner_id)
     # * Cache the bot's own identity once, so display names, links, and
     # * self-target checks never pay for a lookup inside an update handler.
     await bot_identity(client)
@@ -374,7 +386,7 @@ async def _shutdown_subsystems() -> None:
     await identity_refresh.identity_refresh_tasks.drain()
     await connect_common.harvest_tasks.drain()
     await drain_proof_sessions()
-    await error_reporter.drain_pending()
+    await report.drain_pending()
     await _member_cache_tasks.drain()
     await _startup_tasks.drain()
     await drain_redis_mutations()
@@ -403,13 +415,13 @@ async def _run_polling() -> None:
     asyncio.get_running_loop().set_exception_handler(_make_asyncio_exc_handler())
     try:
         await init_shared_subsystems(client)
-        configure_enforcement_worker(client)
+        configure_moderation_enforcement(client)
         configure_notification_worker(client)
         pg_cron_active = await pg_cron.sync_schedules()
         await sched_mod.start(
             cfg.database_url,
             database_jobs_in_pg_cron=pg_cron_active,
-            enforcement_job=run_enforcement_worker,
+            enforcement_job=run_moderation_enforcement,
             notification_job=run_notification_worker,
         )
         _startup_tasks.spawn(_warm_hot_caches())
@@ -434,12 +446,12 @@ async def _run_polling() -> None:
 def _print_fatal(stage: str, exc: BaseException) -> None:
     """Print a fatal startup error with traceback to stderr."""
     border = "=" * _FATAL_BORDER_WIDTH
-    detail = error_reporter.scrub_text(f"{type(exc).__name__}: {exc}")
+    detail = report.scrub_text(f"{type(exc).__name__}: {exc}")
     print(f"\n{_FATAL_RED}{border}", file=sys.stderr)
     print(f" FATAL STARTUP ERROR in stage: {stage}", file=sys.stderr)
     print(f" {detail}", file=sys.stderr)
     print(f"{border}", file=sys.stderr)
-    tb_text = error_reporter.scrub_text(
+    tb_text = report.scrub_text(
         "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     )
     print(f"{_FATAL_RED}{tb_text}{_FATAL_RESET}", file=sys.stderr, end="")
@@ -480,7 +492,7 @@ def _init_sentry() -> None:
             integrations=[LoguruIntegration(event_level=ERROR_LEVEL)],
             traces_sample_rate=0.0,
             send_default_pii=False,
-            before_send=error_reporter.scrub_sentry_event,
+            before_send=report.scrub_sentry_event,
         )
     except Exception as exc:
         log.warning("Sentry initialisation failed (non-fatal): %s", exc)

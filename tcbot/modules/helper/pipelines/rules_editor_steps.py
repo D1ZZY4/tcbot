@@ -46,6 +46,8 @@ _EDITOR_SCOPE_KEYS = (
     "rules_category",
     "rules_category_key",
     "rules_preview_category",
+    "rules_section_id",
+    "rules_format",
 )
 
 

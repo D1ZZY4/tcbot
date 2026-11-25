@@ -11,8 +11,8 @@ from typing import Any
 
 import pytest
 
-from tcbot import enforcement_worker
-from tcbot.database import enforcement_db
+from tcbot.database import enforcement_ledger
+from tcbot.modules.helper.pipelines import moderation_enforcement
 from tcbot.utils import circuit_breaker as _cb
 
 
@@ -74,19 +74,19 @@ def test_no_delivery_chunk_exceeds_the_headroom(
             await coro
         return [None] * len(coros)
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
-    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
-    monkeypatch.setattr(enforcement_db, "complete_empty_run", _complete)
-    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "complete_target", _complete)
+    monkeypatch.setattr(enforcement_ledger, "complete_empty_run", _complete)
+    monkeypatch.setattr(moderation_enforcement, "fan_out", _fan_out)
 
     _cb.telegram.reset()
     _cb.telegram.record_failure()
     try:
         asyncio.run(
-            enforcement_worker.run_once(_FakeBot())  # type: ignore[arg-type]
+            moderation_enforcement.run_once(_FakeBot())  # type: ignore[arg-type]
         )
     finally:
         _cb.telegram.reset()

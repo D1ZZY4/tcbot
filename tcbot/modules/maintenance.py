@@ -10,10 +10,9 @@ import asyncio
 from dataclasses import dataclass
 
 from pyrogram import Client
-from pyrogram.errors import BadRequest, Forbidden
 from pyrogram.types import Message
 
-from tcbot import cfg, enforcement_worker
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.documents import GroupDoc
 from tcbot.database.types import as_int
@@ -28,6 +27,8 @@ from tcbot.modules.helper.messages import (
     safe_edit,
     send_log,
 )
+from tcbot.modules.helper.pipelines import moderation_enforcement
+from tcbot.modules.helper.pipelines.errors.exceptions import API_REFUSAL_ERRORS
 from tcbot.modules.helper.rich.text import blocks
 from tcbot.utils.dispatch import fan_out, gather_bounded, throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, t
@@ -286,7 +287,7 @@ async def _should_remove(bot: Client, grp: GroupDoc) -> bool:
         )
         status = getattr(member.status, "value", member.status)
         return status in ("left", "kicked")
-    except (BadRequest, Forbidden) as exc:
+    except API_REFUSAL_ERRORS as exc:
         # * A service refusal means the bot reached Telegram; keep the group.
         log.warning(
             "Could not verify membership for %d, keeping group: %s", chat_id, exc
@@ -394,7 +395,7 @@ def _repair_lines(runs: list[dict[str, object]], locale: str) -> str:
 async def _reply_repair_list(msg: Message, locale: str) -> None:
     """Reply with the runs that still need an operator."""
     try:
-        runs = await db.enforcement_db.list_unsettled_runs()
+        runs = await db.enforcement_ledger.list_unsettled_runs()
     except Exception:
         log.exception("list_unsettled_runs failed during tcrepair")
         await reply_rich(
@@ -466,7 +467,7 @@ async def cmd_repair(ctx: Ctx) -> None:
         )
         return
     try:
-        result = await db.enforcement_db.redrive_run(run_id, chat_id=chat_id)
+        result = await db.enforcement_ledger.redrive_run(run_id, chat_id=chat_id)
     except Exception:
         log.exception("redrive_run failed for run=%d", run_id)
         await reply_rich(
@@ -482,7 +483,7 @@ async def cmd_repair(ctx: Ctx) -> None:
         # * Deliver now when this process can claim the run; a claim
         # * failure is not an error because the scheduled worker owns it.
         try:
-            await enforcement_worker.deliver_queued_run(ctx.bot, run_id)
+            await moderation_enforcement.deliver_queued_run(ctx.bot, run_id)
         except asyncio.CancelledError:
             raise
         except Exception:

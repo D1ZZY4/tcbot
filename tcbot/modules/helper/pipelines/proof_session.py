@@ -99,7 +99,7 @@ class ProofSessionRegistry:
     async def drain(self) -> None:
         """Let pending flushes finish, then cancel only unclaimed sessions.
 
-        A session already inside ``_execute_ban`` owns a committed decision
+        A session already inside ``execute_ban`` owns a committed decision
         and a queued fan-out. Cancelling that task produces a partial ban and
         no summary, so the timeout cancels only sessions still waiting in
         their silence window.
@@ -123,7 +123,7 @@ class ProofSessionRegistry:
         if not all_live:
             return
         # * asyncio.wait leaves tasks running on timeout. wait_for(gather(...))
-        # * would cancel a session that crossed into _execute_ban during the
+        # * would cancel a session that crossed into execute_ban during the
         # * window, producing a partial ban with no summary.
         _done, pending = await asyncio.wait(all_live, timeout=_PROOF_DRAIN_TIMEOUT_S)
         # * Never cancel a task that is executing or that crossed into

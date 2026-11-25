@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, User
 
-from tcbot import cfg, enforcement_worker
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import guards, messages
 from tcbot.modules.helper.context import Ctx, display_name
@@ -27,6 +27,7 @@ from tcbot.modules.helper.messages import (
     send_log,
     send_text,
 )
+from tcbot.modules.helper.pipelines import moderation_enforcement
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_unban
 from tcbot.modules.helper.rich.edit import callback_text_of
 from tcbot.utils.dispatch import throw_if_cancelled
@@ -256,7 +257,7 @@ class ApproveMixin:
         # * notification fan-out, none of which answers the query again.
         await answer_ack(q)
         try:
-            await enforcement_worker.deliver_queued_run(bot, run_id)
+            await moderation_enforcement.deliver_queued_run(bot, run_id)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -265,13 +266,13 @@ class ApproveMixin:
                 run_id,
             )
         try:
-            report = await db.enforcement_db.run_report(run_id)
+            report = await db.enforcement_ledger.run_report(run_id)
         except asyncio.CancelledError:
             raise
         except Exception:
             log.exception("approve_appeal: run report failed for run %s", run_id)
             report = None
-        failed = db.enforcement_db.report_count(report, "failed_count")
+        failed = db.enforcement_ledger.report_count(report, "failed_count")
         if failed:
             log.error(
                 "Appeal approve left %d group(s) to retry for ban %s (run %s)",

@@ -14,12 +14,13 @@ from typing import Any
 import pytest
 
 from tcbot import __main__ as main_mod
-from tcbot import cfg, error_reporter
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.database.cache import redis_io
 from tcbot.database.cache.twolevel import TwoLevelCache
 from tcbot.database.scheduler import jobs as scheduler_jobs
 from tcbot.modules.helper.decorators import ratelimit
+from tcbot.modules.helper.pipelines.errors import report as error_reporter
 from tcbot.modules.helper.pipelines.stats_panels import Stats
 from tcbot.modules.helper.rich import media as rich_media
 from tcbot.modules.helper.rich import text as rich_text

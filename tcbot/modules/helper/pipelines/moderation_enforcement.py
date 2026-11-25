@@ -2,13 +2,14 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Deliver the queued enforcement runs to Telegram.
+"""Shared moderation enforcement executor: deliver queued runs to Telegram.
 
 The database records a decision and queues one run per managed group.
-This worker applies or lifts the decision for each target, records the
-per-group outcome, and retries a transient failure. The work is
-idempotent: a ban, mute, unban, or restore can be delivered more than
-once without harm.
+This module applies or lifts the decision for each target, records the
+per-group outcome, and retries a transient failure. Every moderation
+executor imports its immediate-delivery entry point from here; the
+scheduler imports the tick entry point. The work is idempotent: a ban,
+mute, unban, or restore can be delivered more than once without harm.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ _MAX_RUNS_PER_TICK: int = 10
 _MAX_TARGETS_PER_RUN: int = 100
 # * Upper bound on one delivery chunk; the breaker headroom tightens it further.
 _DELIVERY_CHUNK: int = 10
-_MAX_ATTEMPTS: int = db.enforcement_db.MAX_ATTEMPTS
+_MAX_ATTEMPTS: int = db.enforcement_ledger.MAX_ATTEMPTS
 _RETRY_DELAY = timedelta(minutes=5)
 
 
@@ -71,7 +72,7 @@ async def run_once(bot: Client) -> None:
     remaining claimed runs still execute, so one bad decision cannot
     starve every other expiry in the same tick.
     """
-    await db.enforcement_db.requeue_stale_runs()
+    await db.enforcement_ledger.requeue_stale_runs()
     # * Claiming a target consumes one of its three attempts even when the
     # * Telegram circuit is open and the call is skipped before it leaves the
     # * process. Leave the work queued while the circuit is OPEN so an outage
@@ -99,7 +100,7 @@ async def run_once(bot: Client) -> None:
         log.debug("Enforcement worker deferred: the recovery probe is in use.")
         return
     try:
-        runs = await db.enforcement_db.claim_runs(
+        runs = await db.enforcement_ledger.claim_runs(
             1 if probe_only else _MAX_RUNS_PER_TICK
         )
         for run in runs:
@@ -155,7 +156,7 @@ async def deliver_queued_run(bot: Client, run_id: int) -> bool:
         )
         return False
     try:
-        run = await db.enforcement_db.claim_run(run_id)
+        run = await db.enforcement_ledger.claim_run(run_id)
         if run is None:
             return False
         await _process_run(
@@ -181,9 +182,9 @@ async def _process_run(
     run_id = as_int(run.get("id"))
     if run_id <= 0:
         return
-    action = await db.enforcement_db.load_run_action(run_id)
+    action = await db.enforcement_ledger.load_run_action(run_id)
     if action is None:
-        await db.enforcement_db.cancel_run(
+        await db.enforcement_ledger.cancel_run(
             run_id, error_detail="the action of the run no longer exists"
         )
         return
@@ -208,7 +209,7 @@ async def _process_run(
         )
     )
     if not supported:
-        await db.enforcement_db.cancel_run(
+        await db.enforcement_ledger.cancel_run(
             run_id,
             error_detail=(
                 f"unsupported {operation!r} run for "
@@ -220,7 +221,7 @@ async def _process_run(
         # * A later decision of the same type is in force. Lifting the
         # * restriction here would undo the newer ban or mute, which is
         # * exactly what a retried revoke after a re-ban must not do.
-        await db.enforcement_db.cancel_run(
+        await db.enforcement_ledger.cancel_run(
             run_id,
             error_detail=(
                 "a newer active decision of the same type supersedes this revoke"
@@ -230,7 +231,7 @@ async def _process_run(
     if operation == "reconcile" and bool(action.get("active_ban")):
         # * A kick converts a ban into a rejoin, but a federation ban now
         # * holds the target. The repair unban would lift that ban.
-        await db.enforcement_db.cancel_run(
+        await db.enforcement_ledger.cancel_run(
             run_id,
             error_detail="an active federation ban supersedes the kick repair",
         )
@@ -243,7 +244,7 @@ async def _process_run(
     if operation == "apply" and expiry is not None:
         remaining = to_utc(expiry) - utc_now()
         if remaining <= timedelta(0):
-            await db.enforcement_db.cancel_run(
+            await db.enforcement_ledger.cancel_run(
                 run_id,
                 error_detail="the decision expired before its delivery",
             )
@@ -252,14 +253,14 @@ async def _process_run(
         # * Applying a nearly expired mute would leave the user restricted
         # * indefinitely while the database says it already ended.
         if action_type == "mute" and remaining < timedelta(seconds=30):
-            await db.enforcement_db.cancel_run(
+            await db.enforcement_ledger.cancel_run(
                 run_id,
                 error_detail="the mute would reach Telegram with under 30s left",
             )
             return
     target_user_id = as_int(action.get("target_user_id"))
     if target_user_id <= 0:
-        await db.enforcement_db.cancel_run(
+        await db.enforcement_ledger.cancel_run(
             run_id, error_detail="the action carries no target"
         )
         return
@@ -281,7 +282,7 @@ async def _process_run(
                 run_id,
                 target_user_id,
             )
-            await db.enforcement_db.cancel_run(
+            await db.enforcement_ledger.cancel_run(
                 run_id, error_detail="protected-role lookup failed before enforcement"
             )
             return
@@ -291,7 +292,7 @@ async def _process_run(
                 run_id,
                 target_user_id,
             )
-            await db.enforcement_db.cancel_run(
+            await db.enforcement_ledger.cancel_run(
                 run_id, error_detail="the target holds the protected Owner role"
             )
             return
@@ -329,13 +330,13 @@ async def _process_run(
             )
             if chunk_size <= 0:
                 break
-        targets = await db.enforcement_db.claim_targets(run_id, chunk_size)
+        targets = await db.enforcement_ledger.claim_targets(run_id, chunk_size)
         if not targets:
             if not results:
                 # * A repair with no claimable target is not a successful
                 # * unban: the chat may be disconnected, so the record stays
                 # * failed and visible.
-                await db.enforcement_db.complete_empty_run(run_id)
+                await db.enforcement_ledger.complete_empty_run(run_id)
             break
         coros = [
             _deliver(
@@ -470,7 +471,7 @@ async def _record_target(target: dict[str, object], result: object) -> None:
     if target_id <= 0:
         return
     if result is None:
-        await db.enforcement_db.complete_target(
+        await db.enforcement_ledger.complete_target(
             target_id, status="succeeded", outcome="succeeded"
         )
         return
@@ -478,7 +479,7 @@ async def _record_target(target: dict[str, object], result: object) -> None:
         # * A missing right or a lost membership cannot recover on its own.
         # * The target is terminal so the failure stays visible to an
         # * operator; retrying it would only repeat the same refusal.
-        await db.enforcement_db.complete_target(
+        await db.enforcement_ledger.complete_target(
             target_id,
             status="failed",
             outcome="failed",
@@ -487,7 +488,7 @@ async def _record_target(target: dict[str, object], result: object) -> None:
         )
         return
     if isinstance(result, BaseException) and is_benign_telegram_error(result):
-        await db.enforcement_db.complete_target(
+        await db.enforcement_ledger.complete_target(
             target_id,
             status="skipped",
             outcome="skipped",
@@ -501,7 +502,7 @@ async def _record_target(target: dict[str, object], result: object) -> None:
     # * A retry is a failed attempt with a due deadline, not a return to
     # * pending; writing pending here aborts the attempt insert and strands
     # * the target in_progress, which keeps its run running forever.
-    await db.enforcement_db.complete_target(
+    await db.enforcement_ledger.complete_target(
         target_id,
         status="failed",
         outcome="failed",

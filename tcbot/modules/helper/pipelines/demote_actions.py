@@ -10,13 +10,13 @@ import asyncio
 from enum import Enum
 
 from pyrogram import Client
-from pyrogram.errors import Forbidden
 
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import messages
 from tcbot.modules.helper.locale import locale_for_user
 from tcbot.modules.helper.messages import send_log, send_text
+from tcbot.modules.helper.pipelines.errors.exceptions import is_forbidden
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, t
 from tcbot.utils.logger import get_logger
@@ -176,7 +176,7 @@ class Demote:
             # * role itself was already removed, so this never blocks the caller.
             log.error("Demote log send failed for target=%d: %s", target_id, log_result)
         if isinstance(dm_result, BaseException):
-            if isinstance(dm_result, Forbidden) or is_benign_telegram_error(dm_result):
+            if is_forbidden(dm_result) or is_benign_telegram_error(dm_result):
                 # * Expected when the target never started the bot, blocked
                 # * it, or deleted the account ("Chat not found"): info-level
                 # * only, mirroring the ban executor PM handling. Error-level here

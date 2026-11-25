@@ -10,10 +10,10 @@ import asyncio
 from typing import Any
 
 import pytest
-from pyrogram.errors import BadRequest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import kick_actions
+from tcbot.modules.helper.pipelines import kick_executor
+from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest
 
 
 class _FakeBot:
@@ -93,7 +93,7 @@ def _kick_no_io(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _run(bot: _FakeBot, **kwargs: Any) -> _FakeBot:
     asyncio.run(
-        kick_actions.execute_kick(
+        kick_executor.execute_kick(
             _FakeUpdate(bot),  # type: ignore[arg-type]
             _FakeCtx(bot),  # type: ignore[arg-type]
             33,
@@ -110,7 +110,9 @@ def test_summary_edits_prompt_when_known(_kick_no_io: None) -> None:
     assert len(bot.edits) == 1
     assert bot.edits[0]["args"][0] == 22
     assert bot.edits[0]["args"][1] == 44
-    assert "has been kicked" in bot.edits[0]["kwargs"]["rich_message"].html
+    # * The summary is a rich outcome card: title, user row, reason row.
+    assert "Kick Applied" in bot.edits[0]["kwargs"]["rich_message"].html
+    assert "spam" in bot.edits[0]["kwargs"]["rich_message"].html
     assert bot.replies == []
 
 
@@ -130,7 +132,7 @@ def test_cancellation_during_demote_marks_the_kick_failed(
         failed.append(action_id)
 
     monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
-    monkeypatch.setattr(kick_actions, "demote_before_enforcement", _cancelled_demote)
+    monkeypatch.setattr(kick_executor, "demote_before_enforcement", _cancelled_demote)
     monkeypatch.setattr(db.kicks_db, "mark_kick_failed", _mark_failed)
 
     with pytest.raises(asyncio.CancelledError):
@@ -142,7 +144,8 @@ def test_summary_replies_when_prompt_unknown(_kick_no_io: None) -> None:
     bot = _run(_FakeBot())
     assert bot.edits == []
     assert len(bot.replies) == 1
-    assert "has been kicked" in bot.replies[0]["args"][0]
+    assert "Kick Applied" in bot.replies[0]["args"][0]
+    assert "spam" in bot.replies[0]["args"][0]
 
 
 def test_summary_falls_back_to_reply_when_edit_fails(
@@ -155,7 +158,8 @@ def test_summary_falls_back_to_reply_when_edit_fails(
     )
     assert len(bot.edits) == 1
     assert len(bot.replies) == 1
-    assert "has been kicked" in bot.replies[0]["args"][0]
+    assert "Kick Applied" in bot.replies[0]["args"][0]
+    assert "spam" in bot.replies[0]["args"][0]
 
 
 def test_a_stranded_kick_queues_its_unban_repair(
@@ -185,7 +189,7 @@ def test_a_stranded_kick_queues_its_unban_repair(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
     monkeypatch.setattr(db.kicks_db, "mark_kick_failed", _mark_failed)
-    monkeypatch.setattr(db.enforcement_db, "queue_kick_unban_repair", _repair)
+    monkeypatch.setattr(db.enforcement_ledger, "queue_kick_unban_repair", _repair)
 
     bot = _run(_FailUnbanBot(), prompt_chat=22, prompt_id=44)
 
@@ -230,7 +234,7 @@ def test_a_benign_retry_after_a_real_refusal_still_queues_repair(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
     monkeypatch.setattr(db.kicks_db, "mark_kick_failed", _mark_failed)
-    monkeypatch.setattr(db.enforcement_db, "queue_kick_unban_repair", _repair)
+    monkeypatch.setattr(db.enforcement_ledger, "queue_kick_unban_repair", _repair)
 
     _run(_FlakyUnbanBot(), prompt_chat=22, prompt_id=44)
 
@@ -267,7 +271,7 @@ def test_a_failed_ban_marks_the_kick_failed(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
     monkeypatch.setattr(db.kicks_db, "log_kick", _logged)
     monkeypatch.setattr(db.kicks_db, "mark_kick_failed", _mark_failed)
-    monkeypatch.setattr(db.enforcement_db, "queue_kick_unban_repair", _repair)
+    monkeypatch.setattr(db.enforcement_ledger, "queue_kick_unban_repair", _repair)
 
     bot = _run(_FailBanBot())
 

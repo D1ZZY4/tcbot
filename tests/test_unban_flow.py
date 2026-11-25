@@ -15,7 +15,7 @@ import pytest
 from tcbot import database as db
 from tcbot.modules import unban
 from tcbot.modules.helper.identity import Identity
-from tcbot.modules.helper.pipelines import unban_actions
+from tcbot.modules.helper.pipelines import unban_executor
 from tcbot.utils.i18n import Safe, t, user_ref
 
 
@@ -146,21 +146,23 @@ def _install(
         return SimpleNamespace(may_proceed=True, value="proceed")
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(unban_actions, "demote_before_unban", _no_demote)
-    monkeypatch.setattr(unban_actions, "locale_for_update", _locale)
+    monkeypatch.setattr(unban_executor, "demote_before_unban", _no_demote)
+    monkeypatch.setattr(unban_executor, "locale_for_update", _locale)
     monkeypatch.setattr(
-        unban_actions,
+        unban_executor,
         "cfg",
         SimpleNamespace(main_group=-1, exec_group=-2, logs=(-3, None)),
     )
     monkeypatch.setattr(db.bans_db, "get_active_ban", _get_active_ban)
     monkeypatch.setattr(db.bans_db, "revoke_ban_and_queue_unban", _revoke)
     monkeypatch.setattr(db.groups_db, "active_groups", _active_groups)
-    monkeypatch.setattr(unban_actions.guards, "enforcement_refusal", _allow_enforcement)
     monkeypatch.setattr(
-        unban_actions.enforcement_worker, "deliver_queued_run", _deliver
+        unban_executor.guards, "enforcement_refusal", _allow_enforcement
     )
-    monkeypatch.setattr(db.enforcement_db, "run_report", _report)
+    monkeypatch.setattr(
+        unban_executor.moderation_enforcement, "deliver_queued_run", _deliver
+    )
+    monkeypatch.setattr(db.enforcement_ledger, "run_report", _report)
     return calls
 
 
@@ -173,7 +175,9 @@ def test_no_record_replies_without_touching_chats(
 ) -> None:
     _install(monkeypatch, ban=None)
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+    asyncio.run(
+        unban_executor.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T")
+    )
     assert bot.unbanned == []
     assert msg.replies == [
         t("unbanning.note.no_record", "en-US", user=Safe(user_ref(42, "T")))
@@ -190,10 +194,12 @@ def test_a_final_rank_refusal_blocks_the_revocation(
         _ = (args, kwargs)
         return "rank lost"
 
-    monkeypatch.setattr(unban_actions.guards, "enforcement_refusal", _deny)
+    monkeypatch.setattr(unban_executor.guards, "enforcement_refusal", _deny)
     msg, bot = _FakeMsg(), _FakeBot()
 
-    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+    asyncio.run(
+        unban_executor.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T")
+    )
 
     assert calls["deactivate"] == []
     assert msg.replies == ["rank lost"]
@@ -204,7 +210,9 @@ def test_read_failure_replies_retry_and_skips_deactivate(
 ) -> None:
     calls = _install(monkeypatch, ban=RuntimeError("db down"))
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+    asyncio.run(
+        unban_executor.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T")
+    )
     assert calls["deactivate"] == []
     assert bot.unbanned == []
     assert msg.replies == [
@@ -217,7 +225,9 @@ def test_groups_failure_keeps_record(
 ) -> None:
     calls = _install(monkeypatch, groups=RuntimeError("db down"))
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+    asyncio.run(
+        unban_executor.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T")
+    )
     assert calls["deactivate"] == []
     assert bot.unbanned == []
     assert msg.replies == [
@@ -230,7 +240,9 @@ def test_deactivate_failure_aborts_before_fanout(
 ) -> None:
     _install(monkeypatch, deactivate=RuntimeError("db down"))
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+    asyncio.run(
+        unban_executor.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T")
+    )
     assert bot.unbanned == []
     assert msg.replies == [
         t("unbanning.note.db_fail", "en-US", user=Safe(user_ref(42, "T")))
@@ -245,7 +257,9 @@ def test_partial_fanout_names_missed_group(
         groups=[{"chat_id": 1, "title": "Gone"}, {"chat_id": -1, "title": ""}],
     )
     msg, bot = _FakeMsg(), _FakeBot(fail_ids={1})
-    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+    asyncio.run(
+        unban_executor.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T")
+    )
     assert "Gone" in msg.replies[-1]
 
 
@@ -265,12 +279,14 @@ def test_a_run_another_worker_owns_is_reported_as_queued(
         }
 
     monkeypatch.setattr(
-        unban_actions.enforcement_worker, "deliver_queued_run", _not_claimed
+        unban_executor.moderation_enforcement, "deliver_queued_run", _not_claimed
     )
-    monkeypatch.setattr(db.enforcement_db, "run_report", _pending)
+    monkeypatch.setattr(db.enforcement_ledger, "run_report", _pending)
 
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+    asyncio.run(
+        unban_executor.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T")
+    )
 
     assert "queued" in msg.replies[-1]
     assert bot.unbanned == []
@@ -298,10 +314,12 @@ def test_a_settled_run_with_a_missing_group_is_reported_as_queued(
             "targets": [{"chat_id": 1, "title": "A", "status": "succeeded"}],
         }
 
-    monkeypatch.setattr(db.enforcement_db, "run_report", _short_report)
+    monkeypatch.setattr(db.enforcement_ledger, "run_report", _short_report)
 
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+    asyncio.run(
+        unban_executor.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T")
+    )
 
     assert "queued" in msg.replies[-1]
 
@@ -311,7 +329,7 @@ def test_anonymous_admin_log_names_anonymous(
 ) -> None:
     _install(monkeypatch, groups=[])
     msg, bot = _FakeMsg(), _FakeBot()
-    asyncio.run(unban_actions.execute_unban(_update(msg, None), _ctx(bot), 42, "T"))
+    asyncio.run(unban_executor.execute_unban(_update(msg, None), _ctx(bot), 42, "T"))
     assert bot.logs and "anonymous admin" in bot.logs[-1]
 
 
@@ -355,10 +373,12 @@ def test_a_promotion_during_the_group_load_forces_the_demote_gate(
         return SimpleNamespace(may_proceed=False, value="role_survived")
 
     monkeypatch.setattr(db.users_roles, "get_effective_role", _staff_role)
-    monkeypatch.setattr(unban_actions, "demote_before_unban", _blocking_gate)
+    monkeypatch.setattr(unban_executor, "demote_before_unban", _blocking_gate)
     msg, bot = _FakeMsg(), _FakeBot()
 
-    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+    asyncio.run(
+        unban_executor.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T")
+    )
 
     assert gates == [("moderator", "unban")]
     assert calls["deactivate"] == []
@@ -378,7 +398,9 @@ def test_a_failed_staff_role_read_blocks_the_unban(
     monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
     msg, bot = _FakeMsg(), _FakeBot()
 
-    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+    asyncio.run(
+        unban_executor.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T")
+    )
 
     assert calls["deactivate"] == []
     assert bot.unbanned == []

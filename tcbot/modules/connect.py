@@ -87,10 +87,14 @@ async def cmd_tcconnect(ctx: Ctx) -> None:
     if chat is None or user is None or msg is None:
         return
 
-    # * A connected destination is a group or a supergroup (a forum is a
-    # * supergroup). A channel has no member list to moderate, so it is
-    # * refused before any Telegram or database work.
-    if getattr(chat.type, "value", chat.type) not in ("group", "supergroup"):
+    # * A connected destination is a group, a supergroup, or a forum. A
+    # * channel has no member list to moderate, so it is refused before any
+    # * Telegram or database work.
+    if getattr(chat.type, "value", chat.type) not in (
+        "group",
+        "supergroup",
+        "forum",
+    ):
         await reply_rich(
             msg,
             replies.err_group_only(locale, plain=True),

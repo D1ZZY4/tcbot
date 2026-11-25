@@ -11,11 +11,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from pyrogram.errors import BadRequest
 
 from tcbot import database as db
-from tcbot import enforcement_worker
-from tcbot.database import enforcement_db
+from tcbot.database import enforcement_ledger
+from tcbot.modules.helper.pipelines import moderation_enforcement
+from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest
 from tcbot.utils import circuit_breaker as _cb
 
 
@@ -87,12 +87,12 @@ def _wire(
                 coro.close()
         return [result]
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
-    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
-    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "complete_target", _complete)
+    monkeypatch.setattr(moderation_enforcement, "fan_out", _fan_out)
     return record
 
 
@@ -100,7 +100,7 @@ def test_an_expired_ban_is_lifted(monkeypatch: pytest.MonkeyPatch) -> None:
     record = _wire(monkeypatch)
     bot = _FakeBot()
 
-    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(bot))  # type: ignore[arg-type]
 
     assert bot.unbanned == [(-100, 9)]
     assert record["completed"] == [(3, {"status": "succeeded", "outcome": "succeeded"})]
@@ -136,15 +136,15 @@ def test_an_active_ban_apply_is_delivered(monkeypatch: pytest.MonkeyPatch) -> No
             await coro
         return [None]
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
-    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
-    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "complete_target", _complete)
+    monkeypatch.setattr(moderation_enforcement, "fan_out", _fan_out)
     bot = _FakeBot()
 
-    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(bot))  # type: ignore[arg-type]
 
     assert bot.banned == [(-100, 9)]
     assert completed == [(3, {"status": "succeeded", "outcome": "succeeded"})]
@@ -182,15 +182,15 @@ async def test_a_target_promoted_to_owner_is_not_enforced(
         assert fresh is True
         return True
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_run", _claim_run)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _no_target)
-    monkeypatch.setattr(enforcement_db, "cancel_run", _cancel)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_run", _claim_run)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _no_target)
+    monkeypatch.setattr(enforcement_ledger, "cancel_run", _cancel)
     monkeypatch.setattr(db.users_roles, "is_owner", _owner)
 
     bot = _FakeBot()
-    await enforcement_worker.deliver_queued_run(bot, 1)  # type: ignore[arg-type]
+    await moderation_enforcement.deliver_queued_run(bot, 1)  # type: ignore[arg-type]
 
     assert bot.banned == []
     assert bot.restricted == []
@@ -226,14 +226,14 @@ async def test_an_unresolved_role_refuses_the_apply_run(
     async def _broken_role(_user_id: int, *, fresh: bool = False) -> bool:
         raise RuntimeError("role store unavailable")
 
-    monkeypatch.setattr(enforcement_db, "claim_run", _claim_run)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _no_target)
-    monkeypatch.setattr(enforcement_db, "cancel_run", _cancel)
+    monkeypatch.setattr(enforcement_ledger, "claim_run", _claim_run)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _no_target)
+    monkeypatch.setattr(enforcement_ledger, "cancel_run", _cancel)
     monkeypatch.setattr(db.users_roles, "is_owner", _broken_role)
 
     bot = _FakeBot()
-    await enforcement_worker.deliver_queued_run(bot, 1)  # type: ignore[arg-type]
+    await moderation_enforcement.deliver_queued_run(bot, 1)  # type: ignore[arg-type]
 
     assert bot.banned == []
     assert len(cancelled) == 1
@@ -284,13 +284,13 @@ def _wire_apply(
                 coro.close()
         return list(results)
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
-    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "complete_target", _complete)
     monkeypatch.setattr(db.warns_db, "clear_warns_for_chats", _clear)
-    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    monkeypatch.setattr(moderation_enforcement, "fan_out", _fan_out)
     return cleared, completed
 
 
@@ -302,7 +302,7 @@ def test_automated_ban_apply_clears_warns_for_landed_chats(
         monkeypatch, origin="automated", results=[None, RuntimeError("network down")]
     )
 
-    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(_FakeBot()))  # type: ignore[arg-type]
 
     assert cleared == [(9, [-100])]
 
@@ -313,7 +313,7 @@ def test_a_manual_ban_apply_does_not_clear_warns(
     """Only a warn-threshold ban owns the corresponding warning cleanup."""
     cleared, _ = _wire_apply(monkeypatch, origin="manual", results=[None, None])
 
-    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(_FakeBot()))  # type: ignore[arg-type]
 
     assert cleared == []
 
@@ -350,15 +350,15 @@ def test_an_active_mute_apply_keeps_its_deadline(
             await coro
         return [None]
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
-    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
-    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "complete_target", _complete)
+    monkeypatch.setattr(moderation_enforcement, "fan_out", _fan_out)
     bot = _FakeBot()
 
-    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(bot))  # type: ignore[arg-type]
 
     assert len(bot.restricted) == 1
     assert bot.restricted[0][2].can_send_messages is False
@@ -395,14 +395,14 @@ def test_an_apply_that_outlived_its_deadline_is_cancelled(
     async def _cancel(run_id: int, **kwargs: Any) -> None:
         cancelled.append(run_id)
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
-    monkeypatch.setattr(enforcement_db, "cancel_run", _cancel)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "cancel_run", _cancel)
     bot = _FakeBot()
 
-    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(bot))  # type: ignore[arg-type]
 
     assert cancelled == [1]
     assert claimed == []
@@ -439,14 +439,14 @@ def test_a_mute_with_under_30s_left_is_cancelled(
     async def _cancel(run_id: int, **kwargs: Any) -> None:
         cancelled.append(run_id)
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
-    monkeypatch.setattr(enforcement_db, "cancel_run", _cancel)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "cancel_run", _cancel)
     bot = _FakeBot()
 
-    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(bot))  # type: ignore[arg-type]
 
     assert cancelled == [1]
     assert claimed == []
@@ -457,7 +457,7 @@ def test_an_expired_mute_is_restored(monkeypatch: pytest.MonkeyPatch) -> None:
     _wire(monkeypatch, action_type="mute")
     bot = _FakeBot()
 
-    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(bot))  # type: ignore[arg-type]
 
     assert len(bot.restricted) == 1
     chat_id, user_id, permissions = bot.restricted[0]
@@ -470,7 +470,7 @@ def test_a_benign_telegram_refusal_is_skipped(
 ) -> None:
     record = _wire(monkeypatch, result=BadRequest("USER_NOT_PARTICIPANT"))
 
-    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(_FakeBot()))  # type: ignore[arg-type]
 
     assert record["completed"][0][1]["status"] == "skipped"
 
@@ -481,7 +481,7 @@ def test_a_missing_admin_right_is_a_terminal_failure(
     """A demoted bot did not apply the action and retrying cannot fix it."""
     record = _wire(monkeypatch, result=BadRequest("CHAT_ADMIN_REQUIRED"))
 
-    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(_FakeBot()))  # type: ignore[arg-type]
 
     outcome = record["completed"][0][1]
     assert outcome["status"] == "failed"
@@ -495,7 +495,7 @@ def test_a_transient_failure_gets_a_bounded_retry(
 ) -> None:
     record = _wire(monkeypatch, result=RuntimeError("network down"))
 
-    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(_FakeBot()))  # type: ignore[arg-type]
 
     status = record["completed"][0][1]
     # * A retry is a failed attempt with a due deadline: the target trigger
@@ -534,13 +534,13 @@ def test_a_revoke_with_a_newer_active_decision_is_cancelled(
     async def _cancel(run_id: int, **kwargs: Any) -> None:
         cancelled.append(run_id)
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "cancel_run", _cancel)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "cancel_run", _cancel)
     bot = _FakeBot()
 
-    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(bot))  # type: ignore[arg-type]
 
     assert cancelled == [1]
     assert bot.unbanned == []
@@ -570,13 +570,13 @@ def test_a_kick_repair_is_cancelled_when_a_ban_is_active(
     async def _cancel(run_id: int, **kwargs: Any) -> None:
         cancelled.append(run_id)
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "cancel_run", _cancel)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "cancel_run", _cancel)
     bot = _FakeBot()
 
-    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(bot))  # type: ignore[arg-type]
 
     assert cancelled == [5]
     assert bot.unbanned == []
@@ -589,8 +589,8 @@ def test_the_requeue_uses_legal_target_transitions() -> None:
     only. Writing pending aborts the whole transaction and leaves the
     target and its run stuck, so the SQL is pinned here.
     """
-    assert "status = 'failed'" in enforcement_db._REQUEUE_TARGETS.text
-    assert "status = 'pending'" not in enforcement_db._REQUEUE_TARGETS.text
+    assert "status = 'failed'" in enforcement_ledger._REQUEUE_TARGETS.text
+    assert "status = 'pending'" not in enforcement_ledger._REQUEUE_TARGETS.text
 
 
 def test_a_due_retry_requeues_its_run() -> None:
@@ -599,7 +599,7 @@ def test_a_due_retry_requeues_its_run() -> None:
     The target can only be claimed through a running run, so the run
     statement has to pick up failed targets whose deadline arrived.
     """
-    sql = enforcement_db._REQUEUE_RUNS.text
+    sql = enforcement_ledger._REQUEUE_RUNS.text
     assert "t.status = 'failed'" in sql
     assert "t.next_retry_at <= now()" in sql
     assert "cc.is_active" in sql
@@ -621,7 +621,7 @@ def test_a_delivery_outcome_keeps_pending_groups_out_of_applied() -> None:
         ],
     }
 
-    outcome = enforcement_db.delivery_outcome(report, 9)
+    outcome = enforcement_ledger.delivery_outcome(report, 9)
 
     assert (outcome.total, outcome.applied, outcome.failed, outcome.pending) == (
         9,
@@ -629,11 +629,11 @@ def test_a_delivery_outcome_keeps_pending_groups_out_of_applied() -> None:
         1,
         7,
     )
-    assert enforcement_db.report_settled(report) is False
+    assert enforcement_ledger.report_settled(report) is False
 
 
 def test_an_unreadable_report_is_not_a_successful_delivery() -> None:
-    outcome = enforcement_db.delivery_outcome(None, 4)
+    outcome = enforcement_ledger.delivery_outcome(None, 4)
 
     assert (outcome.total, outcome.applied, outcome.failed, outcome.pending) == (
         4,
@@ -680,16 +680,16 @@ def test_a_kick_repair_run_lifts_the_second_step(
             await coro
         return [None]
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
-    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "complete_target", _complete)
     monkeypatch.setattr(db.kicks_db, "mark_kick_completed", _restore)
-    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    monkeypatch.setattr(moderation_enforcement, "fan_out", _fan_out)
     bot = _FakeBot()
 
-    asyncio.run(enforcement_worker.run_once(bot))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(bot))  # type: ignore[arg-type]
 
     assert bot.unbanned == [(-100, 9)]
     assert completed == [(7, {"status": "succeeded", "outcome": "succeeded"})]
@@ -727,14 +727,14 @@ def test_an_empty_kick_reconcile_does_not_close_the_failed_kick(
         restored.append(action_id)
         return True
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
-    monkeypatch.setattr(enforcement_db, "complete_empty_run", _empty)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "complete_empty_run", _empty)
     monkeypatch.setattr(db.kicks_db, "mark_kick_completed", _restore)
 
-    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(_FakeBot()))  # type: ignore[arg-type]
 
     assert restored == []
 
@@ -758,16 +758,16 @@ def test_a_reconcile_run_for_another_action_is_cancelled(
             "operation": "reconcile",
         }
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
     monkeypatch.setattr(
-        enforcement_db,
+        enforcement_ledger,
         "cancel_run",
         lambda run_id, **kwargs: _record(cancelled, run_id),
     )
 
-    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(_FakeBot()))  # type: ignore[arg-type]
 
     assert cancelled == [5]
 
@@ -775,10 +775,12 @@ def test_a_reconcile_run_for_another_action_is_cancelled(
 def test_deliver_queued_run_reports_a_lost_claim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(enforcement_db, "claim_run", lambda run_id: _async_value(None))
+    monkeypatch.setattr(
+        enforcement_ledger, "claim_run", lambda run_id: _async_value(None)
+    )
 
     delivered = asyncio.run(
-        enforcement_worker.deliver_queued_run(_FakeBot(), 5)  # type: ignore[arg-type]
+        moderation_enforcement.deliver_queued_run(_FakeBot(), 5)  # type: ignore[arg-type]
     )
 
     assert delivered is False
@@ -789,17 +791,17 @@ def test_a_run_for_an_active_action_is_cancelled(
 ) -> None:
     cancelled: list[int] = []
     monkeypatch.setattr(
-        enforcement_db,
+        enforcement_ledger,
         "claim_runs",
         lambda limit=10: _async_value([{"id": 1, "action_id": 2}]),
     )
     monkeypatch.setattr(
-        enforcement_db,
+        enforcement_ledger,
         "requeue_stale_runs",
         lambda *args, **kwargs: _async_none(),
     )
     monkeypatch.setattr(
-        enforcement_db,
+        enforcement_ledger,
         "load_run_action",
         lambda run_id: _async_value(
             {
@@ -810,17 +812,17 @@ def test_a_run_for_an_active_action_is_cancelled(
         ),
     )
     monkeypatch.setattr(
-        enforcement_db,
+        enforcement_ledger,
         "cancel_run",
         lambda run_id, **kwargs: _record(cancelled, run_id),
     )
     monkeypatch.setattr(
-        enforcement_db,
+        enforcement_ledger,
         "claim_targets",
         lambda *args, **kwargs: _async_value([]),
     )
 
-    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(_FakeBot()))  # type: ignore[arg-type]
 
     assert cancelled == [1]
 
@@ -864,14 +866,14 @@ def test_one_failed_run_does_not_stop_the_next(
             await coro
         return [None]
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
-    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
-    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "complete_target", _complete)
+    monkeypatch.setattr(moderation_enforcement, "fan_out", _fan_out)
 
-    asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+    asyncio.run(moderation_enforcement.run_once(_FakeBot()))  # type: ignore[arg-type]
 
     assert loaded == [1, 2]
     assert completed == [3]
@@ -903,14 +905,14 @@ def test_an_open_telegram_circuit_does_not_consume_target_attempts(
         claimed.append(limit)
         return []
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
 
     _cb.telegram.reset()
     for _ in range(_cb.telegram._failure_threshold):
         _cb.telegram.record_failure()
     try:
-        asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+        asyncio.run(moderation_enforcement.run_once(_FakeBot()))  # type: ignore[arg-type]
         assert claimed == []
     finally:
         _cb.telegram.reset()
@@ -957,17 +959,17 @@ def test_a_half_open_circuit_claims_only_its_single_probe(
             await coro
         return [None] * len(coros)
 
-    monkeypatch.setattr(enforcement_db, "requeue_stale_runs", _requeue)
-    monkeypatch.setattr(enforcement_db, "claim_runs", _claim_runs)
-    monkeypatch.setattr(enforcement_db, "load_run_action", _load)
-    monkeypatch.setattr(enforcement_db, "claim_targets", _targets)
-    monkeypatch.setattr(enforcement_db, "complete_target", _complete)
-    monkeypatch.setattr(enforcement_worker, "fan_out", _fan_out)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "complete_target", _complete)
+    monkeypatch.setattr(moderation_enforcement, "fan_out", _fan_out)
 
     _cb.telegram.reset()
     _cb.telegram._state = _cb.CircuitState.HALF_OPEN
     try:
-        asyncio.run(enforcement_worker.run_once(_FakeBot()))  # type: ignore[arg-type]
+        asyncio.run(moderation_enforcement.run_once(_FakeBot()))  # type: ignore[arg-type]
     finally:
         _cb.telegram.reset()
 
@@ -990,14 +992,14 @@ def test_an_immediate_delivery_leaves_the_run_queued_on_an_open_circuit(
         claimed.append(run_id)
         return {"id": run_id}
 
-    monkeypatch.setattr(enforcement_db, "claim_run", _claim_run)
+    monkeypatch.setattr(enforcement_ledger, "claim_run", _claim_run)
 
     _cb.telegram.reset()
     for _ in range(_cb.telegram._failure_threshold):
         _cb.telegram.record_failure()
     try:
         delivered = asyncio.run(
-            enforcement_worker.deliver_queued_run(_FakeBot(), 7)  # type: ignore[arg-type]
+            moderation_enforcement.deliver_queued_run(_FakeBot(), 7)  # type: ignore[arg-type]
         )
     finally:
         _cb.telegram.reset()

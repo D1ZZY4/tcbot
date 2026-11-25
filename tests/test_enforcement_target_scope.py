@@ -11,7 +11,7 @@ import dataclasses
 from typing import Any
 
 from tcbot import cfg
-from tcbot.database import enforcement_db
+from tcbot.database import enforcement_ledger
 
 
 def test_queue_run_filters_inactive_non_primary_targets(
@@ -33,11 +33,11 @@ def test_queue_run_filters_inactive_non_primary_targets(
             return 5
 
     monkeypatch.setattr(
-        enforcement_db, "cfg", dataclasses.replace(cfg, main_group=-100)
+        enforcement_ledger, "cfg", dataclasses.replace(cfg, main_group=-100)
     )
 
     asyncio.run(
-        enforcement_db.queue_run(
+        enforcement_ledger.queue_run(
             _Session(),  # type: ignore[arg-type]
             action_id=1,
             operation="apply",

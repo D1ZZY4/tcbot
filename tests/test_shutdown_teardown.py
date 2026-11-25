@@ -13,12 +13,12 @@ from typing import Any
 import pytest
 
 from tcbot import __main__ as main_mod
-from tcbot import error_reporter
 from tcbot.database import mtproto as mtproto_mod
 from tcbot.database import redis_client
 from tcbot.database import scheduler as sched_mod
 from tcbot.modules.helper.extraction import refresh as identity_refresh
 from tcbot.modules.helper.pipelines import connect_common
+from tcbot.modules.helper.pipelines.errors import report as error_reporter
 
 
 def _stub_shutdown_steps(monkeypatch: pytest.MonkeyPatch) -> None:

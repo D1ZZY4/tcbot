@@ -4,9 +4,9 @@
 
 """Rich link markup and Telegram URL construction.
 
-One owner for every link: HTML anchors and user mentions, public ``t.me``
-URLs, ban deep links, and cached community chat link resolution. Buttons live
-in :mod:`tcbot.modules.helper.rich.button` and are never re-exported here.
+One owner for link text and URLs: inline anchors, public ``t.me`` URLs, ban
+deep links, and cached community chat link resolution. User mentions are
+native rich buttons owned by :mod:`tcbot.modules.helper.rich.button`.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import time
 
 from pyrogram import Client
 
-from tcbot.modules.helper.rich.style import bold, esc
+from tcbot.modules.helper.rich.style import esc
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
@@ -34,19 +34,6 @@ _locks: dict[int, asyncio.Lock] = {}
 def link(text: object, url: str) -> str:
     """Render an inline link, escaping both label and URL."""
     return f'<a href="{esc(url)}">{esc(text)}</a>'
-
-
-def user_ref(user_id: int, name: str) -> str:
-    """Mention a user by ID. Non-positive IDs render as bold text."""
-    label = str(name) if name else str(user_id)
-    if user_id <= 0:
-        return bold(label)
-    return link(label, f"tg://user?id={user_id}")
-
-
-def mention(user_id: int, name: str) -> str:
-    """Alias of :func:`user_ref` for call sites that read as a mention."""
-    return user_ref(user_id, name)
 
 
 def chat_id_to_link_id(chat_id: int) -> str:
@@ -138,8 +125,6 @@ __all__ = [
     "display",
     "forget",
     "link",
-    "mention",
     "message_link",
     "resolve",
-    "user_ref",
 ]

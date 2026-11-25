@@ -11,7 +11,9 @@ from typing import Any
 
 import pytest
 
-from tcbot.modules.helper.pipelines import ban_actions
+from tcbot import database as db
+from tcbot.modules.helper import guards, messages
+from tcbot.modules.helper.pipelines import ban_executor, moderation_enforcement
 
 
 class _Log:
@@ -56,7 +58,7 @@ async def test_a_partial_enforcement_reports_its_actual_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     log = _Log()
-    monkeypatch.setattr(ban_actions, "log", log)
+    monkeypatch.setattr(ban_executor, "log", log)
 
     async def _refusal(*_args: Any, **_kwargs: Any) -> None:
         return None
@@ -98,24 +100,22 @@ async def test_a_partial_enforcement_reports_its_actual_error(
     def _outcome(_report: Any, _total: int) -> Any:
         return SimpleNamespace(total=2, applied=1, failed=1, pending=0)
 
-    monkeypatch.setattr(ban_actions.guards, "enforcement_refusal", _refusal)
-    monkeypatch.setattr(ban_actions.db.groups_db, "active_groups", _groups)
-    monkeypatch.setattr(ban_actions, "locale_for_user", _none)
-    monkeypatch.setattr(ban_actions.db.bans_db, "get_active_ban", _none)
-    monkeypatch.setattr(ban_actions, "bot_identity", _identity)
-    monkeypatch.setattr(ban_actions, "upload_proof_media", _upload)
-    monkeypatch.setattr(ban_actions, "demote_before_enforcement", _refusal)
-    monkeypatch.setattr(ban_actions, "_execute_ban_record", _record)
-    monkeypatch.setattr(ban_actions.enforcement_worker, "deliver_queued_run", _none)
-    monkeypatch.setattr(ban_actions.db.enforcement_db, "run_report", _report)
-    monkeypatch.setattr(
-        ban_actions.db.enforcement_db, "failed_report_targets", _failed_targets
-    )
-    monkeypatch.setattr(ban_actions.db.enforcement_db, "delivery_outcome", _outcome)
-    monkeypatch.setattr(ban_actions.db.users_cache, "upsert_user", _none)
-    monkeypatch.setattr(ban_actions.messages, "send_text", _none)
+    monkeypatch.setattr(guards, "enforcement_refusal", _refusal)
+    monkeypatch.setattr(db.groups_db, "active_groups", _groups)
+    monkeypatch.setattr(ban_executor, "locale_for_user", _none)
+    monkeypatch.setattr(db.bans_db, "get_active_ban", _none)
+    monkeypatch.setattr(ban_executor, "bot_identity", _identity)
+    monkeypatch.setattr(ban_executor, "upload_proof_media", _upload)
+    monkeypatch.setattr(ban_executor, "demote_before_enforcement", _refusal)
+    monkeypatch.setattr(ban_executor, "_execute_ban_record", _record)
+    monkeypatch.setattr(moderation_enforcement, "deliver_queued_run", _none)
+    monkeypatch.setattr(db.enforcement_ledger, "run_report", _report)
+    monkeypatch.setattr(db.enforcement_ledger, "failed_report_targets", _failed_targets)
+    monkeypatch.setattr(db.enforcement_ledger, "delivery_outcome", _outcome)
+    monkeypatch.setattr(db.users_cache, "upsert_user", _none)
+    monkeypatch.setattr(messages, "send_text", _none)
 
-    await ban_actions._execute_ban(_Bot(), [], _meta())  # type: ignore[arg-type]
+    await ban_executor.execute_ban(_Bot(), [], _meta())  # type: ignore[arg-type]
 
     failures = [entry for entry in log.errors if "left 1/2 group" in entry[0]]
     assert len(failures) == 1

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import select
 
-from tcbot.database import enforcement_db, notifications_db
+from tcbot.database import enforcement_ledger, notifications_db
 from tcbot.database.base import moderation_actions, moderation_appeals
 from tcbot.database.engine import run_transaction
 from tcbot.database.users_cache import ensure_users
@@ -92,7 +92,7 @@ async def revoke_ban_and_queue_unban(
         revoked = cast("CursorResult", result).rowcount
         run_id: int | None = None
         for action_id in action_ids:
-            queued = await enforcement_db.queue_run(
+            queued = await enforcement_ledger.queue_run(
                 sess,
                 action_id=int(action_id),
                 operation="revoke",
@@ -175,7 +175,7 @@ async def approve_appeal_and_queue_unban(
             # * the whole unit has to roll back instead of committing an
             # * accepted appeal that still sits on an active ban.
             raise RuntimeError(f"the ban {ban_id!r} could not be revoked")
-        run_id = await enforcement_db.queue_run(
+        run_id = await enforcement_ledger.queue_run(
             sess,
             action_id=int(action_id),
             operation="revoke",

@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Warning actor, threshold ban, management, and conversation factory."""
+"""Warning actor, threshold ban, management, and scope adapter."""
 
 from __future__ import annotations
 
@@ -11,26 +11,22 @@ from typing import TYPE_CHECKING
 
 from pyrogram.types import Message
 
-from tcbot import cfg, enforcement_worker
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import buttons, guards, messages
 from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, send_log
+from tcbot.modules.helper.pipelines import moderation_enforcement
 from tcbot.modules.helper.pipelines.demote_actions import (
     Demote,
     demote_before_enforcement,
 )
-from tcbot.modules.helper.pipelines.mod_action_steps import (
-    BuildReason,
-    build_modaction_conv,
-    rules_from_scope,
-)
+from tcbot.modules.helper.pipelines.mod_action_steps import rules_from_scope
 from tcbot.modules.helper.pipelines.proof_post import (
     ProofUpload,
     upload_proof_for_action,
 )
-from tcbot.modules.helper.pipelines.proof_steps import BuildProof
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import (
     fan_out,
@@ -42,15 +38,9 @@ from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from typing import Any
 
-    from pyrogram.filters import Filter as BaseFilter
-
 log = get_logger(__name__)
-
-reason = BuildReason("warn", skip_allowed=False)
-proof = BuildProof("warn")
 
 # ────────────────────────── Warn executor ───────────────────────── #
 
@@ -377,7 +367,7 @@ async def execute_warn(
         pending = 0
         if ban_run_id is not None:
             try:
-                await enforcement_worker.deliver_queued_run(ctx.bot, ban_run_id)
+                await moderation_enforcement.deliver_queued_run(ctx.bot, ban_run_id)
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -386,19 +376,19 @@ async def execute_warn(
                     ban_run_id,
                 )
             try:
-                report = await db.enforcement_db.run_report(ban_run_id)
+                report = await db.enforcement_ledger.run_report(ban_run_id)
             except asyncio.CancelledError:
                 raise
             except Exception:
                 log.exception("Warn threshold run report failed for %s", ban_run_id)
                 report = None
-            failed_targets = db.enforcement_db.failed_report_targets(report)
-            delivery = db.enforcement_db.delivery_outcome(report, len(groups))
+            failed_targets = db.enforcement_ledger.failed_report_targets(report)
+            delivery = db.enforcement_ledger.delivery_outcome(report, len(groups))
             total_groups = delivery.total
             applied = delivery.applied
             failed_count = delivery.failed
             pending = delivery.pending
-            landed_chat_ids = db.enforcement_db.landed_report_chat_ids(report)
+            landed_chat_ids = db.enforcement_ledger.landed_report_chat_ids(report)
             transient = [
                 (
                     group,
@@ -593,6 +583,27 @@ async def execute_unwarn(
         return
     chat_id = chat_id_of(chat)
     locale = await locale_for_update(ctx)
+    admin = ctx.effective_user
+    if admin is None:
+        return
+    # * Re-check the executor against the target at execution time: the
+    # * entry command compared the two roles, but a demotion could land
+    # * before this single-tap Unwarn runs.
+    refusal = await guards.enforcement_refusal(
+        admin.id,
+        target_id,
+        min_role="moderator",
+        action="Unwarn",
+        locale=locale,
+    )
+    if refusal is not None:
+        await reply_rich(
+            msg,
+            refusal,
+            log_label="execute_unwarn rank-refusal",
+            parse_mode=None,
+        )
+        return
     try:
         count = await db.warns_db.warn_count(target_id, chat_id)
     except Exception:
@@ -776,6 +787,24 @@ async def execute_resetwarns(
     chat_id = chat_id_of(chat)
     chat_title = chat.title or str(chat_id)
     locale = await locale_for_update(ctx)
+    admin = ctx.effective_user
+    if admin is None:
+        return
+    refusal = await guards.enforcement_refusal(
+        admin.id,
+        target_id,
+        min_role="moderator",
+        action="Resetwarns",
+        locale=locale,
+    )
+    if refusal is not None:
+        await reply_rich(
+            msg,
+            refusal,
+            log_label="execute_resetwarns rank-refusal",
+            parse_mode=None,
+        )
+        return
     removed = 0
     try:
         removed = await db.warns_db.clear_warns(target_id, chat_id)
@@ -850,23 +879,4 @@ async def _exec_warn(ctx: Ctx) -> None:
     await execute_warn(ctx, target_id, target_name, reason_text, proof_msgs=proof_msgs)
 
 
-# ─────────────────── ConversationHandler factory ────────────────── #
-
-
-def warn_conversation(
-    entry_fn: Callable[..., object],
-    entry_filter: BaseFilter,
-    *,
-    escape_filter: BaseFilter | None = None,
-) -> object:
-    """Return the warn ConversationHandler via the central mod_action_steps factory."""
-    return build_modaction_conv(
-        reason,
-        proof,
-        entry_fn,
-        _exec_warn,
-        entry_filter,
-        escape_filter=escape_filter,
-        min_role="moderator",
-        rules_enabled=True,
-    )
+__all__ = ["execute_resetwarns", "execute_unwarn", "execute_warn", "execute_warnlist"]

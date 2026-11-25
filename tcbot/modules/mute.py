@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Group mute and unmute command handlers: validates permissions and delegates to mute_actions."""
+"""Group mute and unmute command handlers: validates permissions and delegates to the mute pipeline."""
 
 from __future__ import annotations
 
@@ -20,12 +20,12 @@ from tcbot.modules.helper.pipelines.mod_action_steps import (
     parse_inline_reason,
     reason_too_long_text,
 )
-from tcbot.modules.helper.pipelines.mute_actions import (
-    execute_unmute,
+from tcbot.modules.helper.pipelines.mute_conversation import (
     mute_conversation,
     proof,
     reason,
 )
+from tcbot.modules.helper.pipelines.mute_executor import execute_unmute
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import code, esc, t, user_ref
 from tcbot.utils.logger import get_logger

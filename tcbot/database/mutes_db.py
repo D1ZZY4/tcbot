@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from tcbot.database import enforcement_db, moderation_db
+from tcbot.database import enforcement_ledger, moderation_db
 from tcbot.database.base import moderation_actions
 from tcbot.database.documents import ActiveMuteDoc, MuteDoc
 from tcbot.database.engine import (
@@ -209,7 +209,7 @@ async def record_mute(
         )
         run_id: int | None = None
         if enforcement_chat_ids is not None:
-            run_id = await enforcement_db.queue_run(
+            run_id = await enforcement_ledger.queue_run(
                 sess,
                 action_id=int(row["id"]),
                 operation="apply",
@@ -311,7 +311,7 @@ async def revoke_mute_and_queue_unmute(
             return 0, None
         run_id: int | None = None
         for action_id in action_ids:
-            queued = await enforcement_db.queue_run(
+            queued = await enforcement_ledger.queue_run(
                 sess,
                 action_id=int(action_id),
                 operation="revoke",

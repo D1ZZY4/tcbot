@@ -9,11 +9,17 @@ from __future__ import annotations
 import logging
 
 import pytest
-from pyrogram.errors import AuthKeyDuplicated, Timedout, Timeout
 from pyrogram.session.session import AuthKeyNotFound
 from sqlalchemy.exc import OperationalError
 
-from tcbot import error_reporter as classify
+from tcbot.modules.helper.pipelines.errors import classify
+from tcbot.modules.helper.pipelines.errors.exceptions import (
+    AuthKeyDuplicated,
+    Timedout,
+)
+from tcbot.modules.helper.pipelines.errors.exceptions import (
+    RPCTimeout as Timeout,
+)
 from tcbot.utils.circuit_breaker import CircuitOpenError
 
 

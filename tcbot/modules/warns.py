@@ -23,13 +23,15 @@ from tcbot.modules.helper.pipelines.mod_action_steps import (
     parse_inline_reason,
     reason_too_long_text,
 )
-from tcbot.modules.helper.pipelines.warn_actions import (
-    execute_resetwarns,
-    execute_unwarn,
-    execute_warnlist,
+from tcbot.modules.helper.pipelines.warn_conversation import (
     proof,
     reason,
     warn_conversation,
+)
+from tcbot.modules.helper.pipelines.warn_executor import (
+    execute_resetwarns,
+    execute_unwarn,
+    execute_warnlist,
 )
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import Safe, bold, t, user_ref

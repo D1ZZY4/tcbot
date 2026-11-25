@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import warn_actions
+from tcbot.modules.helper.pipelines import warn_executor
 
 _GROUPS: list[dict[str, Any]] = [
     {"chat_id": -1001, "title": "A"},
@@ -43,7 +43,7 @@ def test_complete_enforcement_clears_the_whole_slate(
     """A ban that reached every group clears every warning."""
     calls = _install(monkeypatch)
     asyncio.run(
-        warn_actions._clear_warns_after_threshold_ban(42, _GROUPS, [-1001, -1002])
+        warn_executor._clear_warns_after_threshold_ban(42, _GROUPS, [-1001, -1002])
     )
     assert calls["all"] == [42]
     assert calls["chats"] == []
@@ -54,7 +54,7 @@ def test_partial_enforcement_clears_only_the_reached_groups(
 ) -> None:
     """A ban that missed a group must keep that group's warnings."""
     calls = _install(monkeypatch)
-    asyncio.run(warn_actions._clear_warns_after_threshold_ban(42, _GROUPS, [-1001]))
+    asyncio.run(warn_executor._clear_warns_after_threshold_ban(42, _GROUPS, [-1001]))
     assert calls["all"] == []
     assert calls["chats"] == [(42, [-1001])]
 
@@ -65,7 +65,7 @@ def test_partial_enforcement_ignores_benign_refusals(
     """A user-not-in-chat refusal is not a failed enforcement."""
     calls = _install(monkeypatch)
     asyncio.run(
-        warn_actions._clear_warns_after_threshold_ban(42, _GROUPS, [-1001, -1002])
+        warn_executor._clear_warns_after_threshold_ban(42, _GROUPS, [-1001, -1002])
     )
     assert calls["all"] == [42]
     assert calls["chats"] == []
@@ -77,7 +77,7 @@ def test_a_reduced_scope_never_clears_the_whole_slate(
     """A reduced group list must not clear warnings for untouched groups."""
     calls = _install(monkeypatch)
     asyncio.run(
-        warn_actions._clear_warns_after_threshold_ban(
+        warn_executor._clear_warns_after_threshold_ban(
             42,
             _GROUPS,
             [-1001, -1002],

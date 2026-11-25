@@ -16,8 +16,8 @@ from pyrogram import ContinuePropagation
 from tcbot.modules.helper.handlers import ConversationHandler
 from tcbot.modules.helper.pipelines import (
     appeal_submit,
-    ban_actions,
     ban_rules_step,
+    ban_session,
     mod_action_steps,
     proof_session,
     proof_steps,
@@ -196,12 +196,12 @@ def test_a_cancelled_flush_is_awaited_before_the_scope_is_reused() -> None:
             meta=dict(scope), scope=scope, deadline=0.0, last_arrival=0.0
         )
         session.flush_task = task
-        ban_actions.proof_sessions.add(key, session)
+        ban_session.proof_sessions.add(key, session)
 
-        await ban_actions._cancel_proof_session(scope)
+        await ban_session._cancel_proof_session(scope)
 
         assert task.done()
-        assert key not in ban_actions.proof_sessions
+        assert key not in ban_session.proof_sessions
         assert scope == {}
 
     asyncio.run(_run())

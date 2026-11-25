@@ -40,7 +40,7 @@ body = "They can rejoin via invite link."
 unban = " WARNING: the post-kick unban step failed; the user is still banned in this chat. A repair task retries the unban automatically; if it remains banned, unban them manually from the chat member list."
 
 [summary]
-body = "{user} has been kicked.\nReason: {reason}\n{rejoin}{warning}"
+title = "Kick Applied"
 
 [error]
 body = "Couldn't kick {user}. Please check bot permissions and retry."

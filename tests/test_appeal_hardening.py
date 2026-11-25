@@ -135,9 +135,9 @@ def _wire_approve(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(db.users_cache, "get_first_name", _fname)
     monkeypatch.setattr(db.bans_db, "approve_appeal_and_queue_unban", _approve)
     monkeypatch.setattr(
-        appeal_review.enforcement_worker, "deliver_queued_run", _deliver
+        appeal_review.moderation_enforcement, "deliver_queued_run", _deliver
     )
-    monkeypatch.setattr(db.enforcement_db, "run_report", _report)
+    monkeypatch.setattr(db.enforcement_ledger, "run_report", _report)
     monkeypatch.setattr(appeal_review, "locale_for_update", _locale_update)
     monkeypatch.setattr(appeal_review, "locale_for_user", _locale_user)
     return record

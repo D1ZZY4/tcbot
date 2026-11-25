@@ -61,6 +61,7 @@ scope_warn = " PERINGATAN: daftar grup gagal dimuat, jadi sebagian grup mungkin 
 body = "Kamu di-ban dari {community} se-federasi.\nAlasan: {reason}\n\nKamu bisa mengajukan banding lewat tombol di bawah ↴."
 
 [summary]
+title = "Ban Federasi"
 body = "{user} telah di-ban.\n*Alasan:* {reason}\n{applied}"
 
 [confirm]

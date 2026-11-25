@@ -8,13 +8,15 @@ from __future__ import annotations
 
 import asyncio
 
-from tcbot import cfg, enforcement_worker
+from tcbot import cfg
 from tcbot import database as db
 from tcbot.database import documents as docs
 from tcbot.modules.helper import guards, messages
+from tcbot.modules.helper.buttons import mention_button
 from tcbot.modules.helper.context import Ctx, display_name
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import reply_rich, send_log
+from tcbot.modules.helper.pipelines import moderation_enforcement
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_unban
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
@@ -93,7 +95,7 @@ async def execute_unban(
     # * fan-out. Deactivating first and then discovering an empty list
     # * leaves chats unbanned-nowhere with no record to retry from (the
     # * next /tcunban would report "no active ban" while chats still ban
-    # * the user). Mirrors _execute_mute's groups-first fail-closed order.
+    # * the user). Mirrors execute_mute's groups-first fail-closed order.
     # * Costs one sequential read, but active_groups is L1-cached (30 s).
     try:
         groups = await db.groups_db.active_groups()
@@ -242,22 +244,22 @@ async def execute_unban(
     # * Deliver now on the fast path. A claim failure means the scheduled
     # * worker already owns the run, so the summary reports it as queued.
     try:
-        await enforcement_worker.deliver_queued_run(ctx.bot, run_id)
+        await moderation_enforcement.deliver_queued_run(ctx.bot, run_id)
     except asyncio.CancelledError:
         raise
     except Exception:
         log.exception("Unban delivery failed for run %s; it stays queued", run_id)
 
     try:
-        report = await db.enforcement_db.run_report(run_id)
+        report = await db.enforcement_ledger.run_report(run_id)
     except asyncio.CancelledError:
         raise
     except Exception:
         log.exception("Unban run report failed for run %s", run_id)
         report = None
-    settled = db.enforcement_db.report_settled(report)
-    failed_targets = db.enforcement_db.failed_report_targets(report)
-    delivery = db.enforcement_db.delivery_outcome(report, len(groups))
+    settled = db.enforcement_ledger.report_settled(report)
+    failed_targets = db.enforcement_ledger.failed_report_targets(report)
+    delivery = db.enforcement_ledger.delivery_outcome(report, len(groups))
     total = delivery.total
     failed = delivery.failed
     landed = delivery.applied
@@ -312,11 +314,19 @@ async def execute_unban(
             ),
             reply_rich(
                 msg,
-                t(
-                    "unbanning.summary.body",
+                messages.replies.outcome_card(
+                    t("unbanning.summary.title", locale, plain=True),
+                    [
+                        (
+                            t("checking.ban_info.table.user", locale, plain=True),
+                            mention_button(target_id, target_fname),
+                        ),
+                        (
+                            t("common.outcome.result", locale, plain=True),
+                            Safe(unban_note),
+                        ),
+                    ],
                     locale,
-                    user=Safe(user_ref(target_id, target_fname)),
-                    note=Safe(unban_note),
                 ),
             ),
             return_exceptions=True,
@@ -331,3 +341,6 @@ async def execute_unban(
         )
     if isinstance(log_r, BaseException):
         log.error("Unban log send failed for user %d: %s", target_id, log_r)
+
+
+__all__ = ["execute_unban"]

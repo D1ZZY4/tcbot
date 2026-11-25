@@ -12,11 +12,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from pyrogram.errors import SessionRevoked
 
 from tcbot import database as db
 from tcbot.database import mtproto
 from tcbot.modules.helper.extraction.refresh import _fetch_live_identity
+from tcbot.modules.helper.pipelines.errors.exceptions import SessionRevoked
 
 
 def _with_creds(monkeypatch: pytest.MonkeyPatch, api_id: int, api_hash: str) -> None:

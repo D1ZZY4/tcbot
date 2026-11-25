@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 
 from tcbot import database as db
-from tcbot import error_reporter
 from tcbot.modules.helper import identity
 from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.extraction import extract_target
@@ -20,6 +19,7 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     send_log,
 )
+from tcbot.modules.helper.pipelines.errors import report as error_reporter
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger

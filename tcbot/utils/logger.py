@@ -221,6 +221,7 @@ def _bridge_to_stdlib(message: Any) -> None:
         record["message"],
         (),
         (exc.type, exc.value, exc.traceback) if exc and exc.value is not None else None,
+        func=record["function"] or "",
     )
     if std_record.exc_info:
         std_record.exc_text = None

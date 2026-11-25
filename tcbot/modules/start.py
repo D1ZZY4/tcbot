@@ -125,8 +125,8 @@ async def cmd_start(ctx: Ctx) -> None:
     identity, locale = identity_r, locale_r
     botname = identity.first_name or ""
 
-    # * A forum is a supergroup in Telegram; "forum" is not a chat type.
-    if getattr(chat.type, "value", chat.type) in ("group", "supergroup"):
+    # * Kurigram reports a forum-enabled supergroup with the "forum" value.
+    if getattr(chat.type, "value", chat.type) in ("group", "supergroup", "forum"):
         bot_username = identity.username or ""
         await reply_rich(
             msg,

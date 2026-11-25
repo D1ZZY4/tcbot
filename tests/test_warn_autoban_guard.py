@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import warn_actions
+from tcbot.modules.helper.pipelines import warn_executor
 from tcbot.modules.helper.pipelines.proof_post import ProofUpload
 
 
@@ -58,14 +58,14 @@ def test_threshold_ban_aborts_on_role_lookup_failure(
     async def _add_warn(*args: Any, **kwargs: Any) -> int:
         return 3
 
-    monkeypatch.setattr(warn_actions, "locale_for_update", _locale)
+    monkeypatch.setattr(warn_executor, "locale_for_update", _locale)
     monkeypatch.setattr(db.warns_db, "add_warn", _add_warn)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role_lookup)
     monkeypatch.setattr(db.bans_db, "get_active_ban", _boom)
     monkeypatch.setattr(db.groups_db, "active_groups", _boom)
 
     asyncio.run(
-        warn_actions.execute_warn(
+        warn_executor.execute_warn(
             ctx,  # type: ignore[arg-type]
             42,
             "Target",
@@ -145,8 +145,8 @@ def test_threshold_ban_stores_warn_proof_on_ban_record(
         cleared.append(user_id)
         return 1
 
-    monkeypatch.setattr(warn_actions, "locale_for_update", _locale)
-    monkeypatch.setattr(warn_actions, "upload_proof_for_action", _upload)
+    monkeypatch.setattr(warn_executor, "locale_for_update", _locale)
+    monkeypatch.setattr(warn_executor, "upload_proof_for_action", _upload)
     monkeypatch.setattr(db.warns_db, "add_warn", _add_warn)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role_lookup)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
@@ -169,7 +169,7 @@ def test_threshold_ban_stores_warn_proof_on_ban_record(
         effective_user=_update.effective_user,
     )
     asyncio.run(
-        warn_actions.execute_warn(
+        warn_executor.execute_warn(
             ctx,  # type: ignore[arg-type]
             42,
             "Target",
@@ -238,7 +238,7 @@ def test_threshold_ban_demotes_at_enforcement_time(
         demoted.append((target_id, trigger))
         return "moderator"
 
-    monkeypatch.setattr(warn_actions, "locale_for_update", _locale)
+    monkeypatch.setattr(warn_executor, "locale_for_update", _locale)
     monkeypatch.setattr(db.warns_db, "add_warn", _add_warn)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role_lookup)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
@@ -246,7 +246,7 @@ def test_threshold_ban_demotes_at_enforcement_time(
     monkeypatch.setattr(db.bans_db, "create_ban", _create_ban)
     monkeypatch.setattr(db.bans_db, "set_log_message_id", _set_log)
     monkeypatch.setattr(db.warns_db, "clear_all_warns", _clear_all)
-    monkeypatch.setattr(warn_actions, "demote_before_enforcement", _demote)
+    monkeypatch.setattr(warn_executor, "demote_before_enforcement", _demote)
 
     msg = _FakeMsg()
     _update = SimpleNamespace(
@@ -262,7 +262,7 @@ def test_threshold_ban_demotes_at_enforcement_time(
         effective_user=_update.effective_user,
     )
     asyncio.run(
-        warn_actions.execute_warn(
+        warn_executor.execute_warn(
             ctx,  # type: ignore[arg-type]
             42,
             "Target",

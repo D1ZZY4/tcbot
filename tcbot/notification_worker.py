@@ -11,11 +11,15 @@ from datetime import timedelta
 from typing import Any
 
 from pyrogram import Client
-from pyrogram.errors import BadRequest, Forbidden
-from pyrogram.types import InlineKeyboardMarkup
 
 from tcbot import database as db
 from tcbot.database.types import as_int
+from tcbot.modules.helper.pipelines.errors.exceptions import (
+    is_bad_request,
+    is_forbidden,
+)
+from tcbot.modules.helper.rich.edit import edit_rich
+from tcbot.modules.helper.rich.msg import html_message
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
 from tcbot.utils.i18n import resolve_locale, t
@@ -201,15 +205,14 @@ async def _process_task(
         return
     try:
         async with asyncio.timeout(TELEGRAM_ACTION_TIMEOUT):
-            await bot.edit_message_text(
+            await edit_rich(
+                bot,
                 chat_id,
                 message_id,
-                text,
-                parse_mode=None,
-                # * Kurigram drops None values, so an explicit empty keyboard is
-                # * required to strip the Approve/Reject buttons from a
-                # * decided card on this retry path too.
-                reply_markup=InlineKeyboardMarkup([]),
+                html_message(text),
+                # * An explicit empty keyboard is required to strip the
+                # * Approve/Reject buttons from a decided card.
+                clear_markup=True,
             )
     except asyncio.CancelledError:
         _cb.telegram.release_probe()
@@ -220,13 +223,13 @@ async def _process_task(
         # * service answer, including RetryAfter and BadRequest, does not;
         # * otherwise five rate-limit replies would stall every fan-out.
         if isinstance(exc, TimeoutError) or (
-            isinstance(exc, OSError) and not isinstance(exc, BadRequest)
+            isinstance(exc, OSError) and not is_bad_request(exc)
         ):
             _cb.telegram.record_failure()
         else:
             _cb.telegram.release_probe(reached_service=True)
-        if isinstance(exc, Forbidden) or (
-            isinstance(exc, BadRequest)
+        if is_forbidden(exc) or (
+            is_bad_request(exc)
             and ("not found" in detail or "message_id_invalid" in detail)
         ):
             await _complete(
@@ -235,7 +238,7 @@ async def _process_task(
                 expected_attempts=attempts,
             )
             return
-        if isinstance(exc, BadRequest) and "not modified" in detail:
+        if is_bad_request(exc) and "not modified" in detail:
             # * Telegram already has the closed text, so the edit landed from
             # * the operator's point of view. A failed settlement must not
             # * fall through to run_once's ceiling handler, which would mark

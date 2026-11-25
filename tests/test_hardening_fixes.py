@@ -9,14 +9,14 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from pyrogram.errors import BadRequest
 
 from tcbot import cfg
-from tcbot.database import enforcement_db
+from tcbot.database import enforcement_ledger
 from tcbot.database.rules_db import sets as rules_sets
 from tcbot.database.rules_db.categories import _available_key
 from tcbot.database.schema import SCHEMA_FILES, _schema_of
 from tcbot.database.schema.loader import file_statements
+from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest
 from tcbot.modules.helper.rich.edit import _edit_via
 from tests.postgres_support import identity_db_call
 
@@ -104,10 +104,10 @@ async def test_primary_group_keeps_enforcement_retry(
     async def _transaction(op: Any) -> Any:
         return await op(_Session())
 
-    monkeypatch.setattr(enforcement_db, "run_transaction", _transaction)
+    monkeypatch.setattr(enforcement_ledger, "run_transaction", _transaction)
 
-    await enforcement_db.claim_targets(1)
-    await enforcement_db.requeue_stale_runs()
+    await enforcement_ledger.claim_targets(1)
+    await enforcement_ledger.requeue_stale_runs()
 
     claim, requeue = calls[0], calls[-1]
     assert "cc.chat_id = :primary_chat_id" in claim[0]

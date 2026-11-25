@@ -74,6 +74,7 @@ from tcbot.modules.helper.buttons.topics import (
     privacy_btn,
     privacy_policy_sections_btn,
 )
+from tcbot.modules.helper.rich.button import mention_button
 
 __all__ = [
     "about_sections_btn",
@@ -109,6 +110,7 @@ __all__ = [
     "join_ban_btn",
     "language_list_btn",
     "main_menu_btn",
+    "mention_button",
     "module_help_btn",
     "nav_row",
     "open_pm_btn",

@@ -22,7 +22,7 @@ from tcbot.database import users_cache
 from tcbot.modules import netspeed
 from tcbot.modules.helper import guards
 from tcbot.modules.helper.extraction import refresh as refresh_mod
-from tcbot.modules.helper.pipelines import mute_actions, proof_post, stats_panels
+from tcbot.modules.helper.pipelines import mute_executor, proof_post, stats_panels
 from tcbot.utils import logger as logger_mod
 from tcbot.utils.circuit_breaker import CircuitBreaker, CircuitState
 from tcbot.utils.time_and_date import parse_duration, utc_now
@@ -173,18 +173,26 @@ def test_unmute_partial_queues_a_durable_delivery(
     ctx.bot.send_message = AsyncMock()
     ctx.bot.send_rich_message = AsyncMock()
 
-    monkeypatch.setattr(mute_actions, "locale_for_update", _locale)
+    async def _role(uid: int, *, fresh: bool = False) -> str | None:
+        return "moderator" if uid == 1 else None
+
+    # * The unmute executor re-checks the pair before revoking the mute; a
+    # * fresh role keeps this test on the partial-delivery path it asserts.
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(mute_executor, "locale_for_update", _locale)
     monkeypatch.setattr(
-        mute_actions, "cfg", SimpleNamespace(main_group=-1, logs=(-3, None))
+        mute_executor, "cfg", SimpleNamespace(main_group=-1, logs=(-3, None))
     )
     monkeypatch.setattr(db.mutes_db, "get_active_mute", _active)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
     monkeypatch.setattr(db.mutes_db, "revoke_mute_and_queue_unmute", _revoke)
-    monkeypatch.setattr(db.enforcement_db, "run_report", _report)
-    monkeypatch.setattr(mute_actions.enforcement_worker, "deliver_queued_run", _deliver)
+    monkeypatch.setattr(db.enforcement_ledger, "run_report", _report)
+    monkeypatch.setattr(
+        mute_executor.moderation_enforcement, "deliver_queued_run", _deliver
+    )
 
     asyncio.run(
-        mute_actions.execute_unmute(update, ctx, 33, "Target")  # type: ignore[arg-type]
+        mute_executor.execute_unmute(update, ctx, 33, "Target")  # type: ignore[arg-type]
     )
     assert revoked == [(33, 1, [1, 2, -1])]
     msg.reply_text.assert_awaited_once()
@@ -431,3 +439,56 @@ def test_user_table_renders_the_stored_profile_timestamps(
     }
     assert "stats_main" in callbacks
     assert not any(cb.startswith("stats_user_item") for cb in callbacks)
+
+
+def test_identity_refresh_deduplicates_per_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeated detail views of one user schedule one live refresh."""
+    spawned: list[Any] = []
+
+    class _Tracker:
+        pending = 0
+
+        def spawn(self, coro: Any) -> bool:
+            spawned.append(coro)
+            return True
+
+    async def _refresh(bot: Any, target_id: int) -> None:
+        return None
+
+    monkeypatch.setattr(refresh_mod, "identity_refresh_tasks", _Tracker())
+    monkeypatch.setattr(refresh_mod, "_identity_refresh_inflight", set())
+    monkeypatch.setattr(refresh_mod, "_identity_refresh_drops", 0)
+    monkeypatch.setattr(refresh_mod, "_refresh_identity", _refresh)
+
+    async def _run() -> None:
+        refresh_mod.launch_identity_refresh(None, 42)
+        refresh_mod.launch_identity_refresh(None, 42)
+        assert len(spawned) == 1
+        for coro in spawned:
+            await coro
+        assert refresh_mod._identity_refresh_inflight == set()
+
+    asyncio.run(_run())
+
+
+def test_identity_refresh_caps_concurrent_fanout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A saturated refresh tracker drops new work instead of piling on."""
+    spawned: list[Any] = []
+
+    class _Tracker:
+        pending = refresh_mod._IDENTITY_REFRESH_MAX_CONCURRENT
+
+        def spawn(self, coro: Any) -> bool:
+            spawned.append(coro)
+            return True
+
+    monkeypatch.setattr(refresh_mod, "identity_refresh_tasks", _Tracker())
+    monkeypatch.setattr(refresh_mod, "_identity_refresh_inflight", set())
+    monkeypatch.setattr(refresh_mod, "_identity_refresh_drops", 0)
+
+    refresh_mod.launch_identity_refresh(None, 7)
+    assert spawned == []

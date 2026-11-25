@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from tcbot import cfg
 from tcbot import database as db
+from tcbot.modules.helper.buttons import mention_button
 from tcbot.modules.helper.messages import message_link
 from tcbot.modules.helper.rich.formats import heading
 from tcbot.modules.helper.rich.table import table
@@ -74,43 +75,35 @@ async def build_ban_detail(
             return_exceptions=True,
         )
         throw_if_cancelled((r_target, r_admin))
-        target_fname, target_uname = (
-            r_target if not isinstance(r_target, BaseException) else (str(uid), None)
+        target_fname = (
+            r_target[0] if not isinstance(r_target, BaseException) else str(uid)
         )
         # * Outage fallback stays locale-neutral: the numeric ID renders
         # * the same in every language instead of a hardcoded word.
-        admin_fname, admin_uname = (
-            r_admin if not isinstance(r_admin, BaseException) else (str(aid), None)
-        )
+        admin_fname = r_admin[0] if not isinstance(r_admin, BaseException) else str(aid)
     else:
         try:
             r_admin = await db.users_cache.get_user_mention_data(aid)
-            admin_fname, admin_uname = r_admin
+            admin_fname = r_admin[0]
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             log.debug("Admin mention data lookup failed for %d: %s", aid, exc)
-            admin_fname, admin_uname = (str(aid), None)
-        target_uname = None
+            admin_fname = str(aid)
 
     proof_link = ban_proof_link(ban)
     date_str = ban_date_text(ban, locale)
     time_str = ban_time_text(ban, locale)
 
+    # * The table already has a "User" / "Banned by" column, so the value is
+    # * the native mention button itself instead of an inline anchor inside
+    # * a sentence. Button markup passes through the table's raw cells.
     identity_items = [
-        t(
-            "checking.ban_info.user",
-            locale,
-            user=Safe(user_ref(uid, target_fname, target_uname)),
-        ),
+        mention_button(uid, target_fname or str(uid)),
         t("checking.ban_info.user_id", locale, id=Safe(code(str(uid)))),
     ]
     actor_items = [
-        t(
-            "checking.ban_info.banned_by",
-            locale,
-            admin=Safe(user_ref(aid, admin_fname, admin_uname)),
-        ),
+        mention_button(aid, admin_fname or str(aid)),
         t("checking.ban_info.admin_id", locale, id=Safe(code(str(aid)))),
     ]
     # * Reason is moderator free text: pass raw so the engine escapes it at

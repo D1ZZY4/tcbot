@@ -46,6 +46,13 @@ permission = "Kamu tidak punya izin yang diperlukan untuk perintah ini."
 # rides on the number ({wait}s) so the line stays correct at 1.
 text = "Pelan-pelan, coba lagi dalam {wait}s."
 
+[outcome]
+field = "Kolom"
+value = "Nilai"
+result = "Hasil"
+# Sel alasan polos: kartu hasil sudah memberi label barisnya.
+reason = "{reason}"
+
 [action]
 no_reason = "Tanpa alasan"
 unknown_date = "Tidak diketahui"

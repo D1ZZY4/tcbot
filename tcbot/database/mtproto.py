@@ -361,13 +361,11 @@ def is_available() -> bool:
 
 def is_auth_key_duplicated(exc: BaseException) -> bool:
     """Check whether *exc* is Telegram's 406 AUTH_KEY_DUPLICATED."""
-    try:
-        from pyrogram.errors import (  # noqa: PLC0415 (heavy extra; import only on use)
-            AuthKeyDuplicated,
-        )
-    except ImportError:
-        return type(exc).__name__ == "AuthKeyDuplicated"
-    return isinstance(exc, AuthKeyDuplicated)
+    from tcbot.modules.helper.pipelines.errors.exceptions import (  # noqa: PLC0415
+        is_auth_key_duplicated as _is_auth_key_duplicated,
+    )
+
+    return _is_auth_key_duplicated(exc)
 
 
 def is_auth_key_not_found(exc: BaseException) -> bool:
@@ -377,13 +375,11 @@ def is_auth_key_not_found(exc: BaseException) -> bool:
     reports the auth key is gone. It is a ``TransportError`` subclass, not
     an ``RPCError``, so it is detected in its own module instead.
     """
-    try:
-        from pyrogram.session.session import (  # noqa: PLC0415 (same reason)
-            AuthKeyNotFound,
-        )
-    except ImportError:
-        return type(exc).__name__ == "AuthKeyNotFound"
-    return isinstance(exc, AuthKeyNotFound)
+    from tcbot.modules.helper.pipelines.errors.exceptions import (  # noqa: PLC0415
+        is_auth_key_not_found as _is_auth_key_not_found,
+    )
+
+    return _is_auth_key_not_found(exc)
 
 
 def is_session_revoked(exc: BaseException) -> bool:
@@ -395,13 +391,11 @@ def is_session_revoked(exc: BaseException) -> bool:
     and performs one fresh bot-token login; a late runtime failure parks
     the client instead of reconnecting inside a live handler.
     """
-    try:
-        from pyrogram.errors import (  # noqa: PLC0415 (heavy extra; import only on use)
-            SessionRevoked,
-        )
-    except ImportError:
-        return type(exc).__name__ == "SessionRevoked"
-    return isinstance(exc, SessionRevoked)
+    from tcbot.modules.helper.pipelines.errors.exceptions import (  # noqa: PLC0415
+        is_session_revoked as _is_session_revoked,
+    )
+
+    return _is_session_revoked(exc)
 
 
 def _is_auth_fatal(exc: BaseException) -> bool:

@@ -14,7 +14,7 @@ import pytest
 from pyrogram import ContinuePropagation
 
 from tcbot import __main__ as main_mod
-from tcbot.modules.helper.pipelines import ban_actions
+from tcbot.modules.helper.pipelines import ban_proof_handlers
 from tcbot.modules.helper.pipelines.mod_action_steps import (
     BuildReason,
     _ModActionFlow,
@@ -137,14 +137,15 @@ def test_stale_ban_cancel_keeps_the_live_session(
     async def _cancel(_scope: Any) -> None:
         cancelled.append(True)
 
-    monkeypatch.setattr(ban_actions, "_cancel_proof_session", _cancel)
+    monkeypatch.setattr(ban_proof_handlers, "_cancel_proof_session", _cancel)
     monkeypatch.setattr(
-        "tcbot.modules.helper.pipelines.ban_actions.locale_for_update", _noop_locale
+        "tcbot.modules.helper.pipelines.ban_proof_handlers.locale_for_update",
+        _noop_locale,
     )
     update, ctx, details = _make(_LIVE_ID + 1)
 
     with pytest.raises(ContinuePropagation):
-        asyncio.run(ban_actions.on_cancel_proof(update, ctx))
+        asyncio.run(ban_proof_handlers.on_cancel_proof(update, ctx))
 
     assert cancelled == []
     assert details["scope"]["ban_target_id"] == 99

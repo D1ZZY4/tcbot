@@ -611,16 +611,20 @@ async def refresh_display_name(user_id: int, first_name: str) -> bool:
     triple = _cached_triple(cached) if isinstance(cached, list) else (None, None, None)
     if isinstance(cached, list) and triple[0] == first_name:
         return False
+    # * The refresh owns the revision window: capture before the write so an
+    # * erasure landing during it cannot be undone by the re-warm below.
+    revision = user_mention_cache.revision()
     written = await upsert_user(user_id, None, first_name)
     if not written:
         # * The erased-identity guard refused the write. Re-warming here would
         # * put the harvested name back into L1 and Redis, defeating erasure.
         user_mention_cache.invalidate(user_id)
         return False
-    # * A display-name-only write cannot reconstruct the full triple, so
-    # * upsert_user invalidates the mention cache. Without re-warming the
-    # * preserved fields, the next view peeks a miss and writes again, making
-    # * this guard ineffective on the hot path it was added to protect.
+    # * A display-name-only write invalidates the entry exactly once. Any
+    # * other mutation in this window, such as the erasure sweep, must win:
+    # * re-warming after it would restore a cleared identity to L1 and Redis.
+    if user_mention_cache.revision() != revision + 1:
+        return True
     if isinstance(cached, list) and len(cached) == 3 and cached[0] is not None:
         user_mention_cache.put(user_id, [first_name, triple[1], triple[2]])
     return True

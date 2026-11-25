@@ -11,10 +11,10 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from pyrogram.errors import BadRequest
 
 from tcbot import database as db
 from tcbot.modules import broadcast
+from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest
 from tcbot.utils.circuit_breaker import CircuitState
 
 

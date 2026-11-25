@@ -15,7 +15,7 @@ from sqlalchemy import select
 from tcbot import cfg
 from tcbot.database import (
     bans_db,
-    enforcement_db,
+    enforcement_ledger,
     groups_db,
     kicks_db,
     mutes_db,
@@ -117,14 +117,14 @@ async def test_unban_revokes_and_queues_the_delivery(run_db: str) -> None:
     )
     assert card == {"chat_id": -1001, "message_id": 900, "state": "pending"}
 
-    claimed = await enforcement_db.claim_run(run_id)
+    claimed = await enforcement_ledger.claim_run(run_id)
     assert claimed is not None
-    targets = await enforcement_db.claim_targets(run_id)
+    targets = await enforcement_ledger.claim_targets(run_id)
     assert [as_int(target["chat_id"]) for target in targets] == [-1001]
-    await enforcement_db.complete_target(
+    await enforcement_ledger.complete_target(
         as_int(targets[0]["id"]), status="succeeded", outcome="succeeded"
     )
-    report = await enforcement_db.run_report(run_id)
+    report = await enforcement_ledger.run_report(run_id)
     assert report is not None
     assert report["status"] == "completed"
     assert report["succeeded_count"] == 1
@@ -168,7 +168,7 @@ async def test_a_revoke_run_sees_a_newer_active_decision(run_db: str) -> None:
         proof_expected_count=1,
     )
 
-    action = await enforcement_db.load_run_action(run_id)
+    action = await enforcement_ledger.load_run_action(run_id)
     assert action is not None
     assert action["newer_active"] is True
     assert action["active_ban"] is True
@@ -348,7 +348,7 @@ async def test_review_card_outbox_round_trip(run_db: str) -> None:
 async def test_a_kick_can_queue_its_unban_repair(run_db: str) -> None:
     kick_id = await kicks_db.log_kick(44, -1001, "spam", 7)
 
-    run_id = await enforcement_db.queue_kick_unban_repair(kick_id, -1001, 7)
+    run_id = await enforcement_ledger.queue_kick_unban_repair(kick_id, -1001, 7)
 
     assert run_id is not None
     run = await engine_module.fetch_one(
@@ -394,10 +394,10 @@ async def test_an_exhausted_failed_target_can_be_re_driven(run_db: str) -> None:
     run_id = ban.get("enforcement_run_id")
     assert isinstance(run_id, int)
 
-    assert await enforcement_db.claim_run(run_id) is not None
-    targets = await enforcement_db.claim_targets(run_id)
+    assert await enforcement_ledger.claim_run(run_id) is not None
+    targets = await enforcement_ledger.claim_targets(run_id)
     assert len(targets) == 1
-    await enforcement_db.complete_target(
+    await enforcement_ledger.complete_target(
         as_int(targets[0]["id"]),
         status="failed",
         outcome="failed",
@@ -405,13 +405,13 @@ async def test_an_exhausted_failed_target_can_be_re_driven(run_db: str) -> None:
         error_detail="not enough rights",
     )
 
-    report = await enforcement_db.run_report(run_id)
+    report = await enforcement_ledger.run_report(run_id)
     assert report is not None
     assert report["status"] == "failed"
-    listed = await enforcement_db.list_unsettled_runs()
+    listed = await enforcement_ledger.list_unsettled_runs()
     assert any(as_int(row.get("id")) == run_id for row in listed)
 
-    repaired = await enforcement_db.redrive_run(run_id)
+    repaired = await enforcement_ledger.redrive_run(run_id)
     assert repaired.state == "queued"
     assert repaired.targets == 1
     run = await engine_module.fetch_one(
@@ -421,8 +421,8 @@ async def test_an_exhausted_failed_target_can_be_re_driven(run_db: str) -> None:
     )
     assert run == {"status": "queued"}
 
-    assert await enforcement_db.claim_run(run_id) is not None
-    retried = await enforcement_db.claim_targets(run_id)
+    assert await enforcement_ledger.claim_run(run_id) is not None
+    retried = await enforcement_ledger.claim_targets(run_id)
     assert len(retried) == 1
     assert as_int(retried[0]["attempt_count"]) == 2
 
@@ -444,11 +444,11 @@ async def test_a_repair_can_target_one_group(run_db: str) -> None:
     )
     run_id = ban.get("enforcement_run_id")
     assert isinstance(run_id, int)
-    assert await enforcement_db.claim_run(run_id) is not None
-    targets = await enforcement_db.claim_targets(run_id)
+    assert await enforcement_ledger.claim_run(run_id) is not None
+    targets = await enforcement_ledger.claim_targets(run_id)
     assert len(targets) == 2
     for target in targets:
-        await enforcement_db.complete_target(
+        await enforcement_ledger.complete_target(
             as_int(target["id"]),
             status="failed",
             outcome="failed",
@@ -456,7 +456,7 @@ async def test_a_repair_can_target_one_group(run_db: str) -> None:
             error_detail="not enough rights",
         )
 
-    repaired = await enforcement_db.redrive_run(run_id, chat_id=-1001)
+    repaired = await enforcement_ledger.redrive_run(run_id, chat_id=-1001)
     assert repaired.state == "queued"
     assert repaired.targets == 1
 
@@ -487,8 +487,8 @@ async def test_a_cancelled_run_is_not_re_driven(run_db: str) -> None:
     )
     run_id = ban.get("enforcement_run_id")
     assert isinstance(run_id, int)
-    assert await enforcement_db.claim_run(run_id) is not None
-    await enforcement_db.cancel_run(run_id, error_detail="superseded")
+    assert await enforcement_ledger.claim_run(run_id) is not None
+    await enforcement_ledger.cancel_run(run_id, error_detail="superseded")
     metadata = await engine_module.fetch_value(
         select(moderation_enforcement_runs.c.metadata).where(
             moderation_enforcement_runs.c.id == run_id
@@ -496,8 +496,8 @@ async def test_a_cancelled_run_is_not_re_driven(run_db: str) -> None:
     )
     assert metadata == {"cancel_reason": "superseded"}
 
-    assert (await enforcement_db.redrive_run(run_id)).state == "cancelled"
-    assert (await enforcement_db.redrive_run(999_999)).state == "missing"
+    assert (await enforcement_ledger.redrive_run(run_id)).state == "cancelled"
+    assert (await enforcement_ledger.redrive_run(999_999)).state == "missing"
 
 
 async def test_a_destination_is_registered_without_rewriting_a_group(

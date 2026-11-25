@@ -40,7 +40,7 @@ body = "Mereka bisa bergabung lagi lewat tautan undangan."
 unban = " PERINGATAN: tahap unban setelah kick gagal; pengguna masih di-ban di chat ini. Tugas perbaikan akan mencoba unban otomatis; jika masih di-ban, unban manual dari daftar anggota chat."
 
 [summary]
-body = "{user} telah di-kick.\nAlasan: {reason}\n{rejoin}{warning}"
+title = "Kick Diterapkan"
 
 [error]
 body = "Tidak bisa meng-kick {user}. Cek izin bot lalu coba lagi."

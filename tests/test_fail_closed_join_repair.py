@@ -10,10 +10,10 @@ import asyncio
 from typing import Any
 
 import pytest
-from pyrogram.errors import BadRequest
 
 from tcbot import database as db
 from tcbot.modules import greeting
+from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest
 
 
 class _Bot:
@@ -51,7 +51,7 @@ def _wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         return 9
 
     monkeypatch.setattr(db.kicks_db, "log_repair_kick", _kick)
-    monkeypatch.setattr(db.enforcement_db, "queue_kick_unban_repair", _queue)
+    monkeypatch.setattr(db.enforcement_ledger, "queue_kick_unban_repair", _queue)
     return seen
 
 

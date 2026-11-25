@@ -216,7 +216,7 @@ async def _repair_failed_removal(chat_id: int, user_id: int, source: str) -> Non
         action_id = await db.kicks_db.log_repair_kick(
             user_id, chat_id, cfg.initial_owner_id, _REPAIR_REASON
         )
-        await db.enforcement_db.queue_kick_unban_repair(
+        await db.enforcement_ledger.queue_kick_unban_repair(
             action_id, chat_id, cfg.initial_owner_id
         )
     except asyncio.CancelledError:
@@ -445,9 +445,10 @@ async def on_new_member(ctx: Ctx) -> None:
     Previously this handler returned early for chats that were not the main
     group, meaning a federation-banned user who joined a secondary
     connected group would not be removed. This version checks ``is_connected``
-    for non-primary chats (the result is L1+L2 cached) and runs
-    ``_handle_member`` with ``greet=False`` for them so bans are enforced
-    everywhere without producing welcome-message noise in secondary groups.
+    freshly for non-primary chats so a disconnect in another process stops
+    enforcement at once, and runs ``_handle_member`` with ``greet=False`` for
+    them so bans are enforced everywhere without producing welcome-message
+    noise in secondary groups.
     """
     msg = ctx.effective_message
     chat = ctx.effective_chat
@@ -653,15 +654,19 @@ async def on_join_request(ctx: Ctx) -> None:
         return
 
     # * The protected Owner is never a valid enforcement target, whichever
-    # * join path they use. A lookup failure keeps the existing fail-closed
-    # * decline rather than admitting an unverified user.
+    # * join path they use. A lookup failure fails closed: the join is
+    # * declined rather than admitted on an unverified owner.
     try:
-        if await db.users_roles.get_effective_role(user.id, fresh=True) == "owner":
-            return
+        is_owner = (
+            await db.users_roles.get_effective_role(user.id, fresh=True) == "owner"
+        )
     except asyncio.CancelledError:
         raise
     except Exception:
-        log.debug("Owner check failed for uid=%d on join_request", user.id)
+        log.warning("Owner role check failed for uid=%d on join_request", user.id)
+        return
+    if is_owner:
+        return
 
     # * Opportunistic identity harvest + ban check in parallel.
     # * harvest_user_identity skips the DB write when identity is unchanged (L1 hit).

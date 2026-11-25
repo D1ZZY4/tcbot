@@ -14,8 +14,9 @@ from typing import Any
 
 import pytest
 
-from tcbot import _env_list, cfg, error_reporter, parse_chat_id
+from tcbot import _env_list, cfg, parse_chat_id
 from tcbot.database import mtproto
+from tcbot.modules.helper.pipelines.errors import redaction
 
 
 def _run(coro: Any) -> Any:
@@ -109,7 +110,7 @@ def test_scrub_secrets_redacts_exact_configured_values(
     # * The double mirrors the current Configs fields: no webhook attribute,
     # * so exact redaction must still cover every configured secret.
     monkeypatch.setattr(
-        error_reporter,
+        redaction,
         "cfg",
         SimpleNamespace(
             bot_token="SENTINEL-BOT-TOKEN-xyz",
@@ -126,20 +127,18 @@ def test_scrub_secrets_redacts_exact_configured_values(
         "SENTINEL-REDIS-xyz",
         "SENTINEL-SENTRY-xyz",
     ):
-        text = error_reporter._scrub_secrets(f"leak>>{value}<<done")
+        text = redaction._scrub_secrets(f"leak>>{value}<<done")
         assert value not in text
         assert "[REDACTED]" in text
         assert text.startswith("leak>>") and text.endswith("<<done")
-    token_shaped = error_reporter._scrub_secrets(
-        "oops 999888:ABCDEFghij1234567890XY end"
-    )
+    token_shaped = redaction._scrub_secrets("oops 999888:ABCDEFghij1234567890XY end")
     assert "999888:ABCDEFghij1234567890XY" not in token_shaped
-    url_token = error_reporter._scrub_secrets(
+    url_token = redaction._scrub_secrets(
         "GET https://api.telegram.org/bot999888:ABCDEFghij1234567890XY/getMe"
     )
     assert "999888:ABCDEFghij1234567890XY" not in url_token
     assert "[REDACTED_TOKEN]" in url_token
-    database_shaped = error_reporter._scrub_secrets(
+    database_shaped = redaction._scrub_secrets(
         "oops postgresql://user:hunter2@host/db end"
     )
     assert "hunter2" not in database_shaped

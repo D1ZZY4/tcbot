@@ -11,9 +11,13 @@ import inspect
 import logging
 
 import pytest
-from pyrogram.errors import BadRequest, Forbidden, Timedout
 
 from tcbot.modules.helper.messages.replies import applied_summary
+from tcbot.modules.helper.pipelines.errors.exceptions import (
+    BadRequest,
+    Forbidden,
+    Timedout,
+)
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.dispatch import (
     count_transient_errors,

@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Centralized error reporter: classifies, formats, dedupes, ships to LOG_ERRORS."""
+"""Error report lifecycle: state, dedupe, rendering, throttling, and delivery."""
 
 from __future__ import annotations
 
@@ -13,26 +13,24 @@ import re
 import threading
 import traceback
 from itertools import islice
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from pyrogram import Client
-from pyrogram.errors import (
-    BadRequest,
-    FloodWait,
-    Forbidden,
-    RPCError,
-    Timedout,
-    Unauthorized,
-)
-from pyrogram.errors import (
-    Timeout as RPCTimeout,
-)
 
-from tcbot import cfg
-from tcbot.database import engine as db_engine
+from tcbot.modules.helper.pipelines.errors.classify import (
+    _action_hint,
+    _classify,
+    _is_benign,
+    _log_noise,
+    _owner_only,
+)
+from tcbot.modules.helper.pipelines.errors.exceptions import PollingConflictError
+from tcbot.modules.helper.pipelines.errors.redaction import (
+    _scrub_secrets,
+    scrub_sentry_event,
+    scrub_text,
+)
 from tcbot.utils import logger as logger_mod
-from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.logger import get_logger
 from tcbot.utils.tasks import TaskTracker
 from tcbot.utils.time_and_date import monotonic
@@ -40,188 +38,7 @@ from tcbot.utils.time_and_date import monotonic
 if TYPE_CHECKING:
     import logging
 
-
 log = get_logger("tcbot.error_reporter")
-
-
-class PollingConflictError(RuntimeError):
-    """Another process is already polling the same bot identity."""
-
-
-# * Kurigram names Telegram failures differently from the old framework. The
-# * reporter classifies by exception type, so keep one small local namespace
-# * with the categories it needs.
-_te = SimpleNamespace(
-    RetryAfter=FloodWait,
-    Conflict=PollingConflictError,
-    BadRequest=BadRequest,
-    Forbidden=Forbidden,
-    InvalidToken=Unauthorized,
-    NetworkError=OSError,
-    TelegramError=RPCError,
-)
-
-# * Log-noise patterns come from log_execution wrapping every handler.
-_BENIGN_PATTERNS: tuple[str, ...] = (
-    "message is not modified",
-    "message to edit not found",
-    "message to delete not found",
-    "query is too old",
-    "message is too old",
-    "message can't be edited",
-)
-# * The tracer logs "… raised after Nms" only for an exception it is about to
-# * re-raise. Match its whole shape so an unrelated error that merely mentions
-# * elapsed time is still reported.
-_LOG_NOISE_RE = re.compile(r"\[[^]]+\] uid=\S+ raised after [\d.]+ms")
-_OWNER_ONLY_TYPES: tuple[type[BaseException], ...] = (_te.Conflict, _te.InvalidToken)
-# * Kurigram raises these when the MTProto session must be re-established by
-# * an operator; they are auth failures, not application code bugs.
-_MTPROTO_AUTH_TYPES: tuple[str, ...] = (
-    "AuthKeyDuplicated",
-    "AuthKeyNotFound",
-    "SessionRevoked",
-)
-
-
-def _benign(exc: BaseException | None) -> bool:
-    """Check recoverable no-op (cancel, circuit, outage, known Telegram no-ops)."""
-    if exc is None:
-        return False
-    if isinstance(exc, asyncio.CancelledError):
-        return True
-    if db_engine.is_connection_error(exc) or isinstance(exc, CircuitOpenError):
-        return True
-    # * A saturated pool is a load condition, not a defect. The circuit
-    # * breaker reacts to it, and the handler logs it as a warning, so
-    # * shipping a report per timeout would only bury the incidents that
-    # * need an operator.
-    if db_engine.is_pool_timeout(exc):
-        return True
-    msg = str(exc).lower()
-    return any(p in msg for p in _BENIGN_PATTERNS)
-
-
-def _is_benign(exc: BaseException | None) -> bool:
-    """Return True when the exception is a recoverable no-op.
-
-    The reporter exists precisely for unexpected failures, so a predicate
-    that itself fails must never discard the report: the unknown state is
-    reported instead of swallowed.
-    """
-    if exc is None:
-        return False
-    try:
-        return _benign(exc)
-    except Exception as check_exc:
-        log.warning("Benign check failed, treating as reportable: %s", check_exc)
-        return False
-
-
-def _log_noise(record: logging.LogRecord | None) -> bool:
-    """Check whether this is the tracer's duplicate of an already-reported error."""
-    return bool(record) and bool(_LOG_NOISE_RE.search(record.getMessage()))
-
-
-def _owner_only(exc: BaseException | None) -> bool:
-    """Check owner-only routing to the owner DM only."""
-    return exc is not None and isinstance(exc, _OWNER_ONLY_TYPES)
-
-
-_ACTION_HINTS: tuple[tuple[str, str], ...] = (
-    (
-        "PostgreSQL Circuit Open",
-        "PostgreSQL is unreachable; the circuit is open and calls fail fast "
-        "until recovery. Check the database reachability and credentials, then retry.",
-    ),
-    ("[DB]", "Check PostgreSQL reachability and credentials, then retry the action."),
-    ("Rate Limit", "Telegram asked to slow down; no action needed unless it persists."),
-    ("Timed Out", "Transient Telegram hiccup; retry the action."),
-    ("Polling Conflict", "Two bot instances are polling; stop the duplicate."),
-    ("Invalid Token", "Token revoked or wrong; set BOT_TOKEN and restart."),
-    ("Forbidden", "Client lacks admin rights in the target chat; re-promote it."),
-    ("Bad Request", "Check the reported call arguments for a bad ID or text."),
-    ("Network", "Transient connectivity issue; retry the action."),
-    ("Timeout", "Operation exceeded its deadline; retry the action."),
-    ("Code Bug", "Needs a code fix; see the traceback below."),
-    ("[?] Unknown", "No exception attached; check the message and location above."),
-    ("Circuit Open", "Telegram circuit is open; retry after the cooldown."),
-    (
-        "MTProto Auth",
-        "MTProto auth key is dead; stop every instance, delete the session "
-        "rows from mtproto_state, then boot one.",
-    ),
-)
-
-
-def _action_hint(label: str) -> str:
-    """Return the operator action line for a classify label."""
-    for marker, hint in _ACTION_HINTS:
-        if marker in label:
-            return hint
-    return "Check the message and location above."
-
-
-def _is_telegram_timeout(exc: BaseException) -> bool:
-    """Match Kurigram's RPC timeout without claiming builtin timeouts.
-
-    Python 3.11 made ``asyncio.TimeoutError`` an alias of the builtin, so an
-    ``isinstance(exc, TimeoutError)`` branch would label database and worker
-    deadlines as Telegram failures and make the generic timeout branches below
-    unreachable. Match the client's RPC timeout classes directly: the old
-    name-based check looked for ``TimedOut``, which the client never defines,
-    so real RPC deadlines were reported as generic API errors.
-    """
-    return isinstance(exc, (Timedout, RPCTimeout))
-
-
-def _classify(exc: BaseException | None) -> str:
-    """Return a human-readable label tag for the exception."""
-    if exc is None:
-        return "[?] Unknown"
-    # * AuthKeyDuplicated subclasses RPCError in Kurigram; match dead keys
-    # * before the generic branch so they keep the operator hint.
-    if type(exc).__name__ in _MTPROTO_AUTH_TYPES:
-        return "[~] MTProto Auth Key Invalidated"
-    if isinstance(exc, _te.RetryAfter):
-        return "[~] Rate Limit: Flood Wait"
-    if _is_telegram_timeout(exc):
-        return "[~] Telegram Timed Out"
-    if isinstance(exc, _te.Conflict):
-        return "[~] Polling Conflict"
-    if isinstance(exc, _te.BadRequest):
-        return "[!] Telegram Bad Request"
-    if isinstance(exc, _te.Forbidden):
-        return "[!] Telegram Forbidden"
-    if isinstance(exc, _te.InvalidToken):
-        return "[!] Telegram Invalid Token"
-    # * TimeoutError derives from OSError, so the generic timeout check must
-    # * precede the network branch or every deadline becomes a Telegram error.
-    if isinstance(exc, asyncio.TimeoutError):
-        return "[~] Async Timeout"
-    if isinstance(exc, _te.NetworkError):
-        return "[~] Telegram Network Error"
-    if isinstance(exc, _te.TelegramError):
-        return "[!] Telegram API Error"
-    mod = type(exc).__module__ or ""
-    if db_engine.is_database_error(exc):
-        return "[DB] Database Error"
-    if isinstance(exc, CircuitOpenError):
-        return (
-            "[~] PostgreSQL Circuit Open"
-            if "postgres" in str(exc).lower()
-            else "[~] Circuit Open"
-        )
-    if "circuit_breaker" in mod:
-        return "[~] Circuit Open"
-    if isinstance(exc, asyncio.CancelledError):
-        return "[-] Task Cancelled"
-    if isinstance(exc, (ConnectionError, TimeoutError, OSError)) or any(
-        x in mod for x in ("httpx", "aiohttp", "urllib3", "ssl")
-    ):
-        return "[~] Network / Server Error"
-    return "[!] Code Bug"
-
 
 # * Owner of the in-flight error deliveries. The logger handler calls the
 # * sink synchronously, so the reporter schedules and tracks the delivery.
@@ -551,67 +368,6 @@ def _location(
     return "?", "?", 0
 
 
-# * No leading word boundary: a token inside "bot<token>/..." must still be
-# * redacted when the exact configured value is unavailable.
-_TOKEN_RE = re.compile(r"(?<!\d)\d{6,}:[A-Za-z0-9_-]{20,}\b")
-_URL_CREDENTIALS_RE = re.compile(r"://(?:[^:@/\s]+)?:[^@/\s]+@")
-
-
-def _scrub_secrets(text: str) -> str:
-    """Redact exact configured values first, then credential-shaped patterns.
-
-    A fatal startup report can run when the configuration itself failed to
-    load. Reading ``cfg`` would raise again and mask the original error, so
-    the configured-value pass degrades to the shape-based redaction below.
-    """
-    try:
-        configured = (
-            getattr(cfg, "bot_token", ""),
-            getattr(cfg, "database_url", ""),
-            getattr(cfg, "api_hash", ""),
-            getattr(cfg, "redis_url", ""),
-            getattr(cfg, "sentry_dsn", ""),
-        )
-    except Exception:
-        configured = ()
-    for secret in configured:
-        if secret and secret in text:
-            text = text.replace(secret, "[REDACTED]")
-    text = _TOKEN_RE.sub("[REDACTED_TOKEN]", text)
-    return _URL_CREDENTIALS_RE.sub("://[REDACTED]@", text)
-
-
-def scrub_text(text: str) -> str:
-    """Public wrapper for secret redaction of console-bound strings."""
-    return _scrub_secrets(text)
-
-
-def _scrub_event_value(value: object) -> object:
-    """Recursively redact string leaves in a Sentry event payload."""
-    if isinstance(value, str):
-        return _scrub_secrets(value)
-    if isinstance(value, dict):
-        return {str(key): _scrub_event_value(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_scrub_event_value(item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(_scrub_event_value(item) for item in value)
-    return value
-
-
-def scrub_sentry_event(event: Any, hint: Any = None) -> Any:
-    """Redact credential-bearing strings before a Sentry event is delivered.
-
-    Used as the ``before_send`` hook, so non-string values such as retry
-    counters must survive unchanged and the event structure must be kept.
-    The SDK is an optional extra, so its ``Event`` type cannot be imported
-    here without breaking checks in installations that omit it; the hook
-    is duck-typed against the event mapping at runtime.
-    """
-    _ = hint
-    return {key: _scrub_event_value(value) for key, value in event.items()}
-
-
 def build_error_report_payload(
     *,
     exc: BaseException | None = None,
@@ -626,6 +382,7 @@ def build_error_report_payload(
     """
     from tcbot.modules.helper.rich.formats import code, heading, pre  # noqa: PLC0415
     from tcbot.modules.helper.rich.list import bullet_list, details  # noqa: PLC0415
+    from tcbot.modules.helper.rich.style import bold  # noqa: PLC0415
     from tcbot.modules.helper.rich.style import esc as html_esc  # noqa: PLC0415
 
     if record and record.exc_info and record.exc_info[1]:
@@ -641,14 +398,17 @@ def build_error_report_payload(
         f"Message: {html_esc(_scrub_secrets(raw_msg)[:_MAX_MSG])}",
     ]
     body = bullet_list(lines)
-    if exc and exc.__traceback__:
+    if exc is not None:
+        # * A failure built from stored delivery details has no traceback, but
+        # * _condensed_tb still renders its type and message. Skipping the
+        # * block here hid the actual Telegram error from the operator.
         body += "\n" + html_esc("Traceback:") + pre(_scrub_secrets(_condensed_tb(exc)))
     if context:
         body += (
             "\n" + html_esc("Context:") + code(_scrub_secrets(str(context))[:_MAX_CTX])
         )
     return {
-        "html": "\n".join((heading("Error Report", 2), details("<b>Details</b>", body)))
+        "html": "\n".join((heading("Error Report", 2), details(bold("Details"), body)))
     }
 
 
@@ -809,3 +569,17 @@ async def report_exc(exc: BaseException, context: str | None = None) -> None:
         await send_to_owner(payload, fp)
     else:
         await send_to_log_errors(payload)
+
+
+__all__ = [
+    "PollingConflictError",
+    "attach",
+    "build_error_report_payload",
+    "drain_pending",
+    "report_exc",
+    "scrub_sentry_event",
+    "scrub_text",
+    "send_to_log_errors",
+    "send_to_owner",
+    "set_owner",
+]

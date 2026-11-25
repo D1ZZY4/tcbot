@@ -46,12 +46,19 @@ async def edit_rich(
     message: dict[str, Any],
     *,
     reply_markup: Any | None = None,
+    clear_markup: bool = False,
 ) -> Message:
-    """Edit a message through Kurigram's native rich-message transport."""
+    """Edit a message through Kurigram's native rich-message transport.
+
+    ``clear_markup`` forwards an explicit empty keyboard, which Telegram needs
+    to actually strip old buttons from a decided panel.
+    """
     payload, fallback = _message_with_buttons(message, reply_markup)
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
+    if clear_markup:
+        extra["reply_markup"] = InlineKeyboardMarkup([])
     return await bot.edit_message_text(
         chat_id,
         message_id,

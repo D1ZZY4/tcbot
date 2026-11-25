@@ -11,7 +11,8 @@ from typing import Any
 
 import pytest
 
-from tcbot.modules.helper.pipelines import ban_actions
+from tcbot import database as db
+from tcbot.modules.helper.pipelines import ban_executor
 
 
 class _DummyBot:
@@ -47,7 +48,7 @@ def _install_role_stub(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _role(user_id: int, *, fresh: bool = False) -> str | None:
         return "developer" if user_id == 44 else None
 
-    monkeypatch.setattr(ban_actions.db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
 
 
 def _install_create_task_spy(monkeypatch: pytest.MonkeyPatch) -> list[asyncio.Task]:
@@ -64,14 +65,14 @@ def _install_create_task_spy(monkeypatch: pytest.MonkeyPatch) -> list[asyncio.Ta
         await asyncio.sleep(30)
         return []
 
-    monkeypatch.setattr(ban_actions.db.groups_db, "active_groups", _long_running)
+    monkeypatch.setattr(db.groups_db, "active_groups", _long_running)
 
     def _spy(coro: Any, *args: Any, **kwargs: Any) -> asyncio.Task:
         task = real_create_task(coro, *args, **kwargs)
         created.append(task)
         return task
 
-    monkeypatch.setattr(ban_actions.asyncio, "create_task", _spy)
+    monkeypatch.setattr(asyncio, "create_task", _spy)
     return created
 
 
@@ -81,13 +82,13 @@ def test_propagated_error_retrieves_groups_task(
     async def _boom(*args: Any, **kwargs: Any) -> None:
         raise RuntimeError("mongo down")
 
-    monkeypatch.setattr(ban_actions, "locale_for_user", _stub_locale)
-    monkeypatch.setattr(ban_actions.db.bans_db, "get_active_ban", _boom)
+    monkeypatch.setattr(ban_executor, "locale_for_user", _stub_locale)
+    monkeypatch.setattr(db.bans_db, "get_active_ban", _boom)
     _install_role_stub(monkeypatch)
     created = _install_create_task_spy(monkeypatch)
 
     with pytest.raises(RuntimeError, match="mongo down"):
-        asyncio.run(ban_actions._execute_ban(_DummyBot(), [], _fake_meta()))  # type: ignore[arg-type]
+        asyncio.run(ban_executor.execute_ban(_DummyBot(), [], _fake_meta()))  # type: ignore[arg-type]
 
     assert len(created) == 1
     assert created[0].done()
@@ -98,13 +99,13 @@ def test_cancellation_still_propagates(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _cancel(*args: Any, **kwargs: Any) -> None:
         raise asyncio.CancelledError()
 
-    monkeypatch.setattr(ban_actions, "locale_for_user", _stub_locale)
-    monkeypatch.setattr(ban_actions.db.bans_db, "get_active_ban", _cancel)
+    monkeypatch.setattr(ban_executor, "locale_for_user", _stub_locale)
+    monkeypatch.setattr(db.bans_db, "get_active_ban", _cancel)
     _install_role_stub(monkeypatch)
     created = _install_create_task_spy(monkeypatch)
 
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(ban_actions._execute_ban(_DummyBot(), [], _fake_meta()))  # type: ignore[arg-type]
+        asyncio.run(ban_executor.execute_ban(_DummyBot(), [], _fake_meta()))  # type: ignore[arg-type]
 
     assert len(created) == 1
     assert created[0].done()

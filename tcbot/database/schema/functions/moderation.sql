@@ -782,7 +782,7 @@ BEGIN
 END;
 $$;
 
--- * The attempt ceiling mirrors enforcement_db.MAX_ATTEMPTS. A stuck target
+-- * The attempt ceiling mirrors enforcement_ledger.MAX_ATTEMPTS. A stuck target
 -- * that already used its budget must become terminal: a failed row with a
 -- * due next_retry_at would be claimed again and increment the count past the
 -- * ceiling, issuing one more Telegram delivery than the worker ever allows.

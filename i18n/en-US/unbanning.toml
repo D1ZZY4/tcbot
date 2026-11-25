@@ -38,4 +38,5 @@ partial = "removed from {done}/{total} groups. WARNING: still banned in: {sample
 full = "removed from {total}/{total} groups."
 
 [summary]
+title = "Ban Lifted"
 body = "{user} has been unbanned - {note}"

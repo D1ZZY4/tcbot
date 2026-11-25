@@ -2,12 +2,11 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Kick executor + conversation factory."""
+"""Kick executor and its conversation-scope adapter."""
 
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
 
 from pyrogram.types import Message
 
@@ -23,32 +22,18 @@ from tcbot.modules.helper.messages import (
     send_log,
 )
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
-from tcbot.modules.helper.pipelines.mod_action_steps import (
-    BuildReason,
-    build_modaction_conv,
-    rules_from_scope,
-)
+from tcbot.modules.helper.pipelines.mod_action_steps import rules_from_scope
 from tcbot.modules.helper.pipelines.proof_post import (
     ProofUpload,
     upload_proof_for_action,
 )
-from tcbot.modules.helper.pipelines.proof_steps import BuildProof
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from pyrogram.filters import Filter as BaseFilter
-
 log = get_logger(__name__)
-
-# * Per-action BuildReason and BuildProof instances; imported by kick.py
-reason = BuildReason("kick", skip_allowed=False)
-proof = BuildProof("kick")
 
 
 # ────────────────────────── Kick executor ───────────────────────── #
@@ -150,7 +135,7 @@ async def execute_kick(
             return
         repair_queued = True
         try:
-            repair_run = await db.enforcement_db.queue_kick_unban_repair(
+            repair_run = await db.enforcement_ledger.queue_kick_unban_repair(
                 kick_action_id, chat_id, admin_id
             )
         except Exception:
@@ -316,13 +301,23 @@ async def execute_kick(
             if isinstance(unban_result, BaseException)
             else Safe("")
         )
-        summary = t(
-            "kicking.summary.body",
+        summary = replies.outcome_card(
+            t("kicking.summary.title", locale, plain=True),
+            [
+                (
+                    t("checking.ban_info.table.user", locale, plain=True),
+                    buttons.mention_button(target_id, target_name),
+                ),
+                (
+                    t("checking.ban_info.table.reason", locale, plain=True),
+                    t("common.outcome.reason", locale, reason=reason_text),
+                ),
+                (
+                    t("common.outcome.result", locale, plain=True),
+                    Safe(f"{t('kicking.rejoin.body', locale)}{unban_warning}"),
+                ),
+            ],
             locale,
-            user=Safe(user_ref(target_id, target_name)),
-            reason=reason_text,
-            rejoin=Safe(t("kicking.rejoin.body", locale)),
-            warning=unban_warning,
         )
         # * Edit the proof prompt in place like the mute executor: a fresh
         # * reply for every kick doubles the chat noise and buries the
@@ -418,17 +413,4 @@ async def _exec_kick(ctx: Ctx) -> None:
     )
 
 
-# ─────────────────── ConversationHandler factory ────────────────── #
-
-
-def kick_conversation(entry_fn: Callable[..., Any], entry_filter: BaseFilter) -> object:
-    """Return the kick ConversationHandler via the central mod_action_steps factory."""
-    return build_modaction_conv(
-        reason,
-        proof,
-        entry_fn,
-        _exec_kick,
-        entry_filter,
-        min_role="moderator",
-        rules_enabled=True,
-    )
+__all__ = ["execute_kick"]

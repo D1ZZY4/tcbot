@@ -24,15 +24,15 @@ from tcbot.modules.helper.messages import (
     reply_rich,
     reply_rich_result,
 )
-from tcbot.modules.helper.pipelines.ban_actions import (
-    BAN_USER_DATA_KEYS,
-    WAITING_UPDATE_CONFIRM,
-    ban_conversation,
-    replace_live_proof_session,
-)
+from tcbot.modules.helper.pipelines.ban_conversation import ban_conversation
 from tcbot.modules.helper.pipelines.ban_rules_step import (
     BAN_RULES_STATES,
     show_ban_rules,
+)
+from tcbot.modules.helper.pipelines.ban_session import (
+    BAN_USER_DATA_KEYS,
+    WAITING_UPDATE_CONFIRM,
+    replace_live_proof_session,
 )
 from tcbot.modules.helper.pipelines.mod_action_steps import (
     is_reason_too_long,

@@ -121,9 +121,7 @@ no_reason = "~tanpa alasan~"
 
 [ban_info]
 heading = "Info Ban"
-user = "Pengguna: {user}"
 user_id = "ID Pengguna: {id}"
-banned_by = "Di-ban oleh: {admin}"
 admin_id = "ID Admin: {id}"
 reason = "*Alasan:* {reason}"
 ban_id = "ID Ban: {id}"

@@ -20,7 +20,7 @@ import pytest
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import guards
-from tcbot.modules.helper.pipelines import warn_actions
+from tcbot.modules.helper.pipelines import warn_executor
 from tcbot.modules.helper.pipelines.demote_actions import Demote
 from tcbot.utils.i18n import available_locales, load_catalog, t
 
@@ -98,8 +98,8 @@ def _wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(guards, "enforcement_verdict", _verdict)
     monkeypatch.setattr(db.warns_db, "add_warn", _add_warn)
     monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
-    monkeypatch.setattr(warn_actions, "locale_for_update", _locale)
-    monkeypatch.setattr(warn_actions, "reply_rich", _reply)
+    monkeypatch.setattr(warn_executor, "locale_for_update", _locale)
+    monkeypatch.setattr(warn_executor, "reply_rich", _reply)
     monkeypatch.setattr(Demote, "execute", staticmethod(_fake_demote))
     return record
 
@@ -123,7 +123,7 @@ def test_the_staff_exemption_demotes_without_claiming_a_ban(
         },
     )()
     asyncio.run(
-        warn_actions.execute_warn(
+        warn_executor.execute_warn(
             ctx,  # type: ignore[arg-type]
             9,
             "Staff",

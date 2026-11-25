@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from tcbot import database as db
-from tcbot.modules.helper.pipelines import mute_actions
+from tcbot.modules.helper.pipelines import mute_executor
 
 
 class _Bot:
@@ -71,14 +71,14 @@ def test_a_partial_mute_names_the_failed_groups(
     async def _send_log(*args: Any, **kwargs: Any) -> None:
         return None
 
-    monkeypatch.setattr(mute_actions, "locale_for_update", _locale)
-    monkeypatch.setattr(mute_actions.guards, "enforcement_refusal", _no_refusal)
+    monkeypatch.setattr(mute_executor, "locale_for_update", _locale)
+    monkeypatch.setattr(mute_executor.guards, "enforcement_refusal", _no_refusal)
     monkeypatch.setattr(db.groups_db, "active_groups", _groups)
     monkeypatch.setattr(db.mutes_db, "record_mute", _record)
-    monkeypatch.setattr(mute_actions, "demote_before_enforcement", _demote)
-    monkeypatch.setattr(mute_actions, "fan_out", _fan_out)
-    monkeypatch.setattr(mute_actions, "summarize_fanout", _summarize)
-    monkeypatch.setattr(mute_actions, "send_log", _send_log)
+    monkeypatch.setattr(mute_executor, "demote_before_enforcement", _demote)
+    monkeypatch.setattr(mute_executor, "fan_out", _fan_out)
+    monkeypatch.setattr(mute_executor, "summarize_fanout", _summarize)
+    monkeypatch.setattr(mute_executor, "send_log", _send_log)
 
     bot = _Bot()
     update = SimpleNamespace(
@@ -97,7 +97,7 @@ def test_a_partial_mute_names_the_failed_groups(
         "mute_prompt_id": 5,
     }
 
-    asyncio.run(mute_actions._execute_mute(bot, update, meta))  # type: ignore[arg-type]
+    asyncio.run(mute_executor.execute_mute(bot, update, meta))  # type: ignore[arg-type]
 
     assert bot.edits
     assert "Gone" in bot.edits[-1]

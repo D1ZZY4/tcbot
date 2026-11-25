@@ -9,7 +9,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from tcbot import cfg, error_reporter
+from tcbot import cfg
+from tcbot.modules.helper.pipelines.errors import report as error_reporter
 
 
 def _report(exc: BaseException, context: str | None = None) -> dict[str, Any]:

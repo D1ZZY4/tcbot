@@ -250,7 +250,7 @@ class ConnectionReplayMixin:
             queued = 0
             for attempt in range(_REPLAY_QUEUE_ATTEMPTS):
                 try:
-                    queued = await db.enforcement_db.queue_connect_replay(
+                    queued = await db.enforcement_ledger.queue_connect_replay(
                         chat_id, pending_user_ids, owner_id
                     )
                     break

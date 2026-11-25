@@ -19,7 +19,7 @@ from typing import Any, cast
 import pytest
 
 from tcbot.modules.helper.context import build_ctx, clear_state
-from tcbot.modules.helper.pipelines import ban_actions
+from tcbot.modules.helper.pipelines import ban_proof_handlers, ban_session
 from tcbot.modules.helper.pipelines.proof_session import ProofSessionRegistry
 from tcbot.modules.helper.scope import clear_flow_scope, conversation_key, flow_scope
 
@@ -126,7 +126,7 @@ def test_the_ban_proof_session_snapshots_its_own_conversation(
 ) -> None:
     """A proof upload must enforce against the target of its own group."""
     registry = ProofSessionRegistry()
-    monkeypatch.setattr(ban_actions, "proof_sessions", registry)
+    monkeypatch.setattr(ban_proof_handlers, "proof_sessions", registry)
 
     ctx_a = _ctx(100, 42)
     ctx_b = _ctx(200, 42)
@@ -138,7 +138,7 @@ def test_the_ban_proof_session_snapshots_its_own_conversation(
     scope_b["ban_admin_id"] = 42
 
     async def _scenario() -> int:
-        outcome = await ban_actions.on_proof_received(ctx_a)
+        outcome = await ban_proof_handlers.on_proof_received(ctx_a)
         session = registry[(100, 42)]
         assert session.meta["ban_target_id"] == 111
         assert registry.get((200, 42)) is None
@@ -147,6 +147,6 @@ def test_the_ban_proof_session_snapshots_its_own_conversation(
             await asyncio.gather(session.flush_task, return_exceptions=True)
         return outcome
 
-    assert asyncio.run(_scenario()) == ban_actions.WAITING_PROOF
+    assert asyncio.run(_scenario()) == ban_session.WAITING_PROOF
     asyncio.run(clear_state(100, 42))
     asyncio.run(clear_state(200, 42))

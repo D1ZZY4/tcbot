@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tcbot import cfg
-from tcbot.database import enforcement_db, moderation_db
+from tcbot.database import enforcement_ledger, moderation_db
 from tcbot.database.base import (
     moderation_actions,
     moderation_appeals,
@@ -224,7 +224,7 @@ async def create_ban(
             rule_selection_note,
         )
         if enforcement_chat_ids is not None:
-            row["enforcement_run_id"] = await enforcement_db.queue_run(
+            row["enforcement_run_id"] = await enforcement_ledger.queue_run(
                 sess,
                 action_id=int(row["id"]),
                 operation="apply",
@@ -462,7 +462,7 @@ async def update_ban(
             rule_selection_note,
         )
         if enforcement_chat_ids is not None:
-            row["enforcement_run_id"] = await enforcement_db.queue_run(
+            row["enforcement_run_id"] = await enforcement_ledger.queue_run(
                 sess,
                 action_id=int(row["id"]),
                 operation="apply",

@@ -28,7 +28,7 @@ from tcbot.modules.helper.rich.formats import (
     pull_quote,
     quote,
 )
-from tcbot.modules.helper.rich.link import link, user_ref
+from tcbot.modules.helper.rich.link import link
 from tcbot.modules.helper.rich.list import bullet_list, details, ordered_list
 from tcbot.modules.helper.rich.style import (
     bold,
@@ -41,6 +41,7 @@ from tcbot.modules.helper.rich.style import (
     underline,
 )
 from tcbot.modules.helper.rich.table import table
+from tcbot.utils.i18n import user_ref
 
 
 class _FakeBot:
@@ -89,8 +90,10 @@ def test_inline_helpers_cover_modern_formatting() -> None:
     assert link("t.me", "https://t.me/") == '<a href="https://t.me/">t.me</a>'
 
 
-def test_user_ref_uses_id_and_avoids_dead_mentions() -> None:
-    assert user_ref(42, "Name") == '<a href="tg://user?id=42">Name</a>'
+def test_user_ref_uses_native_rich_mention_buttons() -> None:
+    assert user_ref(42, "Name") == (
+        '<tg-button type="url" url="tg://user?id=42">Name</tg-button>'
+    )
     assert user_ref(0, "Anon") == "<b>Anon</b>"
 
 
@@ -273,3 +276,14 @@ def test_rich_edit_embeds_buttons() -> None:
     kwargs = bot.calls[0][1]
     assert "<tg-button-row>" in kwargs["rich_message"].html
     assert "reply_markup" not in kwargs
+
+
+def test_rich_edit_can_clear_a_keyboard() -> None:
+    bot = _FakeBot()
+    asyncio.run(
+        rich_edit.edit_rich(
+            cast("Any", bot), -100, 1, rc.html_message("x"), clear_markup=True
+        )
+    )
+    kwargs = bot.calls[0][1]
+    assert kwargs["reply_markup"].inline_keyboard == []

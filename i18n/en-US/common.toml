@@ -45,6 +45,13 @@ permission = "You don't have the permission needed for this command."
 # rides on the number ({wait}s) so the line stays correct at 1.
 text = "Slow down - try again in {wait}s."
 
+[outcome]
+field = "Field"
+value = "Value"
+result = "Result"
+# Bare reason cell: the outcome card already labels the row.
+reason = "{reason}"
+
 [action]
 no_reason = "No reason provided"
 unknown_date = "Unknown"

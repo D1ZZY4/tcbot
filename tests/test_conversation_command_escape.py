@@ -13,7 +13,7 @@ from typing import Any
 from pyrogram.handlers import MessageHandler
 
 from tcbot.modules.helper.pipelines.appeal_submit import build_handler
-from tcbot.modules.helper.pipelines.ban_actions import ban_conversation
+from tcbot.modules.helper.pipelines.ban_conversation import ban_conversation
 from tcbot.modules.helper.pipelines.mod_action_steps import (
     BuildReason,
     build_modaction_conv,

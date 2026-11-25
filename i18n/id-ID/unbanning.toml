@@ -38,4 +38,5 @@ partial = "dihapus dari {done}/{total} grup. PERINGATAN: masih di-ban di: {sampl
 full = "dihapus dari {total}/{total} grup."
 
 [summary]
+title = "Ban Dicabut"
 body = "{user} telah di-unban. {note}"

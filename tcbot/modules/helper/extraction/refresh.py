@@ -42,6 +42,14 @@ _SYNC_MAX_AGE_S = 7 * 24 * 3600
 # * Owner of the in-flight background identity refreshes.
 identity_refresh_tasks = TaskTracker("identity refresh")
 
+# * A refresh is a display hint, not a moderation gate. Bound the fan-out so a
+# * burst of detail views cannot saturate Telegram and the database pool.
+_IDENTITY_REFRESH_MAX_CONCURRENT: int = 20
+_IDENTITY_REFRESH_DROP_REPORT_EVERY: int = 100
+_identity_refresh_drops: int = 0
+# * Repeated views of one profile share a single in-flight refresh.
+_identity_refresh_inflight: set[int] = set()
+
 
 async def _fetch_live_identity(
     bot: Client, target_id: int
@@ -262,12 +270,37 @@ async def _refresh_identity(bot: Client, target_id: int) -> None:
         log.debug("background identity refresh failed for %d: %s", target_id, exc)
 
 
+async def _tracked_refresh(bot: Client, target_id: int) -> None:
+    """Run one refresh and release the target's single-flight slot."""
+    try:
+        await _refresh_identity(bot, target_id)
+    finally:
+        _identity_refresh_inflight.discard(target_id)
+
+
 def launch_identity_refresh(bot: Client, target_id: int) -> None:
     """Fire-and-forget identity sync for detail views (zero added latency).
 
     The view renders instantly from cache; this refreshes the stored
     identity in the background so the *next* view is current. Callers
     holding the document should gate with :func:`identity_needs_refresh`
-    so fresh profiles cost nothing.
+    so fresh profiles cost nothing. One refresh per target is in flight at
+    a time, and the total is capped so a burst of detail views cannot turn
+    into unbounded Telegram and database work.
     """
-    identity_refresh_tasks.spawn(_refresh_identity(bot, target_id))
+    global _identity_refresh_drops
+    if target_id in _identity_refresh_inflight:
+        return
+    if identity_refresh_tasks.pending >= _IDENTITY_REFRESH_MAX_CONCURRENT:
+        _identity_refresh_drops += 1
+        if _identity_refresh_drops % _IDENTITY_REFRESH_DROP_REPORT_EVERY == 0:
+            log.warning(
+                "Identity refresh saturated (%d in flight): %d refreshes "
+                "dropped since startup.",
+                _IDENTITY_REFRESH_MAX_CONCURRENT,
+                _identity_refresh_drops,
+            )
+        return
+    _identity_refresh_inflight.add(target_id)
+    if not identity_refresh_tasks.spawn(_tracked_refresh(bot, target_id)):
+        _identity_refresh_inflight.discard(target_id)

@@ -26,7 +26,7 @@ import pytest
 from tcbot import database as db
 from tcbot.modules.helper import guards, identity
 from tcbot.modules.helper.guards import EnforcementVerdict
-from tcbot.modules.helper.pipelines import ban_actions, kick_actions
+from tcbot.modules.helper.pipelines import ban_executor, kick_executor
 
 
 class _FakeChat:
@@ -196,7 +196,7 @@ def _install_kick_doubles(
         return None
 
     monkeypatch.setattr(db.kicks_db, "log_kick", _log_kick)
-    monkeypatch.setattr(kick_actions, "demote_before_enforcement", _demote)
+    monkeypatch.setattr(kick_executor, "demote_before_enforcement", _demote)
 
     class _Bot:
         async def ban_chat_member(self, *args: Any, **kwargs: Any) -> None:
@@ -223,7 +223,7 @@ def test_the_kick_executor_refuses_a_target_who_outranks(
 
     with caplog.at_level(logging.WARNING, logger="tcbot.modules.helper.pipelines"):
         asyncio.run(
-            kick_actions.execute_kick(
+            kick_executor.execute_kick(
                 update,  # type: ignore[arg-type]
                 ctx,  # type: ignore[arg-type]
                 999,
@@ -253,7 +253,7 @@ def test_the_kick_executor_refuses_on_a_role_lookup_failure(
     update = _FakeUpdate(msg)
 
     asyncio.run(
-        kick_actions.execute_kick(
+        kick_executor.execute_kick(
             update,  # type: ignore[arg-type]
             ctx,  # type: ignore[arg-type]
             999,
@@ -292,7 +292,7 @@ def test_the_ban_executor_refuses_a_target_who_outranks(
         written.append(args)
         raise AssertionError("the ban must not be created")
 
-    monkeypatch.setattr(ban_actions.db.bans_db, "create_ban", _create_ban)
+    monkeypatch.setattr(db.bans_db, "create_ban", _create_ban)
 
     class _Bot:
         username = "testbot"
@@ -300,6 +300,6 @@ def test_the_ban_executor_refuses_a_target_who_outranks(
         async def edit_message_text(self, *args: Any, **kwargs: Any) -> Any:
             return None
 
-    asyncio.run(ban_actions._execute_ban(_Bot(), [], _ban_meta()))  # type: ignore[arg-type]
+    asyncio.run(ban_executor.execute_ban(_Bot(), [], _ban_meta()))  # type: ignore[arg-type]
 
     assert written == []

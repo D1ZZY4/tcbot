@@ -52,7 +52,7 @@ async def publish_rules(
         keep_ids: list[int] = []
         for category, index, text in parts:
             digest = content_hash(text)
-            previous_hash = await rules_db.publications.slot_hash(
+            previous_hash, previous_status = await rules_db.publications.slot_state(
                 set_id=set_id,
                 locale=content_locale,
                 chat_id=cfg.main_channel,
@@ -74,7 +74,10 @@ async def publish_rules(
             keep_ids.append(int(slot["id"]))
             try:
                 edited = False
-                unchanged = previous_hash == digest
+                # * A failed or missing slot keeps its old hash. Treating that
+                # * as "already synced" would mark it done without any channel
+                # * operation, losing the retry this slot exists to guarantee.
+                unchanged = previous_hash == digest and previous_status == "synced"
                 if slot.get("message_id") and not unchanged:
                     edited = await safe_edit_message(
                         bot, cfg.main_channel, slot["message_id"], text

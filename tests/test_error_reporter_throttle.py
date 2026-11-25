@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from tcbot import error_reporter
+from tcbot.modules.helper.pipelines.errors import report as error_reporter
 
 
 class _FakeBot:

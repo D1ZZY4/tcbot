@@ -6,7 +6,8 @@
 
 from __future__ import annotations
 
-from tcbot import cfg, error_reporter
+from tcbot import cfg
+from tcbot.modules.helper.pipelines.errors import report as error_reporter
 
 
 def test_sentry_event_strings_are_redacted_recursively() -> None:

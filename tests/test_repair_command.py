@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from tcbot.database import enforcement_db
+from tcbot.database import enforcement_ledger
 from tcbot.modules import maintenance
 
 
@@ -64,7 +64,7 @@ def test_tcrepair_lists_the_unsettled_runs(
     async def _list() -> list[dict[str, object]]:
         return [_run()]
 
-    monkeypatch.setattr(maintenance.db.enforcement_db, "list_unsettled_runs", _list)
+    monkeypatch.setattr(maintenance.db.enforcement_ledger, "list_unsettled_runs", _list)
     monkeypatch.setattr(maintenance, "locale_for_update", _locale)
 
     async def _role(user_id: int, *, fresh: bool = False) -> str:
@@ -98,14 +98,16 @@ def test_tcrepair_retries_one_run_through_the_worker(
 
     async def _redrive(run_id: int, *, chat_id: int | None = None) -> Any:
         seen.append((run_id, chat_id))
-        return enforcement_db.RepairResult("queued", 2)
+        return enforcement_ledger.RepairResult("queued", 2)
 
     async def _deliver(bot: Any, run_id: int) -> bool:
         delivered.append(run_id)
         return True
 
-    monkeypatch.setattr(maintenance.db.enforcement_db, "redrive_run", _redrive)
-    monkeypatch.setattr(maintenance.enforcement_worker, "deliver_queued_run", _deliver)
+    monkeypatch.setattr(maintenance.db.enforcement_ledger, "redrive_run", _redrive)
+    monkeypatch.setattr(
+        maintenance.moderation_enforcement, "deliver_queued_run", _deliver
+    )
     monkeypatch.setattr(maintenance, "locale_for_update", _locale)
 
     async def _role(user_id: int, *, fresh: bool = False) -> str:
@@ -139,7 +141,7 @@ def test_tcrepair_rejects_an_incomplete_retry(
     async def _redrive(run_id: int, *, chat_id: int | None = None) -> Any:
         raise AssertionError("a malformed command must not touch the ledger")
 
-    monkeypatch.setattr(maintenance.db.enforcement_db, "redrive_run", _redrive)
+    monkeypatch.setattr(maintenance.db.enforcement_ledger, "redrive_run", _redrive)
     monkeypatch.setattr(maintenance, "locale_for_update", _locale)
 
     async def _role(user_id: int, *, fresh: bool = False) -> str:

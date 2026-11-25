@@ -13,10 +13,11 @@ from typing import Any
 import pytest
 
 from tcbot import __main__ as main_mod
-from tcbot import enforcement_worker, notification_worker
+from tcbot import notification_worker
 from tcbot.database import mtproto as mtproto_mod
 from tcbot.database import pg_cron
 from tcbot.database import scheduler as sched_mod
+from tcbot.modules.helper.pipelines import moderation_enforcement
 
 
 class _Client:
@@ -50,7 +51,9 @@ def _stub_startup(
     monkeypatch.setattr(mtproto_mod, "client", lambda: client)
     monkeypatch.setattr(main_mod, "register_handlers", lambda _client: None)
     monkeypatch.setattr(main_mod, "init_shared_subsystems", _ready)
-    monkeypatch.setattr(main_mod, "configure_enforcement_worker", lambda _client: None)
+    monkeypatch.setattr(
+        main_mod, "configure_moderation_enforcement", lambda _client: None
+    )
     monkeypatch.setattr(main_mod, "configure_notification_worker", lambda _client: None)
     monkeypatch.setattr(pg_cron, "sync_schedules", _false)
     monkeypatch.setattr(sched_mod, "start", _start)
@@ -61,7 +64,7 @@ def _stub_startup(
         coro.close()
 
     monkeypatch.setattr(main_mod, "_startup_tasks", SimpleNamespace(spawn=_discard))
-    monkeypatch.setattr(enforcement_worker, "configure", lambda _bot: None)
+    monkeypatch.setattr(moderation_enforcement, "configure", lambda _bot: None)
     monkeypatch.setattr(notification_worker, "configure", lambda _bot: None)
 
 

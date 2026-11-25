@@ -61,6 +61,7 @@ scope_warn = " WARNING: the group list could not be loaded, so some groups may h
 body = "You have been federation-banned from {community}.\nReason: {reason}\n\nYou may submit an appeal using the button below ↴."
 
 [summary]
+title = "Federation Ban"
 body = "{user} has been banned.\n*Reason:* {reason}\n{applied}"
 
 [confirm]

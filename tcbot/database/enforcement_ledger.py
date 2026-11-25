@@ -2,7 +2,11 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Queue, claim, report, and requeue the enforcement runs of decisions."""
+"""Ledger for moderation enforcement runs: queue, claim, report, and requeue.
+
+This module owns the SQL for the durable enforcement tables. Delivery and
+retry decisions live in the shared moderation enforcement executor.
+"""
 
 from __future__ import annotations
 
