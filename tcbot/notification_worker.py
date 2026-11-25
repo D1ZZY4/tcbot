@@ -223,7 +223,20 @@ async def _process_task(bot: Client, task: dict[str, object]) -> None:
             )
             return
         if isinstance(exc, BadRequest) and "not modified" in detail:
-            await _complete(state="sent", expected_attempts=attempts)
+            # * Telegram already has the closed text, so the edit landed from
+            # * the operator's point of view. A failed settlement must not
+            # * fall through to run_once's ceiling handler, which would mark
+            # * a delivered card as failed.
+            try:
+                await _complete(state="sent", expected_attempts=attempts)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception(
+                    "Review-card edit was already current for action=%d but its "
+                    "settlement write failed; leaving the task pending.",
+                    action_id,
+                )
             return
         retry = attempts < _MAX_ATTEMPTS
         log.warning(

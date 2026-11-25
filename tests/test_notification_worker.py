@@ -288,6 +288,33 @@ def test_a_failed_sent_settlement_does_not_record_a_failed_card(
     assert [entry["state"] for entry in completed] == ["sent"]
 
 
+def test_a_not_modified_settlement_failure_does_not_mark_a_closed_card_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A card Telegram confirms as current must not be settled as failed."""
+    completed: list[dict[str, Any]] = []
+    task = {**_task(), "attempts": notification_worker._MAX_ATTEMPTS}
+    _wire(monkeypatch)
+
+    async def _claim(limit: int = 10, *, retry_after: Any) -> list[dict[str, object]]:
+        return [task]
+
+    async def _complete(task_id: int, **kwargs: Any) -> None:
+        completed.append({"task_id": task_id, **kwargs})
+        if kwargs.get("state") == "sent":
+            raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(db.notifications_db, "claim_due_tasks", _claim)
+    monkeypatch.setattr(db.notifications_db, "complete_task", _complete)
+
+    bot = _Bot(BadRequest("Message is not modified"))
+
+    asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert len(bot.edits) == 1
+    assert [entry["state"] for entry in completed] == ["sent"]
+
+
 def test_an_invalid_task_is_settled_instead_of_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
