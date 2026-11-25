@@ -188,24 +188,27 @@ async def _mention_triples(
         )
     )
     publish = user_mention_cache.revision() == revision
+    to_cache: dict[int, list[str | None]] = {}
     for doc in docs:
         uid = doc["user_id"]
-        # * Populate L1 (and fire-and-forget L2 Redis write) for next lookup.
         triple = [
             doc.get("first_name") or str(uid),
             doc.get("username"),
             doc.get("last_name"),
         ]
         if publish:
-            user_mention_cache.put(uid, triple)
+            to_cache[uid] = triple
         result[uid] = triple
     # * Fill fallback for users not found in DB either and cache the sentinel so
     # * subsequent calls skip the database round-trip on the next lookup.
     for uid in missing:
         if uid not in result:
+            sentinel = list(_NOT_FOUND_SENTINEL)
             if publish:
-                user_mention_cache.put(uid, list(_NOT_FOUND_SENTINEL))
-            result[uid] = list(_NOT_FOUND_SENTINEL)
+                to_cache[uid] = sentinel
+            result[uid] = sentinel
+    if publish and to_cache:
+        user_mention_cache.put_many(to_cache)
     return result
 
 

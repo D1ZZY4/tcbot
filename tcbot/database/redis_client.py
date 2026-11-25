@@ -71,9 +71,9 @@ _liveness: bool | None = None
 # * while a socket-level timeout aborts cleanly). Keep it small enough
 # * that a stalled Redis cannot serialize the FIFO mutation queue.
 
-_SOCKET_CONNECT_TIMEOUT_S: float = 5.0
-_SOCKET_TIMEOUT_S: float = 2.0
-_MAX_CONNECTIONS: int = 20
+_SOCKET_CONNECT_TIMEOUT_S: float = 2.0
+_SOCKET_TIMEOUT_S: float = 0.5
+_MAX_CONNECTIONS: int = 64
 _HEALTH_CHECK_INTERVAL_S: int = 30
 
 # * Backoff between reconnect attempts after a failed connection. The
@@ -128,6 +128,7 @@ async def _connect_locked(url: str) -> None:
         max_connections=_MAX_CONNECTIONS,
         socket_connect_timeout=_SOCKET_CONNECT_TIMEOUT_S,
         socket_timeout=_SOCKET_TIMEOUT_S,
+        socket_keepalive=True,
         health_check_interval=_HEALTH_CHECK_INTERVAL_S,
     )
     c = aioredis.Redis(connection_pool=pool)
