@@ -9,6 +9,8 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Any
 
+from pyrogram import ContinuePropagation
+
 from tcbot.modules.helper.context import Ctx
 from tcbot.utils.logger import get_logger
 
@@ -47,6 +49,11 @@ def log_execution[R](
             result = await func(ctx)
             log.debug("[%s] uid=%s ok (%.1fms)", name, uid, elapsed_ms(t0))
             return result
+        except ContinuePropagation:
+            # * Dispatcher hand-off, not a failure: the next handler owns the
+            # * update. Keep the trace at DEBUG like every other exit line.
+            log.debug("[%s] uid=%s passed on after %.1fms", name, uid, elapsed_ms(t0))
+            raise
         except Exception:
             log.exception("[%s] uid=%s raised after %.1fms", name, uid, elapsed_ms(t0))
             raise
