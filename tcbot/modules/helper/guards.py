@@ -214,7 +214,7 @@ async def resolve_and_check(
     Replies on the message itself when the executor lacks rank or the target
     outranks the executor, then returns ``(None, None)``.
 
-    Clienth roles are read fresh. A demotion or a transfer in another process
+    Current roles are read fresh. A demotion or a transfer in another process
     must never be hidden behind the cache TTL, and the check must not
     depend on a decorator having run first.
 
@@ -584,7 +584,7 @@ def can_demote_admin(executor_role: str | None, target_role: str | None) -> bool
     outrank the target. On top of that, demoting an Admin needs the
     Owner, because an Admin is the tier a demotion would strip.
 
-    Clienth comparisons run through the shared rank table, so a tier that
+    Current comparisons run through the shared rank table, so a tier that
     joins it takes part in the rule instead of slipping past a hardcoded
     name. The Owner stays a named tier, because the Admin rule is about
     that one role and not about a rank number.

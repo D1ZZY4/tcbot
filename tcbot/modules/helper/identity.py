@@ -110,7 +110,7 @@ async def classify(
     fail-closed without asking every caller for a second role read.
     Cancellation always propagates.
     """
-    # * Clienth are independent reads; run them in parallel. The role is read
+    # * These are independent reads; run them in parallel. The role is read
     # * fresh: the refusal table is keyed on the role kind, so a cached
     # * role could show a Owner as an ordinary user for the whole cache
     # * TTL and let the action reach its prompt.
@@ -269,7 +269,7 @@ async def can_manage_group(
 ) -> bool:
     """Return True when ``user_id`` may manage federation settings for a group.
 
-    Granted to federation staff, or to the group's Telegram creator. Clienth
+    Granted to federation staff, or to the group's Telegram creator. Both
     lookups fail closed: a staff-role or membership failure denies, so an
     outage never grants. Cancellation always propagates.
 

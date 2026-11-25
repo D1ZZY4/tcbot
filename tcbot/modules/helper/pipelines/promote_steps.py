@@ -86,7 +86,7 @@ class Promote:
     ) -> tuple[bool, str]:
         """Execute a role assignment. Returns (success, reply text).
 
-        Clienth roles are read fresh at the mutation point so a demotion or
+        Current roles are read fresh at the mutation point so a demotion or
         ownership transfer during earlier lookups cannot still grant rank.
         A failed lookup refuses the grant.
         """
