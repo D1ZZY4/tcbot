@@ -61,14 +61,18 @@ jobs:
 
       - name: Install updated dependencies
         if: steps.update.outputs.has_updates == 'true'
-        run: uv sync --frozen
+        env:
+          UV_LOCKED: "1"
+        run: uv sync --locked
 
       - name: Validate updated dependencies
         if: steps.update.outputs.has_updates == 'true'
         env:
+          UV_LOCKED: "1"
           BOT_TOKEN: "000000:dummy-token-for-ci00000000000000000"
           DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
           OWNER_ID: "1"
+          PROOFS: "-1000000000001"
         run: |
           uv run ruff format --check .
           uv run ruff check .
@@ -82,15 +86,31 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          DIFF_SUMMARY="$(head -c 4000 changes.md | tr -d '\r' | sed 's/"/\\"/g' | tr '\n' ' ')"
+          PAYLOAD="$(python3 - << 'PYEOF'
+          import json
+          from pathlib import Path
+
+          diff_summary = Path("changes.md").read_text(encoding="utf-8", errors="replace")[:4000].replace("\r", "").replace("\n", " ")
           # * Free AI via GitHub Models (openai/gpt-4o-mini) using GITHUB_TOKEN
           # * - no extra secrets, no billing. Falls back to static text on failure.
-          PROMPT="You are a senior Python/DevOps release expert. Write a professional Conventional Commit PR title and body for a dependency update. Title must be scoped Conventional Commit like 'chore(deps): ...' under 72 chars. Body must be 2-4 short bullets: what changed, why it matters, validation run, risk. No emojis, no em dashes, no tool names beyond the dep names. Diff summary: $DIFF_SUMMARY"
+          prompt = (
+              "You are a senior Python/DevOps release expert. Write a professional Conventional Commit PR title "
+              "and body for a dependency update. Title must be scoped Conventional Commit like 'chore(deps): ...' "
+              "under 72 chars. Body must be 2-4 short bullets: what changed, why it matters, validation run, risk. "
+              f"No emojis, no em dashes, no tool names beyond the dep names. Diff summary: {diff_summary}"
+          )
+          print(json.dumps({
+              "model": "openai/gpt-4o-mini",
+              "messages": [{"role": "user", "content": prompt}],
+              "max_tokens": 400,
+          }))
+          PYEOF
+          )"
 
           RESPONSE="$(curl -s -w "\n%{http_code}" https://models.github.ai/inference/chat/completions \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"$PROMPT\"}],\"max_tokens\":400}" || true)"
+            -d "$PAYLOAD" || true)"
           HTTP_CODE="$(echo "$RESPONSE" | tail -n1)"
           BODY_JSON="$(echo "$RESPONSE" | sed '$d')"
 

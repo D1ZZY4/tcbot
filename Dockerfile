@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.14-slim@sha256:22eafb370920ad8b429e0aec3fff433e0669968519f5d60469d83729c138b28b
 
 # * libstdc++6 provides the runtime the greenlet extension links
 # * against. greenlet comes with sqlalchemy[asyncio], so the async

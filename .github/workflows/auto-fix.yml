@@ -47,7 +47,9 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --frozen
+        env:
+          UV_LOCKED: 1
+        run: uv sync --locked
 
       - name: Run Ruff format
         id: format
@@ -79,6 +81,7 @@ jobs:
           BOT_TOKEN: "000000:dummy-token-for-ci00000000000000000"
           DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
           OWNER_ID: "1"
+          PROOFS: "-1000000000001"
         run: |
           set +e
           uv run pyright 2>&1 | tee pyright.log
@@ -96,6 +99,7 @@ jobs:
           BOT_TOKEN: "000000:dummy-token-for-ci00000000000000000"
           DATABASE_URL: "postgresql://tcbot:tcbot@127.0.0.1:5432/tcbot"
           OWNER_ID: "1"
+          PROOFS: "-1000000000001"
         run: |
           set +e
           uv run pytest tests/ -q -n auto 2>&1 | tee pytest.log
@@ -111,22 +115,46 @@ jobs:
         run: |
           # * Only attempt AI fix when ruff --fix left issues or pyright/pytest failed.
           # * Free AI via GitHub Models (openai/gpt-4o-mini) using GITHUB_TOKEN - no billing.
-          PYRIGHT_ERRORS="$(head -c 3000 pyright.log | tr -d '\r' | tr '\n' ' ' | sed 's/"/\\"/g' | cut -c1-3000)"
-          PYTEST_ERRORS="$(head -c 3000 pytest.log | tr -d '\r' | tr '\n' ' ' | sed 's/"/\\"/g' | cut -c1-3000)"
-          RUFF_ERRORS="$(head -c 2000 check.log | tr -d '\r' | tr '\n' ' ' | sed 's/"/\\"/g' | cut -c1-2000)"
+          PAYLOAD="$(python3 - << 'PYEOF'
+          import json
+          from pathlib import Path
 
-          if [ -z "$PYRIGHT_ERRORS" ] && [ -z "$PYTEST_ERRORS" ] && [ -z "$RUFF_ERRORS" ]; then
+          def read_snippet(name: str, limit: int) -> str:
+              path = Path(name)
+              if not path.is_file():
+                  return ""
+              return path.read_text(encoding="utf-8", errors="replace")[:limit].replace("\r", "").replace("\n", " ")
+
+          pyright_err = read_snippet("pyright.log", 3000)
+          pytest_err = read_snippet("pytest.log", 3000)
+          ruff_err = read_snippet("check.log", 2000)
+          if not (pyright_err or pytest_err or ruff_err):
+              raise SystemExit(0)
+
+          prompt = (
+              "You are a senior Python 3.14 expert for TCF Bot. Fix these errors concisely and professionally. "
+              f"Ruff errors: {ruff_err} . Pyright errors: {pyright_err} . Pytest failures: {pytest_err} . "
+              "Output only a short summary of what you would fix (no code dump) - the actual fixes are applied "
+              "by ruff --fix and will be reviewed. Keep under 200 chars, no emojis, no em dashes."
+          )
+          print(json.dumps({
+              "model": "openai/gpt-4o-mini",
+              "messages": [{"role": "user", "content": prompt}],
+              "max_tokens": 250,
+          }))
+          PYEOF
+          )"
+
+          if [ -z "$PAYLOAD" ]; then
             echo "No fixable errors for AI."
             echo "ai_fixed=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          PROMPT="You are a senior Python 3.14 expert for TCF Bot. Fix these errors concisely and professionally. Ruff errors: $RUFF_ERRORS . Pyright errors: $PYRIGHT_ERRORS . Pytest failures: $PYTEST_ERRORS . Output only a short summary of what you would fix (no code dump) - the actual fixes are applied by ruff --fix and will be reviewed. Keep under 200 chars, no emojis, no em dashes."
-
           RESPONSE="$(curl -s -w "\n%{http_code}" https://models.github.ai/inference/chat/completions \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"model\":\"openai/gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"$PROMPT\"}],\"max_tokens\":250}" || true)"
+            -d "$PAYLOAD" || true)"
           HTTP_CODE="$(echo "$RESPONSE" | tail -n1)"
           BODY_JSON="$(echo "$RESPONSE" | sed '$d')"
 
