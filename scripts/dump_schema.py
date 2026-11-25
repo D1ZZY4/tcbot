@@ -38,6 +38,13 @@ import psycopg
 from dotenv import find_dotenv, load_dotenv
 from psycopg import sql
 
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from tcbot import DB_SCHEMAS  # noqa: E402
+from tcbot.database.schema.loader import split_statements  # noqa: E402
+
 # * The directory the schema files live in.
 SCHEMA_DIR: Path = Path(__file__).resolve().parents[1] / "tcbot" / "database" / "schema"
 
@@ -160,6 +167,71 @@ def _split(dump: str) -> dict[str, list[str]]:
     return grouped
 
 
+def _validate_schema(schema: str) -> str:
+    """Return *schema* when it is one of the three schemas the project owns.
+
+    The dump reads one schema and rewrites the committed files from it. A
+    free-form name can point at an unrelated schema whose dump contains none
+    of this project's objects, which would silently empty the files.
+    """
+    if schema not in DB_SCHEMAS:
+        raise SystemExit(
+            f"Refusing to export schema {schema!r}; expected one of "
+            f"{', '.join(sorted(DB_SCHEMAS))}."
+        )
+    return schema
+
+
+def _committed_minimums() -> dict[str, int]:
+    """Count statements in the committed files the exporter would overwrite."""
+
+    def _count(relative: str) -> int:
+        return len(
+            split_statements((SCHEMA_DIR / relative).read_text(encoding="utf-8"))
+        )
+
+    functions = sum(
+        _count(str(path.relative_to(SCHEMA_DIR)))
+        for path in sorted((SCHEMA_DIR / "functions").glob("*.sql"))
+    )
+    return {
+        "views.sql": _count("views.sql"),
+        "functions.sql": functions,
+        "triggers.sql": _count("triggers.sql"),
+        "seed.sql": _count("seed.sql"),
+    }
+
+
+def _require_export(
+    grouped: dict[str, list[str]],
+    seed: list[str],
+    minimums: dict[str, int] | None = None,
+) -> None:
+    """Refuse a dump smaller than the committed schema.
+
+    A non-empty dump of a partial schema must not replace complete files with
+    a subset: the missing objects would disappear from every deployment that
+    applies these files.
+    """
+    if minimums is None:
+        minimums = _committed_minimums()
+    short = [
+        f"{name}: {len(statements)} of {minimums.get(name, 1)}"
+        for name, statements in (
+            ("views.sql", grouped["views.sql"]),
+            ("functions.sql", grouped["functions.sql"]),
+            ("triggers.sql", grouped["triggers.sql"]),
+            ("seed.sql", seed),
+        )
+        if len(statements) < minimums.get(name, 1)
+    ]
+    if short:
+        raise SystemExit(
+            "The dump is smaller than the committed schema (" + ", ".join(short) + "). "
+            "The committed schema files were not changed."
+        )
+
+
 def _portable(statement: str, schema: str) -> str:
     """Return *statement* with the schema of the database replaced.
 
@@ -171,7 +243,7 @@ def _portable(statement: str, schema: str) -> str:
     files twice does not fail on an object that already exists.
     """
     statement = statement.replace(f"'{schema}'", "'%SCHEMA%'")
-    statement = re.sub(rf"\b{schema}\.", "%SCHEMA%.", statement)
+    statement = re.sub(rf"\b{re.escape(schema)}\.", "%SCHEMA%.", statement)
     statement = re.sub(
         r"^CREATE VIEW ",
         "CREATE OR REPLACE VIEW ",
@@ -422,34 +494,37 @@ def main() -> int:
     parser.add_argument("--schema", default="public", help="the schema to export")
     args = parser.parse_args()
 
+    schema = _validate_schema(args.schema)
     url = _database_url()
-    dump = _dump(url, args.schema)
+    dump = _dump(url, schema)
     grouped = _split(dump)
+    function_files = _function_groups(grouped["functions.sql"])
+    seed = _seed_statements(url, schema)
+    _require_export(grouped, seed)
 
     _write(
         "views.sql",
         grouped["views.sql"],
-        args.schema,
+        schema,
         "-- The read-only views of the community.",
     )
-    function_files = _function_groups(grouped["functions.sql"])
     for domain, statements in sorted(function_files.items()):
         _write(
             f"functions/{domain}.sql",
             statements,
-            args.schema,
+            schema,
             f"-- Database functions: {domain}.",
         )
     _write(
         "triggers.sql",
         grouped["triggers.sql"],
-        args.schema,
+        schema,
         "-- The triggers that protect the invariants the schema cannot express.",
     )
     _write(
         "seed.sql",
-        _seed_statements(url, args.schema),
-        args.schema,
+        seed,
+        schema,
         "-- The reference data of the community: the role catalog, the "
         "permission catalog,\n-- the retention contract, and the job registry.",
     )

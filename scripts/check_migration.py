@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -323,14 +324,16 @@ def _verify(engine: object, schema: str) -> list[str]:
 
         # * Every seeded decision has to arrive with its kind, its
         # * target, its group, and its scope.
-        decisions: dict[tuple[str, str, str], str] = {}
+        # * Two seeded warns share the same (action, target, chat) key, so a
+        # * plain dict would let a migration that drops one of them pass.
+        decisions: Counter[tuple[str, str, str, str]] = Counter()
         for row in conn.execute(
             text(
                 "SELECT action_type, target_user_id, "
                 "  coalesce(chat_id, 0), scope_type FROM moderation_actions"
             )
         ).all():
-            decisions[(str(row[0]), str(row[1]), str(row[2]))] = str(row[3])
+            decisions[(str(row[0]), str(row[1]), str(row[2]), str(row[3]))] += 1
 
         expected_decisions = (
             ("ban", "3", "0", "community"),
@@ -341,17 +344,24 @@ def _verify(engine: object, schema: str) -> list[str]:
             ("warn", "5", "-999", "chat"),
             ("kick", "5", "-100", "chat"),
         )
-        for action_type, target, chat_id, scope in expected_decisions:
-            found = decisions.get((action_type, target, chat_id))
-            if found is None:
+        for (
+            action_type,
+            target,
+            chat_id,
+            scope,
+        ), expected_count in Counter(expected_decisions).items():
+            key = (action_type, target, chat_id, scope)
+            found = sum(
+                count
+                for (a_type, a_target, a_chat, _scope), count in decisions.items()
+                if (a_type, a_target, a_chat) == (action_type, target, chat_id)
+            )
+            scoped = decisions.get(key, 0)
+            if found != expected_count or scoped != expected_count:
                 failures.append(
-                    f"the {action_type} decision for user {target} "
-                    f"in chat {chat_id} did not arrive"
-                )
-            elif found != scope:
-                failures.append(
-                    f"the {action_type} decision for user {target} "
-                    f"has scope {found}, expected {scope}"
+                    f"expected {expected_count} {action_type} decision(s) for "
+                    f"user {target} in chat {chat_id} with scope {scope}, "
+                    f"found {found} total and {scoped} with that scope"
                 )
 
         # * The community decisions carry no group, and the chat
