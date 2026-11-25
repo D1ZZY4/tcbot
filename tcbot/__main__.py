@@ -370,7 +370,6 @@ async def _run_polling() -> None:
     client = mtproto_mod.client()
     register_handlers(client)
     asyncio.get_running_loop().set_exception_handler(_make_asyncio_exc_handler())
-    started = False
     try:
         await init_shared_subsystems(client)
         configure_enforcement_worker(client)
@@ -383,10 +382,16 @@ async def _run_polling() -> None:
             notification_job=run_notification_worker,
         )
         _startup_tasks.spawn(_warm_hot_caches())
-        started = client.is_connected
+        # * A dropped connection after init would otherwise skip idle(),
+        # * return normally and exit 0 while receiving no updates. A
+        # * supervisor that restarts on failure would leave the bot down.
+        if not client.is_connected:
+            raise RuntimeError(
+                "Kurigram client disconnected before the polling loop; "
+                "refusing to exit successfully without receiving updates."
+            )
         log.info("Bot initialised. Running Kurigram polling loop...")
-        if started:
-            await idle()
+        await idle()
     except asyncio.CancelledError:
         log.info("Polling cancelled.")
         raise
