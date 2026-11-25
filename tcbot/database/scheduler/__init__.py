@@ -687,7 +687,7 @@ async def stop() -> None:
     Sets the stop event so the background task can exit cleanly.
     Safe to call even if :func:`start` was never called.
     """
-    global _sched_task, _sched_ready, _sched_stop, _sched_error
+    global _sched_task, _sched_ready, _sched_stop, _sched_error, _scheduler_executor
     if _sched_stop is not None:
         _sched_stop.set()
     if _sched_task is not None:
@@ -731,6 +731,11 @@ async def stop() -> None:
     _sched_ready = None
     _sched_stop = None
     _sched_error = None
+    # * The dedicated worker owns a thread and the blocking job-store engine.
+    # * Leaving it alive across a stop/start cycle leaks both into the next run.
+    executor, _scheduler_executor = _scheduler_executor, None
+    if executor is not None:
+        executor.shutdown(wait=False)
     log.info("APScheduler stopped.")
 
 

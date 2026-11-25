@@ -62,3 +62,67 @@ def test_database_closes_after_a_cancelled_shutdown_step(
         asyncio.run(main_mod._shutdown_subsystems())
 
     assert closed == [True]
+
+
+def test_clients_close_when_an_early_drain_is_cancelled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second cancellation during a drain must not skip client disposal."""
+    _stub_shutdown_steps(monkeypatch)
+    closed: list[str] = []
+
+    async def _cancelled_drain() -> None:
+        raise asyncio.CancelledError()
+
+    async def _close(name: str) -> None:
+        closed.append(name)
+
+    async def _close_redis() -> None:
+        await _close("redis")
+
+    async def _close_mtproto() -> None:
+        await _close("mtproto")
+
+    async def _close_database() -> None:
+        await _close("database")
+
+    monkeypatch.setattr(main_mod, "shutdown_dispatcher", _cancelled_drain)
+    monkeypatch.setattr(redis_client, "close", _close_redis)
+    monkeypatch.setattr(mtproto_mod, "stop", _close_mtproto)
+    monkeypatch.setattr(main_mod, "close_database", _close_database)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(main_mod._shutdown_subsystems())
+
+    assert closed == ["redis", "mtproto", "database"]
+
+
+def test_database_closes_when_disposal_task_is_cancelled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second cancellation during client disposal must still close the DB."""
+    _stub_shutdown_steps(monkeypatch)
+    closed: list[bool] = []
+    disposal_started = asyncio.Event()
+
+    async def _slow_close() -> None:
+        disposal_started.set()
+        await asyncio.sleep(10)
+
+    async def _close_database() -> None:
+        closed.append(True)
+
+    monkeypatch.setattr(redis_client, "close", _slow_close)
+    monkeypatch.setattr(mtproto_mod, "stop", _slow_close)
+    monkeypatch.setattr(main_mod, "close_database", _close_database)
+
+    async def _run() -> None:
+        task = asyncio.create_task(main_mod._shutdown_subsystems())
+        await disposal_started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(_run())
+
+    assert closed == [True]

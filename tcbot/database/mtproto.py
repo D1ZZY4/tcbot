@@ -321,25 +321,35 @@ async def stop() -> None:
     # ! CRITICAL: Disconnect before releasing the lease. A free lease with a
     # ! still-connected client lets a rolling-restart peer claim it and reuse
     # ! the shared auth key, which Telegram rejects as AUTH_KEY_DUPLICATED.
-    c, _client = _client, None
-    if c is not None:
-        try:
-            await c.stop()
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            log.debug("MTProto stop failed (non-fatal): %s", exc)
-    owner = _lease_owner
-    _lease_owner = None
-    if owner is not None:
-        try:
-            from tcbot.database.mtproto_store import (  # noqa: PLC0415 (same as client())
-                PostgresStorage,
-            )
-        except ImportError:
-            pass
-        else:
-            await _release_lease_quietly(PostgresStorage(cfg.mtproto_session), owner)
+    c = _client
+    try:
+        if c is not None:
+            try:
+                await c.stop()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.debug("MTProto stop failed (non-fatal): %s", exc)
+            finally:
+                _client = None
+    finally:
+        # * Keep the owner id until the release is attempted. Clearing it
+        # * before the await used to strand the lease for its whole TTL when
+        # * a second cancellation interrupted shutdown.
+        owner = _lease_owner
+        if owner is not None:
+            try:
+                from tcbot.database.mtproto_store import (  # noqa: PLC0415 (same as client())
+                    PostgresStorage,
+                )
+            except ImportError:
+                pass
+            else:
+                await _release_lease_quietly(
+                    PostgresStorage(cfg.mtproto_session), owner
+                )
+            finally:
+                _lease_owner = None
 
 
 def is_auth_dead() -> bool:
