@@ -31,7 +31,7 @@ from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
-from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
+from tcbot.utils.transport import TELEGRAM_ACTION_TIMEOUT
 
 log = get_logger(__name__)
 
@@ -212,10 +212,17 @@ async def execute_kick(
                 parse_mode=None,
             )
             return
-        await asyncio.wait_for(
-            ctx.bot.ban_chat_member(chat_id, target_id),
-            timeout=TELEGRAM_LOOKUP_TIMEOUT,
-        )
+        try:
+            await asyncio.wait_for(
+                ctx.bot.ban_chat_member(chat_id, target_id),
+                timeout=TELEGRAM_ACTION_TIMEOUT,
+            )
+        except TimeoutError:
+            # * A deadline cancels only the local RPC: Telegram may already
+            # * have applied the ban. Treat it as landed so the repair path
+            # * unbans defensively instead of stranding the target.
+            ban_landed = True
+            raise
         # * Only a ban that actually landed can leave the target stranded.
         # * Without this flag a failed ban queued a no-op repair that the
         # * worker settled as success, flipping the audit row back to
@@ -241,7 +248,10 @@ async def execute_kick(
         # * know whether the unban failed -- otherwise the admin would see
         # * "kicked" while the user is still banned.
         unban_result, log_send_result = await asyncio.gather(
-            ctx.bot.unban_chat_member(chat_id, target_id),
+            asyncio.wait_for(
+                ctx.bot.unban_chat_member(chat_id, target_id),
+                timeout=TELEGRAM_ACTION_TIMEOUT,
+            ),
             send_log(
                 ctx.bot,
                 log_text,
@@ -262,7 +272,7 @@ async def execute_kick(
             try:
                 await asyncio.wait_for(
                     ctx.bot.unban_chat_member(chat_id, target_id),
-                    timeout=TELEGRAM_LOOKUP_TIMEOUT,
+                    timeout=TELEGRAM_ACTION_TIMEOUT,
                 )
                 log.info("kick unban retry succeeded for target=%d", target_id)
                 unban_result = True

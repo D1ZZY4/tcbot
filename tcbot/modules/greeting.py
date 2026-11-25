@@ -40,10 +40,10 @@ from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcem
 from tcbot.utils.dispatch import is_benign_telegram_error, throw_if_cancelled
 from tcbot.utils.i18n import Safe, code, t, user_ref
 from tcbot.utils.logger import get_logger
-from tcbot.utils.transport import TELEGRAM_LOOKUP_TIMEOUT
+from tcbot.utils.transport import TELEGRAM_ACTION_TIMEOUT
 
 if TYPE_CHECKING:
-    from tcbot.database.documents import BanDoc
+    from tcbot.database.documents import ActiveMuteDoc, BanDoc
 
 log = get_logger(__name__)
 
@@ -201,6 +201,22 @@ async def _ban_state_with_retry(user_id: int) -> BanDoc | None:
         return await db.bans_db.get_active_ban(user_id)
 
 
+async def _mute_state_with_retry(user_id: int) -> ActiveMuteDoc | None:
+    """Read the active mute once, then retry once after a brief pause.
+
+    A transient pool or circuit failure must not silently restore full
+    posting rights to a muted member during a join. Mirrors the ban read so
+    both join-time enforcement paths tolerate the same short outage.
+    """
+    try:
+        return await db.mutes_db.get_active_mute(user_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        await asyncio.sleep(0.1)
+        return await db.mutes_db.get_active_mute(user_id)
+
+
 _REPAIR_REASON: str = "Fail-closed removal: rejoin could not be delivered"
 
 
@@ -244,12 +260,26 @@ async def _fail_closed_join(
     """
     try:
         await asyncio.wait_for(
-            bot.ban_chat_member(chat_id, user_id), timeout=TELEGRAM_LOOKUP_TIMEOUT
+            bot.ban_chat_member(chat_id, user_id), timeout=TELEGRAM_ACTION_TIMEOUT
         )
     except asyncio.CancelledError:
         raise
+    except TimeoutError:
+        # * A client deadline only cancels the local RPC: Telegram may still
+        # * have applied the ban. Queue the same repair as a landed ban,
+        # * because an unban of a user who is not banned is benign.
+        log.warning(
+            "Fail-closed removal timed out on %s for uid=%d in chat=%d; "
+            "the ban may have landed",
+            source,
+            user_id,
+            chat_id,
+        )
+        await _repair_failed_removal(chat_id, user_id, source)
+        return
     except Exception:
-        # * The ban never landed, so there is nothing to undo or repair.
+        # * A definite refusal means the ban never landed, so there is
+        # * nothing to undo or repair.
         log.exception(
             "Fail-closed removal failed on %s for uid=%d in chat=%d",
             source,
@@ -261,7 +291,7 @@ async def _fail_closed_join(
     try:
         await asyncio.wait_for(
             bot.unban_chat_member(chat_id, user_id),
-            timeout=TELEGRAM_LOOKUP_TIMEOUT,
+            timeout=TELEGRAM_ACTION_TIMEOUT,
         )
     except asyncio.CancelledError:
         await _repair_failed_removal(chat_id, user_id, source)
@@ -273,7 +303,7 @@ async def _fail_closed_join(
         try:
             await asyncio.wait_for(
                 bot.unban_chat_member(chat_id, user_id),
-                timeout=TELEGRAM_LOOKUP_TIMEOUT,
+                timeout=TELEGRAM_ACTION_TIMEOUT,
             )
         except asyncio.CancelledError:
             await _repair_failed_removal(chat_id, user_id, source)
@@ -336,7 +366,7 @@ async def _handle_member(
             member.last_name,
         ),
         _ban_state_with_retry(member.id),
-        db.mutes_db.get_active_mute(member.id),
+        _mute_state_with_retry(member.id),
         return_exceptions=True,
     )
     # ! CRITICAL: a cancelled read must propagate, never degrade into a
@@ -372,7 +402,7 @@ async def _handle_member(
         try:
             await asyncio.wait_for(
                 bot.ban_chat_member(chat_id_of(chat), member.id),
-                timeout=TELEGRAM_LOOKUP_TIMEOUT,
+                timeout=TELEGRAM_ACTION_TIMEOUT,
             )
         except Exception:
             log.exception(
@@ -409,7 +439,7 @@ async def _handle_member(
                     bot.restrict_chat_member(
                         chat_id_of(chat), member.id, permissions=perms, until_date=until
                     ),
-                    timeout=TELEGRAM_LOOKUP_TIMEOUT,
+                    timeout=TELEGRAM_ACTION_TIMEOUT,
                 )
                 log.info(
                     "Re-applied active federation mute for uid=%d in chat=%d",
@@ -531,7 +561,7 @@ async def on_join_request_approved(ctx: Ctx) -> None:
         db.users_cache.harvest_user_identity(
             user.id, user.username, display_name(user), user.last_name or None
         ),
-        db.mutes_db.get_active_mute(user.id),
+        _mute_state_with_retry(user.id),
         _ban_state_with_retry(user.id),
         return_exceptions=True,
     )
@@ -565,7 +595,7 @@ async def on_join_request_approved(ctx: Ctx) -> None:
         try:
             await asyncio.wait_for(
                 ctx.bot.ban_chat_member(chat_id_of(chat), user.id),
-                timeout=TELEGRAM_LOOKUP_TIMEOUT,
+                timeout=TELEGRAM_ACTION_TIMEOUT,
             )
         except Exception:
             log.exception(
@@ -612,7 +642,7 @@ async def on_join_request_approved(ctx: Ctx) -> None:
             ctx.bot.restrict_chat_member(
                 chat_id_of(chat), user.id, permissions=perms, until_date=until
             ),
-            timeout=TELEGRAM_LOOKUP_TIMEOUT,
+            timeout=TELEGRAM_ACTION_TIMEOUT,
         )
         log.info(
             "Re-applied active federation mute on approved join_request for uid=%d in chat=%d",
@@ -662,8 +692,22 @@ async def on_join_request(ctx: Ctx) -> None:
         )
     except asyncio.CancelledError:
         raise
-    except Exception:
-        log.warning("Owner role check failed for uid=%d on join_request", user.id)
+    except Exception as exc:
+        log.warning(
+            "Owner role check failed for uid=%d on join_request: %s", user.id, exc
+        )
+        # * The owner exemption is the only reason to skip the ban check, so
+        # * an unverifiable role must not leave the request pending for a
+        # * later approval. Decline it exactly like a failed ban lookup.
+        try:
+            await ctx.bot.decline_chat_join_request(chat_id_of(chat), user.id)
+        except Exception as decline_exc:
+            log.warning(
+                "Failed to decline join request for uid=%d in chat=%d: %s",
+                user.id,
+                chat_id_of(chat),
+                decline_exc,
+            )
         return
     if is_owner:
         return

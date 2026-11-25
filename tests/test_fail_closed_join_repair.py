@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -56,6 +57,75 @@ def _wire(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
+async def test_a_transient_mute_lookup_is_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A brief mute-store failure must not skip join-time mute enforcement."""
+    calls = 0
+
+    async def _mute(user_id: int) -> dict[str, object] | None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("stalled")
+        return {"until_date": None}
+
+    monkeypatch.setattr(db.mutes_db, "get_active_mute", _mute)
+
+    result = await greeting._mute_state_with_retry(42)
+
+    assert calls == 2
+    assert result == {"until_date": None}
+
+
+@pytest.mark.asyncio
+async def test_join_enforcement_uses_the_mute_retry_helper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A join must call the retrying mute read, not the raw database helper."""
+    seen: list[int] = []
+
+    async def _harvest(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def _ban(_user_id: int) -> None:
+        return None
+
+    async def _mute(user_id: int) -> dict[str, object] | None:
+        seen.append(user_id)
+        return {"until_date": None}
+
+    async def _demote(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    class _Bot:
+        def __init__(self) -> None:
+            self.restricted: list[int] = []
+
+        async def restrict_chat_member(
+            self, chat_id: int, user_id: int, **_: Any
+        ) -> None:
+            self.restricted.append(user_id)
+
+    monkeypatch.setattr(db.users_cache, "harvest_user_identity", _harvest)
+    monkeypatch.setattr(greeting, "_ban_state_with_retry", _ban)
+    monkeypatch.setattr(greeting, "_mute_state_with_retry", _mute)
+    monkeypatch.setattr(greeting, "demote_before_enforcement", _demote)
+
+    bot = _Bot()
+    member = SimpleNamespace(
+        id=42, is_bot=False, first_name="M", username=None, last_name=None
+    )
+    chat = SimpleNamespace(id=-100, title="Group")
+    msg = SimpleNamespace(chat=chat)
+
+    await greeting._handle_member(member, msg, chat, bot, "en-US", greet=False)
+
+    assert seen == [42]
+    assert bot.restricted == [42]
+
+
+@pytest.mark.asyncio
 async def test_a_clean_fail_closed_removal_needs_no_repair(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -81,6 +151,21 @@ async def test_a_failed_ban_never_queues_a_repair(
     assert bot.bans == [(-100, 42)]
     assert bot.unbans == []
     assert seen == {"kicks": [], "runs": []}
+
+
+@pytest.mark.asyncio
+async def test_an_ambiguous_ban_timeout_queues_a_repair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A client deadline cannot undo an RPC Telegram may already have applied."""
+    seen = _wire(monkeypatch)
+    bot = _Bot(TimeoutError(), [])
+
+    await greeting._fail_closed_join(bot, -100, 42, "new_member")  # type: ignore[arg-type]
+
+    assert bot.bans == [(-100, 42)]
+    assert len(seen["kicks"]) == 1
+    assert len(seen["runs"]) == 1
 
 
 @pytest.mark.asyncio
