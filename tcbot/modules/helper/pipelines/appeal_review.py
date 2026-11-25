@@ -101,6 +101,52 @@ async def _answer_review(
         log.debug("Appeal review answer failed for %s: %s", key, exc)
 
 
+async def _decision_role_still_valid(
+    q: CallbackQuery,
+    locale: str | None,
+    admin_id: int,
+    target_role: str | None,
+    *,
+    action: str,
+) -> bool:
+    """Re-read the reviewer's rank immediately before an irreversible decision.
+
+    The entry checks read the role before the ban fetch, the claim, and the
+    target lookups. A reviewer demoted across those awaits would otherwise
+    still lift a ban or reject an appeal with a stale rank.
+    """
+    try:
+        role = await db.users_roles.get_effective_role(admin_id, fresh=True)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning(
+            "%s appeal: reviewer role re-read failed for %d: %s", action, admin_id, exc
+        )
+        await _answer_review(q, locale, "appeals.review.db_retry")
+        return False
+    if role not in db.users_roles.OWNER_ADMIN_ROLES:
+        log.warning("%s appeal refused: reviewer %d was demoted", action, admin_id)
+        await _answer_review(q, locale, "appeals.review.not_authorized")
+        return False
+    if not guards.outranks(role, target_role):
+        log.warning(
+            "%s appeal refused: reviewer %d (role=%s) does not outrank target (role=%s)",
+            action,
+            admin_id,
+            role,
+            target_role,
+        )
+        await _answer_review(
+            q,
+            locale,
+            "common.refuse.outranked",
+            role=db.users_roles.role_label(target_role),
+        )
+        return False
+    return True
+
+
 async def _restore_review_slot(
     ban_id: str, review_msg_id: int, review_timestamp: datetime | None
 ) -> None:
@@ -230,6 +276,10 @@ class ApproveMixin:
             for grp in groups
             if int(grp.get("chat_id", 0) or 0)
         ]
+        if not await _decision_role_still_valid(
+            q, locale, admin.id, target_role, action="approve"
+        ):
+            return False
         # * Decision and delivery intent land together: the appeal is
         # * accepted, the ban is revoked, the review slot is released, and
         # * the unban run owns every group. A split here used to leave an
@@ -418,6 +468,10 @@ class RejectMixin:
                 "common.refuse.outranked",
                 role=db.users_roles.role_label(role_r),
             )
+            return False
+        if not await _decision_role_still_valid(
+            q, staff_locale, admin.id, role_r, action="reject"
+        ):
             return False
         try:
             rejected = await db.bans_db.reject_appeal(

@@ -43,6 +43,27 @@ def _expected_retry() -> str:
     return t("appeals.review.db_retry", "en-US", plain=True)
 
 
+def test_a_demoted_reviewer_is_refused_at_decision_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rank lost during the decision awaits must not lift a ban."""
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "user"
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    query = _FakeQuery("appeal_approve_abc_1")
+
+    allowed = asyncio.run(
+        appeal_review._decision_role_still_valid(
+            query, "en-US", 7, "moderator", action="approve"
+        )
+    )
+
+    assert allowed is False
+    assert query.answers[-1][1] is True
+
+
 def test_ban_read_failure_alerts_and_keeps_card(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
