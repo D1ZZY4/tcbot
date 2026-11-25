@@ -65,6 +65,12 @@ deactivating first and then discovering the list cannot be loaded would leave
 chats banning a user with no record to retry from. It then re-runs
 `guards.enforcement_refusal(min_role="developer")` after the group load.
 
+The entry-time staff verdict is not authoritative for that window: a target can
+be promoted or granted a role while the group list loads. `execute_unban()`
+therefore re-reads the target role fresh and applies `demote_before_unban()` when
+the target holds a staff role at enforcement time. A role read that fails blocks
+the unban, so a staff holder cannot keep federation rank after the revocation.
+
 `bans_db.revoke_ban_and_queue_unban()` performs one transaction:
 
 1. Lock the active ban row or rows with `FOR UPDATE`.
@@ -85,6 +91,8 @@ sequenceDiagram
     participant Bot as Telegram
     Cmd->>Flow: execute_unban with pre_ban
     Flow->>DB: active_groups and with_primary_groups
+    Flow->>DB: fresh target role read
+    Flow->>Flow: demote_before_unban for a staff target
     Flow->>Flow: enforcement_refusal re-check
     Flow->>DB: revoke_ban_and_queue_unban
     DB->>DB: withdraw appeals, drop review keys, revoke ban, queue run

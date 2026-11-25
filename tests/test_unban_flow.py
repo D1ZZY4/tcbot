@@ -137,6 +137,16 @@ def _install(
             ],
         }
 
+    async def _role(_user_id: int, *, fresh: bool = False) -> str | None:
+        _ = fresh
+        return None
+
+    async def _no_demote(*args: Any, **kwargs: Any) -> Any:
+        _ = (args, kwargs)
+        return SimpleNamespace(may_proceed=True, value="proceed")
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(unban_actions, "demote_before_unban", _no_demote)
     monkeypatch.setattr(unban_actions, "locale_for_update", _locale)
     monkeypatch.setattr(
         unban_actions,
@@ -317,3 +327,61 @@ def test_staff_cleanup_uses_whichever_read_saw_the_role() -> None:
         unban._cleanup_role("moderator", Identity("user", 42, "Target")) == "moderator"
     )
     assert unban._cleanup_role(None, Identity("user", 42, "Target")) is None
+
+
+def test_a_promotion_during_the_group_load_forces_the_demote_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target promoted after the entry checks must not keep rank after unban."""
+    calls = _install(monkeypatch)
+    gates: list[tuple[str, str]] = []
+
+    async def _staff_role(_user_id: int, *, fresh: bool = False) -> str:
+        _ = fresh
+        return "moderator"
+
+    async def _blocking_gate(
+        bot: Any,
+        target_id: int,
+        target_fname: str,
+        target_role: str,
+        executor_id: int,
+        executor_fname: str,
+        *,
+        trigger: str = "unban",
+    ) -> Any:
+        _ = (bot, target_id, target_fname, executor_id, executor_fname)
+        gates.append((target_role, trigger))
+        return SimpleNamespace(may_proceed=False, value="role_survived")
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _staff_role)
+    monkeypatch.setattr(unban_actions, "demote_before_unban", _blocking_gate)
+    msg, bot = _FakeMsg(), _FakeBot()
+
+    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+
+    assert gates == [("moderator", "unban")]
+    assert calls["deactivate"] == []
+    assert bot.unbanned == []
+
+
+def test_a_failed_staff_role_read_blocks_the_unban(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unresolved role is not proof that the target is safe to unban."""
+    calls = _install(monkeypatch)
+
+    async def _boom(_user_id: int, *, fresh: bool = False) -> str:
+        _ = fresh
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _boom)
+    msg, bot = _FakeMsg(), _FakeBot()
+
+    asyncio.run(unban_actions.execute_unban(_update(msg, _admin()), _ctx(bot), 42, "T"))
+
+    assert calls["deactivate"] == []
+    assert bot.unbanned == []
+    assert msg.replies == [
+        t("unbanning.note.read_fail", "en-US", user=Safe(user_ref(42, "T")))
+    ]

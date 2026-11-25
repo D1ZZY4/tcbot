@@ -15,6 +15,7 @@ from tcbot.modules.helper import guards, messages
 from tcbot.modules.helper.context import Ctx, display_name
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import reply_rich, send_log
+from tcbot.modules.helper.pipelines.demote_actions import demote_before_unban
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
@@ -120,10 +121,61 @@ async def execute_unban(
     chat_ids = [
         int(grp.get("chat_id", 0)) for grp in groups if int(grp.get("chat_id", 0) or 0)
     ]
-    # * The group load is a network round trip between the entry check and
-    # * the revocation. Re-run the fresh executor-versus-target gate so a
-    # * demotion or a target promotion in that window cannot be overridden.
+    # * The group load is a network round trip between the command's entry
+    # * checks and the revocation. A target can be promoted or granted a role
+    # * in that window, so the entry-time staff verdict is not authoritative.
+    # * Unban clears every federation ban, and a banned-everywhere user cannot
+    # * rejoin to trigger greeting-time demote, so a staff holder left with a
+    # * role after the unban would keep federation rank indefinitely.
     if admin is not None:
+        try:
+            live_role = await db.users_roles.get_effective_role(target_id, fresh=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Live role re-read failed during unban of %d", target_id)
+            live_role = None
+            role_read_failed = True
+        else:
+            role_read_failed = False
+        if role_read_failed:
+            if msg is not None:
+                await reply_rich(
+                    msg,
+                    t(
+                        "unbanning.note.read_fail",
+                        locale,
+                        user=Safe(user_ref(target_id, target_fname)),
+                    ),
+                    log_label="Unban role-read-fail",
+                )
+            return
+        if live_role in db.users_roles.STAFF_ROLES:
+            gate = await demote_before_unban(
+                ctx.bot,
+                target_id,
+                target_fname,
+                live_role,
+                admin.id,
+                display_name(admin),
+                trigger="unban",
+            )
+            if not gate.may_proceed:
+                if msg is not None:
+                    await reply_rich(
+                        msg,
+                        t(
+                            "demote.abort.body",
+                            locale,
+                            user=Safe(user_ref(target_id, target_fname)),
+                            target_role=live_role,
+                            action="unban",
+                        ),
+                        log_label=f"Unban demote-{gate.value}",
+                    )
+                return
+        # * Re-run the fresh executor-versus-target gate so a demotion or a
+        # * target promotion in that window cannot be overridden.
         refusal = await guards.enforcement_refusal(
             admin.id,
             target_id,
