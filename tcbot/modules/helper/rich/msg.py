@@ -66,6 +66,8 @@ def _message_with_buttons(
     could not be converted, so no button is silently lost. An empty markup is
     deliberately not forwarded: it is used to clear an old keyboard.
     """
+    if reply_markup is None:
+        return message, None
     rows = buttons_from_markup(reply_markup)
     html_value = message.get("html")
     if not rows or not isinstance(html_value, str):

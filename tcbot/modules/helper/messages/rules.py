@@ -23,17 +23,14 @@ from tcbot.utils.logger import get_logger
 # * category title, part marker, and footer always fit.
 CHANNEL_LIMIT: int = 4000
 
+_MD_BULLET_RE = re.compile(r"(?m)^\s*[-*+]\s")
+
 log = get_logger(__name__)
 
 
 def _item_body(body: str) -> str:
     """Render Markdown bodies as rich blocks; keep plain bodies verbatim."""
-    if (
-        "**" in body
-        or "`" in body
-        or "---" in body
-        or re.search(r"(?m)^\s*[-*+]\s", body)
-    ):
+    if "**" in body or "`" in body or "---" in body or _MD_BULLET_RE.search(body):
         return render_body(body)
     return rich_esc(body)
 
@@ -51,6 +48,8 @@ def category_label(key: str, locale: str | None, fallback: str = "") -> str:
 
 def utf16_len(text: str) -> int:
     """Return the length of *text* in UTF-16 code units."""
+    if text.isascii():
+        return len(text)
     return len(text.encode("utf-16-le")) // 2
 
 
@@ -64,27 +63,37 @@ def split_utf16(text: str, limit: int = CHANNEL_LIMIT) -> list[str]:
     if utf16_len(text) <= limit:
         return [text]
     parts: list[str] = []
-    current = ""
+    current_parts: list[str] = []
+    current_len = 0
     for line in text.split("\n"):
-        candidate = f"{current}\n{line}" if current else line
-        if utf16_len(candidate) <= limit:
-            current = candidate
+        line_len = utf16_len(line)
+        if current_parts:
+            if current_len + 1 + line_len <= limit:
+                current_parts.append(line)
+                current_len += 1 + line_len
+                continue
+            parts.append("\n".join(current_parts))
+            current_parts.clear()
+            current_len = 0
+        if line_len <= limit:
+            current_parts.append(line)
+            current_len = line_len
             continue
-        if current:
-            parts.append(current)
-            current = ""
-        if utf16_len(line) <= limit:
-            current = line
-            continue
-        buffer = ""
+        buf: list[str] = []
+        buf_len = 0
         for char in line:
-            if utf16_len(buffer + char) > limit:
-                parts.append(buffer)
-                buffer = ""
-            buffer += char
-        current = buffer
-    if current:
-        parts.append(current)
+            ch_len = 2 if ord(char) > 0xFFFF else 1
+            if buf_len + ch_len > limit:
+                parts.append("".join(buf))
+                buf.clear()
+                buf_len = 0
+            buf.append(char)
+            buf_len += ch_len
+        if buf:
+            current_parts.append("".join(buf))
+            current_len = buf_len
+    if current_parts:
+        parts.append("\n".join(current_parts))
     return parts
 
 

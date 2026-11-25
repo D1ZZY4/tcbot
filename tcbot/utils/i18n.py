@@ -6,72 +6,77 @@
 
 from __future__ import annotations
 
+import html
 import re
 import tomllib
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from tcbot.utils.logger import get_logger
 
-# * All formatting is rich HTML from the helper/rich modules. The imports are
-# * lazy (inside the helpers) so catalog loading never depends on the rich
-# * package at module load time.
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+_HTML_ESCAPE = html.escape
+
+# * All formatting is rich HTML from the helper/rich modules. Inline rich
+# * primitives avoid importing tcbot.modules at catalog load time; heavier
+# * helpers cache their lazy import on first use.
 _USERNAME_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_]{5,32}$")
+
+_mention_button_fn: Callable[[int, str], str] | None = None
+_quote_fn: Callable[..., str] | None = None
+_heading_fn: Callable[[object, int], str] | None = None
+_bullet_list_fn: Callable[[list[str]], str] | None = None
 
 
 def esc(text: object) -> str:
     """Escape untrusted text for a rich HTML field."""
-    from tcbot.modules.helper.rich.style import esc as _esc  # noqa: PLC0415
-
-    return _esc(text)
+    s = text if type(text) is str else str(text)
+    if not s:
+        return ""
+    return _HTML_ESCAPE(s, quote=True)
 
 
 def bold(text: object) -> str:
     """Render text in rich bold markup."""
-    from tcbot.modules.helper.rich.style import bold as _bold  # noqa: PLC0415
-
-    return _bold(text)
+    content = esc(text)
+    return f"<b>{content}</b>" if content else ""
 
 
 def italic(text: object) -> str:
     """Render text in rich italic markup."""
-    from tcbot.modules.helper.rich.style import italic as _italic  # noqa: PLC0415
-
-    return _italic(text)
+    content = esc(text)
+    return f"<i>{content}</i>" if content else ""
 
 
 def underline(text: object) -> str:
     """Render text in rich underline markup."""
-    from tcbot.modules.helper.rich.style import underline as _underline  # noqa: PLC0415
-
-    return _underline(text)
+    content = esc(text)
+    return f"<u>{content}</u>" if content else ""
 
 
 def strike(text: object) -> str:
     """Render text in rich strikethrough markup."""
-    from tcbot.modules.helper.rich.style import strike as _strike  # noqa: PLC0415
-
-    return _strike(text)
+    content = esc(text)
+    return f"<s>{content}</s>" if content else ""
 
 
 def code(text: object) -> str:
     """Render text as an inline rich code span."""
-    from tcbot.modules.helper.rich.formats import code as _code  # noqa: PLC0415
-
-    return _code(text)
+    content = esc(text)
+    return f"<code>{content}</code>" if content else ""
 
 
 def pre(text: object) -> str:
     """Render text as a rich preformatted block."""
-    from tcbot.modules.helper.rich.formats import pre as _pre  # noqa: PLC0415
-
-    return _pre(text)
+    content = esc(text)
+    return f"<pre><code>{content}</code></pre>" if content else ""
 
 
 def link(text: object, url: str) -> str:
     """Render a rich hyperlink from text and a URL."""
-    from tcbot.modules.helper.rich.link import link as _link  # noqa: PLC0415
-
-    return _link(text, url)
+    return f'<a href="{esc(url)}">{esc(text)}</a>'
 
 
 def user_ref(user_id: int, name: str, username: str | None = None) -> str:
@@ -81,12 +86,18 @@ def user_ref(user_id: int, name: str, username: str | None = None) -> str:
     URL button carrying ``tg://user?id=``. Keeping the public signature here
     lets every existing catalog placeholder migrate in one place.
     """
-    from tcbot.modules.helper.rich.button import mention_button  # noqa: PLC0415
-    from tcbot.modules.helper.rich.style import bold  # noqa: PLC0415
-
+    global _mention_button_fn
     if user_id <= 0:
         return bold(name or str(user_id))
-    return mention_button(user_id, name)
+    fn = _mention_button_fn
+    if fn is None:
+        from tcbot.modules.helper.rich.button import (  # noqa: PLC0415
+            mention_button as _mention_button,
+        )
+
+        fn = _mention_button
+        _mention_button_fn = fn
+    return fn(user_id, name)
 
 
 def safe_username(username: str | None) -> str | None:
@@ -98,55 +109,64 @@ def safe_username(username: str | None) -> str | None:
 
 def divider() -> str:
     """Render the shared rich horizontal rule."""
-    from tcbot.modules.helper.rich.formats import divider as _divider  # noqa: PLC0415
-
-    return _divider()
+    return "<hr/>"
 
 
 def quote(text: str, *, author: object | None = None) -> str:
     """Render a block quotation, with an optional attributed author."""
-    from tcbot.modules.helper.rich.formats import quote as _quote  # noqa: PLC0415
+    global _quote_fn
+    fn = _quote_fn
+    if fn is None:
+        from tcbot.modules.helper.rich.formats import quote as _quote  # noqa: PLC0415
 
-    return _quote(text, author=author)
+        fn = _quote
+        _quote_fn = fn
+    return fn(text, author=author)
 
 
 def heading(text: object, level: int = 2) -> str:
     """Render a rich section heading."""
-    from tcbot.modules.helper.rich.formats import (  # noqa: PLC0415
-        heading as _heading,
-    )
+    global _heading_fn
+    fn = _heading_fn
+    if fn is None:
+        from tcbot.modules.helper.rich.formats import (  # noqa: PLC0415
+            heading as _heading,
+        )
 
-    return _heading(text, level)
+        fn = _heading
+        _heading_fn = fn
+    return fn(text, level)
 
 
 def subscript(text: object) -> str:
     """Render text as rich subscript."""
-    from tcbot.modules.helper.rich.style import (  # noqa: PLC0415
-        subscript as _subscript,
-    )
-
-    return _subscript(text)
+    content = esc(text)
+    return f"<sub>{content}</sub>" if content else ""
 
 
 def superscript(text: object) -> str:
     """Render text as rich superscript."""
-    from tcbot.modules.helper.rich.style import (  # noqa: PLC0415
-        superscript as _superscript,
-    )
-
-    return _superscript(text)
+    content = esc(text)
+    return f"<sup>{content}</sup>" if content else ""
 
 
 def bullet_list(lines: list[str]) -> str:
     """Render already-formatted lines as a rich bulleted block."""
-    from tcbot.modules.helper.rich.list import bullet_list as _bullet_list  # noqa: PLC0415
+    global _bullet_list_fn
+    fn = _bullet_list_fn
+    if fn is None:
+        from tcbot.modules.helper.rich.list import (  # noqa: PLC0415
+            bullet_list as _bullet_list,
+        )
 
-    return _bullet_list([line for line in lines if line])
+        fn = _bullet_list
+        _bullet_list_fn = fn
+    return fn([line for line in lines if line])
 
 
 def section(title: str, body: str) -> str:
     """Render a titled section with the rich divider rule."""
-    return f"{bold(title)}\n{divider()}\n{body}"
+    return f"{bold(title)}\n<hr/>\n{body}"
 
 
 log = get_logger(__name__)
@@ -186,6 +206,22 @@ class I18nError(ValueError):
 
 _catalog: dict[str, dict[str, str]] = {}
 _catalog_root: Path | None = None
+_global_locale_cache: dict[str, str | None] = {}
+_global_plans: dict[tuple[str, str, bool], _CompiledTemplate] = {}
+_compiled_cache: dict[tuple[str, bool], _CompiledTemplate] = {}
+_COMPILED_CACHE_MAX = 8192
+_LOCALE_CACHE_MAX = 512
+
+
+class _CompiledTemplate:
+    """Pre-parsed template with pre-escaped static segments and field names."""
+
+    __slots__ = ("field_count", "fields", "static")
+
+    def __init__(self, static: tuple[str, ...], fields: tuple[str, ...]) -> None:
+        self.static = static
+        self.fields = fields
+        self.field_count = len(fields)
 
 
 def _default_root() -> Path:
@@ -241,6 +277,15 @@ def _ensure_loaded() -> dict[str, dict[str, str]]:
     if not _catalog:
         _catalog_root = _default_root()
         _catalog = load_catalog(_catalog_root)
+        _global_locale_cache.clear()
+        _global_plans.clear()
+        for existing in _catalog:
+            _global_locale_cache[existing] = existing
+            _global_locale_cache[existing.lower()] = existing
+        for alias, target in _LOCALE_ALIASES.items():
+            resolved = _canonical_locale(target, _catalog)
+            if resolved is not None:
+                _global_locale_cache[alias] = resolved
         log.info(
             "i18n catalog loaded: %s",
             ", ".join(f"{loc} ({len(keys)})" for loc, keys in sorted(_catalog.items())),
@@ -260,16 +305,27 @@ def _canonical_locale(
     """Return the catalog spelling of ``locale``, or None when unknown."""
     if not locale:
         return None
+    if catalog is _catalog:
+        cached = _global_locale_cache.get(locale)
+        if cached is not None or locale in _global_locale_cache:
+            return cached
     wanted = locale.strip().lower()
+    result: str | None = None
     for existing in catalog:
         if existing.lower() == wanted:
-            return existing
-    alias_target = _LOCALE_ALIASES.get(wanted)
-    if alias_target is not None:
-        for existing in catalog:
-            if existing.lower() == alias_target.lower():
-                return existing
-    return None
+            result = existing
+            break
+    if result is None:
+        alias_target = _LOCALE_ALIASES.get(wanted)
+        if alias_target is not None:
+            alias_lower = alias_target.lower()
+            for existing in catalog:
+                if existing.lower() == alias_lower:
+                    result = existing
+                    break
+    if catalog is _catalog and len(_global_locale_cache) < _LOCALE_CACHE_MAX:
+        _global_locale_cache[locale] = result
+    return result
 
 
 def is_known_locale(
@@ -309,36 +365,24 @@ def _prepare_value(name: str, value: object, *, escape: bool) -> str:
     Raw strings are escaped in rich mode and verbatim in plain
     mode; :class:`Safe` fragments (helper markup) always pass through.
     """
-    if isinstance(value, Safe):
+    val_type = type(value)
+    if val_type is str:
+        return _HTML_ESCAPE(value, quote=True) if escape else value  # type: ignore[arg-type]
+    if val_type is Safe or isinstance(value, Safe):
         return str(value)
-    if isinstance(value, str):
-        return esc(value) if escape else value
     if value is None:
         raise I18nError(f"i18n placeholder {name!r} got None; pass a real value")
-    if isinstance(value, bool | int | float):
+    if val_type is int or val_type is bool or val_type is float:
         return str(value)
     text = str(value)
-    return esc(text) if escape else text
+    return _HTML_ESCAPE(text, quote=True) if escape else text
 
 
-def _render_template(
-    template: str, prepared: dict[str, str], *, key: str, escape: bool
-) -> str:
-    """Substitute placeholders and resolve the strict mini-markup.
-
-    In rich mode (``escape=True``) literal text is HTML-escaped and the
-    `` `code` `` / ``*bold*`` / ``~italic~`` spans become ``<code>`` / ``<b>``
-    / ``<i>`` tags. Plain mode (``plain=True``) keeps raw catalog text for
-    callback alerts, which Telegram never parses.
-    """
-    parts: list[str] = []
-    literal: list[str] = []
-
-    def flush_literal() -> None:
-        if literal:
-            text = "".join(literal)
-            parts.append(esc(text) if escape else text)
-            literal.clear()
+def _compile_template(template: str, *, key: str, escape: bool) -> _CompiledTemplate:
+    """Parse ``template`` once into pre-escaped static segments and field names."""
+    static: list[str] = []
+    fields: list[str] = []
+    cur: list[str] = []
 
     def check_span(inner: str, kind: str) -> None:
         if not inner:
@@ -355,8 +399,9 @@ def _render_template(
                 raise I18nError(f"i18n template {key!r} has an unbalanced backtick")
             inner = template[i + 1 : j]
             check_span(inner, "code")
-            flush_literal()
-            parts.append(f"<code>{esc(inner)}</code>" if escape else inner)
+            cur.append(
+                f"<code>{_HTML_ESCAPE(inner, quote=True)}</code>" if escape else inner
+            )
             i = j + 1
         elif ch == "*":
             j = template.find("*", i + 1)
@@ -368,8 +413,7 @@ def _render_template(
                 raise I18nError(
                     f"i18n template {key!r} forbids nesting inside bold spans"
                 )
-            flush_literal()
-            parts.append(f"<b>{esc(inner)}</b>" if escape else inner)
+            cur.append(f"<b>{_HTML_ESCAPE(inner, quote=True)}</b>" if escape else inner)
             i = j + 1
         elif ch == "~":
             j = template.find("~", i + 1)
@@ -381,12 +425,11 @@ def _render_template(
                 raise I18nError(
                     f"i18n template {key!r} forbids nesting inside italic spans"
                 )
-            flush_literal()
-            parts.append(f"<i>{esc(inner)}</i>" if escape else inner)
+            cur.append(f"<i>{_HTML_ESCAPE(inner, quote=True)}</i>" if escape else inner)
             i = j + 1
         elif ch == "{":
             if template.startswith("{{", i):
-                literal.append("{")
+                cur.append("{" if not escape else _HTML_ESCAPE("{", quote=True))
                 i += 2
                 continue
             j = template.find("}", i + 1)
@@ -395,22 +438,118 @@ def _render_template(
             name = template[i + 1 : j]
             if not _FIELD_RE.match(name):
                 raise I18nError(f"i18n template {key!r} must use bare {{name}} fields")
-            if name not in prepared:
-                raise I18nError(f"i18n template {key!r} missing value for {{{name}}}")
-            flush_literal()
-            parts.append(prepared[name])
+            static.append("".join(cur))
+            cur.clear()
+            fields.append(name)
             i = j + 1
         elif ch == "}":
             if template.startswith("}}", i):
-                literal.append("}")
+                cur.append("}" if not escape else _HTML_ESCAPE("}", quote=True))
                 i += 2
                 continue
             raise I18nError(f"i18n template {key!r} has an unbalanced brace")
         else:
-            literal.append(ch)
-            i += 1
-    flush_literal()
-    return "".join(parts)
+            # * Copy a maximal run of plain characters at once instead of
+            # * appending one character at a time.
+            next_special = n
+            for marker in ("`", "*", "~", "{", "}"):
+                pos = template.find(marker, i + 1)
+                if 0 <= pos < next_special:
+                    next_special = pos
+            chunk = template[i:next_special]
+            cur.append(_HTML_ESCAPE(chunk, quote=True) if escape else chunk)
+            i = next_special
+    static.append("".join(cur))
+    return _CompiledTemplate(tuple(static), tuple(fields))
+
+
+def _render_compiled(
+    plan: _CompiledTemplate,
+    kwargs: dict[str, object],
+    *,
+    key: str,
+    escape: bool,
+) -> str:
+    """Render a compiled template with ``kwargs``."""
+    fc = plan.field_count
+    static = plan.static
+    if fc == 0:
+        if kwargs:
+            for name, val in kwargs.items():
+                if val is None:
+                    raise I18nError(
+                        f"i18n placeholder {name!r} got None; pass a real value"
+                    )
+        return static[0]
+    fields = plan.fields
+    if len(kwargs) != fc:
+        for name, val in kwargs.items():
+            if val is None:
+                raise I18nError(
+                    f"i18n placeholder {name!r} got None; pass a real value"
+                )
+    if fc == 1:
+        f0 = fields[0]
+        try:
+            raw0 = kwargs[f0]
+        except KeyError:
+            raise I18nError(
+                f"i18n template {key!r} missing value for {{{f0}}}"
+            ) from None
+        return f"{static[0]}{_prepare_value(f0, raw0, escape=escape)}{static[1]}"
+    if fc == 2:
+        f0, f1 = fields
+        try:
+            raw0 = kwargs[f0]
+            raw1 = kwargs[f1]
+        except KeyError as missing:
+            raise I18nError(
+                f"i18n template {key!r} missing value for {{{missing.args[0]}}}"
+            ) from None
+        v0 = _prepare_value(f0, raw0, escape=escape)
+        v1 = _prepare_value(f1, raw1, escape=escape)
+        return f"{static[0]}{v0}{static[1]}{v1}{static[2]}"
+    if fc == 3:
+        f0, f1, f2 = fields
+        try:
+            raw0 = kwargs[f0]
+            raw1 = kwargs[f1]
+            raw2 = kwargs[f2]
+        except KeyError as missing:
+            raise I18nError(
+                f"i18n template {key!r} missing value for {{{missing.args[0]}}}"
+            ) from None
+        v0 = _prepare_value(f0, raw0, escape=escape)
+        v1 = _prepare_value(f1, raw1, escape=escape)
+        v2 = _prepare_value(f2, raw2, escape=escape)
+        return f"{static[0]}{v0}{static[1]}{v1}{static[2]}{v2}{static[3]}"
+    out: list[str] = [static[0]]
+    for idx, fname in enumerate(fields):
+        try:
+            raw = kwargs[fname]
+        except KeyError:
+            raise I18nError(
+                f"i18n template {key!r} missing value for {{{fname}}}"
+            ) from None
+        out.append(_prepare_value(fname, raw, escape=escape))
+        out.append(static[idx + 1])
+    return "".join(out)
+
+
+def _render_template(
+    template: str, prepared: dict[str, str], *, key: str, escape: bool
+) -> str:
+    """Substitute placeholders and resolve the strict mini-markup."""
+    plan = _compile_template(template, key=key, escape=escape)
+    if plan.field_count == 0:
+        return plan.static[0]
+    out: list[str] = [plan.static[0]]
+    for idx, fname in enumerate(plan.fields):
+        if fname not in prepared:
+            raise I18nError(f"i18n template {key!r} missing value for {{{fname}}}")
+        out.append(prepared[fname])
+        out.append(plan.static[idx + 1])
+    return "".join(out)
 
 
 def t(
@@ -432,20 +571,41 @@ def t(
     """
     if vargs:
         raise I18nError(f"i18n key {key!r} takes keyword placeholders only")
-    data = catalog if catalog is not None else _ensure_loaded()
-    canonical = _canonical_locale(locale, data) or DEFAULT_LOCALE
-    template = data.get(canonical, {}).get(key)
+    escape = not plain
+    if catalog is None:
+        data = _catalog or _ensure_loaded()
+        canonical = (
+            DEFAULT_LOCALE
+            if locale is None
+            else (_canonical_locale(locale, data) or DEFAULT_LOCALE)
+        )
+        plan = _global_plans.get((canonical, key, escape))
+        if plan is None:
+            template = data.get(canonical, {}).get(key)
+            if template is None:
+                template = data.get(DEFAULT_LOCALE, {}).get(key)
+            if template is None:
+                log.error("i18n missing key %r (locale %r)", key, locale)
+                return f"[{key}]" if plain else esc(f"[{key}]")
+            plan = _compile_template(template, key=key, escape=escape)
+            _global_plans[(canonical, key, escape)] = plan
+        return _render_compiled(plan, kwargs, key=key, escape=escape)
+
+    canonical = _canonical_locale(locale, catalog) or DEFAULT_LOCALE
+    template = catalog.get(canonical, {}).get(key)
     if template is None:
-        template = data.get(DEFAULT_LOCALE, {}).get(key)
+        template = catalog.get(DEFAULT_LOCALE, {}).get(key)
     if template is None:
         log.error("i18n missing key %r (locale %r)", key, locale)
         return f"[{key}]" if plain else esc(f"[{key}]")
-    escape = not plain
-    prepared = {
-        name: _prepare_value(name, value, escape=escape)
-        for name, value in kwargs.items()
-    }
-    return _render_template(template, prepared, key=key, escape=escape)
+    cache_key = (template, escape)
+    plan = _compiled_cache.get(cache_key)
+    if plan is None:
+        plan = _compile_template(template, key=key, escape=escape)
+        if len(_compiled_cache) >= _COMPILED_CACHE_MAX:
+            _compiled_cache.clear()
+        _compiled_cache[cache_key] = plan
+    return _render_compiled(plan, kwargs, key=key, escape=escape)
 
 
 def resolve_locale(

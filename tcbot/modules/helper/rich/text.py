@@ -83,16 +83,20 @@ def blocks(
     alias-less command does not split one section into two tables. Alias
     wrappers and their parentheses are removed from the cell content.
     """
-    if any(tag in text for tag in _BLOCK_TAGS):
+    if "<" in text and any(tag in text for tag in _BLOCK_TAGS):
         return text
     # * A single plain line needs no wrapper; short notices keep their exact
     # * wording and existing callers keep their asserted output.
-    if "\n" not in text and not (
-        _BULLET_LINE.match(text)
-        or _ORDERED_LINE.match(text)
-        or _COMMAND_LINE.match(text)
-    ):
-        return text
+    if "\n" not in text:
+        if not text:
+            return text
+        first = text[0]
+        if not (
+            (first in "-*" and _BULLET_LINE.match(text))
+            or ("0" <= first <= "9" and _ORDERED_LINE.match(text))
+            or (first == "<" and _COMMAND_LINE.match(text))
+        ):
+            return text
 
     parts: list[str] = []
     bullets: list[str] = []
@@ -130,29 +134,33 @@ def blocks(
             flush_ordered()
             flush_commands()
             continue
-        command = _COMMAND_LINE.match(line)
-        if command:
-            flush_bullets()
-            flush_ordered()
-            detail, has_alias = _alias_cell(command.group(2))
-            # * Keep an alias-less command as a row with an empty second cell
-            # * instead of falling through to a paragraph, which would split
-            # * one help section into separate tables.
-            commands.append((command.group(1), detail))
-            any_alias = any_alias or has_alias
-            continue
-        bullet = _BULLET_LINE.match(line)
-        if bullet:
-            flush_ordered()
-            flush_commands()
-            bullets.append(bullet.group(1))
-            continue
-        numbered = _ORDERED_LINE.match(line)
-        if numbered:
-            flush_bullets()
-            flush_commands()
-            ordered.append(numbered.group(1))
-            continue
+        first = line[0]
+        if first == "<":
+            command = _COMMAND_LINE.match(line)
+            if command:
+                flush_bullets()
+                flush_ordered()
+                detail, has_alias = _alias_cell(command.group(2))
+                # * Keep an alias-less command as a row with an empty second cell
+                # * instead of falling through to a paragraph, which would split
+                # * one help section into separate tables.
+                commands.append((command.group(1), detail))
+                any_alias = any_alias or has_alias
+                continue
+        elif first in "-*":
+            bullet = _BULLET_LINE.match(line)
+            if bullet:
+                flush_ordered()
+                flush_commands()
+                bullets.append(bullet.group(1))
+                continue
+        elif "0" <= first <= "9":
+            numbered = _ORDERED_LINE.match(line)
+            if numbered:
+                flush_bullets()
+                flush_commands()
+                ordered.append(numbered.group(1))
+                continue
         flush_bullets()
         flush_ordered()
         flush_commands()

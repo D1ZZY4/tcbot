@@ -17,7 +17,10 @@ _HTML_ESCAPE = html.escape
 
 def esc(text: object) -> str:
     """Escape untrusted text for a rich HTML field."""
-    return _HTML_ESCAPE(str(text), quote=True)
+    s = text if type(text) is str else str(text)
+    if not s:
+        return ""
+    return _HTML_ESCAPE(s, quote=True)
 
 
 def bold(text: object) -> str:

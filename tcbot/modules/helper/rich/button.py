@@ -115,17 +115,23 @@ def button(
 
 def callback_button(label: str, data: str, *, style: str | None = None) -> str:
     """Render a callback button."""
-    return button(label, data=data, style=style)
+    return (
+        f'<tg-button type="callback_data" data="{esc(data)}"{_style(style)}>'
+        f"{esc(label)}</tg-button>"
+    )
 
 
 def url_button(label: str, url: str, *, style: str | None = None) -> str:
     """Render a URL button."""
-    return button(label, url=url, style=style)
+    return f'<tg-button type="url" url="{esc(url)}"{_style(style)}>{esc(label)}</tg-button>'
 
 
 def copy_button(label: str, text: str, *, style: str | None = None) -> str:
     """Render a copy-text button."""
-    return button(label, copy=text, style=style)
+    return (
+        f'<tg-button type="copy_text" text="{esc(text)}"{_style(style)}>'
+        f"{esc(label)}</tg-button>"
+    )
 
 
 def mention_button(user_id: int, name: str, *, style: str | None = None) -> str:
@@ -139,8 +145,11 @@ def mention_button(user_id: int, name: str, *, style: str | None = None) -> str:
     """
     label = name or str(user_id)
     if user_id <= 0:
-        return button(label, disabled=True, style=style)
-    return url_button(label, f"tg://user?id={user_id}", style=style)
+        return f'<tg-button type="disabled"{_style(style)}>{esc(label)}</tg-button>'
+    return (
+        f'<tg-button type="url" url="tg://user?id={user_id}"{_style(style)}>'
+        f"{esc(label)}</tg-button>"
+    )
 
 
 def web_app_button(label: str, url: str, *, style: str | None = None) -> str:
@@ -351,6 +360,100 @@ def button_from_cell(cell: dict[str, object]) -> str | None:
     return None
 
 
+def _button_from_obj(cell: Any) -> str | None:
+    """Convert a Kurigram InlineKeyboardButton directly without dict allocation."""
+    label = getattr(cell, "text", None)
+    if not isinstance(label, str):
+        return None
+    raw_style = getattr(cell, "style", None)
+    if raw_style is not None:
+        style_val = getattr(raw_style, "value", raw_style)
+        style_s = str(style_val)
+        style_attr = (
+            f' style="{esc(style_s)}"' if style_s in _RICH_BUTTON_STYLES else ""
+        )
+    else:
+        style_attr = ""
+
+    data = getattr(cell, "callback_data", None)
+    if isinstance(data, str) and data:
+        if len(data) > _CALLBACK_MAX_BYTES or (
+            not data.isascii() and len(data.encode()) > _CALLBACK_MAX_BYTES
+        ):
+            return None
+        return (
+            f'<tg-button type="callback_data" data="{esc(data)}"{style_attr}>'
+            f"{esc(label)}</tg-button>"
+        )
+    url = getattr(cell, "url", None)
+    if isinstance(url, str) and url:
+        return (
+            f'<tg-button type="url" url="{esc(url)}"{style_attr}>'
+            f"{esc(label)}</tg-button>"
+        )
+    web_app = getattr(cell, "web_app", None)
+    if web_app is not None:
+        web_url = getattr(web_app, "url", None)
+        if isinstance(web_url, str):
+            return (
+                f'<tg-button type="web_app" url="{esc(web_url)}"{style_attr}>'
+                f"{esc(label)}</tg-button>"
+            )
+    login = getattr(cell, "login_url", None)
+    if login is not None:
+        login_url = getattr(login, "url", None)
+        if isinstance(login_url, str):
+            fwd = getattr(login, "forward_text", None)
+            rwa = bool(getattr(login, "request_write_access", False))
+            attrs = f' type="login_url" url="{esc(login_url)}"'
+            if fwd is not None:
+                attrs += f' forward-text="{esc(fwd)}"'
+            if rwa:
+                attrs += " request-write-access"
+            return f"<tg-button{attrs}{style_attr}>{esc(label)}</tg-button>"
+    copy = getattr(cell, "copy_text", None)
+    if copy is not None:
+        copy_txt = getattr(copy, "text", None)
+        if isinstance(copy_txt, str):
+            return (
+                f'<tg-button type="copy_text" text="{esc(copy_txt)}"{style_attr}>'
+                f"{esc(label)}</tg-button>"
+            )
+    switch_query = getattr(cell, "switch_inline_query", None)
+    if isinstance(switch_query, str):
+        return (
+            f'<tg-button type="switch_inline_query" query="{esc(switch_query)}"'
+            f"{style_attr}>{esc(label)}</tg-button>"
+        )
+    switch_current = getattr(cell, "switch_inline_query_current_chat", None)
+    if isinstance(switch_current, str):
+        return (
+            f'<tg-button type="switch_inline_query_current_chat"'
+            f' query="{esc(switch_current)}"{style_attr}>{esc(label)}</tg-button>'
+        )
+    switch_chosen = getattr(cell, "switch_inline_query_chosen_chat", None)
+    if isinstance(switch_chosen, str):
+        attrs = f' type="switch_inline_query_chosen_chat" query="{esc(switch_chosen)}"'
+        if getattr(cell, "allow_user_chats", False):
+            attrs += " allow-user-chats"
+        if getattr(cell, "allow_bot_chats", False):
+            attrs += " allow-bot-chats"
+        if getattr(cell, "allow_group_chats", False):
+            attrs += " allow-group-chats"
+        if getattr(cell, "allow_channel_chats", False):
+            attrs += " allow-channel-chats"
+        return f"<tg-button{attrs}{style_attr}>{esc(label)}</tg-button>"
+    if (
+        data is None
+        and url is None
+        and web_app is None
+        and login is None
+        and copy is None
+    ):
+        return f'<tg-button type="disabled"{style_attr}>{esc(label)}</tg-button>'
+    return None
+
+
 def buttons_from_markup(reply_markup: object | None) -> list[str] | None:
     """Convert a Kurigram inline markup into rich button rows.
 
@@ -358,20 +461,42 @@ def buttons_from_markup(reply_markup: object | None) -> list[str] | None:
     button keeps the whole keyboard as native inline markup, so no button is
     silently lost.
     """
-    markup = _markup_dict(reply_markup)
-    if markup is None:
+    if reply_markup is None:
         return None
-    cells = markup.get("inline_keyboard")
-    if not isinstance(cells, list) or not cells:
+    if isinstance(reply_markup, dict):
+        cells = reply_markup.get("inline_keyboard")
+        if not isinstance(cells, list) or not cells:
+            return None
+        rows: list[str] = []
+        for row in cells:
+            if not isinstance(row, list) or not row:
+                continue
+            converted: list[str] = []
+            for cell in row:
+                item = button_from_cell(cell)
+                if item is None:
+                    return None
+                converted.append(item)
+            rows.append(f"<tg-button-row>{''.join(converted)}</tg-button-row>")
+        return rows or None
+    inline_rows = getattr(reply_markup, "inline_keyboard", None)
+    if not isinstance(inline_rows, list) or not inline_rows:
         return None
-    rows: list[str] = []
-    for row in cells:
+    rows = []
+    for row in inline_rows:
         if not isinstance(row, list) or not row:
             continue
-        converted = [button_from_cell(cell) for cell in row]
-        if any(item is None for item in converted):
-            return None
-        rows.append(button_row([item for item in converted if item]))
+        converted = []
+        for cell in row:
+            item = (
+                button_from_cell(cell)
+                if isinstance(cell, dict)
+                else _button_from_obj(cell)
+            )
+            if item is None:
+                return None
+            converted.append(item)
+        rows.append(f"<tg-button-row>{''.join(converted)}</tg-button-row>")
     return rows or None
 
 

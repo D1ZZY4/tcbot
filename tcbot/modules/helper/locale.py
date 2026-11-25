@@ -10,7 +10,7 @@ import asyncio
 
 from tcbot import database as db
 from tcbot.modules.helper.context import Ctx
-from tcbot.utils.i18n import DEFAULT_LOCALE, is_known_locale, resolve_locale
+from tcbot.utils.i18n import DEFAULT_LOCALE, canonical_locale, resolve_locale
 from tcbot.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -41,12 +41,9 @@ async def _resolve_preference(
     ordinary path pays no extra cache read.
     """
     specific = user_locale if chat_type == "private" else group_locale
-    if is_known_locale(specific):
-        return resolve_locale(
-            chat_type=chat_type,
-            user_locale=user_locale,
-            group_locale=group_locale,
-        )
+    canonical = canonical_locale(specific)
+    if canonical is not None:
+        return canonical
     return resolve_locale(
         chat_type=chat_type,
         user_locale=user_locale,
@@ -65,10 +62,13 @@ async def effective_locale(chat_type: object, user_id: int, chat_id: int) -> str
     default locale; a successful read that finds nothing consults the
     community default. Resolution never raises. Cancellation propagates.
     """
-    candidate: object = getattr(chat_type, "value", chat_type)
-    effective_type: str = (
-        candidate if isinstance(candidate, str) and candidate else "private"
-    )
+    if type(chat_type) is str and chat_type:
+        effective_type = chat_type
+    else:
+        candidate: object = getattr(chat_type, "value", chat_type)
+        effective_type = (
+            candidate if isinstance(candidate, str) and candidate else "private"
+        )
     if effective_type == "private":
         try:
             user_locale = await db.settings_db.get_user_locale(user_id)

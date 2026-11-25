@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 from tcbot import cfg
 from tcbot.modules.helper.rich.formats import footer, heading, paragraph
-from tcbot.modules.helper.rich.table import table
 from tcbot.utils.i18n import bullet_list, code, divider, esc, t
 
 if TYPE_CHECKING:
@@ -90,25 +89,36 @@ def render_groups(
     """
     header = t("groups.list.header", locale, n=len(groups))
     rule = divider()
-    headers = [esc(t("groups.list.table_group", locale, plain=True))]
+    group_hdr = esc(t("groups.list.table_group", locale, plain=True))
     if detailed:
-        headers.append(esc(t("groups.list.table_id", locale, plain=True)))
-    used = len(header) + len(rule) + 2
-    rows: list[list[str]] = []
+        id_hdr = esc(t("groups.list.table_id", locale, plain=True))
+        table_prefix = (
+            f"<table bordered compact><tr><th>{group_hdr}</th><th>{id_hdr}</th></tr>"
+        )
+    else:
+        table_prefix = f"<table bordered compact><tr><th>{group_hdr}</th></tr>"
+    table_suffix = "</table>"
+    # * Track accumulated table length in O(1) per group instead of rebuilding
+    # * the entire table on every iteration.
+    used = len(header) + len(rule) + 2 + len(table_prefix) + len(table_suffix)
+    unknown_title = t("common.action.unknown_title", locale, plain=True)
+    row_parts: list[str] = []
     more = ""
     for i, g in enumerate(groups):
-        title = g.get("title") or t("common.action.unknown_title", locale, plain=True)
-        row: list[str] = [esc(title)]
+        title = g.get("title") or unknown_title
         if detailed:
-            row.append(code(str(g.get("chat_id", 0))))
-        candidate = [*rows, row]
-        rendered = table(headers, candidate, raw_cells=True, compact=True)
-        if used + len(rendered) > _MAX_RENDER_CHARS:
+            row_html = (
+                f"<tr><td>{esc(title)}</td>"
+                f"<td>{code(str(g.get('chat_id', 0)))}</td></tr>"
+            )
+        else:
+            row_html = f"<tr><td>{esc(title)}</td></tr>"
+        if used + len(row_html) > _MAX_RENDER_CHARS:
             more = t("groups.list.more", locale, n=len(groups) - i)
             break
-        rows = candidate
-    body = table(headers, rows, raw_cells=True, compact=True)
-    text = f"{header}\n{rule}\n{body}"
+        used += len(row_html)
+        row_parts.append(row_html)
+    body = f"{table_prefix}{''.join(row_parts)}{table_suffix}"
     if more:
-        text += f"\n{more}"
-    return text
+        return f"{header}\n{rule}\n{body}\n{more}"
+    return f"{header}\n{rule}\n{body}"

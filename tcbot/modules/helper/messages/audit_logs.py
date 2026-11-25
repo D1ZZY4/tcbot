@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper.rich.formats import divider, heading
-from tcbot.modules.helper.rich.list import bullet_list
 from tcbot.modules.helper.rich.style import bold as rich_bold
 from tcbot.utils.i18n import code, esc, link, safe_username, user_ref
 from tcbot.utils.logger import get_logger
@@ -42,7 +41,7 @@ class LogBuilder:
     notes sit between the lists as their own rich blocks.
     """
 
-    __slots__ = ("_items",)
+    __slots__ = ("_list_items", "_parts")
 
     def __init__(self, title: str) -> None:
         """Start a new log message with the given title header.
@@ -50,11 +49,18 @@ class LogBuilder:
         The title is escaped so callers can pass raw config or user-facing
         strings without risk of breaking the rich markup sent to the log channel.
         """
-        self._items: list[tuple[str, str]] = [("heading", heading(str(title)))]
+        self._parts: list[str] = [heading(str(title))]
+        self._list_items: list[str] = []
+
+    def _flush_list(self) -> None:
+        if self._list_items:
+            self._parts.append(f"<ul>{''.join(self._list_items)}</ul>")
+            self._list_items.clear()
 
     def detail_field(self, rendered: str) -> LogBuilder:
         """Append an already-rendered rich line to the current field list."""
-        self._items.append(("item", rendered))
+        if rendered:
+            self._list_items.append(f"<li>{rendered}</li>")
         return self
 
     def field(
@@ -65,12 +71,12 @@ class LogBuilder:
         escape: bool = True,
     ) -> LogBuilder:
         """Append a `Label: value` field. The value is escaped by default."""
-        v = esc(str(value)) if escape else str(value)
+        v = esc(value) if escape else str(value)
         return self.detail_field(f"{rich_bold(label)}: {v}")
 
     def code_field(self, label: str, value: object) -> LogBuilder:
         """Append a `Label: code(value)` field."""
-        return self.detail_field(f"{rich_bold(label)}: {code(str(value))}")
+        return self.detail_field(f"{rich_bold(label)}: {code(value)}")
 
     def mention_field(
         self, label: str, user_id: int, name: str, username: str | None = None
@@ -86,12 +92,14 @@ class LogBuilder:
 
     def raw(self, text: str) -> LogBuilder:
         """Append a free-form rich line. Caller is responsible for escaping."""
-        self._items.append(("raw", text))
+        self._flush_list()
+        self._parts.append(text)
         return self
 
     def section(self) -> LogBuilder:
         """Insert a rich divider between sections."""
-        self._items.append(("divider", divider()))
+        self._flush_list()
+        self._parts.append(divider())
         return self
 
     def date(self, ts: datetime | None = None, *, label: str = "Date") -> LogBuilder:
@@ -106,22 +114,8 @@ class LogBuilder:
 
     def build(self) -> str:
         """Return the assembled rich message with fields grouped into lists."""
-        parts: list[str] = []
-        pending: list[str] = []
-
-        def flush() -> None:
-            if pending:
-                parts.append(bullet_list(pending))
-                pending.clear()
-
-        for kind, content in self._items:
-            if kind == "item":
-                pending.append(content)
-                continue
-            flush()
-            parts.append(content)
-        flush()
-        return "\n".join(parts)
+        self._flush_list()
+        return "\n".join(self._parts)
 
     def __str__(self) -> str:
         """Delegate to build so str(builder) works naturally."""
