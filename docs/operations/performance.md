@@ -74,8 +74,8 @@ cannot undo an erasure or profile update.
 
 The two-level cache has an in-process L1 layer and an optional Redis L2 layer.
 L1 is always present, so a Redis outage does not block handlers. Keys use the
-`v2` namespace, and tagged JSON values keep the wire format compatible with
-existing entries.
+`v2` namespace with the configured database schema as the tenant boundary,
+and tagged JSON values keep the wire format compatible with existing entries.
 
 | Cache | L1 TTL | L2 TTL |
 |---|---|---|

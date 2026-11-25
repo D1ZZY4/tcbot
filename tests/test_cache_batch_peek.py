@@ -20,6 +20,7 @@ import msgspec
 import pytest
 
 import tcbot.database.cache as cache_mod
+from tcbot import cfg
 from tcbot.database import users_cache
 from tcbot.database.cache import redis_io
 from tcbot.database.cache.codec import _msgspec_enc_hook, _tag_scalars
@@ -72,7 +73,9 @@ def test_a_batch_read_reaches_the_second_layer(
     monkeypatch.setattr(redis_io, "usable_redis_client", lambda: redis)
 
     cache = _cache()
-    redis.store["tcbot:test-batch-peek:v2:7"] = _encode(["Ann", "ann", None])
+    redis.store[f"tcbot:{cfg.db_schema}:test-batch-peek:v2:7"] = _encode(
+        ["Ann", "ann", None]
+    )
 
     found = asyncio.run(cache.peek_many([7, 8]))
 
@@ -88,7 +91,9 @@ def test_a_batch_read_fills_the_in_memory_layer(
     monkeypatch.setattr(redis_io, "usable_redis_client", lambda: redis)
 
     cache = _cache()
-    redis.store["tcbot:test-batch-peek:v2:7"] = _encode(["Ann", "ann", None])
+    redis.store[f"tcbot:{cfg.db_schema}:test-batch-peek:v2:7"] = _encode(
+        ["Ann", "ann", None]
+    )
 
     asyncio.run(cache.peek_many([7]))
     redis.mget_calls = 0
@@ -121,7 +126,9 @@ def test_peek_does_not_promote_stale_l2_after_a_local_write(
     redis = _FakeRedis()
     monkeypatch.setattr(redis_io, "usable_redis_client", lambda: redis)
     cache = _cache()
-    redis.store["tcbot:test-batch-peek:v2:7"] = _encode(["Old", "old", None])
+    redis.store[f"tcbot:{cfg.db_schema}:test-batch-peek:v2:7"] = _encode(
+        ["Old", "old", None]
+    )
     # * put() marks the key until the queued write lands; simulate that window.
     cache._pending_writes.add(7)
 

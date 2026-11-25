@@ -220,7 +220,7 @@ class TwoLevelCache[T]:
         batches of 100, avoiding the O(N) blocking behaviour of ``KEYS``.
 
         Unlike ``invalidate(key)``, which removes one known key from both layers,
-        this sweeps every key matching ``tcbot:<prefix>:v2:*``.  Do not call it in
+        this sweeps every key matching ``tcbot:<schema>:<prefix>:v2:*``. Do not call it in
         hot paths; it is designed for rare, high-impact invalidations only.
         The Redis sweep is never dropped by the mutation-queue bound, and the
         wait for it is bounded so a dead-Redis backlog cannot stall the caller
@@ -238,7 +238,7 @@ class TwoLevelCache[T]:
         self._epoch += 1
         for state in self._states.values():
             state.generation += 1
-        pattern = f"tcbot:{self._redis_prefix}:v2:*"
+        pattern = f"{self._namespace()}:{self._redis_prefix}:v2:*"
 
         def _close_window() -> None:
             # * Close the window: reads that overlapped the sweep are
@@ -533,11 +533,17 @@ class TwoLevelCache[T]:
                                 if self._critical_delete and await self._tombstoned(
                                     rc, key
                                 ):
+                                    # ! CRITICAL: a remote revocation landed
+                                    # * between the first check and this read.
+                                    # * Returning the L2 value would authorize
+                                    # * with a role that was just revoked.
                                     log.debug(
                                         "Discarding tombstoned Redis hit for %s", key
                                     )
-                                    return loaded
-                                if (
+                                    # * A revocation is authoritative: fall
+                                    # * through to the source read instead of
+                                    # * authorizing with a revoked value.
+                                elif (
                                     state.generation != generation
                                     or self._epoch != epoch
                                     or key in self._pending_writes
@@ -552,14 +558,15 @@ class TwoLevelCache[T]:
                                         key,
                                     )
                                     return loaded
-                                # * An L2 hit is a cache write in L1; advance
-                                # * both counters so a concurrent peek or a
-                                # * batch reader that captured the old values
-                                # * cannot undo it.
-                                self._advance(key)
-                                self._revision += 1
-                                self._mem.put(key, loaded)
-                                return loaded
+                                else:
+                                    # * An L2 hit is a cache write in L1; advance
+                                    # * both counters so a concurrent peek or a
+                                    # * batch reader that captured the old values
+                                    # * cannot undo it.
+                                    self._advance(key)
+                                    self._revision += 1
+                                    self._mem.put(key, loaded)
+                                    return loaded
 
                 # * L2 write is fire-and-forget and ordered FIFO against
                 # * later invalidates; L1 already serves this value.
@@ -762,11 +769,19 @@ class TwoLevelCache[T]:
             rc = await redis_io.acquire_redis_client()
         return rc
 
+    @staticmethod
+    def _namespace() -> str:
+        # ! CRITICAL: every instance pointed at the same REDIS_URL shares the
+        # ! L2 store. The schema is the tenant boundary: without it a
+        # ! development instance can read or invalidate the production owner,
+        # ! role, and connection entries.
+        return f"tcbot:{cfg.db_schema}"
+
     def _rkey(self, key: Any) -> str:
-        return f"tcbot:{self._redis_prefix}:v2:{key}"
+        return f"{self._namespace()}:{self._redis_prefix}:v2:{key}"
 
     def _tombstone_key(self, key: Any) -> str:
-        return f"tcbot:{self._redis_prefix}:v2:tombstone:{key}"
+        return f"{self._namespace()}:{self._redis_prefix}:v2:tombstone:{key}"
 
     async def _tombstoned(self, rc: Any, key: Any) -> bool:
         """Return True while another process has a pending revocation."""
