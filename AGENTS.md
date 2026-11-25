@@ -192,7 +192,7 @@ Current stack:
 <project root>/
 ├── tcbot/                    Main bot package
 │   ├── __init__.py           Config loader, env parsing, immutable Configs model
-│   ├── __main__.py           App lifecycle, builder, errors, and main startup
+│   ├── __main__.py           App lifecycle, error reporting, and main startup
 │   ├── alive.py              Flask keep-alive and health/metrics endpoints
 │   ├── notification_worker.py Retry the review-card edits through the durable outbox
 │   ├── database/             PostgreSQL helpers, one package per table/domain

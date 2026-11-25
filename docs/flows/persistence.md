@@ -226,15 +226,18 @@ storage layer never imports Telegram delivery modules.
 |---|---|---|
 | `tcbot.expiry_daily` | 24 h | Expire decisions and queue revokes; removed when pg_cron owns this. |
 | `tcbot.promotion_expiry_hourly` | 1 h | Mark stale promotion requests `expired`. |
-| `tcbot.enforcement_worker` | 5 min | Drain the enforcement run queue once. The ID is stable for persisted schedules; the callable now lives in `moderation_enforcement.py`. |
+| `tcbot.enforcement_worker` | 5 min | Drain the enforcement run queue once. The ID is stable for persisted schedules; the callable lives in `moderation_enforcement.py` and is registered directly. |
 | `tcbot.notification_worker` | 5 min | Retry due review-card edits once. |
 | `tcbot.erasure_every_10m` | 10 min | Drain up to 25 queued account erasures. |
 | `tcbot.retention_daily` | 24 h | Apply schema retention policies. |
 | `tcbot.stale_cleanup_daily` | 24 h | Delete stale memberships and drain erasures. |
 
 Retired schedule IDs removed on every startup are `tcbot.warn_expiry_daily`,
-`tcbot.db_cleanup_weekly`, and `tcbot.enforcement_sync`. Their functions stay
-importable so a persisted job record can still be deserialized.
+`tcbot.db_cleanup_weekly`, and `tcbot.enforcement_sync`. A persisted row whose
+callable path no longer imports is dropped by APScheduler before reconciliation;
+the current schedules are then registered from the source modules. Upgrading an
+old job store therefore recreates the enforcement schedule with the current
+reference, and its fire time restarts from that boot.
 
 pg_cron is opt-in through `PG_CRON_ENABLED` and only used when the extension
 exists. Its job names match the `scheduled_jobs` registry keys.
