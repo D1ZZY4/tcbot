@@ -460,9 +460,6 @@ async def _execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) -
                     log_label="Ban proof-fail prompt",
                     catch_all=True,
                 )
-            if not _groups_task.done():
-                _groups_task.cancel()
-            await asyncio.gather(_groups_task, return_exceptions=True)
             return
         try:
             groups = await _groups_task
@@ -553,16 +550,13 @@ async def _execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) -
             proof_expected_count=upload.expected_item_count,
             enforcement_chat_ids=[int(grp["chat_id"]) for grp in groups],
         )
-    except asyncio.CancelledError:
+    finally:
+        # * Every return and failure path owns this prefetch: leaving it
+        # * alive after a refusal would hold a pool slot and can surface
+        # * an unretrieved exception later.
         if not _groups_task.done():
             _groups_task.cancel()
         await asyncio.gather(_groups_task, return_exceptions=True)
-        raise
-    except Exception:
-        if not _groups_task.done():
-            _groups_task.cancel()
-        await asyncio.gather(_groups_task, return_exceptions=True)
-        raise
     if not db_ok:
         _db_fail_text = t(
             "banning.db_fail.body",
