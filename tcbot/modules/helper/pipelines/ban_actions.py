@@ -84,6 +84,7 @@ BAN_USER_DATA_KEYS = (
     "ban_locale",
     "ban_rules",
     "ban_rules_note",
+    "ban_rules_note_awaiting",
 )
 WAITING_PROOF = 0
 WAITING_UPDATE_CONFIRM = 1
@@ -99,11 +100,15 @@ def _clear_ban_state(scope: dict[str, Any] | None) -> None:
         scope.pop(key, None)
 
 
-def _cancel_proof_session(scope: dict[str, Any] | None) -> None:
-    """Cancel in-flight flush tasks and clear all ban state."""
+async def _cancel_proof_session(scope: dict[str, Any] | None) -> None:
+    """Cancel flushes and await them before clearing state.
+
+    An unawaited flush cleanup could delete a newer ban's scope keys.
+    """
     _clear_ban_state(scope)
     if scope is None:
         return
+    cancelled: list[asyncio.Task[None]] = []
     for key, session in proof_sessions.items():
         if session.scope is not scope:
             continue
@@ -111,6 +116,9 @@ def _cancel_proof_session(scope: dict[str, Any] | None) -> None:
         session.cancelled = True
         if session.flush_task is not None:
             session.flush_task.cancel()
+            cancelled.append(session.flush_task)
+    if cancelled:
+        await asyncio.gather(*cancelled, return_exceptions=True)
 
 
 async def replace_live_proof_session(
@@ -888,7 +896,7 @@ async def on_cancel_proof(ctx: Ctx) -> int | None:
             await q.answer()
             return ConversationHandler.END
     await q.answer()
-    _cancel_proof_session(scope)
+    await _cancel_proof_session(scope)
     await safe_edit_cb(
         q, t("banning.state.cancelled", await locale_for_update(ctx), plain=False)
     )
@@ -916,7 +924,7 @@ async def on_proof_timeout(ctx: Ctx) -> int:
         if sess.scope is scope and sess.flushing:
             log.info("Ban proof timeout ignored: the ban is already executing.")
             return ConversationHandler.END
-    _cancel_proof_session(scope)
+    await _cancel_proof_session(scope)
     if prompt_chat and prompt_msg_id:
         try:
             await ctx.bot.edit_message_reply_markup(

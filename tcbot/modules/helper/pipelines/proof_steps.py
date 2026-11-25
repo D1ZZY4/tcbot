@@ -27,6 +27,10 @@ def proof_prompt_content(
     target_id: int, target_fname: str, reason: str, locale: str | None = None
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Build the proof-collection prompt text and keyboard."""
+    # * A non-positive id renders as bold text, not a mention. Callers must
+    # * never turn a missing target into a convincing "Banning 0" prompt.
+    if target_id <= 0:
+        raise ValueError("proof prompt requires a positive target id")
     return (
         BuildProof("ban", skip_allowed=False).noted_prompt(
             "ban", reason, user_ref(target_id, target_fname), locale=locale

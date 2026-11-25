@@ -551,7 +551,14 @@ class AppealSubmitMixin(SubmitMessageMixin):
 
     async def _end(self, ctx: Ctx) -> int:
         """Fallback handler; fires on any unrecognised command."""
-        clear_appeal_state(flow_scope(ctx))
+        scope = flow_scope(ctx)
+        if not scope.get("appeal_ban_id"):
+            # * This fallback is flattened into group 0 and matches every
+            # * prefixed command. An unknown command with no live appeal must
+            # * reach the next flow's fallback, so a stale ban proof session
+            # * can still be cleaned up instead of being left on screen.
+            raise ContinuePropagation()
+        clear_appeal_state(scope)
         msg = ctx.effective_message
         if msg:
             await reply_rich(
@@ -568,6 +575,10 @@ class AppealSubmitMixin(SubmitMessageMixin):
 
     async def _on_unexpected(self, ctx: Ctx) -> int:
         """Non-text message handler; nudge back to text."""
+        if not flow_scope(ctx).get("appeal_ban_id"):
+            # * Flat registration exposes this private-chat handler even while
+            # * another flow owns the update. Pass media back to its owner.
+            raise ContinuePropagation()
         msg = ctx.effective_message
         if msg is not None:
             await reply_rich(

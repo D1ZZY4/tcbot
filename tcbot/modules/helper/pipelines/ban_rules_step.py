@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from pyrogram import filters
+from pyrogram import ContinuePropagation, filters
 
 from tcbot import database as db
 from tcbot.modules.helper.buttons import rules as rules_btn
@@ -110,8 +110,16 @@ async def show_ban_rules(ctx: Ctx) -> int:
 
 async def _show_proof(ctx: Ctx) -> int:
     scope = flow_scope(ctx)
+    target_id = int(scope.get("ban_target_id", 0) or 0)
+    # * These handlers are registered flat, without live state gating. A
+    # * missing target must never be rendered as "Banning 0": that prompt
+    # * looks actionable and starts a proof session nobody authorized.
+    if target_id <= 0:
+        for key in BAN_USER_DATA_KEYS:
+            scope.pop(key, None)
+        return ConversationHandler.END
     text, btn = proof_prompt_content(
-        int(scope.get("ban_target_id", 0) or 0),
+        target_id,
         str(scope.get("ban_target_fname") or ""),
         str(scope.get("ban_reason") or ""),
         scope.get("ban_locale"),
@@ -195,6 +203,9 @@ async def on_ban_rules_other(ctx: Ctx) -> int | None:
     if await stale_ban_callback(ctx):
         return None
     await q.answer()
+    # * Mark the phase before asking: a flat text handler must know that the
+    # * next non-command message is the requested note, not stray group text.
+    flow_scope(ctx)["ban_rules_note_awaiting"] = True
     if ctx.effective_message is not None:
         await reply_rich(
             ctx.effective_message,
@@ -209,6 +220,16 @@ async def on_ban_rules_note(ctx: Ctx) -> int:
     msg = ctx.effective_message
     if msg is None or not msg.text:
         return WAITING_BAN_RULES_NOTE
+    scope = flow_scope(ctx)
+    # * This text handler is registered flat with every other handler, so an
+    # * ordinary group message reaches it even when no ban flow is active.
+    # * Only a live ban prompt with a real target may consume a note.
+    if (
+        int(scope.get("ban_target_id", 0) or 0) <= 0
+        or not scope.get("ban_admin_id")
+        or not scope.pop("ban_rules_note_awaiting", False)
+    ):
+        raise ContinuePropagation()
     note = msg.text.strip()
     if not note or len(note) > MAX_RULES_NOTE_LEN:
         await reply_rich(

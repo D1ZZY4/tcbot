@@ -10,7 +10,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from pyrogram import filters
+from pyrogram import ContinuePropagation, filters
 from pyrogram.filters import Filter as BaseFilter
 from pyrogram.types import InlineKeyboardMarkup
 
@@ -445,6 +445,10 @@ class _ProofStepMixin(_FlowBase):
 
     async def _on_proof_unexpected(self, ctx: Ctx) -> int:
         """Reject unexpected message types during proof collection."""
+        if not flow_scope(ctx).get(f"{self.action}_target_id"):
+            # * All state handlers are registered flat, so this catch-all must
+            # * not consume a message that belongs to another active flow.
+            raise ContinuePropagation()
         if ctx.effective_message:
             locale = await locale_for_update(ctx)
             await reply_rich(
@@ -474,9 +478,14 @@ class _ReasonStepMixin(_FlowBase):
             return WAITING_REASON
         if ctx.user_data is None:
             return WAITING_REASON
+        scope = flow_scope(ctx)
+        if not scope.get(f"{self.action}_target_id"):
+            # * This state handler is registered with every other handler.
+            # * Without an active flow it must let another module's text
+            # * handler see the update instead of capturing a reason.
+            raise ContinuePropagation()
         if not await self._recheck_tapper(ctx):
             return ConversationHandler.END
-        scope = flow_scope(ctx)
         text = msg.text.strip()
         locale = await locale_for_update(ctx)
         if not text:
@@ -566,6 +575,8 @@ class _ReasonStepMixin(_FlowBase):
 
     async def _on_reason_unexpected(self, ctx: Ctx) -> int:
         """Reject non-text messages during reason collection."""
+        if not flow_scope(ctx).get(f"{self.action}_target_id"):
+            raise ContinuePropagation()
         if ctx.effective_message:
             locale = await locale_for_update(ctx)
             await reply_rich(
@@ -665,6 +676,8 @@ class _RulesStepMixin(_FlowBase):
             await self._ignore_stale_callback(ctx)
             return None
         await q.answer()
+        # * Only the note requested by this tap may consume the next text.
+        flow_scope(ctx)[f"{self.action}_rules_note_awaiting"] = True
         msg = ctx.effective_message
         if msg is not None:
             await reply_rich(
@@ -679,6 +692,11 @@ class _RulesStepMixin(_FlowBase):
         msg = ctx.effective_message
         if msg is None or not msg.text:
             return WAITING_RULES_NOTE
+        scope = flow_scope(ctx)
+        if not scope.get(f"{self.action}_target_id") or not scope.pop(
+            f"{self.action}_rules_note_awaiting", False
+        ):
+            raise ContinuePropagation()
         note = msg.text.strip()
         locale = await locale_for_update(ctx)
         if not note or len(note) > MAX_RULES_NOTE_LEN:
