@@ -44,7 +44,7 @@ every caller.
 | `db_call` | Runs one operation through the `postgres` circuit breaker and a 20 s `asyncio.timeout`. |
 | `run_transaction` | Runs a callback on one session; all statements commit or roll back together. It already uses `db_call`, so callers must not nest another. |
 | `session` | Commits on success, rolls back on failure; rollback is best effort and never replaces the original exception. |
-| `read_connection` | Autocommit read path; a SELECT avoids the cost of closing a transaction. |
+| `read_connection` | Autocommit read path using the shared `_read_engine` proxy so checkouts skip per-call `execution_options()`; a SELECT avoids the cost of closing a transaction. |
 | Circuit `postgres` | Opens after 5 consecutive transient failures; one HALF_OPEN probe after 60 s; a success closes it. |
 | Counted failures | Dropped connections, refused sockets, driver timeouts, pool timeouts, caller-side timeouts. |
 | Ignored failures | SQLSTATE `40001`, `40P01`, `55P03`, `57014` (serialization failure, deadlock, lock refusal, statement cancellation) prove the link is healthy. |

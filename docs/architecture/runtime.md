@@ -81,11 +81,14 @@ through `SENTRY_DSN` and uses the same redaction hook.
 tasks. The startup, member-cache, identity-refresh, admin-harvest, and
 asyncio-report sets are drained during shutdown.
 
-`KeyedUpdateProcessor` serializes updates per `(chat, user)` so a
+`KeyedUpdateProcessor` serializes updates per `(chat, user)` (up to 512
+concurrent updates via `_MAX_CONCURRENT_UPDATES = 512`) so a
 ConversationHandler sees one update at a time without blocking the rest of the
-federation. It takes the conversation lock before the global cap, so a burst on
-one conversation does not hold every slot. Cancelled queued updates close their
-coroutines.
+federation. Uncontended keys use a zero-allocation fast path without creating a
+lock or deque, and handler dispatch builds `Ctx` synchronously with lazy
+state dictionaries (`user_data`, `chat_data`, `bot_data`). It takes the
+conversation lock before the global cap, so a burst on one conversation does
+not hold every slot. Cancelled queued updates close their coroutines.
 
 ## Workers
 
@@ -141,6 +144,6 @@ predecessor. The queue is bounded: droppable operations drop past 200 queued,
 critical operations evict the oldest droppable operation past 1000, and an
 absolute ceiling of 2000 drops even critical work with an error log. Revocation
 prefixes and locale deletions take the non-droppable path. Operations rely on
-the 2-second socket timeout rather than `asyncio.wait_for`, because cancelling a
+the 0.5-second socket timeout rather than `asyncio.wait_for`, because cancelling a
 Redis command leaves its reply unread on the pooled connection. With no Redis
 client the cache behaves as a plain in-memory TTL cache.

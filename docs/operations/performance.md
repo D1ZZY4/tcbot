@@ -11,7 +11,9 @@ Related pages: [database layer](../architecture/database.md) and
 ## Update processing
 
 Kurigram uses a `KeyedUpdateProcessor` that serializes updates per `(chat, user)`
-pair while leaving other conversations concurrent. A ConversationHandler
+pair while leaving other conversations concurrent, up to 512 concurrent updates
+(`_MAX_CONCURRENT_UPDATES = 512`), using a zero-allocation fast path for
+uncontended keys. A ConversationHandler
 therefore sees one update at a time for one moderator, but a flood in one group
 does not block the rest of the federation.
 
@@ -19,16 +21,22 @@ Rate limits are applied by the per-handler `ratelimiter()` tiers, one bucket
 per user and wrapped handler, with the current Owner exempt. Ordinary chat
 messages are not throttled by a global handler. Prefix filters are async so
 they stay on the event loop instead of being offloaded to the client's thread
-pool for every update. See
+pool for every update, and command argument splitting runs only on `Message`
+updates. See
 [bounded dispatch and breakers](../architecture/runtime.md#bounded-dispatch-and-breakers).
 
 Kurigram's dispatcher workers are sized from CPU count and the database pool,
 capped at the application's 64-slot handler limit. `KURIGRAM_WORKERS` can
-override the count, also capped at 64. More workers improve throughput across
-independent chats; they do not reduce the round trip of a single command or
-edit, and an unbounded count only creates contention on the 10-connection pool.
-The MTProto store keeps a bounded in-process peer cache so each rich edit does
-not resolve its peer through PostgreSQL again.
+override the count, also capped at 64. The client sets `sleep_threshold=0` so
+`FloodWait` errors raise immediately instead of stalling a worker, and scales
+`max_concurrent_transmissions` (`min(16, max(4, workers // 2))`). More workers
+improve throughput across independent chats; they do not reduce the round trip
+of a single command or edit, and an unbounded count only creates contention on
+the 10-connection pool. The MTProto store keeps a bounded 20,000-entry
+in-process peer cache so each rich edit does not resolve its peer through
+PostgreSQL again, coalesces `update_state` writes on a 2-second flush interval,
+and skips redundant `update_peers` database upserts when peer metadata is
+unchanged.
 
 ## Bounded fan-out
 
@@ -52,11 +60,15 @@ slot skipped by the breaker never burns a retry attempt.
 ## Database access
 
 Every read and write goes through `engine.db_call()` with a 20-second timeout
-and the `postgres` circuit breaker. `run_transaction()` keeps multi-statement
-units atomic. Connection pool size and overflow come from `DB_POOL_SIZE` and
-`DB_MAX_OVERFLOW`; they must fit the connection limit granted by the database,
-because an oversized pool fails later as "max clients reached" rather than at
-startup.
+and the `postgres` circuit breaker (skipping the timeout wrapper when
+`timeout=None`). `run_transaction()` keeps multi-statement units atomic, while
+`read_connection()` uses a shared autocommit `_read_engine` proxy to avoid
+per-checkout `execution_options()` overhead. The async engine sets
+`pool_use_lifo=True` to keep hot connections warm for Psycopg 3 prepared
+statements and let idle overflow connections age out. Connection pool size and
+overflow come from `DB_POOL_SIZE` and `DB_MAX_OVERFLOW`; they must fit the
+connection limit granted by the database, because an oversized pool fails later
+as "max clients reached" rather than at startup.
 
 Prefer batch helpers over per-row queries:
 
@@ -89,7 +101,10 @@ A per-key single-flight lock means concurrent misses for one key run one source
 read. Generation counters and a cache-wide epoch discard results fetched
 across an invalidation. Redis mutations are chained FIFO per prefix and event
 loop and bounded by depth, so a slow write cannot complete after a newer
-delete. Revocation prefixes use non-droppable deletes.
+delete. Revocation prefixes use non-droppable deletes that pipeline the
+tombstone `SET` and `DEL` atomically, whereas non-revocation writes skip the
+tombstone existence check and batch helpers use `put_many()` to pipeline L2
+writes in one round trip.
 
 Enforcement reads pass `fresh=True` to bypass caches. This keeps a demotion or
 transfer in another process from hiding behind a TTL.

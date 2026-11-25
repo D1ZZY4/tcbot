@@ -33,7 +33,10 @@ schema is created at startup for non-public values.
   it, so a dead database fails fast for every caller.
 - `run_transaction(op)` runs a callback on one session; all statements commit
   or roll back together. It already uses `db_call`, so callers must not nest another.
-- `read_connection()` is an autocommit read path.
+- `read_connection()` is an autocommit read path backed by a shared
+  `_read_engine` proxy so checkouts skip per-call `execution_options()`
+  overhead; the pool uses `pool_use_lifo=True` to keep Psycopg 3 prepared
+  statements warm on hot connections.
 - The circuit opens after five transient failures within a window (successes in
   CLOSED do not reset the count) and admits one half-open probe after 60 seconds. Serialization failures, deadlocks, lock
   refusals, and statement cancellations prove the server is healthy and do not
@@ -118,7 +121,10 @@ return to `pending`.
 `database/cache/` implements the two-level cache. L1 is an in-process TTL cache;
 L2 is optional Redis under the `v2` namespace. A generation counter and a
 cache-wide epoch discard results fetched across an invalidation, and a FIFO
-mutation queue keeps writes, deletes, and clears ordered. Redis is never on the
+mutation queue keeps writes, deletes, and clears ordered. `put_many()` batches
+non-revocation L2 writes in one pipeline, non-revocation writes skip the
+tombstone existence check, and revocation deletes pipeline `SET` + `DEL`
+atomically. Redis is never on the
 critical path: a failed L2 read is a miss and a failed write is logged.
 
 | Cache | Prefix | L1 TTL | L2 TTL |

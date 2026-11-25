@@ -89,7 +89,7 @@ sequenceDiagram
     alt Client missing or not usable on this loop
         Async->>Local: check(uid)
     else Client available
-        Async->>Redis: EVAL _RL_LUA key=rl:prefix:uid
+        Async->>Redis: EVALSHA (fallback EVAL) _RL_LUA key=rl:prefix:uid
         Note over Redis: ZREMRANGEBYSCORE old, ZCARD, ZADD now/member, PEXPIRE
         alt count < limit
             Redis-->>Async: 0 (allowed)
@@ -103,17 +103,20 @@ sequenceDiagram
     Async-->>Handler: 0.0 or seconds to wait
 ```
 
-`_RL_LUA` is an atomic sorted-set sliding window. Its arguments are the key,
-current time, window, limit, and a unique member (`time.time_ns()` string). It
-returns `0` when allowed, or `ceil(wait * 10)` when denied; the caller converts
-that back to seconds rounded to one decimal. `_AsyncRateLimiter` uses
-`key = f"rl:{prefix}:{uid}"` and `PEXPIRE` of `ceil(window * 1000) + 1000` ms.
+`_RL_LUA` is an atomic sorted-set sliding window executed via `register_script`
+(`EVALSHA` with `EVAL` fallback) using a single `time.time_ns()` syscall. Its
+arguments are the key, current time, window, limit, and a unique member
+(`time.time_ns()` string). It returns `0` when allowed, or `ceil(wait * 10)` when
+denied; the caller converts that back to seconds rounded to one decimal.
+`_AsyncRateLimiter` uses `key = f"rl:{prefix}:{uid}"` and `PEXPIRE` of
+`ceil(window * 1000) + 1000` ms.
 
 When Redis is unavailable (no client, a client bound to another event loop, or
 a command error), the call falls through to the synchronous `_RateLimiter`,
-which keeps per-user `deque` timestamps and prunes entries outside the window.
-Memory is bounded by periodic cleanup once the bucket count exceeds `10_000`.
-Rate limiting is never silently disabled.
+which keeps per-user `deque` timestamps, resets expired buckets in O(1) in place,
+and prunes entries outside the window. Memory is bounded by window-throttled
+cleanup once the bucket count exceeds `10_000`. Rate limiting is never silently
+disabled.
 
 A deliberate constraint: the Redis call is bounded by the client's socket
 timeout, not by `asyncio.wait_for()`. Cancelling a waiter would abandon an

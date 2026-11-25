@@ -37,7 +37,9 @@ flowchart TD
 ```
 
 The per-key lock serializes concurrent misses for one key so only one source
-read runs. Different keys remain fully parallel. `peek()` and `peek_many()` read
+read runs. Different keys remain fully parallel. `put_many()` stores multiple
+entries in L1 and enqueues one non-transactional Redis pipeline for
+non-revocation caches. `peek()` and `peek_many()` read
 L1 and L2 without a database fetch; `peek_many` uses `MGET` in chunks of 500.
 Peek values may be stale by design and are for display hints only, not
 authoritative state.
@@ -157,7 +159,7 @@ processed account after commit.
 | Redis fails after boot | `ensure_connected()` retries at most once per 30 s backoff window, so a recovered Redis is picked up without a restart. |
 | Any L2 get fails | A miss, not an error. `mark_op(False)` records unhealthiness and logs the transition. |
 | L2 write or delete fails | Logged at DEBUG; L1 already serves or has dropped the value. |
-| Socket timeouts | Connect 5 s, socket 2 s, pool 20 connections, health check every 30 s. Operations rely on the socket timeout, not `wait_for`, because cancelling a Redis command leaves its reply unread on a pooled connection. |
+| Socket timeouts | Connect 2 s, socket 0.5 s, pool 64 connections with `socket_keepalive=True`, health check every 30 s. Operations rely on the socket timeout, not `wait_for`, because cancelling a Redis command leaves its reply unread on a pooled connection. |
 | Shutdown | `drain_redis_mutations()` waits up to 5 s for queued mutations so they are not lost with the loop. |
 
 A long outage only extends staleness to the affected key TTL. The cache never
