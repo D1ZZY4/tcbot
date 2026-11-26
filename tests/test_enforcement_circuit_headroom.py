@@ -36,6 +36,49 @@ def test_the_breaker_reports_its_closed_admission_headroom() -> None:
         _cb.telegram.reset()
 
 
+def test_a_mid_tick_circuit_open_returns_claimed_runs_to_the_queue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run claimed just before the circuit opens must not wait 30 minutes."""
+
+    async def _requeue(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [
+            {"id": 1, "action_id": 2, "operation": "revoke"},
+            {"id": 2, "action_id": 3, "operation": "revoke"},
+        ]
+
+    processed: list[int] = []
+
+    async def _process(bot: Any, run: dict[str, object], **_kwargs: Any) -> None:
+        processed.append(int(str(run["id"])))
+        _cb.telegram._state = _cb.CircuitState.OPEN
+
+    deferred: list[list[int]] = []
+
+    async def _defer(run_ids: Any) -> int:
+        deferred.append(list(run_ids))
+        return len(run_ids)
+
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "defer_runs", _defer)
+    monkeypatch.setattr(moderation_enforcement, "_process_run", _process)
+
+    _cb.telegram.reset()
+    try:
+        asyncio.run(
+            moderation_enforcement.run_once(_FakeBot())  # type: ignore[arg-type]
+        )
+    finally:
+        _cb.telegram.reset()
+
+    assert processed == [1, 2]
+    assert deferred == [[1, 2]]
+
+
 def test_no_delivery_chunk_exceeds_the_headroom(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

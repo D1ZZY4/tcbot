@@ -99,10 +99,12 @@ async def run_once(bot: Client) -> None:
     if probe_only and not _cb.telegram.try_acquire():
         log.debug("Enforcement worker deferred: the recovery probe is in use.")
         return
+    claimed_ids: list[int] = []
     try:
         runs = await db.enforcement_ledger.claim_runs(
             1 if probe_only else _MAX_RUNS_PER_TICK
         )
+        claimed_ids = [as_int(run.get("id")) for run in runs]
         for run in runs:
             try:
                 await _process_run(
@@ -123,6 +125,18 @@ async def run_once(bot: Client) -> None:
             # * Idempotent when a delivery already settled the probe; releases
             # * it when the run was cancelled or never reached Telegram.
             _cb.telegram.release_probe()
+        if claimed_ids:
+            # * A run the circuit stopped before its first target, and a run
+            # * left claimed by a cancellation between runs, must be back in
+            # * the queue for the next tick instead of waiting 30 minutes for
+            # * the stale-run sweep. Runs with an in-flight target are skipped
+            # * by the ledger because another owner is still delivering them.
+            try:
+                await db.enforcement_ledger.defer_runs(claimed_ids)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("Could not return claimed enforcement runs to the queue")
 
 
 async def deliver_queued_run(bot: Client, run_id: int) -> bool:

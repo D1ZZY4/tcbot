@@ -500,6 +500,54 @@ async def test_a_cancelled_run_is_not_re_driven(run_db: str) -> None:
     assert (await enforcement_ledger.redrive_run(999_999)).state == "missing"
 
 
+async def test_defer_runs_returns_only_untouched_claims(run_db: str) -> None:
+    """A stopped run goes back to the queue; an in-flight target stays owned."""
+    first = await bans_db.create_ban(
+        42,
+        "spam",
+        7,
+        501,
+        0,
+        "liferun0008",
+        destination_chat_id=cfg.proofs[0],
+        proof_items=_proof(),
+        proof_expected_count=1,
+        enforcement_chat_ids=[-1001],
+    )
+    second = await bans_db.create_ban(
+        43,
+        "spam",
+        7,
+        502,
+        0,
+        "liferun0009",
+        destination_chat_id=cfg.proofs[0],
+        proof_items=_proof(),
+        proof_expected_count=1,
+        enforcement_chat_ids=[-1001],
+    )
+    first_id = first["enforcement_run_id"]
+    second_id = second["enforcement_run_id"]
+    assert isinstance(first_id, int)
+    assert isinstance(second_id, int)
+    assert await enforcement_ledger.claim_run(first_id) is not None
+    assert await enforcement_ledger.claim_run(second_id) is not None
+    assert await enforcement_ledger.claim_targets(second_id)
+
+    assert await enforcement_ledger.defer_runs([first_id, second_id]) == 1
+
+    statuses = {
+        row["id"]: row["status"]
+        for row in await engine_module.fetch_all(
+            select(
+                moderation_enforcement_runs.c.id,
+                moderation_enforcement_runs.c.status,
+            ).where(moderation_enforcement_runs.c.id.in_([first_id, second_id]))
+        )
+    }
+    assert statuses == {first_id: "queued", second_id: "running"}
+
+
 async def test_a_destination_is_registered_without_rewriting_a_group(
     run_db: str,
 ) -> None:

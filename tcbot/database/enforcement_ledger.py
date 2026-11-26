@@ -250,6 +250,29 @@ _CANCEL_RUN = text(
     """
 )
 
+# * A claimed run can be left running when the Telegram circuit opens before
+# * any of its targets were claimed, or when a tick is cancelled between runs.
+# * Returning it to the queue immediately avoids waiting for the stale-run
+# * window. A run with an in_progress target is never touched: that target is
+# * owned by a worker and the stale pass owns its recovery.
+_DEFER_RUNS = text(
+    """
+    UPDATE moderation_enforcement_runs AS r
+       SET status = 'queued',
+           finished_at = NULL,
+           updated_at = now()
+      WHERE r.id = ANY(:run_ids)
+        AND r.status = 'running'
+        AND NOT EXISTS (
+            SELECT 1
+              FROM moderation_enforcement_targets AS t
+             WHERE t.run_id = r.id
+               AND t.status = 'in_progress'
+        )
+     RETURNING r.id
+     """
+)
+
 _QUEUE_RUN = text(
     """
     INSERT INTO moderation_enforcement_runs (
@@ -838,6 +861,25 @@ async def complete_empty_run(run_id: int) -> None:
         await sess.execute(_COMPLETE_EMPTY_RUN, {"run_id": run_id})
 
     await run_transaction(_work)
+
+
+async def defer_runs(run_ids: Sequence[int]) -> int:
+    """Return claimed runs with no in-flight target to the queue.
+
+    A tick that stops because the Telegram circuit opened must not leave the
+    runs it already claimed in ``running`` until the stale-run window expires.
+    Runs that own an in-flight target are deliberately excluded: their worker
+    or the stale recovery pass owns them.
+    """
+    ids = [int(run_id) for run_id in run_ids if int(run_id) > 0]
+    if not ids:
+        return 0
+
+    async def _work(sess: AsyncSession) -> int:
+        result = await sess.execute(_DEFER_RUNS, {"run_ids": ids})
+        return len(result.mappings().all())
+
+    return await run_transaction(_work)
 
 
 async def cancel_run(run_id: int, *, error_detail: str) -> None:
