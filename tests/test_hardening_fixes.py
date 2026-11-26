@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from pyrogram.errors import MessageIdInvalid, MessageNotModified
 
 from tcbot import cfg
 from tcbot.database import enforcement_ledger
@@ -78,6 +79,31 @@ async def test_edit_via_reports_missing_message() -> None:
     )
 
 
+async def test_edit_via_recognizes_real_kurigram_refusals() -> None:
+    """A real RPC no-op is swallowed and a dead message reports as gone."""
+
+    async def not_modified() -> None:
+        raise MessageNotModified()
+
+    async def dead_message() -> None:
+        raise MessageIdInvalid()
+
+    assert await _edit_via(
+        not_modified(),
+        log_level="debug",
+        log_label=None,
+        catch_all=False,
+        default_msg="x",
+    )
+    assert not await _edit_via(
+        dead_message(),
+        log_level="debug",
+        log_label=None,
+        catch_all=False,
+        default_msg="x",
+    )
+
+
 async def test_primary_group_keeps_enforcement_retry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -114,6 +140,55 @@ async def test_primary_group_keeps_enforcement_retry(
     assert claim[1]["primary_chat_id"] == cfg.main_group
     assert "cc.chat_id = :primary_chat_id" in requeue[0]
     assert requeue[1]["primary_chat_id"] == cfg.main_group
+
+
+async def test_run_action_claimable_marker_matches_the_retry_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The demote guard must not treat a pending target as unclaimable.
+
+    ``claim_targets`` requires a live chat only for a failed retry; a pending
+    target is claimed unconditionally. The projection that feeds the demote
+    gate must use the same rule, or a staffer can be stripped without being
+    enforced while a pending target is still delivered.
+    """
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class _Result:
+        def mappings(self) -> _Result:
+            return self
+
+        def first(self) -> None:
+            return None
+
+        def all(self) -> list[dict[str, Any]]:
+            return []
+
+        def __iter__(self) -> Any:
+            return iter(())
+
+    class _Session:
+        async def execute(
+            self, stmt: Any, params: dict[str, Any] | None = None
+        ) -> _Result:
+            calls.append((str(stmt), params or {}))
+            return _Result()
+
+    async def _transaction(op: Any) -> Any:
+        return await op(_Session())
+
+    monkeypatch.setattr(enforcement_ledger, "run_transaction", _transaction)
+
+    assert await enforcement_ledger.load_run_action(1) is None
+    sql, params = calls[0]
+    compact = " ".join(sql.split())
+    assert "AS has_claimable_target" in compact
+    assert (
+        "t.status = 'failed' AND t.next_retry_at IS NOT NULL "
+        "AND t.next_retry_at <= now() AND EXISTS ( SELECT 1 "
+        "FROM connected_chats AS cc"
+    ) in compact
+    assert params["primary_chat_id"] == cfg.main_group
 
 
 async def test_existing_rule_set_without_categories_is_backfilled(

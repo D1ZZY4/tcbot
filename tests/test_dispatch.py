@@ -11,6 +11,7 @@ import inspect
 import logging
 
 import pytest
+from pyrogram.errors import OffsetPeerIdInvalid, ReplyMessageIdInvalid, UserIsBot
 
 from tcbot.modules.helper.messages.replies import applied_summary
 from tcbot.modules.helper.pipelines.errors.exceptions import (
@@ -24,6 +25,7 @@ from tcbot.utils.dispatch import (
     fan_out,
     gather_bounded,
     is_benign_telegram_error,
+    is_edit_target_gone_error,
     is_permanent_telegram_error,
     summarize_fanout,
 )
@@ -60,6 +62,14 @@ def test_applied_summary_does_not_count_a_pending_group_as_done() -> None:
 
     assert "1/2" in line
     assert "awaiting delivery" in line
+
+
+def test_real_rpc_names_do_not_collide_with_benign_markers() -> None:
+    """Normalized substrings must not turn a bad peer into a no-op."""
+    assert is_benign_telegram_error(OffsetPeerIdInvalid()) is False
+    assert is_benign_telegram_error(UserIsBot()) is True
+    assert is_edit_target_gone_error(OffsetPeerIdInvalid()) is False
+    assert is_edit_target_gone_error(ReplyMessageIdInvalid()) is False
 
 
 def test_human_readable_refusal_recognized() -> None:

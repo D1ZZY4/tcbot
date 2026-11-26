@@ -24,12 +24,6 @@ class PollingConflictError(RuntimeError):
     """Another process is already polling the same bot identity."""
 
 
-# * Legacy aliases from the framework this project migrated from. Keeping them
-# * here prevents every classifier from re-learning the Kurigram names.
-RetryAfter = FloodWait
-InvalidToken = Unauthorized
-Conflict = PollingConflictError
-
 # * Error groups shared by classification, dispatch, and operator messaging.
 RATE_LIMIT_ERRORS: tuple[type[BaseException], ...] = (FloodWait,)
 TELEGRAM_TIMEOUT_ERRORS: tuple[type[BaseException], ...] = (Timedout, RPCTimeout)
@@ -166,13 +160,10 @@ __all__ = [
     "AuthKeyDuplicated",
     "BadRequest",
     "ChatAdminRequired",
-    "Conflict",
     "FloodWait",
     "Forbidden",
-    "InvalidToken",
     "RPCError",
     "RPCTimeout",
-    "RetryAfter",
     "SessionRevoked",
     "Timedout",
     "Unauthorized",

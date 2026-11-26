@@ -490,20 +490,18 @@ async def execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) ->
                 group.get("chat_id", 0),
                 error,
             )
-        if failed:
-            # * The durable path builds its exceptions from stored target
-            # * fields. Without one attached, the error channel classifies the
-            # * report as [?] Unknown and the operator cannot see why the
-            # * groups failed. The legacy fan-out path below already passes
-            # * its first transient error through summarize_fanout().
-            log.error(
-                "Ban enforcement for user=%d left %d/%d group(s) failed (run %s)",
-                target_id,
-                failed,
-                total,
-                enforcement_run_id,
-                exc_info=transient[0][1] if transient else None,
-            )
+        # * The durable path builds its exception from stored target fields,
+        # * so an incomplete delivery reaches the operator error channel with
+        # * the real refusal attached. The legacy fan-out path below already
+        # * reports through summarize_fanout().
+        moderation_enforcement.report_partial_failure(
+            action="Ban",
+            target_id=target_id,
+            failed=failed,
+            total=total,
+            run_id=enforcement_run_id,
+            error_detail=str(transient[0][1]) if transient else None,
+        )
     else:
         # * Legacy callers without a queued run keep the direct fan-out.
         results = await fan_out(

@@ -36,7 +36,7 @@ from tcbot.modules.helper.rich.formats import heading
 from tcbot.modules.helper.rich.link import display as display_community_link
 from tcbot.modules.helper.rich.list import checklist
 from tcbot.modules.helper.scope import flow_scope
-from tcbot.utils.i18n import pre, t
+from tcbot.utils.i18n import Safe, link, pre, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import (
     ALL_PREFIXES_CMD_FILTER,
@@ -104,34 +104,45 @@ def _cooldown_remaining_h(rejected_at: datetime | None) -> int | None:
     return (total + _SECONDS_PER_HOUR - 1) // _SECONDS_PER_HOUR
 
 
-def _example_log_link(log_channel: str) -> str:
-    """Build a usable example message link from a log channel display value.
+def _example_log_link(log_channel: str, message_id: int = 1, chat_id: int = 0) -> str:
+    """Build a usable message link from a log channel display value.
 
-    The caller resolves the channel to a full URL or a numeric chat id. The
-    example template needs one complete link, never a URL nested inside
-    another. A numeric supergroup id uses the ``t.me/c/`` form.
+    The caller passes the ban's real log message id so the instruction shows
+    the link the member must quote, not a placeholder that cannot pass the
+    appeal check. An invite link cannot address a message, so it falls back
+    to the numeric chat id when one is available.
     """
     raw = log_channel.strip()
     if raw.lstrip("-").isdigit():
-        return message_link(int(raw), 1)
+        return message_link(int(raw), message_id)
     if raw.startswith("https://t.me/"):
         tail = raw[len("https://t.me/") :].rstrip("/")
         first = tail.split("/", 1)[0]
-        if "+" not in first and first != "c":
-            return f"https://t.me/{first.lstrip('@')}/1"
+        if first.startswith("+"):
+            return message_link(chat_id, message_id) if chat_id else raw
+        if first != "c":
+            return f"https://t.me/{first.lstrip('@')}/{message_id}"
+        parts = tail.split("/")
+        if len(parts) >= 2 and parts[1].isdigit():
+            return message_link(int(parts[1]), message_id)
         return raw
-    return f"https://t.me/{raw.lstrip('@')}/1"
+    return f"https://t.me/{raw.lstrip('@')}/{message_id}"
 
 
 def instruction_text(
-    *, community_name: str, log_channel: str, locale: str | None
+    *,
+    community_name: str,
+    log_channel: str,
+    locale: str | None,
+    log_message_id: int = 1,
+    log_chat_id: int = 0,
 ) -> str:
     """Render the multi-line rich instruction prompt."""
     example = pre(
         t(
             "appeals.instruction.example_body",
             locale,
-            log_link=_example_log_link(log_channel),
+            log_link=_example_log_link(log_channel, log_message_id, log_chat_id),
             plain=True,
         )
     )
@@ -202,6 +213,8 @@ async def handle_group_appeal(
 
 class SubmitMessageMixin:
     """Text-message submit step: gates, review posting, and delivery retry."""
+
+    log_channel: int
 
     async def _on_message(self, ctx: Ctx) -> int:
         """Text message handler; validates and submits a #appeal message."""
@@ -345,9 +358,15 @@ class SubmitMessageMixin:
         if not log_msg_id:
             log_msg_id = fresh_ban.get("log_message_id", 0)
         if log_msg_id and not text_references_log_message(text, log_msg_id):
+            expected = link("Log message", message_link(self.log_channel, log_msg_id))
             await reply_rich(
                 msg,
-                t("appeals.submit.invalid_log", locale, plain=True),
+                t(
+                    "appeals.submit.invalid_log",
+                    locale,
+                    log_link=Safe(expected),
+                    plain=True,
+                ),
                 log_label="Appeal _on_message invalid-log",
                 parse_mode=None,
             )
@@ -367,13 +386,18 @@ class AppealSubmitMixin(SubmitMessageMixin):
     cancel_callback: str
 
     def instruction_text(
-        self, locale: str | None = None, log_display: str | None = None
+        self,
+        locale: str | None = None,
+        log_display: str | None = None,
+        log_message_id: int = 1,
     ) -> str:
-        """Multi-line rich instruction prompt."""
+        """Multi-line rich instruction prompt for one specific ban."""
         return instruction_text(
             community_name=self.community_name,
             log_channel=log_display or str(self.log_channel),
             locale=locale,
+            log_message_id=log_message_id,
+            log_chat_id=self.log_channel,
         )
 
     async def _start(self, ctx: Ctx, ban_id: str) -> int:
@@ -491,9 +515,16 @@ class AppealSubmitMixin(SubmitMessageMixin):
         scope["appeal_log_msg_id"] = ban.get("log_message_id", 0)
         try:
             log_display = await display_community_link(ctx.bot, self.log_channel)
+            # * Quote the ban's real log message, not a generic /1 example:
+            # * the submit step checks this id, so a placeholder could never
+            # * produce a valid appeal and sent users to the wrong channel.
             instr = await reply_rich_result(
                 msg,
-                self.instruction_text(locale, log_display),
+                self.instruction_text(
+                    locale,
+                    log_display,
+                    log_message_id=int(ban.get("log_message_id") or 0) or 1,
+                ),
                 reply_markup=appeal_cancel_btn(None, self.cancel_callback, locale),
             )
             scope["appeal_instruction_msg_id"] = instr.id

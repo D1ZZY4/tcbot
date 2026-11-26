@@ -152,6 +152,23 @@ async def _leave_one(
             chat_id,
             deactivate_result,
         )
+        if not isinstance(leave_result, BaseException):
+            # ! CRITICAL: the bot has already left, so the database is the
+            # ! only remaining source of truth. Retry the authoritative
+            # ! write once; a surviving failure is a ghost group and must
+            # ! reach the operator error channel with its chat id.
+            try:
+                await db.groups_db.deactivate_group(chat_id)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception(
+                    "leaveall ghost group %d: bot left but deactivation "
+                    "failed after retry",
+                    chat_id,
+                )
+            else:
+                deactivate_result = None
     if isinstance(log_result, BaseException):
         log.warning(
             "group_disconnected log send failed for %d: %s", chat_id, log_result

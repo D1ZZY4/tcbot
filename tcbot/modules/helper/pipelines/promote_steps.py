@@ -351,6 +351,26 @@ async def cmd_setrole(ctx: Ctx) -> None:
     if resolved is None:
         return
     executor_role, target_id, target_fname = resolved
+    # * A role change is a demotion for at least one tier, so it needs the
+    # * same protected-identity gate as /tcdemote. Skipping it here offered
+    # * self, bot, Telegram, and Owner targets an otherwise unreachable
+    # * picker even though the mutation callback could still refuse them.
+    classified = await classify_and_load_role(
+        ctx.bot,
+        admin.id,
+        target_id,
+        target_fname,
+        msg,
+        action="demote",
+        locale=locale,
+    )
+    if classified is None:
+        return
+    ident, _ = classified
+    refusal = identity.refuse_message("demote", ident, locale)
+    if refusal is not None:
+        await reply_rich(msg, refusal, log_label="cmd_setrole refusal")
+        return
     await role_change_prompt(
         ctx,
         executor_role=executor_role,

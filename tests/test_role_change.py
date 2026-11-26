@@ -196,6 +196,58 @@ def test_promote_command_routes_an_admin_target_to_the_change_flow(
     assert replies == ["changed"]
 
 
+def test_setrole_refuses_a_protected_target_before_the_picker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The role-change command uses the same protected-identity gate as demote."""
+    pickers: list[int] = []
+    replies: list[str] = []
+
+    async def _locale(_update: Any) -> str:
+        return "en-US"
+
+    async def _origin(*_args: Any, **_kwargs: Any) -> bool:
+        return True
+
+    async def _resolve(*_args: Any, **_kwargs: Any) -> tuple[str, int, str]:
+        return "owner", 1, "Self"
+
+    async def _classify(*_args: Any, **_kwargs: Any) -> tuple[Identity, str]:
+        return Identity("self", 1, "Self"), "owner"
+
+    async def _picker(*_args: Any, **_kwargs: Any) -> None:
+        pickers.append(1)
+
+    async def _reply(_msg: Any, text: str, **_kwargs: Any) -> None:
+        replies.append(text)
+
+    monkeypatch.setattr(role_change, "locale_for_update", _locale)
+    monkeypatch.setattr(role_change, "require_federation_origin", _origin)
+    monkeypatch.setattr(role_change, "resolve_executor_target", _resolve)
+    monkeypatch.setattr(role_change, "classify_and_load_role", _classify)
+    monkeypatch.setattr(role_change, "role_change_prompt", _picker)
+    monkeypatch.setattr(role_change, "reply_rich", _reply)
+
+    msg = SimpleNamespace(
+        text="/tcsetrole 1 moderator",
+        chat=SimpleNamespace(id=-100999, type="supergroup"),
+    )
+    ctx = SimpleNamespace(
+        effective_user=SimpleNamespace(id=1, first_name="Self"),
+        effective_message=msg,
+        effective_chat=msg.chat,
+        bot=object(),
+        user_data={},
+    )
+    body: Any = role_change.cmd_setrole
+    while hasattr(body, "__wrapped__"):
+        body = body.__wrapped__
+    asyncio.run(body(ctx))
+
+    assert pickers == []
+    assert len(replies) == 1
+
+
 def test_role_change_button_excludes_current_role() -> None:
     markup = role_change_btn(
         42, ["admin", "developer", "moderator"], "admin", "en-US", 1

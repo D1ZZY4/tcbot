@@ -179,6 +179,65 @@ def test_a_local_invalidation_hides_stale_l2_until_its_delete_lands() -> None:
         asyncio.run(_run())
 
 
+def test_an_invalidation_landing_during_an_l2_read_forces_the_source() -> None:
+    """A revocation during Redis GET must not return the old L2 value.
+
+    The stale-hit guard used to log the discarded value and then return it
+    anyway, so a reader overlapping a demotion could still authorize with
+    the revoked role.
+    """
+
+    class _BlockingRedis:
+        def __init__(self) -> None:
+            self.get_started = asyncio.Event()
+            self.release_get = asyncio.Event()
+
+        async def exists(self, key: str) -> int:
+            _ = key
+            return 0
+
+        async def get(self, key: str) -> str:
+            _ = key
+            self.get_started.set()
+            await self.release_get.wait()
+            return '"revoked"'
+
+    fake = _BlockingRedis()
+
+    async def _no_client() -> None:
+        return None
+
+    def _never_run(prefix: str, factory: Any, *, droppable: bool = True) -> None:
+        _ = (prefix, factory, droppable)
+        return
+
+    async def _run() -> None:
+        cache = TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix="role")
+        calls = 0
+
+        async def _fetch() -> str:
+            nonlocal calls
+            calls += 1
+            return "fresh"
+
+        reading = asyncio.create_task(cache.get_or_fetch("k", _fetch))
+        await fake.get_started.wait()
+        cache.invalidate("k")
+        fake.release_get.set()
+        assert await reading == "fresh"
+        assert calls == 1
+        assert cache.get("k") is twolevel.CACHE_MISS
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            twolevel, "cfg", dataclasses.replace(cfg, redis_url="redis://test")
+        )
+        patch.setattr(redis_io, "usable_redis_client", lambda: fake)
+        patch.setattr(redis_io, "acquire_redis_client", _no_client)
+        patch.setattr(redis_io, "enqueue_redis_mutation", _never_run)
+        asyncio.run(_run())
+
+
 def test_a_tombstone_landing_during_a_db_fetch_is_not_overwritten() -> None:
     """A revocation from another process during the DB read must win.
 

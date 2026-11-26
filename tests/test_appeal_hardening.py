@@ -23,7 +23,9 @@ class _FakeQuery:
     def __init__(self, data: str, message_id: int | None = None) -> None:
         self.data = data
         self.message = (
-            SimpleNamespace(message_id=message_id) if message_id is not None else None
+            SimpleNamespace(id=message_id, message_id=message_id)
+            if message_id is not None
+            else None
         )
         self.answers: list[tuple[str, bool]] = []
         self.edits: list[str] = []
@@ -318,6 +320,39 @@ def test_approve_proceeds_when_the_approver_outranks_the_target(
     assert record["deactivated"] == ["abc"]
 
 
+def test_approve_does_not_demote_when_the_reviewer_lost_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The irreversible demote runs only after the reviewer's final recheck.
+
+    An Admin who was demoted while the claim and the group read were in
+    flight used to strip the target's role before the authority recheck
+    refused the decision, leaving the target demoted with an active ban.
+    """
+    record = _wire_approve(monkeypatch)
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        # * Entry captured Owner; the recheck sees the later demotion.
+        return "moderator" if user_id == 1 else "admin"
+
+    async def _fake_demote(*a: Any, **k: Any) -> bool:
+        record["demoted"].append((9, "admin"))
+        return True
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(demote.Demote, "execute", staticmethod(_fake_demote))
+
+    query = _FakeQuery("appeal_approve_abc_1")
+    _run_approve(query)
+
+    assert record["demoted"] == []
+    assert record["deactivated"] == []
+    assert query.answers[-1] == (
+        t("appeals.review.not_authorized", "en-US", plain=True),
+        True,
+    )
+
+
 def test_approve_proceeds_when_the_role_is_already_gone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -426,6 +461,8 @@ def test_a_live_legacy_card_is_still_accepted(
     monkeypatch.setattr(appeal_review, "locale_for_update", _locale)
 
     query = _FakeQuery("appeal_approve_abc", message_id=1)
+    # * Kurigram names the attribute ``id``, not ``message_id``.
+    query.message = SimpleNamespace(id=1)
     asyncio.run(
         appeal_review.AppealReviewMixin().on_decision(
             _fake_update(query, 1),  # type: ignore[arg-type]

@@ -97,6 +97,22 @@ def test_an_invalid_profile_button_gets_a_specific_label_and_hint() -> None:
     assert "call arguments" not in hint
 
 
+def test_a_stored_telegram_refusal_is_not_a_code_bug() -> None:
+    """A rebuilt partial-delivery error keeps the real operator guidance.
+
+    Queued enforcement stores the Telegram refusal as text and reconstructs
+    an exception for the report. A plain RuntimeError was labelled a code bug,
+    so an operator was told to fix the source instead of re-promoting the bot.
+    """
+    exc = RuntimeError(
+        "Telegram says: [403 CHAT_WRITE_FORBIDDEN] - You don't have rights "
+        'to send messages in this chat. (caused by "channels.EditBanned")'
+    )
+    label = classify._classify(exc)
+    assert label == "[!] Telegram Forbidden"
+    assert "admin rights" in classify._action_hint(label).lower()
+
+
 def test_benign_suppresses_connectivity_and_circuit() -> None:
     outage = OperationalError("SELECT 1", {}, Exception("connection refused"))
     assert classify._benign(outage) is True

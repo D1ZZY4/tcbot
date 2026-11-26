@@ -191,6 +191,65 @@ def test_threshold_ban_stores_warn_proof_on_ban_record(
     assert len(msg.replies) == 1
 
 
+def test_threshold_ban_rechecks_the_executor_after_the_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A moderator demoted while the threshold was checked cannot file a ban."""
+    created: list[int] = []
+    checked: list[str] = []
+
+    async def _locale(_update: Any) -> str:
+        return "en-US"
+
+    async def _add_warn(*args: Any, **kwargs: Any) -> int:
+        return 3
+
+    async def _refusal(
+        _admin_id: int,
+        _target_id: int,
+        *,
+        min_role: str,
+        action: str,
+        locale: str | None,
+    ) -> str | None:
+        checked.append(action)
+        return "rank refused" if len(checked) == 3 else None
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        return "moderator" if user_id == 1 else None
+
+    async def _create_ban(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        created.append(1)
+        return {"ban_id": "b1"}
+
+    monkeypatch.setattr(warn_executor, "locale_for_update", _locale)
+    monkeypatch.setattr(db.warns_db, "add_warn", _add_warn)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(warn_executor.guards, "enforcement_refusal", _refusal)
+    monkeypatch.setattr(db.bans_db, "create_ban", _create_ban)
+
+    msg = _FakeMsg()
+    ctx = SimpleNamespace(
+        bot=_FakeBot(),
+        user_data={},
+        effective_message=msg,
+        effective_chat=SimpleNamespace(id=22, title="Group", type="supergroup"),
+        effective_user=SimpleNamespace(id=1, first_name="Admin"),
+    )
+    asyncio.run(
+        warn_executor.execute_warn(
+            ctx,  # type: ignore[arg-type]
+            42,
+            "Target",
+            "spam",
+        )
+    )
+
+    assert checked[-1] == "Warn threshold ban"
+    assert created == []
+    assert len(msg.replies) == 1
+
+
 def test_threshold_ban_demotes_at_enforcement_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

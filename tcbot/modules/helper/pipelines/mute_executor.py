@@ -270,6 +270,18 @@ async def execute_mute(bot: Client, ctx: Ctx, meta: dict[str, Any]) -> None:
                 group.get("title", ""),
                 group.get("chat_id", 0),
             )
+        moderation_enforcement.report_partial_failure(
+            action="Mute",
+            target_id=target_id,
+            failed=failed,
+            total=total,
+            run_id=run_id,
+            error_detail=(
+                str(failed_targets[0].get("last_error_detail") or "")
+                if failed_targets
+                else None
+            ),
+        )
     else:
         restrict_coros = [
             bot.restrict_chat_member(

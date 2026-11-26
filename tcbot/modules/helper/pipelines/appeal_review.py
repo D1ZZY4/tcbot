@@ -253,6 +253,20 @@ class ApproveMixin:
             log.exception("approve_appeal: groups fetch failed for user=%d", target_id)
             await _answer_review(q, locale, "common.err.groups_load_failed")
             return False
+        groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
+        chat_ids = [
+            int(grp.get("chat_id", 0))
+            for grp in groups
+            if int(grp.get("chat_id", 0) or 0)
+        ]
+        # ! CRITICAL: re-read the reviewer's rank before any irreversible
+        # ! write. The demote below strips the target's role and cannot be
+        # ! undone here, so a reviewer demoted during the claim or the group
+        # ! read must be refused before it runs.
+        if not await _decision_role_still_valid(
+            q, locale, admin.id, target_role, action="approve"
+        ):
+            return False
         if target_role in db.users_roles.STAFF_ROLES:
             # * Fail closed: the shared gate blocks the approval when the
             # * demote raised, or when it cleared no row while the role still
@@ -270,16 +284,6 @@ class ApproveMixin:
             if not gate.may_proceed:
                 await _answer_review(q, locale, "appeals.review.demote_blocked")
                 return False
-        groups = db.groups_db.with_primary_groups(groups, (cfg.main_group,))
-        chat_ids = [
-            int(grp.get("chat_id", 0))
-            for grp in groups
-            if int(grp.get("chat_id", 0) or 0)
-        ]
-        if not await _decision_role_still_valid(
-            q, locale, admin.id, target_role, action="approve"
-        ):
-            return False
         # * Decision and delivery intent land together: the appeal is
         # * accepted, the ban is revoked, the review slot is released, and
         # * the unban run owns every group. A split here used to leave an
@@ -606,9 +610,11 @@ class AppealReviewMixin(AppealVerdictsMixin):
         else:
             ban_id = payload
             message = q.message
-            tapped_review_id = (
-                int(getattr(message, "message_id", 0) or 0) if message else 0
-            )
+            # * Kurigram exposes the message id as ``id``; ``message_id`` is
+            # * the DB-column and test-double spelling. Accept both so a live
+            # * legacy card still matches its stored review id.
+            raw_id = getattr(message, "id", None) or getattr(message, "message_id", 0)
+            tapped_review_id = int(raw_id or 0) if message else 0
         if not ban_id:
             log.warning("Appeal decision payload malformed: %r", data)
             try:

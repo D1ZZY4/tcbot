@@ -546,18 +546,28 @@ class TwoLevelCache[T]:
                                 elif (
                                     state.generation != generation
                                     or self._epoch != epoch
+                                    or key in self._pending_invalidations
                                     or key in self._pending_writes
                                 ):
-                                    # * The key was invalidated, swept, or
-                                    # * written locally while the Redis read
-                                    # * was in flight: the payload predates
-                                    # * the change and must not be cached.
+                                    # ! CRITICAL: a revocation that landed while
+                                    # * the Redis read was in flight must fall
+                                    # * through to the source; returning the old
+                                    # * value would authorize with a revoked
+                                    # * role. A pending write is different: its
+                                    # * caller may still peek at the old L2 value,
+                                    # * it just must not be promoted into L1.
+                                    revoked = (
+                                        state.generation != generation
+                                        or self._epoch != epoch
+                                        or key in self._pending_invalidations
+                                    )
                                     log.debug(
                                         "Discarding stale Redis hit for "
                                         "invalidated key %s",
                                         key,
                                     )
-                                    return loaded
+                                    if not revoked:
+                                        return loaded
                                 else:
                                     # * An L2 hit is a cache write in L1; advance
                                     # * both counters so a concurrent peek or a

@@ -47,7 +47,7 @@ Kamu akan diberi tahu bot dalam kedua kasus."""
 # Runtime strings for appeal submission (appeal_submit_flow.py).
 # All send plain (PM replies, alerts, plain edits): plain=True.
 # Placeholders: {hours}/{remaining}/{max} ints, {community}/{handle}
-# raw config values, {log_link} a complete example message URL.
+# raw config values, {log_link} a preformatted link to the ban log message.
 
 [submit]
 not_private = "Buka tautan ini di PM bot."
@@ -60,7 +60,7 @@ unexpected = "Kirim pesan bandingmu, atau tekan Batal."
 session_ended = "Sesi banding berakhir."
 too_long = "Pesan bandingmu terlalu panjang (maks {max} karakter). Persingkat lalu coba lagi."
 session_expired = "Sesi kedaluwarsa, mulai lagi bandingnya."
-invalid_log = "Tautan log tidak valid. Cek lagi lalu coba lagi."
+invalid_log = "Tautan log tidak valid. Sertakan nomor dari log ban Anda: {log_link}"
 submitted = "Bandingmu sudah dikirim. Tim akan segera meninjaunya dan mengabarimu."
 delivery_failed = "Bandingmu tidak bisa diteruskan ke tim moderasi sekarang. Coba lagi beberapa menit lagi; jika terus terjadi, hubungi staf langsung."
 

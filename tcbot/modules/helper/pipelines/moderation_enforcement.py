@@ -22,6 +22,7 @@ from pyrogram.types import ChatPermissions
 
 from tcbot import database as db
 from tcbot.database.types import as_int
+from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
 from tcbot.utils.dispatch import (
@@ -310,6 +311,29 @@ async def _process_run(
                 run_id, error_detail="the target holds the protected Owner role"
             )
             return
+        if (
+            action_type in ("ban", "mute")
+            and action.get("has_claimable_target") is not False
+        ):
+            # ! CRITICAL: A deferred run can be delivered minutes or days after
+            # ! the decision was filed. The direct executors strip a staff
+            # ! target's role before enforcing; the worker must do the same or
+            # ! a later promotion leaves the target with federation rank while
+            # ! banned or muted everywhere. The gate is best effort by design,
+            # ! but the protected-role verdict it returns is binding. A run
+            # ! with no deliverable target must not strip a role at all.
+            demoted_role = await demote_before_enforcement(
+                bot,
+                target_user_id,
+                str(target_user_id),
+                trigger=action_type,
+            )
+            if demoted_role == "owner":
+                await db.enforcement_ledger.cancel_run(
+                    run_id,
+                    error_detail="the target holds the protected Owner role",
+                )
+                return
     # * A warn-threshold ban is deferred to this worker. The handler cannot
     # * clear warnings for chats that have not landed yet, so every chunk of
     # * this run clears its own landed chats. Manual bans never touch warns.
@@ -452,6 +476,36 @@ async def _deliver(
                     can_manage_topics=True,
                 ),
             )
+
+
+def report_partial_failure(
+    *,
+    action: str,
+    target_id: int,
+    failed: int,
+    total: int,
+    run_id: int,
+    error_detail: str | None = None,
+) -> None:
+    """Surface an incomplete durable delivery at ERROR level once per action.
+
+    The executor prompts already tell the moderator that groups failed, but
+    only an ERROR record reaches the operator error channel. The stored target
+    detail becomes the attached exception so the report names the real refusal
+    instead of an unknown cause. Partial delivery is retryable, so this is an
+    operator signal, not a rollback.
+    """
+    if failed <= 0:
+        return
+    log.error(
+        "%s enforcement for user=%d left %d/%d group(s) failed (run %s)",
+        action,
+        target_id,
+        failed,
+        total,
+        run_id,
+        exc_info=RuntimeError(error_detail) if error_detail else None,
+    )
 
 
 async def _clear_landed_warns(user_id: int, chat_ids: list[int]) -> None:

@@ -82,8 +82,8 @@ _REQUEUE_RUNS = text(
                AND EXISTS (
                    SELECT 1
                      FROM moderation_enforcement_targets AS t
-                     JOIN connected_chats AS cc ON cc.chat_id = t.chat_id
-                    WHERE t.run_id = r.id
+                      JOIN connected_chats AS cc ON cc.chat_id = t.chat_id
+                     WHERE t.run_id = r.id
                       AND t.status = 'failed'
                       AND t.next_retry_at IS NOT NULL
                       AND t.next_retry_at <= now()
@@ -149,7 +149,29 @@ _RUN_ACTION = text(
                 WHERE b.target_user_id = a.target_user_id
                   AND b.action_type = 'ban'
                   AND b.status = 'active'
-           ) AS active_ban
+           ) AS active_ban,
+           EXISTS (
+               SELECT 1
+                 FROM moderation_enforcement_targets AS t
+                WHERE t.run_id = r.id
+                  AND (
+                       t.status = 'pending'
+                       OR (
+                           t.status = 'failed'
+                           AND t.next_retry_at IS NOT NULL
+                           AND t.next_retry_at <= now()
+                           AND EXISTS (
+                               SELECT 1
+                                 FROM connected_chats AS cc
+                                WHERE cc.chat_id = t.chat_id
+                                  AND (
+                                       cc.is_active
+                                       OR cc.chat_id = :primary_chat_id
+                                  )
+                           )
+                       )
+                  )
+           ) AS has_claimable_target
       FROM moderation_enforcement_runs AS r
       JOIN moderation_actions AS a ON a.id = r.action_id
      WHERE r.id = :run_id
@@ -779,11 +801,15 @@ async def load_run_action(run_id: int) -> dict[str, object] | None:
     target is in force; a revoke run must not lift a restriction that a
     newer decision reinstated after this run was queued. ``active_ban`` is
     true when any ban on the target is in force; a kick repair must not
-    unban a target that a federation ban now holds.
+    unban a target that a federation ban now holds. ``has_claimable_target``
+    reports whether any target of the run can actually be delivered, so a
+    queued demote is not applied when every group has disconnected.
     """
 
     async def _work(sess: AsyncSession) -> dict[str, object] | None:
-        result = await sess.execute(_RUN_ACTION, {"run_id": run_id})
+        result = await sess.execute(
+            _RUN_ACTION, {"run_id": run_id, "primary_chat_id": cfg.main_group}
+        )
         row = result.mappings().first()
         return dict(row) if row is not None else None
 

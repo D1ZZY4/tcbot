@@ -592,7 +592,11 @@ async def prompt_owner_mismatch(q: Any, ctx: Ctx, *, min_parts: int, key: str) -
         # * treated as the owner.
         return True
     tapper = ctx.effective_user
-    if tapper is None or tapper.id == owner_id:
+    # ! CRITICAL: no proven identity cannot be the prompt owner. Treating a
+    # * missing tapper as the owner would let an unattributed tap through.
+    if tapper is None:
+        return True
+    if tapper.id == owner_id:
         return False
     try:
         await q.answer(

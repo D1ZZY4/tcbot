@@ -49,7 +49,7 @@ _BENIGN_BAD_REQUEST_SUBSTRINGS: tuple[str, ...] = (
     "CHAT_NOT_FOUND",  # group was deleted
     "PEER_ID_INVALID",  # user or chat id rejected by Telegram
     "USER_NOT_FOUND",  # Telegram does not know the user
-    "USER_IS_A_BOT",  # bot users cannot be banned/muted/etc.
+    "USER_IS_BOT",  # bot users cannot be banned/muted/etc.
     "USER_IS_ANONYMOUS",  # GroupAnonymousBot placeholder
     "PARTICIPANT_ID_INVALID",  # user not a participant of the chat
 )
@@ -318,6 +318,12 @@ def is_benign_telegram_error(exc: BaseException) -> bool:
     A missing
     permission is not benign; see :func:`is_permanent_telegram_error`.
     """
+    # * OFFSET_PEER_ID_INVALID normalizes to a string containing PEERIDINVALID
+    # * but is a pagination error, not a no-op moderation target.
+    if isinstance(exc, OffsetPeerIdInvalid):
+        return False
+    if isinstance(exc, UserIsBot):
+        return True
     if is_bad_request(exc):
         normalized = _normalize(str(exc).upper())
         for target in _BENIGN_NORMALIZED:

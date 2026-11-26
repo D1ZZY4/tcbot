@@ -18,6 +18,7 @@ from tcbot.modules.admins import (
     on_promote_role_cancel,
 )
 from tcbot.modules.helper import buttons as btn
+from tcbot.modules.helper.guards import prompt_owner_mismatch
 from tcbot.utils.i18n import t
 
 
@@ -89,6 +90,25 @@ def test_owner_cancel_collapses_prompt(
     query = _FakeQuery("demote_cancel:7:1")
     asyncio.run(on_demote_cancel(_update(query, 1), None))  # type: ignore[arg-type]
     assert query.edits != []
+
+
+def test_a_tap_without_a_proven_user_is_not_the_prompt_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing identity must fail closed instead of inheriting the owner id."""
+
+    async def _locale(_ctx: Any) -> str:
+        return "en-US"
+
+    monkeypatch.setattr("tcbot.modules.helper.guards.locale_for_update", _locale)
+    query = _FakeQuery("demote_cancel:7:1")
+    ctx = type("Ctx", (), {"effective_user": None})()
+    assert asyncio.run(
+        prompt_owner_mismatch(
+            query, ctx, min_parts=2, key="admins.error.not_prompt_owner"
+        )
+    )
+    assert query.edits == []
 
 
 def test_legacy_cancel_keeps_working(monkeypatch: pytest.MonkeyPatch) -> None:

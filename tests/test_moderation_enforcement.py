@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -28,6 +29,11 @@ def _target_is_not_owner(monkeypatch: pytest.MonkeyPatch) -> None:
         return False
 
     monkeypatch.setattr(db.users_roles, "is_owner", _is_owner)
+
+    async def _no_demote(*args: Any, **kwargs: Any) -> str | None:
+        return None
+
+    monkeypatch.setattr(moderation_enforcement, "demote_before_enforcement", _no_demote)
 
 
 class _FakeBot:
@@ -148,6 +154,185 @@ def test_an_active_ban_apply_is_delivered(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert bot.banned == [(-100, 9)]
     assert completed == [(3, {"status": "succeeded", "outcome": "succeeded"})]
+
+
+def test_partial_durable_delivery_reaches_the_error_channel(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A failed group in a queued run is an operator-visible incident."""
+    with caplog.at_level(
+        logging.ERROR,
+        logger="tcbot.modules.helper.pipelines.moderation_enforcement",
+    ):
+        moderation_enforcement.report_partial_failure(
+            action="Mute",
+            target_id=9,
+            failed=2,
+            total=5,
+            run_id=77,
+            error_detail="CHAT_ADMIN_REQUIRED",
+        )
+    assert "2/5" in caplog.text
+    assert "CHAT_ADMIN_REQUIRED" in caplog.text
+
+
+def test_a_fully_delivered_run_is_not_an_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(
+        logging.ERROR,
+        logger="tcbot.modules.helper.pipelines.moderation_enforcement",
+    ):
+        moderation_enforcement.report_partial_failure(
+            action="Ban", target_id=9, failed=0, total=5, run_id=77
+        )
+    assert caplog.text == ""
+
+
+def test_a_deferred_ban_demotes_a_staff_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A queued apply strips a role gained after the decision was filed."""
+    demoted: list[tuple[int, str]] = []
+
+    async def _demote(
+        bot: Any,
+        target_id: int,
+        target_fname: str,
+        *,
+        trigger: str,
+        **kwargs: Any,
+    ) -> str | None:
+        demoted.append((target_id, trigger))
+        return "admin"
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [{"id": 1, "action_id": 2, "operation": "apply"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "ban",
+            "action_status": "active",
+            "operation": "apply",
+            "expires_at": None,
+        }
+
+    async def _targets(run_id: int, limit: int = 100) -> list[dict[str, object]]:
+        return [{"id": 3, "chat_id": -100, "attempt_count": 0}]
+
+    async def _complete(target_id: int, **kwargs: Any) -> None:
+        return None
+
+    async def _fan_out(coros: Any) -> list[object]:
+        for coro in coros:
+            await coro
+        return [None]
+
+    monkeypatch.setattr(moderation_enforcement, "demote_before_enforcement", _demote)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _targets)
+    monkeypatch.setattr(enforcement_ledger, "complete_target", _complete)
+    monkeypatch.setattr(moderation_enforcement, "fan_out", _fan_out)
+    bot = _FakeBot()
+
+    asyncio.run(moderation_enforcement.run_once(bot))  # type: ignore[arg-type]
+
+    assert demoted == [(9, "ban")]
+    assert bot.banned == [(-100, 9)]
+
+
+def test_a_deferred_ban_without_a_deliverable_target_keeps_the_role(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run whose groups all disconnected must not strip the target's role."""
+    demoted: list[int] = []
+
+    async def _demote(*args: Any, **kwargs: Any) -> str | None:
+        demoted.append(1)
+        return "admin"
+
+    async def _requeue(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _claim_runs(limit: int = 10) -> list[dict[str, object]]:
+        return [{"id": 1, "action_id": 2, "operation": "apply"}]
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "ban",
+            "action_status": "active",
+            "operation": "apply",
+            "expires_at": None,
+            "has_claimable_target": False,
+        }
+
+    async def _no_target(*args: Any, **kwargs: Any) -> list[dict[str, object]]:
+        return []
+
+    async def _empty_run(run_id: int) -> None:
+        return None
+
+    monkeypatch.setattr(moderation_enforcement, "demote_before_enforcement", _demote)
+    monkeypatch.setattr(enforcement_ledger, "requeue_stale_runs", _requeue)
+    monkeypatch.setattr(enforcement_ledger, "claim_runs", _claim_runs)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _no_target)
+    monkeypatch.setattr(enforcement_ledger, "complete_empty_run", _empty_run)
+    bot = _FakeBot()
+
+    asyncio.run(moderation_enforcement.run_once(bot))  # type: ignore[arg-type]
+
+    assert demoted == []
+    assert bot.banned == []
+
+
+@pytest.mark.asyncio
+async def test_a_deferred_apply_cancels_when_the_target_became_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A late promotion to Owner still refuses the queued enforcement."""
+    cancelled: list[str] = []
+
+    async def _demote(*args: Any, **kwargs: Any) -> str:
+        return "owner"
+
+    async def _claim_run(run_id: int) -> dict[str, object] | None:
+        return {"id": 1, "action_id": 2, "operation": "apply"}
+
+    async def _load(run_id: int) -> dict[str, object]:
+        return {
+            "target_user_id": 9,
+            "action_type": "mute",
+            "action_status": "active",
+            "operation": "apply",
+            "expires_at": None,
+        }
+
+    async def _no_target(*args: Any, **kwargs: Any) -> list[dict[str, object]]:
+        raise AssertionError("no enforcement target may be claimed")
+
+    async def _cancel(run_id: int, *, error_detail: str) -> None:
+        cancelled.append(error_detail)
+
+    monkeypatch.setattr(moderation_enforcement, "demote_before_enforcement", _demote)
+    monkeypatch.setattr(enforcement_ledger, "claim_run", _claim_run)
+    monkeypatch.setattr(enforcement_ledger, "load_run_action", _load)
+    monkeypatch.setattr(enforcement_ledger, "claim_targets", _no_target)
+    monkeypatch.setattr(enforcement_ledger, "cancel_run", _cancel)
+
+    bot = _FakeBot()
+    await moderation_enforcement.deliver_queued_run(bot, 1)  # type: ignore[arg-type]
+
+    assert bot.restricted == []
+    assert len(cancelled) == 1
+    assert "Owner" in cancelled[0]
 
 
 @pytest.mark.asyncio

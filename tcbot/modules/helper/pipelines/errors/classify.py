@@ -34,7 +34,10 @@ log = get_logger("tcbot.error_reporter")
 # * Log-noise patterns come from log_execution wrapping every handler.
 _BENIGN_PATTERNS: tuple[str, ...] = (
     "message is not modified",
+    "message_not_modified",  # Kurigram's real RPC code
     "message to edit not found",
+    "message_to_edit_not_found",
+    "message_id_invalid",
     "message to delete not found",
     "query is too old",
     "message is too old",
@@ -44,6 +47,10 @@ _BENIGN_PATTERNS: tuple[str, ...] = (
 # * re-raise. Match its whole shape so an unrelated error that merely mentions
 # * elapsed time is still reported.
 _LOG_NOISE_RE = re.compile(r"\[[^]]+\] uid=\S+ raised after [\d.]+ms")
+# * Durable delivery records store the Telegram refusal as text and rebuild an
+# * exception for the operator report. Without this match, every missing-right
+# * refusal is labelled a code bug and tells the operator to read the source.
+_TELEGRAM_RPC_TEXT_RE = re.compile(r"\[\s*(\d{3})\s+([A-Z][A-Z0-9_]*)\s*\]")
 
 
 def _benign(exc: BaseException | None) -> bool:
@@ -129,6 +136,23 @@ def _action_hint(label: str) -> str:
     return "Check the message and location above."
 
 
+def _stored_telegram_label(exc: BaseException) -> str | None:
+    """Classify a rebuilt exception that carries a Telegram RPC refusal as text."""
+    match = _TELEGRAM_RPC_TEXT_RE.search(str(exc))
+    if match is None:
+        return None
+    code = int(match.group(1))
+    if code == 403:
+        return "[!] Telegram Forbidden"
+    if code == 429:
+        return "[~] Rate Limit: Flood Wait"
+    if code == 401:
+        return "[!] Telegram Invalid Token"
+    if code == 400:
+        return "[!] Telegram Bad Request"
+    return "[!] Telegram API Error"
+
+
 def _is_telegram_timeout(exc: BaseException) -> bool:
     """Match Kurigram's RPC timeout without claiming builtin timeouts.
 
@@ -158,6 +182,9 @@ def _classify(exc: BaseException | None) -> str:
         return "[~] Polling Conflict"
     if is_invalid_button_user(exc):
         return "[!] Telegram User Profile Button Invalid"
+    stored_label = _stored_telegram_label(exc)
+    if stored_label is not None:
+        return stored_label
     if is_bad_request(exc):
         return "[!] Telegram Bad Request"
     if is_forbidden(exc):
@@ -201,4 +228,5 @@ __all__ = [
     "_is_telegram_timeout",
     "_log_noise",
     "_owner_only",
+    "_stored_telegram_label",
 ]

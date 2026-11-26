@@ -47,7 +47,7 @@ You will be notified by the bot either way."""
 # Runtime strings for appeal submission (appeal_submit_flow.py).
 # All send plain (PM replies, alerts, plain edits): plain=True.
 # Placeholders: {hours}/{remaining}/{max} ints, {community}/{handle}
-# raw config values, {log_link} a complete example message URL.
+# raw config values, {log_link} a preformatted link to the ban log message.
 
 [submit]
 not_private = "Please open this link in my private messages."
@@ -60,7 +60,7 @@ unexpected = "Please send your appeal message, or press Cancel."
 session_ended = "Appeal session ended."
 too_long = "Your appeal message is too long (max {max} characters). Please shorten it and try again."
 session_expired = "Session expired - please start the appeal again."
-invalid_log = "Invalid log link. Please check and try again."
+invalid_log = "Invalid log link. Quote the number from your ban log: {log_link}"
 submitted = "Your appeal has been submitted. The team will review it shortly - we'll get back to you."
 delivery_failed = "We could not deliver your appeal to the moderation team right now. Please try again in a few minutes; if this keeps happening, contact a staff member directly."
 

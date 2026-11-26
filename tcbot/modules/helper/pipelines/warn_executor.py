@@ -307,6 +307,25 @@ async def execute_warn(
         ban_id: str | None = None
         ban_run_id: int | None = None
         if not already_banned:
+            # ! CRITICAL: the warning is already recorded, but the federation
+            # ! ban is a second and more severe decision. The last executor
+            # ! check preceded the warning and the threshold reads, so a
+            # ! moderator demoted across those awaits must not file a ban.
+            refusal = await guards.enforcement_refusal(
+                admin_id,
+                target_id,
+                min_role="moderator",
+                action="Warn threshold ban",
+                locale=locale,
+            )
+            if refusal is not None:
+                await reply_rich(
+                    msg,
+                    refusal,
+                    log_label="Warn threshold rank-refusal before ban",
+                    parse_mode=None,
+                )
+                return
             try:
                 # * The threshold ban is taken by the bot, not by a
                 # * moderator, so it is an automated decision: the proof
@@ -392,10 +411,20 @@ async def execute_warn(
             transient = [
                 (
                     group,
-                    RuntimeError("delivery failed"),
+                    RuntimeError(
+                        str(group.get("last_error_detail") or "delivery failed")
+                    ),
                 )
                 for group in failed_targets
             ]
+            moderation_enforcement.report_partial_failure(
+                action="Warn threshold ban",
+                target_id=target_id,
+                failed=failed_count,
+                total=total_groups,
+                run_id=ban_run_id,
+                error_detail=str(transient[0][1]) if transient else None,
+            )
         else:
             ban_results = await fan_out(
                 [ctx.bot.ban_chat_member(grp["chat_id"], target_id) for grp in groups]

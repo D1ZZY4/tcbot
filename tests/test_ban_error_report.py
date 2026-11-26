@@ -59,6 +59,8 @@ async def test_a_partial_enforcement_reports_its_actual_error(
 ) -> None:
     log = _Log()
     monkeypatch.setattr(ban_executor, "log", log)
+    # * The shared runner owns the operator-facing partial-failure report.
+    monkeypatch.setattr(moderation_enforcement, "log", log)
 
     async def _refusal(*_args: Any, **_kwargs: Any) -> None:
         return None
