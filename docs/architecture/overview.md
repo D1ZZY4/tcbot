@@ -92,7 +92,7 @@ Handlers are small orchestration functions. A typical handler guards
 once with `locale_for_update`; delegates authorization to decorators and guards;
 delegates persistence to `*_db.py` helpers; delegates multi-step work to a
 domain-named pipeline module; and sends replies through the `messages` helpers
-(`reply_rich`, defined in `rich/msg.py`).
+(`reply_rich`, defined in `rich/reply_msg.py`).
 
 Decorator order is fixed: `ratelimiter()` outermost, the required authorization
 guard second, and `log_execution` innermost. Message-event handlers are exempt

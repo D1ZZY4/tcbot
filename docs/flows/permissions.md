@@ -174,13 +174,17 @@ unreachable. See [Roles](roles.md) for the demote gates.
 
 | Gate | Policy | Used by |
 |---|---|---|
-| `demote_before_enforcement` | Best effort. A lookup or demote failure is logged loudly and enforcement still runs. | Ban, kick, mute, join enforcement. |
+| `demote_before_enforcement` | Best effort. A lookup or demote failure is logged loudly and enforcement still runs. | Ban, kick, mute, join enforcement, and deferred ban/mute delivery. |
 | `demote_before_unban` | Fail closed. A failed or no-op demote while the role still resolves blocks the unban (`UnbanGate.DEMOTE_FAILED` or `UnbanGate.ROLE_SURVIVED`). | `/tcunban`, appeal approval. |
 
 The best-effort rule exists because the moderation record already exists when
 the demote runs, so a transient database failure must not block enforcement.
-Unban and appeal approval fail closed because a staff holder must never keep
-rank after a ban lifts.
+A queued apply can be delivered minutes or days after the decision, so the
+worker and the replay path run the same gate before claiming targets and still
+cancel for a target promoted to Owner in the meantime. Unban and appeal
+approval fail closed because a staff holder must never keep rank after a ban
+lifts; the appeal path re-reads the reviewer's rank before its irreversible
+demote.
 
 ## Role cache freshness
 

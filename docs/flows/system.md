@@ -24,7 +24,7 @@ flowchart TD
     GATE --> FLOW["Flow in helper/pipelines"]
     FLOW --> DB[("PostgreSQL via engine.db_call")]
     FLOW --> CACHE[("Redis L1 memory and optional L2 cache")]
-    FLOW --> RICH["rich/msg and rich/edit with InputRichMessage"]
+    FLOW --> RICH["rich send, reply and edit helpers with InputRichMessage"]
     RICH --> U
     DB --> WK["moderation_enforcement, notification_worker, scheduler"]
     WK --> U
@@ -136,7 +136,7 @@ messages, and appeals live in the community moderation tables. Durable per-group
 work lives in `moderation_enforcement_runs`, `moderation_enforcement_targets`,
 and `moderation_enforcement_attempts`.
 
-User-facing messages render through `rich/msg.py` and `rich/edit.py` using
+User-facing messages render through `rich/send_msg.py`, `rich/reply_msg.py` and `rich/edit_msg.py` using
 Kurigram's native `InputRichMessage`. Keyboards are rich buttons; cells that
 cannot be expressed as rich buttons keep their inline keyboard. Plain notices and
 callback alerts stay unparsed. No parse mode is used anywhere. Every decision

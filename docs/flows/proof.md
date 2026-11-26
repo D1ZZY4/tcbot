@@ -99,7 +99,8 @@ flowchart TD
     KIND --> CHUNK[split each kind into groups of at most 50 files]
     CHUNK --> MEDIA[wrap each file in InputRichMessageMedia]
     MEDIA --> HTML[render tg-slideshow with embedded media ids]
-    HTML --> SEND[send_rich_message with media and caption]
+    HTML --> TABLE[append metadata table block]
+    TABLE --> SEND[send_rich_message with media]
     SEND --> LAND[one ProofItem per landed rich message]
     LAND --> COUNT[expected_item_count counts rich messages attempted]
     COUNT --> UP[ProofUpload with first id link items and expected count]
@@ -114,7 +115,7 @@ id, and the slideshow HTML references it through `tg://photo`, `tg://video`, or
 that fails is logged and counted as missing, so the archive records a partial
 batch instead of hiding lost evidence.
 
-Every slideshow carries the identifying caption. `ProofItem` records the landed
+Every slideshow is followed by its identifying metadata table. `ProofItem` records the landed
 rich message id, the first file's media metadata, and the source ids.
 `to_document()` converts it to the `EvidenceItemDoc` shape stored in the
 archive. `ProofUpload.landed` is true when at least one rich message reached
@@ -160,16 +161,18 @@ Either the decision and its proof both commit, or neither does.
 | `upload_proof_media` | `proof_post.py` | Upload owner and `ProofUpload`. |
 | `upload_proof_items` | `proof_post.py` | Rich slideshow chunking and embedded media. |
 | `rich.media.slideshow` | `rich/media.py` | Slideshow markup referencing embedded media ids. |
-| `rich.msg.send_rich` | `rich/msg.py` | Rich transport used for every proof artifact. |
+| `rich.send_msg.send_rich` | `rich/send_msg.py` | Rich transport used for every proof artifact. |
 | `ProofSession`, `proof_sessions` | `proof_session.py` | Ban session storage and drain. |
 | `_flush_session` | `ban_session.py` | Debounce timer and claim. |
 | `demote_before_enforcement` | `demote_actions.py` | Runs after proof before enforcement. |
 | `archive_proof` | `moderation_db.py` | Durable evidence rows. |
 
-The proof caption is built by `messages.proof_caption_new()` for new decisions
+The proof metadata is built by `messages.proof_caption_new()` for new decisions
 and `messages.proof_caption_update()` for re-bans, where it carries the previous
-proof link. It is rendered inside the slideshow's `figcaption`, not as a plain
-media caption. See [Transport](transport.md) for the rich send path.
+proof link. Both return a compact Field/Value rich table; it follows the
+slideshow as a separate block in the same message, because a Telegram caption
+only accepts inline text and cannot hold a table. See [Transport](transport.md)
+for the rich send path.
 
 ## Edge cases
 

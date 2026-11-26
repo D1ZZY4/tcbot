@@ -14,9 +14,9 @@ A button is built as a Kurigram `InlineKeyboardButton` and converted to a rich
 
 | Keyword | Action type | Notes |
 |---|---|---|
-| `data` | `callback_data` | At most 64 bytes. |
+| `data` | `callback_data` | 1-64 UTF-8 bytes. |
 | `url` | `url` | Public HTTPS link. |
-| `copy` | `copy_text` | Copies text on tap. |
+| `copy` | `copy_text` | 1-256 characters, copied on tap. |
 | `web_app` | `web_app` | Private chats only. |
 | `login_url` | `login_url` | Optional forward text and write access. |
 | `switch_inline_query` | `switch_inline_query` | Opens inline mode. |
@@ -26,12 +26,22 @@ A button is built as a Kurigram `InlineKeyboardButton` and converted to a rich
 
 Convenience wrappers in `rich/button.py` (`callback_button`, `url_button`,
 `copy_button`, `web_app_button`, `login_button`, `switch_button`,
-`disabled_button`) are thin aliases over `button()`.
+`switch_current_button`, `switch_chosen_button`, `disabled_button`) are thin
+aliases over `button()`. `mention_button()` is the exception: it emits a URL
+button for a shape-valid username and escaped plain text otherwise.
 
 Style names map to API values: `default` to none, `blue` to `primary`, `green`
-to `success`, `red` to `danger`, and `link` to `link`. Rows hold at most eight
-buttons, and an unknown style or alignment is ignored. A single-button row is
-the supported way to give a button a whole row.
+to `success`, `red` to `danger`, and `link` to `link`. The `link` style is valid
+only for callback buttons; direct `button()` calls reject it for other actions
+and keyboard conversion drops it. Names are case-insensitive. Rows hold at
+most eight buttons and come from `button_row()`/`button_rows()`; an unknown
+alignment is dropped. In keyboard conversion an unknown style is dropped too,
+but a direct `button()` caller should pass only the names above. A single-button
+row is the supported way to give a button a whole row.
+
+`button_row(buttons, *, align=None)` renders one row and raises `ValueError`
+outside the 1-8 range. `button_rows(rows, *, align=None)` renders several rows
+with the same alignment and drops empty rows.
 
 ### Color semantics
 
@@ -46,13 +56,19 @@ Older clients ignore the style field, so color is purely additive.
 
 ### Inline keyboard fallback
 
-`buttons_from_markup(reply_markup)` is all-or-nothing: one cell that cannot map keeps
-the whole keyboard inline. Every cell action above has a rich equivalent, so a
-cell fails to map only when its `callback_data` exceeds 64 bytes, its text is not
-a string, or it carries an action outside the mapped set. A cell with no action
-is rendered as a disabled rich button. Payloads using `blocks` instead of `html`
-are not embedded. This is a transport fallback only; there is no parse-mode send
-path.
+`buttons_from_markup(reply_markup)` is all-or-nothing for real cells: one cell
+that cannot map keeps the whole keyboard inline. Empty navigation rows from
+single-page keyboards are dropped losslessly, so they do not trigger the
+fallback. Every cell action above has a rich equivalent, so a cell fails to map
+only when its `callback_data` exceeds 64 bytes, its text is not a string, or it
+carries an action outside the mapped set. A cell with no action is rendered as a
+disabled rich button. Payloads using `blocks` instead of `html` are not
+embedded. This is a markup fallback on the same rich message, never a
+non-rich transport; there is no parse-mode send path.
+
+`table_cell(button("Go", data="go"), raw=True)` places an inline rich button
+inside a table cell. A raw cell is the explicit opt-in that keeps trusted button
+markup verbatim while every other cell stays escaped.
 
 ### Symbol vocabulary
 

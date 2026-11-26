@@ -7,7 +7,7 @@ state constants are in [reference/callbacks.md](../reference/callbacks.md).
 
 ## Payload shape
 
-`modules/helper/rich/msg.py` owns payload assembly and sends.
+`modules/helper/rich/block.py` owns payload assembly; `send_msg.py`, `reply_msg.py`, and `edit_msg.py` own the send, reply, and edit transports.
 `html_message(*blocks, rtl=False, skip_entity_detection=False, media=None)` returns a
 dictionary with `html` as the newline-joined non-empty blocks. It adds `is_rtl`,
 `skip_entity_detection`, and `media` only when supplied. `media` carries the
@@ -17,10 +17,17 @@ explicit block objects.
 
 `_message_with_buttons(message, reply_markup)` converts the markup with
 `buttons_from_markup()` and, when rows exist and `message["html"]` is a string,
-appends the rows to the HTML with a newline. It returns `(payload, embedded)`.
+appends the rows to the HTML with a newline. It returns
+`(payload, fallback_markup)`: rows embedded means the fallback is `None`; a
+non-empty keyboard that could not be converted is kept; an empty markup is
+dropped so editors can still clear an old keyboard.
 The send and edit helpers always embed convertible buttons as rich markup.
-Conversion is all-or-nothing: one unmappable cell keeps the whole keyboard as
-native inline markup instead of embedding any rich button rows.
+Conversion is all-or-nothing for real cells: one unmappable cell, a row longer
+than eight buttons, or an overlong callback keeps the whole keyboard as native
+inline markup instead of embedding any rich button rows. Empty navigation rows
+from paged keyboards are dropped losslessly before that decision. Each rich button carries exactly one
+action, with callback data limited to 1-64 bytes and copy text to 1-256
+characters, matching Kurigram's `RichMessageButton.write()`.
 
 | Field | Set by | Meaning |
 |---|---|---|
@@ -65,7 +72,7 @@ discarded with `_ = parse_mode`.
 ```mermaid
 flowchart TD
     CALL[safe_edit, safe_edit_cb or safe_edit_message] --> RICH[Native edit with rich_message payload]
-    RICH --> BAD{Text matches _IGNORED?}
+    RICH --> BAD{Dispatch edit classifier matches a benign refusal?}
     BAD -->|yes| DONE[Return silently or False]
     BAD -->|no| CATCH{catch_all enabled?}
     CATCH -->|no| RAISE[Re-raise]
@@ -79,16 +86,17 @@ flowchart TD
 | `safe_edit_cb` | `safe_edit_cb(q, text, *, log_level="warning", log_label=None, catch_all=False, clear_markup=False, parse_mode=None, **kwargs)` | Edits via `q.edit_message_text(rich_message=...)`; `clear_markup` strips old buttons. |
 | `safe_edit_message` | `safe_edit_message(bot, chat_id, message_id, text, *, log_level="warning", log_label=None, catch_all=False, clear_markup=False, parse_mode=None, **kwargs)` | Edits by id via `bot.edit_message_text(rich_message=...)`; `clear_markup` strips old buttons. |
 | `cb_error_edit` | `cb_error_edit(q, text, *, log_label, parse_mode=None, log_level="warning")` | `safe_edit_cb` with `catch_all=True`; it does not clear the keyboard. Callers that need removal pass `clear_markup=True` or call `clear_markup_cb`. |
-| `clear_markup` | `clear_markup(bot, chat_id, message_id)` | Removes the inline keyboard by chat and message id; keeps `_IGNORED` BadRequests silent. |
+| `clear_markup` | `clear_markup(bot, chat_id, message_id)` | Removes the inline keyboard by chat and message id; keeps benign gone-target refusals silent. |
 | `clear_markup_cb` | `clear_markup_cb(q)` | Callback-query form of the same keyboard-only edit. |
 
-`_IGNORED` contains `"message is not modified"`, `"message to edit not found"`,
-and `"chat not found"`. `_edit_via()` and `safe_edit_message()` return `True`
-on success or an unchanged message, and `False` when the target message is
-gone so a caller that owns a durable slot can send a fresh post instead of
-re-editing a dead id. Unexpected exceptions are logged and return `False`, or are
-re-raised when `catch_all` is false. `parse_mode` is accepted and ignored by the
-safe helpers.
+`utils/dispatch.py` owns the edit-error classifiers. They normalize Telegram
+RPC codes such as `MESSAGE_NOT_MODIFIED` and `MESSAGE_ID_INVALID` as well as the
+older spaced prose, so a real no-op edit is treated as success. `_edit_via()`
+and `safe_edit_message()` return `True` on success or an unchanged message, and
+`False` when the target message is gone so a caller that owns a durable slot can
+send a fresh post instead of re-editing a dead id. Unexpected exceptions are
+logged and return `False`, or are re-raised when `catch_all` is false.
+`parse_mode` is accepted and ignored by the safe helpers.
 
 ## Inline keyboard to rich buttons
 
@@ -138,6 +146,12 @@ those Kurigram cell types, so normal keyboards ship as rich buttons.
 | Payload has `blocks` rather than `html` | `_message_with_buttons()` does not embed; `reply_markup` stays inline. |
 | No markup at all | No buttons in either representation. |
 
+A button is inline rich text, so it can also live inside a table cell:
+`table_cell(button(...), raw=True)` keeps the trusted button markup verbatim in
+one cell. Block-level `<tg-button-row>` rows stay outside the table, appended
+after the content with a divider. Both forms ship in the same
+`InputRichMessage`; no separate inline keyboard is needed.
+
 Accepted Kurigram styles are `primary`, `success`, `danger`, and `link`. Friendly
 names map as `default` to empty, `blue` to `primary`, `green` to `success`, and
 `red` to `danger`. Rows hold up to eight buttons; an unknown alignment is
@@ -148,14 +162,14 @@ ignored. Which style each button uses is a semantic decision documented in
 
 Rich HTML collapses plain newline characters, so a catalog string or a view
 built with `"\n".join(lines)` must be grouped into real blocks before sending.
-`rich/text.py::blocks()` owns that conversion:
+`rich/block.py::blocks()` owns that conversion:
 
 | Input lines | Rich output |
 |---|---|
-| Consecutive `` `/command` `` lines, optionally followed by a second `` `/alias` `` code span | A two-column table with Command and Alias, or Details for rows with no alias. |
-| `- ...` | A rich bullet list. |
+| Consecutive `` `/command` `` lines, optionally followed by a second `` `/alias` `` code span | A two-column table whose second header is Alias if any row carries an alias, otherwise Details. |
+| `- ...` or `* ...` | A rich bullet list. |
 | `1. ...` | A rich ordered list. |
-| Other lines, separated by blank lines | Paragraphs. |
+| Any other line | Its own `<p>` paragraph. Blank lines only flush a list or command group. |
 | Already-structured markup | Returned verbatim, so owning renderers keep their tables and lists. |
 | A single plain line | Returned verbatim, preserving short notices exactly. |
 
@@ -169,6 +183,31 @@ mentions and code spans stay live. That keeps identity, reason, ban id, and
 date scannable without a run of bullets. The appeal instruction prompt uses an
 `h2` heading, a rich checklist for its three required sections, and a
 preformatted example block.
+
+## Tables and lists
+
+`rich/table.py::table(headers, rows, ...)` escapes each cell by default. Use
+`raw_cells=True` only when every cell is trusted inline markup, or set `raw=True`
+on one `table_cell()` to keep just that cell's markup. `table_cell()` carries
+`header`, `colspan`, `rowspan`, `align` (`left`/`center`/`right`), `valign`
+(`top`/`middle`/`bottom`), and `raw`; spans are emitted only above one and
+non-positive spans are rejected. `title` becomes a `<caption>` inside the table,
+not an outer heading. A headerless table starts directly with its data rows.
+Telegram allows at most 20 columns per table, counting colspans; `table()` now
+rejects an over-wide grid before it can fail the whole message.
+
+`rich/list.py` owns `bullet_list()`, `ordered_list()`, `ordered_item()`,
+`checklist()`, and `details(summary, body, open=False)`. Ordered markers are
+limited to `a`, `A`, `i`, `I`, and `1`; unsupported markers are dropped.
+`checklist()` takes `(label, checked)` pairs and is display-only, not an
+interactive control. List items are trusted markup: escape user text first and
+use inline formatting only, never a nested block. Whitespace-only items are
+skipped.
+
+The verbatim rule of `blocks()` is fragment-wide: one structured tag such as a
+`<hr/>` divider returns the whole string untouched, so assemble real `<p>` and
+list blocks instead when a fragment already contains a divider. Structured
+lists with attributes and bare media are recognized as blocks too.
 
 ## Callback answers
 
@@ -184,7 +223,7 @@ preformatted example block.
 Callback answers are plain text and have no rich equivalent. Handlers call
 `await q.answer()` before visible work; the shared answer helpers are used where
 the call site needs either a silent ack or an alert. `callback_args`,
-`callback_args_optional`, and `callback_numbers` in `rich/edit.py` split `q.data`
+`callback_args_optional`, and `callback_numbers` in `rich/edit_msg.py` split `q.data`
 on `:` and return `None` on malformed payloads.
 
 ## Parse mode
@@ -206,13 +245,16 @@ Rich HTML escaping for button labels and attributes is `esc()` in
 `rich/style.py`, backed by `html.escape`. The richer formatting primitives live in `rich/formats.py`
 (`heading`, `paragraph`, `quote` with an optional author, `pull_quote`,
 `highlight` with an optional author, `code`, `pre`, `code_block`, `footnote`,
-`footnote_ref`, `divider`, `footer`, `anchor`, `math`, `math_block`, `time_tag`,
-`emoji`), `rich/style.py` (`bold`, `italic`, `underline`, `strike`, `spoiler`,
-`subscript`, `superscript`), `rich/list.py` (`bullet_list`, `ordered_list` with
-`start`/`marker`/`reversed_order`, `checklist`, `details`), `rich/table.py`
-(`table`), and `rich/media.py` (`photo`, `video`, `slideshow`, `collage`).
-`rich/text.py` exposes `style(text)`, a verbatim passthrough, and `blocks()`,
-which converts a rendered multiline fragment into rich block markup. Rich
+`footnote_ref`, `divider`, `footer`, `anchor`, `math`, `math_block`, `map_block`,
+`time_tag`, `emoji`), `rich/style.py` (`bold`, `italic`, `underline`, `strike`,
+`spoiler`, `subscript`, `superscript`), `rich/link.py` (`link`, `email_link`,
+`phone_link`), `rich/list.py` (`bullet_list`, `ordered_list` with
+`start`/`marker`/`reversed_order` and per-item `ordered_item` labels, `checklist`,
+`details`), `rich/table.py` (`table`), and `rich/media.py` (`photo`, `video`,
+`audio`, `document`, `slideshow`, `collage`).
+`rich/text.py` exposes `style(text)`, a verbatim passthrough. `rich/block.py`
+owns `html_message`, `blocks_message` and `blocks()`, which converts a rendered
+multiline fragment into rich block markup. Rich
 messages carry their own markup, so sends and edits must use the rich helpers;
 a direct Kurigram send leaves the HTML tags visible to users.
 
@@ -222,7 +264,7 @@ a direct Kurigram send leaves the HTML tags visible to users.
 `detail_field`, `field`, `code_field`, `mention_field`, `link_field`, `raw`,
 `section`, `date`, and `build`. Field entries render as compact two-column
 rich tables; `raw` keeps free-form prose and `section` inserts a divider between
-tables. `send_log(bot, text, **kwargs)` in `rich/edit.py` always posts to
+tables. `send_log(bot, text, **kwargs)` in `rich/edit_msg.py` always posts to
 `cfg.logs` (chat and thread) through `send_rich`. Error reports take the separate
 `cfg.logs_errors` path and do not use `LogBuilder`.
 
@@ -241,6 +283,8 @@ tables. `send_log(bot, text, **kwargs)` in `rich/edit.py` always posts to
 | `chat_id_to_link_id(chat_id)` | Strip the `-100` supergroup prefix for a `t.me/c/` URL. |
 | `message_link(chat_id, message_id, thread_id=None)` | `https://t.me/c/<id>/<message_id>` plus `?thread=<id>` when provided. |
 | `appeal_deep_link(bot_username, ban_id)` | `https://t.me/<username>?start=appeal_<ban_id>`, or empty when the username is unknown. |
+| `email_link(text, address)` | `<a href="mailto:...">` with an escaped label and address. |
+| `phone_link(text, number)` | `<a href="tel:...">` with an escaped label and number. |
 | `resolve(bot, chat_id)` | Public username or invite link, cached for 300 s with the shared 3 s lookup timeout (`TELEGRAM_LOOKUP_TIMEOUT`). |
 | `display(bot, chat_id)` | `resolve()` result, falling back to the numeric chat id. |
 | `forget(chat_id)`, `clear()` | Drop one cached link or every cached link. |

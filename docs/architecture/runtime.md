@@ -69,12 +69,15 @@ caplog and the Telegram error handler see records. Use a module logger rather
 than `print()`. `log_execution` binds `update_id`, `user_id`, and `chat_id` to
 each line until the handler returns.
 
-`errors/classify.py` classifies exceptions, suppresses benign and transient ones, while `errors/report.py` owns dedupe, throttling, and delivery
-scrubs credential-shaped text and exact configured secrets, fingerprints and
+`errors/classify.py` classifies exceptions and suppresses benign and transient
+ones. `errors/report.py` owns dedupe, throttling, and delivery: it scrubs
+credential-shaped text and exact configured secrets, fingerprints and
 deduplicates incidents, and ships reports as rich payloads to the configured
 error destination or the Owner DM. Shipping is capped at 20 reports per 60
-seconds and the suppressed count is folded into a summary. Sentry is opt-in
-through `SENTRY_DSN` and uses the same redaction hook.
+seconds and the suppressed count is folded into a summary. The console
+formatter applies the same credential-shape redaction to every line and
+traceback, plus exact configured values once the reporter attaches. Sentry is
+opt-in through `SENTRY_DSN` and uses the same redaction hook.
 
 ## Supervised tasks and update processing
 

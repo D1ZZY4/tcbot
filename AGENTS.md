@@ -88,27 +88,29 @@ modules under `tcbot/modules/helper/rich/`: `formats.py` (headings, text,
 quotes, highlights, code, footnotes, dividers), `style.py` (HTML escaping and
 bold, italic, underline, strike, spoiler), `list.py` (lists and details),
 `table.py`, `button.py` (every rich button feature and inline-markup
-conversion), `link.py` (links, ID-based mentions, and Telegram URL builders), and `media.py` (photo,
-video, slideshow, collage). `text.py` exposes `style(text)`, a verbatim
-passthrough, and `blocks()`, which converts a rendered multiline fragment into
-rich block markup. `msg.py` owns the `send_rich_message` transport and `edit.py`
-owns the native rich edit helpers. Both build Kurigram `InputRichMessage`
+conversion), `link.py` (links, ID-based mentions, and Telegram URL builders),
+`media.py` (photo, video, slideshow, collage), and `text.py` (verbatim
+passthrough). `block.py` owns payload assembly and converts a rendered multiline
+fragment into rich block markup. `send_msg.py`, `reply_msg.py` and `edit_msg.py`
+own the send, reply and edit transports. They build Kurigram `InputRichMessage`
 payloads, so rich HTML is rendered by the client itself; there is no parse mode
 and no MarkdownV2 fallback. Every send and edit must go through these helpers
 so inline keyboards and rich markup stay consistent.
 
-- Route new sends and edits through `msg.py` (`send_rich`, `reply_rich`) and
-  `edit.py` (`edit_rich` and the safe-edit helpers). Every send uses a
-  `rich_message` payload. Markup cells that cannot be expressed as rich
-  buttons keep their inline representation.
+- Route new sends through `rich/send_msg.py` (`send_rich`, `send_text`) and
+  `rich/reply_msg.py` (`reply_rich`, `reply_rich_result`), and edits through
+  `rich/edit_msg.py` (`edit_rich` and the safe-edit helpers). Every send uses a
+  `rich_message` payload. Rich buttons may sit in a `<tg-button-row>` after the
+  content or inside a table cell via a raw `TableCell`; markup cells that cannot
+  be expressed as rich buttons keep their inline representation.
 - Shared markup helpers (`esc`, `bold`, `code`, `user_ref`, and the rest) and
   localized wording come from `tcbot/utils/i18n.py`.
 - Plain notices and callback alerts stay unparsed; they are not rich messages.
 - Kurigram speaks MTProto directly and is the sole Telegram framework. Its
   native rich-message API carries all HTML formatting; the same client also
-  handles commands and long-polling updates. Rich send and edit helpers live in
-  `rich/msg.py` and `rich/edit.py` and are re-exported from `messages/` for
-  stable import paths.
+  handles commands and long-polling updates. Rich send, reply and edit helpers
+  live in `rich/send_msg.py`, `rich/reply_msg.py` and `rich/edit_msg.py`; the
+  shared names remain available through `messages/` for stable import paths.
 
 ## Autonomous Engineering Loop
 
@@ -241,10 +243,12 @@ Current stack:
 │   │   │   │   ├── rules.py         Rules rendering, hashing, and selected summaries
 │   │   │   │   └── replies.py       Localized reply functions and HelpEntry shape
 │   │   │   ├── rich/           Rich HTML blocks, links, buttons, and send/edit transports
+│   │   │   │   ├── block.py        Payload assembly and block conversion
 │   │   │   │   ├── button.py       Rich buttons and inline-markup conversion
+│   │   │   │   ├── edit_msg.py     Safe-edit transport and callback helpers
 │   │   │   │   ├── link.py         Links, mentions, and Telegram URL builders
-│   │   │   │   ├── msg.py          Rich send transport
-│   │   │   │   └── edit.py         Safe-edit transport helpers
+│   │   │   │   ├── reply_msg.py    Rich reply transport
+│   │   │   │   └── send_msg.py     Rich send transport
 │   │   │   ├── ban_info.py    Shared ban-detail builder for /check and /checkme
 │   │   │   └── scope.py       Per-conversation payload scope for the moderation flows
 │   │   ├── bans.py           /tcban command
@@ -278,6 +282,7 @@ Current stack:
 │       ├── metrics.py         Runtime metrics counters
 │       ├── pagination.py      Page arithmetic (clamp_page) for paged views
 │       ├── prefixes.py        Command prefix resolution
+│       ├── redaction.py       Credential-shape redaction shared by console and reports
 │       ├── secrets.py         Constant-time secret comparison for inbound credentials
 │       ├── tasks.py           Background task lifecycle owner (TaskTracker)
 │       ├── time_and_date.py    Central clock: UTC store/display + measure + durations
