@@ -154,6 +154,14 @@ def test_the_outbox_downgrade_removes_its_retention_policy() -> None:
     )
 
 
+def test_the_schema_identifier_guard_accepts_scratch_names() -> None:
+    """Dedicated test schemas are plain identifiers like deployment ones."""
+    assert migrations.is_safe_schema("tcbot_migration_check_gw0") is True
+    assert migrations.is_safe_schema("development") is True
+    assert migrations.is_safe_schema('bad"; DROP SCHEMA public') is False
+    assert migrations.is_safe_schema("1migration") is False
+
+
 def test_the_bootstrap_generator_refuses_to_overwrite_the_first_revision(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:

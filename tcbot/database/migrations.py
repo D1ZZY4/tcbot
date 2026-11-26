@@ -43,6 +43,16 @@ _MIGRATION_CONNECT_TIMEOUT_S: int = 10
 _SCHEMA_PATTERN: re.Pattern[str] = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 
+def is_safe_schema(schema: str) -> bool:
+    """Return True when *schema* is a plain PostgreSQL identifier.
+
+    The migration environment uses this for an explicitly configured scratch
+    schema; deployment configuration is still restricted to the three project
+    schemas by the config loader.
+    """
+    return bool(_SCHEMA_PATTERN.fullmatch(schema))
+
+
 def set_database_url(config: AlembicConfig, database_url: str) -> None:
     """Store the database URL in the Alembic config.
 

@@ -27,6 +27,7 @@ from tcbot.database.base import metadata  # noqa: E402
 from tcbot.database.connection_options import TIMEZONE_OPTION  # noqa: E402
 from tcbot.database.migrations import (  # noqa: E402
     ensure_schema,
+    is_safe_schema,
     set_database_url,
     stamp_bootstrap_schema,
 )
@@ -146,11 +147,14 @@ def _db_schema() -> str:
     The deployment owns ``public``, the integration tests own ``test``,
     and a developer owns ``development``.
     """
-    raw = (
-        config.get_main_option("db_schema", "").strip()
-        or os.environ.get("DB_SCHEMA", "").strip()
-        or "public"
-    )
+    configured = config.get_main_option("db_schema", "").strip()
+    # * The integration tests pass a dedicated scratch schema through the
+    # * config. Those names are prefix-scoped so a deployment typo in
+    # * DB_SCHEMA still falls back to public instead of creating a fourth
+    # * schema. A name from the config is always checked as an identifier.
+    if configured.startswith("tcbot_") and is_safe_schema(configured):
+        return configured
+    raw = configured or os.environ.get("DB_SCHEMA", "").strip() or "public"
     if raw not in DB_SCHEMAS:
         return "public"
     return raw
