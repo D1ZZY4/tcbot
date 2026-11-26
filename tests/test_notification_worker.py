@@ -251,6 +251,86 @@ def test_cancelling_an_edit_returns_the_claim(
     ]
 
 
+def test_cancellation_after_a_landed_edit_keeps_the_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cancelled settlement must not grant a sixth attempt or re-edit a card."""
+    released: list[dict[str, Any]] = []
+    completed: list[dict[str, Any]] = []
+    task = {**_task(), "attempts": notification_worker._MAX_ATTEMPTS}
+    _wire(monkeypatch)
+    started = asyncio.Event()
+
+    async def _claim(limit: int = 10, *, retry_after: Any) -> list[dict[str, object]]:
+        return [task]
+
+    async def _blocking_complete(task_id: int, **kwargs: Any) -> None:
+        completed.append({"task_id": task_id, **kwargs})
+        started.set()
+        await asyncio.Event().wait()
+
+    async def _release(task_id: int, **kwargs: Any) -> None:
+        released.append({"task_id": task_id, **kwargs})
+
+    monkeypatch.setattr(db.notifications_db, "claim_due_tasks", _claim)
+    monkeypatch.setattr(db.notifications_db, "complete_task", _blocking_complete)
+    monkeypatch.setattr(db.notifications_db, "release_claim", _release)
+
+    async def _scenario() -> None:
+        running = asyncio.create_task(
+            notification_worker.run_once(_Bot())  # type: ignore[arg-type]
+        )
+        await asyncio.wait_for(started.wait(), timeout=1)
+        running.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await running
+
+    asyncio.run(_scenario())
+
+    assert [entry["state"] for entry in completed] == ["sent"]
+    assert released == []
+
+
+def test_cancellation_during_the_action_read_returns_the_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A shutdown before the edit must not charge a retry to the card."""
+    released: list[dict[str, Any]] = []
+    _wire(monkeypatch)
+    started = asyncio.Event()
+
+    async def _blocking_load(task_id: int) -> dict[str, object]:
+        started.set()
+        await asyncio.Event().wait()
+        raise AssertionError("the load should have been cancelled")
+
+    async def _release(task_id: int, **kwargs: Any) -> None:
+        released.append({"task_id": task_id, **kwargs})
+
+    monkeypatch.setattr(db.notifications_db, "load_task_action", _blocking_load)
+    monkeypatch.setattr(db.notifications_db, "release_claim", _release)
+
+    async def _scenario() -> None:
+        running = asyncio.create_task(
+            notification_worker.run_once(_Bot())  # type: ignore[arg-type]
+        )
+        await asyncio.wait_for(started.wait(), timeout=1)
+        running.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await running
+
+    asyncio.run(_scenario())
+
+    assert released == [
+        {
+            "task_id": 1,
+            "expected_attempts": 1,
+            "expected_message_id": 900,
+            "expected_next_retry_at": "claimed-deadline",
+        }
+    ]
+
+
 def test_an_unadmitted_claim_gives_back_its_attempt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -313,6 +393,22 @@ def test_a_worker_error_at_the_attempt_ceiling_is_terminal(
     asyncio.run(notification_worker.run_once(_Bot()))  # type: ignore[arg-type]
 
     assert completed[0]["state"] == "failed"
+
+
+def test_an_invalid_profile_button_is_settled_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deterministic rich-content refusal must not burn five retry slots."""
+    completed = _wire(monkeypatch)
+    bot = _Bot(
+        BadRequest("Telegram says: [400 BUTTON_USER_INVALID] - the user_id is invalid!")
+    )
+
+    asyncio.run(notification_worker.run_once(bot))  # type: ignore[arg-type]
+
+    assert completed[0]["state"] == "skipped"
+    assert completed[0].get("retry_after") is None
+    assert len(bot.edits) == 1
 
 
 def test_a_deleted_card_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -18,6 +18,7 @@ from tcbot.modules.helper.pipelines.errors.exceptions import (
     TRANSPORT_TIMEOUT_ERRORS,
     is_bad_request,
     is_forbidden,
+    is_invalid_button_user,
 )
 from tcbot.modules.helper.rich.edit import edit_rich
 from tcbot.modules.helper.rich.msg import html_message
@@ -192,121 +193,140 @@ async def _process_task(
 
     if task_id <= 0:
         return
-    if action_id <= 0 or chat_id == 0 or message_id <= 0:
-        # * A row with a missing identifier can never succeed, and leaving
-        # * it pending makes the claim advance its attempt count forever.
-        # * Record the terminal state so it stops consuming a worker slot.
-        await _complete(
-            state="failed",
-            error="the task carries an invalid action, chat, or message id",
-            expected_attempts=attempts,
-        )
-        return
-    action = await db.notifications_db.load_task_action(task_id)
-    if action is None or _card_is_still_decidable(action, message_id):
-        await _complete(state="skipped", expected_attempts=attempts)
-        return
-    locale = await _group_locale(chat_id)
-    text = t("appeals.review.card_closed", locale, plain=True)
-    # * In HALF_OPEN run_once reserves the sole probe before claiming, because
-    # * the claim itself already consumes a retry attempt. A reserved slot must
-    # * not reject itself here. In CLOSED a second worker could otherwise issue
-    # * a concurrent probe, so the call site still admits each edit.
-    if not probe_reserved and not _cb.telegram.try_acquire():
-        log.warning(
-            "Review-card edit for action=%d skipped: Telegram circuit is not "
-            "admitting calls.",
-            action_id,
-        )
-        # * The claim already charged an attempt. Without releasing it, a
-        # * card skipped during an outage reaches the attempt ceiling and is
-        # * recorded as failed even though Telegram never saw an edit.
-        await _release_claim()
-        return
+    # * The claim is charged before this function starts. Every exit, including
+    # * cancellation during either database read below, must settle or return it.
+    probe_acquired = False
+    edit_confirmed = False
     try:
-        async with asyncio.timeout(TELEGRAM_ACTION_TIMEOUT):
-            await edit_rich(
-                bot,
-                chat_id,
-                message_id,
-                html_message(text),
-                # * An explicit empty keyboard is required to strip the
-                # * Approve/Reject buttons from a decided card.
-                clear_markup=True,
-            )
-    except asyncio.CancelledError:
-        # * A cancellation before the edit returns means no Telegram call was
-        # * confirmed. Return the claim so repeated shutdowns cannot spend the
-        # * card's whole retry budget without an edit.
-        await _release_claim()
-        _cb.telegram.release_probe()
-        raise
-    except Exception as exc:
-        detail = str(exc).lower()
-        # * Match fan_out: only a transport failure trips the breaker. A
-        # * service answer, including RetryAfter and BadRequest, does not;
-        # * otherwise five rate-limit replies would stall every fan-out.
-        if isinstance(exc, TRANSPORT_TIMEOUT_ERRORS) or (
-            isinstance(exc, OSError) and not is_bad_request(exc)
-        ):
-            _cb.telegram.record_failure()
-        else:
-            _cb.telegram.release_probe(reached_service=True)
-        if is_forbidden(exc) or (
-            is_bad_request(exc)
-            and ("not found" in detail or "message_id_invalid" in detail)
-        ):
+        if action_id <= 0 or chat_id == 0 or message_id <= 0:
+            # * A row with a missing identifier can never succeed, and leaving
+            # * it pending makes the claim advance its attempt count forever.
+            # * Record the terminal state so it stops consuming a worker slot.
             await _complete(
-                state="skipped",
-                error=str(exc),
+                state="failed",
+                error="the task carries an invalid action, chat, or message id",
                 expected_attempts=attempts,
             )
             return
-        if is_bad_request(exc) and "not modified" in detail:
-            # * Telegram already has the closed text, so the edit landed from
-            # * the operator's point of view. A failed settlement must not
-            # * fall through to run_once's ceiling handler, which would mark
-            # * a delivered card as failed.
-            try:
-                await _complete(state="sent", expected_attempts=attempts)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                log.exception(
-                    "Review-card edit was already current for action=%d but its "
-                    "settlement write failed; leaving the task pending.",
-                    action_id,
-                )
+        action = await db.notifications_db.load_task_action(task_id)
+        if action is None or _card_is_still_decidable(action, message_id):
+            await _complete(state="skipped", expected_attempts=attempts)
             return
-        retry = attempts < _MAX_ATTEMPTS
-        log.warning(
-            "Review-card edit failed for action=%d chat=%d message=%d "
-            "(attempt %d/%d): %s",
-            action_id,
-            chat_id,
-            message_id,
-            attempts,
-            _MAX_ATTEMPTS,
-            exc,
-        )
-        await _complete(
-            state="failed" if not retry else "pending",
-            error=str(exc),
-            retry_after=_RETRY_DELAY if retry else None,
-            expected_attempts=attempts,
-        )
-        return
-    _cb.telegram.record_success()
-    try:
-        await _complete(state="sent", expected_attempts=attempts)
+        locale = await _group_locale(chat_id)
+        text = t("appeals.review.card_closed", locale, plain=True)
+        # * In HALF_OPEN run_once reserves the sole probe before claiming, because
+        # * the claim itself already consumes a retry attempt. A reserved slot must
+        # * not reject itself here. In CLOSED a second worker could otherwise issue
+        # * a concurrent probe, so the call site still admits each edit.
+        if not probe_reserved and not _cb.telegram.try_acquire():
+            log.warning(
+                "Review-card edit for action=%d skipped: Telegram circuit is not "
+                "admitting calls.",
+                action_id,
+            )
+            # * The claim already charged an attempt. Without releasing it, a
+            # * card skipped during an outage reaches the attempt ceiling and is
+            # * recorded as failed even though Telegram never saw an edit.
+            await _release_claim()
+            return
+        probe_acquired = not probe_reserved
+        try:
+            async with asyncio.timeout(TELEGRAM_ACTION_TIMEOUT):
+                await edit_rich(
+                    bot,
+                    chat_id,
+                    message_id,
+                    html_message(text),
+                    # * An explicit empty keyboard is required to strip the
+                    # * Approve/Reject buttons from a decided card.
+                    clear_markup=True,
+                )
+        except Exception as exc:
+            detail = str(exc).lower()
+            # * Match fan_out: only a transport failure trips the breaker. A
+            # * service answer, including RetryAfter and BadRequest, does not;
+            # * otherwise five rate-limit replies would stall every fan-out.
+            if isinstance(exc, TRANSPORT_TIMEOUT_ERRORS) or (
+                isinstance(exc, OSError) and not is_bad_request(exc)
+            ):
+                _cb.telegram.record_failure()
+            else:
+                _cb.telegram.release_probe(reached_service=True)
+            if (
+                is_forbidden(exc)
+                or is_invalid_button_user(exc)
+                or (
+                    is_bad_request(exc)
+                    and ("not found" in detail or "message_id_invalid" in detail)
+                )
+            ):
+                await _complete(
+                    state="skipped",
+                    error=str(exc),
+                    expected_attempts=attempts,
+                )
+                return
+            if is_bad_request(exc) and "not modified" in detail:
+                # * Telegram already has the closed text, so the edit landed from
+                # * the operator's point of view. A failed settlement must not
+                # * fall through to run_once's ceiling handler, which would mark
+                # * a delivered card as failed.
+                edit_confirmed = True
+                try:
+                    await _complete(state="sent", expected_attempts=attempts)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    log.exception(
+                        "Review-card edit was already current for action=%d but its "
+                        "settlement write failed; leaving the task pending.",
+                        action_id,
+                    )
+                return
+            retry = attempts < _MAX_ATTEMPTS
+            log.warning(
+                "Review-card edit failed for action=%d chat=%d message=%d "
+                "(attempt %d/%d): %s",
+                action_id,
+                chat_id,
+                message_id,
+                attempts,
+                _MAX_ATTEMPTS,
+                exc,
+            )
+            await _complete(
+                state="failed" if not retry else "pending",
+                error=str(exc),
+                retry_after=_RETRY_DELAY if retry else None,
+                expected_attempts=attempts,
+            )
+            return
+        _cb.telegram.record_success()
+        # * The Telegram edit has landed. From here on, cancellation belongs to
+        # * the settlement write, not to the claim: releasing it would grant a
+        # * sixth attempt and re-edit an already-closed card.
+        edit_confirmed = True
+        try:
+            await _complete(state="sent", expected_attempts=attempts)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # * The edit already landed. A failed settlement must not reach
+            # * run_once's ceiling handler, which would record a delivered card
+            # * as failed. Leave the claim pending for the next tick.
+            log.exception(
+                "Review-card edit landed for action=%d but its settlement write "
+                "failed; leaving the task pending for retry.",
+                action_id,
+            )
     except asyncio.CancelledError:
+        # * Only a cancellation before Telegram confirmed the edit returns the
+        # * claim. Once the edit landed, its settlement may still be retried;
+        # * releasing the claim would restore a spent attempt and re-edit a
+        # * card the operator already sees as closed. A probe reserved by
+        # * run_once stays owned by run_once; only a probe taken here is released.
+        if not edit_confirmed:
+            await _release_claim()
+            if probe_acquired:
+                _cb.telegram.release_probe()
         raise
-    except Exception:
-        # * The edit already landed. A failed settlement must not reach
-        # * run_once's ceiling handler, which would record a delivered card
-        # * as failed. Leave the claim pending for the next tick.
-        log.exception(
-            "Review-card edit landed for action=%d but its settlement write "
-            "failed; leaving the task pending for retry.",
-            action_id,
-        )

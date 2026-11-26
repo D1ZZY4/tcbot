@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from pyrogram import Client
-from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, User
+from pyrogram.types import CallbackQuery, User
 
 from tcbot import cfg
 from tcbot import database as db
@@ -355,7 +355,7 @@ class ApproveMixin:
                 ),
                 # * An empty markup is sent explicitly: omitting it leaves the
                 # * old Approve/Reject buttons on a card that is already decided.
-                reply_markup=InlineKeyboardMarkup([]),
+                clear_markup=True,
             ),
             _update_or_send_log(
                 bot,
@@ -507,7 +507,7 @@ class RejectMixin:
                     staff_locale,
                     admin=Safe(user_ref(admin.id, display_name(admin))),
                 ),
-                reply_markup=InlineKeyboardMarkup([]),
+                clear_markup=True,
             )
         except asyncio.CancelledError:
             raise
@@ -515,6 +515,9 @@ class RejectMixin:
             log.warning(
                 "reject_appeal review-card edit failed for ban %s: %s", ban_id, exc
             )
+            # * The decision is already committed, so an edit failure is not a
+            # * reason to abort: the durable outbox must close the live card.
+            card_ok = False
         if not card_ok:
             action_id = int(ban.get("id") or 0)
             review_id = int(ban.get("review_message_id") or 0)

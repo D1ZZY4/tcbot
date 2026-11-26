@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 
 from pyrogram import ContinuePropagation
-from pyrogram.types import InlineKeyboardMarkup, Message
+from pyrogram.types import Message
 
 from tcbot.modules.helper.context import Ctx, chat_id_of
 from tcbot.modules.helper.guards import recheck_executor_rank
@@ -27,6 +27,7 @@ from tcbot.modules.helper.pipelines.ban_session import (
     _flush_session,
     proof_sessions,
 )
+from tcbot.modules.helper.rich.edit import clear_markup
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
@@ -222,14 +223,7 @@ async def on_proof_timeout(ctx: Ctx) -> int:
             return ConversationHandler.END
     await _cancel_proof_session(scope)
     if prompt_chat and prompt_msg_id:
-        try:
-            await ctx.bot.edit_message_reply_markup(
-                chat_id=prompt_chat,
-                message_id=prompt_msg_id,
-                reply_markup=InlineKeyboardMarkup([]),
-            )
-        except Exception as exc:
-            log.debug("Ban proof-timeout markup clear failed: %s", exc)
+        await clear_markup(ctx.bot, prompt_chat, prompt_msg_id)
     if not had_state:
         return ConversationHandler.END
     if ctx.effective_message:

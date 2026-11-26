@@ -10,7 +10,7 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 from pyrogram import Client
-from pyrogram.types import InlineKeyboardMarkup, Message
+from pyrogram.types import Message
 
 from tcbot import cfg
 from tcbot import database as db
@@ -27,6 +27,7 @@ from tcbot.modules.helper.pipelines import moderation_enforcement
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
 from tcbot.modules.helper.pipelines.errors.exceptions import is_chat_admin_required
 from tcbot.modules.helper.pipelines.proof_post import upload_proof_media
+from tcbot.modules.helper.rich.edit import clear_markup
 from tcbot.utils.dispatch import (
     fan_out,
     summarize_fanout,
@@ -564,11 +565,7 @@ async def execute_ban(bot: Client, msgs: list[Message], meta: dict[str, Any]) ->
             safe_edit_message(bot, prompt_chat_id, prompt_msg_id, summary),
             db.users_cache.upsert_user(target_id, None, target_fname),
             messages.send_text(bot, target_id, _pm_text, reply_markup=_pm_btn),
-            bot.edit_message_reply_markup(
-                chat_id=prompt_chat_id,
-                message_id=prompt_msg_id,
-                reply_markup=InlineKeyboardMarkup([]),
-            ),
+            clear_markup(bot, prompt_chat_id, prompt_msg_id),
             return_exceptions=True,
         )
         throw_if_cancelled((edit_result, upsert_result, pm_result, markup_result))

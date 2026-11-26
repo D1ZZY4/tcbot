@@ -120,6 +120,7 @@ async def safe_edit(
     log_level: str = "warning",
     log_label: str | None = None,
     catch_all: bool = False,
+    clear_markup: bool = False,
     parse_mode: Any = None,
     **kwargs: Any,
 ) -> None:
@@ -130,6 +131,8 @@ async def safe_edit(
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
+    if clear_markup:
+        extra["reply_markup"] = InlineKeyboardMarkup([])
     await _edit_via(
         msg.edit_text(
             rich_message=_input_rich(payload),
@@ -149,6 +152,7 @@ async def safe_edit_cb(
     log_level: str = "warning",
     log_label: str | None = None,
     catch_all: bool = False,
+    clear_markup: bool = False,
     parse_mode: Any = None,
     **kwargs: Any,
 ) -> bool:
@@ -159,6 +163,8 @@ async def safe_edit_cb(
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
+    if clear_markup:
+        extra["reply_markup"] = InlineKeyboardMarkup([])
     return await _edit_via(
         q.edit_message_text(
             rich_message=_input_rich(payload),
@@ -180,6 +186,7 @@ async def safe_edit_message(
     log_level: str = "warning",
     log_label: str | None = None,
     catch_all: bool = False,
+    clear_markup: bool = False,
     parse_mode: Any = None,
     **kwargs: Any,
 ) -> bool:
@@ -192,6 +199,8 @@ async def safe_edit_message(
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
+    if clear_markup:
+        extra["reply_markup"] = InlineKeyboardMarkup([])
     return await _edit_via(
         bot.edit_message_text(
             chat_id,
@@ -204,6 +213,20 @@ async def safe_edit_message(
         catch_all=catch_all,
         default_msg="message edit failed: %s",
     )
+
+
+async def clear_markup(bot: Client, chat_id: int | str, message_id: int) -> None:
+    """Remove the inline keyboard from a message identified by chat and id."""
+    try:
+        await bot.edit_message_reply_markup(
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=InlineKeyboardMarkup([]),
+        )
+    except Exception as exc:
+        if any(i in str(exc).lower() for i in _IGNORED):
+            return
+        log.warning("clear markup failed: %s", exc)
 
 
 async def clear_markup_cb(q: CallbackQuery) -> None:
@@ -347,6 +370,7 @@ __all__ = [
     "callback_text",
     "callback_text_of",
     "cb_error_edit",
+    "clear_markup",
     "clear_markup_cb",
     "edit_rich",
     "safe_edit",
