@@ -8,10 +8,12 @@ state constants are in [reference/callbacks.md](../reference/callbacks.md).
 ## Payload shape
 
 `modules/helper/rich/msg.py` owns payload assembly and sends.
-`html_message(*blocks, rtl=False, skip_entity_detection=False)` returns a
-dictionary with `html` as the newline-joined non-empty blocks. It adds `is_rtl`
-and `skip_entity_detection` only when requested. `blocks_message(blocks)` returns
-`{"blocks": blocks}` for callers that supply explicit block objects.
+`html_message(*blocks, rtl=False, skip_entity_detection=False, media=None)` returns a
+dictionary with `html` as the newline-joined non-empty blocks. It adds `is_rtl`,
+`skip_entity_detection`, and `media` only when supplied. `media` carries the
+`InputRichMessageMedia` objects referenced by `tg://` links in the HTML.
+`blocks_message(blocks)` returns `{"blocks": blocks}` for callers that supply
+explicit block objects.
 
 `_message_with_buttons(message, reply_markup)` converts the markup with
 `buttons_from_markup()` and, when rows exist and `message["html"]` is a string,
@@ -25,6 +27,7 @@ native inline markup instead of embedding any rich button rows.
 | `html` | `html_message`, `_message_with_buttons` | Newline-joined rich HTML, including any converted `<tg-button-row>` blocks. |
 | `is_rtl` | `html_message(rtl=True)` | Right-to-left layout hint. |
 | `skip_entity_detection` | `html_message(skip_entity_detection=True)` | Disable automatic entity detection. |
+| `media` | `html_message(..., media=[...])` | Embedded media referenced by `tg://photo|video|document|audio?id=` links. |
 | `blocks` | `blocks_message(blocks)` | Explicit block payload; buttons are not embedded into it. |
 | `rich_message` | `send_rich`, `edit_rich` | API key carrying the payload above. |
 | `reply_markup` | `send_rich`, `edit_rich` | Inline keyboard kept as fallback when conversion did not embed it. |
@@ -48,7 +51,7 @@ flowchart TD
 |---|---|---|
 | `send_rich` | `send_rich(bot, chat_id, message, *, reply_markup=None, message_thread_id=None, disable_notification=None, reply_to_message_id=None)` | `Message` |
 | `reply_rich` | `reply_rich(msg, text, *, log_label="reply", parse_mode=None, **kwargs)` | `None` |
-| `html_message` | `html_message(*blocks, rtl=False, skip_entity_detection=False)` | payload dictionary |
+| `html_message` | `html_message(*blocks, rtl=False, skip_entity_detection=False, media=None)` | payload dictionary; `media` is forwarded to `InputRichMessage` for embedded files |
 | `blocks_message` | `blocks_message(blocks)` | payload dictionary |
 
 `reply_rich` is the single fire-and-forget reply owner for commands and flows. It
@@ -72,11 +75,12 @@ flowchart TD
 | Helper | Signature summary | Notes |
 |---|---|---|
 | `edit_rich` | `edit_rich(bot, chat_id, message_id, message, *, reply_markup=None, clear_markup=False)` | Calls `bot.edit_message_text(..., rich_message=InputRichMessage(...))` and returns the edited `Message`. `clear_markup` forwards an empty keyboard so decided buttons are stripped. |
-| `safe_edit` | `safe_edit(msg, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits via `msg.edit_text(rich_message=...)`. |
-| `safe_edit_cb` | `safe_edit_cb(q, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits via `q.edit_message_text(rich_message=...)`. |
-| `safe_edit_message` | `safe_edit_message(bot, chat_id, message_id, text, *, log_level="warning", log_label=None, catch_all=False, parse_mode=None, **kwargs)` | Edits by id via `bot.edit_message_text(rich_message=...)`. |
-| `cb_error_edit` | `cb_error_edit(q, text, *, log_label, parse_mode=None, log_level="warning")` | `safe_edit_cb` with `catch_all=True`; the replacement message carries no keyboard. |
-| `clear_markup_cb` | `clear_markup_cb(q)` | Removes the inline keyboard only; keeps `_IGNORED` BadRequests silent. |
+| `safe_edit` | `safe_edit(msg, text, *, log_level="warning", log_label=None, catch_all=False, clear_markup=False, parse_mode=None, **kwargs)` | Edits via `msg.edit_text(rich_message=...)`; `clear_markup` sends an empty keyboard. |
+| `safe_edit_cb` | `safe_edit_cb(q, text, *, log_level="warning", log_label=None, catch_all=False, clear_markup=False, parse_mode=None, **kwargs)` | Edits via `q.edit_message_text(rich_message=...)`; `clear_markup` strips old buttons. |
+| `safe_edit_message` | `safe_edit_message(bot, chat_id, message_id, text, *, log_level="warning", log_label=None, catch_all=False, clear_markup=False, parse_mode=None, **kwargs)` | Edits by id via `bot.edit_message_text(rich_message=...)`; `clear_markup` strips old buttons. |
+| `cb_error_edit` | `cb_error_edit(q, text, *, log_label, parse_mode=None, log_level="warning")` | `safe_edit_cb` with `catch_all=True`; it does not clear the keyboard. Callers that need removal pass `clear_markup=True` or call `clear_markup_cb`. |
+| `clear_markup` | `clear_markup(bot, chat_id, message_id)` | Removes the inline keyboard by chat and message id; keeps `_IGNORED` BadRequests silent. |
+| `clear_markup_cb` | `clear_markup_cb(q)` | Callback-query form of the same keyboard-only edit. |
 
 `_IGNORED` contains `"message is not modified"`, `"message to edit not found"`,
 and `"chat not found"`. `_edit_via()` and `safe_edit_message()` return `True`
@@ -91,7 +95,7 @@ safe helpers.
 `modules/helper/rich/button.py` owns `buttons_from_markup(reply_markup)` and
 `button_from_cell(cell)`. `buttons_from_markup` is all-or-nothing: one unmappable
 cell makes the whole keyboard stay inline. `_markup_dict()` accepts a dict directly
-or calls `to_dict()` on a Kurigram markup object.
+or reads `inline_keyboard` from a Kurigram markup object and serializes its cells.
 
 ```mermaid
 flowchart TD
@@ -174,7 +178,7 @@ preformatted example block.
 | `answer_alert(q, text)` | `q.answer(text, show_alert=True)`; never raises. |
 | `answer_and_edit(q, text, **kwargs)` | `q.answer()` and `safe_edit_cb()` in one `asyncio.gather(..., return_exceptions=True)`. |
 | `ack_and_render(q, data_coro)` | `q.answer()` parallel to a data coroutine returning `(text, markup)`, then `safe_edit_cb()`. |
-| `cb_error_edit(q, text, *, log_label, ...)` | Ack-style replacement of the message with a notice and no keyboard. |
+| `cb_error_edit(q, text, *, log_label, ...)` | Catch-all replacement of the message with a notice; the existing keyboard is not cleared. |
 | `clear_markup_cb(q)` | `q.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))` to remove the keyboard. |
 
 Callback answers are plain text and have no rich equivalent. Handlers call
@@ -216,10 +220,11 @@ a direct Kurigram send leaves the HTML tags visible to users.
 
 `modules/helper/messages/audit_logs.py` owns `LogBuilder`, a fluent builder with
 `detail_field`, `field`, `code_field`, `mention_field`, `link_field`, `raw`,
-`section`, `date`, and `build`. Field entries render as rich bulleted lists;
-`raw` keeps free-form prose and `section` inserts a divider between lists.
-`send_log(bot, text, **kwargs)` in `rich/edit.py` always posts to `cfg.logs`
-(chat and thread) through `send_rich`.
+`section`, `date`, and `build`. Field entries render as compact two-column
+rich tables; `raw` keeps free-form prose and `section` inserts a divider between
+tables. `send_log(bot, text, **kwargs)` in `rich/edit.py` always posts to
+`cfg.logs` (chat and thread) through `send_rich`. Error reports take the separate
+`cfg.logs_errors` path and do not use `LogBuilder`.
 
 | Builder group | Names |
 |---|---|

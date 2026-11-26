@@ -38,9 +38,8 @@ the supported way to give a button a whole row.
 | Color | Style | Used for |
 |---|---|---|
 | Blue | `PRIMARY` | Default for actions, detail opens, navigation, and links. |
-| Green | `SUCCESS` | Positive commits: Approve, Agree, proof Done, rules Publish, the selected locale. |
+| Green | `SUCCESS` | Positive commits and navigation: Approve, Agree, proof Done, rules Publish, Back, Prev, Next, and the selected locale. |
 | Red | `DANGER` | Destructive or rejecting actions and every Cancel: Reject, Demote Confirm, rules Delete, Discard, Close, destructive confirmations. |
-| Green | `SUCCESS` | Positive navigation: Back, Prev, Next, and the selected locale. |
 | None | default | No remaining primary action; plain informational cells stay uncolored. |
 
 Older clients ignore the style field, so color is purely additive.
@@ -72,7 +71,7 @@ both catalogs so the same action looks the same in every locale.
 | `↝` / `🖈` | open elsewhere / pinned evidence | View Log, Open in PM, community links; View Proof, Proof id |
 | `⤎` + `🗶` | leave a panel | Back (green) and Close (red) on read-only menus |
 | `⇧` / `⌫` | create / remove | Publish, Discard |
-| `⛁` / `☰` / `✎` | govern / configure / edit | Settings, Manage Rules, Edit Draft, Rename |
+| `✎` | edit | Edit Draft, Rename |
 | `↑` / `↓` | reorder | Up, Down |
 | `+` / `☳` / `☶` | add / more / extra | Add Category, Add Item, More, Additional |
 | `🗟` | document preview | Preview |
@@ -155,7 +154,7 @@ appeal; a legacy payload without the suffix falls back to the tapped message id.
 | `picker_btn(items, selected)` | `rules_step:pick:<id>` (blue), `other` (none), `done` (green), `clear` (none), `cancel` (red) | mixed |
 | `editor_sections_btn(has_content)` | The live main editor panel: `rules_edit_draft` (blue), `rules_preview` (blue), Upload .md (blue), `rules_lang` (blue), Close; adds `rules_publish` (green) and `rules_discard` (red) only when the draft has items | mixed |
 | `rules_language_btn`, `rules_section_btn`, `section_editor_btn` | `rules_lang_set:<code>`, `rules_sections`, `rules_section_title`, `rules_section_edit:<id>` | mixed |
-| `draft_preview_btn`, `draft_preview_sections_btn`, `editor_preview_page_btn` | `rules_preview_cat:<key>`, `rules_preview_sec:<n>`, `rules_preview_page:<n>`, Back to the editor panel + Close | mixed |
+| `draft_preview_btn`, `draft_preview_sections_btn` | `rules_preview_cat:<key>`, `rules_preview_sec:<n>`, Back to the editor panel + Close | mixed |
 | `editor_items_page_btn` | `rules_items_page:<n>` for the paginated item list | mixed |
 | `preview_btn` | Back to the editor panel + Close for the draft preview | mixed |
 | `categories_btn` | `rules_cat:<key>`, rename/up/down (blue), `rules_cat_del:<key>` (red), `rules_cat_add` (blue), Back + Close | mixed |

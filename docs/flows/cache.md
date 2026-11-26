@@ -70,11 +70,12 @@ read that started before a revocation cannot republish the old value into L1.
 `invalidate(key)` removes L1, advances generation, and enqueues a Redis delete.
 The key stays in `_pending_invalidations` until the delete task actually
 finishes, so a local reader cannot republish the old L2 value while the delete
-is still queued. For revocation prefixes it first enqueues a short-lived
-tombstone (`SET ... EX 10`, key `tcbot:<schema>:<prefix>:v2:tombstone:<key>`) that other
-processes check before trusting an L2 hit. This narrows the cross-process window
-where a reader could fetch the old value before another process's queued delete
-lands.
+is still queued. For revocation prefixes it first enqueues a tombstone
+(`SET ... 1 EX <L2 TTL>`, minimum 10 s, key
+`tcbot:<schema>:<prefix>:v2:tombstone:<key>`) that other processes check before
+trusting an L2 hit. The marker outlives any stale value it guards, including one
+whose delete failed; this narrows the cross-process window where a reader could
+fetch the old value before another process's queued delete lands.
 
 ```mermaid
 sequenceDiagram
@@ -85,7 +86,7 @@ sequenceDiagram
     participant G as Concurrent reader
     W->>C: invalidate(key)
     C->>C: advance generation and add pending_invalidations
-    C->>Q: enqueue tombstone SET ex 10 for critical prefixes
+    C->>Q: enqueue tombstone SET EX max(10s, L2 TTL) for critical prefixes
     C->>Q: enqueue DEL non-droppable for revocations
     G->>C: get_or_fetch captures generation and epoch
     C->>R: GET key
@@ -110,8 +111,10 @@ complete after a newer delete. The queue is bounded:
 
 Revocation prefixes (`role`, `conn`, `groups`, `owner`) and locale deletions
 (`ulocale`, `glocale`, `clocale`) take the non-droppable delete path.
-Display-name hints (`umention`) remain droppable. A dropped revocation leaves
-the old value visible until the key TTL, which is recoverable.
+Display-name hints (`umention`) remain droppable. If a revocation is dropped at
+the absolute ceiling no tombstone is written; local readers still hold their
+pending marker, but another process can keep serving the old L2 value until the
+key TTL. That is why revocations are non-droppable until the last resort.
 
 `clear_all()` sweeps `tcbot:<schema>:<prefix>:v2:*` with `SCAN` and `UNLINK` in batches of
 100 instead of blocking `KEYS`. It clears L1, bumps the epoch on both sides of

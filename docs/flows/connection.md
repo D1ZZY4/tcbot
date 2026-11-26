@@ -46,7 +46,7 @@ native welcome message.
 | Chat type | `cmd_tcconnect` | Refuse with a group-only reply. |
 | Infrastructure chat | `cfg.is_infrastructure_chat` | Refuse; log, proof, appeal, and main destinations are not managed groups. |
 | Anonymous admin | `identity.is_anon_admin` | Refuse; the placeholder name cannot be attributed. |
-| Sender role | `get_chat_member` with lookup timeout | Administrator or creator required. |
+| Sender role | `get_chat_member` with lookup timeout | Administrator or Owner required. |
 | Primary group | `cfg.is_primary_group` | Refuse; already an enforcement destination. |
 | Connection state | `groups_db.is_connected(fresh=True)` | Fail closed on a database error. |
 | Pending state | `groups_db.get_pending` | Fail closed on a database error. |
@@ -179,7 +179,7 @@ flowchart TD
     D2 --> OWN2{Protected Owner}
     OWN2 -->|yes| SKIP2[Skip mute; keep greeting]
     OWN2 -->|no| REST[restrict_chat_member until deadline]
-    M -->|no| W[Welcome in primary group with rules ack button when enabled]
+    M -->|no| W[Welcome in primary group with rules ack button for a new published version]
 ```
 
 `demote_before_enforcement()` returns a protected-owner verdict for the Owner

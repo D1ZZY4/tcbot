@@ -131,8 +131,8 @@ sequenceDiagram
     Flow->>Reg: set flushing flag synchronously
     Flow->>Reg: cancel the debounce timer task
     Reg-->>Flow: one claim wins over the timer
-    Flow->>Bot: upload media group to PROOFS
-    Bot-->>Flow: landed items and first message id
+    Flow->>Bot: send rich slideshow(s) to PROOFS
+    Bot-->>Flow: landed rich message ids and expected count
 ```
 
 The session is keyed by `(chat_id, user_id)` and carries a snapshot of the flow
@@ -169,10 +169,12 @@ and the originating group. A ban issued from bot PM has no group origin, so the
 scope is the primary group alone. A failed connected-group fetch still leaves
 the origin group enforced, and the summary carries a scope warning.
 
-`demote_before_enforcement(trigger="ban")` runs after the record commits and
-before delivery on a best-effort basis. A role-lookup failure is logged loudly
-and enforcement still runs, so a transient database outage cannot block the
-action. See [Permissions](permissions.md#demote-gates-best-effort-versus-fail-closed).
+`demote_before_enforcement(trigger="ban")` runs before the decision is written,
+because creating the ban also queues its durable apply run. A protected-role
+verdict therefore refuses the action before any record, proof reference, or
+enforcement run exists. A role-lookup failure is logged loudly and enforcement
+still runs, so a transient database outage cannot block the action. See
+[Permissions](permissions.md#demote-gates-best-effort-versus-fail-closed).
 
 ## Decision, delivery, audit, and summary
 
@@ -184,11 +186,11 @@ sequenceDiagram
     participant Bot as Telegram
     participant Mod as Moderator
     participant Target as Banned user
+    Flow->>Bot: demote_before_enforcement trigger ban best effort
     Flow->>DB: create_ban or update_ban with proof and apply run in one transaction
     DB-->>Flow: canonical ban_id and enforcement_run_id
     Flow->>Bot: post federation log with proof and appeal buttons
     Flow->>DB: set_log_message_id
-    Flow->>Bot: demote_before_enforcement trigger ban best effort
     Flow->>Work: deliver_queued_run for the apply run
     Work->>Bot: ban_chat_member in each target group
     Work-->>Flow: run report and delivery outcome

@@ -220,7 +220,7 @@ The translator contract lives in [`i18n/README.md`](../../i18n/README.md). The u
 - Keep one translation file per domain, such as `banning.toml` and `kicking.toml`.
 - Button labels live exactly once in `button.toml`.
 - Match the rendering mode to the actual send path.
-- Use `plain=True` for alerts and replies sent with `parse_mode=None`.
+- Use `plain=True` for callback alerts and short notices that must show literal characters. Every send/edit helper accepts `parse_mode` for compatibility but discards it; the text still travels through rich HTML, so escape untrusted dynamic values before they enter that output.
 - Use the default rendering mode for rich HTML sends.
 - A rendering-mode mismatch can expose raw escape characters or break message parsing.
 - Pass dynamic values as raw data so the rendering engine can escape them.

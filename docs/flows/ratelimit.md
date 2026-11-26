@@ -131,9 +131,11 @@ two-level cache in `database/cache/twolevel.py`.
   a real countdown rather than a generic refusal.
 - The decorator bypasses quotas for the current Owner and fails closed when
   the owner lookup is unavailable.
-- Telegram `RetryAfter` from the rate limiter is waited out with a bounded
-  retry budget: the request is retried after the requested delay while the
-  other requests are paused, which is the behaviour Telegram asks for.
+- A Telegram `RetryAfter` is an API refusal, not a transport failure: the
+  circuit breaker treats it as a service answer and does not open. There is no
+  local flood-wait retry loop; the decorated handler already refused the user
+  for this window, and a refused Telegram call leaves moderation work queued
+  for the durable worker's next retry deadline.
 
 ## Telegram circuit breaker and bounded fan-out
 

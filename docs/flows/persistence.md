@@ -45,7 +45,7 @@ every caller.
 | `run_transaction` | Runs a callback on one session; all statements commit or roll back together. It already uses `db_call`, so callers must not nest another. |
 | `session` | Commits on success, rolls back on failure; rollback is best effort and never replaces the original exception. |
 | `read_connection` | Autocommit read path; a SELECT avoids the cost of closing a transaction. |
-| Circuit `postgres` | Opens after 5 consecutive transient failures; one HALF_OPEN probe after 60 s; a success closes it. |
+| Circuit `postgres` | Opens after 5 accumulated transient failures; successes in CLOSED do not reset the count, and a sustained healthy streak decays it. One HALF_OPEN probe after 60 s; that probe closes the circuit. |
 | Counted failures | Dropped connections, refused sockets, driver timeouts, pool timeouts, caller-side timeouts. |
 | Ignored failures | SQLSTATE `40001`, `40P01`, `55P03`, `57014` (serialization failure, deadlock, lock refusal, statement cancellation) prove the link is healthy. |
 
@@ -114,7 +114,10 @@ never reaches Telegram and must not consume one of the three attempts. HALF_OPEN
 admits a single probe so a recovering circuit cannot burn the federation retry
 budget. `run_once` claims at most 10 runs per tick; each run delivers in chunks
 sized by the breaker's `admission_headroom`, so a circuit that opens mid-batch
-cannot leave later claimed targets skipped without a call.
+cannot leave later claimed targets skipped without a call. A claimed run that
+ends up with no in-flight target is returned to `queued` at the end of the tick,
+so the next five-minute tick can deliver it instead of waiting for the 30-minute
+stale sweeper.
 
 ```mermaid
 stateDiagram-v2

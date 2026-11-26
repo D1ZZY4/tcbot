@@ -140,7 +140,8 @@ is cancelled by the worker instead of muting a user after the deadline.
 and calls `mutes_db.revoke_mute_and_queue_unmute()` to move the decision to
 `revoked` and queue a `revoke` run in one transaction with idempotency key
 `moderation:{action_id}:revoke:manual:v1`. The worker restores full permissions
-with `ChatPermissions.all_permissions()`. `revoked == 0` is an idempotent "no
+with an explicit all-allowed `ChatPermissions(...)` object, because the client
+does not expose the Bot API's `all_permissions()` helper. `revoked == 0` is an idempotent "no
 active mute" reply. The record clear runs before the success announcement, so a
 failed clear cannot announce a successful unmute.
 

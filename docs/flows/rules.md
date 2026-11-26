@@ -92,9 +92,9 @@ sequenceDiagram
         P->>DB: publications.upsert_slot by slot key
         DB-->>P: slot with optional message_id and hash
         alt Existing id and matching hash
-            P->>TG: edit_message_text in place
+            P->>TG: safe_edit_message in place
         else New or changed content
-            P->>TG: send_message
+            P->>TG: send_text
         end
         P->>DB: mark_synced or mark_failed
     end
@@ -140,7 +140,7 @@ read failure never blocks the welcome: the greeting is sent without a button.
 
 ```mermaid
 flowchart TD
-    J[New member in primary group] --> V[Load acknowledgement requirement]
+    J[New member in primary group] --> V[Load current published version]
     V --> Q{version exists and not yet acknowledged}
     Q -->|yes| BTN[Greeting with rules_ack version member button]
     Q -->|no| W[Plain greeting]

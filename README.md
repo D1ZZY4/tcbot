@@ -126,6 +126,7 @@ Chat destinations accept a chat ID or a `chat_id/thread_id` pair.
 | `DB_MAX_OVERFLOW` | `5` | Extra connections the pool may open under load. |
 | `DB_SCHEMA` | `public` | PostgreSQL schema the bot reads and writes. The project uses `public` for the deployment, `test` for the integration tests, and `development` for a developer. |
 | `PG_CRON_ENABLED` | `false` | Let pg_cron run the pure-database expiry, role-expiry, and stuck-enforcement sweeps. Requires the extension; otherwise APScheduler keeps them. |
+| `KURIGRAM_WORKERS` | `0` (automatic) | Dispatcher worker count, sized from CPU count and the database pool and capped at 64; higher values help when many chats update at once. |
 | `MODULES_LOAD` | empty (all) | Allowlist of modules to load exclusively. |
 | `MODULES_NO_LOAD` | empty | Denylist of modules to skip. |
 

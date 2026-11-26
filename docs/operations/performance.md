@@ -45,9 +45,10 @@ or `CHAT_NOT_FOUND` are not reported as failed groups, because there was
 nothing to enforce. `/tcbroadcast` deliberately differs: it promises delivery,
 so it counts every failed send, including benign refusals, in its Failed line.
 
-Circuit breakers open after five consecutive transient failures and admit one
-probe after 60 seconds. Workers pause entirely while the breaker is open so a
-slot skipped by the breaker never burns a retry attempt.
+Circuit breakers open after five accumulated transient failures; successes in
+CLOSED do not reset that count, and a long healthy streak decays it. They admit
+one probe after 60 seconds. Workers pause entirely while the breaker is open so
+a slot skipped by the breaker never burns a retry attempt.
 
 ## Database access
 

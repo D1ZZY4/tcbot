@@ -72,12 +72,6 @@ remain.
 | `FED_WARN_LIMIT` | `0` | Federation-wide threshold; 0 disables it. |
 | `PROMOTION_REQUEST_TTL_DAYS` | `7` | Pending request lifetime; 0 disables expiry. |
 
-## Platform-injected variables
-
-Platform variables such as `REPLIT_DEV_DOMAIN`, `REPLIT_SLUG`, and
-`REPLIT_DEPLOYMENT` may exist in the environment, but the bot does not read
-them. Polling needs no public endpoint, dev domain, or inbound port.
-
 `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` are `docker-compose.yml`
 variables, not read by the bot.
 

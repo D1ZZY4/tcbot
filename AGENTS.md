@@ -379,6 +379,7 @@ Important non-secret/runtime variables include:
 - `DB_POOL_SIZE`: PostgreSQL connection pool size; default `5`.
 - `DB_MAX_OVERFLOW`: extra connections the pool may open under load; default `5`.
 - `DB_SCHEMA`: PostgreSQL schema the bot reads and writes; default `public`. See [Database Schemas](#database-schemas).
+- `KURIGRAM_WORKERS`: dispatcher worker count; `0` sizes it from CPU count and the database pool, capped at 64.
 - `PG_CRON_ENABLED`: optional pg_cron ownership of the pure-database expiry, role-expiry, and reconciliation jobs; default `false`.
 - `PROMOTION_REQUEST_TTL_DAYS`: days a pending promotion request stays open before it is marked `expired`; default `7`, `0` disables expiry.
 - `WARN_LIMIT`: per-group warn threshold that triggers auto-ban; default `3`.
