@@ -56,7 +56,7 @@ from tcbot.notification_worker import run as run_notification_worker
 from tcbot.utils.circuit_breaker import CircuitOpenError
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import _ensure_loaded
-from tcbot.utils.logger import ERROR_LEVEL, get_logger
+from tcbot.utils.logger import ERROR_LEVEL, get_logger, set_text_scrubber
 from tcbot.utils.logger import setup as setup_logging
 from tcbot.utils.tasks import TaskTracker
 
@@ -249,7 +249,7 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
                         exc = future.exception()
             except Exception:
                 exc = None
-        detail = (
+        detail = report.scrub_text(
             f"{msg} | Exception: {exc!r} | Task: {future!r}"
             if exc is not None and future is not None
             else (f"{msg} | Task: {future!r}" if future else msg)
@@ -268,8 +268,8 @@ def _make_asyncio_exc_handler() -> Callable[[asyncio.AbstractEventLoop, dict], N
         if classify._is_benign(exc):
             log.debug("[asyncio] benign (not reported): %s", exc)
             return
-        # * Console output is scrubbed like the shipped reports (see the
-        # * main error handler); the loop handler has no other scrub site.
+        # * Detail is scrubbed once here so both the console line and the
+        # * shipped report carry the same safe text.
         log.error(
             "[asyncio] %s%s",
             detail,
@@ -481,6 +481,9 @@ def main() -> None:
     stage = "logging setup"
     try:
         setup_logging(level=cfg.log_level)
+        # * Console redaction must be active before any startup log line:
+        # * attach() runs later, after PostgreSQL and MTProto are connected.
+        set_text_scrubber(report.scrub_text)
         _init_sentry()
         log.info("Starting %s bot (Kurigram polling)...", cfg.community_name)
         if not cfg.mtproto_enabled:

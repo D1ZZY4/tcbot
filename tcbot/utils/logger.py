@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from loguru import logger
 
+from tcbot.utils.redaction import redact_credential_shapes
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -119,6 +121,7 @@ class BotLogFormatter(logging.Formatter):
             message_text = record.getMessage()
         except TypeError, ValueError:
             message_text = str(record.msg) if record.msg is not None else ""
+        message_text = _scrub_console(message_text)
         msg_part = f"{msg_color}{message_text}{self._R}"
         output = (
             f"{time_part} {date_part} {level_part} {module_part}"
@@ -128,9 +131,12 @@ class BotLogFormatter(logging.Formatter):
             if not record.exc_text:
                 record.exc_text = self.formatException(record.exc_info)
             if record.exc_text:
-                output += f"\n{level_color}{record.exc_text}{self._R}"
+                output += f"\n{level_color}{_scrub_console(record.exc_text)}{self._R}"
         if record.stack_info:
-            output += f"\n{level_color}{self.formatStack(record.stack_info)}{self._R}"
+            output += (
+                f"\n{level_color}{_scrub_console(self.formatStack(record.stack_info))}"
+                f"{self._R}"
+            )
         return output
 
 
@@ -147,6 +153,30 @@ _SUPPRESS_PREFIXES: tuple[str, ...] = (
 # * would close a cycle between the two. Registering the sink keeps the
 # * dependency one-way.
 _record_sink: Callable[[logging.LogRecord], None] | None = None
+
+# * Shape-based redaction runs on every console line even before the reporter
+# * attaches. The hook adds replacement of exact configured values once they
+# * are known; it is registered alongside the record sink for the same reason.
+_text_scrubber: Callable[[str], str] | None = None
+
+
+def set_text_scrubber(scrubber: Callable[[str], str] | None) -> None:
+    """Register redaction of exact secret values on the console path."""
+    global _text_scrubber
+    _text_scrubber = scrubber
+
+
+def _scrub_console(text: str) -> str:
+    """Redact secrets once, in one owner's order, on the console path.
+
+    The registered scrubber already applies exact configured values first and
+    credential shapes second. Running the shape pass here as well would make
+    the console order differ from reports and Sentry. Before the scrubber is
+    registered (import-time and unit tests), shape redaction still applies.
+    """
+    scrubber = _text_scrubber
+    return scrubber(text) if scrubber is not None else redact_credential_shapes(text)
+
 
 # * Loguru handlers hold a non-reentrant thread-local lock while a sink runs.
 # * The bridge calls stdlib handlers inside that sink, so any project log call

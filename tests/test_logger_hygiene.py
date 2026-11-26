@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 
 import pytest
 from loguru import logger as loguru_logger
@@ -18,6 +19,7 @@ from tcbot.utils.logger import (
     _safe_time_parts,
     get_logger,
     set_record_sink,
+    set_text_scrubber,
     setup,
 )
 
@@ -97,3 +99,48 @@ def test_formatter_handles_bad_percent_args() -> None:
     )
     out = BotLogFormatter().format(record)
     assert "count" in out
+
+
+def test_formatter_redacts_credentials_in_the_message() -> None:
+    """A secret-shaped value in a log message never reaches the console."""
+    token = "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    record = logging.LogRecord(
+        "t", logging.ERROR, __file__, 1, f"login {token}", None, None
+    )
+    out = BotLogFormatter().format(record)
+    assert token not in out
+    assert "[REDACTED_TOKEN]" in out
+
+    url_record = logging.LogRecord(
+        "t", logging.ERROR, __file__, 1, "postgresql://user:hunter2@host/db", None, None
+    )
+    assert "hunter2" not in BotLogFormatter().format(url_record)
+
+
+def test_formatter_uses_the_registered_exact_value_scrubber(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exact configured values are masked before a console line is emitted."""
+    _ = monkeypatch
+    previous = utils.logger._text_scrubber
+    marker = "exact-secret-marker"
+    set_text_scrubber(lambda text: text.replace(marker, "[REDACTED]"))
+    try:
+        record = logging.LogRecord("t", logging.INFO, __file__, 1, marker, None, None)
+        assert marker not in BotLogFormatter().format(record)
+    finally:
+        set_text_scrubber(previous)
+
+
+def test_formatter_redacts_credentials_in_the_traceback() -> None:
+    """An exception message is redacted at the single console output border."""
+    token = "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    try:
+        raise RuntimeError(f"login failed for {token}")
+    except RuntimeError:
+        record = logging.LogRecord(
+            "t", logging.ERROR, __file__, 1, "handler failed", None, sys.exc_info()
+        )
+    out = BotLogFormatter().format(record)
+    assert token not in out
+    assert "RuntimeError" in out

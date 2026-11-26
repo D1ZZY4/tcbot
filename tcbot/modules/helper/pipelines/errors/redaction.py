@@ -6,15 +6,10 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from tcbot import cfg
-
-# * No leading word boundary: a token inside "bot<token>/..." must still be
-# * redacted when the exact configured value is unavailable.
-_TOKEN_RE = re.compile(r"(?<!\d)\d{6,}:[A-Za-z0-9_-]{20,}\b")
-_URL_CREDENTIALS_RE = re.compile(r"://(?:[^:@/\s]+)?:[^@/\s]+@")
+from tcbot.utils.redaction import redact_credential_shapes
 
 
 def _scrub_secrets(text: str) -> str:
@@ -37,8 +32,7 @@ def _scrub_secrets(text: str) -> str:
     for secret in configured:
         if secret and secret in text:
             text = text.replace(secret, "[REDACTED]")
-    text = _TOKEN_RE.sub("[REDACTED_TOKEN]", text)
-    return _URL_CREDENTIALS_RE.sub("://[REDACTED]@", text)
+    return redact_credential_shapes(text)
 
 
 def scrub_text(text: str) -> str:
