@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Proof upload records every landed media item, not one photo placeholder."""
+"""Proof upload sends one rich slideshow and never a plain media message."""
 
 from __future__ import annotations
 
@@ -10,14 +10,20 @@ import asyncio
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
 from pyrogram import Client
-from pyrogram.types import Message
+from pyrogram.types import (
+    InputMediaAnimation,
+    InputMediaDocument,
+    InputMediaVideo,
+    Message,
+)
 
 from tcbot.modules.helper.pipelines import proof_post
 
 
 def _sent(message_id: int, **kwargs: Any) -> Any:
-    """Build a Kurigram-shaped sent-message double with both id aliases."""
+    """Build a Kurigram-shaped sent-message double."""
     return SimpleNamespace(id=message_id, message_id=message_id, **kwargs)
 
 
@@ -116,63 +122,80 @@ def _animation_message(file_id: str, message_id: int) -> Message:
     )
 
 
-def test_a_gallery_and_a_document_are_all_recorded() -> None:
-    messages = [
-        _photo_message("p1", 1),
-        _photo_message("p2", 2),
-        _document_message("d1", 3),
-    ]
-    sent_ids = iter(range(100, 200))
+class _RichBot:
+    """Accept rich sends only; any plain media send is a regression."""
 
-    class _Bot:
-        async def send_media_group(self, *args: Any, **kwargs: Any) -> list[Any]:
-            return [
-                _sent(next(sent_ids), media_group_id="g1"),
-                _sent(next(sent_ids), media_group_id="g1"),
-            ]
+    def __init__(self, *, fail_on_call: int | None = None) -> None:
+        self.calls: list[tuple[int | str, Any, dict[str, Any]]] = []
+        self.fail_on_call = fail_on_call
 
-        async def send_document(self, *args: Any, **kwargs: Any) -> Any:
-            return _sent(next(sent_ids))
+    async def send_rich_message(
+        self, chat_id: int | str, rich_message: Any, **kwargs: Any
+    ) -> Any:
+        self.calls.append((chat_id, rich_message, kwargs))
+        if len(self.calls) == self.fail_on_call:
+            raise RuntimeError("flood wait")
+        return _sent(100 + len(self.calls))
 
-        async def send_photo(self, *args: Any, **kwargs: Any) -> Any:
-            raise AssertionError("a gallery must not fall back to single sends")
+    async def send_photo(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("proof must never use a plain photo send")
 
-        async def send_video(self, *args: Any, **kwargs: Any) -> Any:
-            raise AssertionError("a gallery must not fall back to single sends")
+    async def send_video(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("proof must never use a plain video send")
 
+    async def send_animation(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("proof must never use a plain animation send")
+
+    async def send_document(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("proof must never use a plain document send")
+
+    async def send_media_group(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("proof must never use a plain media group")
+
+
+async def _upload(bot: _RichBot, messages: list[Message]) -> tuple[Any, int]:
+    """Run the uploader through its public owner."""
+    return await proof_post.upload_proof_items(
+        cast("Client", bot), messages, "cap", -100, None
+    )
+
+
+def test_each_media_kind_gets_its_own_rich_slideshow() -> None:
+    """Mixed kinds are split so Telegram never sees an undocumented block."""
+    bot = _RichBot()
     items, expected = asyncio.run(
-        proof_post.upload_proof_items(
-            cast("Client", _Bot()),
-            messages,
-            "cap",
-            -100,
-            None,  # type: ignore[arg-type]
+        _upload(
+            bot,
+            [
+                _photo_message("p1", 1),
+                _video_message("v1", 2),
+                _animation_message("a1", 3),
+                _document_message("d1", 4),
+            ],
         )
     )
 
-    assert expected == 3
-    assert [item.media_type for item in items] == ["photo", "photo", "document"]
-    assert [item.item_order for item in items] == [0, 1, 2]
-    assert [item.archive_message_id for item in items] == [100, 101, 102]
-    assert items[2].file_name == "evidence.pdf"
-    assert items[0].file_size_bytes == 1234
+    assert expected == 4
+    assert len(bot.calls) == 4
+    htmls = [call[1].html for call in bot.calls]
+    assert 'src="tg://photo?id=m0"' in htmls[0]
+    assert 'src="tg://video?id=m0"' in htmls[1]
+    assert 'src="tg://document?id=m0"' in htmls[2]
+    assert 'src="tg://document?id=m0"' in htmls[3]
+    assert all("<figcaption>cap</figcaption>" in html for html in htmls)
+    assert isinstance(bot.calls[1][1].media[0].media, InputMediaVideo)
+    assert isinstance(bot.calls[2][1].media[0].media, InputMediaAnimation)
+    assert isinstance(bot.calls[3][1].media[0].media, InputMediaDocument)
+    assert len(items) == 4
+    assert [item.archive_message_id for item in items] == [101, 102, 103, 104]
+    assert [item.item_order for item in items] == [0, 1, 2, 3]
+    assert all(item.caption_text == "cap" for item in items)
 
 
 def test_a_video_keeps_its_media_type_and_duration() -> None:
-    async def _send_video(*args: Any, **kwargs: Any) -> Any:
-        return _sent(55)
-
-    bot = type("Bot", (), {"send_video": _send_video})()
-
-    items, expected = asyncio.run(
-        proof_post.upload_proof_items(
-            cast("Client", bot),
-            [_video_message("v1", 7)],
-            "cap",
-            -100,
-            None,  # type: ignore[arg-type]
-        )
-    )
+    """The archived row still describes the first embedded file accurately."""
+    bot = _RichBot()
+    items, expected = asyncio.run(_upload(bot, [_video_message("v1", 7)]))
 
     assert expected == 1
     assert items[0].media_type == "video"
@@ -182,165 +205,84 @@ def test_a_video_keeps_its_media_type_and_duration() -> None:
     assert items[0].source_message_id == 7
 
 
-def test_a_failed_chunk_marks_the_upload_partial() -> None:
-    messages = [_photo_message(f"p{i}", i) for i in range(11)]
-    calls = 0
+def test_an_oversized_album_is_split_into_more_slideshows() -> None:
+    """The 50-media rich limit is respected without dropping evidence."""
+    bot = _RichBot()
+    messages = [_photo_message(f"p{i}", i) for i in range(51)]
+    items, expected = asyncio.run(_upload(bot, messages))
 
-    class _Bot:
-        async def send_media_group(self, *args: Any, **kwargs: Any) -> list[Any]:
-            nonlocal calls
-            calls += 1
-            if calls == 2:
-                raise RuntimeError("flood wait")
-            return [_sent(200 + i) for i in range(10)]
-
-        async def send_photo(self, *args: Any, **kwargs: Any) -> Any:
-            raise AssertionError("a gallery must not fall back to single sends")
-
-    items, expected = asyncio.run(
-        proof_post.upload_proof_items(
-            cast("Client", _Bot()),
-            messages,
-            "cap",
-            -100,
-            None,  # type: ignore[arg-type]
-        )
-    )
-
-    assert expected == 11
-    assert len(items) == 10
-    assert [item.item_order for item in items] == list(range(10))
+    assert expected == 2
+    assert len(bot.calls) == 2
+    assert len(items) == 2
+    assert [item.item_order for item in items] == [0, 1]
+    first_html = bot.calls[0][1].html
+    second_html = bot.calls[1][1].html
+    assert 'src="tg://photo?id=m49"' in first_html
+    assert 'src="tg://photo?id=m0"' in second_html
+    assert "<figcaption>cap</figcaption>" in first_html
+    assert "<figcaption>cap</figcaption>" in second_html
 
 
-def test_caption_lands_on_the_first_chunk_that_succeeds() -> None:
-    """A failed first chunk must not leave the archive without a caption."""
-    messages = [_photo_message(f"p{i}", i) for i in range(11)]
-    captured: list[list[Any]] = []
-    calls = 0
-
-    class _Bot:
-        async def send_media_group(self, *args: Any, **kwargs: Any) -> list[Any]:
-            nonlocal calls
-            calls += 1
-            captured.append(args[1])
-            if calls == 1:
-                raise RuntimeError("flood wait on first chunk")
-            return [_sent(300 + i) for i in range(len(args[1]))]
-
-        async def send_photo(self, *args: Any, **kwargs: Any) -> Any:
-            raise AssertionError("a gallery must not fall back to single sends")
-
-    items, expected = asyncio.run(
-        proof_post.upload_proof_items(
-            cast("Client", _Bot()),
-            messages,
-            "cap",
-            -100,
-            None,  # type: ignore[arg-type]
-        )
-    )
-
-    assert expected == 11
-    assert len(items) == 1
-    assert captured[1][0].caption == "cap"
-    assert all(item.caption is None for item in captured[1][1:])
-
-
-def test_caption_lands_on_the_first_standalone_item_that_succeeds() -> None:
-    """A failed first document must not drop the caption from the second."""
-    messages = [_document_message("d0", 1), _document_message("d1", 2)]
-    captured: list[str | None] = []
-    calls = 0
-
-    class _Bot:
-        async def send_document(self, *args: Any, **kwargs: Any) -> Any:
-            nonlocal calls
-            calls += 1
-            captured.append(kwargs.get("caption"))
-            if calls == 1:
-                raise RuntimeError("flood wait on first document")
-            return _sent(500 + calls)
-
-    items, expected = asyncio.run(
-        proof_post.upload_proof_items(
-            cast("Client", _Bot()),
-            messages,
-            "cap",
-            -100,
-            None,  # type: ignore[arg-type]
-        )
-    )
+def test_a_failed_slideshow_is_recorded_as_partial() -> None:
+    """A lost rich chunk must not be reported as a complete proof."""
+    bot = _RichBot(fail_on_call=1)
+    messages = [_photo_message(f"p{i}", i) for i in range(51)]
+    items, expected = asyncio.run(_upload(bot, messages))
 
     assert expected == 2
     assert len(items) == 1
-    # * The first send failed, so the caption must still be present on the
-    # * second (landing) call rather than being lost with the source index.
-    assert captured[-1] == "cap"
+    assert items[0].caption_text == "cap"
 
 
-def test_an_animation_is_sent_as_an_animation() -> None:
-    """A GIF keeps its animation kind instead of becoming a document."""
-    sent: list[tuple[str, str]] = []
+def test_no_media_returns_an_empty_upload() -> None:
+    """A text-only batch cannot produce a proof slideshow."""
+    bot = _RichBot()
+    items, expected = asyncio.run(_upload(bot, []))
 
-    class _Bot:
-        async def send_animation(self, *args: Any, **kwargs: Any) -> Any:
-            sent.append(("animation", str(args[1])))
-            return _sent(61)
+    assert items == []
+    assert expected == 0
+    assert bot.calls == []
 
-        async def send_document(self, *args: Any, **kwargs: Any) -> Any:
-            raise AssertionError("an animation must not be sent as a document")
 
-    items, expected = asyncio.run(
-        proof_post.upload_proof_items(
-            cast("Client", _Bot()),
-            [_animation_message("a1", 8)],
+def test_upload_proof_media_uses_configured_destination_and_builds_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The public wrapper owns the destination, link, and landed contract."""
+    monkeypatch.setattr(
+        proof_post, "cfg", SimpleNamespace(proofs=(-1001234567890, 7)), raising=False
+    )
+    bot = _RichBot()
+
+    upload = asyncio.run(
+        proof_post.upload_proof_media(
+            cast("Client", bot),
+            [_photo_message("p1", 1), _photo_message("p2", 2)],
             "cap",
-            -100,
-            None,  # type: ignore[arg-type]
         )
     )
 
-    assert sent == [("animation", "a1")]
-    assert expected == 1
-    assert items[0].media_type == "animation"
-    assert items[0].duration_seconds == 3
-    assert items[0].file_name == "loop.mp4"
+    assert bot.calls[0][0] == -1001234567890
+    assert bot.calls[0][2]["message_thread_id"] == 7
+    assert upload.message_id == 101
+    assert upload.link == "https://t.me/c/1234567890/101?thread=7"
+    assert upload.landed is True
+    assert upload.expected_item_count == 1
+    assert len(upload.items) == 1
+    assert len(upload.documents()) == 1
+    assert upload.items[0].caption_text == "cap"
 
 
-def test_a_gallery_and_an_animation_are_both_archived() -> None:
-    """The gallery fast path must not drop a single media item beside it."""
-    sent: list[tuple[str, str]] = []
-
-    class _Bot:
-        async def send_media_group(self, *args: Any, **kwargs: Any) -> list[Any]:
-            return [
-                _sent(100, media_group_id="g1"),
-                _sent(101, media_group_id="g1"),
-            ]
-
-        async def send_animation(self, *args: Any, **kwargs: Any) -> Any:
-            sent.append(("animation", str(args[1])))
-            return _sent(102)
-
-        async def send_photo(self, *args: Any, **kwargs: Any) -> Any:
-            raise AssertionError("a gallery must not fall back to single sends")
-
-    items, expected = asyncio.run(
-        proof_post.upload_proof_items(
-            cast("Client", _Bot()),
-            [
-                _photo_message("p1", 1),
-                _photo_message("p2", 2),
-                _animation_message("a1", 3),
-            ],
-            "cap",
-            -100,
-            None,  # type: ignore[arg-type]
-        )
+def test_upload_proof_media_without_media_does_not_contact_telegram(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        proof_post, "cfg", SimpleNamespace(proofs=(-100, 7)), raising=False
     )
+    bot = _RichBot()
 
-    assert sent == [("animation", "a1")]
-    assert expected == 3
-    assert [item.media_type for item in items] == ["photo", "photo", "animation"]
-    assert [item.item_order for item in items] == [0, 1, 2]
-    assert [item.archive_message_id for item in items] == [100, 101, 102]
+    upload = asyncio.run(proof_post.upload_proof_media(cast("Client", bot), [], "cap"))
+
+    assert upload.landed is False
+    assert upload.expected_item_count == 0
+    assert upload.documents() == []
+    assert bot.calls == []

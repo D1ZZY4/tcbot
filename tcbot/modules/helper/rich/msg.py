@@ -32,14 +32,25 @@ log = get_logger(__name__)
 
 
 def html_message(
-    *blocks: str, rtl: bool = False, skip_entity_detection: bool = False
+    *blocks: str,
+    rtl: bool = False,
+    skip_entity_detection: bool = False,
+    media: list[Any] | None = None,
 ) -> dict[str, Any]:
-    """Build a rich message payload keyed by HTML content."""
+    """Build a rich message payload keyed by HTML content.
+
+    ``media`` carries the embedded media objects referenced by
+    ``tg://photo|video|document|audio?id=`` links in the HTML. It is forwarded
+    verbatim to :class:`InputRichMessage` so a rich message can contain media
+    without a separate plain upload.
+    """
     payload: dict[str, Any] = {"html": "\n".join(b for b in blocks if b)}
     if rtl:
         payload["is_rtl"] = True
     if skip_entity_detection:
         payload["skip_entity_detection"] = True
+    if media:
+        payload["media"] = list(media)
     return payload
 
 
@@ -87,6 +98,8 @@ def _input_rich(message: dict[str, Any]) -> InputRichMessage:
         kwargs["is_rtl"] = True
     if message.get("skip_entity_detection"):
         kwargs["skip_entity_detection"] = True
+    if message.get("media"):
+        kwargs["media"] = message["media"]
     return InputRichMessage(**kwargs)
 
 
@@ -177,10 +190,12 @@ async def reply_rich(
     parse_mode: Any = None,
     **kwargs: Any,
 ) -> None:
-    """Send a rich reply; transport errors propagate to the caller's guard.
+    """Send a rich reply, logging a transport failure instead of raising.
 
-    ``message_thread_id`` stays accepted for call-site compatibility but the
-    bound Kurigram reply already carries the host message's thread id.
+    Callers that need delivery confirmation use ``reply_rich_result``, which
+    raises when Telegram returns no message. ``message_thread_id`` stays
+    accepted for call-site compatibility but the bound Kurigram reply already
+    carries the host message's thread id.
     """
     _ = parse_mode
     markup = kwargs.get("reply_markup")

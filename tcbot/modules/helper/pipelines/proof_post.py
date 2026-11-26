@@ -11,12 +11,20 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 from pyrogram import Client
-from pyrogram.types import InputMediaPhoto, InputMediaVideo, Message
+from pyrogram.types import (
+    InputMediaAnimation,
+    InputMediaDocument,
+    InputMediaPhoto,
+    InputMediaVideo,
+    InputRichMessageMedia,
+    Message,
+)
 
 from tcbot import cfg
 from tcbot.modules.helper.messages.audit_logs import proof_caption_new
 from tcbot.modules.helper.rich.link import message_link
 from tcbot.modules.helper.rich.media import slideshow
+from tcbot.modules.helper.rich.msg import html_message, send_rich
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
@@ -162,8 +170,32 @@ def _source_media(message: Message) -> _SourceMedia | None:
     return None
 
 
-def _landed_item(message: Message, source: _SourceMedia, order: int) -> ProofItem:
-    """Describe one sent proof message with the metadata of its source."""
+# * A rich message accepts at most 50 attached media objects. A larger album
+# * is split into several slideshows instead of losing its excess files.
+_MAX_SLIDESHOW_MEDIA = 50
+
+
+def _attached_media(source: _SourceMedia, media_id: str) -> InputRichMessageMedia:
+    """Wrap one classified file for embedding in a rich slideshow."""
+    if source.send_kind == "photo":
+        content: Any = InputMediaPhoto(source.file_id)
+    elif source.send_kind == "video":
+        content = InputMediaVideo(source.file_id)
+    elif source.send_kind == "animation":
+        content = InputMediaAnimation(source.file_id)
+    else:
+        content = InputMediaDocument(source.file_id)
+    return InputRichMessageMedia(id=media_id, media=content)
+
+
+def _slideshow_item(
+    message: Message,
+    chunk: list[_SourceMedia],
+    order: int,
+    cap: str | None,
+) -> ProofItem:
+    """Describe the rich slideshow message that landed in the archive."""
+    source = chunk[0]
     return ProofItem(
         media_type=source.media_type,
         archive_message_id=int(message.id),
@@ -171,14 +203,13 @@ def _landed_item(message: Message, source: _SourceMedia, order: int) -> ProofIte
         file_unique_id=source.file_unique_id,
         mime_type=source.mime_type,
         file_size_bytes=source.file_size_bytes,
-        media_group_id=getattr(message, "media_group_id", None),
         duration_seconds=source.duration_seconds,
         width=source.width,
         height=source.height,
         file_name=source.file_name,
         source_chat_id=source.source_chat_id,
         source_message_id=source.source_message_id,
-        caption_text=source.caption_text or "",
+        caption_text=cap or source.caption_text or "",
     )
 
 
@@ -189,153 +220,65 @@ async def upload_proof_items(
     proof_chat: int,
     proof_thread: int | None,
 ) -> tuple[list[ProofItem], int]:
-    """Upload proof media and return the landed items plus the source count.
+    """Upload proof as rich slideshows with embedded media.
 
-    Photos and videos travel together in one media group (caption on the
-    first item, per the Telegram API); animations and documents cannot join
-    a media group, so each is sent individually after the gallery. The
-    source count includes a file whose send failed, so the archive can mark
-    a partial batch instead of claiming that a lost file landed. A failed
-    gallery chunk is logged and skipped; a failed animation or document is
-    logged and skipped so one bad file cannot void a good gallery.
+    Every landed artifact is one rich message carrying a slideshow; there is
+    no plain media send and no alternate transport. The returned count is the
+    number of rich messages attempted, so a lost chunk is recorded as partial
+    rather than silently omitted.
     """
     sources = [source for msg in msgs if (source := _source_media(msg)) is not None]
     if not sources:
         return [], 0
-    gallery = [source for source in sources if source.send_kind in ("photo", "video")]
-    singles = [
-        source for source in sources if source.send_kind not in ("photo", "video")
-    ]
+    # * One slideshow holds one media kind. Mixing img, video, and
+    # * document-backed items in one block is not a documented shape, so each
+    # * kind gets its own rich message instead of risking a server refusal.
+    chunks: list[list[_SourceMedia]] = []
+    for kind in ("photo", "video", "animation", "document"):
+        same_kind = [source for source in sources if source.send_kind == kind]
+        chunks.extend(
+            same_kind[start : start + _MAX_SLIDESHOW_MEDIA]
+            for start in range(0, len(same_kind), _MAX_SLIDESHOW_MEDIA)
+        )
     landed: list[ProofItem] = []
-
-    async def _send_single(source: _SourceMedia, cap: str | None) -> Message | None:
-        if source.send_kind == "photo":
-            return await bot.send_photo(
-                proof_chat,
-                source.file_id,
-                caption=cap or "",
-                parse_mode=None,
-                message_thread_id=proof_thread,
-            )
-        if source.send_kind == "video":
-            return await bot.send_video(
-                proof_chat,
-                source.file_id,
-                caption=cap or "",
-                parse_mode=None,
-                message_thread_id=proof_thread,
-            )
-        if source.send_kind == "animation":
-            return await bot.send_animation(
-                proof_chat,
-                source.file_id,
-                caption=cap or "",
-                parse_mode=None,
-                message_thread_id=proof_thread,
-            )
-        return await bot.send_document(
-            proof_chat,
-            source.file_id,
-            caption=cap or "",
-            parse_mode=None,
-            message_thread_id=proof_thread,
-        )
-
-    try:
-        if gallery:
-            if len(gallery) == 1:
-                sent = await _send_single(gallery[0], caption)
-                if sent is not None:
-                    landed.append(_landed_item(sent, gallery[0], len(landed)))
-                log.info(
-                    "Proof media uploaded: message_id=%s",
-                    landed[0].archive_message_id,
-                )
-                if not singles:
-                    return landed, len(sources)
-            else:
-                # * Telegram caps a media group at 10 items; larger albums
-                # * must be split or the whole gallery send is rejected.
-                for chunk_start in range(0, len(gallery), 10):
-                    chunk = gallery[chunk_start : chunk_start + 10]
-                    media: list[Any] = [
-                        InputMediaPhoto(
-                            source.file_id,
-                            # * Caption the first item that actually lands.
-                            # * Keying it to chunk 0 would lose the caption
-                            # * entirely when that chunk fails and a later
-                            # * one is the first to reach the destination.
-                            caption=(caption if not landed and index == 0 else "")
-                            or "",
-                            parse_mode=None,
-                        )
-                        if source.send_kind == "photo"
-                        else InputMediaVideo(
-                            source.file_id,
-                            caption=(caption if not landed and index == 0 else "")
-                            or "",
-                            parse_mode=None,
-                        )
-                        for index, source in enumerate(chunk)
-                    ]
-                    try:
-                        sent_group = await bot.send_media_group(
-                            proof_chat, media, message_thread_id=proof_thread
-                        )
-                    except Exception:
-                        log.exception("Proof gallery chunk upload failed")
-                        continue
-                    for sent, source in zip(sent_group, chunk, strict=False):
-                        landed.append(_landed_item(sent, source, len(landed)))
-                    if sent_group:
-                        log.info(
-                            "Proof gallery uploaded: %d items, message_id=%s",
-                            len(sent_group),
-                            landed[0].archive_message_id,
-                        )
-                if landed and not singles:
-                    return landed, len(sources)
-    except Exception:
-        # * A gallery failure must not discard single media evidence: fall
-        # * through to the single-item loop below.
-        log.exception("Proof gallery upload failed; trying single media")
-    # * The caption belongs to the first item that actually lands, not the
-    # * first source in the list: a failed first send must not leave the landed
-    # * evidence unlabelled. Track "already captioned" instead of the source
-    # * index, which never advances back after a failure.
-    caption_landed = bool(landed)
-    for source in singles:
+    for chunk in chunks:
+        references: list[tuple[str, str]] = []
+        attached: list[InputRichMessageMedia] = []
+        for index, source in enumerate(chunk):
+            media_id = f"m{index}"
+            references.append((media_id, source.send_kind))
+            attached.append(_attached_media(source, media_id))
+        cap = caption
+        html = slideshow(references, caption=cap)
         try:
-            sent = await _send_single(source, None if caption_landed else caption)
+            sent = await send_rich(
+                bot,
+                proof_chat,
+                html_message(html, media=attached),
+                message_thread_id=proof_thread,
+            )
         except Exception:
-            log.exception("Proof single media upload failed; continuing")
+            log.exception("Proof slideshow upload failed")
             continue
-        caption_landed = True
-        if sent is not None:
-            landed.append(_landed_item(sent, source, len(landed)))
-    if landed and singles:
-        log.info(
-            "Proof single media uploaded alongside message_id=%s",
-            landed[0].archive_message_id,
-        )
-    return landed, len(sources)
+        landed.append(_slideshow_item(sent, chunk, len(landed), cap))
+        log.info("Proof slideshow uploaded: message_id=%s", sent.id)
+    return landed, len(chunks)
 
 
 @dataclass(frozen=True)
 class ProofUpload:
     """One uploaded proof: the landed items, the first id, and its link.
 
-    ``items`` carries every message that actually reached the destination,
-    in send order. ``expected_item_count`` is the number of source media the
-    uploader tried to send, so a caller can archive a partial gallery
-    honestly instead of treating the first message as the whole proof.
+    ``items`` carries every rich slideshow that reached the destination, in
+    send order. ``expected_item_count`` is the number of slideshows attempted,
+    so a caller can archive a partial batch honestly instead of treating the
+    first message as the whole proof.
     """
 
     message_id: int | None = None
     link: str | None = None
     items: tuple[ProofItem, ...] = ()
     expected_item_count: int = 0
-    slideshow_html: str = ""
 
     @property
     def landed(self) -> bool:
@@ -377,17 +320,11 @@ async def upload_proof_media(
     if not items:
         return ProofUpload(expected_item_count=expected)
     first = items[0]
-    links = [
-        message_link(proof_chat, item.archive_message_id, proof_thread)
-        for item in items
-    ]
     return ProofUpload(
         message_id=first.archive_message_id,
         link=message_link(proof_chat, first.archive_message_id, proof_thread),
         items=tuple(items),
         expected_item_count=expected,
-        # * Existing rich media helper owns the presentation; no new code in rich/.
-        slideshow_html=slideshow(links, caption=caption),
     )
 
 

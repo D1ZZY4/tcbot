@@ -1,5 +1,5 @@
 # Proof-step strings shared by ban/kick/mute/warn flows.
-# Structure stays in proof_flow.py; only prose lives here.
+# Structure lives in proof_steps.py and proof_post.py; only prose lives here.
 # [empty]/[unexpected] send plain (alerts, parse_mode=None replies).
 # [prompt] entries render as rich HTML.
 # Placeholders: {gerund}/{Doing} localized verb forms, {target} rich

@@ -86,9 +86,10 @@ class BanDoc(TypedDict, total=False):
 class EvidenceItemDoc(TypedDict, total=False):
     """Row shape of one archived proof item.
 
-    One row describes one Telegram message that actually landed in the
-    evidence destination, so a gallery is recorded as its individual
-    photos, videos, or files instead of a single ``photo`` placeholder.
+    One row describes one rich slideshow that landed in the evidence
+    destination. Its fields describe the first embedded file; the remaining
+    files stay attached to the same rich message and are reachable through
+    its message link.
     """
 
     media_type: EvidenceMediaType

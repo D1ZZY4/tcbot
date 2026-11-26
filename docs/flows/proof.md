@@ -95,29 +95,30 @@ flowchart TD
     MSG[collected source messages] --> CLASS[_source_media classification]
     CLASS --> NONE{any supported media}
     NONE -->|no| EMPTY[return empty ProofUpload]
-    NONE -->|yes| SPLIT[split into gallery and singles]
-    SPLIT --> GAL[photos and videos in media groups of at most 10]
-    SPLIT --> SING[animations and documents sent individually]
-    GAL --> CAP[caption on first item of first chunk only]
-    CAP --> LAND[record landed items in send order]
-    SING --> LAND
-    LAND --> COUNT[expected_item_count counts every source attempted]
+    NONE -->|yes| KIND[partition by media kind]
+    KIND --> CHUNK[split each kind into groups of at most 50 files]
+    CHUNK --> MEDIA[wrap each file in InputRichMessageMedia]
+    MEDIA --> HTML[render tg-slideshow with embedded media ids]
+    HTML --> SEND[send_rich_message with media and caption]
+    SEND --> LAND[one ProofItem per landed rich message]
+    LAND --> COUNT[expected_item_count counts rich messages attempted]
     COUNT --> UP[ProofUpload with first id link items and expected count]
 ```
 
-`upload_proof_items()` groups photos and videos into one or more
-`send_media_group` calls, capped at ten items per group because Telegram rejects
-larger albums. Animations and documents cannot join a media group, so each is
-sent on its own. A failed gallery chunk is logged and skipped; a failed single
-is logged and skipped so one bad file cannot void a good gallery. A failed photo
-gallery falls through to the document loop so already collected file evidence
-still lands.
+`upload_proof_items()` sends every artifact as a rich message containing a
+`tg-slideshow`. Sources are partitioned by media kind first, then each kind is
+chunked to at most 50 files, so one slideshow never mixes `img`, `video`, and
+document-backed items. Each file becomes an `InputRichMessageMedia` with a short
+id, and the slideshow HTML references it through `tg://photo`, `tg://video`, or
+`tg://document` links. There is no plain media send and no fallback: a chunk
+that fails is logged and counted as missing, so the archive records a partial
+batch instead of hiding lost evidence.
 
-`ProofItem` records the landed message id, media type, item order, source chat
-and message ids, and the media metadata. `to_document()` converts it to the
-`EvidenceItemDoc` shape stored in the archive. `ProofUpload.landed` is true when
-at least one message reached the channel, and `documents()` returns every landed
-item.
+Every slideshow carries the identifying caption. `ProofItem` records the landed
+rich message id, the first file's media metadata, and the source ids.
+`to_document()` converts it to the `EvidenceItemDoc` shape stored in the
+archive. `ProofUpload.landed` is true when at least one rich message reached
+the channel, and `documents()` returns every landed slideshow row.
 
 A failed upload returns an empty `ProofUpload` instead of raising, because the
 moderation action is the important side effect. The ban executor checks `landed`
@@ -157,8 +158,9 @@ Either the decision and its proof both commit, or neither does.
 | `BuildProof` | `proof_steps.py` | Keyboard and prompts. |
 | `proof_step_btn` | `buttons/flows.py` | Skip, Done, Cancel callbacks. |
 | `upload_proof_media` | `proof_post.py` | Upload owner and `ProofUpload`. |
-| `upload_proof_items` | `proof_post.py` | Gallery chunking and singles. |
-| `ProofUpload.slideshow_html` | `proof_post.py` | Landed media links rendered with the shared rich slideshow helper. |
+| `upload_proof_items` | `proof_post.py` | Rich slideshow chunking and embedded media. |
+| `rich.media.slideshow` | `rich/media.py` | Slideshow markup referencing embedded media ids. |
+| `rich.msg.send_rich` | `rich/msg.py` | Rich transport used for every proof artifact. |
 | `ProofSession`, `proof_sessions` | `proof_session.py` | Ban session storage and drain. |
 | `_flush_session` | `ban_session.py` | Debounce timer and claim. |
 | `demote_before_enforcement` | `demote_actions.py` | Runs after proof before enforcement. |
@@ -166,16 +168,18 @@ Either the decision and its proof both commit, or neither does.
 
 The proof caption is built by `messages.proof_caption_new()` for new decisions
 and `messages.proof_caption_update()` for re-bans, where it carries the previous
-proof link. See [Transport](transport.md) for the rich send path.
+proof link. It is rendered inside the slideshow's `figcaption`, not as a plain
+media caption. See [Transport](transport.md) for the rich send path.
 
 ## Edge cases
 
 - A proof upload that outlives a demotion or target promotion is followed by a
   fresh enforcement gate immediately before the decision write.
-- A gallery that lost a file is a partial batch, not a single photo, and a new
-  ban is refused from it.
-- An animation lands as an animation message rather than a file attachment, so
-  the archive and the stored media type agree.
+- A slideshow chunk that failed is a partial batch, not a complete proof, and a
+  new ban is refused from it.
+- An animation is embedded as a document-backed rich attachment while its
+  `ProofItem` keeps the animation media type, so the archive still reports the
+  original evidence kind.
 - A late `Done` tap while a flush is already running is ignored; the first claim
   wins.
 - A cancelled proof flush releases only its own session, leaving a newer

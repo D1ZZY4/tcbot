@@ -4,9 +4,9 @@
 
 """Rich media blocks: photo, video, slideshow, and collage.
 
-Uploaded proof media is sent as a plain Bot API media message with a plain
-caption; these helpers render URL-based media inside rich HTML when a caller
-needs it.
+A slideshow references media supplied in ``InputRichMessage.media`` through
+``tg://photo|video|document|audio?id=`` links. Proof posts use that single rich
+path, so no plain media upload runs alongside it.
 """
 
 from __future__ import annotations
@@ -24,10 +24,28 @@ def video(url: str, *, caption: str | None = None) -> str:
     return _media("video", url, caption=caption)
 
 
-def slideshow(urls: list[str], *, caption: str | None = None) -> str:
-    """Render an ordered media slideshow."""
-    body = "".join(_media("img", url, self_closing=True) for url in urls)
+def slideshow(media: list[tuple[str, str]], *, caption: str | None = None) -> str:
+    """Render an ordered slideshow of media embedded in the rich message.
+
+    ``media`` holds ``(id, kind)`` pairs, where the id matches an
+    ``InputRichMessageMedia.id`` and the kind is the Kurigram media type. The
+    caption is a direct child of the slideshow, which is the only valid
+    location for a bare figcaption.
+    """
+    body = "".join(_embedded(media_id, kind) for media_id, kind in media)
     return f"<tg-slideshow>{body}{_caption(caption)}</tg-slideshow>"
+
+
+def _embedded(media_id: str, kind: str) -> str:
+    """Render one slideshow item referencing an attached media object."""
+    safe_id = esc(media_id)
+    if kind == "photo":
+        return f'<img src="tg://photo?id={safe_id}"/>'
+    if kind == "video":
+        return f'<video src="tg://video?id={safe_id}"></video>'
+    if kind == "audio":
+        return f'<audio src="tg://audio?id={safe_id}"></audio>'
+    return f'<img src="tg://document?id={safe_id}"/>'
 
 
 def collage(urls: list[str], *, caption: str | None = None) -> str:

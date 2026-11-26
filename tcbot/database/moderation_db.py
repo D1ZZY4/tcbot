@@ -206,10 +206,9 @@ async def archive_proof(
 ) -> int | None:
     """Archive the proof messages that actually landed and return the batch id.
 
-    One upload owns its landed items. A gallery that lost one file is a
-    ``partial`` batch, not a ``completed`` photo: the schema trigger checks
-    the item count against the expected count, so the caller has to say how
-    many source items it tried to send. A caller that only has the first
+    One upload owns its landed rich slideshows. A batch that lost one
+    slideshow is ``partial``, not ``completed``: the schema trigger checks the
+    item count against the expected count. A caller that only has the first
     message id keeps the legacy single-photo shape.
     """
     if not destination_chat_id:
