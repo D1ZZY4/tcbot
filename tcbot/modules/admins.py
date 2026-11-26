@@ -14,6 +14,7 @@ from tcbot.modules.helper.context import Ctx, chat_id_of, display_name
 from tcbot.modules.helper.guards import (
     action_owner_mismatch,
     can_demote_admin,
+    can_demote_staff,
     cancel_owner_mismatch,
     check_callback_executor,
     require_federation_origin,
@@ -601,6 +602,37 @@ async def on_demote_confirm(ctx: Ctx) -> None:
             q,
             refusal,
             log_label="on_demote_confirm refusal",
+        )
+        return
+
+    # * The rank was read before the target lookup and identity refresh. A
+    # * demotion landing in that window must not still strip the target's role
+    # * with a stale verdict, so the authorization runs again at the mutation
+    # * point. A lookup failure fails closed like every other role read.
+    try:
+        live_executor_role = await db.users_roles.get_effective_role(
+            admin.id, fresh=True
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception(
+            "executor role re-read failed during demote callback for admin=%d",
+            admin.id,
+        )
+        await cb_error_edit(
+            q,
+            t("admins.error.role_lookup_failed", locale, plain=True),
+            log_label="on_demote_confirm executor-role-lookup-failed",
+            parse_mode=None,
+        )
+        return
+    if not can_demote_staff(live_executor_role, target_role):
+        await cb_error_edit(
+            q,
+            t("admins.error.owner_demote_only", locale, plain=True),
+            log_label="on_demote_confirm executor-demoted",
+            parse_mode=None,
         )
         return
 

@@ -655,6 +655,21 @@ def can_demote_admin(executor_role: str | None, target_role: str | None) -> bool
     return executor_role == "owner"
 
 
+def can_demote_staff(executor_role: str | None, target_role: str | None) -> bool:
+    """Return True when the executor may remove ``target_role`` at mutation time.
+
+    ``check_callback_executor`` enforces the Admin floor at callback entry. A
+    confirmation can span several awaits, so the same combined gate is applied
+    again immediately before the role removal: a demotion landing in that
+    window must not still strip the target with a stale rank.
+    """
+    return (
+        executor_role is not None
+        and required_rank("admin") <= db.users_roles.role_rank(executor_role)
+        and can_demote_admin(executor_role, target_role)
+    )
+
+
 async def banned_target_refusal(
     target_id: int,
     locale: str | None,

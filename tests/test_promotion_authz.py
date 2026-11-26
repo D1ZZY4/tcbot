@@ -273,6 +273,16 @@ def test_promote_request_refuses_a_banned_target(
     assert enqueued == []
 
 
+def test_demote_mutation_gate_reuses_the_admin_floor() -> None:
+    """The mutation-point gate refuses a demoted or insufficient executor."""
+    assert guards.can_demote_staff("owner", "admin") is True
+    assert guards.can_demote_staff("admin", "moderator") is True
+    assert guards.can_demote_staff("admin", "admin") is False
+    assert guards.can_demote_staff("moderator", "moderator") is False
+    assert guards.can_demote_staff("moderator", "user") is False
+    assert guards.can_demote_staff(None, "moderator") is False
+
+
 # ───────────────────────────── Sync rank gate ─────────────────────────── #
 
 

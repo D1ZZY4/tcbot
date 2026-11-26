@@ -54,6 +54,64 @@ def _meta() -> dict[str, Any]:
     }
 
 
+def test_a_target_promoted_to_owner_before_the_write_stops_the_mute(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pre-write Owner verdict must leave no mute record and no delivery."""
+
+    async def _locale(_update: Any) -> str:
+        return "en-US"
+
+    async def _groups() -> list[dict[str, Any]]:
+        return [{"chat_id": 101, "title": "Group A"}]
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        return "moderator" if user_id == 1 else None
+
+    async def _demote(*args: Any, **kwargs: Any) -> str:
+        return "owner"
+
+    written: list[tuple[Any, ...]] = []
+    delivered: list[int] = []
+    prompts: list[list[Any]] = []
+
+    async def _record(*args: Any, **kwargs: Any) -> tuple[int, int]:
+        written.append(args)
+        return 1, 55
+
+    async def _deliver(_bot: Any, run_id: int) -> bool:
+        delivered.append(run_id)
+        return True
+
+    async def _prompt(*args: Any, **kwargs: Any) -> None:
+        prompts.append(list(args))
+
+    monkeypatch.setattr(mute_executor, "locale_for_update", _locale)
+    monkeypatch.setattr(db.groups_db, "active_groups", _groups)
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(mute_executor, "demote_before_enforcement", _demote)
+    monkeypatch.setattr(db.mutes_db, "record_mute", _record)
+    monkeypatch.setattr(
+        mute_executor.moderation_enforcement, "deliver_queued_run", _deliver
+    )
+    monkeypatch.setattr(mute_executor, "safe_edit_message", _prompt)
+
+    bot = _FakeBot()
+    asyncio.run(
+        mute_executor.execute_mute(
+            bot,  # type: ignore[arg-type]
+            _FakeUpdate(),  # type: ignore[arg-type]
+            _meta(),  # type: ignore[arg-type]
+        )
+    )
+
+    assert written == []
+    assert delivered == []
+    assert bot.restricts == []
+    assert len(prompts) == 1
+    assert "refuse.mute.owner" not in str(prompts[0])
+
+
 def test_a_late_owner_verdict_cannot_hide_a_committed_mute(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
