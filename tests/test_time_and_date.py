@@ -11,7 +11,6 @@ from datetime import UTC, datetime, timedelta, timezone
 from tcbot.utils.time_and_date import (
     elapsed_ms,
     fmt_date,
-    fmt_dt,
     fmt_duration,
     fmt_time,
     monotonic,
@@ -27,17 +26,6 @@ def test_to_utc_assumes_naive_is_utc() -> None:
 def test_to_utc_converts_aware() -> None:
     shifted = datetime(2026, 1, 2, 5, 4, tzinfo=timezone(timedelta(hours=2)))
     assert to_utc(shifted) == datetime(2026, 1, 2, 3, 4, tzinfo=UTC)
-
-
-def test_fmt_dt_renders_expected_shape() -> None:
-    assert fmt_dt(datetime(2026, 1, 2, 3, 4, tzinfo=UTC)) == "02-01-2026 | 03:04"
-    assert fmt_dt(datetime(2026, 1, 2, 3, 4)) == "02-01-2026 | 03:04"
-
-
-def test_fmt_dt_converts_another_offset_to_utc() -> None:
-    """An aware value in another zone renders its UTC wall clock."""
-    shifted = datetime(2026, 1, 2, 5, 4, tzinfo=timezone(timedelta(hours=2)))
-    assert fmt_dt(shifted) == "02-01-2026 | 03:04"
 
 
 def test_fmt_date_and_fmt_time_are_separate() -> None:

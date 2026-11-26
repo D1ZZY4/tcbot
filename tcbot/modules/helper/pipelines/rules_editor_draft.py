@@ -695,13 +695,6 @@ class RulesDraftEditor:
         )
         return WAITING_EDITOR_MENU
 
-    async def preview_page(self, ctx: Ctx) -> int:
-        """Handle a legacy preview-page tap by reopening the current preview."""
-        query = ctx.callback_query
-        if query is not None:
-            await query.answer()
-        return await self.preview(ctx)
-
     @staticmethod
     async def _locale(ctx: Ctx) -> str:
         return await locale_for_update(ctx)

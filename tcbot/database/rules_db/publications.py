@@ -175,15 +175,3 @@ async def retire_unused(set_id: int, locale: str, keep_ids: list[int]) -> int:
     return await db_call(
         lambda: run(stmt.values(status="retired", updated_at=utc_now()))
     )
-
-
-async def status_counts(set_id: int) -> dict[str, int]:
-    """Return the count of slots in each status for the editor panel."""
-    rows = await db_call(
-        lambda: fetch_all(
-            select(rule_publications.c.status, func.count().label("count"))
-            .where(rule_publications.c.rule_set_id == set_id)
-            .group_by(rule_publications.c.status)
-        )
-    )
-    return {str(row["status"]): int(row["count"]) for row in rows}

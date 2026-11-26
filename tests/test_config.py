@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import dataclasses
+import re
+from pathlib import Path
 
 import pytest
 
@@ -315,3 +317,30 @@ def test_transport_env_does_not_change_config(monkeypatch: pytest.MonkeyPatch) -
     loaded = _load(monkeypatch)
     assert not hasattr(loaded, "webhook_url")
     assert not hasattr(loaded, "webhook_secret")
+
+
+def _assigned_env_names(path: Path) -> set[str]:
+    """Return only the assignment names in a dotenv file, never the values."""
+    return {
+        match.group(1)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if (match := re.match(r"^([A-Z][A-Z0-9_]*)\s*=", line))
+    }
+
+
+def test_local_config_defines_no_removed_variables() -> None:
+    """A local config must not keep settings the loader has retired.
+
+    The example template is the documented variable set. A stale key there or
+    in a developer's local file silently stops having any effect after a
+    transport or configuration removal, which is how the webhook settings
+    survived their own removal. Values are deliberately never read.
+    """
+    root = Path(__file__).resolve().parent.parent
+    example = _assigned_env_names(root / "config.env.example")
+    assert example, "the example template must define the configuration keys"
+    local = root / "config.env"
+    # * config.env is gitignored, so a fresh checkout has no local file to
+    # * compare. The template itself is still checked above.
+    if local.is_file():
+        assert _assigned_env_names(local) <= example

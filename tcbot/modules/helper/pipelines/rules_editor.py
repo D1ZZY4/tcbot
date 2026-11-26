@@ -280,10 +280,6 @@ def build_rules_conv() -> ConversationHandler:
                     rules_draft_editor.preview, pattern=r"^rules_preview$"
                 ),
                 CallbackQueryHandler(
-                    rules_draft_editor.preview_page,
-                    pattern=r"^rules_preview_page:\d+$",
-                ),
-                CallbackQueryHandler(
                     rules_draft_editor.preview_category,
                     pattern=r"^rules_preview_cat:.+$",
                 ),

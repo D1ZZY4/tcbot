@@ -10,7 +10,7 @@ import re
 import time
 from datetime import UTC, datetime, timedelta
 
-from tcbot.utils.i18n import esc, t
+from tcbot.utils.i18n import t
 
 # ──────────────────────── Datetime Helpers ──────────────────────── #
 
@@ -35,21 +35,6 @@ def fmt_date(dt: datetime) -> str:
 def fmt_time(dt: datetime) -> str:
     """Format the clock time of dt as HH:MM in UTC."""
     return to_utc(dt).strftime("%H:%M")
-
-
-def fmt_dt_raw(dt: datetime) -> str:
-    """Format dt as DD-MM-YYYY | HH:MM in UTC (legacy combined form).
-
-    Kept for the rules publication content hash, where the two values appear
-    as one string in a version footer. Display surfaces use fmt_date and
-    fmt_time separately.
-    """
-    return f"{fmt_date(dt)} | {fmt_time(dt)}"
-
-
-def fmt_dt(dt: datetime) -> str:
-    """Format dt as an escaped combined date and time for upgrade compat."""
-    return esc(fmt_dt_raw(dt))
 
 
 # ──────────────────────── Measurement Helpers ──────────────────────── #

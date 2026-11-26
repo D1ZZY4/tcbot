@@ -29,7 +29,6 @@ from tcbot.database.rules_db.items import (
     update_item_body,
     update_item_title,
 )
-from tcbot.database.rules_db.publications import status_counts
 from tcbot.database.rules_db.publish import promote_version
 from tcbot.database.rules_db.read import (
     acknowledgement_count,
@@ -64,7 +63,6 @@ __all__ = [
     "rename_category",
     "runs",
     "set_category_description",
-    "status_counts",
     "update_item_body",
     "update_item_title",
 ]
