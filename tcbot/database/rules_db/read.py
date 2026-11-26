@@ -104,10 +104,10 @@ async def published_rules(
         )
     if version is None:
         return None
-    # * These reads depend only on set_id and the now-known version id. They
-    # * are independent pure reads, so one gather avoids three serial pool
-    # * checkouts on every rules-menu tap.
-    items, categories, set_doc = await asyncio.gather(
+    # * These reads depend only on set_id, locale, and the now-known version
+    # * id. They are independent pure reads, so one gather avoids four serial
+    # * pool checkouts on every rules-menu tap.
+    items, categories, set_doc, content = await asyncio.gather(
         db_call(
             lambda: fetch_all(
                 select(rule_items)
@@ -123,8 +123,8 @@ async def published_rules(
             )
         ),
         db_call(lambda: fetch_one(select(rule_sets).where(rule_sets.c.id == set_id))),
+        _category_presentation(set_id, locale),
     )
-    content = await _category_presentation(set_id, locale)
     titles = {str(row["category_key"]): str(row["title"]) for row in categories}
     resolved_categories: list[dict[str, Any]] = []
     for row in categories:
