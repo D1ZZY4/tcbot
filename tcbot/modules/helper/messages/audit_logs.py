@@ -13,9 +13,9 @@ if TYPE_CHECKING:
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper.rich.formats import divider, heading
-from tcbot.modules.helper.rich.list import bullet_list
+from tcbot.modules.helper.rich.formats import divider, heading, paragraph
 from tcbot.modules.helper.rich.style import bold as rich_bold
+from tcbot.modules.helper.rich.table import table
 from tcbot.utils.i18n import code, esc, link, safe_username, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import fmt_date, fmt_time, utc_now
@@ -35,11 +35,13 @@ _APPEAL_EXCERPT_MAX: int = 600
 
 
 class LogBuilder:
-    """Fluent builder for rich audit-log messages used by the log builders.
+    """Fluent builder for audit-log messages rendered as rich tables.
 
-    Field-like entries render as a rich bulleted list so label/value pairs
-    stay readable in a narrow log channel. Headings, dividers, and free-form
-    notes sit between the lists as their own rich blocks.
+    Every label/value pair is a row in a compact two-column Field/Value table,
+    the same layout used by the profile, statistics, and ban-detail panels.
+    Trusted markup from mention, code, and link helpers stays live in cells;
+    untrusted values are escaped once by the owning helper. Headings, section
+    dividers, and free-form notes render as their own rich blocks.
     """
 
     __slots__ = ("_items",)
@@ -47,14 +49,16 @@ class LogBuilder:
     def __init__(self, title: str) -> None:
         """Start a new log message with the given title header.
 
-        The title is escaped so callers can pass raw config or user-facing
-        strings without risk of breaking the rich markup sent to the log channel.
+        The title is escaped by ``heading()`` so callers can pass raw config or
+        user-facing strings without breaking the rich markup sent to the log.
         """
-        self._items: list[tuple[str, str]] = [("heading", heading(str(title)))]
+        self._items: list[tuple[str, str | list[str]]] = [
+            ("heading", heading(str(title)))
+        ]
 
-    def detail_field(self, rendered: str) -> LogBuilder:
-        """Append an already-rendered rich line to the current field list."""
-        self._items.append(("item", rendered))
+    def detail_field(self, label: str, rendered: str) -> LogBuilder:
+        """Append a trusted rich value under ``label`` as one table row."""
+        self._items.append(("row", [rich_bold(label), rendered]))
         return self
 
     def field(
@@ -64,62 +68,69 @@ class LogBuilder:
         *,
         escape: bool = True,
     ) -> LogBuilder:
-        """Append a `Label: value` field. The value is escaped by default."""
+        """Append one Field/Value row. The value is escaped by default."""
         v = esc(str(value)) if escape else str(value)
-        return self.detail_field(f"{rich_bold(label)}: {v}")
+        return self.detail_field(label, v)
 
     def code_field(self, label: str, value: object) -> LogBuilder:
-        """Append a `Label: code(value)` field."""
-        return self.detail_field(f"{rich_bold(label)}: {code(str(value))}")
+        """Append one Field/Value row whose value is an inline code span."""
+        return self.detail_field(label, code(str(value)))
 
     def mention_field(
         self, label: str, user_id: int, name: str, username: str | None = None
     ) -> LogBuilder:
-        """Append a `Label: user_ref(user_id, name, username)` field."""
-        return self.detail_field(
-            f"{rich_bold(label)}: {user_ref(user_id, name, username)}"
-        )
+        """Append one Field/Value row whose value is a user mention."""
+        return self.detail_field(label, user_ref(user_id, name, username))
 
     def link_field(self, label: str, text: str, url: str) -> LogBuilder:
-        """Append a `Label: link(text, url)` field."""
-        return self.detail_field(f"{rich_bold(label)}: {link(text, url)}")
+        """Append one Field/Value row whose value is a hyperlink."""
+        return self.detail_field(label, link(text, url))
 
     def raw(self, text: str) -> LogBuilder:
-        """Append a free-form rich line. Caller is responsible for escaping."""
-        self._items.append(("raw", text))
+        """Append a free-form rich paragraph. Caller owns any inline markup."""
+        self._items.append(("raw", paragraph(text)))
         return self
 
     def section(self) -> LogBuilder:
-        """Insert a rich divider between sections."""
+        """Insert a rich divider between field tables."""
         self._items.append(("divider", divider()))
         return self
 
     def date(self, ts: datetime | None = None, *, label: str = "Date") -> LogBuilder:
-        """Append separate `Label`/`Time` fields. Defaults to utc_now().
+        """Append separate Date/Time rows. Defaults to utc_now().
 
-        Date and time are never joined into one value: each gets its own
-        field so log readers can scan either independently.
+        Date and time are never joined into one value: each gets its own row so
+        log readers can scan either independently.
         """
         value = ts if ts is not None else utc_now()
-        self.detail_field(f"{rich_bold(label)}: {fmt_date(value)}")
-        return self.detail_field(f"{rich_bold('Time')}: {fmt_time(value)}")
+        self.detail_field(label, fmt_date(value))
+        return self.detail_field("Time", fmt_time(value))
 
     def build(self) -> str:
-        """Return the assembled rich message with fields grouped into lists."""
+        """Return the assembled rich message with fields grouped into tables."""
         parts: list[str] = []
-        pending: list[str] = []
+        rows: list[list[str]] = []
 
         def flush() -> None:
-            if pending:
-                parts.append(bullet_list(pending))
-                pending.clear()
+            if rows:
+                parts.append(
+                    table(
+                        ["Field", "Value"],
+                        rows,
+                        compact=True,
+                        striped=True,
+                        raw_cells=True,
+                    )
+                )
+                rows.clear()
 
         for kind, content in self._items:
-            if kind == "item":
-                pending.append(content)
+            if kind == "row" and isinstance(content, list):
+                rows.append(content)
                 continue
             flush()
-            parts.append(content)
+            if isinstance(content, str):
+                parts.append(content)
         flush()
         return "\n".join(parts)
 
@@ -189,10 +200,9 @@ def proof_caption_new(
     admin_fname: str,
     timestamp: datetime,
 ) -> str:
-    """Caption used on the initial proof message.
+    """Plain caption text for the initial proof slideshow.
 
-    Proof media is sent with ``parse_mode=None``, so this caption must stay
-    plain text: rich tags from the log builder would be shown literally.
+    The rich transport escapes it once inside the slideshow's figcaption.
     """
     return (
         f"ID: {target_id}\n\n"
@@ -210,7 +220,7 @@ def proof_caption_update(
     original_ts: datetime,
     prev_proof_lnk: str | None = None,
 ) -> str:
-    """Plain caption used when the proof message is updated."""
+    """Plain caption text used when the proof slideshow is replaced."""
     previous = f"\n\nPrevious: {prev_proof_lnk}" if prev_proof_lnk else ""
     updated_at = utc_now()
     return (
@@ -280,7 +290,7 @@ def kick_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Reason", reason)
-        .detail_field(f"{rich_bold('Group')}: {esc(chat_title)} ({code(str(chat_id))})")
+        .detail_field("Group", f"{esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -303,7 +313,7 @@ def resetwarns_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Warnings cleared", str(removed))
-        .detail_field(f"{rich_bold('Group')}: {esc(chat_title)} ({code(str(chat_id))})")
+        .detail_field("Group", f"{esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -329,7 +339,7 @@ def warn_log(
         .code_field("User ID", target_id)
         .field("Reason", reason)
         .field("Warnings", f"{count}/{warn_limit}")
-        .detail_field(f"{rich_bold('Group')}: {esc(chat_title)} ({code(str(chat_id))})")
+        .detail_field("Group", f"{esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -353,7 +363,7 @@ def unwarn_log(
         .mention_field("User", target_id, target_fname)
         .code_field("User ID", target_id)
         .field("Warnings now", f"{new_count}/{warn_limit}")
-        .detail_field(f"{rich_bold('Group')}: {esc(chat_title)} ({code(str(chat_id))})")
+        .detail_field("Group", f"{esc(chat_title)} ({code(str(chat_id))})")
         .section()
         .date()
         .build()
@@ -400,8 +410,8 @@ def appeal_received_log(
     request they never saw.
     """
     b = LogBuilder(f"New {cfg.community_name} Appeal Request").detail_field(
-        f"{rich_bold('User')}: {user_ref(target_id, target_fname)} "
-        f"(ID: {code(str(target_id))})"
+        "User",
+        f"{user_ref(target_id, target_fname)} (ID: {code(str(target_id))})",
     )
     b.code_field("Ban ID", ban_id)
     if rules:
@@ -471,7 +481,7 @@ def _appeal_decision_edit(
         # * of escaping twice like the default field() does.
         .field("Submitted date", submitted_date, escape=False)
         .field("Submitted time", submitted_time, escape=False)
-        .detail_field(f"{rich_bold(decision_label)}: {user_ref(admin_id, admin_fname)}")
+        .detail_field(decision_label, user_ref(admin_id, admin_fname))
         .date(label=f"{decision_label} at")
         .build()
     )
@@ -697,7 +707,7 @@ def group_connected_log(
         group_display = esc(chat_title)
     return (
         LogBuilder(f"New {cfg.community_name} Connected Group")
-        .detail_field(f"{rich_bold('Group')}: {group_display}")
+        .detail_field("Group", group_display)
         .code_field("ID", chat_id)
         .section()
         .mention_field("Added by Owner", owner_id, owner_fname)
@@ -717,11 +727,11 @@ def group_connection_rejected_log(
     """Connection-rejected audit-log message."""
     return (
         LogBuilder(f"{cfg.community_name} Connection Rejected")
-        .detail_field(f"{rich_bold('Group')}: {esc(chat_title)} (ID: {chat_id})")
+        .detail_field("Group", f"{esc(chat_title)} (ID: {code(str(chat_id))})")
         .section()
         .detail_field(
-            f"{rich_bold('Rejected by Owner')}: "
-            f"{user_ref(owner_id, owner_fname)} (ID: {code(str(owner_id))})"
+            "Rejected by Owner",
+            f"{user_ref(owner_id, owner_fname)} (ID: {code(str(owner_id))})",
         )
         .section()
         .date()

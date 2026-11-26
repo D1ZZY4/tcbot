@@ -2,7 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Audit logs render their label/value fields as a rich list."""
+"""Audit logs render their label/value fields as rich Field/Value tables."""
 
 from __future__ import annotations
 
@@ -64,31 +64,33 @@ def _samples() -> dict[str, str]:
     }
 
 
-def test_every_audit_log_groups_fields_into_a_rich_list() -> None:
-    """No log leaves a bare `Label: value` line outside a rich list."""
+def test_every_audit_log_groups_fields_into_a_rich_table() -> None:
+    """Every log field lives in a two-column table, like the other panels."""
     for name, text in _samples().items():
-        assert "<ul><li><b>" in text, name
+        assert "<table bordered striped compact>" in text, name
+        assert "<th>Field</th><th>Value</th>" in text, name
+        assert "<ul>" not in text, name
         assert "\n<b>" not in text, name
 
 
-def test_promoted_log_keeps_inline_markup_inside_the_list() -> None:
-    """Mentions, code IDs, and the date stay usable inside list items."""
+def test_promoted_log_keeps_inline_markup_inside_the_table() -> None:
+    """Mentions, code IDs, and the date stay usable inside table cells."""
     text = audit_logs.promoted(42, "tompearlgaming123", "moderator", 7, "Dizzy")
 
-    assert '<li><b>User</b>: <tg-button type="url" url="tg://user?id=42">' in text
-    assert "<li><b>User ID</b>: <code>42</code>" in text
-    assert "<li><b>Role</b>: Moderator" in text
-    assert '<li><b>Promoted by</b>: <tg-button type="url" url="tg://user?id=' in text
-    assert "<li><b>ID</b>: <code>7</code>" in text
-    assert "<li><b>Date</b>: " in text
+    assert "<td><b>User</b></td><td>tompearlgaming123</td>" in text
+    assert "<td><b>User ID</b></td><td><code>42</code></td>" in text
+    assert "<td><b>Role</b></td><td>Moderator</td>" in text
+    assert "<td><b>Promoted by</b></td><td>Dizzy</td>" in text
+    assert "<td><b>ID</b></td><td><code>7</code></td>" in text
+    assert "<td><b>Date</b></td><td>" in text
     assert "<hr/>" in text
 
 
 def test_date_and_time_are_separate_fields() -> None:
     """A log never joins the calendar date and clock time into one value."""
     text = audit_logs.ban_log(1, "Ann", 2, "Bob", "spam", "ban-1")
-    assert "<li><b>Commit at</b>: " in text
-    assert "<li><b>Time</b>: " in text
+    assert "<td><b>Commit at</b></td><td>" in text
+    assert "<td><b>Time</b></td><td>" in text
     assert " | " not in text
 
 
@@ -101,20 +103,21 @@ def test_proof_captions_split_date_and_time() -> None:
     assert " | " not in caption
 
 
-def test_untrusted_reason_stays_escaped_in_the_list() -> None:
-    """A rich list does not weaken the escaping applied to user input."""
+def test_untrusted_reason_stays_escaped_in_the_table() -> None:
+    """A rich table does not weaken the escaping applied to user input."""
     text = audit_logs.ban_log(1, "Ann", 2, "Bob", "<script>x</script>", "ban-1")
 
     assert "&lt;script&gt;x&lt;/script&gt;" in text
     assert "<script>" not in text
 
 
-def test_free_form_note_stays_outside_the_list() -> None:
+def test_free_form_note_stays_outside_the_table() -> None:
     """The pending-review note is prose, not a label/value field."""
     text = audit_logs.appeal_received_log(1, "Ann", "ban-1", "")
 
-    assert "<ul>" in text
-    assert "This appeal is pending review." in text
+    assert "<table bordered striped compact>" in text
+    assert "<p>This appeal is pending review.</p>" in text
+    assert "<ul>" not in text
 
 
 def test_review_card_shows_the_appeal_text_when_the_forward_failed() -> None:
