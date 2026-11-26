@@ -12,6 +12,7 @@ here is a genuine ``pyrogram.handlers.Handler`` ready for ``add_handler``.
 
 from __future__ import annotations
 
+import contextlib
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
@@ -26,9 +27,6 @@ from pyrogram.handlers import (
     ChatMemberUpdatedHandler as _ChatMemberUpdatedHandler,
 )
 from pyrogram.handlers import (
-    EditedMessageHandler as _EditedMessageHandler,
-)
-from pyrogram.handlers import (
     MessageHandler as _MessageHandler,
 )
 from pyrogram.types import CallbackQuery, ChatJoinRequest, ChatMemberUpdated, Message
@@ -41,7 +39,6 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from pyrogram import Client
-    from pyrogram.filters import Filter
     from pyrogram.handlers import Handler
 
 log = get_logger(__name__)
@@ -53,11 +50,45 @@ _updates = KeyedUpdateProcessor()
 # * The error handler receives a raw MTProto update. The application context
 # * built here is the reliable source of user, chat, and callback details.
 _current_ctx: ContextVar[Any | None] = ContextVar("tcbot_current_ctx", default=None)
+# * Kurigram calls error handlers after the wrapped handler has unwound and
+# * reset its ContextVar. The update snapshot therefore has to travel on the
+# * exception itself for the operator report to keep its user and chat details.
+_ERROR_CONTEXT_ATTR: str = "_tcbot_error_ctx"
 
 
 def current_ctx() -> Any | None:
     """Return the application context of the handler running in this task."""
     return _current_ctx.get()
+
+
+def context_snapshot(ctx: Any) -> dict[str, object]:
+    """Reduce a handler context to primitive fields for an error report."""
+    user = ctx.effective_user
+    chat = ctx.effective_chat
+    message = ctx.effective_message
+    query = ctx.callback_query
+    return {
+        "user_name": getattr(user, "first_name", None),
+        "user_id": getattr(user, "id", None),
+        "chat_type": getattr(getattr(chat, "type", None), "value", ""),
+        "chat_title": getattr(chat, "title", None),
+        "chat_id": getattr(chat, "id", None),
+        "text": getattr(message, "text", None),
+        "callback_data": getattr(query, "data", None),
+    }
+
+
+def remember_error_context(exc: BaseException, ctx: Any) -> None:
+    """Attach the update snapshot before the wrapper resets the context."""
+    # * An exception that cannot carry attributes still reports its message.
+    with contextlib.suppress(AttributeError, TypeError):
+        setattr(exc, _ERROR_CONTEXT_ATTR, context_snapshot(ctx))
+
+
+def error_context(exc: BaseException) -> dict[str, object] | None:
+    """Return the update snapshot carried by *exc*, when one was attached."""
+    value = getattr(exc, _ERROR_CONTEXT_ATTR, None)
+    return value if isinstance(value, dict) else None
 
 
 def _wrap(
@@ -94,6 +125,9 @@ def _wrap(
         token = _current_ctx.set(ctx)
         try:
             await _updates.do_process_update(ctx, callback(ctx))
+        except BaseException as exc:
+            remember_error_context(exc, ctx)
+            raise
         finally:
             _current_ctx.reset(token)
         return None
@@ -132,11 +166,6 @@ MY_CHAT_MEMBER = "my_chat_member"
 def ChatJoinRequestHandler(callback: Any, *args: Any, **kwargs: Any) -> Handler:
     """Build a Kurigram chat-join-request handler."""
     return _ChatJoinRequestHandler(_wrap(callback))
-
-
-def EditedMessageHandler(callback: Any, filter_: Filter | None = None) -> Handler:
-    """Build a Kurigram edited-message handler."""
-    return _EditedMessageHandler(_wrap(callback), filter_)
 
 
 class ConversationHandler:

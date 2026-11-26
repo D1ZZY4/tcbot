@@ -12,7 +12,7 @@ import sys
 import traceback
 from typing import TYPE_CHECKING
 
-from pyrogram import idle
+from pyrogram import ContinuePropagation, idle
 from pyrogram.handlers import (
     CallbackQueryHandler,
     ChatJoinRequestHandler,
@@ -35,7 +35,12 @@ from tcbot.database.engine import connect
 from tcbot.modules import get_handlers, handler_group
 from tcbot.modules.helper.context import bot_identity
 from tcbot.modules.helper.extraction import refresh as identity_refresh
-from tcbot.modules.helper.handlers import current_ctx, shutdown_dispatcher
+from tcbot.modules.helper.handlers import (
+    context_snapshot,
+    current_ctx,
+    error_context,
+    shutdown_dispatcher,
+)
 from tcbot.modules.helper.pipelines import connect_common
 from tcbot.modules.helper.pipelines.ban_session import drain_proof_sessions
 from tcbot.modules.helper.pipelines.errors import classify, report
@@ -76,8 +81,11 @@ log = get_logger(__name__)
 
 # ─────────────────────────────── Constants ─────────────────────────────── #
 
-_HANDLER_GROUP_RATE_LIMITER: int = -1
-_HANDLER_GROUP_CACHE: int = 10
+# * The catch-all cache handler must run before module handlers. Kurigram
+# * stops at the first handler that consumes an update, so a later group would
+# * never see commands and callbacks. It passes the update on so the module
+# * handlers still own it.
+_HANDLER_GROUP_CACHE: int = -1
 # * Last responder: flows release callbacks they do not own with
 # * ContinuePropagation. This group acknowledges a tap nobody claimed so no
 # * client spinner is left hanging, and it never answers twice.
@@ -135,6 +143,10 @@ async def _on_any_update(client: Client, update: object) -> None:
         user = update.from_user
         if user is not None:
             await _cache_identity(client, user)
+    # * Caching must not consume the update: module handlers own commands and
+    # * callbacks. Reaching the last-responder group is then possible only for
+    # * callbacks no module claimed.
+    raise ContinuePropagation()
 
 
 async def _answer_unowned_callback(_client: Client, query: CallbackQuery) -> None:
@@ -178,29 +190,32 @@ async def _error_handler(
         return
     if classify._is_benign(exc):
         return
+    snapshot = error_context(exc)
+    if snapshot is None:
+        ctx = current_ctx()
+        snapshot = context_snapshot(ctx) if ctx is not None else None
     context_parts: list[str] = []
-    ctx = current_ctx()
-    user = ctx.effective_user if ctx is not None else None
-    chat = ctx.effective_chat if ctx is not None else None
-    msg = ctx.effective_message if ctx is not None else None
-    query = ctx.callback_query if ctx is not None else None
-    is_private = getattr(getattr(chat, "type", None), "value", "") in ("private", "bot")
-    if user is not None:
-        context_parts.append(
-            f"User: {user.first_name}"
-            if is_private
-            else f"User: {user.first_name} ({user.id})"
-        )
-    if chat is not None:
-        context_parts.append(
-            "Chat: DM"
-            if is_private
-            else f"Chat: {getattr(chat, 'title', None) or 'group'} ({chat.id})"
-        )
-    if msg is not None and getattr(msg, "text", None) and not is_private:
-        context_parts.append(f"Text: {msg.text[:_ERROR_CONTEXT_TEXT_LEN]}")
-    if query is not None and query.data:
-        context_parts.append(f"CBQ data: {query.data}")
+    is_private = str((snapshot or {}).get("chat_type") or "") in ("private", "bot")
+    if snapshot:
+        name = snapshot.get("user_name")
+        user_id = snapshot.get("user_id")
+        if name:
+            context_parts.append(
+                f"User: {name}" if is_private else f"User: {name} ({user_id})"
+            )
+        chat_id = snapshot.get("chat_id")
+        if chat_id:
+            context_parts.append(
+                "Chat: DM"
+                if is_private
+                else f"Chat: {snapshot.get('chat_title') or 'group'} ({chat_id})"
+            )
+        text = snapshot.get("text")
+        if text and not is_private:
+            context_parts.append(f"Text: {str(text)[:_ERROR_CONTEXT_TEXT_LEN]}")
+        callback_data = snapshot.get("callback_data")
+        if callback_data:
+            context_parts.append(f"CBQ data: {callback_data}")
     context_str = (
         report.scrub_text(" | ".join(context_parts)) if context_parts else None
     )
