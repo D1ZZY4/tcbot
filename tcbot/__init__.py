@@ -79,7 +79,9 @@ def parse_list(raw: str) -> list[str]:
             # * and MODULES_LOAD treats an empty name as an invalid module.
             return [value for item in parsed if (value := str(item).strip())]
     except (ValueError, SyntaxError) as exc:
-        log.debug("parse_list falling back to CSV parsing: %s", exc)
+        # * This fallback can change command prefixes, registered modules, and
+        # * the infrastructure-chat guard, so it must be visible at INFO level.
+        log.warning("parse_list falling back to CSV parsing: %s", exc)
     items = raw.strip("[]").split(",")
     return [item.strip().strip("'\"") for item in items if item.strip()]
 
