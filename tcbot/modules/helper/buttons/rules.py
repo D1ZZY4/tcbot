@@ -419,13 +419,6 @@ def editor_items_page_btn(
     return InlineKeyboardMarkup(_nav_rows(index, total, "rules_items_page", locale))
 
 
-def editor_preview_page_btn(
-    index: int, total: int, locale: str | None = None
-) -> InlineKeyboardMarkup:
-    """Page controls for the draft preview."""
-    return InlineKeyboardMarkup(_nav_rows(index, total, "rules_preview_page", locale))
-
-
 def rules_page_btn(
     index: int, total: int, locale: str | None = None
 ) -> InlineKeyboardMarkup:

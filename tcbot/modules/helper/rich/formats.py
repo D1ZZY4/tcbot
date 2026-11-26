@@ -87,11 +87,6 @@ def divider() -> str:
     return "<hr/>"
 
 
-def line_break() -> str:
-    """Render an explicit line break inside a block."""
-    return "<br/>"
-
-
 def footer(text: object) -> str:
     """Render a footer block."""
     content = esc(text)
@@ -138,7 +133,6 @@ __all__ = [
     "footnote_ref",
     "heading",
     "highlight",
-    "line_break",
     "math",
     "math_block",
     "paragraph",
