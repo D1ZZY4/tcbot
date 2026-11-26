@@ -79,10 +79,11 @@ Recent project additions to keep accurate when editing docs:
 
 - Smart mention system in `tcbot/utils/i18n.py`
   (`user_ref(user_id, name, username=None)`) which delegates to the native rich
-  mention button in `modules/helper/rich/button.py`. Telegram has no dedicated
-  mention button type, so the button carries an ID-based `tg://user?id=...` URL.
-  Usernames are never used (the numeric ID is the single source of truth); the
-  `username` parameter is accepted for backward compatibility and ignored.
+  mention button in `modules/helper/rich/button.py`. A verified username becomes
+  a `t.me/{username}` button; there is no `tg://user` form because Telegram
+  rejects a user-profile button for any account that no longer exists. Without
+  a verified username the mention renders as escaped plain text. The numeric ID
+  remains the identity key; a username is only the durable link when available.
 - Batch query helpers in `tcbot/database/users_cache.py`
   (`get_user_mention_data`, `get_mention_data_batch`,
   `get_first_names_batch`).

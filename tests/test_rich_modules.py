@@ -62,9 +62,7 @@ def test_table_module_owns_tables() -> None:
 
 def test_link_module_owns_links_and_buttons_own_mentions() -> None:
     assert rich_link.link("t.me", "https://t.me") == ('<a href="https://t.me">t.me</a>')
-    assert rich_buttons.mention_button(0, "Anon") == (
-        '<tg-button type="disabled">Anon</tg-button>'
-    )
+    assert rich_buttons.mention_button(0, "Anon") == "Anon"
     assert rich_buttons.button("Go", data="go", style="green") == (
         '<tg-button type="callback_data" data="go" style="success">Go</tg-button>'
     )
@@ -155,8 +153,9 @@ def test_media_module_owns_media_and_slideshow() -> None:
     assert rich_media.collage(["https://x/i.jpg"]) == (
         '<tg-collage><img src="https://x/i.jpg"/></tg-collage>'
     )
-    assert rich_media.slideshow(["https://x/i.jpg"]) == (
-        '<tg-slideshow><img src="https://x/i.jpg"/></tg-slideshow>'
+    assert rich_media.slideshow([("m0", "photo"), ("m1", "video")]) == (
+        '<tg-slideshow><img src="tg://photo?id=m0"/>'
+        '<video src="tg://video?id=m1"></video></tg-slideshow>'
     )
 
 

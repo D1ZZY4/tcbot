@@ -77,16 +77,15 @@ def link(text: object, url: str) -> str:
 def user_ref(user_id: int, name: str, username: str | None = None) -> str:
     """Render a native rich mention button for a user ID.
 
-    Telegram has no dedicated mention button: the documented mechanism is a
-    URL button carrying ``tg://user?id=``. Keeping the public signature here
-    lets every existing catalog placeholder migrate in one place.
+    The mention owner renders a shape-valid username as a rich URL button and
+    every other value as escaped plain text. There is no ``tg://user`` form:
+    Telegram would reject the edit for any id without a live account. Keeping
+    the public signature here lets every catalog placeholder use that one safe
+    form.
     """
     from tcbot.modules.helper.rich.button import mention_button  # noqa: PLC0415
-    from tcbot.modules.helper.rich.style import bold  # noqa: PLC0415
 
-    if user_id <= 0:
-        return bold(name or str(user_id))
-    return mention_button(user_id, name)
+    return mention_button(user_id, name, username=username)
 
 
 def safe_username(username: str | None) -> str | None:
@@ -329,7 +328,8 @@ def _render_template(
     In rich mode (``escape=True``) literal text is HTML-escaped and the
     `` `code` `` / ``*bold*`` / ``~italic~`` spans become ``<code>`` / ``<b>``
     / ``<i>`` tags. Plain mode (``plain=True``) keeps raw catalog text for
-    callback alerts, which Telegram never parses.
+    callback alerts and notices; that text still enters a rich HTML payload,
+    so an untrusted dynamic value must be escaped by the caller.
     """
     parts: list[str] = []
     literal: list[str] = []

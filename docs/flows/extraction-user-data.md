@@ -78,8 +78,9 @@ the `utf-16-le` bytes; a split surrogate fails to decode and the entity is
 skipped.
 
 Live verification of a target's name uses `_fetch_live_identity()` in
-`extraction/refresh.py`: one bounded `get_chat`, then `mtproto.resolve_user()`,
-then a bounded `get_chat_member` sweep over connected groups. The sweep is
+`extraction/refresh.py`: one bounded MTProto `get_users` call, then
+`mtproto.resolve_user()`, then a bounded `get_chat_member` sweep over connected
+groups. The sweep is
 capped by `_RESOLVE_SWEEP_CONCURRENCY = 10` and `_RESOLVE_SWEEP_TIMEOUT = 15.0` s.
 The Bot API cannot enumerate group members, so unknown users resolve per id
 across the groups the bot has joined.
@@ -169,14 +170,16 @@ itself stays instant.
 
 ## Mention formatting
 
-All clickable user mentions are ID-based native rich buttons.
-`utils.i18n.user_ref(user_id, name, username=None)` delegates to
-`modules/helper/rich/button.py::mention_button`, which ignores `username` and
-renders `<tg-button type="url" url="tg://user?id={user_id}">{name}</tg-button>`
-for a positive id. Telegram has no separate mention button type, so the URL
-carries the numeric id. A non-positive id renders as bold text, so an anonymous
-admin or service account is never linked. The numeric id is the single source
-of truth; a reusable username can change and is never used in the button.
+User mentions are owned by `modules/helper/rich/button.py::mention_button`,
+reached through `utils.i18n.user_ref(user_id, name, username=None)`. A
+shape-valid username becomes a `https://t.me/{username}` rich URL button. There
+is deliberately no `tg://user?id=` form: Telegram turns it into a native
+user-profile button and rejects any id without a live account, which fails the
+whole edit with `BUTTON_USER_INVALID`. Because an id alone cannot prove that an
+account still exists, a user without a verified username renders as escaped
+plain text instead of a message-breaking button. Staff rosters still verify ids
+with MTProto `get_users`, and the shared lookup in `extraction/refresh.py` uses
+the same API so restricted and silent accounts keep a usable label.
 
 `code()` renders ids inside literal code spans, and `bold()` wraps static
 labels. Do not combine `user_ref(x)` and `code(x)` for the same value. The test

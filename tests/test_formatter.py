@@ -58,14 +58,15 @@ def test_link_escapes_both_parts() -> None:
     assert link("Go", "https://t.me/x") == '<a href="https://t.me/x">Go</a>'
 
 
-def test_user_ref_uses_native_button_and_ignores_username() -> None:
-    expected = '<tg-button type="url" url="tg://user?id=123">{}</tg-button>'
-    assert user_ref(123, "A_B") == expected.format("A_B")
-    assert user_ref(123, "Ann", "ann_x") == expected.format("Ann")
+def test_user_ref_prefers_a_verified_username() -> None:
+    assert user_ref(123, "A_B") == "A_B"
+    assert user_ref(123, "Ann", "ann_x") == (
+        '<tg-button type="url" url="https://t.me/ann_x">Ann</tg-button>'
+    )
 
 
-def test_user_ref_without_an_account_renders_bold_text() -> None:
-    assert user_ref(0, "anonymous admin") == "<b>anonymous admin</b>"
+def test_user_ref_without_an_account_renders_plain_text() -> None:
+    assert user_ref(0, "anonymous admin") == "anonymous admin"
 
 
 def test_safe_username_shape() -> None:

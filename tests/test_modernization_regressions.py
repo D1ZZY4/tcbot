@@ -80,7 +80,7 @@ def test_logger_handler_copies_record() -> None:
     assert captured[0].exc_info is not None
 
 
-def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_proof_gallery_is_one_rich_slideshow(monkeypatch: pytest.MonkeyPatch) -> None:
     msgs = []
     for i in range(11):
         m = MagicMock()
@@ -90,20 +90,15 @@ def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:
         m.document = None
         msgs.append(m)
 
-    calls: list[int] = []
+    rich_calls: list[Any] = []
 
-    async def _send_media_group(chat_id: int, media: list[Any], **kw: Any) -> list[Any]:
-        calls.append(len(media))
-        out = []
-        for _ in media:
-            r = MagicMock()
-            r.id = 1
-            r.message_id = 1
-            out.append(r)
-        return out
+    async def _send_rich(chat_id: int, rich_message: Any, **kw: Any) -> Any:
+        rich_calls.append(rich_message)
+        return SimpleNamespace(id=77, message_id=77)
 
     bot = MagicMock()
-    bot.send_media_group = _send_media_group
+    bot.send_rich_message = _send_rich
+    bot.send_media_group = AsyncMock(side_effect=AssertionError("no plain gallery"))
     bot.send_photo = AsyncMock(side_effect=AssertionError("no single send"))
     bot.send_video = AsyncMock(side_effect=AssertionError("no single send"))
     bot.send_document = AsyncMock(side_effect=AssertionError("no single send"))
@@ -111,9 +106,10 @@ def test_proof_gallery_chunked_at_ten(monkeypatch: pytest.MonkeyPatch) -> None:
     items, expected = asyncio.run(
         proof_post.upload_proof_items(bot, msgs, "cap", 1, None)  # type: ignore[arg-type]
     )
-    assert [item.archive_message_id for item in items] == [1] * 11
-    assert expected == 11
-    assert calls == [10, 1]
+    assert [item.archive_message_id for item in items] == [77]
+    assert expected == 1
+    assert len(rich_calls) == 1
+    assert len(rich_calls[0].media) == 11
 
 
 def test_unmute_partial_queues_a_durable_delivery(
@@ -254,17 +250,25 @@ def test_staff_roster_resolves_live_on_numeric_fallback(
     async def _mention(ids: list[int]) -> dict[int, tuple[str, str | None]]:
         return {1: ("Founder", None), 8679231509: ("8679231509", None)}
 
-    async def _sync(bot: Any, uid: int) -> tuple[str, str | None, str | None]:
-        return ("Sang Kucing", "sangkucing", None)
+    class _Bot:
+        async def get_users(self, ids: list[int]) -> list[Any]:
+            return [
+                SimpleNamespace(id=1, first_name="Owner", username=None),
+                SimpleNamespace(
+                    id=8679231509, first_name="Sang Kucing", username="sangkucing"
+                ),
+            ]
 
     monkeypatch.setattr(db.users_roles, "get_owner_id", _owner)
     monkeypatch.setattr(db.users_roles, "all_admins", _admins)
     monkeypatch.setattr(db.users_roles, "all_by_role", _by_role)
     monkeypatch.setattr(db.users_cache, "get_mention_data_batch", _mention)
-    monkeypatch.setattr(stats_panels, "sync_user_identity", _sync)
 
-    text, _ = asyncio.run(stats_panels.Stats.staff_roster("en-US", bot=MagicMock()))
+    text, _ = asyncio.run(
+        stats_panels.Stats.staff_roster("en-US", bot=_Bot())  # type: ignore[arg-type]
+    )
     assert "Sang Kucing" in text
+    assert "https://t.me/sangkucing" in text
     admins_section = text.split("Admins")[1].split("Developers")[0]
     assert "- 8679231509" not in admins_section
     # * A stale role key used to render as a raw "[stats.roster.founder]"
@@ -312,6 +316,45 @@ def test_staff_roster_renders_separate_rich_blocks(
     assert "<ul><li>" in text
     assert text.count("<ul>") >= 3
     assert "\n- " not in text
+
+
+def test_staff_roster_links_only_users_mtproto_can_resolve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deleted staff account must not produce a rejected profile button."""
+
+    async def _owner() -> int:
+        return 1
+
+    async def _admins() -> list[dict[str, int]]:
+        return [{"user_id": 2}, {"user_id": 3}]
+
+    async def _by_role(_role: str) -> list[dict[str, int]]:
+        return []
+
+    async def _mention(ids: list[int]) -> dict[int, tuple[str, str | None]]:
+        return {uid: (str(uid), None) for uid in ids}
+
+    class _Bot:
+        async def get_users(self, ids: list[int]) -> list[Any]:
+            return [
+                SimpleNamespace(id=1, first_name="Owner", username="live_owner"),
+                SimpleNamespace(id=2, first_name="Alpha", username=None),
+            ]
+
+    monkeypatch.setattr(db.users_roles, "get_owner_id", _owner)
+    monkeypatch.setattr(db.users_roles, "all_admins", _admins)
+    monkeypatch.setattr(db.users_roles, "all_by_role", _by_role)
+    monkeypatch.setattr(db.users_cache, "get_mention_data_batch", _mention)
+
+    text, _ = asyncio.run(
+        stats_panels.Stats.staff_roster("en-US", bot=_Bot())  # type: ignore[arg-type]
+    )
+
+    assert "https://t.me/live_owner" in text
+    assert "Alpha" in text
+    assert "tg://user" not in text
+    assert "3</tg-button>" not in text
 
 
 def test_circuit_decay_resets_lifetime_count() -> None:

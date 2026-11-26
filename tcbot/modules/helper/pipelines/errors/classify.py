@@ -15,6 +15,7 @@ from tcbot.modules.helper.pipelines.errors.exceptions import (
     PollingConflictError,
     is_bad_request,
     is_forbidden,
+    is_invalid_button_user,
     is_mtproto_auth_error,
     is_owner_only,
     is_rate_limit,
@@ -101,6 +102,11 @@ _ACTION_HINTS: tuple[tuple[str, str], ...] = (
     ("Polling Conflict", "Two bot instances are polling; stop the duplicate."),
     ("Invalid Token", "Token revoked or wrong; set BOT_TOKEN and restart."),
     ("Forbidden", "Client lacks admin rights in the target chat; re-promote it."),
+    (
+        "User Profile Button",
+        "A mention in the card points to an id Telegram cannot address. "
+        "Re-render that card without the mention or clear its keyboard.",
+    ),
     ("Bad Request", "Check the reported call arguments for a bad ID or text."),
     ("Network", "Transient connectivity issue; retry the action."),
     ("Timeout", "Operation exceeded its deadline; retry the action."),
@@ -150,6 +156,8 @@ def _classify(exc: BaseException | None) -> str:
         return "[~] Telegram Timed Out"
     if isinstance(exc, PollingConflictError):
         return "[~] Polling Conflict"
+    if is_invalid_button_user(exc):
+        return "[!] Telegram User Profile Button Invalid"
     if is_bad_request(exc):
         return "[!] Telegram Bad Request"
     if is_forbidden(exc):

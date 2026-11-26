@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 
 import pytest
+from pyrogram.errors import BadRequest
 from pyrogram.session.session import AuthKeyNotFound
 from sqlalchemy.exc import OperationalError
 
@@ -81,6 +82,19 @@ def test_rpc_timeout_keeps_the_telegram_label(exc_type: type[Exception]) -> None
     exc = exc_type("rpc call timed out")
     assert classify._classify(exc) == "[~] Telegram Timed Out"
     assert "retry the action" in classify._action_hint(classify._classify(exc)).lower()
+
+
+def test_an_invalid_profile_button_gets_a_specific_label_and_hint() -> None:
+    """A stale user-profile button is not a generic bad call argument."""
+    exc = BadRequest(
+        "Telegram says: [400 BUTTON_USER_INVALID] - The user_id passed to "
+        "inputKeyboardButtonUserProfile is invalid!"
+    )
+    label = classify._classify(exc)
+    assert label == "[!] Telegram User Profile Button Invalid"
+    hint = classify._action_hint(label).lower()
+    assert "mention" in hint
+    assert "call arguments" not in hint
 
 
 def test_benign_suppresses_connectivity_and_circuit() -> None:

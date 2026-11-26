@@ -83,11 +83,17 @@ via `locale_for_user`; event handlers without an update use
 `locale_for_chat`. Every `t()` call passes that locale explicitly; the
 default locale is only for tests and goldens.
 
-Each key documents its send path. Plain notices and callback alerts must
-render with `plain=True`. Rich message keys use the default mode, which
-escapes literal text and resolves `` `code` `` / `*bold*` / `~italic~`
-spans into real `<code>` / `<b>` / `<i>` tags. Dynamics cross as raw data or `Safe` pre-formatted
-markup, never pre-escaped. There is no parse-mode fallback path.
+Each key documents its send path. Plain notices and callback alerts render
+with `plain=True`. Rich message keys use the default mode, which escapes literal
+text and resolves `` `code` `` / `*bold*` / `~italic~` spans into real `<code>` /
+`<b>` / `<i>` tags. Dynamics cross as raw data or `Safe` pre-formatted markup,
+never pre-escaped.
+
+Every send and edit helper accepts `parse_mode` for call-site compatibility but
+discards it; the string always reaches Telegram inside rich HTML. Plain-mode
+output is not HTML-escaped, so an untrusted dynamic value must be escaped with
+`esc()` or wrapped by a trusted formatting helper before it enters a rich
+message. There is no parse-mode fallback transport.
 
 ## Adding a locale
 

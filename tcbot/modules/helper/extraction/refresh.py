@@ -56,9 +56,10 @@ async def _fetch_live_identity(
 ) -> tuple[str, str | None, str | None] | None:
     """Fetch a fresh (first_name, username, last_name) triple from Telegram.
 
-    Tries one bounded ``get_chat`` call, then walks the connected groups
-    with ``get_chat_member`` (which returns full ``User`` objects even for
-    kicked users). Group probes run concurrently (bounded by
+    Tries one bounded MTProto ``get_users`` call, then one shared MTProto
+    lookup, then walks the connected groups with ``get_chat_member``
+    (which returns full ``User`` objects even for kicked users). Group probes
+    run concurrently (bounded by
     ``_RESOLVE_SWEEP_CONCURRENCY``) and the first hit in group order wins;
     every probe returns the same Telegram user triple, so parallelism only
     changes latency, not the result. Returns ``None`` when nothing resolves.
@@ -71,17 +72,22 @@ async def _fetch_live_identity(
     fname: str = ""
     uname: str | None = None
     lname: str | None = None
+    # * users.getUsers is the authoritative MTProto lookup: unlike the Bot API
+    # * getChat it still returns a full User for a restricted or silent account.
+    # * Kurigram exposes it to bot sessions as get_users.
     try:
-        chat = await asyncio.wait_for(
-            bot.get_chat(target_id), timeout=_GET_CHAT_TIMEOUT
+        user = await asyncio.wait_for(
+            bot.get_users(target_id), timeout=_GET_CHAT_TIMEOUT
         )
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
-        log.debug("get_chat(%s) failed: %s", target_id, exc)
-        chat = None
-    if chat is not None:
-        fname = chat.first_name or ""
-        uname = chat.username
-        lname = getattr(chat, "last_name", None)
+        log.debug("get_users(%s) failed: %s", target_id, exc)
+        user = None
+    if user is not None:
+        fname = getattr(user, "first_name", "") or ""
+        uname = getattr(user, "username", None)
+        lname = getattr(user, "last_name", None)
 
     if not fname:
         # * MTProto fallback before the group sweep: one peer lookup instead

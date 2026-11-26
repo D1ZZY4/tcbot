@@ -36,9 +36,7 @@ async def test_drain_is_bounded_when_a_task_suppresses_cancellation() -> None:
 
 def test_user_ref_without_a_name_uses_the_numeric_id() -> None:
     """A missing name must render the ID, never the literal text 'None'."""
-    assert user_ref(12345, None) == (  # type: ignore[arg-type]
-        '<tg-button type="url" url="tg://user?id=12345">12345</tg-button>'
-    )
+    assert user_ref(12345, None) == "12345"  # type: ignore[arg-type]
 
 
 def test_short_durations_are_clamped_to_a_safe_restriction_floor() -> None:

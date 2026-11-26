@@ -9,11 +9,22 @@ from __future__ import annotations
 import asyncio
 from typing import Any, cast
 
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InputMediaPhoto,
+    InputRichMessage,
+    InputRichMessageMedia,
+)
 
 from tcbot.modules.helper.rich import edit as rich_edit
 from tcbot.modules.helper.rich import msg as rc
-from tcbot.modules.helper.rich.button import button, button_row
+from tcbot.modules.helper.rich.button import (
+    button,
+    button_row,
+    is_mentionable_user_id,
+    mention_button,
+)
 from tcbot.modules.helper.rich.formats import (
     anchor,
     code,
@@ -91,10 +102,118 @@ def test_inline_helpers_cover_modern_formatting() -> None:
 
 
 def test_user_ref_uses_native_rich_mention_buttons() -> None:
-    assert user_ref(42, "Name") == (
-        '<tg-button type="url" url="tg://user?id=42">Name</tg-button>'
+    assert user_ref(42, "Name") == "Name"
+    assert user_ref(42, "Name", "real_user") == (
+        '<tg-button type="url" url="https://t.me/real_user">Name</tg-button>'
     )
-    assert user_ref(0, "Anon") == "<b>Anon</b>"
+    assert user_ref(0, "Anon") == "Anon"
+    assert user_ref(0, "Anon", "cached_name") == (
+        '<tg-button type="url" url="https://t.me/cached_name">Anon</tg-button>'
+    )
+
+
+def test_mention_id_gate_rejects_every_non_user_shape() -> None:
+    """The roster's get_users batch must never receive an invalid peer id."""
+    assert is_mentionable_user_id(42) is True
+    assert is_mentionable_user_id((1 << 40) - 1) is True
+    for value in (
+        0,
+        -1,
+        True,
+        False,
+        1.5,
+        float("nan"),
+        "123",
+        None,
+        1 << 40,
+        777000,
+        1087968824,
+    ):
+        assert is_mentionable_user_id(value) is False
+
+
+def test_unaddressable_ids_never_become_user_profile_buttons() -> None:
+    """A stored id must never turn a rich edit into BUTTON_USER_INVALID."""
+    for value in (
+        0,
+        -1,
+        True,
+        1.5,
+        float("nan"),
+        "123",
+        None,
+        1 << 40,
+        777000,
+        1087968824,
+    ):
+        rendered = user_ref(value, "Name")  # type: ignore[arg-type]
+        assert rendered == "Name"
+        assert "tg://user?id=" not in rendered
+        assert mention_button(value, "Name") == rendered  # type: ignore[arg-type]
+
+
+def test_safe_edit_cb_can_explicitly_clear_a_keyboard() -> None:
+    """A decided card must not keep its old buttons after a text edit."""
+
+    class _Query:
+        def __init__(self) -> None:
+            self.kwargs: list[dict[str, Any]] = []
+
+        async def edit_message_text(self, **kwargs: Any) -> str:
+            self.kwargs.append(kwargs)
+            return "edited"
+
+    q = _Query()
+    assert asyncio.run(rich_edit.safe_edit_cb(q, "done", clear_markup=True)) is True  # type: ignore[arg-type]
+    assert q.kwargs[0]["reply_markup"].inline_keyboard == []
+
+
+def test_standalone_keyboard_clear_uses_the_native_endpoint() -> None:
+    """Both keyboard-only helpers send an explicit empty markup."""
+
+    class _Target:
+        def __init__(self, *, fail: bool = False) -> None:
+            self.kwargs: list[dict[str, Any]] = []
+            self.fail = fail
+
+        async def edit_message_reply_markup(self, **kwargs: Any) -> None:
+            self.kwargs.append(kwargs)
+            if self.fail:
+                raise RuntimeError("Message to edit not found")
+
+    bot = _Target()
+    asyncio.run(rich_edit.clear_markup(cast("Any", bot), -100, 5))
+    assert bot.kwargs[0] == {
+        "chat_id": -100,
+        "message_id": 5,
+        "reply_markup": InlineKeyboardMarkup([]),
+    }
+
+    query = _Target()
+    asyncio.run(rich_edit.clear_markup_cb(cast("Any", query)))
+    assert query.kwargs[0] == {"reply_markup": InlineKeyboardMarkup([])}
+
+    benign = _Target(fail=True)
+    asyncio.run(rich_edit.clear_markup(cast("Any", benign), -100, 6))
+    assert len(benign.kwargs) == 1
+
+
+def test_embedded_file_id_media_serializes_without_an_upload() -> None:
+    """A file id is decoded locally; no client upload call is needed."""
+    rich = InputRichMessage(
+        html='<tg-slideshow><img src="tg://photo?id=m0"/></tg-slideshow>',
+        media=[
+            InputRichMessageMedia(
+                "m0", InputMediaPhoto("AgACAgEAAwF4AAIBAAcCAAcBAAcCAAMBAAcCAAcBAAMeBA")
+            )
+        ],
+    )
+
+    written = rich.write(client=None, chat_id=None)
+
+    assert written.files is not None
+    assert len(written.files) == 1
+    assert written.files[0].id == "m0"
 
 
 def test_blocks_render_expected_rich_html() -> None:

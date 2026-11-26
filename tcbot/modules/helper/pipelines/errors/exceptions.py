@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from pyrogram.errors import (
     AuthKeyDuplicated,
     BadRequest,
@@ -20,9 +18,6 @@ from pyrogram.errors import (
     Unauthorized,
 )
 from pyrogram.errors import Timeout as RPCTimeout
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 
 class PollingConflictError(RuntimeError):
@@ -53,6 +48,24 @@ MTPROTO_AUTH_TYPE_NAMES: tuple[str, ...] = (
     "AuthKeyNotFound",
     "SessionRevoked",
 )
+
+
+_INVALID_BUTTON_USER_MARKERS: tuple[str, ...] = (
+    "button_user_invalid",
+    "buttonuserinvalid",
+)
+
+
+def is_invalid_button_user(exc: object) -> bool:
+    """Return True for a stale or invalid user-profile button in a rich message.
+
+    Kurigram maps the unknown 400 ``BUTTON_USER_INVALID`` RPC error to a plain
+    ``BadRequest``, so the RPC text is the only reliable signal.
+    """
+    if exc is None:
+        return False
+    text = str(exc).lower()
+    return any(marker in text for marker in _INVALID_BUTTON_USER_MARKERS)
 
 
 def is_bad_request(exc: object) -> bool:
@@ -143,11 +156,6 @@ def is_session_revoked(exc: object) -> bool:
     return isinstance(exc, SessionRevoked)
 
 
-def has_error_group(exc: object, group: Sequence[type[BaseException]]) -> bool:
-    """Return True when *exc* matches one of the error types in *group*."""
-    return isinstance(exc, tuple(group))
-
-
 __all__ = [
     "API_REFUSAL_ERRORS",
     "MTPROTO_AUTH_TYPE_NAMES",
@@ -168,13 +176,13 @@ __all__ = [
     "SessionRevoked",
     "Timedout",
     "Unauthorized",
-    "has_error_group",
     "is_api_refusal",
     "is_auth_key_duplicated",
     "is_auth_key_not_found",
     "is_bad_request",
     "is_chat_admin_required",
     "is_forbidden",
+    "is_invalid_button_user",
     "is_mtproto_auth_error",
     "is_owner_only",
     "is_rate_limit",

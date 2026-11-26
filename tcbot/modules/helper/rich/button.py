@@ -17,6 +17,7 @@ Raw API style names are accepted as well as the friendly colour names.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from tcbot.modules.helper.rich.style import esc
@@ -38,6 +39,26 @@ _RICH_BUTTON_STYLES = frozenset({"primary", "success", "danger", "link"})
 # * Telegram caps callback_data at 64 bytes; a longer payload keeps the
 # * original inline keyboard as the fallback.
 _CALLBACK_MAX_BYTES = 64
+# * A tg://user URL is normalised by Telegram into a user-profile button. The
+# * client only accepts ids in 1..2^40-1 as users; larger values, chat ids and
+# * sentinels reach Telegram and fail the whole message with BUTTON_USER_INVALID.
+_MAX_MENTION_USER_ID: int = (1 << 40) - 1
+# * Telegram's service account and the GroupAnonymousClient placeholder have no
+# * addressable profile; identity classification imports the same constants.
+TELEGRAM_USER_ID: int = 777000
+ANONYMOUS_BOT_ID: int = 1087968824
+_NON_PROFILE_USER_IDS: frozenset[int] = frozenset({TELEGRAM_USER_ID, ANONYMOUS_BOT_ID})
+_USERNAME_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_]{5,32}$")
+
+
+def is_mentionable_user_id(user_id: object) -> bool:
+    """Return True only for an id Telegram accepts as a user-profile target."""
+    return (
+        isinstance(user_id, int)
+        and not isinstance(user_id, bool)
+        and 0 < user_id <= _MAX_MENTION_USER_ID
+        and user_id not in _NON_PROFILE_USER_IDS
+    )
 
 
 def _style(style: str | None) -> str:
@@ -128,19 +149,30 @@ def copy_button(label: str, text: str, *, style: str | None = None) -> str:
     return button(label, copy=text, style=style)
 
 
-def mention_button(user_id: int, name: str, *, style: str | None = None) -> str:
-    """Render a native rich button that mentions a user by numeric ID.
+def mention_button(
+    user_id: int,
+    name: str,
+    *,
+    username: str | None = None,
+    style: str | None = None,
+) -> str:
+    """Render a rich mention button for a live, addressable user.
 
-    Telegram has no separate mention button type: a mention is a URL button
-    carrying ``tg://user?id=``. Keeping the construction here means callers do
-    not build that URL themselves, and the button can be placed inline in a
-    table cell as well as in a keyboard row. A non-positive ID has no target,
-    so it renders as a disabled button rather than a dead link.
+    A shape-valid username becomes an ordinary URL button. There is no
+    ``tg://user`` form: Telegram turns it into a user-profile button and
+    refuses any id without a live account, which fails the whole edit with
+    ``BUTTON_USER_INVALID``. A user without a verified username therefore
+    renders as escaped plain text, never as a message-breaking button.
     """
     label = name or str(user_id)
-    if user_id <= 0:
-        return button(label, disabled=True, style=style)
-    return url_button(label, f"tg://user?id={user_id}", style=style)
+    # * A tg://user URL becomes a native user-profile button, and Telegram
+    # * rejects it for every id whose account no longer exists. Shape checks
+    # * cannot prove existence, and stored ban/role rows can outlive an
+    # * account, so only a verified username becomes a button. Every other
+    # * mention stays readable text rather than a message-breaking button.
+    if username and _USERNAME_RE.fullmatch(username):
+        return url_button(label, f"https://t.me/{username}", style=style)
+    return esc(label)
 
 
 def web_app_button(label: str, url: str, *, style: str | None = None) -> str:
@@ -376,6 +408,8 @@ def buttons_from_markup(reply_markup: object | None) -> list[str] | None:
 
 
 __all__ = [
+    "ANONYMOUS_BOT_ID",
+    "TELEGRAM_USER_ID",
     "button",
     "button_from_cell",
     "button_row",
@@ -384,6 +418,7 @@ __all__ = [
     "callback_button",
     "copy_button",
     "disabled_button",
+    "is_mentionable_user_id",
     "login_button",
     "mention_button",
     "switch_button",

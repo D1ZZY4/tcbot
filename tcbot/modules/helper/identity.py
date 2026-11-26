@@ -14,6 +14,7 @@ from pyrogram import Client
 
 from tcbot import database as db
 from tcbot.modules.helper.context import Ctx, bot_identity
+from tcbot.modules.helper.rich.button import ANONYMOUS_BOT_ID, TELEGRAM_USER_ID
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger
@@ -23,14 +24,8 @@ log = get_logger(__name__)
 
 # ───────────────────────────── Constants ────────────────────────────── #
 
-# * Telegram's official service / system account ID. The 777000 channel ID
-# * also surfaces on forwarded service messages but never as an action target.
-TELEGRAM_USER_ID = 777000
-
-# * Telegram's internal ID for the GroupAnonymousClient placeholder, which appears
-# * as the sender when a real admin posts using "send message as group" mode.
-# * The true identity is unknown to the bot, so federation commands are refused.
-ANONYMOUS_BOT_ID = 1087968824
+# * The service account and GroupAnonymousClient have no addressable profile;
+# * the mention button owner owns the same constants and excludes them.
 
 
 def is_anon_admin(user: object) -> bool:

@@ -78,18 +78,21 @@ async def build_ban_detail(
         target_fname = (
             r_target[0] if not isinstance(r_target, BaseException) else str(uid)
         )
+        target_uname = r_target[1] if not isinstance(r_target, BaseException) else None
         # * Outage fallback stays locale-neutral: the numeric ID renders
         # * the same in every language instead of a hardcoded word.
         admin_fname = r_admin[0] if not isinstance(r_admin, BaseException) else str(aid)
+        admin_uname = r_admin[1] if not isinstance(r_admin, BaseException) else None
     else:
+        target_uname = None
         try:
             r_admin = await db.users_cache.get_user_mention_data(aid)
-            admin_fname = r_admin[0]
+            admin_fname, admin_uname = r_admin
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             log.debug("Admin mention data lookup failed for %d: %s", aid, exc)
-            admin_fname = str(aid)
+            admin_fname, admin_uname = str(aid), None
 
     proof_link = ban_proof_link(ban)
     date_str = ban_date_text(ban, locale)
@@ -99,11 +102,11 @@ async def build_ban_detail(
     # * the native mention button itself instead of an inline anchor inside
     # * a sentence. Button markup passes through the table's raw cells.
     identity_items = [
-        mention_button(uid, target_fname or str(uid)),
+        mention_button(uid, target_fname or str(uid), username=target_uname),
         t("checking.ban_info.user_id", locale, id=Safe(code(str(uid)))),
     ]
     actor_items = [
-        mention_button(aid, admin_fname or str(aid)),
+        mention_button(aid, admin_fname or str(aid), username=admin_uname),
         t("checking.ban_info.admin_id", locale, id=Safe(code(str(aid)))),
     ]
     # * Moderator reason is free text: pass raw so the engine escapes it at

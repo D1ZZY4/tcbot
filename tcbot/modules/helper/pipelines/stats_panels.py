@@ -23,11 +23,11 @@ from tcbot.modules.helper.buttons import (
     stats_search_row,
 )
 from tcbot.modules.helper.context import Ctx, chat_id_of
-from tcbot.modules.helper.extraction import sync_user_identity
+from tcbot.modules.helper.rich.button import is_mentionable_user_id
 from tcbot.modules.helper.rich.list import bullet_list
 from tcbot.modules.helper.rich.table import table
 from tcbot.modules.helper.rich.text import blocks
-from tcbot.utils.dispatch import gather_bounded, throw_if_cancelled
+from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, divider, esc, t, user_ref
 from tcbot.utils.logger import get_logger
 from tcbot.utils.pagination import clamp_page, paginate
@@ -238,34 +238,54 @@ class OverviewViews:
         # * Staff without an identity row render as raw numeric IDs.
         # * Resolve those names live (bounded, failures keep the ID) so a
         # * legacy staff row never displays as an ID in the roster.
+        absent_ids: set[int] = set()
+        live_identity: dict[int, tuple[str, str | None]] = {}
+        lookup_failed_ids: set[int] = set()
         if bot is not None:
-            missing = [
-                uid
-                for uid in all_user_ids
-                if uid and mention_data_map.get(uid, ("", None))[0] == str(uid)
-            ]
-            if missing:
-                resolved = await gather_bounded(
-                    [
-                        asyncio.wait_for(
-                            sync_user_identity(bot, uid),
-                            timeout=TELEGRAM_LOOKUP_TIMEOUT,
+            # * MTProto users.getUsers returns full User objects even for
+            # * accounts the Bot API cannot open. Ask it directly instead of
+            # * trusting a cache that can outlive a deleted account.
+            get_users = getattr(bot, "get_users", None)
+            # * Only ids that can be a user are sent to get_users: one invalid
+            # * peer id would fail resolve_peer for the whole batch.
+            verify_ids = [uid for uid in all_user_ids if is_mentionable_user_id(uid)]
+            if get_users is not None and verify_ids:
+                for start in range(0, len(verify_ids), 200):
+                    chunk = verify_ids[start : start + 200]
+                    try:
+                        found = await asyncio.wait_for(
+                            get_users(chunk), timeout=TELEGRAM_LOOKUP_TIMEOUT
                         )
-                        for uid in missing
-                    ]
-                )
-                throw_if_cancelled(resolved)
-                for uid, result in zip(missing, resolved, strict=True):
-                    if isinstance(result, BaseException):
-                        log.debug(
-                            "staff roster live identity failed for %d: %s",
-                            uid,
-                            result,
-                        )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        # * A transport failure is not proof that the accounts
+                        # * are gone; keep their cached mentions.
+                        log.debug("staff roster get_users failed: %s", exc)
+                        lookup_failed_ids.update(chunk)
                         continue
-                    live_fname, live_uname, _ = result
-                    if not db.users_cache.is_placeholder_name(live_fname):
-                        mention_data_map[uid] = (live_fname, live_uname)
+                    for user in found or ():
+                        uid = int(getattr(user, "id", 0) or 0)
+                        fname = getattr(user, "first_name", "") or ""
+                        if fname:
+                            live_identity[uid] = (
+                                fname,
+                                getattr(user, "username", None),
+                            )
+                absent_ids.update(
+                    uid
+                    for uid in verify_ids
+                    if uid not in live_identity and uid not in lookup_failed_ids
+                )
+
+        def _mention(uid: int, fname: str, uname: str | None) -> str:
+            """Build a mention only for an account Telegram can address."""
+            if uid in live_identity:
+                fname, uname = live_identity[uid]
+            if uid in absent_ids or db.users_cache.is_placeholder_name(fname):
+                return user_ref(0, fname, uname)
+            return user_ref(uid, fname, uname)
+
         # * Build real rich blocks here instead of passing a newline fragment
         # * to blocks(): the divider is itself a block tag, which makes blocks()
         # * return the whole string verbatim and Telegram then collapses the
@@ -283,7 +303,7 @@ class OverviewViews:
                         t(
                             "stats.roster.member",
                             locale,
-                            user=Safe(user_ref(owner_id_int, owner_fname, owner_uname)),
+                            user=Safe(_mention(owner_id_int, owner_fname, owner_uname)),
                         )
                     ]
                 )
@@ -302,7 +322,7 @@ class OverviewViews:
                         t(
                             "stats.roster.member",
                             locale,
-                            user=Safe(user_ref(uid, fname, uname)),
+                            user=Safe(_mention(uid, fname, uname)),
                         )
                     )
                 blocks_out.append(bullet_list(members))
