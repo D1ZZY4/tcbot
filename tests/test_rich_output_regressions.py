@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 from tcbot.modules.helper.messages.replies import applied_summary
-from tcbot.modules.helper.rich import text as rich_text
+from tcbot.modules.helper.rich import block as rich_text
 from tcbot.modules.netspeed import _render_result
 from tcbot.utils.i18n import t
 

@@ -16,8 +16,8 @@ from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.handlers import CallbackQueryHandler, MessageHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit, reply_rich
-from tcbot.modules.helper.rich.edit import callback_text_of
-from tcbot.modules.helper.rich.text import blocks
+from tcbot.modules.helper.rich.block import blocks
+from tcbot.modules.helper.rich.edit_msg import callback_text_of
 from tcbot.utils.i18n import Safe, bold, code, divider, esc, heading, quote, t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters, parse_cmd_args

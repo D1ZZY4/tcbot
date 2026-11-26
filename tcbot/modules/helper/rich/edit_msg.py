@@ -2,13 +2,7 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Rich message editing: ``edit_rich`` and the safe edit helpers.
-
-Sending and replying live in ``rich.msg``. Every edit goes through a native
-Kurigram rich-message call, with an inline keyboard kept as a real Kurigram
-markup. Callback answers and keyboard-only edits are native Kurigram calls.
-``send_log`` lives here because its payload is shared with the edit helpers.
-"""
+"""Rich message edits, callback answers, and the federation log transport."""
 
 from __future__ import annotations
 
@@ -18,13 +12,17 @@ from typing import TYPE_CHECKING, Any
 from pyrogram.types import InlineKeyboardMarkup
 
 from tcbot import cfg
-from tcbot.modules.helper.rich.msg import (
+from tcbot.modules.helper.rich.block import (
     _input_rich,
     _message_with_buttons,
     html_message,
-    send_rich,
 )
-from tcbot.utils.dispatch import throw_if_cancelled
+from tcbot.modules.helper.rich.send_msg import send_rich
+from tcbot.utils.dispatch import (
+    is_edit_not_modified_error,
+    is_edit_target_gone_error,
+    throw_if_cancelled,
+)
 from tcbot.utils.logger import get_logger
 
 if TYPE_CHECKING:
@@ -36,9 +34,6 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 
-# ───────────────────────────── edit_rich ──────────────────────────────── #
-
-
 async def edit_rich(
     bot: Client,
     chat_id: int | str,
@@ -48,11 +43,7 @@ async def edit_rich(
     reply_markup: Any | None = None,
     clear_markup: bool = False,
 ) -> Message:
-    """Edit a message through Kurigram's native rich-message transport.
-
-    ``clear_markup`` forwards an explicit empty keyboard, which Telegram needs
-    to actually strip old buttons from a decided panel.
-    """
+    """Edit a message through Kurigram's native rich-message transport."""
     payload, fallback = _message_with_buttons(message, reply_markup)
     extra: dict[str, Any] = {}
     if fallback is not None:
@@ -65,16 +56,6 @@ async def edit_rich(
         rich_message=_input_rich(payload),
         **extra,
     )
-
-
-# ─────────────────────────────── Safe edits ─────────────────────────────── #
-
-_IGNORED = {"message is not modified", "message to edit not found", "chat not found"}
-
-
-def _rich_payload(text: str) -> dict[str, Any]:
-    """Build the rich payload for any text, including plain notices."""
-    return html_message(text)
 
 
 def _log_edit_failure(
@@ -93,19 +74,14 @@ async def _edit_via(
     catch_all: bool,
     default_msg: str,
 ) -> bool:
-    """Run one edit coroutine with the shared benign-error policy.
-
-    Returns False when the target message is gone, so a caller that owns a
-    durable slot can send a fresh message instead of retrying the dead id.
-    """
+    """Run one edit coroutine with the shared benign-error policy."""
     try:
         await do_edit
         return True
     except Exception as exc:
-        text = str(exc).lower()
-        if "message is not modified" in text or "hasn't changed" in text:
+        if is_edit_not_modified_error(exc):
             return True
-        if any(i in text for i in _IGNORED):
+        if is_edit_target_gone_error(exc):
             return False
         if not catch_all:
             raise
@@ -127,17 +103,14 @@ async def safe_edit(
     """Edit a message as a rich message; swallow harmless not-modified errors."""
     _ = parse_mode
     markup = kwargs.get("reply_markup")
-    payload, fallback = _message_with_buttons(_rich_payload(text), markup)
+    payload, fallback = _message_with_buttons(html_message(text), markup)
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
     if clear_markup:
         extra["reply_markup"] = InlineKeyboardMarkup([])
     await _edit_via(
-        msg.edit_text(
-            rich_message=_input_rich(payload),
-            **extra,
-        ),
+        msg.edit_text(rich_message=_input_rich(payload), **extra),
         log_level=log_level,
         log_label=log_label,
         catch_all=catch_all,
@@ -159,17 +132,14 @@ async def safe_edit_cb(
     """Edit a callback-query message, returning whether the edit landed."""
     _ = parse_mode
     markup = kwargs.get("reply_markup")
-    payload, fallback = _message_with_buttons(_rich_payload(text), markup)
+    payload, fallback = _message_with_buttons(html_message(text), markup)
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
     if clear_markup:
         extra["reply_markup"] = InlineKeyboardMarkup([])
     return await _edit_via(
-        q.edit_message_text(
-            rich_message=_input_rich(payload),
-            **extra,
-        ),
+        q.edit_message_text(rich_message=_input_rich(payload), **extra),
         log_level=log_level,
         log_label=log_label,
         catch_all=catch_all,
@@ -195,7 +165,7 @@ async def safe_edit_message(
     if chat_id is None or message_id is None:
         return False
     markup = kwargs.get("reply_markup")
-    payload, fallback = _message_with_buttons(_rich_payload(text), markup)
+    payload, fallback = _message_with_buttons(html_message(text), markup)
     extra: dict[str, Any] = {}
     if fallback is not None:
         extra["reply_markup"] = fallback
@@ -203,10 +173,7 @@ async def safe_edit_message(
         extra["reply_markup"] = InlineKeyboardMarkup([])
     return await _edit_via(
         bot.edit_message_text(
-            chat_id,
-            message_id,
-            rich_message=_input_rich(payload),
-            **extra,
+            chat_id, message_id, rich_message=_input_rich(payload), **extra
         ),
         log_level=log_level,
         log_label=log_label,
@@ -224,7 +191,7 @@ async def clear_markup(bot: Client, chat_id: int | str, message_id: int) -> None
             reply_markup=InlineKeyboardMarkup([]),
         )
     except Exception as exc:
-        if any(i in str(exc).lower() for i in _IGNORED):
+        if is_edit_target_gone_error(exc) or is_edit_not_modified_error(exc):
             return
         log.warning("clear markup failed: %s", exc)
 
@@ -234,7 +201,7 @@ async def clear_markup_cb(q: CallbackQuery) -> None:
     try:
         await q.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
     except Exception as exc:
-        if any(i in str(exc).lower() for i in _IGNORED):
+        if is_edit_target_gone_error(exc) or is_edit_not_modified_error(exc):
             return
         log.warning("clear markup failed: %s", exc)
 
@@ -258,9 +225,7 @@ async def answer_ack(q: CallbackQuery) -> None:
 async def answer_and_edit(q: CallbackQuery, text: str, **kwargs: Any) -> None:
     """Answer a callback query and edit its message in parallel."""
     answer_r, edit_r = await asyncio.gather(
-        answer_ack(q),
-        safe_edit_cb(q, text, **kwargs),
-        return_exceptions=True,
+        answer_ack(q), safe_edit_cb(q, text, **kwargs), return_exceptions=True
     )
     throw_if_cancelled((answer_r, edit_r))
     if isinstance(answer_r, BaseException):
@@ -337,13 +302,10 @@ async def cb_error_edit(
     parse_mode: Any = None,
     log_level: str = "warning",
 ) -> None:
-    """Replace a callback message with a notice and drop its keyboard."""
+    """Replace a callback message with a notice and catch edit failures."""
+    _ = parse_mode
     await safe_edit_cb(
-        q,
-        text,
-        log_level=log_level,
-        log_label=log_label,
-        catch_all=True,
+        q, text, log_level=log_level, log_label=log_label, catch_all=True
     )
 
 

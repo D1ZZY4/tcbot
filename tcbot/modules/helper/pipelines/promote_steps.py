@@ -12,7 +12,7 @@ from pyrogram import Client
 
 from tcbot import cfg
 from tcbot import database as db
-from tcbot.modules.helper import buttons, decorators, messages
+from tcbot.modules.helper import buttons, decorators, identity, messages
 from tcbot.modules.helper.context import Ctx, display_name
 from tcbot.modules.helper.guards import (
     action_owner_mismatch,
@@ -37,7 +37,7 @@ from tcbot.modules.helper.pipelines.promote_request import (
     assign_subrole,
     request_admin,
 )
-from tcbot.modules.helper.targets import resolve_executor_target
+from tcbot.modules.helper.targets import classify_and_load_role, resolve_executor_target
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, t, user_ref
 from tcbot.utils.logger import get_logger

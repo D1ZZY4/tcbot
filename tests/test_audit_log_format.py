@@ -94,13 +94,15 @@ def test_date_and_time_are_separate_fields() -> None:
     assert " | " not in text
 
 
-def test_proof_captions_split_date_and_time() -> None:
-    """Proof media captions carry a separate date line and time line."""
+def test_proof_metadata_is_a_rich_table_below_the_slideshow() -> None:
+    """Proof metadata is a Field/Value table with separate date and time rows."""
     ts = datetime(2026, 11, 22, 15, 27, tzinfo=UTC)
     caption = audit_logs.proof_caption_new(1, 2, "Bob", ts)
-    assert "Commit date: 22-11-2026" in caption
-    assert "Commit time: 15:27" in caption
+    assert caption.startswith("<table bordered striped compact>")
+    assert "<td><b>Commit date</b></td><td>22-11-2026</td>" in caption
+    assert "<td><b>Commit time</b></td><td>15:27</td>" in caption
     assert " | " not in caption
+    assert "<figcaption>" not in caption
 
 
 def test_untrusted_reason_stays_escaped_in_the_table() -> None:

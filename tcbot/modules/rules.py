@@ -21,7 +21,7 @@ from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import replies, reply_rich, safe_edit_cb
 from tcbot.modules.helper.messages import rules as rules_msg
 from tcbot.modules.helper.pipelines.rules_editor import build_rules_conv
-from tcbot.modules.helper.rich import edit as rich_edit
+from tcbot.modules.helper.rich import edit_msg as rich_edit
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger
 from tcbot.utils.prefixes import build_prefixed_filters

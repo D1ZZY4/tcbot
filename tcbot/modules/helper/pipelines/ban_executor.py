@@ -27,7 +27,7 @@ from tcbot.modules.helper.pipelines import moderation_enforcement
 from tcbot.modules.helper.pipelines.demote_actions import demote_before_enforcement
 from tcbot.modules.helper.pipelines.errors.exceptions import is_chat_admin_required
 from tcbot.modules.helper.pipelines.proof_post import upload_proof_media
-from tcbot.modules.helper.rich.edit import clear_markup
+from tcbot.modules.helper.rich.edit_msg import clear_markup
 from tcbot.utils.dispatch import (
     fan_out,
     summarize_fanout,

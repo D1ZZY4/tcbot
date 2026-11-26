@@ -38,7 +38,7 @@ from tcbot.modules.helper.pipelines.ban_session import (
 )
 from tcbot.modules.helper.pipelines.mod_action_steps import MAX_RULES_NOTE_LEN
 from tcbot.modules.helper.pipelines.proof_steps import proof_prompt_content
-from tcbot.modules.helper.rich.edit import callback_text_of
+from tcbot.modules.helper.rich.edit_msg import callback_text_of
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger

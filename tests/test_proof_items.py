@@ -182,7 +182,7 @@ def test_each_media_kind_gets_its_own_rich_slideshow() -> None:
     assert 'src="tg://video?id=m0"' in htmls[1]
     assert 'src="tg://document?id=m0"' in htmls[2]
     assert 'src="tg://document?id=m0"' in htmls[3]
-    assert all("<figcaption>cap</figcaption>" in html for html in htmls)
+    assert all(html.endswith("</tg-slideshow>\ncap") for html in htmls)
     assert isinstance(bot.calls[1][1].media[0].media, InputMediaVideo)
     assert isinstance(bot.calls[2][1].media[0].media, InputMediaAnimation)
     assert isinstance(bot.calls[3][1].media[0].media, InputMediaDocument)
@@ -219,8 +219,8 @@ def test_an_oversized_album_is_split_into_more_slideshows() -> None:
     second_html = bot.calls[1][1].html
     assert 'src="tg://photo?id=m49"' in first_html
     assert 'src="tg://photo?id=m0"' in second_html
-    assert "<figcaption>cap</figcaption>" in first_html
-    assert "<figcaption>cap</figcaption>" in second_html
+    assert first_html.endswith("</tg-slideshow>\ncap")
+    assert second_html.endswith("</tg-slideshow>\ncap")
 
 
 def test_a_failed_slideshow_is_recorded_as_partial() -> None:
@@ -232,6 +232,31 @@ def test_a_failed_slideshow_is_recorded_as_partial() -> None:
     assert expected == 2
     assert len(items) == 1
     assert items[0].caption_text == "cap"
+
+
+def test_proof_metadata_table_follows_the_slideshow_as_a_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real proof message carries the metadata table outside figcaption."""
+    monkeypatch.setattr(
+        proof_post, "cfg", SimpleNamespace(proofs=(-1001234567890, None)), raising=False
+    )
+    bot = _RichBot()
+    upload = asyncio.run(
+        proof_post.upload_proof_for_action(
+            cast("Client", bot),
+            [_photo_message("p1", 1)],
+            42,
+            7,
+            "Dizzy",
+        )
+    )
+
+    html = bot.calls[0][1].html
+    assert "</tg-slideshow>\n<table bordered striped compact>" in html
+    assert "<figcaption>" not in html
+    assert "<td><b>Admin</b></td><td>Dizzy</td>" in html
+    assert upload.landed is True
 
 
 def test_no_media_returns_an_empty_upload() -> None:

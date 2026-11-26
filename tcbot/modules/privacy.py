@@ -12,7 +12,7 @@ from tcbot.modules.helper.context import Ctx
 from tcbot.modules.helper.handlers import CallbackQueryHandler
 from tcbot.modules.helper.locale import locale_for_update
 from tcbot.modules.helper.messages import answer_and_edit
-from tcbot.modules.helper.rich.edit import callback_text_of
+from tcbot.modules.helper.rich.edit_msg import callback_text_of
 from tcbot.modules.helper.rich.formats import (
     divider,
     footer,

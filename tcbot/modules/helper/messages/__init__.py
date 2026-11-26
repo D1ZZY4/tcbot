@@ -43,7 +43,7 @@ from tcbot.modules.helper.messages.panels import (
     about_section_msg,
     render_groups,
 )
-from tcbot.modules.helper.rich.edit import (
+from tcbot.modules.helper.rich.edit_msg import (
     ack_and_render,
     answer_ack,
     answer_alert,
@@ -63,11 +63,8 @@ from tcbot.modules.helper.rich.link import (
     chat_id_to_link_id,
     message_link,
 )
-from tcbot.modules.helper.rich.msg import (
-    reply_rich,
-    reply_rich_result,
-    send_text,
-)
+from tcbot.modules.helper.rich.reply_msg import reply_rich, reply_rich_result
+from tcbot.modules.helper.rich.send_msg import send_text
 
 __all__ = [
     "LogBuilder",

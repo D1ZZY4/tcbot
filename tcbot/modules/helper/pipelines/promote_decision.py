@@ -27,7 +27,7 @@ from tcbot.modules.helper.messages import (
     send_log,
     send_text,
 )
-from tcbot.modules.helper.rich.edit import callback_text_of
+from tcbot.modules.helper.rich.edit_msg import callback_text_of
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger

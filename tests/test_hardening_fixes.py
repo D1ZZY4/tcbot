@@ -17,7 +17,7 @@ from tcbot.database.rules_db.categories import _available_key
 from tcbot.database.schema import SCHEMA_FILES, _schema_of
 from tcbot.database.schema.loader import file_statements
 from tcbot.modules.helper.pipelines.errors.exceptions import BadRequest
-from tcbot.modules.helper.rich.edit import _edit_via
+from tcbot.modules.helper.rich.edit_msg import _edit_via
 from tests.postgres_support import identity_db_call
 
 

@@ -22,8 +22,8 @@ from tcbot.database.scheduler import jobs as scheduler_jobs
 from tcbot.modules.helper.decorators import ratelimit
 from tcbot.modules.helper.pipelines.errors import report as error_reporter
 from tcbot.modules.helper.pipelines.stats_panels import Stats
+from tcbot.modules.helper.rich import block as rich_text
 from tcbot.modules.helper.rich import media as rich_media
-from tcbot.modules.helper.rich import text as rich_text
 from tcbot.utils import i18n
 
 

@@ -194,22 +194,36 @@ def ban_update_log(
     )
 
 
+def _proof_table(rows: list[list[str]]) -> str:
+    """Render the proof metadata as a compact Field/Value rich table.
+
+    A Telegram caption only accepts inline text, so the table is a separate
+    block directly after the slideshow rather than a figcaption child.
+    """
+    return table(
+        ["Field", "Value"],
+        rows,
+        compact=True,
+        striped=True,
+        raw_cells=True,
+    )
+
+
 def proof_caption_new(
     target_id: int,
     admin_id: int,
     admin_fname: str,
     timestamp: datetime,
 ) -> str:
-    """Plain caption text for the initial proof slideshow.
-
-    The rich transport escapes it once inside the slideshow's figcaption.
-    """
-    return (
-        f"ID: {target_id}\n\n"
-        f"Admin: {admin_fname}\n"
-        f"Admin ID: {admin_id}\n\n"
-        f"Commit date: {fmt_date(timestamp)}\n"
-        f"Commit time: {fmt_time(timestamp)}"
+    """Render the initial proof metadata as a rich table below the slideshow."""
+    return _proof_table(
+        [
+            [rich_bold("ID"), code(str(target_id))],
+            [rich_bold("Admin"), esc(admin_fname)],
+            [rich_bold("Admin ID"), code(str(admin_id))],
+            [rich_bold("Commit date"), fmt_date(timestamp)],
+            [rich_bold("Commit time"), fmt_time(timestamp)],
+        ]
     )
 
 
@@ -220,18 +234,24 @@ def proof_caption_update(
     original_ts: datetime,
     prev_proof_lnk: str | None = None,
 ) -> str:
-    """Plain caption text used when the proof slideshow is replaced."""
-    previous = f"\n\nPrevious: {prev_proof_lnk}" if prev_proof_lnk else ""
+    """Render replacement proof metadata as a rich table."""
+    rows = [
+        [rich_bold("ID"), code(str(target_id))],
+        [rich_bold("Admin"), esc(admin_fname)],
+        [rich_bold("Admin ID"), code(str(admin_id))],
+    ]
+    if prev_proof_lnk:
+        rows.append([rich_bold("Previous"), link("View", prev_proof_lnk)])
     updated_at = utc_now()
-    return (
-        f"ID: {target_id}\n\n"
-        f"Admin: {admin_fname}\n"
-        f"Admin ID: {admin_id}{previous}\n\n"
-        f"Commit date: {fmt_date(original_ts)}\n"
-        f"Commit time: {fmt_time(original_ts)}\n"
-        f"Update date: {fmt_date(updated_at)}\n"
-        f"Update time: {fmt_time(updated_at)}"
+    rows.extend(
+        [
+            [rich_bold("Commit date"), fmt_date(original_ts)],
+            [rich_bold("Commit time"), fmt_time(original_ts)],
+            [rich_bold("Update date"), fmt_date(updated_at)],
+            [rich_bold("Update time"), fmt_time(updated_at)],
+        ]
     )
+    return _proof_table(rows)
 
 
 def mute_log(

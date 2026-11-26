@@ -28,7 +28,7 @@ import asyncio
 import inspect
 from pathlib import Path
 
-from tcbot.modules.helper.rich.edit import cb_error_edit
+from tcbot.modules.helper.rich.edit_msg import cb_error_edit
 
 _TCBOT_ROOT = Path(__file__).resolve().parent.parent / "tcbot"
 

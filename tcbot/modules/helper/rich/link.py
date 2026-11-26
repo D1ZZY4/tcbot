@@ -4,9 +4,9 @@
 
 """Rich link markup and Telegram URL construction.
 
-One owner for link text and URLs: inline anchors, public ``t.me`` URLs, ban
-deep links, and cached community chat link resolution. User mentions are
-native rich buttons owned by :mod:`tcbot.modules.helper.rich.button`.
+One owner for link text and URLs: inline anchors, email and phone links, public
+``t.me`` URLs, ban deep links, and cached community chat link resolution. User
+mentions are native rich buttons owned by :mod:`tcbot.modules.helper.rich.button`.
 """
 
 from __future__ import annotations
@@ -34,6 +34,16 @@ _locks: dict[int, asyncio.Lock] = {}
 def link(text: object, url: str) -> str:
     """Render an inline link, escaping both label and URL."""
     return f'<a href="{esc(url)}">{esc(text)}</a>'
+
+
+def email_link(text: object, address: str) -> str:
+    """Render an inline email link, escaping both label and address."""
+    return f'<a href="mailto:{esc(address)}">{esc(text)}</a>'
+
+
+def phone_link(text: object, number: str) -> str:
+    """Render an inline phone link, escaping both label and number."""
+    return f'<a href="tel:{esc(number)}">{esc(text)}</a>'
 
 
 def chat_id_to_link_id(chat_id: int) -> str:
@@ -123,8 +133,10 @@ __all__ = [
     "chat_id_to_link_id",
     "clear",
     "display",
+    "email_link",
     "forget",
     "link",
     "message_link",
+    "phone_link",
     "resolve",
 ]

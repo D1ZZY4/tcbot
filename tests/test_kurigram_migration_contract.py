@@ -16,7 +16,7 @@ from pyrogram.enums import ChatType
 from tcbot.modules.helper import handlers
 from tcbot.modules.helper.context import bot_identity
 from tcbot.modules.helper.extraction import resolve
-from tcbot.modules.helper.rich import msg as rich_msg
+from tcbot.modules.helper.rich import reply_msg as rich_msg
 
 
 class _ReplyCapture:

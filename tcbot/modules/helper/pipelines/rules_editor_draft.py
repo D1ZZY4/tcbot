@@ -36,7 +36,7 @@ from tcbot.modules.helper.pipelines.rules_markdown import (
     parse_document,
     render_body,
 )
-from tcbot.modules.helper.rich.edit import callback_text_of
+from tcbot.modules.helper.rich.edit_msg import callback_text_of
 from tcbot.modules.helper.rich.style import esc
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t

@@ -22,9 +22,10 @@ from pyrogram.types import (
 
 from tcbot import cfg
 from tcbot.modules.helper.messages.audit_logs import proof_caption_new
+from tcbot.modules.helper.rich.block import html_message
 from tcbot.modules.helper.rich.link import message_link
 from tcbot.modules.helper.rich.media import slideshow
-from tcbot.modules.helper.rich.msg import html_message, send_rich
+from tcbot.modules.helper.rich.send_msg import send_rich
 from tcbot.utils.logger import get_logger
 from tcbot.utils.time_and_date import utc_now
 
@@ -249,7 +250,10 @@ async def upload_proof_items(
             references.append((media_id, source.send_kind))
             attached.append(_attached_media(source, media_id))
         cap = caption
-        html = slideshow(references, caption=cap)
+        # * The metadata is a compact rich table, not a figcaption: Telegram
+        # * captions only accept inline text. The table follows the slideshow
+        # * as its own block in the same rich message.
+        html = f"{slideshow(references)}\n{cap}" if cap else slideshow(references)
         try:
             sent = await send_rich(
                 bot,

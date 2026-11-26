@@ -27,7 +27,7 @@ from tcbot.modules.helper.pipelines.ban_session import (
     _flush_session,
     proof_sessions,
 )
-from tcbot.modules.helper.rich.edit import clear_markup
+from tcbot.modules.helper.rich.edit_msg import clear_markup
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import t
 from tcbot.utils.logger import get_logger

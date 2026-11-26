@@ -11,11 +11,11 @@ import re
 from typing import Any
 
 from tcbot.modules.helper.pipelines.rules_markdown import render_body
-from tcbot.modules.helper.rich import msg as rich_msg
+from tcbot.modules.helper.rich import send_msg as rich_msg
+from tcbot.modules.helper.rich.block import blocks
 from tcbot.modules.helper.rich.formats import footer, heading, paragraph
 from tcbot.modules.helper.rich.style import bold as rich_bold
 from tcbot.modules.helper.rich.style import esc as rich_esc
-from tcbot.modules.helper.rich.text import blocks
 from tcbot.utils.i18n import bold, bullet_list, divider, esc, section, t
 from tcbot.utils.logger import get_logger
 

@@ -16,7 +16,7 @@ from tcbot.modules.helper.messages import (
     about_section_msg,
     answer_and_edit,
 )
-from tcbot.modules.helper.rich.edit import callback_text_of
+from tcbot.modules.helper.rich.edit_msg import callback_text_of
 from tcbot.utils.i18n import t
 
 __module_name__ = None

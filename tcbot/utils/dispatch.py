@@ -11,6 +11,8 @@ import inspect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from pyrogram.errors import OffsetPeerIdInvalid, ReplyMessageIdInvalid, UserIsBot
+
 from tcbot.modules.helper.pipelines.errors.exceptions import (
     TRANSPORT_TIMEOUT_ERRORS,
     is_api_refusal,
@@ -79,6 +81,29 @@ _BENIGN_NORMALIZED: tuple[str, ...] = tuple(
 _PERMANENT_NORMALIZED: tuple[str, ...] = tuple(
     _normalize(s) for s in _PERMANENT_BAD_REQUEST_SUBSTRINGS
 )
+
+# * A no-op edit is a success for the caller: the content it wanted is already
+# * on Telegram. A missing target message is a benign loss, so the caller can
+# * post a fresh panel instead of retrying a dead id. Kurigram names these in
+# * RPC codes with underscores (MESSAGE_NOT_MODIFIED); older notices used
+# * spaced prose. Normalizing both forms keeps one classifier for every path.
+_EDIT_NOT_MODIFIED: tuple[str, ...] = (
+    "MESSAGENOTMODIFIED",
+    "MESSAGEISNOTMODIFIED",
+    "MESSAGEWASNOTMODIFIED",
+    "HASNTCHANGED",
+)
+_EDIT_TARGET_GONE: tuple[str, ...] = (
+    "MESSAGETOEDITNOTFOUND",
+    "MESSAGEIDINVALID",
+    "CHATNOTFOUND",
+    "CHANNELINVALID",
+    "PEERIDINVALID",
+    "MESSAGETOOOLD",
+    "MSGTOOOLD",
+)
+_EDIT_NOT_MODIFIED_NORMALIZED = tuple(_normalize(s) for s in _EDIT_NOT_MODIFIED)
+_EDIT_TARGET_GONE_NORMALIZED = tuple(_normalize(s) for s in _EDIT_TARGET_GONE)
 
 
 # ──────────────── Throttled Multi-Group Dispatcher ──────────────── #
@@ -260,6 +285,23 @@ def throw_if_cancelled(results: Iterable[object]) -> None:
     for result in results:
         if isinstance(result, asyncio.CancelledError):
             raise result
+
+
+def is_edit_not_modified_error(exc: BaseException) -> bool:
+    """Return True when Telegram refused an edit because nothing changed."""
+    text = _normalize(str(exc).upper())
+    return any(marker in text for marker in _EDIT_NOT_MODIFIED_NORMALIZED)
+
+
+def is_edit_target_gone_error(exc: BaseException) -> bool:
+    """Return True when the message or chat an edit targets no longer exists."""
+    # * These two RPC names contain a gone-target marker as a substring but
+    # * describe a bad reply-to id or an invalid pagination peer, not a dead
+    # * edit target. Type checks beat normalized text for those exact classes.
+    if isinstance(exc, (ReplyMessageIdInvalid, OffsetPeerIdInvalid)):
+        return False
+    text = _normalize(str(exc).upper())
+    return any(marker in text for marker in _EDIT_TARGET_GONE_NORMALIZED)
 
 
 def is_benign_telegram_error(exc: BaseException) -> bool:

@@ -33,7 +33,7 @@ from tcbot.modules.helper.pipelines.rules_editor_steps import (
     set_and_draft,
 )
 from tcbot.modules.helper.pipelines.rules_publish import publish_rules
-from tcbot.modules.helper.rich.edit import callback_text_of
+from tcbot.modules.helper.rich.edit_msg import callback_text_of
 from tcbot.modules.helper.scope import flow_scope
 from tcbot.utils.i18n import canonical_locale, display_name, t
 from tcbot.utils.logger import get_logger

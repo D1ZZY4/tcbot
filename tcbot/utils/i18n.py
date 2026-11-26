@@ -15,7 +15,6 @@ from tcbot.utils.logger import get_logger
 # * All formatting is rich HTML from the helper/rich modules. The imports are
 # * lazy (inside the helpers) so catalog loading never depends on the rich
 # * package at module load time.
-_USERNAME_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_]{5,32}$")
 
 
 def esc(text: object) -> str:
@@ -89,10 +88,10 @@ def user_ref(user_id: int, name: str, username: str | None = None) -> str:
 
 
 def safe_username(username: str | None) -> str | None:
-    """Return ``username`` only when it matches a Telegram username shape."""
-    if username and _USERNAME_RE.fullmatch(username):
-        return username
-    return None
+    """Return ``username`` only when the rich button owner accepts its shape."""
+    from tcbot.modules.helper.rich.button import is_valid_username  # noqa: PLC0415
+
+    return username if is_valid_username(username) else None
 
 
 def divider() -> str:
@@ -140,7 +139,7 @@ def bullet_list(lines: list[str]) -> str:
     """Render already-formatted lines as a rich bulleted block."""
     from tcbot.modules.helper.rich.list import bullet_list as _bullet_list  # noqa: PLC0415
 
-    return _bullet_list([line for line in lines if line])
+    return _bullet_list([line for line in lines if line and line.strip()])
 
 
 def section(title: str, body: str) -> str:

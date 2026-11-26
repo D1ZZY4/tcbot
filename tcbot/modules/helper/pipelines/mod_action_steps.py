@@ -35,7 +35,7 @@ from tcbot.modules.helper.messages import (
 )
 from tcbot.modules.helper.pipelines import rules_picker
 from tcbot.modules.helper.pipelines.proof_steps import PROOF_MEDIA_FILTER, BuildProof
-from tcbot.modules.helper.rich.edit import callback_text_of
+from tcbot.modules.helper.rich.edit_msg import callback_text_of
 from tcbot.modules.helper.scope import (
     callback_is_current,
     clear_flow_scope,

@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from tcbot.modules.helper.rich import block as rich_text
 from tcbot.modules.helper.rich import button as rich_buttons
 from tcbot.modules.helper.rich import formats as rich_format
 from tcbot.modules.helper.rich import link as rich_link
@@ -13,7 +16,6 @@ from tcbot.modules.helper.rich import list as rich_list
 from tcbot.modules.helper.rich import media as rich_media
 from tcbot.modules.helper.rich import style as rich_style
 from tcbot.modules.helper.rich import table as rich_table
-from tcbot.modules.helper.rich import text as rich_text
 from tcbot.utils.i18n import t
 
 
@@ -54,10 +56,100 @@ def test_list_module_owns_lists_and_details() -> None:
     assert rich_list.details("S", "B") == ("<details><summary>S</summary>B</details>")
 
 
+def test_list_items_skip_whitespace_only_entries() -> None:
+    assert (
+        rich_list.bullet_list(["a", "", "  ", "b"]) == "<ul><li>a</li><li>b</li></ul>"
+    )
+    assert rich_list.ordered_list(["a", "  "]) == "<ol><li>a</li></ol>"
+    assert rich_list.checklist([("a", True), (" ", True)]) == (
+        '<ul><li><input type="checkbox" checked>a</li></ul>'
+    )
+
+
+def test_ordered_item_overrides_the_item_label() -> None:
+    item = rich_list.ordered_item("Three", value=7, type="i")
+    assert (
+        rich_list.ordered_list([item]) == '<ol><li value="7" type="i">Three</li></ol>'
+    )
+    assert rich_list.ordered_list([rich_list.ordered_item("x", type="bad")]) == (
+        "<ol><li>x</li></ol>"
+    )
+
+
+def test_blocks_preserves_attribute_bearing_lists_and_bare_media() -> None:
+    """Structured markup must stay verbatim, whatever its attributes."""
+    ordered = rich_list.ordered_list(["a"], start=3, marker="a", reversed_order=True)
+    mixed = f"{ordered}\n- after"
+    assert rich_text.blocks(mixed) == mixed
+    assert "<p><ol" not in rich_text.blocks(mixed)
+
+    media = rich_media.photo("https://x/i.jpg")
+    assert rich_text.blocks(f"{media}\n1. step") == f"{media}\n1. step"
+
+
 def test_table_module_owns_tables() -> None:
     html = rich_table.table(["H"], [["<x>"]], compact=True, bordered=False)
     assert html.startswith("<table compact>")
     assert "<td>&lt;x&gt;</td>" in html
+
+
+def test_table_title_renders_as_a_caption_inside_the_table() -> None:
+    """Kurigram maps <caption> to PageBlockTable.title, not a heading block."""
+    html = rich_table.table(["H"], [["v"]], title="Detail Ban", striped=True)
+
+    assert html.startswith("<table bordered striped><caption>Detail Ban</caption>")
+    assert "<h2>" not in html
+    assert "<caption>&lt;script&gt;</caption>" in rich_table.table(
+        ["H"], [["v"]], title="<script>"
+    )
+
+
+def test_table_cells_match_kurigram_table_cell_options() -> None:
+    """Cell options mirror Kurigram's RichBlockTableCell without custom markup."""
+    total = rich_table.table_cell(
+        "Total",
+        header=True,
+        colspan=2,
+        rowspan=3,
+        align="right",
+        valign="middle",
+    )
+    html = rich_table.table(["H"], [[total, "v"]], raw_cells=True)
+
+    assert (
+        '<th colspan="2" rowspan="3" align="right" valign="middle">Total</th>' in html
+    )
+    assert "<td>v</td>" in html
+
+    invalid = rich_table.table_cell("x", align="full", valign="center")
+    plain = rich_table.table(["H"], [[invalid]])
+    assert '<td align="full" valign="center">' not in plain
+    assert "<td>x</td>" in plain
+
+
+def test_headerless_table_has_no_empty_header_row() -> None:
+    """A table without headers starts directly with its data rows."""
+    assert rich_table.table([], [["a", "b"]]) == (
+        "<table bordered><tr><td>a</td><td>b</td></tr></table>"
+    )
+
+
+def test_table_enforces_the_twenty_column_limit() -> None:
+    """An over-wide grid is rejected before it can break a whole message."""
+    assert (
+        rich_table.table([f"c{i}" for i in range(20)], [["v"] * 20]).count("<th>") == 20
+    )
+    with pytest.raises(ValueError, match="20 columns"):
+        rich_table.table([f"c{i}" for i in range(21)], [["v"] * 21])
+    with pytest.raises(ValueError, match="20 columns"):
+        rich_table.table(["H"], [[rich_table.table_cell("wide", colspan=21)]])
+
+
+def test_table_cell_spans_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="must be positive"):
+        rich_table.table_cell("x", colspan=0)
+    with pytest.raises(ValueError, match="must be positive"):
+        rich_table.table_cell("x", rowspan=-1)
 
 
 def test_link_module_owns_links_and_buttons_own_mentions() -> None:
@@ -114,6 +206,58 @@ def test_button_subfeatures_cover_the_documented_api() -> None:
     assert rich_buttons.button_rows([["a"], ["b"]]) == (
         "<tg-button-row>a</tg-button-row>\n<tg-button-row>b</tg-button-row>"
     )
+
+
+def test_button_matches_kurigram_action_contract() -> None:
+    with pytest.raises(ValueError):
+        rich_buttons.button("X")
+    with pytest.raises(ValueError):
+        rich_buttons.button("X", data="go", url="https://x")
+    with pytest.raises(ValueError):
+        rich_buttons.button("X", data="")
+    with pytest.raises(ValueError):
+        rich_buttons.button("X", data="x" * 65)
+    with pytest.raises(ValueError):
+        rich_buttons.button("X", copy="")
+    with pytest.raises(ValueError):
+        rich_buttons.button("X", copy="x" * 257)
+    with pytest.raises(ValueError):
+        rich_buttons.button("X", url="https://x", style="link")
+    assert "data=" in rich_buttons.button("X", data="x" * 64)
+
+
+def test_button_styles_are_case_insensitive_and_link_stays_callback_only() -> None:
+    assert rich_buttons.button("CB", data="d", style="LINK") == rich_buttons.button(
+        "CB", data="d", style="link"
+    )
+    assert 'style="primary"' in rich_buttons.button("OK", data="d", style="PRIMARY")
+    with pytest.raises(ValueError, match="link style"):
+        rich_buttons.button("X", url="https://x", style="LINK")
+
+
+def test_native_only_actions_stay_inline_for_both_markup_shapes() -> None:
+    """A profile or payment cell must not become a dead rich button."""
+    native = {"inline_keyboard": [[{"text": "Pay", "pay": True}]]}
+    assert rich_buttons.buttons_from_markup(native) is None
+
+
+def test_an_overlong_copy_button_falls_back_to_native_markup() -> None:
+    markup = {"inline_keyboard": [[{"text": "Copy", "copy_text": "x" * 257}]]}
+    assert rich_buttons.buttons_from_markup(markup) is None
+
+
+def test_button_row_caps_eight_buttons_and_falls_back_to_native() -> None:
+    one = rich_buttons.button("x", data="go")
+    assert rich_buttons.button_row([one] * 8).count("<tg-button ") == 8
+    with pytest.raises(ValueError):
+        rich_buttons.button_row([one] * 9)
+
+    markup = {
+        "inline_keyboard": [
+            [{"text": str(i), "callback_data": f"d{i}"} for i in range(9)]
+        ]
+    }
+    assert rich_buttons.buttons_from_markup(markup) is None
 
 
 def test_button_colours_map_to_api_styles() -> None:

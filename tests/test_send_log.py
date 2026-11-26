@@ -14,7 +14,7 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from tcbot import cfg
 from tcbot.modules.helper.messages import send_log
-from tcbot.modules.helper.rich import edit as rich_edit
+from tcbot.modules.helper.rich import edit_msg as rich_edit
 
 
 class _FakeBot:

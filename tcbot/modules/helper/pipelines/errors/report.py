@@ -81,7 +81,9 @@ def attach(
         )
     # * Register the shipping sink with the logger. The logger lives in the
     # * utils layer and must not import this module, so the dependency is
-    # * inverted: this side registers, the logger calls.
+    # * inverted: this side registers, the logger calls. Console redaction is
+    # * registered at startup right after logging setup, before these
+    # * connections exist, so early startup lines are scrubbed too.
     logger_mod.set_record_sink(_schedule_record)
 
 
@@ -458,7 +460,7 @@ async def _ship_throttled(payload: dict[str, Any]) -> None:
         _sent_in_window += 1
         reserved_window = _send_window_start
 
-    from tcbot.modules.helper.rich.msg import (  # noqa: PLC0415
+    from tcbot.modules.helper.rich.send_msg import (  # noqa: PLC0415
         html_message,
         send_rich,
     )
@@ -514,7 +516,7 @@ async def send_to_owner(
     if not _bot or not _owner_id:
         return
     try:
-        from tcbot.modules.helper.rich.msg import send_rich  # noqa: PLC0415
+        from tcbot.modules.helper.rich.send_msg import send_rich  # noqa: PLC0415
 
         await send_rich(_bot, _owner_id, payload)
     except Exception as exc:

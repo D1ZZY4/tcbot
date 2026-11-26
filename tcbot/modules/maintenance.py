@@ -29,7 +29,7 @@ from tcbot.modules.helper.messages import (
 )
 from tcbot.modules.helper.pipelines import moderation_enforcement
 from tcbot.modules.helper.pipelines.errors.exceptions import API_REFUSAL_ERRORS
-from tcbot.modules.helper.rich.text import blocks
+from tcbot.modules.helper.rich.block import blocks
 from tcbot.utils.dispatch import fan_out, gather_bounded, throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, t
 from tcbot.utils.logger import get_logger

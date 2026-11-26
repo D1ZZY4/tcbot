@@ -2,22 +2,21 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Inline rich text styles: bold, italic, underline, strike, spoiler, sub/sup.
+"""Inline rich-text styles: escaping, emphasis, spoiler, sub and superscript.
 
-Inline styling lives here. Code and preformatted blocks are in
-``rich.formats``; links and mentions are in ``rich.link``.
+Escaping has one owner: :func:`esc`. Every helper escapes its input first and
+returns rich HTML inline markup. Code and preformatted blocks live in
+``rich.formats``; links and mentions live in ``rich.link`` and ``rich.button``.
 """
 
 from __future__ import annotations
 
 import html
 
-_HTML_ESCAPE = html.escape
-
 
 def esc(text: object) -> str:
     """Escape untrusted text for a rich HTML field."""
-    return _HTML_ESCAPE(str(text), quote=True)
+    return html.escape(str(text), quote=True)
 
 
 def bold(text: object) -> str:

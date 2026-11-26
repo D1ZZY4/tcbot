@@ -2,20 +2,30 @@
 # © Copyright 2024 - 2026 Dizzy
 # © Copyright 2026 Ave Labs
 
-"""Rich block formats: headings, text, quotes, highlights, code, footnotes, dividers."""
+"""Rich block formats: headings, text, quotes, highlights, code, maps and footnotes.
+
+Every helper returns rich HTML inline or block markup. Untrusted text is
+escaped by ``rich.style.esc``; callers may pass trusted rendered markup only
+where a helper explicitly documents it.
+"""
 
 from __future__ import annotations
 
+import re
+
 from tcbot.modules.helper.rich.style import esc
+
+# * Kurigram's date-time entity accepts exactly this format alphabet.
+_TIME_FORMAT_RE = re.compile(r"r|w?[dD]?[tT]?")
 
 
 def heading(text: object, level: int = 2) -> str:
-    """Render a section heading. Rich style supports h1 through h6."""
+    """Render an h1-h6 section heading. Empty text renders nothing."""
     content = esc(text)
     if not content:
         return ""
-    tag = min(6, max(1, level))
-    return f"<h{tag}>{content}</h{tag}>"
+    size = min(6, max(1, level))
+    return f"<h{size}>{content}</h{size}>"
 
 
 def paragraph(text: str) -> str:
@@ -24,18 +34,14 @@ def paragraph(text: str) -> str:
 
 
 def quote(text: str, *, expandable: bool = False, author: object | None = None) -> str:
-    """Render a block quotation with an optional attributed author.
-
-    The Bot API has no ``author`` attribute on ``blockquote``; authorship is
-    expressed by a ``<cite>`` element inside the quotation.
-    """
+    """Render a block quotation with an optional attributed author."""
     attr = " expandable" if expandable else ""
     credit = f"<cite>{esc(author)}</cite>" if author else ""
     return f"<blockquote{attr}>{text}{credit}</blockquote>"
 
 
 def pull_quote(text: str, *, author: object | None = None) -> str:
-    """Render a centred pull quote with an optional attributed author."""
+    """Render a centred pull quote with an optional credited author."""
     credit = f"<cite>{esc(author)}</cite>" if author else ""
     return f"<aside>{text}{credit}</aside>"
 
@@ -53,12 +59,7 @@ def pre(text: object) -> str:
 
 
 def highlight(text: object, *, author: object | None = None) -> str:
-    """Render marked text, optionally credited to an author.
-
-    ``<cite>`` is only valid inside blockquote, aside, and figcaption; a bare
-    one after an inline ``<mark>`` is outside the supported rich HTML set. The
-    credit is therefore escaped plain text following the mark.
-    """
+    """Render marked text with an escaped plain-text credit."""
     content = esc(text)
     if not content:
         return ""
@@ -67,18 +68,18 @@ def highlight(text: object, *, author: object | None = None) -> str:
 
 
 def code_block(text: object, *, language: str | None = None) -> str:
-    """Render a preformatted code block, with an optional language class."""
+    """Render a preformatted code block with an optional language class."""
     lang = f' class="language-{esc(language)}"' if language else ""
     return f"<pre><code{lang}>{esc(text)}</code></pre>"
 
 
 def footnote(name: str, text: object) -> str:
-    """Define a reference that a :func:`footnote_ref` link points to."""
+    """Define a reference that :func:`footnote_ref` can link to."""
     return f'<tg-reference name="{esc(name)}">{esc(text)}</tg-reference>'
 
 
 def footnote_ref(name: str, label: object) -> str:
-    """Render an in-document link to a footnote defined by :func:`footnote`."""
+    """Render an in-document link to a defined reference."""
     return f'<a href="#{esc(name)}">{esc(label)}</a>'
 
 
@@ -94,7 +95,7 @@ def footer(text: object) -> str:
 
 
 def anchor(name: str) -> str:
-    """Render an in-document anchor that :func:`footnote_ref` can link to."""
+    """Render an in-document anchor."""
     return f'<a name="{esc(name)}"></a>'
 
 
@@ -105,15 +106,45 @@ def math(expression: object) -> str:
 
 
 def math_block(expression: object) -> str:
-    """Render a LaTeX expression as its own block."""
+    """Render a LaTeX block."""
     content = esc(expression)
     return f"<tg-math-block>{content}</tg-math-block>" if content else ""
 
 
+def map_block(
+    latitude: float,
+    longitude: float,
+    *,
+    zoom: int | None = None,
+    caption: str | None = None,
+    credit: object | None = None,
+) -> str:
+    """Render a map block with an optional figure caption and credit.
+
+    ``zoom`` follows Kurigram's 0-24 range. Width and height are fields of the
+    typed block but are not part of the rich HTML tag, so they are not exposed.
+    """
+    if zoom is not None and not 0 <= zoom <= 24:
+        raise ValueError(f"Invalid rich map zoom: {zoom!r}")
+    attrs = f' lat="{esc(latitude)}" long="{esc(longitude)}"'
+    if zoom is not None:
+        attrs += f' zoom="{int(zoom)}"'
+    tag = f"<tg-map{attrs}/>"
+    if not caption and credit is None:
+        return tag
+    cite = f"<cite>{esc(credit)}</cite>" if credit else ""
+    label = esc(caption) if caption else ""
+    return f"<figure>{tag}<figcaption>{label}{cite}</figcaption></figure>"
+
+
 def time_tag(unix: int, fmt: str, label: object) -> str:
-    """Render a formatted date-time entity."""
-    # * Escape numeric attributes too: a value crossing a loose type boundary
-    # * must never break out of the double-quoted attribute.
+    """Render a formatted date-time entity.
+
+    An invalid ``fmt`` is rejected here rather than shipping markup Telegram
+    cannot parse. Numeric attributes are escaped as well.
+    """
+    if not _TIME_FORMAT_RE.fullmatch(fmt):
+        raise ValueError(f"Invalid rich date-time format: {fmt!r}")
     return f'<tg-time unix="{esc(unix)}" format="{esc(fmt)}">{esc(label)}</tg-time>'
 
 
@@ -133,6 +164,7 @@ __all__ = [
     "footnote_ref",
     "heading",
     "highlight",
+    "map_block",
     "math",
     "math_block",
     "paragraph",

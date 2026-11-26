@@ -36,9 +36,17 @@ _ALIGNMENTS = frozenset({"left", "center", "right"})
 
 # * Bot API style names accepted from a Kurigram inline keyboard button.
 _RICH_BUTTON_STYLES = frozenset({"primary", "success", "danger", "link"})
-# * Telegram caps callback_data at 64 bytes; a longer payload keeps the
-# * original inline keyboard as the fallback.
+# * Kurigram's RichMessageButton requires one action field and bounds callback
+# * data to 1-64 bytes and copy text to 1-256 characters.
 _CALLBACK_MAX_BYTES = 64
+_COPY_MAX_CHARS = 256
+_NATIVE_ONLY_FIELDS = (
+    "user_id",
+    "pay",
+    "callback_game",
+    "requires_password",
+    "icon_custom_emoji_id",
+)
 # * A tg://user URL is normalised by Telegram into a user-profile button. The
 # * client only accepts ids in 1..2^40-1 as users; larger values, chat ids and
 # * sentinels reach Telegram and fail the whole message with BUTTON_USER_INVALID.
@@ -51,6 +59,11 @@ _NON_PROFILE_USER_IDS: frozenset[int] = frozenset({TELEGRAM_USER_ID, ANONYMOUS_B
 _USERNAME_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_]{5,32}$")
 
 
+def is_valid_username(username: object) -> bool:
+    """Return True only for a shape-valid Telegram username."""
+    return isinstance(username, str) and bool(_USERNAME_RE.fullmatch(username))
+
+
 def is_mentionable_user_id(user_id: object) -> bool:
     """Return True only for an id Telegram accepts as a user-profile target."""
     return (
@@ -61,10 +74,16 @@ def is_mentionable_user_id(user_id: object) -> bool:
     )
 
 
-def _style(style: str | None) -> str:
+def _resolved_style(style: str | None) -> str:
+    """Normalize a friendly or raw style name to the API spelling."""
     if not style:
         return ""
-    resolved = _STYLES.get(style.lower(), style)
+    key = style.strip().lower()
+    return _STYLES.get(key, key)
+
+
+def _style(style: str | None) -> str:
+    resolved = _resolved_style(style)
     return f' style="{esc(resolved)}"' if resolved else ""
 
 
@@ -91,8 +110,32 @@ def button(
     """Render one rich button with exactly one action type.
 
     The keyword arguments map one-to-one to the Bot API button fields so a
-    caller can build any documented button without raw HTML.
+    caller can build any documented button without raw HTML. Like Kurigram's
+    ``RichMessageButton.write()``, exactly one action must be set.
     """
+    actions = {
+        "data": data,
+        "url": url,
+        "copy": copy,
+        "web_app": web_app,
+        "login_url": login_url,
+        "switch_inline_query": switch_inline_query,
+        "switch_inline_query_current_chat": switch_inline_query_current_chat,
+        "switch_inline_query_chosen_chat": switch_inline_query_chosen_chat,
+        "disabled": disabled if disabled else None,
+    }
+    provided = [name for name, value in actions.items() if value is not None]
+    if len(provided) != 1:
+        raise ValueError(
+            f"Exactly one rich button action must be set, got {provided or 'none'}"
+        )
+    if data is not None and not 1 <= len(data.encode()) <= _CALLBACK_MAX_BYTES:
+        raise ValueError("Rich button callback_data must be 1-64 bytes")
+    if copy is not None and not 1 <= len(copy) <= _COPY_MAX_CHARS:
+        raise ValueError("Rich button copy_text must be 1-256 characters")
+    resolved = _resolved_style(style)
+    if resolved == "link" and provided[0] != "data":
+        raise ValueError("The link style is only valid for callback buttons")
     attrs = ""
     if data is not None:
         attrs = f' type="callback_data" data="{esc(data)}"'
@@ -170,7 +213,7 @@ def mention_button(
     # * cannot prove existence, and stored ban/role rows can outlive an
     # * account, so only a verified username becomes a button. Every other
     # * mention stays readable text rather than a message-breaking button.
-    if username and _USERNAME_RE.fullmatch(username):
+    if is_valid_username(username):
         return url_button(label, f"https://t.me/{username}", style=style)
     return esc(label)
 
@@ -245,6 +288,8 @@ def button_row(buttons: list[str], *, align: str | None = None) -> str:
     in one row per the Bot API. A single-button row is the supported way to
     give one button a full row; the API has no full-width attribute.
     """
+    if not 1 <= len(buttons) <= 8:
+        raise ValueError("A rich button row holds 1-8 buttons")
     value = align if align in _ALIGNMENTS else None
     attr = f' align="{value}"' if value else ""
     return f"<tg-button-row{attr}>" + "".join(buttons) + "</tg-button-row>"
@@ -255,11 +300,26 @@ def button_rows(rows: list[list[str]], *, align: str | None = None) -> str:
     return "\n".join(button_row(row, align=align) for row in rows if row)
 
 
+def _has_native_only_action(cell: Any) -> bool:
+    """Return True when a cell carries an action rich HTML cannot express."""
+    if isinstance(cell, dict):
+        return any(cell.get(name) is not None for name in _NATIVE_ONLY_FIELDS)
+    return any(getattr(cell, name, None) is not None for name in _NATIVE_ONLY_FIELDS)
+
+
 def _markup_dict(reply_markup: Any | None) -> dict[str, Any] | None:
     """Serialise a Kurigram inline keyboard to the dict shape used here."""
     if reply_markup is None:
         return None
     if isinstance(reply_markup, dict):
+        dict_cells = reply_markup.get("inline_keyboard")
+        if isinstance(dict_cells, list) and any(
+            _has_native_only_action(cell)
+            for row in dict_cells
+            if isinstance(row, list)
+            for cell in row
+        ):
+            return None
         return reply_markup
     rows = getattr(reply_markup, "inline_keyboard", None)
     if not isinstance(rows, list):
@@ -268,6 +328,10 @@ def _markup_dict(reply_markup: Any | None) -> dict[str, Any] | None:
     for row in rows:
         cells: list[dict[str, Any]] = []
         for cell in row:
+            # * Rich HTML has no equivalent for these native actions. Keep the
+            # * whole keyboard inline instead of turning a live button dead.
+            if _has_native_only_action(cell):
+                return None
             data: dict[str, Any] = {"text": getattr(cell, "text", "")}
             for name in (
                 "callback_data",
@@ -318,11 +382,16 @@ def button_from_cell(cell: dict[str, object]) -> str | None:
     label = cell.get("text")
     if not isinstance(label, str):
         return None
+    data = cell.get("callback_data")
+    is_callback = isinstance(data, str) and bool(data)
     raw_style = cell.get("style")
     style_value = str(raw_style) if raw_style is not None else None
     if style_value is not None and style_value not in _RICH_BUTTON_STYLES:
         style_value = None
-    data = cell.get("callback_data")
+    if style_value == "link" and not is_callback:
+        # * The link style is only valid on a callback button; drop it rather
+        # * than raising and breaking the whole message.
+        style_value = None
     if isinstance(data, str) and data:
         if len(data.encode()) > _CALLBACK_MAX_BYTES:
             return None
@@ -343,7 +412,9 @@ def button_from_cell(cell: dict[str, object]) -> str | None:
             style=style_value,
         )
     copy = cell.get("copy_text")
-    if isinstance(copy, dict) and isinstance(copy.get("text"), str):
+    if isinstance(copy, dict) and isinstance(copy.get("text"), str) and copy["text"]:
+        if len(copy["text"]) > _COPY_MAX_CHARS:
+            return None
         return button(label, copy=copy["text"], style=style_value)
     switch_query = cell.get("switch_inline_query")
     if isinstance(switch_query, str):
@@ -398,7 +469,11 @@ def buttons_from_markup(reply_markup: object | None) -> list[str] | None:
         return None
     rows: list[str] = []
     for row in cells:
-        if not isinstance(row, list) or not row:
+        if not isinstance(row, list) or len(row) > 8:
+            return None
+        # * Paged keyboard builders emit an empty nav row on a single page.
+        # * Dropping it is lossless and keeps those keyboards on the rich path.
+        if not row:
             continue
         converted = [button_from_cell(cell) for cell in row]
         if any(item is None for item in converted):
@@ -419,6 +494,7 @@ __all__ = [
     "copy_button",
     "disabled_button",
     "is_mentionable_user_id",
+    "is_valid_username",
     "login_button",
     "mention_button",
     "switch_button",

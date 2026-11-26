@@ -32,9 +32,9 @@ from tcbot.modules.helper.extraction import (
     launch_identity_refresh,
 )
 from tcbot.modules.helper.identity import recognition_note
+from tcbot.modules.helper.rich.block import blocks
 from tcbot.modules.helper.rich.formats import divider, footer, heading
 from tcbot.modules.helper.rich.table import table
-from tcbot.modules.helper.rich.text import blocks
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, esc, italic, t, user_ref
 from tcbot.utils.logger import get_logger

@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any, cast
 
+import pytest
+from pyrogram.enums import ButtonStyle
 from pyrogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -17,8 +19,10 @@ from pyrogram.types import (
     InputRichMessageMedia,
 )
 
-from tcbot.modules.helper.rich import edit as rich_edit
-from tcbot.modules.helper.rich import msg as rc
+from tcbot.modules.helper.rich import block as rich_block
+from tcbot.modules.helper.rich import edit_msg as rich_edit
+from tcbot.modules.helper.rich import media as rich_media
+from tcbot.modules.helper.rich import send_msg as rc
 from tcbot.modules.helper.rich.button import (
     button,
     button_row,
@@ -38,6 +42,7 @@ from tcbot.modules.helper.rich.formats import (
     paragraph,
     pull_quote,
     quote,
+    time_tag,
 )
 from tcbot.modules.helper.rich.link import link
 from tcbot.modules.helper.rich.list import bullet_list, details, ordered_list
@@ -51,7 +56,7 @@ from tcbot.modules.helper.rich.style import (
     superscript,
     underline,
 )
-from tcbot.modules.helper.rich.table import table
+from tcbot.modules.helper.rich.table import table, table_cell
 from tcbot.utils.i18n import user_ref
 
 
@@ -250,6 +255,16 @@ def test_extra_inline_and_block_features_render() -> None:
     )
 
 
+def test_rich_values_follow_kurigram_constraints() -> None:
+    with pytest.raises(ValueError):
+        rich_media.slideshow([("bad id", "photo")])
+    with pytest.raises(ValueError):
+        rich_media.slideshow([("m0", "thinking")])
+    with pytest.raises(ValueError):
+        time_tag(1, "bad", "label")
+    assert ordered_list(["x"], marker="bad") == "<ol><li>x</li></ol>"
+
+
 def test_table_renders_header_and_rows() -> None:
     html = table(["Name", "Status"], [["Alice", "OK"]])
     assert html.startswith("<table bordered>")
@@ -275,16 +290,47 @@ def test_button_rows_support_callback_and_url() -> None:
     assert 'type="url" url="https://t.me/"' in row
 
 
+def test_a_button_can_live_inside_a_table_cell() -> None:
+    """A raw cell keeps inline rich markup, including a button, verbatim."""
+    html = table(["Action"], [[table_cell(button("Go", data="go"), raw=True)]])
+    assert '<td><tg-button type="callback_data" data="go">Go</tg-button></td>' in html
+    other = table(["Action"], [[table_cell(button("Go", data="go"))]])
+    assert "&lt;tg-button" in other
+
+
+def test_an_empty_navigation_row_does_not_force_native_markup() -> None:
+    """Single-page keyboards emit empty rows; they must stay fully rich."""
+    markup = {
+        "inline_keyboard": [
+            [{"text": "Topic", "callback_data": "topic"}],
+            [],
+            [{"text": "Close", "callback_data": "close"}],
+        ]
+    }
+    bot = _FakeBot()
+    asyncio.run(
+        rc.send_rich(
+            cast("Any", bot),
+            -100,
+            rich_block.html_message("<p>body</p>"),
+            reply_markup=markup,
+        )
+    )
+    kwargs = bot.calls[0][1]
+    assert "reply_markup" not in kwargs
+    assert kwargs["rich_message"].html.count("<tg-button-row>") == 2
+
+
 def test_message_assembly_uses_exactly_one_content_field() -> None:
-    html_msg = rc.html_message(heading("T"), paragraph("B"))
+    html_msg = rich_block.html_message(heading("T"), paragraph("B"))
     assert set(html_msg) == {"html"}
     assert "<h2>T</h2>" in html_msg["html"]
-    assert rc.blocks_message([{"type": "x"}]) == {"blocks": [{"type": "x"}]}
+    assert rich_block.blocks_message([{"type": "x"}]) == {"blocks": [{"type": "x"}]}
 
 
 def test_send_rich_uses_native_kurigram_rich_message() -> None:
     bot = _FakeBot()
-    message = rc.html_message(paragraph("hi"))
+    message = rich_block.html_message(paragraph("hi"))
     result = asyncio.run(
         rc.send_rich(cast("Any", bot), -100, message, message_thread_id=7)
     )
@@ -298,7 +344,7 @@ def test_send_rich_uses_native_kurigram_rich_message() -> None:
 
 def test_edit_rich_uses_edit_message_text_with_rich_field() -> None:
     bot = _FakeBot()
-    message = rc.html_message(paragraph("new"))
+    message = rich_block.html_message(paragraph("new"))
     asyncio.run(rich_edit.edit_rich(cast("Any", bot), -100, 55, message))
     endpoint, kwargs, _ = bot.calls[0]
     assert endpoint == "editMessageText"
@@ -318,7 +364,7 @@ def test_edit_rich_uses_native_kurigram_rich_message() -> None:
             return "edited"
 
     asyncio.run(
-        rich_edit.edit_rich(_FakeClient(), -100, 5, rc.html_message("<b>x</b>"))  # type: ignore[arg-type]
+        rich_edit.edit_rich(_FakeClient(), -100, 5, rich_block.html_message("<b>x</b>"))  # type: ignore[arg-type]
     )
     rich = captured["rich_message"]
     assert rich.html == "<b>x</b>"
@@ -328,7 +374,9 @@ def test_reply_markup_is_serialised_for_the_api() -> None:
     markup = InlineKeyboardMarkup([])
     bot = _FakeBot()
     asyncio.run(
-        rc.send_rich(cast("Any", bot), -100, rc.html_message("x"), reply_markup=markup)
+        rc.send_rich(
+            cast("Any", bot), -100, rich_block.html_message("x"), reply_markup=markup
+        )
     )
     assert "reply_markup" not in bot.calls[0][1]
 
@@ -343,7 +391,7 @@ def test_rich_embeds_keyboard_as_rich_buttons() -> None:
         ]
     )
     bot = _FakeBot()
-    message = rc.html_message("<p>body</p>")
+    message = rich_block.html_message("<p>body</p>")
     asyncio.run(rc.send_rich(cast("Any", bot), -100, message, reply_markup=markup))
 
     kwargs = bot.calls[0][1]
@@ -360,18 +408,52 @@ def test_an_unconvertible_keyboard_is_forwarded_as_native_markup() -> None:
     markup = {"inline_keyboard": [[{"text": "Long", "callback_data": "x" * 65}]]}
     bot = _FakeBot()
     asyncio.run(
-        rc.send_rich(cast("Any", bot), -100, rc.html_message("x"), reply_markup=markup)
+        rc.send_rich(
+            cast("Any", bot), -100, rich_block.html_message("x"), reply_markup=markup
+        )
     )
     kwargs = bot.calls[0][1]
     assert kwargs["reply_markup"] is markup
     assert "<tg-button-row>" not in kwargs["rich_message"].html
 
 
+def test_a_link_style_url_button_drops_the_style_instead_of_raising() -> None:
+    """The link style is callback-only; a URL button must not break a send."""
+    markup = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("Open", url="https://t.me", style=ButtonStyle.LINK)]]
+    )
+    bot = _FakeBot()
+    asyncio.run(
+        rc.send_rich(
+            cast("Any", bot), -100, rich_block.html_message("x"), reply_markup=markup
+        )
+    )
+    html = bot.calls[0][1]["rich_message"].html
+    assert 'type="url" url="https://t.me"' in html
+    assert 'style="link"' not in html
+
+
+def test_a_profile_button_keeps_the_native_keyboard() -> None:
+    """A native action without a rich equivalent must stay clickable."""
+    markup = InlineKeyboardMarkup([[InlineKeyboardButton("Profile", user_id=42)]])
+    bot = _FakeBot()
+    asyncio.run(
+        rc.send_rich(
+            cast("Any", bot), -100, rich_block.html_message("x"), reply_markup=markup
+        )
+    )
+    kwargs = bot.calls[0][1]
+    assert kwargs["reply_markup"] is markup
+    assert '<tg-button type="disabled">' not in kwargs["rich_message"].html
+
+
 def test_rich_buttons_render_a_disabled_cell_as_a_rich_button() -> None:
     markup = InlineKeyboardMarkup([[InlineKeyboardButton("App")]])
     bot = _FakeBot()
     asyncio.run(
-        rc.send_rich(cast("Any", bot), -100, rc.html_message("x"), reply_markup=markup)
+        rc.send_rich(
+            cast("Any", bot), -100, rich_block.html_message("x"), reply_markup=markup
+        )
     )
     kwargs = bot.calls[0][1]
     html = kwargs["rich_message"].html
@@ -388,7 +470,7 @@ def test_rich_edit_embeds_buttons() -> None:
             cast("Any", bot),
             -100,
             1,
-            rc.html_message("x"),
+            rich_block.html_message("x"),
             reply_markup=markup,
         )
     )
@@ -401,7 +483,7 @@ def test_rich_edit_can_clear_a_keyboard() -> None:
     bot = _FakeBot()
     asyncio.run(
         rich_edit.edit_rich(
-            cast("Any", bot), -100, 1, rc.html_message("x"), clear_markup=True
+            cast("Any", bot), -100, 1, rich_block.html_message("x"), clear_markup=True
         )
     )
     kwargs = bot.calls[0][1]

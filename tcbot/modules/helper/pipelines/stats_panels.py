@@ -23,10 +23,10 @@ from tcbot.modules.helper.buttons import (
     stats_search_row,
 )
 from tcbot.modules.helper.context import Ctx, chat_id_of
+from tcbot.modules.helper.rich.block import blocks
 from tcbot.modules.helper.rich.button import is_mentionable_user_id
 from tcbot.modules.helper.rich.list import bullet_list
 from tcbot.modules.helper.rich.table import table
-from tcbot.modules.helper.rich.text import blocks
 from tcbot.utils.dispatch import throw_if_cancelled
 from tcbot.utils.i18n import Safe, bold, code, divider, esc, t, user_ref
 from tcbot.utils.logger import get_logger

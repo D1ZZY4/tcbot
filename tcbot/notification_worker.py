@@ -20,8 +20,8 @@ from tcbot.modules.helper.pipelines.errors.exceptions import (
     is_forbidden,
     is_invalid_button_user,
 )
-from tcbot.modules.helper.rich.edit import edit_rich
-from tcbot.modules.helper.rich.msg import html_message
+from tcbot.modules.helper.rich.block import html_message
+from tcbot.modules.helper.rich.edit_msg import edit_rich
 from tcbot.utils import circuit_breaker as _cb
 from tcbot.utils.circuit_breaker import CircuitState
 from tcbot.utils.i18n import resolve_locale, t
