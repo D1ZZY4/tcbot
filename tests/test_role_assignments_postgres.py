@@ -89,6 +89,8 @@ async def test_the_admin_promotion_keeps_the_granted_role(
 
     monkeypatch.setattr(promote_steps, "send_log", _send_log)
 
+    # * Production passes the freshly read role so the assignment can revoke
+    # * the tier it replaces. Direct callers must do the same.
     ok, _text = await promote_steps.assign_admin(
         _FakeBot(),  # type: ignore[arg-type]
         1,
@@ -96,6 +98,7 @@ async def test_the_admin_promotion_keeps_the_granted_role(
         42,
         "Target",
         "en-US",
+        current_role="moderator",
     )
 
     assert ok is True

@@ -46,6 +46,24 @@ from tcbot.utils.prefixes import parse_cmd_args
 log = get_logger(__name__)
 
 
+async def _executor_role_at_mutation(
+    admin_id: int, locale: str | None, *, log_label: str
+) -> tuple[str | None, str | None]:
+    """Re-read the executor role immediately before a privileged write.
+
+    The ban guard between entry and the write is a database round trip. A
+    demotion landing there makes the entry-time rank stale, so the grant must
+    bind to a second fresh read instead. Returns ``(role, error_text)``; an
+    error text means the role could not be verified and the caller must refuse.
+    """
+    try:
+        role = await db.users_roles.get_effective_role(admin_id, fresh=True)
+    except Exception:
+        log.warning("%s executor role recheck failed for %d", log_label, admin_id)
+        return None, t("admins.error.role_lookup_failed", locale)
+    return role, None
+
+
 class Promote:
     """All federation-promotion logic."""
 
@@ -111,9 +129,7 @@ class Promote:
                 target_result,
             )
             return False, t("admins.error.role_lookup_failed", locale)
-        executor_role = executor_result
         current_role = target_result
-        allowed = cls.available_roles_for(executor_role)
         if current_role == "owner":
             return False, t("admins.promote.target_is_owner", locale)
         if db.users_roles.role_rank(current_role) >= db.users_roles.role_rank(role):
@@ -127,8 +143,15 @@ class Promote:
         )
         if refusal is not None:
             return False, refusal
+        fresh_executor, error = await _executor_role_at_mutation(
+            admin_id, locale, log_label="promote.execute"
+        )
+        if error is not None:
+            return False, error
+        # * The branch itself uses the mutation-point role: a rank gained or
+        # * lost during the ban guard must change which path is authorised.
         if role == "admin":
-            if executor_role == "owner":
+            if fresh_executor == "owner":
                 return await assign_admin(
                     bot,
                     admin_id,
@@ -138,12 +161,12 @@ class Promote:
                     locale,
                     current_role=current_role,
                 )
-            if executor_role == "admin":
+            if fresh_executor == "admin":
                 return await cls.request_admin(
                     bot, admin_id, target_id, target_fname, locale=locale
                 )
             return False, t("admins.promote.no_assign_perms", locale)
-        if role not in allowed:
+        if role not in cls.available_roles_for(fresh_executor):
             return False, t("admins.promote.no_assign_perms", locale)
         return await assign_subrole(
             bot,
@@ -217,6 +240,15 @@ async def change_role_for_staff(
     )
     if refusal is not None:
         return False, refusal
+    fresh_executor, error = await _executor_role_at_mutation(
+        admin_id, locale, log_label="change_role_for_staff"
+    )
+    if error is not None:
+        return False, error
+    if role not in Promote.available_roles_for(fresh_executor):
+        return False, t("admins.promote.no_assign_perms", locale)
+    if fresh_executor != "owner" and not outranks(fresh_executor, current_role):
+        return False, t("admins.role_change.not_outranked", locale)
     try:
         await db.users_roles.change_role(
             target_id, role, admin_id, expected_role=current_role

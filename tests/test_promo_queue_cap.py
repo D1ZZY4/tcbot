@@ -32,6 +32,14 @@ async def promo_db(postgres_db: str) -> AsyncIterator[str]:
     await reset_community()
 
 
+def test_pending_in_force_uses_the_database_clock() -> None:
+    """The expiry predicate must match the trigger's clock, not the host's."""
+    compiled = str(
+        queues_db._pending_in_force().compile(compile_kwargs={"literal_binds": True})
+    )
+    assert "now()" in compiled.lower()
+
+
 async def test_pending_count_counts_only_the_pending_rows(promo_db: str) -> None:
     """The count helper filters on the pending status."""
     await queues_db.enqueue(1, None, "One", 9)

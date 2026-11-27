@@ -123,9 +123,14 @@ def _rebuild(exc: IntegrityError, kind: type[DuplicateKeyError]) -> DuplicateKey
 
 
 def _pending_in_force() -> ColumnElement[bool]:
-    """Return the condition that a pending request has not expired."""
+    """Return the condition that a pending request has not expired.
+
+    The database lifecycle trigger compares ``expires_at`` with the server
+    clock. Reading it with the application clock could select a row the
+    trigger then refuses to update, so the predicate uses the same clock.
+    """
     return (promotion_requests.c.expires_at.is_(None)) | (
-        promotion_requests.c.expires_at > utc_now()
+        promotion_requests.c.expires_at > func.now()
     )
 
 
@@ -243,11 +248,11 @@ async def expire_stale_requests() -> int:
             .where(
                 promotion_requests.c.status == "pending",
                 promotion_requests.c.expires_at.isnot(None),
-                promotion_requests.c.expires_at <= utc_now(),
+                promotion_requests.c.expires_at <= func.now(),
             )
             .values(
                 status="expired",
-                resolved_at=utc_now(),
+                resolved_at=func.now(),
                 decision_note="Expired without a decision",
             )
         )
@@ -340,7 +345,7 @@ async def cancel_pending_for_user(user_id: int, resolved_by: int) -> int:
             )
             .values(
                 status="cancelled",
-                resolved_at=utc_now(),
+                resolved_at=func.now(),
                 resolved_by_user_id=resolved_by,
             )
         )
@@ -367,7 +372,7 @@ async def resolve(request_id: str, status: RequestStatus, resolved_by: int) -> b
             )
             .values(
                 status=status,
-                resolved_at=utc_now(),
+                resolved_at=func.now(),
                 resolved_by_user_id=resolved_by,
             )
         )

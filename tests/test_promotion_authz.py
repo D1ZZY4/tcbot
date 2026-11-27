@@ -305,6 +305,76 @@ def test_promote_request_refuses_a_banned_target(
     assert enqueued == []
 
 
+def test_promote_execute_refuses_after_a_demotion_during_the_ban_guard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The role used for the grant must be the one read at the write point."""
+    _install_ban(monkeypatch, ban=None)
+    executor_reads = 0
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        nonlocal executor_reads
+        _ = fresh
+        if user_id != 1:
+            return None
+        executor_reads += 1
+        return "owner" if executor_reads == 1 else "moderator"
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    granted: list[int] = []
+
+    async def _add_admin(
+        user_id: int,
+        promoted_by: int,
+        **kwargs: Any,
+    ) -> None:
+        granted.append(user_id)
+
+    monkeypatch.setattr(db.users_roles, "add_admin", _add_admin)
+
+    ok, _text = asyncio.run(
+        promote_steps.Promote.execute(
+            _bot(), 1, "Owner", 42, "Target", "admin", "en-US"
+        )
+    )
+    assert ok is False
+    assert granted == []
+    assert executor_reads == 2
+
+
+def test_role_change_refuses_after_a_demotion_during_the_ban_guard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A role move also re-reads the executor rank before writing."""
+    _install_ban(monkeypatch, ban=None)
+    executor_reads = 0
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str | None:
+        nonlocal executor_reads
+        _ = fresh
+        if user_id == 1:
+            executor_reads += 1
+            return "admin" if executor_reads == 1 else "moderator"
+        return "developer"
+
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    changed: list[int] = []
+
+    async def _change_role(*args: Any, **kwargs: Any) -> None:
+        changed.append(1)
+
+    monkeypatch.setattr(db.users_roles, "change_role", _change_role)
+
+    ok, _text = asyncio.run(
+        promote_steps.change_role_for_staff(
+            _bot(), 1, "Admin", 42, "Target", "moderator", "en-US"
+        )
+    )
+    assert ok is False
+    assert changed == []
+    assert executor_reads == 2
+
+
 def test_demote_mutation_gate_reuses_the_admin_floor() -> None:
     """The mutation-point gate refuses a demoted or insufficient executor."""
     assert guards.can_demote_staff("owner", "admin") is True
