@@ -35,7 +35,6 @@ required authorization guard second, and `log_execution` innermost.
 | `staff_only` | Admin. |
 | `mod_only` | Developer. |
 | `basic_mod_only` | Moderator. |
-| `permission_only(key)` | The named permission through `has_permission()`. |
 
 All gates refuse the anonymous-admin placeholder, fail closed on a lookup
 error, and re-raise `asyncio.CancelledError`. The `owner_only` gate refreshes the
@@ -43,10 +42,10 @@ cached owner role before the rank check later in the same request.
 
 ## Permission catalog
 
-`permission_only(key)` calls `users_roles.has_permission(uid, key)`, which runs
-the SQL function `actor_has_permission(user_id, permission_key)`. That function
-resolves the active assignment, walks its role permissions, and returns false
-for a missing, expired, or unknown permission. Key format is
+Capability checks call `users_roles.has_permission(uid, key)` directly, which
+runs the SQL function `actor_has_permission(user_id, permission_key)`. That
+function resolves the active assignment, walks its role permissions, and
+returns false for a missing, expired, or unknown permission. Key format is
 `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`.
 
 The seed catalog defines keys across the `audit`, `automation`, `community`,
@@ -64,8 +63,8 @@ grants:
 
 `rules.manage` and `rules.view` are enforced by direct
 `users_roles.has_permission()` calls in `rules_editor_steps.py`, `mod_action_steps.py`, and
-`ban_rules_step.py`. The `permission_only` decorator is defined for callers that
-want a decorator form, but no current handler uses it.
+`ban_rules_step.py`. Capability checks are explicit at the call site; there is
+no separate decorator gate.
 
 ## Executor and target checks
 
@@ -86,8 +85,8 @@ target". Both are required; neither substitutes for the other.
 
 Fail-closed rules that apply everywhere: both roles are read with `fresh=True`;
 a role-lookup failure refuses; `identity.classify()` raises rather than
-degrading a target to `"user"`; cancellation propagates; `permission_only` and
-every tier gate reject on lookup failure.
+degrading a target to `"user"`; cancellation propagates; every tier gate and
+capability check rejects on lookup failure.
 
 ## Protected targets
 

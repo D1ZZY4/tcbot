@@ -35,18 +35,15 @@ flowchart TD
     A -->|staff_only| S["get_effective_role(fresh=True) rank >= admin"]
     A -->|mod_only| M["get_effective_role(fresh=True) rank >= developer"]
     A -->|basic_mod_only| B["get_effective_role(fresh=True) rank >= moderator"]
-    A -->|permission_only| P["has_permission(uid, key)"]
     O --> L["log_execution innermost"]
     S --> L
     M --> L
     B --> L
-    P --> L
     L --> H[Handler body]
     O -->|denied| D[Reply with tier refusal]
     S -->|denied| D
     M -->|denied| D
     B -->|denied| D
-    P -->|denied| D
 ```
 
 Rules:
@@ -65,18 +62,17 @@ Rules:
   role-lookup failure sends a retry reply instead of failing silently;
   cancellation is re-raised.
 
-## Permission catalog and `permission_only`
+## Permission catalog
 
-`permission_only(permission_key)` gates a capability directly through the
-database instead of assuming a role rank implies that capability. It calls
-`users_roles.has_permission(uid, key)`, which runs the SQL function
-`actor_has_permission(user_id, permission_key)` in `database/schema/functions/rbac.sql`.
-That function resolves the active assignment, walks its role permissions, and
-returns false for a missing, expired, or unknown permission.
+Capability checks call `users_roles.has_permission(uid, key)` directly instead
+of assuming a role rank implies that capability. The helper runs the SQL
+function `actor_has_permission(user_id, permission_key)` in
+`database/schema/functions/rbac.sql`. That function resolves the active
+assignment, walks its role permissions, and returns false for a missing,
+expired, or unknown permission.
 
 | Item | Value |
 |---|---|
-| Decorator | `decorators.permission_only(key)` in `decorators/auth.py` |
 | Check | `db.users_roles.has_permission(uid, key)` |
 | Key format | `^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$` (`permission_definitions` check constraint) |
 | Catalog helpers | `permission_catalog()`, `permissions_for(user_id)`, `role_catalog()` |
@@ -95,7 +91,7 @@ The seed catalog in `database/schema/seed.sql` defines keys across the `audit`,
 | `rules.manage` | yes | no | no | yes |
 | `rules.view` | yes | yes | yes | yes |
 
-`permission_only` fails closed: a lookup exception produces the role-lookup
+Capability checks fail closed: a lookup exception produces the role-lookup
 refusal and the handler is not called.
 
 ## Executor and target checks
@@ -145,7 +141,7 @@ sequenceDiagram
 Fail-closed rules that apply everywhere: both roles are read with `fresh=True`;
 a role-lookup failure refuses; `throw_if_cancelled()` re-raises cancellation;
 `identity.classify()` raises on a failed role lookup rather than degrading the
-target to `"user"`; `permission_only`, the tier gates, and the guard checks all
+target to `"user"`; the tier gates, capability checks, and guard checks all
 reject on lookup failure.
 
 ## Protected targets
