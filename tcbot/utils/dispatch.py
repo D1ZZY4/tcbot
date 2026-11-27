@@ -11,7 +11,12 @@ import inspect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from pyrogram.errors import OffsetPeerIdInvalid, ReplyMessageIdInvalid, UserIsBot
+from pyrogram.errors import (
+    OffsetPeerIdInvalid,
+    PeerIdInvalid,
+    ReplyMessageIdInvalid,
+    UserIsBot,
+)
 
 from tcbot.modules.helper.pipelines.errors.exceptions import (
     TRANSPORT_TIMEOUT_ERRORS,
@@ -321,6 +326,13 @@ def is_benign_telegram_error(exc: BaseException) -> bool:
     # * OFFSET_PEER_ID_INVALID normalizes to a string containing PEERIDINVALID
     # * but is a pagination error, not a no-op moderation target.
     if isinstance(exc, OffsetPeerIdInvalid):
+        return False
+    # ! CRITICAL: Kurigram raises PeerIdInvalid locally when the cached access
+    # * hash of a peer is missing, before any request reaches Telegram. Such a
+    # * delivery did not happen and must count as a failure, unlike the server
+    # * refusal with the same code, where the target is genuinely absent. Only
+    # * a server error carries the raw RPC response.
+    if isinstance(exc, PeerIdInvalid) and getattr(exc, "raw", None) is None:
         return False
     if isinstance(exc, UserIsBot):
         return True

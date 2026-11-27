@@ -375,17 +375,18 @@ async def _handle_member(
     # * An unverifiable ban state is not a clean join: remove the member so a
     # * later join is checked against a healthy database. Staying silent while
     # * leaving them in the group would let a banned user in during an outage.
-    _enforcement_blind = False
     if isinstance(ban, BaseException):
         log.error("get_active_ban failed on join for uid=%d: %s", member.id, ban)
-        ban = None
-        _enforcement_blind = True
         await _fail_closed_join(bot, chat_id_of(chat), member.id, "new_member")
         return
     if isinstance(mute, BaseException):
+        # ! CRITICAL: an unverifiable mute is not a clean join. Without a
+        # * removal the member keeps full posting rights until the mute is
+        # * refiled or expires, and nothing repairs the missed restriction.
+        # * Reuse the ban path's bounded removal and durable rejoin repair.
         log.error("get_active_mute failed on join for uid=%d: %s", member.id, mute)
-        mute = None
-        _enforcement_blind = True
+        await _fail_closed_join(bot, chat_id_of(chat), member.id, "new_member_mute")
+        return
 
     if ban:
         # * Best-effort demote keeps the role-vs-state invariant (a
@@ -453,7 +454,7 @@ async def _handle_member(
                     chat_id_of(chat),
                 )
 
-    if greet and not _enforcement_blind:
+    if greet:
         markup = await _ack_markup(member.id, locale)
         await reply_rich(
             msg,
@@ -615,11 +616,16 @@ async def on_join_request_approved(ctx: Ctx) -> None:
         )
         return
     if isinstance(mute, BaseException):
-        log.warning(
+        # * No later event rechecks an approved request, so leaving the member
+        # * in place with unverified mute state would restore full rights.
+        log.error(
             "get_active_mute failed for uid=%d on join_request_approved in chat=%d: %s",
             user.id,
             chat_id_of(chat),
             mute,
+        )
+        await _fail_closed_join(
+            ctx.bot, chat_id_of(chat), user.id, "join_request_approved_mute"
         )
         return
     if not mute:
@@ -803,6 +809,17 @@ async def on_chat_migration(ctx: Ctx) -> None:
         old_id = msg.migrate_from_chat_id
         new_id = chat_id_of(ctx.effective_chat) if ctx.effective_chat else None
         if old_id and new_id and old_id != new_id:
+            if old_id == cfg.main_group:
+                # ! WARNING: the config is immutable after load. Without a
+                # * restart the new id is neither primary nor connected, so
+                # * join enforcement stops in the migrated main group.
+                log.warning(
+                    "MAIN_GROUP migrated from %d to %d; set MAIN_GROUP to the "
+                    "new supergroup id and restart to restore primary-group "
+                    "enforcement.",
+                    old_id,
+                    new_id,
+                )
             # * The repoint moves the whole group in one transaction: the
             # * registry, the configuration, the membership, the open
             # * request, and the decisions of the group. The decisions

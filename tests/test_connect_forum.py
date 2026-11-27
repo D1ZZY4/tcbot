@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 from types import SimpleNamespace
 from types import SimpleNamespace as _NS
@@ -525,3 +526,140 @@ async def test_channel_is_refused_before_any_telegram_or_db_work(
 
     assert len(message.replies) == 1
     assert "group" in message.replies[0].lower()
+
+
+def _removal_update() -> SimpleNamespace:
+    """Build the MY_CHAT_MEMBER update for the bot being removed."""
+    chat = SimpleNamespace(id=-1001234567890, type="supergroup", title="Community")
+    cmc = SimpleNamespace(
+        chat=chat,
+        new_chat_member=SimpleNamespace(status=ChatMemberStatus.LEFT),
+        old_chat_member=SimpleNamespace(status=ChatMemberStatus.ADMINISTRATOR),
+        from_user=None,
+    )
+    return SimpleNamespace(my_chat_member=cmc)
+
+
+@pytest.mark.asyncio
+async def test_bot_removal_reads_connection_before_deactivating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The removal log must not depend on a read/write race."""
+    order: list[str] = []
+    logs: list[object] = []
+
+    async def _is_connected(_chat_id: int, *, fresh: bool = False) -> bool:
+        order.append("read-start")
+        await asyncio.sleep(0)
+        order.append("read-done")
+        return True
+
+    async def _deactivate(_chat_id: int) -> bool:
+        order.append("deactivate")
+        return True
+
+    async def _remove_pending(_chat_id: int) -> None:
+        order.append("remove_pending")
+
+    async def _send_log(_bot: object, payload: object) -> None:
+        logs.append(payload)
+
+    async def _locale(_update: object) -> str:
+        return "en-US"
+
+    monkeypatch.setattr(
+        connect_added,
+        "cfg",
+        _NS(
+            is_primary_group=lambda _chat_id: False,
+            is_infrastructure_chat=lambda _chat_id: False,
+        ),
+    )
+    monkeypatch.setattr(connect_added, "locale_for_update", _locale)
+    monkeypatch.setattr(connect_added.db.groups_db, "is_connected", _is_connected)
+    monkeypatch.setattr(connect_added.db.groups_db, "deactivate_group", _deactivate)
+    monkeypatch.setattr(connect_added.db.groups_db, "remove_pending", _remove_pending)
+    monkeypatch.setattr(connect_added.messages, "send_log", _send_log)
+
+    await connect_added.connection.on_bot_added(
+        _removal_update(),  # type: ignore[arg-type]
+        _NS(bot=_FakeBot()),  # type: ignore[arg-type]
+    )
+
+    assert order.index("read-done") < order.index("deactivate")
+    assert order.index("deactivate") < order.index("remove_pending")
+    assert len(logs) == 1
+
+
+def test_connect_schedules_all_reads_while_resolving_the_bot_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A slow bot-id lookup must not delay the other independent reads."""
+    started: list[str] = []
+    identity_started = asyncio.Event()
+    release_identity = asyncio.Event()
+
+    class _Bot:
+        async def get_chat_member(self, chat_id: int, user_id: int) -> object:
+            return _NS(status=ChatMemberStatus.ADMINISTRATOR, privileges=_NS())
+
+    async def _bot_identity() -> _NS:
+        identity_started.set()
+        await release_identity.wait()
+        return _NS(id=999)
+
+    async def _is_connected(_chat_id: int, *, fresh: bool = False) -> bool:
+        started.append("is_connected")
+        return False
+
+    async def _pending(_chat_id: int) -> None:
+        started.append("get_pending")
+
+    async def _locale(_update: object) -> str:
+        return "en-US"
+
+    async def _join(*_args: object, **_kwargs: object) -> bool:
+        return False
+
+    async def _reply(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        connect_module,
+        "cfg",
+        _NS(
+            is_primary_group=lambda _chat_id: False,
+            is_infrastructure_chat=lambda _chat_id: False,
+        ),
+    )
+    monkeypatch.setattr(connect_module, "locale_for_update", _locale)
+    monkeypatch.setattr(connect_module, "is_anon_admin", lambda _user: False)
+    monkeypatch.setattr(connect_module.db.groups_db, "is_connected", _is_connected)
+    monkeypatch.setattr(connect_module.db.groups_db, "get_pending", _pending)
+    monkeypatch.setattr(
+        connect_added.BuildConnection, "check_perms", lambda _self, _m: True
+    )
+    monkeypatch.setattr(connect_added.BuildConnection, "complete_join", _join)
+    monkeypatch.setattr(connect_module, "reply_rich", _reply)
+
+    message = _FakeMessage("supergroup")
+    ctx = SimpleNamespace(
+        effective_chat=message.chat,
+        effective_user=SimpleNamespace(id=42, first_name="Admin", is_bot=False),
+        effective_message=message,
+        bot=_Bot(),
+        bot_identity=_bot_identity,
+    )
+
+    body = connect_module.cmd_tcconnect
+    while hasattr(body, "__wrapped__"):
+        body = body.__wrapped__
+
+    async def _scenario() -> None:
+        running = asyncio.create_task(body(ctx))  # type: ignore[arg-type]
+        await asyncio.wait_for(identity_started.wait(), timeout=1)
+        assert started == ["is_connected", "get_pending"]
+        release_identity.set()
+        await running
+
+    asyncio.run(_scenario())

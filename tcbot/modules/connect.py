@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 
+from pyrogram.types import ChatMember
+
 from tcbot import cfg
 from tcbot import database as db
 from tcbot.modules.helper import decorators
@@ -132,9 +134,17 @@ async def cmd_tcconnect(ctx: Ctx) -> None:
         )
         return
 
-    # * All four calls are independent; fire them in one round-trip.
-    # * bot_member is fetched speculatively alongside the user/DB reads so no
-    # * extra Telegram round-trip is needed after the early-exit checks.
+    # * All four calls are independent; fire them in one round-trip. The bot
+    # * id lookup lives inside a coroutine so it cannot suspend while the
+    # * gather argument list is still being built, which would leave the
+    # * already-created sibling coroutines unawaited on cancellation.
+    async def _bot_member() -> ChatMember:
+        bot_id = (await ctx.bot_identity()).id
+        return await asyncio.wait_for(
+            ctx.bot.get_chat_member(chat_id_of(chat), bot_id),
+            timeout=TELEGRAM_LOOKUP_TIMEOUT,
+        )
+
     member, is_connected, pending, bot_member = await asyncio.gather(
         asyncio.wait_for(
             ctx.bot.get_chat_member(chat_id_of(chat), user.id),
@@ -142,10 +152,7 @@ async def cmd_tcconnect(ctx: Ctx) -> None:
         ),
         db.groups_db.is_connected(chat_id_of(chat), fresh=True),
         db.groups_db.get_pending(chat_id_of(chat)),
-        asyncio.wait_for(
-            ctx.bot.get_chat_member(chat_id_of(chat), (await ctx.bot_identity()).id),
-            timeout=TELEGRAM_LOOKUP_TIMEOUT,
-        ),
+        _bot_member(),
         return_exceptions=True,
     )
     throw_if_cancelled((member, is_connected, pending, bot_member))

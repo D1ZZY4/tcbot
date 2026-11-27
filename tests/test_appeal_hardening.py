@@ -381,6 +381,45 @@ def test_approve_proceeds_when_the_role_is_already_gone(
     assert record["deactivated"] == ["abc"]
 
 
+def test_approve_partial_delivery_reports_the_stored_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A retry summary without an exception produced an "Unknown" report."""
+    _wire_approve(monkeypatch)
+    reports: list[dict[str, Any]] = []
+    detail = (
+        "Telegram says: [403 CHAT_WRITE_FORBIDDEN] - You don't have rights "
+        "to send messages in this chat."
+    )
+
+    async def _role(user_id: int, *, fresh: bool = False) -> str:
+        return "admin" if user_id == 9 else "owner"
+
+    async def _report(run_id: int) -> dict[str, Any]:
+        return {
+            "failed_count": 2,
+            "targets": [{"status": "failed", "last_error_detail": detail}],
+        }
+
+    async def _fake_demote(*a: Any, **k: Any) -> bool:
+        return True
+
+    monkeypatch.setattr(demote.Demote, "execute", staticmethod(_fake_demote))
+    monkeypatch.setattr(db.users_roles, "get_effective_role", _role)
+    monkeypatch.setattr(db.enforcement_ledger, "run_report", _report)
+    monkeypatch.setattr(
+        appeal_review.moderation_enforcement,
+        "report_partial_failure",
+        lambda **kwargs: reports.append(kwargs),
+    )
+
+    _run_approve(_FakeQuery("appeal_approve_abc_1"))
+
+    assert len(reports) == 1
+    assert reports[0]["error_detail"] == detail
+    assert reports[0]["failed"] == 2
+
+
 def test_stale_review_card_cannot_decide_a_newer_appeal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

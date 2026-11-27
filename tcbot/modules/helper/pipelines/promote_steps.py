@@ -418,6 +418,25 @@ async def on_role_change_btn(ctx: Ctx) -> None:
         return
     locale = await locale_for_update(ctx)
     target_fname = await db.users_cache.get_first_name(target_id, str(target_id))
+    # * The callback reaches the same role write as /tcsetrole, so it needs
+    # * that command's protected-identity gate. The rank checks inside
+    # * change_role_for_staff do not cover the bot, Telegram, or anonymous
+    # * admin identities.
+    try:
+        ident = await identity.classify(ctx.bot, admin.id, target_id, target_fname)
+    except Exception:
+        log.exception("identity.classify failed during role-change callback")
+        await cb_error_edit(
+            q,
+            t("admins.error.role_lookup_failed", locale, plain=True),
+            log_label="on_role_change_btn classify-failed",
+            parse_mode=None,
+        )
+        return
+    refusal = identity.refuse_message("demote", ident, locale)
+    if refusal is not None:
+        await cb_error_edit(q, refusal, log_label="on_role_change_btn refusal")
+        return
     _, text = await change_role_for_staff(
         ctx.bot,
         admin.id,

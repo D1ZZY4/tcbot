@@ -208,6 +208,25 @@ async def execute_warn(
             return
         # * Staff are exempt from warn threshold ban; demoted first so rank never survives.
         if target_role:
+            # ! CRITICAL: the rank gate above preceded the warning write and
+            # ! the target role read. A moderator demoted across those awaits
+            # ! must not strip a staff target's role. The threshold-ban
+            # ! branch below applies the same last-moment check.
+            refusal = await guards.enforcement_refusal(
+                admin_id,
+                target_id,
+                min_role="moderator",
+                action="Warn staff exemption",
+                locale=locale,
+            )
+            if refusal is not None:
+                await reply_rich(
+                    msg,
+                    refusal,
+                    log_label="Warn staff exemption rank-refusal",
+                    parse_mode=None,
+                )
+                return
             demoted = False
             try:
                 # * The return value is the source of truth: a role that was

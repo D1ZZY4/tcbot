@@ -328,11 +328,25 @@ class ApproveMixin:
             report = None
         failed = db.enforcement_ledger.report_count(report, "failed_count")
         if failed:
-            log.error(
-                "Appeal approve left %d group(s) to retry for ban %s (run %s)",
-                failed,
-                ban_id,
-                run_id,
+            # * Reuse the single owner of partial-delivery reporting so the
+            # * stored Telegram refusal becomes the attached exception. Logging
+            # * the count alone produced an "Unknown / no exception" report.
+            failed_targets = db.enforcement_ledger.failed_report_targets(report)
+            detail = next(
+                (
+                    str(target["last_error_detail"])
+                    for target in failed_targets
+                    if target.get("last_error_detail")
+                ),
+                None,
+            )
+            moderation_enforcement.report_partial_failure(
+                action="Appeal approve",
+                target_id=target_id,
+                failed=failed,
+                total=len(chat_ids),
+                run_id=run_id,
+                error_detail=detail,
             )
         appeal_link = ban.get("appeal_link") or ""
         appeal_submitted_at = ban.get("appeal_submitted_at")

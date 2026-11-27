@@ -108,6 +108,11 @@ _ACTION_HINTS: tuple[tuple[str, str], ...] = (
     ("Timed Out", "Transient Telegram hiccup; retry the action."),
     ("Polling Conflict", "Two bot instances are polling; stop the duplicate."),
     ("Invalid Token", "Token revoked or wrong; set BOT_TOKEN and restart."),
+    (
+        "Chat Write Forbidden",
+        "The bot cannot post in this chat; check its member permissions and "
+        "restriction state instead of re-promoting it.",
+    ),
     ("Forbidden", "Client lacks admin rights in the target chat; re-promote it."),
     (
         "User Profile Button",
@@ -143,6 +148,12 @@ def _stored_telegram_label(exc: BaseException) -> str | None:
         return None
     code = int(match.group(1))
     if code == 403:
+        # * A write refusal is not a missing admin right: Telegram answered
+        # * with a 403 because the acting account cannot post in that chat.
+        # * Re-promoting the bot would not fix it, so the operator hint must
+        # * name the actual condition.
+        if "CHAT_WRITE_FORBIDDEN" in str(exc).upper():
+            return "[!] Telegram Chat Write Forbidden"
         return "[!] Telegram Forbidden"
     if code == 429:
         return "[~] Rate Limit: Flood Wait"

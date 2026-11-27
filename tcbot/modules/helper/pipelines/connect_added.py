@@ -113,23 +113,31 @@ class ConnectionAddedMixin:
         old_status = cmc.old_chat_member.status if cmc.old_chat_member else None
         by_user = cmc.from_user
         if new_status in (ChatMemberStatus.LEFT, ChatMemberStatus.BANNED):
-            conn_results = await asyncio.gather(
-                db.groups_db.is_connected(chat_id_of(chat), fresh=True),
+            # * Read before writing: a concurrent deactivate would answer the
+            # * fresh connection check with the post-removal value and drop the
+            # * removal audit log. The two writes stay parallel once the fact
+            # * they depend on is known.
+            try:
+                was_connected = await db.groups_db.is_connected(
+                    chat_id_of(chat), fresh=True
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.debug(
+                    "is_connected check failed on bot removal from %d: %s",
+                    chat_id_of(chat),
+                    exc,
+                )
+                was_connected = False
+            cleanup_results = await asyncio.gather(
                 db.groups_db.deactivate_group(chat_id_of(chat)),
                 db.groups_db.remove_pending(chat_id_of(chat)),
                 return_exceptions=True,
             )
-            throw_if_cancelled(conn_results)
-            was_connected = conn_results[0]
-            if isinstance(was_connected, BaseException):
-                log.debug(
-                    "is_connected check failed on bot removal from %d: %s",
-                    chat_id_of(chat),
-                    was_connected,
-                )
-                was_connected = False
+            throw_if_cancelled(cleanup_results)
             for label, result in zip(
-                ("deactivate", "remove_pending"), conn_results[1:], strict=True
+                ("deactivate", "remove_pending"), cleanup_results, strict=True
             ):
                 if isinstance(result, BaseException):
                     log.error(

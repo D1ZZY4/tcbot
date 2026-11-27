@@ -11,7 +11,13 @@ import inspect
 import logging
 
 import pytest
-from pyrogram.errors import OffsetPeerIdInvalid, ReplyMessageIdInvalid, UserIsBot
+from pyrogram.errors import (
+    OffsetPeerIdInvalid,
+    PeerIdInvalid,
+    ReplyMessageIdInvalid,
+    UserIsBot,
+)
+from pyrogram.raw.types import RpcError
 
 from tcbot.modules.helper.messages.replies import applied_summary
 from tcbot.modules.helper.pipelines.errors.exceptions import (
@@ -70,6 +76,22 @@ def test_real_rpc_names_do_not_collide_with_benign_markers() -> None:
     assert is_benign_telegram_error(UserIsBot()) is True
     assert is_edit_target_gone_error(OffsetPeerIdInvalid()) is False
     assert is_edit_target_gone_error(ReplyMessageIdInvalid()) is False
+
+
+def test_a_local_peer_resolution_failure_is_not_a_no_op() -> None:
+    """A missing access hash means Telegram never received the action."""
+    local = PeerIdInvalid()
+    assert local.raw is None
+    assert is_benign_telegram_error(local) is False
+
+
+def test_a_server_peer_refusal_is_still_benign() -> None:
+    """The same RPC code from Telegram means the target is genuinely absent."""
+    server = PeerIdInvalid(
+        raw_error=RpcError(error_code=400, error_message="PEER_ID_INVALID")
+    )
+    assert server.raw is not None
+    assert is_benign_telegram_error(server) is True
 
 
 def test_human_readable_refusal_recognized() -> None:

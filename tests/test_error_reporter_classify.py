@@ -109,8 +109,10 @@ def test_a_stored_telegram_refusal_is_not_a_code_bug() -> None:
         'to send messages in this chat. (caused by "channels.EditBanned")'
     )
     label = classify._classify(exc)
-    assert label == "[!] Telegram Forbidden"
-    assert "admin rights" in classify._action_hint(label).lower()
+    assert label == "[!] Telegram Chat Write Forbidden"
+    hint = classify._action_hint(label).lower()
+    assert "member permissions" in hint
+    assert "re-promote" not in hint
 
 
 def test_benign_suppresses_connectivity_and_circuit() -> None:

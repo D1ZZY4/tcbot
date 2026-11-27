@@ -241,6 +241,23 @@ def test_asyncio_handler_auth_key_not_found_parks_once(monkeypatch: Any) -> None
     assert tracker.tasks_created == 0
 
 
+def test_chat_write_forbidden_gets_its_own_hint() -> None:
+    """A 403 write refusal is not a missing admin right."""
+    exc = RuntimeError(
+        "Telegram says: [403 CHAT_WRITE_FORBIDDEN] - You don't have rights "
+        'to send messages in this chat. (caused by "channels.EditBanned")'
+    )
+    label = classify._classify(exc)
+    assert label == "[!] Telegram Chat Write Forbidden"
+    assert "re-promote" not in classify._action_hint(label)
+    assert "member permissions" in classify._action_hint(label)
+
+    admin_exc = RuntimeError(
+        "Telegram says: [403 CHAT_ADMIN_REQUIRED] - Not enough rights"
+    )
+    assert "re-promote" in classify._action_hint(classify._classify(admin_exc))
+
+
 def test_error_handler_suppresses_database_outage(
     monkeypatch: Any, caplog: Any
 ) -> None:

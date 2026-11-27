@@ -262,3 +262,64 @@ def test_role_change_button_excludes_current_role() -> None:
     assert "role_change:moderator:42:1" in callbacks
     assert "role_change:admin:42:1" not in callbacks
     assert "role_change_cancel:42:1" in callbacks
+
+
+def test_role_change_callback_refuses_a_protected_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The picker callback needs the same gate as the /tcsetrole command."""
+    changed: list[int] = []
+    refusals: list[str] = []
+
+    class _Query:
+        data = "role_change:moderator:42:1"
+
+        async def answer(self) -> None:
+            return None
+
+    async def _owner_mismatch(*_args: Any, **_kwargs: Any) -> bool:
+        return False
+
+    async def _executor(*_args: Any, **_kwargs: Any) -> object:
+        return object()
+
+    async def _locale(*_args: Any, **_kwargs: Any) -> str:
+        return "en-US"
+
+    async def _first_name(_uid: int, _fallback: str) -> str:
+        return "Telegram"
+
+    async def _classify(*_args: Any, **_kwargs: Any) -> Identity:
+        return Identity("telegram", 42, "Telegram")
+
+    async def _change(*_args: Any, **_kwargs: Any) -> tuple[bool, str]:
+        changed.append(42)
+        return True, "changed"
+
+    async def _error_edit(_q: Any, text: str, **_kwargs: Any) -> None:
+        refusals.append(text)
+
+    async def _edit(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(role_change, "action_owner_mismatch", _owner_mismatch)
+    monkeypatch.setattr(role_change, "check_callback_executor", _executor)
+    monkeypatch.setattr(role_change, "locale_for_update", _locale)
+    monkeypatch.setattr(db.users_cache, "get_first_name", _first_name)
+    monkeypatch.setattr(role_change.identity, "classify", _classify)
+    monkeypatch.setattr(role_change, "change_role_for_staff", _change)
+    monkeypatch.setattr(role_change, "cb_error_edit", _error_edit)
+    monkeypatch.setattr(role_change, "safe_edit_cb", _edit)
+
+    ctx = SimpleNamespace(
+        callback_query=_Query(),
+        effective_user=SimpleNamespace(id=1, first_name="Owner"),
+        bot=object(),
+    )
+    body: Any = role_change.on_role_change_btn
+    while hasattr(body, "__wrapped__"):
+        body = body.__wrapped__
+    asyncio.run(body(ctx))
+
+    assert changed == []
+    assert len(refusals) == 1

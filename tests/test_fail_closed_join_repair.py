@@ -126,6 +126,48 @@ async def test_join_enforcement_uses_the_mute_retry_helper(
 
 
 @pytest.mark.asyncio
+async def test_an_unverifiable_mute_removes_the_joiner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A mute-store outage must not leave a muted member with full rights."""
+    seen = _wire(monkeypatch)
+
+    async def _harvest(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def _ban(_user_id: int) -> None:
+        return None
+
+    async def _mute(_user_id: int) -> None:
+        raise RuntimeError("mute store unavailable")
+
+    monkeypatch.setattr(db.users_cache, "harvest_user_identity", _harvest)
+    monkeypatch.setattr(greeting, "_ban_state_with_retry", _ban)
+    monkeypatch.setattr(greeting, "_mute_state_with_retry", _mute)
+
+    bot = _Bot(None, [None])
+    member = SimpleNamespace(
+        id=42, is_bot=False, first_name="M", username=None, last_name=None
+    )
+    chat = SimpleNamespace(id=-100, title="Group")
+    replies: list[str] = []
+
+    async def _reply(*_args: Any, **_kwargs: Any) -> None:
+        replies.append("welcome")
+
+    monkeypatch.setattr(greeting, "reply_rich", _reply)
+
+    await greeting._handle_member(
+        member, SimpleNamespace(chat=chat), chat, bot, "en-US"
+    )  # type: ignore[arg-type]
+
+    assert bot.bans == [(-100, 42)]
+    assert bot.unbans == [(-100, 42)]
+    assert replies == []
+    assert seen == {"kicks": [], "runs": []}
+
+
+@pytest.mark.asyncio
 async def test_a_clean_fail_closed_removal_needs_no_repair(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
