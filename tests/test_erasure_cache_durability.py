@@ -171,3 +171,27 @@ async def test_membership_harvest_skips_erased_accounts(
     assert "INSERT INTO chat_members" in compiled[0]
     assert "telegram_users.erased_at IS NOT NULL" in compiled[0]
     assert "ON CONFLICT (chat_id, user_id) DO UPDATE" in compiled[0]
+
+
+@pytest.mark.asyncio
+async def test_an_erasure_during_a_profile_write_wins_the_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A write that resumes after invalidation must not repopulate the cache."""
+
+    async def _db_call(factory: Any) -> None:
+        await factory()
+        # * The erasure sweep commits and invalidates while this write awaits.
+        user_mention_cache.invalidate(42)
+
+    puts: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(users_cache, "run", AsyncMock())
+    monkeypatch.setattr(users_cache, "db_call", _db_call)
+    monkeypatch.setattr(
+        type(user_mention_cache), "put", lambda _self, *args: puts.append(args)
+    )
+
+    written = await users_cache.upsert_user(42, "handle", "Recovered", "Name")
+
+    assert written is True
+    assert puts == []

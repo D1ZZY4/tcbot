@@ -471,6 +471,13 @@ async def upsert_user(
     # * keeps the stored column instead of clearing it.
     # * The first sighting is not overwritten: the conflict action leaves
     # * first_seen_at alone, so the moment the profile arrived stays readable.
+    # * Capture the cache revision before the write. An erasure sweep that
+    # * commits while this coroutine awaits the database invalidates the
+    # * mention cache; publishing the incoming triple afterwards would put
+    # * the cleared identity back into L1 and queue an L2 write after the
+    # * erasure delete.
+    revision_fn = getattr(user_mention_cache, "revision", None)
+    revision = revision_fn() if callable(revision_fn) else None
     try:
         await db_call(
             lambda: run(
@@ -497,6 +504,11 @@ async def upsert_user(
     # * rewritten on every message. A partial write (username or last name
     # * left as "unknown, preserve existing") cannot reconstruct the stored
     # * triple, so it invalidates instead.
+    current_revision = revision_fn() if callable(revision_fn) else None
+    if revision is not None and current_revision != revision:
+        # * Another mutation landed while the write was in flight. Let it win:
+        # * the caller's identity must not repopulate the cache.
+        return True
     if username is not None and last_name is not None:
         user_mention_cache.put(user_id, [first_name, username, last_name])
     else:

@@ -646,3 +646,47 @@ def test_a_batch_fill_discards_rows_invalidated_during_the_read(
         assert user_mention_cache.get(7) is CACHE_MISS
 
     asyncio.run(_run())
+
+
+def test_a_failed_clear_all_sweep_marks_redis_unhealthy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A sweep that cannot reach Redis must be visible above DEBUG level.
+
+    ``clear_all`` used to log a failed SCAN/UNLINK at DEBUG and return
+    normally, so an ownership transfer could leave revoked roles cached in
+    every other process for the full TTL without an operator-visible signal.
+    """
+
+    class _FailingRedis:
+        async def scan(self, cursor: int, match: str = "", count: int = 100):
+            _ = (cursor, match, count)
+            raise OSError("scan refused")
+
+    outcomes: list[bool] = []
+
+    async def _no_client() -> None:
+        return None
+
+    def _enqueue(
+        prefix: str, factory: Any, *, droppable: bool = False
+    ) -> asyncio.Task[Any]:
+        _ = (prefix, droppable)
+        return asyncio.create_task(factory())
+
+    monkeypatch.setattr(
+        twolevel, "cfg", dataclasses.replace(cfg, redis_url="redis://test")
+    )
+    monkeypatch.setattr(redis_io, "usable_redis_client", lambda: _FailingRedis())
+    monkeypatch.setattr(redis_io, "acquire_redis_client", _no_client)
+    monkeypatch.setattr(redis_io, "enqueue_redis_mutation", _enqueue)
+    monkeypatch.setattr(
+        twolevel._redis_mod, "mark_op", lambda *, ok: outcomes.append(ok)
+    )
+
+    async def _run() -> None:
+        cache = TwoLevelCache(memory_ttl=60, redis_ttl=90, redis_prefix="role")
+        await cache.clear_all()
+
+    asyncio.run(_run())
+    assert outcomes == [False]

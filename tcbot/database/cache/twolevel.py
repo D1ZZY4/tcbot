@@ -277,11 +277,15 @@ class TwoLevelCache[T]:
                             break
                 except asyncio.CancelledError:
                     raise
-                except Exception as exc:
-                    log.debug(
-                        "Redis clear_all failed for prefix %s: %s",
+                except Exception:
+                    # ! CRITICAL: an un-swept L2 leaves revoked roles and
+                    # ! connection flags live in other processes until TTL.
+                    # ! A debug log hid that window at the default level.
+                    _redis_mod.mark_op(ok=False)
+                    log.exception(
+                        "Redis clear_all failed for prefix %s; L2 keys were not "
+                        "swept and may serve stale values until their TTL.",
                         self._redis_prefix,
-                        exc,
                     )
             finally:
                 _close_window()
@@ -627,6 +631,15 @@ class TwoLevelCache[T]:
                 # * whole TTL. Local counters cannot observe that write.
                 if self._critical_delete:
                     rc = await self._client()
+                    if rc is None and cfg.redis_url:
+                        # ! CRITICAL: a configured Redis that cannot answer the
+                        # ! tombstone check is an outage, not proof that no
+                        # ! other process revoked the key. Return the source
+                        # ! value but never publish it into either layer.
+                        log.debug(
+                            "Skipping fetch publish: tombstone unreadable for %s", key
+                        )
+                        return cast("T", val)
                     if rc is not None and await self._tombstoned(rc, key):
                         log.debug("Discarding tombstoned fetch for %s", key)
                         return cast("T", val)
@@ -674,6 +687,13 @@ class TwoLevelCache[T]:
                 # * in L2 for the whole TTL. get_or_fetch already checks this.
                 if self._critical_delete:
                     rc = await self._client()
+                    if rc is None and cfg.redis_url:
+                        # ! CRITICAL: a fresh read cannot prove the value was
+                        # ! not revoked elsewhere while Redis is unreachable.
+                        log.debug(
+                            "Skipping refresh publish: tombstone unreadable for %s", key
+                        )
+                        return val
                     if rc is not None and await self._tombstoned(rc, key):
                         log.debug("Discarding refresh for tombstoned key %s", key)
                         return val
