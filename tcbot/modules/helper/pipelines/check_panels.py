@@ -761,7 +761,7 @@ async def _per_chat_event_list(
             "checking.events.empty",
             locale,
             heading=Safe(bold(t(f"checking.events.{heading_key}", locale, plain=True))),
-            lower=t(f"checking.events.{lower_key}", locale, plain=True),
+            lower=Safe(t(f"checking.events.{lower_key}", locale)),
             user=Safe(user_ref(target_id, display_name)),
         )
         return blocks(

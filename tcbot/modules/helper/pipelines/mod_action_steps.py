@@ -143,7 +143,7 @@ class BuildReason:
         return t(
             "reason.prompt.body",
             locale,
-            verb=t(f"proof.action.{action_label}.verb", locale, plain=True),
+            verb=Safe(t(f"proof.action.{action_label}.verb", locale)),
             target=Safe(target_mention),
             suffix=suffix,
             skip_hint=skip_hint,

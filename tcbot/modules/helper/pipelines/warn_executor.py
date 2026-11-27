@@ -805,7 +805,7 @@ async def execute_warnlist(
                 locale,
                 i=i,
                 reason=w.get("reason", "")
-                or t("warnings.list.no_reason", locale, plain=True),
+                or Safe(t("warnings.list.no_reason", locale)),
             )
         )
     await reply_rich(msg, "\n".join(lines), log_label="execute_warnlist")

@@ -101,11 +101,11 @@ class BuildProof:
         return t(
             "proof.prompt.step",
             locale,
-            gerund=t(f"proof.action.{action_label}.doing", locale, plain=True),
+            gerund=Safe(t(f"proof.action.{action_label}.doing", locale)),
             target=Safe(target_mention),
             suffix=suffix,
             reason=Safe(bold(reason)),
-            done=t("button.done", locale, plain=True),
+            done=Safe(t("button.done", locale)),
             skip_hint=self._skip_hint(locale),
         )
 
@@ -123,10 +123,10 @@ class BuildProof:
         return t(
             "proof.prompt.noted",
             locale,
-            Doing=t(f"proof.action.{action_label}.Doing", locale, plain=True),
+            Doing=Safe(t(f"proof.action.{action_label}.Doing", locale)),
             target=Safe(target_mention),
             suffix=suffix,
             reason=Safe(bold(inline_reason)),
-            done=t("button.done", locale, plain=True),
+            done=Safe(t("button.done", locale)),
             skip_hint=self._skip_hint(locale),
         )
