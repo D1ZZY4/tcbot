@@ -205,11 +205,17 @@ def _build_job_store(database_url: str) -> SQLAlchemyJobStore:
             "options": schema_options(cfg.db_schema, primary_chat_id=cfg.main_group),
         },
     )
-    store = _PreparedJobStore(engine=engine, tablename=_JOBSTORE_TABLE)
-    # * The table creation is the library's own schema, so it is created
-    # * here rather than in start(): the statement is idempotent and the
-    # * check keeps the store usable on a database that already has it.
-    store.jobs_t.create(store.engine, checkfirst=True)
+    try:
+        store = _PreparedJobStore(engine=engine, tablename=_JOBSTORE_TABLE)
+        # * The table creation is the library's own schema, so it is created
+        # * here rather than in start(): the statement is idempotent and the
+        # * check keeps the store usable on a database that already has it.
+        store.jobs_t.create(store.engine, checkfirst=True)
+    except BaseException:
+        # * The caller never receives a store on a construction or DDL
+        # * failure, so its finally block cannot dispose this engine.
+        engine.dispose()
+        raise
     return store
 
 
@@ -236,12 +242,28 @@ async def _scheduler_background(
     scheduler: AsyncIOScheduler | None = None
     store: SQLAlchemyJobStore | None = None
     started = False
+    adopted = False
+
+    def _dispose_orphan_store(
+        future: concurrent.futures.Future[SQLAlchemyJobStore],
+    ) -> None:
+        """Close a store that finishes after its awaiting task was cancelled."""
+        if adopted or future.cancelled():
+            return
+        try:
+            built = future.result()
+        except BaseException:
+            return
+        with contextlib.suppress(Exception):
+            built.shutdown()
+
     try:
-        store = await loop.run_in_executor(
-            _scheduler_pool(),
-            _build_job_store,
-            database_url,
-        )
+        # * Attach the guard to the concurrent future: the asyncio wrapper is
+        # * cancelled with the awaiting task and never observes the result.
+        build_task = _scheduler_pool().submit(_build_job_store, database_url)
+        build_task.add_done_callback(_dispose_orphan_store)
+        store = await asyncio.wrap_future(build_task)
+        adopted = True
         # * The loop is bound explicitly so the scheduler can be started from
         # * a worker thread: APScheduler would otherwise call
         # * get_running_loop() there and fail.
