@@ -43,6 +43,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from tcbot.database.base import metadata  # noqa: E402
+from tcbot.database.connection_options import normalize_database_url  # noqa: E402
 from tcbot.database.migrations import scoped_url  # noqa: E402
 from tcbot.database.schema import apply_schema, drop_schema  # noqa: E402
 
@@ -60,22 +61,6 @@ def _database_url() -> str:
             "DATABASE_URL is required; set it in the environment or config.env."
         )
     return url
-
-
-def _sync_url(url: str) -> str:
-    """Return *url* with the psycopg 3 driver."""
-    if url.startswith("postgresql+psycopg://"):
-        return url
-    if url.startswith("postgresql://"):
-        return "postgresql+psycopg://" + url[len("postgresql://") :]
-    if url.startswith("postgres://"):
-        return "postgresql+psycopg://" + url[len("postgres://") :]
-    return url
-
-
-def _scoped_url(url: str, schema: str) -> str:
-    """Return *url* with the search path of *schema*."""
-    return scoped_url(url, schema)
 
 
 def _expect_failure(conn, failures: list[str], label: str, action: Callable) -> None:
@@ -344,17 +329,17 @@ def _check(engine: object) -> list[str]:
 def main() -> int:
     """Run the invariant checks and report the result."""
     url = _database_url()
-    scoped = _scoped_url(url, CHECK_SCHEMA)
+    scoped = scoped_url(url, CHECK_SCHEMA)
     # * The schema is created before anything connects to it: a search
     # * path that names a schema nobody created falls back to the next
     # * schema of the path, and the check would then rebuild the schema
     # * of the deployment.
-    admin = create_engine(_sync_url(url), pool_pre_ping=True)
+    admin = create_engine(normalize_database_url(url), pool_pre_ping=True)
     with admin.begin() as conn:
         conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{CHECK_SCHEMA}"'))
     admin.dispose()
 
-    engine = create_engine(_sync_url(scoped), pool_pre_ping=True)
+    engine = create_engine(normalize_database_url(scoped), pool_pre_ping=True)
     try:
         failures = _check(engine)
     finally:

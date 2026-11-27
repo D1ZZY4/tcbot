@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from alembic.config import Config
@@ -127,9 +127,10 @@ _LEGACY_ROWS: tuple[str, ...] = (
 def _upgrade(url: str, revision: str, **env: str) -> None:
     """Apply the revisions up to *revision* inside the migration schema.
 
-    The Alembic environment builds its own engine from the URL, so the
-    schema scope has to travel through the libpq connection options.
-    PGOPTIONS is the libpq environment variable for that.
+    The Alembic environment pins the search path from its own config before
+    the libpq options, so PGOPTIONS alone would send the migration into the
+    deployment schema. The dedicated schema must be set on the config, the
+    same way the schema-migration check does.
     """
     previous_options = os.environ.get("PGOPTIONS")
     previous_env = {key: os.environ.get(key) for key in env}
@@ -140,6 +141,7 @@ def _upgrade(url: str, revision: str, **env: str) -> None:
         config = Config(str(_ROOT / "alembic.ini"))
         config.set_main_option("script_location", str(_ROOT / "alembic"))
         config.set_main_option("sqlalchemy.url", url)
+        config.set_main_option("db_schema", _MIGRATION_SCHEMA)
         command.upgrade(config, revision)
     finally:
         if previous_options is None:
@@ -151,6 +153,23 @@ def _upgrade(url: str, revision: str, **env: str) -> None:
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+
+
+def test_upgrade_pins_the_dedicated_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The scratch schema travels on the Alembic config, not just PGOPTIONS.
+
+    This assertion runs without a database, so the pin is still checked in a
+    unit-only run where the migration fixture would skip.
+    """
+    seen: list[str] = []
+
+    def _fake_upgrade(config: Any, revision: str) -> None:
+        seen.append(config.get_main_option("db_schema") or "")
+
+    monkeypatch.setattr(command, "upgrade", _fake_upgrade)
+    _upgrade("postgresql://unused", "0002")
+
+    assert seen == [_MIGRATION_SCHEMA]
 
 
 @pytest.fixture

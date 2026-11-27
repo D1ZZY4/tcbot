@@ -46,7 +46,8 @@ if str(_ROOT) not in sys.path:
 from alembic.config import Config  # noqa: E402
 
 from alembic import command  # noqa: E402
-from tcbot.database.migrations import scoped_url  # noqa: E402
+from tcbot.database.connection_options import normalize_database_url  # noqa: E402
+from tcbot.database.migrations import scoped_url, set_database_url  # noqa: E402
 
 # * A disposable scratch schema owned by this script. ``development`` is a
 # * developer's working schema and must never be dropped by operator tooling.
@@ -164,33 +165,17 @@ def _database_url() -> str:
     return url
 
 
-def _scoped_url(url: str, schema: str) -> str:
-    """Return *url* with the search path of *schema*."""
-    return scoped_url(url, schema)
-
-
 def _alembic_config(url: str) -> Config:
     """Return the Alembic configuration for *url*."""
     config = Config(str(_ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(_ROOT / "alembic"))
-    config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+    set_database_url(config, url)
     # ! CRITICAL: env.py pins the last search_path option and falls back to
     # ! public. Without this, the scoped URL's scratch path is overridden
     # ! and the revisions migrate the deployment schema instead of the scratch
     # ! one this check owns.
     config.set_main_option("db_schema", CHECK_SCHEMA)
     return config
-
-
-def _sync_url(url: str) -> str:
-    """Return *url* with the psycopg 3 driver."""
-    if url.startswith("postgresql+psycopg://"):
-        return url
-    if url.startswith("postgresql://"):
-        return "postgresql+psycopg://" + url[len("postgresql://") :]
-    if url.startswith("postgres://"):
-        return "postgresql+psycopg://" + url[len("postgres://") :]
-    return url
 
 
 def _reset_schema(engine: object, schema: str) -> None:
@@ -450,17 +435,17 @@ def _verify(engine: object, schema: str) -> list[str]:
 def main() -> int:
     """Run the migration check and report the result."""
     url = _database_url()
-    scoped = _scoped_url(url, CHECK_SCHEMA)
+    scoped = scoped_url(url, CHECK_SCHEMA)
     # * The schema is created before anything connects to it: a search
     # * path that names a schema nobody created falls back to the next
     # * schema of the path, and the check would then migrate the schema
     # * of the deployment.
-    admin = create_engine(_sync_url(url), pool_pre_ping=True)
+    admin = create_engine(normalize_database_url(url), pool_pre_ping=True)
     with admin.begin() as conn:
         conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{CHECK_SCHEMA}"'))
     admin.dispose()
 
-    engine = create_engine(_sync_url(scoped), pool_pre_ping=True)
+    engine = create_engine(normalize_database_url(scoped), pool_pre_ping=True)
     try:
         _reset_schema(engine, CHECK_SCHEMA)
         config = _alembic_config(scoped)

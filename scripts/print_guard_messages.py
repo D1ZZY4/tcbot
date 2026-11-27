@@ -36,6 +36,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from tcbot.database.base import metadata  # noqa: E402
+from tcbot.database.connection_options import normalize_database_url  # noqa: E402
 from tcbot.database.migrations import scoped_url  # noqa: E402
 from tcbot.database.schema import apply_schema  # noqa: E402
 
@@ -136,33 +137,17 @@ def _database_url() -> str:
     return url
 
 
-def _sync_url(url: str) -> str:
-    """Return *url* with the psycopg 3 driver."""
-    if url.startswith("postgresql+psycopg://"):
-        return url
-    if url.startswith("postgresql://"):
-        return "postgresql+psycopg://" + url[len("postgresql://") :]
-    if url.startswith("postgres://"):
-        return "postgresql+psycopg://" + url[len("postgres://") :]
-    return url
-
-
-def _scoped_url(url: str, schema: str) -> str:
-    """Return *url* with the search path of *schema*."""
-    return scoped_url(url, schema)
-
-
 def main() -> int:
     """Build the schema and print every guard message."""
     url = _database_url()
-    scoped = _scoped_url(url, PROBE_SCHEMA)
-    engine = create_engine(_sync_url(scoped), pool_pre_ping=True)
+    scoped = scoped_url(url, PROBE_SCHEMA)
+    engine = create_engine(normalize_database_url(scoped), pool_pre_ping=True)
     with engine.begin() as conn:
         conn.execute(text(f'DROP SCHEMA IF EXISTS "{PROBE_SCHEMA}" CASCADE'))
         conn.execute(text(f'CREATE SCHEMA "{PROBE_SCHEMA}"'))
     engine.dispose()
 
-    scoped_engine = create_engine(_sync_url(scoped), pool_pre_ping=True)
+    scoped_engine = create_engine(normalize_database_url(scoped), pool_pre_ping=True)
     with scoped_engine.begin() as conn:
         metadata.create_all(conn)
         apply_schema(conn)
